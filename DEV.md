@@ -89,6 +89,82 @@ To set up hot-reload for UI themes:
 
 Edit `~/.kit/theme.json` in your text editor while the dev server runs. Changes appear instantly in the UI without restarting.
 
+## Global Hotkey Configuration
+
+Script Kit allows you to customize the hotkey used to open/focus the application.
+
+### Setup
+
+The hotkey is configured in `~/.kit/config.ts` (TypeScript):
+
+```typescript
+// ~/.kit/config.ts
+export default {
+  hotkey: {
+    modifiers: ['meta'],      // 'meta' = Cmd on macOS, Win on Windows
+    key: 'Digit0',            // The key to press (default: 0)
+  },
+};
+```
+
+### How It Works
+
+1. **App Startup**: The Rust app loads `~/.kit/config.ts`
+2. **Transpilation**: Uses `bun build` to transpile TypeScript to JavaScript
+3. **Extraction**: Runs the JavaScript with `bun` to extract the default export as JSON
+4. **Registration**: Converts the JSON config to native hotkey codes and registers them
+5. **Listening**: A background thread listens for the hotkey press
+6. **Action**: When pressed, sets `HOTKEY_TRIGGERED` flag, which causes the app window to show/hide
+
+### Supported Keys
+
+**Number keys:** `Digit0`, `Digit1`, `Digit2`, ..., `Digit9`
+
+**Letter keys:** `KeyA`, `KeyB`, ..., `KeyZ`
+
+**Special keys:** `Space`, `Enter`, `Semicolon`
+
+### Supported Modifiers
+
+- `meta` - Command (⌘) on macOS, Windows key on Windows
+- `ctrl` - Control key
+- `alt` - Option/Alt key  
+- `shift` - Shift key
+
+### Examples
+
+```typescript
+// Cmd+K (like VSCode command palette)
+hotkey: { modifiers: ['meta'], key: 'KeyK' }
+
+// Cmd+Shift+P (like VSCode)
+hotkey: { modifiers: ['meta', 'shift'], key: 'KeyP' }
+
+// Ctrl+Alt+Space (like Raycast on Linux)
+hotkey: { modifiers: ['ctrl', 'alt'], key: 'Space' }
+```
+
+### Debugging Hotkey Issues
+
+If your configured hotkey isn't working:
+
+1. **Check startup logs**: Run the app and look for:
+   ```
+   [APP] Loaded config: hotkey=["meta"]+Digit0
+   [HOTKEY] Registered global hotkey meta+Digit0 (id: 536870917)
+   ```
+
+2. **Verify the config is being read**: Check that the hotkey line shows your intended hotkey
+
+3. **Test hotkey press**: Press the hotkey and look for:
+   ```
+   [HOTKEY] meta+Digit0 pressed (trigger #1)
+   ```
+
+4. **Unknown key warning**: If you see `Unknown key code: XYZ`, that key is not supported
+
+5. **Restart after changes**: Configuration file changes are watched, but the hotkey listener needs a restart
+
 ## Best Practices for Development
 
 ### Terminal Setup
@@ -109,9 +185,16 @@ Edit `~/.kit/theme.json` in your text editor while the dev server runs. Changes 
    - Check logs for execution details
 
 3. **Hotkey testing**
-   - Configure your hotkey in `~/.kit/config.json`
-   - Press the configured hotkey to toggle the app visibility
-   - Logs will show when the hotkey is detected and processed
+    - Configure your hotkey in `~/.kit/config.ts` (TypeScript configuration)
+    - The app loads this file, transpiles it with bun, and extracts the hotkey config
+    - Press the configured hotkey (default: `Cmd+0`) to toggle the app visibility
+    - Watch logs (Cmd+L) for hotkey registration: `[HOTKEY] Registered global hotkey meta+Digit0 (id: ...)`
+    - When you press the hotkey, you'll see: `[HOTKEY] meta+Digit0 pressed (trigger #N)`
+    - If your configured hotkey isn't working:
+      1. Check the startup logs for the registered hotkey (should match your config)
+      2. Verify the key code is valid (Digit0-9, KeyA-Z, Space, Enter, Semicolon, etc.)
+      3. Verify the modifier is valid (meta=Cmd, ctrl=Control, alt=Option, shift=Shift)
+      4. Restart the app after config changes (hot-reload watches for file changes)
 
 4. **Use filtering** – Type to search scripts
    - Helps verify the filtering logic is working correctly
