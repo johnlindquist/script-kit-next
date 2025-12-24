@@ -6,5 +6,7 @@
 pub mod config;
 pub mod executor;
 pub mod logging;
+pub mod panel;
 pub mod protocol;
 pub mod prompts;
+pub mod scripts;

@@ -233,6 +233,96 @@ cargo run --bin smoke-test
 cargo run --bin smoke-test -- --gui  # With GUI test
 ```
 
+## Window Focus/Unfocus Theming (NEW!)
+
+The app now supports context-aware theming based on window focus state. When the window loses focus (user clicks another app), the UI automatically transitions to a dimmed theme for visual feedback that it's inactive.
+
+### How It Works
+
+**Automatic Behavior (Default)**
+- When window is **focused**: Uses standard, vibrant theme colors
+- When window is **unfocused**: Colors are automatically dimmed by ~30% toward gray, reducing brightness and saturation
+- This happens seamlessly without any configuration needed
+
+**Custom Focus-Aware Colors**
+You can customize the focused/unfocused appearance in `~/.kit/theme.json`:
+
+```json
+{
+  "colors": {
+    "background": { "main": 1980410, ... },
+    "text": { "primary": 16777215, ... },
+    ...
+  },
+  "focus_aware": {
+    "focused": {
+      "background": { "main": 1980410, ... },
+      "text": { "primary": 16777215, ... },
+      "ui": { "border": 4609607, "success": 65280 },
+      "cursor": {
+        "color": 65535,
+        "blink_interval_ms": 500
+      }
+    },
+    "unfocused": {
+      "background": { "main": 1447037, ... },
+      "text": { "primary": 11842475, ... },
+      "ui": { "border": 3158809, "success": 43008 },
+      "cursor": {
+        "color": 43605,
+        "blink_interval_ms": 1000
+      }
+    }
+  }
+}
+```
+
+### Fields Reference
+
+- **`focus_aware.focused`** – Colors when window has keyboard focus (optional)
+- **`focus_aware.unfocused`** – Colors when window is in background (optional)
+- **`cursor.color`** – Cursor color in hex (e.g., 0x00ffff = cyan)
+- **`cursor.blink_interval_ms`** – Blink speed in milliseconds
+
+If focus-aware colors aren't specified in your theme.json, the app automatically creates a dimmed version of your standard colors when the window loses focus.
+
+### Implementation Details
+
+**Code Structure:**
+- `theme.rs::Theme::get_colors(is_focused)` – Returns appropriate ColorScheme based on window state
+- `theme.rs::Theme::get_cursor_style(is_focused)` – Returns cursor styling (only when focused)
+- `main.rs::render()` – Tracks window focus via `focus_handle.is_focused(window)`
+- All render functions use `colors` from focus-aware selection instead of direct `theme.colors`
+
+**Focus Tracking:**
+```rust
+if self.is_window_focused != is_focused {
+    self.is_window_focused = is_focused;
+    logging::log("FOCUS", &format!("Window focus state changed: {}", is_focused));
+    cx.notify();  // Trigger re-render with new colors
+}
+```
+
+**Dimming Algorithm:**
+The automatic unfocused dimming blends each color channel 30% toward gray (0x808080):
+```rust
+new_value = (original * 70 + gray * 30) / 100
+```
+This reduces both brightness and saturation for a muted appearance.
+
+### Testing Focus Behavior
+
+1. Run the app: `./dev.sh`
+2. Press your configured hotkey to show the window
+3. Click on another application – window loses focus
+4. Observe the UI colors dim automatically
+5. Click back on the Script Kit window – colors return to normal
+6. Watch the logs (`Cmd+L`) for focus change events:
+   ```
+   [FOCUS] Window focus state changed: true
+   [THEME] Using focused colors (is_focused=true)
+   ```
+
 ## Next Steps
 
 1. ✅ Install `cargo-watch`: `cargo install cargo-watch`
@@ -240,5 +330,6 @@ cargo run --bin smoke-test -- --gui  # With GUI test
 3. ✅ Create a test script in `~/.kenv/scripts/`
 4. ✅ Configure hotkey in `~/.kit/config.json`
 5. ✅ Use `Cmd+L` to view logs while developing
+6. ✅ (NEW!) Customize focus-aware theme in `~/.kit/theme.json`
 
 Happy hacking! 🚀

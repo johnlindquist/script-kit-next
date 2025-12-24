@@ -49,6 +49,27 @@ pub struct UIColors {
     pub success: HexColor,
 }
 
+/// Cursor styling for text input
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CursorStyle {
+    /// Cursor color when focused (0x00ffff - cyan)
+    pub color: HexColor,
+    /// Cursor blink interval in milliseconds
+    pub blink_interval_ms: u64,
+}
+
+/// Color scheme for a specific window focus state
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FocusColorScheme {
+    pub background: BackgroundColors,
+    pub text: TextColors,
+    pub accent: AccentColors,
+    pub ui: UIColors,
+    /// Optional cursor styling
+    #[serde(default)]
+    pub cursor: Option<CursorStyle>,
+}
+
 /// Complete color scheme definition
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ColorScheme {
@@ -58,10 +79,46 @@ pub struct ColorScheme {
     pub ui: UIColors,
 }
 
+/// Window focus-aware theme with separate styles for focused and unfocused states
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FocusAwareColorScheme {
+    /// Colors when window is focused (default to standard colors if not specified)
+    #[serde(default)]
+    pub focused: Option<FocusColorScheme>,
+    /// Colors when window is unfocused (dimmed/desaturated)
+    #[serde(default)]
+    pub unfocused: Option<FocusColorScheme>,
+}
+
 /// Complete theme definition
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Theme {
     pub colors: ColorScheme,
+    /// Optional focus-aware colors (new feature)
+    #[serde(default)]
+    pub focus_aware: Option<FocusAwareColorScheme>,
+}
+
+impl CursorStyle {
+    /// Create a default blinking cursor style
+    pub fn default_focused() -> Self {
+        CursorStyle {
+            color: 0x00ffff, // Cyan cursor when focused
+            blink_interval_ms: 500,
+        }
+    }
+}
+
+impl FocusColorScheme {
+    /// Convert to a standard ColorScheme
+    pub fn to_color_scheme(&self) -> ColorScheme {
+        ColorScheme {
+            background: self.background.clone(),
+            text: self.text.clone(),
+            accent: self.accent.clone(),
+            ui: self.ui.clone(),
+        }
+    }
 }
 
 impl ColorScheme {
@@ -116,6 +173,47 @@ impl ColorScheme {
             },
         }
     }
+
+    /// Create an unfocused (dimmed) version of this color scheme
+    pub fn to_unfocused(&self) -> Self {
+        fn darken_hex(color: HexColor) -> HexColor {
+            // Reduce brightness by blending towards mid-gray
+            let r = (color >> 16) & 0xFF;
+            let g = (color >> 8) & 0xFF;
+            let b = color & 0xFF;
+            
+            // Reduce saturation and brightness: blend 30% toward gray
+            let gray = 0x80u32;
+            let new_r = ((r as u32 * 70 + gray * 30) / 100) as u8;
+            let new_g = ((g as u32 * 70 + gray * 30) / 100) as u8;
+            let new_b = ((b as u32 * 70 + gray * 30) / 100) as u8;
+            
+            ((new_r as u32) << 16) | ((new_g as u32) << 8) | (new_b as u32)
+        }
+        
+        ColorScheme {
+            background: BackgroundColors {
+                main: darken_hex(self.background.main),
+                title_bar: darken_hex(self.background.title_bar),
+                search_box: darken_hex(self.background.search_box),
+                log_panel: darken_hex(self.background.log_panel),
+            },
+            text: TextColors {
+                primary: darken_hex(self.text.primary),
+                secondary: darken_hex(self.text.secondary),
+                tertiary: darken_hex(self.text.tertiary),
+                muted: darken_hex(self.text.muted),
+                dimmed: darken_hex(self.text.dimmed),
+            },
+            accent: AccentColors {
+                selected: darken_hex(self.accent.selected),
+            },
+            ui: UIColors {
+                border: darken_hex(self.ui.border),
+                success: darken_hex(self.ui.success),
+            },
+        }
+    }
 }
 
 impl Default for ColorScheme {
@@ -128,7 +226,55 @@ impl Default for Theme {
     fn default() -> Self {
         Theme {
             colors: ColorScheme::default(),
+            focus_aware: None,
         }
+    }
+}
+
+impl Theme {
+    /// Get the appropriate color scheme based on window focus state
+    /// 
+    /// If focus-aware colors are configured:
+    /// - Returns focused colors when focused=true
+    /// - Returns unfocused colors when focused=false
+    /// 
+    /// If focus-aware colors are not configured:
+    /// - Always returns the standard colors (automatic dimmed version for unfocused)
+    pub fn get_colors(&self, is_focused: bool) -> ColorScheme {
+        if let Some(ref focus_aware) = self.focus_aware {
+            if is_focused {
+                if let Some(ref focused) = focus_aware.focused {
+                    return focused.to_color_scheme();
+                }
+            } else {
+                if let Some(ref unfocused) = focus_aware.unfocused {
+                    return unfocused.to_color_scheme();
+                }
+            }
+        }
+        
+        // Fallback: use standard colors, with automatic dimming for unfocused
+        if is_focused {
+            self.colors.clone()
+        } else {
+            self.colors.to_unfocused()
+        }
+    }
+    
+    /// Get cursor style if window is focused
+    pub fn get_cursor_style(&self, is_focused: bool) -> Option<CursorStyle> {
+        if !is_focused {
+            return None;
+        }
+        
+        if let Some(ref focus_aware) = self.focus_aware {
+            if let Some(ref focused) = focus_aware.focused {
+                return focused.cursor.clone();
+            }
+        }
+        
+        // Return default blinking cursor if focused
+        Some(CursorStyle::default_focused())
     }
 }
 
@@ -209,6 +355,7 @@ pub fn load_theme() -> Theme {
             ColorScheme::light_default()
         };
         return Theme {
+            focus_aware: None,
             colors: color_scheme,
         };
     }
@@ -225,6 +372,7 @@ pub fn load_theme() -> Theme {
             };
             Theme {
                 colors: color_scheme,
+                focus_aware: None,
             }
         }
         Ok(contents) => {
@@ -244,6 +392,7 @@ pub fn load_theme() -> Theme {
                     };
                     Theme {
                         colors: color_scheme,
+                        focus_aware: None,
                     }
                 }
             }
@@ -306,6 +455,7 @@ mod tests {
     fn test_light_theme_serialization() {
         let theme = Theme {
             colors: ColorScheme::light_default(),
+            focus_aware: None,
         };
         let json = serde_json::to_string(&theme).unwrap();
         let deserialized: Theme = serde_json::from_str(&json).unwrap();

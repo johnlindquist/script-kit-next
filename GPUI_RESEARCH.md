@@ -450,13 +450,92 @@ pub struct Point<T> {
 
 ---
 
+## 11. macOS Panel Configuration (Floating Window)
+
+### Goal
+Configure the GPUI window as a macOS floating panel that appears above other applications.
+
+### Key Concepts
+
+**NSFloatingWindowLevel (value: 3)**
+- Makes the window float above normal application windows
+- Standard for floating panels, HUD windows, and utility windows
+- Window remains visible when switching between applications
+
+**NSWindowCollectionBehaviorCanJoinAllSpaces**
+- Allows the panel to appear on all spaces/desktops
+- Ensures window is accessible regardless of current space
+- User can switch spaces and the panel stays with them
+
+**NSApp::keyWindow**
+- Gets the most recently activated/focused window
+- Useful for accessing window immediately after creation
+- Works reliably when called right after window is made visible
+
+### Implementation Pattern
+
+```rust
+#[cfg(target_os = "macos")]
+fn configure_as_floating_panel() {
+    unsafe {
+        let app: id = NSApp();
+        
+        // Get the key window (most recently activated)
+        let window: id = msg_send![app, keyWindow];
+        
+        if window != nil {
+            // Set floating window level (3 = NSFloatingWindowLevel)
+            let floating_level: i32 = 3;
+            let _: () = msg_send![window, setLevel:floating_level];
+            
+            // Set collection behavior (1 = NSWindowCollectionBehaviorCanJoinAllSpaces)
+            let collection_behavior: u64 = 1;
+            let _: () = msg_send![window, setCollectionBehavior:collection_behavior];
+            
+            logging::log("PANEL", "Configured as floating panel");
+        }
+    }
+}
+```
+
+### Integration
+
+1. **Call Location:** In `main()` after `cx.activate(true);`
+2. **Timing:** Must be called after window is created and visible
+3. **Guards:** Use `#[cfg(target_os = "macos")]` for conditional compilation
+4. **Interaction:** Works seamlessly with existing positioning logic
+
+### Window Level Reference
+
+| Level | Value | Use Case |
+|-------|-------|----------|
+| NSNormalWindowLevel | 0 | Regular windows |
+| NSFloatingWindowLevel | 3 | Floating panels (our choice) |
+| NSModalPanelWindowLevel | 8 | Modal dialogs |
+| NSPopUpMenuWindowLevel | 101 | Menus |
+| NSStatusWindowLevel | 25 | Status bar items |
+
+### Compatibility
+
+- **Preserves:** Multi-monitor positioning, eye-line height calculation
+- **Enhances:** Window floats above other apps while maintaining all GPUI functionality
+- **Platform:** macOS only (no-op on other platforms with `#[cfg]`)
+
+---
+
 ## References
 
 - **GPUI Crate:** https://docs.rs/gpui/latest/gpui/
 - **Zed Repository:** https://github.com/zed-industries/zed (crates/gpui/src/)
+- **Cocoa/macOS APIs:**
+  - NSApp::keyWindow - Get focused window
+  - NSWindow::setLevel - Set window stacking level
+  - NSWindow::setCollectionBehavior - Configure space/desktop behavior
 - **Key Files:**
   - `crates/gpui/src/app.rs` - `displays()`, `primary_display()`, `find_display()`
   - `crates/gpui/src/geometry.rs` - `Bounds`, `Point`, `contains()`, `centered()`
   - `crates/gpui/src/window.rs` - `mouse_position()`
   - `crates/gpui/src/platform.rs` - `PlatformDisplay` trait
+  - `src/panel.rs` - macOS panel configuration module
+  - `src/main.rs` - Window creation and panel setup
 

@@ -20,6 +20,8 @@ mod theme;
 mod watcher;
 mod protocol;
 mod prompts;
+mod config;
+mod panel;
 
 use std::sync::{Arc, Mutex, mpsc};
 use protocol::{Message, Choice};
@@ -226,6 +228,7 @@ struct ScriptListApp {
     focus_handle: FocusHandle,
     show_logs: bool,
     theme: theme::Theme,
+    config: config::Config,
     // Interactive script state
     current_view: AppView,
     script_session: SharedSession,
@@ -242,8 +245,11 @@ impl ScriptListApp {
     fn new(cx: &mut Context<Self>) -> Self {
         let scripts = scripts::read_scripts();
         let theme = theme::load_theme();
+        let config = config::load_config();
         logging::log("APP", &format!("Loaded {} scripts from ~/.kenv/scripts", scripts.len()));
         logging::log("APP", "Loaded theme with system appearance detection");
+        logging::log("APP", &format!("Loaded config: hotkey={:?}+{}, bun_path={:?}", 
+            config.hotkey.modifiers, config.hotkey.key, config.bun_path));
         ScriptListApp {
             scripts,
             selected_index: 0,
@@ -252,6 +258,7 @@ impl ScriptListApp {
             focus_handle: cx.focus_handle(),
             show_logs: false,
             theme,
+            config,
             current_view: AppView::ScriptList,
             script_session: Arc::new(Mutex::new(None)),
             arg_input_text: String::new(),
@@ -283,6 +290,11 @@ impl ScriptListApp {
     fn update_theme(&mut self, cx: &mut Context<Self>) {
         self.theme = theme::load_theme();
         logging::log("APP", "Theme reloaded based on system appearance");
+        cx.notify();
+    }
+    
+    fn update_config(&mut self, cx: &mut Context<Self>) {
+        logging::log("APP", "Config file reloaded");
         cx.notify();
     }
     
@@ -1080,6 +1092,39 @@ fn start_hotkey_listener() {
     });
 }
 
+/// Configure the current window as a floating macOS panel that appears above other apps
+#[cfg(target_os = "macos")]
+fn configure_as_floating_panel() {
+    unsafe {
+        let app: id = NSApp();
+
+        // Get the key window (the most recently activated window)
+        let window: id = msg_send![app, keyWindow];
+
+        if window != nil {
+            // NSFloatingWindowLevel = 3
+            // This makes the window float above normal windows
+            let floating_level: i32 = 3;
+            let _: () = msg_send![window, setLevel:floating_level];
+
+            // NSWindowCollectionBehaviorCanJoinAllSpaces = (1 << 0)
+            // This makes the window appear on all spaces/desktops
+            let collection_behavior: u64 = 1;
+            let _: () = msg_send![window, setCollectionBehavior:collection_behavior];
+
+            logging::log(
+                "PANEL",
+                "Configured window as floating panel (NSFloatingWindowLevel)",
+            );
+        } else {
+            logging::log("PANEL", "Warning: No key window found to configure as panel");
+        }
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn configure_as_floating_panel() {}
+
 fn start_hotkey_poller(cx: &mut App, window: WindowHandle<ScriptListApp>) {
     let poller = cx.new(|_| HotkeyPoller::new(window));
     poller.update(cx, |p, cx| {
@@ -1097,6 +1142,11 @@ fn main() {
         logging::log("APP", &format!("Failed to start appearance watcher: {}", e));
     }
     
+
+    let (mut config_watcher, config_rx) = watcher::ConfigWatcher::new();
+    if let Err(e) = config_watcher.start() {
+        logging::log("APP", &format!("Failed to start config watcher: {}", e));
+    }
     Application::new().run(move |cx: &mut App| {
         logging::log("APP", "GPUI Application starting");
         
@@ -1129,6 +1179,9 @@ fn main() {
         
         cx.activate(true);
         
+        // Configure window as floating panel on macOS
+        configure_as_floating_panel();
+        
         start_hotkey_poller(cx, window.clone());
         
         let window_for_appearance = window.clone();
@@ -1141,6 +1194,23 @@ fn main() {
                     let _ = cx.update(|cx| {
                         let _ = window_for_appearance.update(cx, |view: &mut ScriptListApp, _window: &mut Window, ctx: &mut Context<ScriptListApp>| {
                             view.update_theme(ctx);
+                        });
+                    });
+                }
+            }
+        }).detach();
+        
+        // Config reload watcher - watches ~/.kit/config.ts for changes
+        let window_for_config = window.clone();
+        cx.spawn(async move |cx: &mut gpui::AsyncApp| {
+            loop {
+                Timer::after(std::time::Duration::from_millis(200)).await;
+                
+                if let Ok(_) = config_rx.try_recv() {
+                    logging::log("APP", "Config file changed, reloading");
+                    let _ = cx.update(|cx| {
+                        let _ = window_for_config.update(cx, |view: &mut ScriptListApp, _window: &mut Window, ctx: &mut Context<ScriptListApp>| {
+                            view.update_config(ctx);
                         });
                     });
                 }
