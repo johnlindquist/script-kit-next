@@ -5,6 +5,64 @@ use std::process::Command;
 /// Hex color representation (u32)
 pub type HexColor = u32;
 
+/// Background opacity settings for window transparency
+/// Values range from 0.0 (fully transparent) to 1.0 (fully opaque)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BackgroundOpacity {
+    /// Main background opacity (default: 0.85)
+    pub main: f32,
+    /// Title bar opacity (default: 0.9)
+    pub title_bar: f32,
+    /// Search box opacity (default: 0.92)
+    pub search_box: f32,
+    /// Log panel opacity (default: 0.8)
+    pub log_panel: f32,
+}
+
+impl Default for BackgroundOpacity {
+    fn default() -> Self {
+        BackgroundOpacity {
+            main: 0.85,
+            title_bar: 0.9,
+            search_box: 0.92,
+            log_panel: 0.8,
+        }
+    }
+}
+
+/// Drop shadow configuration for the window
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DropShadow {
+    /// Whether drop shadow is enabled (default: true)
+    pub enabled: bool,
+    /// Blur radius for the shadow (default: 20.0)
+    pub blur_radius: f32,
+    /// Spread radius for the shadow (default: 0.0)
+    pub spread_radius: f32,
+    /// Horizontal offset (default: 0.0)
+    pub offset_x: f32,
+    /// Vertical offset (default: 8.0)
+    pub offset_y: f32,
+    /// Shadow color as hex (default: 0x000000 - black)
+    pub color: HexColor,
+    /// Shadow opacity (default: 0.25)
+    pub opacity: f32,
+}
+
+impl Default for DropShadow {
+    fn default() -> Self {
+        DropShadow {
+            enabled: true,
+            blur_radius: 20.0,
+            spread_radius: 0.0,
+            offset_x: 0.0,
+            offset_y: 8.0,
+            color: 0x000000,
+            opacity: 0.25,
+        }
+    }
+}
+
 /// Background color definitions
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BackgroundColors {
@@ -97,6 +155,12 @@ pub struct Theme {
     /// Optional focus-aware colors (new feature)
     #[serde(default)]
     pub focus_aware: Option<FocusAwareColorScheme>,
+    /// Background opacity settings for window transparency
+    #[serde(default)]
+    pub opacity: Option<BackgroundOpacity>,
+    /// Drop shadow configuration
+    #[serde(default)]
+    pub drop_shadow: Option<DropShadow>,
 }
 
 impl CursorStyle {
@@ -227,6 +291,8 @@ impl Default for Theme {
         Theme {
             colors: ColorScheme::default(),
             focus_aware: None,
+            opacity: Some(BackgroundOpacity::default()),
+            drop_shadow: Some(DropShadow::default()),
         }
     }
 }
@@ -275,6 +341,35 @@ impl Theme {
         
         // Return default blinking cursor if focused
         Some(CursorStyle::default_focused())
+    }
+    
+    /// Get background opacity settings
+    /// Returns the configured opacity or sensible defaults
+    pub fn get_opacity(&self) -> BackgroundOpacity {
+        self.opacity.clone().unwrap_or_default()
+    }
+    
+    /// Get opacity adjusted for focus state
+    /// Unfocused windows are slightly more transparent
+    pub fn get_opacity_for_focus(&self, is_focused: bool) -> BackgroundOpacity {
+        let base = self.get_opacity();
+        if is_focused {
+            base
+        } else {
+            // Reduce opacity by 10% when unfocused
+            BackgroundOpacity {
+                main: (base.main * 0.9).clamp(0.0, 1.0),
+                title_bar: (base.title_bar * 0.9).clamp(0.0, 1.0),
+                search_box: (base.search_box * 0.9).clamp(0.0, 1.0),
+                log_panel: (base.log_panel * 0.9).clamp(0.0, 1.0),
+            }
+        }
+    }
+    
+    /// Get drop shadow configuration
+    /// Returns the configured shadow or sensible defaults
+    pub fn get_drop_shadow(&self) -> DropShadow {
+        self.drop_shadow.clone().unwrap_or_default()
     }
 }
 
@@ -354,10 +449,14 @@ pub fn load_theme() -> Theme {
         } else {
             ColorScheme::light_default()
         };
-        return Theme {
+        let theme = Theme {
             focus_aware: None,
             colors: color_scheme,
+            opacity: Some(BackgroundOpacity::default()),
+            drop_shadow: Some(DropShadow::default()),
         };
+        log_theme_config(&theme);
+        return theme;
     }
 
     // Read and parse the JSON file
@@ -370,15 +469,20 @@ pub fn load_theme() -> Theme {
             } else {
                 ColorScheme::light_default()
             };
-            Theme {
+            let theme = Theme {
                 colors: color_scheme,
                 focus_aware: None,
-            }
+                opacity: Some(BackgroundOpacity::default()),
+                drop_shadow: Some(DropShadow::default()),
+            };
+            log_theme_config(&theme);
+            theme
         }
         Ok(contents) => {
             match serde_json::from_str::<Theme>(&contents) {
                 Ok(theme) => {
                     eprintln!("Successfully loaded theme from {:?}", theme_path);
+                    log_theme_config(&theme);
                     theme
                 }
                 Err(e) => {
@@ -390,14 +494,28 @@ pub fn load_theme() -> Theme {
                     } else {
                         ColorScheme::light_default()
                     };
-                    Theme {
+                    let theme = Theme {
                         colors: color_scheme,
                         focus_aware: None,
-                    }
+                        opacity: Some(BackgroundOpacity::default()),
+                        drop_shadow: Some(DropShadow::default()),
+                    };
+                    log_theme_config(&theme);
+                    theme
                 }
             }
         }
     }
+}
+
+/// Log theme configuration for debugging
+fn log_theme_config(theme: &Theme) {
+    let opacity = theme.get_opacity();
+    let shadow = theme.get_drop_shadow();
+    eprintln!("Theme opacity: main={:.2}, title_bar={:.2}, search_box={:.2}, log_panel={:.2}",
+        opacity.main, opacity.title_bar, opacity.search_box, opacity.log_panel);
+    eprintln!("Theme shadow: enabled={}, blur={:.1}, spread={:.1}, offset=({:.1}, {:.1}), opacity={:.2}",
+        shadow.enabled, shadow.blur_radius, shadow.spread_radius, shadow.offset_x, shadow.offset_y, shadow.opacity);
 }
 
 #[cfg(test)]
@@ -456,12 +574,35 @@ mod tests {
         let theme = Theme {
             colors: ColorScheme::light_default(),
             focus_aware: None,
+            opacity: Some(BackgroundOpacity::default()),
+            drop_shadow: Some(DropShadow::default()),
         };
         let json = serde_json::to_string(&theme).unwrap();
         let deserialized: Theme = serde_json::from_str(&json).unwrap();
 
         assert_eq!(deserialized.colors.background.main, 0xffffff);
         assert_eq!(deserialized.colors.text.primary, 0x000000);
+    }
+    
+    #[test]
+    fn test_opacity_defaults() {
+        let opacity = BackgroundOpacity::default();
+        assert_eq!(opacity.main, 0.85);
+        assert_eq!(opacity.title_bar, 0.9);
+        assert_eq!(opacity.search_box, 0.92);
+        assert_eq!(opacity.log_panel, 0.8);
+    }
+    
+    #[test]
+    fn test_drop_shadow_defaults() {
+        let shadow = DropShadow::default();
+        assert!(shadow.enabled);
+        assert_eq!(shadow.blur_radius, 20.0);
+        assert_eq!(shadow.spread_radius, 0.0);
+        assert_eq!(shadow.offset_x, 0.0);
+        assert_eq!(shadow.offset_y, 8.0);
+        assert_eq!(shadow.color, 0x000000);
+        assert_eq!(shadow.opacity, 0.25);
     }
 
     #[test]

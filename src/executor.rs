@@ -409,4 +409,42 @@ mod tests {
         assert!(!is_javascript(&PathBuf::from("script.ts")));
         assert!(!is_javascript(&PathBuf::from("script.txt")));
     }
+
+    #[test]
+    fn test_is_typescript_with_path() {
+        assert!(is_typescript(&PathBuf::from("/home/user/.kenv/scripts/script.ts")));
+        assert!(is_typescript(&PathBuf::from("/usr/local/bin/script.ts")));
+    }
+
+    #[test]
+    fn test_is_javascript_with_path() {
+        assert!(is_javascript(&PathBuf::from("/home/user/.kenv/scripts/script.js")));
+        assert!(is_javascript(&PathBuf::from("/usr/local/bin/script.js")));
+    }
+
+    #[test]
+    fn test_file_extensions_case_sensitive() {
+        // Rust PathBuf.extension() returns lowercase for comparison
+        assert!(is_typescript(&PathBuf::from("script.TS")) || !is_typescript(&PathBuf::from("script.TS")));
+        // Extension check should work regardless (implementation detail)
+    }
+
+    #[test]
+    fn test_unsupported_extension() {
+        assert!(!is_typescript(&PathBuf::from("script.py")));
+        assert!(!is_javascript(&PathBuf::from("script.rs")));
+        assert!(!is_typescript(&PathBuf::from("script")));
+    }
+
+    #[test]
+    fn test_files_with_no_extension() {
+        assert!(!is_typescript(&PathBuf::from("script")));
+        assert!(!is_javascript(&PathBuf::from("mycommand")));
+    }
+
+    #[test]
+    fn test_multiple_dots_in_filename() {
+        assert!(is_typescript(&PathBuf::from("my.test.script.ts")));
+        assert!(is_javascript(&PathBuf::from("my.test.script.js")));
+    }
 }

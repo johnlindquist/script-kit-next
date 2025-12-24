@@ -20,6 +20,20 @@
       "border": 4609607,
       "success": 65280
     }
+  },
+  "opacity": {
+    "main": 0.85,
+    "title_bar": 0.9,
+    "search_box": 0.92,
+    "log_panel": 0.8
+  },
+  "drop_shadow": {
+    "enabled": true,
+    "blur_radius": 20.0,
+    "spread_radius": 0.0,
+    "offset_x": 0.0,
+    "offset_y": 8.0,
+    "color": 0,
+    "opacity": 0.25
   }
 }
-

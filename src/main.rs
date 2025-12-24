@@ -1,9 +1,9 @@
 use gpui::{
     div, prelude::*, px, point, rgb, rgba, size, App, Application, Bounds, Context, Render,
     Window, WindowBounds, WindowOptions, SharedString, FocusHandle, Focusable,
-    WindowHandle, Timer, Pixels, WindowBackgroundAppearance, AnyElement,
+    WindowHandle, Timer, Pixels, WindowBackgroundAppearance, AnyElement, BoxShadow, hsla,
 };
-use global_hotkey::{GlobalHotKeyManager, GlobalHotKeyEvent, hotkey::{HotKey, Modifiers, Code}};
+use global_hotkey::{GlobalHotKeyManager, GlobalHotKeyEvent, HotKeyState, hotkey::{HotKey, Modifiers, Code}};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use core_graphics::event::CGEvent;
 use core_graphics::event_source::{CGEventSource, CGEventSourceStateID};
@@ -41,22 +41,82 @@ fn get_global_mouse_position() -> Option<(f64, f64)> {
     Some((location.x, location.y))
 }
 
+/// Represents a display's bounds in macOS global coordinate space
+#[derive(Debug, Clone)]
+struct DisplayBounds {
+    origin_x: f64,
+    origin_y: f64,
+    width: f64,
+    height: f64,
+}
+
+/// Get all displays with their actual bounds in macOS global coordinates.
+/// This uses NSScreen directly because GPUI's display.bounds() doesn't return
+/// correct origins for secondary displays.
+fn get_macos_displays() -> Vec<DisplayBounds> {
+    unsafe {
+        let screens: id = msg_send![class!(NSScreen), screens];
+        let count: usize = msg_send![screens, count];
+        
+        // Get primary screen height for coordinate flipping
+        // macOS coordinates: Y=0 at bottom of primary screen
+        let main_screen: id = msg_send![screens, firstObject];
+        let main_frame: NSRect = msg_send![main_screen, frame];
+        let primary_height = main_frame.size.height;
+        
+        let mut displays = Vec::with_capacity(count);
+        
+        for i in 0..count {
+            let screen: id = msg_send![screens, objectAtIndex:i];
+            let frame: NSRect = msg_send![screen, frame];
+            
+            // Convert from macOS bottom-left origin to top-left origin
+            // macOS: y=0 at bottom, increasing upward
+            // We want: y=0 at top, increasing downward
+            let flipped_y = primary_height - frame.origin.y - frame.size.height;
+            
+            displays.push(DisplayBounds {
+                origin_x: frame.origin.x,
+                origin_y: flipped_y,
+                width: frame.size.width,
+                height: frame.size.height,
+            });
+        }
+        
+        displays
+    }
+}
+
 /// Move the key window (focused window) to a new position using native macOS APIs.
 /// Position is specified as origin (top-left corner) in screen coordinates.
+/// 
+/// IMPORTANT: macOS uses a global coordinate space where Y=0 is at the BOTTOM of the
+/// PRIMARY screen, and Y increases upward. The primary screen's origin is always (0,0)
+/// at its bottom-left corner. Secondary displays have their own position in this space.
+/// 
+/// For input (x, y) in top-left origin coordinates (common in most UI frameworks):
+/// - We need to convert to bottom-left origin for macOS
+/// - The conversion uses the PRIMARY screen height as the reference
 fn move_key_window_to(x: f64, y: f64, width: f64, height: f64) {
     unsafe {
         let app: id = NSApp();
         let window: id = msg_send![app, keyWindow];
         if window != nil {
-            // Get the screen height for coordinate conversion
-            // macOS uses bottom-left origin, we need to flip Y
+            // Get the PRIMARY screen's height for coordinate conversion
+            // macOS global coordinates: Y=0 at bottom of primary screen, Y increases upward
             let screens: id = msg_send![class!(NSScreen), screens];
             let main_screen: id = msg_send![screens, firstObject];
-            let screen_frame: NSRect = msg_send![main_screen, frame];
-            let screen_height = screen_frame.size.height;
+            let main_screen_frame: NSRect = msg_send![main_screen, frame];
+            let primary_screen_height = main_screen_frame.size.height;
             
-            // Convert from top-left origin to bottom-left origin
-            let flipped_y = screen_height - y - height;
+            // Convert from top-left origin (y down) to bottom-left origin (y up)
+            // In macOS coordinates: window_bottom_y = primary_screen_height - top_left_y - height
+            let flipped_y = primary_screen_height - y - height;
+            
+            logging::log("POSITION", &format!(
+                "Moving window: input=({:.0}, {:.0}) size={:.0}x{:.0} | primary_height={:.0} | flipped_y={:.0}",
+                x, y, width, height, primary_screen_height, flipped_y
+            ));
             
             let new_frame = NSRect::new(
                 NSPoint::new(x, flipped_y),
@@ -64,7 +124,7 @@ fn move_key_window_to(x: f64, y: f64, width: f64, height: f64) {
             );
             
             let _: () = msg_send![window, setFrame:new_frame display:true animate:false];
-            logging::log("POSITION", &format!("Moved window to ({:.0}, {:.0})", x, y));
+            logging::log("POSITION", &format!("Window setFrame completed: origin=({:.0}, {:.0})", x, flipped_y));
         } else {
             logging::log("POSITION", "No key window to move");
         }
@@ -90,65 +150,89 @@ fn move_window_to_bounds(bounds: &Bounds<Pixels>) {
 /// This matches the behavior of Raycast/Alfred where the prompt appears on the active display.
 fn calculate_eye_line_bounds_on_mouse_display(
     window_size: gpui::Size<Pixels>,
-    cx: &App,
+    _cx: &App,
 ) -> Bounds<Pixels> {
-    let displays = cx.displays();
+    // Use native macOS API to get actual display bounds with correct origins
+    // GPUI's cx.displays() returns incorrect origins for secondary displays
+    let displays = get_macos_displays();
+    
+    logging::log("POSITION", &format!("=== Calculating window position ({} displays available) ===", displays.len()));
+    
+    // Log all available displays for debugging
+    for (idx, display) in displays.iter().enumerate() {
+        logging::log("POSITION", &format!(
+            "  Display {}: origin=({:.0}, {:.0}) size={:.0}x{:.0}",
+            idx, display.origin_x, display.origin_y, display.width, display.height
+        ));
+    }
     
     // Try to get mouse position and find which display contains it
     let target_display = if let Some((mouse_x, mouse_y)) = get_global_mouse_position() {
-        logging::log("POSITION", &format!("Mouse at ({:.0}, {:.0})", mouse_x, mouse_y));
+        logging::log("POSITION", &format!("Mouse cursor at ({:.0}, {:.0})", mouse_x, mouse_y));
         
         // Find the display that contains the mouse cursor
-        displays.iter().find(|display| {
-            let bounds = display.bounds();
-            let origin_x: f64 = bounds.origin.x.into();
-            let origin_y: f64 = bounds.origin.y.into();
-            let width: f64 = bounds.size.width.into();
-            let height: f64 = bounds.size.height.into();
+        let found = displays.iter().enumerate().find(|(idx, display)| {
+            let contains = mouse_x >= display.origin_x && mouse_x < display.origin_x + display.width &&
+                           mouse_y >= display.origin_y && mouse_y < display.origin_y + display.height;
             
-            mouse_x >= origin_x && mouse_x < origin_x + width &&
-            mouse_y >= origin_y && mouse_y < origin_y + height
-        }).cloned()
+            if contains {
+                logging::log("POSITION", &format!("  -> Mouse is on display {}", idx));
+            }
+            contains
+        });
+        
+        found.map(|(_, d)| d.clone())
     } else {
         logging::log("POSITION", "Could not get mouse position, using primary display");
         None
     };
     
-    // Use the found display, or fall back to primary display
+    // Use the found display, or fall back to first display (primary)
     let display = target_display
-        .or_else(|| cx.primary_display())
-        .or_else(|| displays.into_iter().next());
+        .or_else(|| {
+            logging::log("POSITION", "No display contains mouse, falling back to primary");
+            displays.first().cloned()
+        });
     
     if let Some(display) = display {
-        let display_bounds = display.bounds();
-        
         logging::log("POSITION", &format!(
-            "Using display at ({:.0}, {:.0}) size {:.0}x{:.0}",
-            f64::from(display_bounds.origin.x),
-            f64::from(display_bounds.origin.y),
-            f64::from(display_bounds.size.width),
-            f64::from(display_bounds.size.height)
+            "Selected display: origin=({:.0}, {:.0}) size={:.0}x{:.0}",
+            display.origin_x, display.origin_y, display.width, display.height
         ));
         
         // Eye-line: position window top at ~1/4 from screen top (input bar at eye level)
-        let eye_line_y = display_bounds.origin.y + display_bounds.size.height * 0.25;
+        let eye_line_y = display.origin_y + display.height * 0.25;
         
         // Center horizontally on the display
-        let center_x = display_bounds.origin.x + (display_bounds.size.width - window_size.width) * 0.5;
+        let window_width: f64 = window_size.width.into();
+        let center_x = display.origin_x + (display.width - window_width) / 2.0;
         
-        Bounds {
-            origin: point(center_x, eye_line_y),
+        let final_bounds = Bounds {
+            origin: point(px(center_x as f32), px(eye_line_y as f32)),
             size: window_size,
-        }
+        };
+        
+        logging::log("POSITION", &format!(
+            "Final window bounds: origin=({:.0}, {:.0}) size={:.0}x{:.0}",
+            center_x, eye_line_y,
+            f64::from(window_size.width), f64::from(window_size.height)
+        ));
+        
+        final_bounds
     } else {
         logging::log("POSITION", "No displays found, using default centered bounds");
-        Bounds::centered(None, window_size, cx)
+        // Fallback: just center on screen using 1512x982 as default (common MacBook)
+        Bounds {
+            origin: point(px(381.0), px(246.0)),
+            size: window_size,
+        }
     }
 }
 
 // Global state for hotkey signaling between threads
 static HOTKEY_TRIGGERED: AtomicBool = AtomicBool::new(false);
 static HOTKEY_TRIGGER_COUNT: AtomicU64 = AtomicU64::new(0);
+static WINDOW_VISIBLE: AtomicBool = AtomicBool::new(false); // Track window visibility for toggle (starts hidden)
 
 /// Application state - what view are we currently showing
 #[derive(Debug, Clone)]
@@ -199,25 +283,84 @@ impl HotkeyPoller {
                 Timer::after(std::time::Duration::from_millis(100)).await;
                 
                 if HOTKEY_TRIGGERED.compare_exchange(true, false, Ordering::SeqCst, Ordering::SeqCst).is_ok() {
-                    logging::log("HOTKEY", "Poller detected trigger");
+                    logging::log("HOTKEY", "=== Hotkey triggered ===");
                     
-                    let window_clone = window.clone();
-                    let _ = cx.update(move |cx: &mut App| {
-                        // Calculate new bounds on display with mouse, at eye-line height
-                        let window_size = size(px(750.), px(500.0));
-                        let new_bounds = calculate_eye_line_bounds_on_mouse_display(window_size, cx);
+                    // Check current visibility state for toggle behavior
+                    let is_visible = WINDOW_VISIBLE.load(Ordering::SeqCst);
+                    
+                    if is_visible {
+                        // Update visibility state FIRST to prevent race conditions
+                        // Even though the hide is async, we mark it as hidden immediately
+                        WINDOW_VISIBLE.store(false, Ordering::SeqCst);
+                        logging::log("HOTKEY", "Visibility state updated: visible -> hidden");
                         
-                        let _ = window_clone.update(cx, |view: &mut ScriptListApp, win: &mut Window, cx: &mut Context<ScriptListApp>| {
-                            win.activate_window();
-                            let focus_handle = view.focus_handle(cx);
-                            win.focus(&focus_handle, cx);
-                            logging::log("HOTKEY", "Window activated and focused");
+                        // Window is visible - check if in prompt mode
+                        let window_clone = window.clone();
+                        
+                        // First check if we're in a prompt - if so, cancel and hide
+                        let mut in_prompt = false;
+                        let _ = cx.update(move |cx: &mut App| {
+                            let _ = window_clone.update(cx, |view: &mut ScriptListApp, _win: &mut Window, ctx: &mut Context<ScriptListApp>| {
+                                if view.is_in_prompt() {
+                                    logging::log("HOTKEY", "In prompt mode - canceling script before hiding");
+                                    view.cancel_script_execution(ctx);
+                                    in_prompt = true;
+                                }
+                            });
+                            
+                            // Always hide the window when hotkey pressed while visible
+                            logging::log("HOTKEY", "Hiding window (toggle: visible -> hidden)");
+                            // PERF: Measure window hide latency
+                            let hide_start = std::time::Instant::now();
+                            cx.hide();
+                            let hide_elapsed = hide_start.elapsed();
+                            logging::log("PERF", &format!(
+                                "Window hide took {:.2}ms",
+                                hide_elapsed.as_secs_f64() * 1000.0
+                            ));
+                            logging::log("HOTKEY", "Window hidden via cx.hide()");
                         });
-                        cx.activate(true);
+                    } else {
+                        // Update visibility state FIRST to prevent race conditions
+                        WINDOW_VISIBLE.store(true, Ordering::SeqCst);
+                        logging::log("HOTKEY", "Visibility state updated: hidden -> visible");
                         
-                        // Move the window to the new position using native macOS APIs
-                        move_window_to_bounds(&new_bounds);
-                    });
+                        // Window is hidden - SHOW it
+                        logging::log("HOTKEY", "Showing window (toggle: hidden -> visible)");
+                        
+                        let window_clone = window.clone();
+                        let _ = cx.update(move |cx: &mut App| {
+                            // Step 1: Calculate new bounds on display with mouse, at eye-line height
+                            let window_size = size(px(750.), px(500.0));
+                            let new_bounds = calculate_eye_line_bounds_on_mouse_display(window_size, cx);
+                            
+                            logging::log("HOTKEY", &format!(
+                                "Calculated bounds: origin=({:.0}, {:.0}) size={:.0}x{:.0}",
+                                f64::from(new_bounds.origin.x),
+                                f64::from(new_bounds.origin.y),
+                                f64::from(new_bounds.size.width),
+                                f64::from(new_bounds.size.height)
+                            ));
+                            
+                            // Step 2: MOVE window FIRST (before activation)
+                            // This ensures the window appears on the correct display
+                            move_window_to_bounds(&new_bounds);
+                            
+                            // Step 3: THEN activate the window
+                            // Activation after move prevents macOS from repositioning the window
+                            let _ = window_clone.update(cx, |view: &mut ScriptListApp, win: &mut Window, cx: &mut Context<ScriptListApp>| {
+                                win.activate_window();
+                                let focus_handle = view.focus_handle(cx);
+                                win.focus(&focus_handle, cx);
+                                logging::log("HOTKEY", "Window activated and focused (after move)");
+                            });
+                            cx.activate(true);
+                            
+                            logging::log("HOTKEY", "Window shown - hotkey handling complete");
+                        });
+                    }
+                    
+                    logging::log("HOTKEY", "=== Hotkey handling complete ===");
                 }
             }
         }).detach();
@@ -244,14 +387,34 @@ struct ScriptListApp {
     prompt_receiver: Option<mpsc::Receiver<PromptMessage>>,
     // Channel for sending responses back to script
     response_sender: Option<mpsc::Sender<Message>>,
+    // Scroll state for script list
+    scroll_offset: usize,           // Index of first visible item
+    viewport_height: usize,         // Number of items that fit in viewport
 }
 
 impl ScriptListApp {
     fn new(cx: &mut Context<Self>) -> Self {
+        // PERF: Measure script loading time
+        let load_start = std::time::Instant::now();
         let scripts = scripts::read_scripts();
+        let scripts_elapsed = load_start.elapsed();
+        
+        let scriptlets_start = std::time::Instant::now();
         let scriptlets = scripts::read_scriptlets();
+        let scriptlets_elapsed = scriptlets_start.elapsed();
+        
         let theme = theme::load_theme();
         let config = config::load_config();
+        
+        let total_elapsed = load_start.elapsed();
+        logging::log("PERF", &format!(
+            "Startup loading: {:.2}ms total ({} scripts in {:.2}ms, {} scriptlets in {:.2}ms)",
+            total_elapsed.as_secs_f64() * 1000.0,
+            scripts.len(),
+            scripts_elapsed.as_secs_f64() * 1000.0,
+            scriptlets.len(),
+            scriptlets_elapsed.as_secs_f64() * 1000.0
+        ));
         logging::log("APP", &format!("Loaded {} scripts from ~/.kenv/scripts", scripts.len()));
         logging::log("APP", &format!("Loaded {} scriptlets from ~/.kenv/scriptlets/scriptlets.md", scriptlets.len()));
         logging::log("APP", "Loaded theme with system appearance detection");
@@ -273,6 +436,8 @@ impl ScriptListApp {
             arg_selected_index: 0,
             prompt_receiver: None,
             response_sender: None,
+            scroll_offset: 0,
+            viewport_height: 10,  // ~10 items visible at a time (estimate based on 50px per item, ~500px viewport)
         }
     }
     
@@ -310,13 +475,30 @@ impl ScriptListApp {
         self.scripts = scripts::read_scripts();
         self.scriptlets = scripts::read_scriptlets();
         self.selected_index = 0;
+        self.scroll_offset = 0;
         logging::log("APP", &format!("Scripts refreshed: {} scripts, {} scriptlets loaded", self.scripts.len(), self.scriptlets.len()));
+        logging::log("SCROLL", "Scripts refreshed - reset: selected_index=0, scroll_offset=0");
         cx.notify();
     }
 
     /// Get unified filtered results combining scripts and scriptlets
     fn filtered_results(&self) -> Vec<scripts::SearchResult> {
-        scripts::fuzzy_search_unified(&self.scripts, &self.scriptlets, &self.filter_text)
+        // PERF: Measure search time (only log when actually filtering)
+        let search_start = std::time::Instant::now();
+        let results = scripts::fuzzy_search_unified(&self.scripts, &self.scriptlets, &self.filter_text);
+        let search_elapsed = search_start.elapsed();
+        
+        // Only log search performance when there's an active filter
+        if !self.filter_text.is_empty() {
+            logging::log("PERF", &format!(
+                "Search '{}' took {:.2}ms ({} results from {} total)",
+                self.filter_text,
+                search_elapsed.as_secs_f64() * 1000.0,
+                results.len(),
+                self.scripts.len() + self.scriptlets.len()
+            ));
+        }
+        results
     }
 
     fn filtered_scripts(&self) -> Vec<scripts::Script> {
@@ -334,6 +516,16 @@ impl ScriptListApp {
     fn move_selection_up(&mut self, cx: &mut Context<Self>) {
         if self.selected_index > 0 {
             self.selected_index -= 1;
+            
+            // Scroll if item is above visible area
+            if self.selected_index < self.scroll_offset {
+                self.scroll_offset = self.selected_index;
+            }
+            
+            logging::log("SCROLL", &format!(
+                "Up: selected_index={}, scroll_offset={}, viewport={}",
+                self.selected_index, self.scroll_offset, self.viewport_height
+            ));
             cx.notify();
         }
     }
@@ -342,6 +534,17 @@ impl ScriptListApp {
         let filtered_len = self.filtered_results().len();
         if self.selected_index < filtered_len.saturating_sub(1) {
             self.selected_index += 1;
+            
+            // Scroll if item is below visible area
+            let last_visible = self.scroll_offset + self.viewport_height;
+            if self.selected_index >= last_visible {
+                self.scroll_offset = self.selected_index - self.viewport_height + 1;
+            }
+            
+            logging::log("SCROLL", &format!(
+                "Down: selected_index={}, scroll_offset={}, viewport={}, last_visible={}",
+                self.selected_index, self.scroll_offset, self.viewport_height, last_visible
+            ));
             cx.notify();
         }
     }
@@ -366,12 +569,18 @@ impl ScriptListApp {
         if clear {
             self.filter_text.clear();
             self.selected_index = 0;
+            self.scroll_offset = 0;
+            logging::log("SCROLL", "Filter cleared - reset: selected_index=0, scroll_offset=0");
         } else if backspace && !self.filter_text.is_empty() {
             self.filter_text.pop();
             self.selected_index = 0;
+            self.scroll_offset = 0;
+            logging::log("SCROLL", "Filter backspace - reset: selected_index=0, scroll_offset=0");
         } else if let Some(ch) = new_char {
             self.filter_text.push(ch);
             self.selected_index = 0;
+            self.scroll_offset = 0;
+            logging::log("SCROLL", &format!("Filter char '{}' - reset: selected_index=0, scroll_offset=0", ch));
         }
         cx.notify();
     }
@@ -591,13 +800,81 @@ impl ScriptListApp {
                 cx.notify();
             }
             PromptMessage::ScriptExit => {
-                logging::log("UI", "Script exited, returning to list");
-                self.current_view = AppView::ScriptList;
-                *self.script_session.lock().unwrap() = None;
-                cx.notify();
+                logging::log("EXEC", "Script exited, calling reset_to_script_list");
+                self.reset_to_script_list(cx);
             }
          }
       }
+      
+    /// Cancel the currently running script and clean up all state
+    fn cancel_script_execution(&mut self, cx: &mut Context<Self>) {
+        logging::log("EXEC", "=== Canceling script execution ===");
+        
+        // Send cancel message to script (Exit with cancel code)
+        if let Some(ref sender) = self.response_sender {
+            // Try to send Exit message to terminate the script cleanly
+            let exit_msg = Message::Exit { 
+                code: Some(1),  // Non-zero code indicates cancellation
+                message: Some("Cancelled by user".to_string()),
+            };
+            match sender.send(exit_msg) {
+                Ok(()) => logging::log("EXEC", "Sent Exit message to script"),
+                Err(e) => logging::log("EXEC", &format!("Failed to send Exit: {} (script may have exited)", e)),
+            }
+        } else {
+            logging::log("EXEC", "No response_sender - script may not be running");
+        }
+        
+        // Abort script session if it exists
+        if let Ok(mut session_guard) = self.script_session.lock() {
+            if let Some(_session) = session_guard.take() {
+                logging::log("EXEC", "Cleared script session");
+            }
+        }
+        
+        // Reset to script list view
+        self.reset_to_script_list(cx);
+        logging::log("EXEC", "=== Script cancellation complete ===");
+    }
+    
+    /// Reset all state and return to the script list view
+    fn reset_to_script_list(&mut self, cx: &mut Context<Self>) {
+        let old_view = match &self.current_view {
+            AppView::ScriptList => "ScriptList",
+            AppView::ActionsDialog => "ActionsDialog",
+            AppView::ArgPrompt { .. } => "ArgPrompt",
+            AppView::DivPrompt { .. } => "DivPrompt",
+        };
+        
+        logging::log("UI", &format!("Resetting to script list (was: {})", old_view));
+        
+        // Reset view
+        self.current_view = AppView::ScriptList;
+        
+        // Clear arg prompt state
+        self.arg_input_text.clear();
+        self.arg_selected_index = 0;
+        
+        // Clear output
+        self.last_output = None;
+        
+        // Clear channels (they will be dropped, closing the connections)
+        self.prompt_receiver = None;
+        self.response_sender = None;
+        
+        // Clear script session
+        if let Ok(mut session_guard) = self.script_session.lock() {
+            *session_guard = None;
+        }
+        
+        logging::log("UI", "State reset complete - view is now ScriptList");
+        cx.notify();
+    }
+    
+    /// Check if we're currently in a prompt view (script is running)
+    fn is_in_prompt(&self) -> bool {
+        matches!(self.current_view, AppView::ArgPrompt { .. } | AppView::DivPrompt { .. })
+    }
       
       /// Submit a response to the current prompt
      fn submit_prompt_response(&mut self, id: String, value: Option<String>, _cx: &mut Context<Self>) {
@@ -638,6 +915,57 @@ impl ScriptListApp {
             vec![]
         }
     }
+    
+    /// Convert hex color to rgba with opacity from theme
+    fn hex_to_rgba_with_opacity(&self, hex: u32, opacity: f32) -> u32 {
+        // Convert opacity (0.0-1.0) to alpha byte (0-255)
+        let alpha = (opacity.clamp(0.0, 1.0) * 255.0) as u32;
+        (hex << 8) | alpha
+    }
+    
+    /// Create box shadows from theme configuration
+    fn create_box_shadows(&self) -> Vec<BoxShadow> {
+        let shadow_config = self.theme.get_drop_shadow();
+        
+        if !shadow_config.enabled {
+            return vec![];
+        }
+        
+        // Convert hex color to HSLA
+        // For black (0x000000), we use h=0, s=0, l=0
+        let r = ((shadow_config.color >> 16) & 0xFF) as f32 / 255.0;
+        let g = ((shadow_config.color >> 8) & 0xFF) as f32 / 255.0;
+        let b = (shadow_config.color & 0xFF) as f32 / 255.0;
+        
+        // Simple RGB to HSL conversion for shadow color
+        let max = r.max(g).max(b);
+        let min = r.min(g).min(b);
+        let l = (max + min) / 2.0;
+        
+        let (h, s) = if max == min {
+            (0.0, 0.0) // achromatic
+        } else {
+            let d = max - min;
+            let s = if l > 0.5 { d / (2.0 - max - min) } else { d / (max + min) };
+            let h = if max == r {
+                (g - b) / d + if g < b { 6.0 } else { 0.0 }
+            } else if max == g {
+                (b - r) / d + 2.0
+            } else {
+                (r - g) / d + 4.0
+            };
+            (h / 6.0, s)
+        };
+        
+        vec![
+            BoxShadow {
+                color: hsla(h, s, l, shadow_config.opacity),
+                offset: point(px(shadow_config.offset_x), px(shadow_config.offset_y)),
+                blur_radius: px(shadow_config.blur_radius),
+                spread_radius: px(shadow_config.spread_radius),
+            }
+        ]
+    }
 }
 
 impl Focusable for ScriptListApp {
@@ -669,11 +997,324 @@ impl Render for ScriptListApp {
 }
 
 impl ScriptListApp {
+    /// Read the first N lines of a script file for preview
+    fn read_script_preview(path: &std::path::Path, max_lines: usize) -> String {
+        match std::fs::read_to_string(path) {
+            Ok(content) => {
+                let preview: String = content
+                    .lines()
+                    .take(max_lines)
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                logging::log("UI", &format!(
+                    "Preview loaded: {} ({} lines read)",
+                    path.file_name().unwrap_or_default().to_string_lossy(),
+                    content.lines().count().min(max_lines)
+                ));
+                preview
+            }
+            Err(e) => {
+                logging::log("UI", &format!(
+                    "Preview error: {} - {}",
+                    path.display(),
+                    e
+                ));
+                format!("Error reading file: {}", e)
+            }
+        }
+    }
+    
+    /// Render the preview panel showing details of the selected script/scriptlet
+    fn render_preview_panel(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let filtered = self.filtered_results();
+        let selected_result = filtered.get(self.selected_index);
+        let theme = &self.theme;
+        
+        // Preview panel container with left border separator
+        let mut panel = div()
+            .w_full()
+            .h_full()
+            .bg(rgb(theme.colors.background.main))
+            .border_l_1()
+            .border_color(rgba((theme.colors.ui.border << 8) | 0x80))
+            .p(px(16.))
+            .flex()
+            .flex_col()
+            .overflow_y_hidden()
+            .font_family(".AppleSystemUIFont");
+        
+        match selected_result {
+            Some(result) => {
+                match result {
+                    scripts::SearchResult::Script(script_match) => {
+                        let script = &script_match.script;
+                        logging::log("UI", &format!(
+                            "Preview panel updated: Script '{}' ({})",
+                            script.name, script.extension
+                        ));
+                        
+                        // Script name header
+                        panel = panel.child(
+                            div()
+                                .text_lg()
+                                .font_weight(gpui::FontWeight::SEMIBOLD)
+                                .text_color(rgb(theme.colors.text.primary))
+                                .pb(px(8.))
+                                .child(format!("{}.{}", script.name, script.extension))
+                        );
+                        
+                        // Type badge
+                        panel = panel.child(
+                            div()
+                                .flex()
+                                .flex_row()
+                                .gap_2()
+                                .pb(px(12.))
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .px(px(6.))
+                                        .py(px(2.))
+                                        .rounded(px(4.))
+                                        .bg(rgb(0x4a90e2))
+                                        .text_color(rgb(0xffffff))
+                                        .child("Script")
+                                )
+                        );
+                        
+                        // Description (if present)
+                        if let Some(desc) = &script.description {
+                            panel = panel.child(
+                                div()
+                                    .flex()
+                                    .flex_col()
+                                    .pb(px(12.))
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .text_color(rgb(theme.colors.text.muted))
+                                            .pb(px(2.))
+                                            .child("Description")
+                                    )
+                                    .child(
+                                        div()
+                                            .text_sm()
+                                            .text_color(rgb(theme.colors.text.secondary))
+                                            .child(desc.clone())
+                                    )
+                            );
+                        }
+                        
+                        // Divider
+                        panel = panel.child(
+                            div()
+                                .w_full()
+                                .h(px(1.))
+                                .bg(rgba((theme.colors.ui.border << 8) | 0x60))
+                                .my(px(8.))
+                        );
+                        
+                        // Code preview header
+                        panel = panel.child(
+                            div()
+                                .text_xs()
+                                .text_color(rgb(theme.colors.text.muted))
+                                .pb(px(8.))
+                                .child("Code Preview")
+                        );
+                        
+                        // Read and display code preview
+                        let code_preview = Self::read_script_preview(&script.path, 15);
+                        
+                        panel = panel.child(
+                            div()
+                                .w_full()
+                                .p(px(12.))
+                                .rounded(px(6.))
+                                .bg(rgba((theme.colors.background.search_box << 8) | 0x80))
+                                .font_family("SF Mono")
+                                .text_xs()
+                                .text_color(rgb(theme.colors.text.secondary))
+                                .overflow_x_hidden()
+                                .child(code_preview)
+                        );
+                    }
+                    scripts::SearchResult::Scriptlet(scriptlet_match) => {
+                        let scriptlet = &scriptlet_match.scriptlet;
+                        logging::log("UI", &format!(
+                            "Preview panel updated: Scriptlet '{}' ({})",
+                            scriptlet.name, scriptlet.tool
+                        ));
+                        
+                        // Scriptlet name header
+                        panel = panel.child(
+                            div()
+                                .text_lg()
+                                .font_weight(gpui::FontWeight::SEMIBOLD)
+                                .text_color(rgb(theme.colors.text.primary))
+                                .pb(px(8.))
+                                .child(scriptlet.name.clone())
+                        );
+                        
+                        // Type and tool badges
+                        panel = panel.child(
+                            div()
+                                .flex()
+                                .flex_row()
+                                .gap_2()
+                                .pb(px(12.))
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .px(px(6.))
+                                        .py(px(2.))
+                                        .rounded(px(4.))
+                                        .bg(rgb(0x7ed321))
+                                        .text_color(rgb(0xffffff))
+                                        .child("Snippet")
+                                )
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .px(px(6.))
+                                        .py(px(2.))
+                                        .rounded(px(4.))
+                                        .bg(rgba((theme.colors.ui.border << 8) | 0xff))
+                                        .text_color(rgb(theme.colors.text.secondary))
+                                        .child(scriptlet.tool.clone())
+                                )
+                        );
+                        
+                        // Description (if present)
+                        if let Some(desc) = &scriptlet.description {
+                            panel = panel.child(
+                                div()
+                                    .flex()
+                                    .flex_col()
+                                    .pb(px(12.))
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .text_color(rgb(theme.colors.text.muted))
+                                            .pb(px(2.))
+                                            .child("Description")
+                                    )
+                                    .child(
+                                        div()
+                                            .text_sm()
+                                            .text_color(rgb(theme.colors.text.secondary))
+                                            .child(desc.clone())
+                                    )
+                            );
+                        }
+                        
+                        // Shortcut (if present)
+                        if let Some(shortcut) = &scriptlet.shortcut {
+                            panel = panel.child(
+                                div()
+                                    .flex()
+                                    .flex_col()
+                                    .pb(px(12.))
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .text_color(rgb(theme.colors.text.muted))
+                                            .pb(px(2.))
+                                            .child("Hotkey")
+                                    )
+                                    .child(
+                                        div()
+                                            .text_sm()
+                                            .text_color(rgb(theme.colors.text.secondary))
+                                            .child(shortcut.clone())
+                                    )
+                            );
+                        }
+                        
+                        // Divider
+                        panel = panel.child(
+                            div()
+                                .w_full()
+                                .h(px(1.))
+                                .bg(rgba((theme.colors.ui.border << 8) | 0x60))
+                                .my(px(8.))
+                        );
+                        
+                        // Content preview header
+                        panel = panel.child(
+                            div()
+                                .text_xs()
+                                .text_color(rgb(theme.colors.text.muted))
+                                .pb(px(8.))
+                                .child("Content Preview")
+                        );
+                        
+                        // Display scriptlet code (first 15 lines)
+                        let code_preview: String = scriptlet.code
+                            .lines()
+                            .take(15)
+                            .collect::<Vec<_>>()
+                            .join("\n");
+                        
+                        panel = panel.child(
+                            div()
+                                .w_full()
+                                .p(px(12.))
+                                .rounded(px(6.))
+                                .bg(rgba((theme.colors.background.search_box << 8) | 0x80))
+                                .font_family("SF Mono")
+                                .text_xs()
+                                .text_color(rgb(theme.colors.text.secondary))
+                                .overflow_x_hidden()
+                                .child(code_preview)
+                        );
+                    }
+                }
+            }
+            None => {
+                logging::log("UI", "Preview panel: No selection");
+                // Empty state
+                panel = panel.child(
+                    div()
+                        .w_full()
+                        .h_full()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .text_color(rgb(theme.colors.text.muted))
+                        .child(
+                            if self.filter_text.is_empty() && self.scripts.is_empty() && self.scriptlets.is_empty() {
+                                "No scripts or snippets found"
+                            } else if !self.filter_text.is_empty() {
+                                "No matching scripts"
+                            } else {
+                                "Select a script to preview"
+                            }
+                        )
+                );
+            }
+        }
+        
+        panel
+    }
+    
     fn render_script_list(&mut self, cx: &mut Context<Self>) -> AnyElement {
         let filtered = self.filtered_results();
         let filtered_len = filtered.len();
         let total_len = self.scripts.len() + self.scriptlets.len();
         let theme = &self.theme;
+        
+        // Handle edge cases for scroll bounds
+        // Keep selected_index in valid bounds
+        if self.selected_index >= filtered_len && filtered_len > 0 {
+            self.selected_index = filtered_len.saturating_sub(1);
+        }
+        
+        // Ensure scroll_offset doesn't go past list
+        let max_offset = filtered_len.saturating_sub(self.viewport_height);
+        if self.scroll_offset > max_offset {
+            self.scroll_offset = max_offset;
+        }
 
         // Build script list - tight, clean spacing
         let mut list_container = div().flex().flex_col().w_full();
@@ -693,8 +1334,25 @@ impl ScriptListApp {
                     }),
             );
         } else {
-            for (idx, result) in filtered.iter().enumerate() {
-                let is_selected = idx == self.selected_index;
+            // Only render visible items (scroll_offset to scroll_offset + viewport_height)
+            // This provides a performance benefit - we only render what's visible
+            let visible_items: Vec<_> = filtered.iter()
+                .skip(self.scroll_offset)
+                .take(self.viewport_height)
+                .enumerate()
+                .collect();
+            
+            // PERF: Log viewport rendering stats
+            let visible_count = visible_items.len();
+            logging::log("PERF", &format!(
+                "Rendering {} items (scroll_offset={}, viewport={}, total={})",
+                visible_count, self.scroll_offset, self.viewport_height, filtered_len
+            ));
+            
+            for (display_idx, result) in visible_items {
+                // The actual index in the filtered list
+                let actual_idx = self.scroll_offset + display_idx;
+                let is_selected = actual_idx == self.selected_index;
                 
                 // Get name and badge based on type
                 let (name_display, badge_text, badge_color) = match result {
@@ -792,7 +1450,17 @@ impl ScriptListApp {
                     if !this.filter_text.is_empty() {
                         this.update_filter(None, false, true, cx);
                     } else {
+                        // Update visibility state for hotkey toggle
+                        WINDOW_VISIBLE.store(false, Ordering::SeqCst);
+                        logging::log("HOTKEY", "Window hidden via Escape key");
+                        // PERF: Measure window hide latency
+                        let hide_start = std::time::Instant::now();
                         cx.hide();
+                        let hide_elapsed = hide_start.elapsed();
+                        logging::log("PERF", &format!(
+                            "Window hide (Escape) took {:.2}ms",
+                            hide_elapsed.as_secs_f64() * 1000.0
+                        ));
                     }
                 }
                 "backspace" => this.update_filter(None, true, false, cx),
@@ -809,14 +1477,19 @@ impl ScriptListApp {
         });
 
         // Main container with system font and transparency
-        // Convert theme background to rgba with ~90% opacity (E6 = 230)
+        // Use theme opacity settings for background transparency
+        let opacity = self.theme.get_opacity();
         let bg_hex = theme.colors.background.main;
-        let bg_with_alpha = (bg_hex << 8) | 0xE6; // Shift RGB left, add alpha
+        let bg_with_alpha = self.hex_to_rgba_with_opacity(bg_hex, opacity.main);
+        
+        // Create box shadows from theme
+        let box_shadows = self.create_box_shadows();
         
         let mut main_div = div()
             .flex()
             .flex_col()
             .bg(rgba(bg_with_alpha))
+            .shadow(box_shadows)
             .w_full()
             .h_full()
             .rounded(px(12.))
@@ -870,15 +1543,32 @@ impl ScriptListApp {
                     .h(px(1.))
                     .bg(rgba((theme.colors.ui.border << 8) | 0x60))
             )
-            // List - fills available space
+            // Main content area - 60/40 split: List on left, Preview on right
             .child(
                 div()
                     .flex()
-                    .flex_col()
+                    .flex_row()
                     .flex_1()
                     .w_full()
-                    .py(px(4.))
-                    .child(list_container),
+                    .overflow_hidden()
+                    // Left side: Script list (60% width)
+                    .child(
+                        div()
+                            .w(px(450.))  // 60% of 750px window = 450px
+                            .h_full()
+                            .flex()
+                            .flex_col()
+                            .py(px(4.))
+                            .overflow_y_hidden()
+                            .child(list_container)
+                    )
+                    // Right side: Preview panel (40% width = remaining space)
+                    .child(
+                        div()
+                            .flex_1()
+                            .h_full()
+                            .child(self.render_preview_panel(cx))
+                    ),
             );
         
         if let Some(panel) = log_panel {
@@ -957,10 +1647,10 @@ impl ScriptListApp {
                     }
                 }
                 "escape" => {
+                    logging::log("KEY", "ESC in ArgPrompt - canceling script");
+                    // Send cancel response and clean up fully
                     this.submit_prompt_response(prompt_id.clone(), None, cx);
-                    this.current_view = AppView::ScriptList;
-                    *this.script_session.lock().unwrap() = None;
-                    cx.notify();
+                    this.cancel_script_execution(cx);
                 }
                 "backspace" => {
                     if !this.arg_input_text.is_empty() {
@@ -1030,13 +1720,17 @@ impl ScriptListApp {
             }
         }
         
+        // Use theme opacity and shadow settings
+        let opacity = self.theme.get_opacity();
         let bg_hex = theme.colors.background.main;
-        let bg_with_alpha = (bg_hex << 8) | 0xE6;
+        let bg_with_alpha = self.hex_to_rgba_with_opacity(bg_hex, opacity.main);
+        let box_shadows = self.create_box_shadows();
         
         div()
             .flex()
             .flex_col()
             .bg(rgba(bg_with_alpha))
+            .shadow(box_shadows)
             .w_full()
             .h_full()
             .rounded(px(12.))
@@ -1136,20 +1830,32 @@ impl ScriptListApp {
             logging::log("KEY", &format!("DivPrompt key: '{}'", key_str));
             
             match key_str.as_str() {
-                "enter" | "escape" => {
+                "enter" => {
+                    // Enter continues the script (sends response)
+                    logging::log("KEY", "Enter in DivPrompt - continuing script");
                     this.submit_prompt_response(prompt_id.clone(), None, cx);
+                }
+                "escape" => {
+                    // ESC cancels the script completely
+                    logging::log("KEY", "ESC in DivPrompt - canceling script");
+                    this.submit_prompt_response(prompt_id.clone(), None, cx);
+                    this.cancel_script_execution(cx);
                 }
                 _ => {}
             }
         });
         
+        // Use theme opacity and shadow settings
+        let opacity = self.theme.get_opacity();
         let bg_hex = theme.colors.background.main;
-        let bg_with_alpha = (bg_hex << 8) | 0xE6;
+        let bg_with_alpha = self.hex_to_rgba_with_opacity(bg_hex, opacity.main);
+        let box_shadows = self.create_box_shadows();
         
         div()
             .flex()
             .flex_col()
             .bg(rgba(bg_with_alpha))
+            .shadow(box_shadows)
             .w_full()
             .h_full()
             .rounded(px(12.))
@@ -1181,8 +1887,29 @@ impl ScriptListApp {
             )
             .into_any_element()
     }    
-    fn render_actions_dialog(&mut self, _cx: &mut Context<Self>) -> AnyElement {
+    fn render_actions_dialog(&mut self, cx: &mut Context<Self>) -> AnyElement {
         let theme = &self.theme;
+        
+        // Use theme opacity and shadow settings
+        let opacity = self.theme.get_opacity();
+        let bg_hex = theme.colors.background.main;
+        let bg_with_alpha = self.hex_to_rgba_with_opacity(bg_hex, opacity.main);
+        let box_shadows = self.create_box_shadows();
+        
+        // Key handler for actions dialog
+        let handle_key = cx.listener(move |this: &mut Self, event: &gpui::KeyDownEvent, _window: &mut Window, cx: &mut Context<Self>| {
+            let key_str = event.keystroke.key.to_lowercase();
+            logging::log("KEY", &format!("ActionsDialog key: '{}'", key_str));
+            
+            match key_str.as_str() {
+                "escape" => {
+                    logging::log("KEY", "ESC in ActionsDialog - returning to script list");
+                    this.current_view = AppView::ScriptList;
+                    cx.notify();
+                }
+                _ => {}
+            }
+        });
         
         // Simple actions dialog stub
         div()
@@ -1190,11 +1917,15 @@ impl ScriptListApp {
             .flex_col()
             .w_full()
             .h_full()
-            .bg(rgb(theme.colors.background.main))
+            .bg(rgba(bg_with_alpha))
+            .shadow(box_shadows)
             .rounded(px(12.))
             .p(px(24.))
             .text_color(rgb(theme.colors.text.primary))
             .font_family(".AppleSystemUIFont")
+            .key_context("actions_dialog")
+            .track_focus(&self.focus_handle)
+            .on_key_down(handle_key)
             .child(
                 div()
                     .text_lg()
@@ -1206,6 +1937,13 @@ impl ScriptListApp {
                     .text_color(rgb(theme.colors.text.muted))
                     .mt(px(12.))
                     .child("• Create script\n• Edit script\n• Reload\n• Settings\n• Quit")
+            )
+            .child(
+                div()
+                    .mt(px(16.))
+                    .text_xs()
+                    .text_color(rgb(theme.colors.text.dimmed))
+                    .child("Press Esc to close")
             )
             .into_any_element()
     }
@@ -1302,10 +2040,15 @@ fn start_hotkey_listener(config: config::Config) {
         
         loop {
             if let Ok(event) = receiver.recv() {
-                if event.id == hotkey_id {
+                // Only respond to key PRESS, not release
+                // This prevents double-triggering on a single key press
+                if event.id == hotkey_id && event.state == HotKeyState::Pressed {
                     let count = HOTKEY_TRIGGER_COUNT.fetch_add(1, Ordering::SeqCst);
                     HOTKEY_TRIGGERED.store(true, Ordering::SeqCst);
                     logging::log("HOTKEY", &format!("{} pressed (trigger #{})", hotkey_display, count + 1));
+                } else if event.id == hotkey_id && event.state == HotKeyState::Released {
+                    // Ignore key release events - just log for debugging
+                    logging::log("HOTKEY", &format!("{} released (ignored)", hotkey_display));
                 }
             }
         }
@@ -1406,6 +2149,10 @@ fn main() {
         
         // Configure window as floating panel on macOS
         configure_as_floating_panel();
+        
+        // IMPORTANT: Update visibility state now that window is actually created and visible
+        WINDOW_VISIBLE.store(true, Ordering::SeqCst);
+        logging::log("HOTKEY", "Window visibility state set to true (window now visible)");
         
         start_hotkey_poller(cx, window.clone());
         
