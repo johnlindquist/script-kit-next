@@ -183,6 +183,56 @@ These work together to provide instant feedback on:
 3. New/modified scripts (notify + file watcher)
 4. Hotkey presses (global-hotkey thread)
 
+## Interactive Prompt System (NEW!)
+
+The app now supports Script Kit's v1 API prompts via bidirectional JSONL:
+
+### Testing Interactive Scripts
+
+1. Create a script using `arg()` or `div()`:
+   ```typescript
+   // ~/.kenv/scripts/my-test.ts
+   const choice = await arg('Pick one', [
+     { name: 'Option A', value: 'a' },
+     { name: 'Option B', value: 'b' },
+   ]);
+   await div(`<h1>You picked: ${choice}</h1>`);
+   ```
+
+2. Run via the app UI (type to filter, Enter to execute)
+
+3. Or trigger via test command:
+   ```bash
+   echo "run:my-test.ts" > /tmp/script-kit-gpui-cmd.txt
+   ```
+
+### Architecture
+
+The interactive system uses:
+- **Split threads**: Reader (blocks on script stdout) + Writer (sends to stdin)
+- **Channels**: `mpsc` for thread-safe UI updates
+- **AppView state**: ScriptList → ArgPrompt → DivPrompt → ScriptList
+
+### Key Log Events
+
+Watch for these in the logs (`Cmd+L`):
+```
+[EXEC] Received message: Arg { ... }     # Script sent prompt
+[UI] Showing arg prompt: 1 with 2 choices # UI displaying
+[KEY] ArgPrompt key: 'enter'              # User selected
+[UI] Submitting response for 1: Some(...) # Sending back
+[EXEC] Sending to script: {...}           # Writer thread
+[EXEC] Received message: Div { ... }      # Next prompt
+```
+
+### Smoke Test
+
+Run the binary smoke test:
+```bash
+cargo run --bin smoke-test
+cargo run --bin smoke-test -- --gui  # With GUI test
+```
+
 ## Next Steps
 
 1. ✅ Install `cargo-watch`: `cargo install cargo-watch`
