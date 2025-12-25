@@ -39,6 +39,44 @@ export interface FileInfo {
   size: number;
 }
 
+// =============================================================================
+// System API Types
+// =============================================================================
+
+export interface NotifyOptions {
+  title?: string;
+  body?: string;
+}
+
+export interface StatusOptions {
+  status: 'busy' | 'idle' | 'error';
+  message: string;
+}
+
+export interface Position {
+  x: number;
+  y: number;
+}
+
+export interface ClipboardAPI {
+  readText(): Promise<string>;
+  writeText(text: string): Promise<void>;
+  readImage(): Promise<Buffer>;
+  writeImage(buffer: Buffer): Promise<void>;
+}
+
+export interface KeyboardAPI {
+  type(text: string): Promise<void>;
+  tap(...keys: string[]): Promise<void>;
+}
+
+export interface MouseAPI {
+  move(positions: Position[]): Promise<void>;
+  leftClick(): Promise<void>;
+  rightClick(): Promise<void>;
+  setPosition(position: Position): Promise<void>;
+}
+
 interface ArgMessage {
   type: 'arg';
   id: string;
@@ -123,6 +161,68 @@ interface EnvMessage {
   id: string;
   key: string;
   secret?: boolean;
+}
+
+// System message types (fire-and-forget, no response needed)
+interface BeepMessage {
+  type: 'beep';
+}
+
+interface SayMessage {
+  type: 'say';
+  text: string;
+  voice?: string;
+}
+
+interface NotifyMessage {
+  type: 'notify';
+  title?: string;
+  body?: string;
+}
+
+interface SetStatusMessage {
+  type: 'setStatus';
+  status: 'busy' | 'idle' | 'error';
+  message: string;
+}
+
+interface MenuMessage {
+  type: 'menu';
+  icon: string;
+  scripts?: string[];
+}
+
+interface ClipboardMessage {
+  type: 'clipboard';
+  id: string;
+  action: 'read' | 'write';
+  format: 'text' | 'image';
+  content?: string;
+}
+
+interface SetSelectedTextMessage {
+  type: 'setSelectedText';
+  text: string;
+}
+
+interface GetSelectedTextMessage {
+  type: 'getSelectedText';
+  id: string;
+}
+
+interface KeyboardMessage {
+  type: 'keyboard';
+  action: 'type' | 'tap';
+  text?: string;
+  keys?: string[];
+}
+
+interface MouseMessage {
+  type: 'mouse';
+  action: 'move' | 'click' | 'setPosition';
+  positions?: Position[];
+  button?: 'left' | 'right';
+  position?: Position;
 }
 
 interface SubmitMessage {
@@ -266,6 +366,80 @@ declare global {
    * @returns The environment variable value
    */
   function env(key: string, promptFn?: () => Promise<string>): Promise<string>;
+  
+  // =============================================================================
+  // System APIs (TIER 3)
+  // =============================================================================
+  
+  /**
+   * Play system beep sound
+   */
+  function beep(): Promise<void>;
+  
+  /**
+   * Text-to-speech
+   * @param text - Text to speak
+   * @param voice - Optional voice name
+   */
+  function say(text: string, voice?: string): Promise<void>;
+  
+  /**
+   * Show system notification
+   * @param options - Notification options or body string
+   */
+  function notify(options: string | NotifyOptions): Promise<void>;
+  
+  /**
+   * Set application status
+   * @param options - Status options with status and message
+   */
+  function setStatus(options: StatusOptions): Promise<void>;
+  
+  /**
+   * Set system menu icon and scripts
+   * @param icon - Icon name/path
+   * @param scripts - Optional array of script paths
+   */
+  function menu(icon: string, scripts?: string[]): Promise<void>;
+  
+  /**
+   * Copy text to clipboard (alias for clipboard.writeText)
+   * @param text - Text to copy
+   */
+  function copy(text: string): Promise<void>;
+  
+  /**
+   * Paste text from clipboard (alias for clipboard.readText)
+   * @returns Text from clipboard
+   */
+  function paste(): Promise<string>;
+  
+  /**
+   * Set selected text (simulates paste at cursor)
+   * @param text - Text to insert
+   */
+  function setSelectedText(text: string): Promise<void>;
+  
+  /**
+   * Get selected text (simulates copy from selection)
+   * @returns Selected text
+   */
+  function getSelectedText(): Promise<string>;
+  
+  /**
+   * Clipboard API object
+   */
+  const clipboard: ClipboardAPI;
+  
+  /**
+   * Keyboard API object
+   */
+  const keyboard: KeyboardAPI;
+  
+  /**
+   * Mouse API object
+   */
+  const mouse: MouseAPI;
 }
 
 globalThis.arg = async function arg(
@@ -670,4 +844,207 @@ globalThis.env = async function env(
 
     send(message);
   });
+};
+
+// =============================================================================
+// TIER 3: System APIs (alerts, clipboard, keyboard, mouse)
+// =============================================================================
+
+// Fire-and-forget messages - send and resolve immediately (no response needed)
+globalThis.beep = async function beep(): Promise<void> {
+  const message: BeepMessage = { type: 'beep' };
+  send(message);
+};
+
+globalThis.say = async function say(text: string, voice?: string): Promise<void> {
+  const message: SayMessage = { type: 'say', text, voice };
+  send(message);
+};
+
+globalThis.notify = async function notify(options: string | NotifyOptions): Promise<void> {
+  const message: NotifyMessage = typeof options === 'string'
+    ? { type: 'notify', body: options }
+    : { type: 'notify', title: options.title, body: options.body };
+  send(message);
+};
+
+globalThis.setStatus = async function setStatus(options: StatusOptions): Promise<void> {
+  const message: SetStatusMessage = {
+    type: 'setStatus',
+    status: options.status,
+    message: options.message,
+  };
+  send(message);
+};
+
+globalThis.menu = async function menu(icon: string, scripts?: string[]): Promise<void> {
+  const message: MenuMessage = { type: 'menu', icon, scripts };
+  send(message);
+};
+
+// Text operations that need responses
+globalThis.setSelectedText = async function setSelectedText(text: string): Promise<void> {
+  const message: SetSelectedTextMessage = { type: 'setSelectedText', text };
+  send(message);
+};
+
+globalThis.getSelectedText = async function getSelectedText(): Promise<string> {
+  const id = nextId();
+  
+  return new Promise((resolve) => {
+    pending.set(id, (msg: SubmitMessage) => {
+      resolve(msg.value ?? '');
+    });
+    
+    const message: GetSelectedTextMessage = { type: 'getSelectedText', id };
+    send(message);
+  });
+};
+
+// Clipboard API object
+globalThis.clipboard = {
+  async readText(): Promise<string> {
+    const id = nextId();
+    
+    return new Promise((resolve) => {
+      pending.set(id, (msg: SubmitMessage) => {
+        resolve(msg.value ?? '');
+      });
+      
+      const message: ClipboardMessage = {
+        type: 'clipboard',
+        id,
+        action: 'read',
+        format: 'text',
+      };
+      send(message);
+    });
+  },
+  
+  async writeText(text: string): Promise<void> {
+    const id = nextId();
+    
+    return new Promise((resolve) => {
+      pending.set(id, () => {
+        resolve();
+      });
+      
+      const message: ClipboardMessage = {
+        type: 'clipboard',
+        id,
+        action: 'write',
+        format: 'text',
+        content: text,
+      };
+      send(message);
+    });
+  },
+  
+  async readImage(): Promise<Buffer> {
+    const id = nextId();
+    
+    return new Promise((resolve) => {
+      pending.set(id, (msg: SubmitMessage) => {
+        // Value comes back as base64-encoded string
+        const base64 = msg.value ?? '';
+        resolve(Buffer.from(base64, 'base64'));
+      });
+      
+      const message: ClipboardMessage = {
+        type: 'clipboard',
+        id,
+        action: 'read',
+        format: 'image',
+      };
+      send(message);
+    });
+  },
+  
+  async writeImage(buffer: Buffer): Promise<void> {
+    const id = nextId();
+    
+    return new Promise((resolve) => {
+      pending.set(id, () => {
+        resolve();
+      });
+      
+      const message: ClipboardMessage = {
+        type: 'clipboard',
+        id,
+        action: 'write',
+        format: 'image',
+        content: buffer.toString('base64'),
+      };
+      send(message);
+    });
+  },
+};
+
+// Clipboard aliases
+globalThis.copy = async function copy(text: string): Promise<void> {
+  return globalThis.clipboard.writeText(text);
+};
+
+globalThis.paste = async function paste(): Promise<string> {
+  return globalThis.clipboard.readText();
+};
+
+// Keyboard API object
+globalThis.keyboard = {
+  async type(text: string): Promise<void> {
+    const message: KeyboardMessage = {
+      type: 'keyboard',
+      action: 'type',
+      text,
+    };
+    send(message);
+  },
+  
+  async tap(...keys: string[]): Promise<void> {
+    const message: KeyboardMessage = {
+      type: 'keyboard',
+      action: 'tap',
+      keys,
+    };
+    send(message);
+  },
+};
+
+// Mouse API object
+globalThis.mouse = {
+  async move(positions: Position[]): Promise<void> {
+    const message: MouseMessage = {
+      type: 'mouse',
+      action: 'move',
+      positions,
+    };
+    send(message);
+  },
+  
+  async leftClick(): Promise<void> {
+    const message: MouseMessage = {
+      type: 'mouse',
+      action: 'click',
+      button: 'left',
+    };
+    send(message);
+  },
+  
+  async rightClick(): Promise<void> {
+    const message: MouseMessage = {
+      type: 'mouse',
+      action: 'click',
+      button: 'right',
+    };
+    send(message);
+  },
+  
+  async setPosition(position: Position): Promise<void> {
+    const message: MouseMessage = {
+      type: 'mouse',
+      action: 'setPosition',
+      position,
+    };
+    send(message);
+  },
 };
