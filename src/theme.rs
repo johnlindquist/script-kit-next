@@ -123,6 +123,15 @@ pub struct TextColors {
 pub struct AccentColors {
     /// Selected item highlight (0x007acc - blue)
     pub selected: HexColor,
+    /// Subtle selection for list items - barely visible highlight (0x2a2a2a - dark gray)
+    /// Used for polished, Raycast-like selection backgrounds
+    #[serde(default = "default_selected_subtle")]
+    pub selected_subtle: HexColor,
+}
+
+/// Default subtle selection color (dark gray, barely visible)
+fn default_selected_subtle() -> HexColor {
+    0x2a2a2a
 }
 
 /// Border and UI element colors
@@ -227,13 +236,14 @@ impl ColorScheme {
             },
             text: TextColors {
                 primary: 0xffffff,
-                secondary: 0xe0e0e0,
+                secondary: 0xcccccc,
                 tertiary: 0x999999,
                 muted: 0x808080,
                 dimmed: 0x666666,
             },
             accent: AccentColors {
-                selected: 0x007acc,
+                selected: 0xfbbf24,    // Script Kit primary: #fbbf24 (yellow/gold) - for text highlights
+                selected_subtle: 0x2a2a2a, // Subtle dark gray for list selection backgrounds
             },
             ui: UIColors {
                 border: 0x464647,
@@ -260,6 +270,7 @@ impl ColorScheme {
             },
             accent: AccentColors {
                 selected: 0x0078d4,
+                selected_subtle: 0xe8e8e8, // Subtle light gray for list selections
             },
             ui: UIColors {
                 border: 0xd0d0d0,
@@ -301,6 +312,7 @@ impl ColorScheme {
             },
             accent: AccentColors {
                 selected: darken_hex(self.accent.selected),
+                selected_subtle: darken_hex(self.accent.selected_subtle),
             },
             ui: UIColors {
                 border: darken_hex(self.ui.border),

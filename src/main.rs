@@ -1,6 +1,6 @@
 use gpui::{
-    div, prelude::*, px, point, rgb, rgba, size, App, Application, Bounds, Context, Render,
-    Window, WindowBounds, WindowOptions, SharedString, FocusHandle, Focusable,
+    div, svg, prelude::*, px, point, rgb, rgba, size, App, Application, Bounds, Context, Render,
+    Window, WindowBounds, WindowOptions, SharedString, FocusHandle, Focusable, Entity,
     WindowHandle, Timer, Pixels, WindowBackgroundAppearance, AnyElement, BoxShadow, hsla,
 };
 use global_hotkey::{GlobalHotKeyManager, GlobalHotKeyEvent, HotKeyState, hotkey::{HotKey, Modifiers, Code}};
@@ -27,7 +27,7 @@ mod syntax;
 
 use std::sync::{Arc, Mutex, mpsc};
 use protocol::{Message, Choice};
-use actions::{ScriptInfo, POPUP_WIDTH, POPUP_MAX_HEIGHT};
+use actions::{ActionsDialog, ScriptInfo};
 use syntax::highlight_code_lines;
 
 /// Channel for sending prompt messages from script thread to UI
@@ -454,6 +454,10 @@ struct ScriptListApp {
     viewport_height: usize,         // Number of items that fit in viewport
     // Actions popup overlay
     show_actions_popup: bool,
+    // ActionsDialog entity for focus management
+    actions_dialog: Option<Entity<ActionsDialog>>,
+    // Cursor blink state
+    cursor_visible: bool,
 }
 
 impl ScriptListApp {
@@ -484,6 +488,20 @@ impl ScriptListApp {
         logging::log("APP", "Loaded theme with system appearance detection");
         logging::log("APP", &format!("Loaded config: hotkey={:?}+{}, bun_path={:?}", 
             config.hotkey.modifiers, config.hotkey.key, config.bun_path));
+        
+        // Start cursor blink timer
+        cx.spawn(async move |this, mut cx| {
+            loop {
+                Timer::after(std::time::Duration::from_millis(530)).await;
+                let _ = cx.update(|cx| {
+                    this.update(cx, |app, cx| {
+                        app.cursor_visible = !app.cursor_visible;
+                        cx.notify();
+                    })
+                });
+            }
+        }).detach();
+        
         ScriptListApp {
             scripts,
             scriptlets,
@@ -503,6 +521,8 @@ impl ScriptListApp {
             scroll_offset: 0,
             viewport_height: 9,  // ~9 items visible at a time (allows margin for footer)
             show_actions_popup: false,
+            actions_dialog: None,
+            cursor_visible: true,
         }
     }
     
@@ -655,9 +675,30 @@ impl ScriptListApp {
         cx.notify();
     }
     
-    fn open_actions(&mut self, cx: &mut Context<Self>) {
+    fn toggle_actions(&mut self, cx: &mut Context<Self>, window: &mut Window) {
         logging::log("KEY", "Toggling actions popup");
-        self.show_actions_popup = !self.show_actions_popup;
+        if self.show_actions_popup {
+            // Close
+            self.show_actions_popup = false;
+            self.actions_dialog = None;
+            window.focus(&self.focus_handle, cx);
+        } else {
+            // Open - create dialog entity
+            self.show_actions_popup = true;
+            let script_info = self.get_focused_script_info();
+            let focus_handle = cx.focus_handle();
+            
+            let dialog = cx.new(|_cx| {
+                ActionsDialog::with_script(
+                    focus_handle.clone(),
+                    std::sync::Arc::new(|_action_id| {}), // Empty callback - we handle via key events
+                    script_info,
+                )
+            });
+            
+            self.actions_dialog = Some(dialog.clone());
+            window.focus(&focus_handle, cx);
+        }
         cx.notify();
     }
     
@@ -1499,92 +1540,6 @@ impl ScriptListApp {
         }
     }
     
-    /// Render the actions overlay popup as a static div (ActionsDialog is a Render component)
-    fn render_actions_overlay(&self, _cx: &mut Context<Self>, script_info: Option<ScriptInfo>) -> impl IntoElement {
-        // Render a simple actions popup inline rather than using the ActionsDialog component
-        // since ActionsDialog is a Render component (entity) that can't be used directly as IntoElement
-        let theme = &self.theme;
-        
-        let mut actions_container = div()
-            .flex()
-            .flex_col()
-            .w(px(POPUP_WIDTH))
-            .max_h(px(POPUP_MAX_HEIGHT))
-            .bg(rgba(0x1e1e1ee6))
-            .rounded(px(12.))
-            .shadow_lg()
-            .border_1()
-            .border_color(rgba(0x3d3d3d80))
-            .overflow_hidden()
-            .p(px(8.));
-        
-        // Header with script context
-        if let Some(info) = &script_info {
-            actions_container = actions_container.child(
-                div()
-                    .px(px(12.))
-                    .py(px(8.))
-                    .text_xs()
-                    .text_color(rgba(0x888888ff))
-                    .child(format!("Actions for: {}", info.name))
-            );
-        }
-        
-        // Define actions
-        let actions = vec![
-            ("edit_script", "Edit Script", "⌘E"),
-            ("view_logs", "View Logs", "⌘L"),
-            ("reveal_in_finder", "Reveal in Finder", "⌘⇧F"),
-            ("copy_path", "Copy Path", "⌘⇧C"),
-            ("create_script", "Create New Script", "⌘N"),
-            ("reload_scripts", "Reload Scripts", "⌘R"),
-            ("settings", "Settings", "⌘,"),
-            ("quit", "Quit", "⌘Q"),
-        ];
-        
-        for (_id, title, shortcut) in actions {
-            actions_container = actions_container.child(
-                div()
-                    .w_full()
-                    .px(px(12.))
-                    .py(px(6.))
-                    .rounded(px(6.))
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .justify_between()
-                    .hover(|s| s.bg(rgba(0x0e47a1cc)))
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(rgb(theme.colors.text.secondary))
-                            .child(title)
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(rgba(0x66666699))
-                            .child(shortcut)
-                    )
-            );
-        }
-        
-        // Footer hint
-        actions_container = actions_container.child(
-            div()
-                .mt(px(8.))
-                .pt(px(8.))
-                .border_t_1()
-                .border_color(rgba(0x3d3d3d60))
-                .px(px(12.))
-                .text_xs()
-                .text_color(rgba(0x666666ff))
-                .child("Press Esc to close")
-        );
-        
-        actions_container
-    }
-    
     fn render_script_list(&mut self, cx: &mut Context<Self>) -> AnyElement {
         let filtered = self.filtered_results();
         let filtered_len = filtered.len();
@@ -1641,15 +1596,37 @@ impl ScriptListApp {
                 let actual_idx = self.scroll_offset + display_idx;
                 let is_selected = actual_idx == self.selected_index;
                 
-                // Get name and badge based on type
-                let (name_display, badge_text, badge_color) = match result {
+                // Get name, description, and shortcut based on type
+                let (name_display, description, shortcut) = match result {
                     scripts::SearchResult::Script(sm) => {
-                        (format!("{}.{}", sm.script.name, sm.script.extension), "Script", 0x4a90e2u32)
+                        (sm.script.name.clone(), sm.script.description.clone(), None::<String>)
                     }
                     scripts::SearchResult::Scriptlet(sm) => {
-                        (sm.scriptlet.name.clone(), "Snippet", 0x7ed321u32)
+                        (sm.scriptlet.name.clone(), sm.scriptlet.description.clone(), sm.scriptlet.shortcut.clone())
                     }
                 };
+                
+                // Subtle selection backgrounds
+                let selected_bg = rgba((theme.colors.accent.selected_subtle << 8) | 0x80);
+                let hover_bg = rgba((theme.colors.accent.selected_subtle << 8) | 0x40);
+                
+                // Build content with name + description
+                let mut item_content = div()
+                    .flex_1().min_w(px(0.)).overflow_hidden()
+                    .flex().flex_col().gap(px(2.));
+                
+                // Name
+                item_content = item_content.child(
+                    div().text_sm().font_weight(gpui::FontWeight::MEDIUM).overflow_hidden().child(name_display)
+                );
+                
+                // Description - use accent color when selected, truncate to single line
+                if let Some(desc) = description {
+                    let desc_color = if is_selected { rgb(theme.colors.accent.selected) } else { rgb(theme.colors.text.muted) };
+                    item_content = item_content.child(
+                        div().text_xs().text_color(desc_color).overflow_hidden().max_h(px(16.)).child(desc)
+                    );
+                }
                 
                 list_container = list_container.child(
                     div()
@@ -1659,26 +1636,22 @@ impl ScriptListApp {
                             div()
                                 .w_full()
                                 .px(px(12.))
-                                .py(px(8.))
-                                .rounded(px(8.))
-                                .bg(if is_selected { rgb(theme.colors.accent.selected) } else { rgb(theme.colors.background.main) })
+                                .py(px(6.))
+                                // No rounded corners - flat design
+                                .bg(if is_selected { selected_bg } else { rgba(0x00000000) })
+                                .hover(|s| s.bg(hover_bg))
                                 .text_color(if is_selected { rgb(theme.colors.text.primary) } else { rgb(theme.colors.text.secondary) })
                                 .font_family(".AppleSystemUIFont")
-                                .flex()
-                                .flex_row()
-                                .items_center()
-                                .gap_2()
+                                .cursor_pointer()
+                                .flex().flex_row().items_center().justify_between().gap_2()
+                                // Left: name + description
+                                .child(item_content)
+                                // Right: shortcut + action button
                                 .child(
-                                    div()
-                                        .text_xs()
-                                        .px(px(5.))
-                                        .py(px(2.))
-                                        .rounded(px(3.))
-                                        .bg(rgb(badge_color))
-                                        .text_color(rgb(0xffffff))
-                                        .child(badge_text)
+                                    div().flex().flex_row().items_center().gap_2().flex_shrink_0()
+                                        .child(if let Some(sc) = shortcut { div().text_xs().text_color(rgb(theme.colors.text.dimmed)).child(sc) } else { div() })
+                                        .child(div().text_xs().text_color(rgb(theme.colors.text.muted)).child("⋯"))
                                 )
-                                .child(name_display)
                         ),
                 );
             }
@@ -1715,7 +1688,7 @@ impl ScriptListApp {
         };
         let filter_is_empty = self.filter_text.is_empty();
 
-        let handle_key = cx.listener(move |this: &mut Self, event: &gpui::KeyDownEvent, _window: &mut Window, cx: &mut Context<Self>| {
+        let handle_key = cx.listener(move |this: &mut Self, event: &gpui::KeyDownEvent, window: &mut Window, cx: &mut Context<Self>| {
             let key_str = event.keystroke.key.to_lowercase();
             let has_cmd = event.keystroke.modifiers.platform;
             
@@ -1724,7 +1697,7 @@ impl ScriptListApp {
             if has_cmd {
                 match key_str.as_str() {
                     "l" => { this.toggle_logs(cx); return; }
-                    "k" => { this.open_actions(cx); return; }
+                    "k" => { this.toggle_actions(cx, window); return; }
                     _ => {}
                 }
             }
@@ -1737,6 +1710,7 @@ impl ScriptListApp {
                     // If actions popup is open, close it first
                     if this.show_actions_popup {
                         this.show_actions_popup = false;
+                        this.actions_dialog = None;
                         cx.notify();
                         return;
                     }
@@ -1791,7 +1765,7 @@ impl ScriptListApp {
             .key_context("script_list")
             .track_focus(&self.focus_handle)
             .on_key_down(handle_key)
-            // Header: Logo + Search Input - compact
+            // Header: Search Input + Run + Actions + Logo
             .child(
                 div()
                     .w_full()
@@ -1801,32 +1775,36 @@ impl ScriptListApp {
                     .flex_row()
                     .items_center()
                     .gap_3()
-                    // Logo - smaller, cleaner
-                    .child(
-                        div()
-                            .w(px(24.))
-                            .h(px(24.))
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .text_color(rgb(theme.colors.accent.selected))
-                            .text_lg()
-                            .child("▶")
-                    )
-                    // Search input - large but not huge
+                    // Search input with blinking cursor
                     .child(
                         div()
                             .flex_1()
+                            .flex()
+                            .flex_row()
+                            .items_center()
                             .text_xl()
                             .text_color(if filter_is_empty { rgb(theme.colors.text.muted) } else { rgb(theme.colors.text.primary) })
                             .child(filter_display)
+                            .child(div().w(px(2.)).h(px(24.)).ml(px(2.)).when(self.cursor_visible, |d| d.bg(rgb(theme.colors.text.primary))))
                     )
-                    // Count - subtle
+                    // Run button
                     .child(
-                        div()
-                            .text_sm()
-                            .text_color(rgb(theme.colors.text.dimmed))
-                            .child(format!("{}/{}", filtered_len, total_len))
+                        div().flex().flex_row().items_center().gap_1().text_sm().text_color(rgb(theme.colors.text.muted))
+                            .child("Run").child(div().text_color(rgb(theme.colors.text.dimmed)).child("↵"))
+                    )
+                    .child(div().text_color(rgb(theme.colors.text.dimmed)).child("|"))
+                    // Actions button
+                    .child(
+                        div().flex().flex_row().items_center().gap_1().text_sm().text_color(rgb(theme.colors.text.muted))
+                            .child("Actions").child(div().text_color(rgb(theme.colors.text.dimmed)).child("⌘ K"))
+                    )
+                    .child(div().text_color(rgb(theme.colors.text.dimmed)).child("|"))
+                    // Script Kit Logo (SVG)
+                    .child(
+                        svg()
+                            .path(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/logo.svg"))
+                            .size(px(20.))
+                            .text_color(rgb(theme.colors.text.muted))
                     ),
             )
             // Subtle divider - semi-transparent
@@ -1836,7 +1814,7 @@ impl ScriptListApp {
                     .h(px(1.))
                     .bg(rgba((theme.colors.ui.border << 8) | 0x60))
             )
-            // Main content area - 60/40 split: List on left, Preview on right
+            // Main content area - 50/50 split: List on left, Preview on right
             // Uses min_h(px(0.)) to prevent flex children from overflowing
             .child(
                 div()
@@ -1846,11 +1824,11 @@ impl ScriptListApp {
                     .min_h(px(0.))  // Critical: allows flex container to shrink properly
                     .w_full()
                     .overflow_hidden()
-                    // Left side: Script list (60% width)
+                    // Left side: Script list (50% width)
                     .child(
                         div()
-                            .w(px(450.))  // 60% of 750px window = 450px
-                            .flex_1()     // Take available vertical space
+                            .w_1_2()      // 50% width
+                            .h_full()     // Take full height
                             .min_h(px(0.))  // Allow shrinking
                             .flex()
                             .flex_col()
@@ -1858,10 +1836,11 @@ impl ScriptListApp {
                             .overflow_y_hidden()
                             .child(list_container)
                     )
-                    // Right side: Preview panel (40% width = remaining space)
+                    // Right side: Preview panel (50% width)
                     .child(
                         div()
-                            .flex_1()
+                            .w_1_2()      // 50% width
+                            .h_full()     // Take full height
                             .min_h(px(0.))  // Allow shrinking
                             .child(self.render_preview_panel(cx))
                     ),
@@ -1871,44 +1850,7 @@ impl ScriptListApp {
             main_div = main_div.child(panel);
         }
         
-        // Footer - compact with semi-transparent border
-        main_div = main_div.child(
-            div()
-                .w_full()
-                .px(px(16.))
-                .py(px(10.))
-                .border_t_1()
-                .border_color(rgba((theme.colors.ui.border << 8) | 0x60))
-                .flex()
-                .flex_row()
-                .justify_between()
-                .items_center()
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(rgb(theme.colors.text.muted))
-                        .child(
-                            if let Some(output) = &self.last_output {
-                                output.clone()
-                            } else {
-                                SharedString::from("↑↓ navigate • ⏎ run")
-                            }
-                        )
-                )
-                .child(
-                    div()
-                        .px(px(8.))
-                        .py(px(4.))
-                        .bg(rgba((theme.colors.background.search_box << 8) | 0x80))
-                        .rounded(px(4.))
-                        .text_xs()
-                        .text_color(rgb(theme.colors.text.muted))
-                        .child("Actions ⌘K")
-                ),
-        );
-        
         // Wrap in relative container for overlay positioning
-        let script_info = self.get_focused_script_info();
         let show_popup = self.show_actions_popup;
         
         let mut container = div()
@@ -1917,17 +1859,17 @@ impl ScriptListApp {
             .h_full()
             .child(main_div);
         
-        // Add actions popup overlay when visible
+        // Add actions popup overlay when visible - render the ActionsDialog entity
         if show_popup {
-            container = container.child(
-                div()
-                    .absolute()
-                    .right(px(16.))
-                    .bottom(px(56.))  // Above the footer
-                    .w(px(POPUP_WIDTH))
-                    .max_h(px(POPUP_MAX_HEIGHT))
-                    .child(self.render_actions_overlay(cx, script_info))
-            );
+            if let Some(ref dialog) = self.actions_dialog {
+                container = container.child(
+                    div()
+                        .absolute()
+                        .right(px(16.))
+                        .bottom(px(16.))  // Near bottom edge
+                        .child(dialog.clone())
+                );
+            }
         }
         
         container.into_any_element()
