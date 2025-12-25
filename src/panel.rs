@@ -1,6 +1,8 @@
 // macOS Panel Configuration Module
 // This module configures GPUI windows as macOS floating panels
 // that appear above other applications with native vibrancy effects
+//
+// Also provides placeholder configuration for input fields
 
 /// Vibrancy configuration for GPUI window background appearance
 /// 
@@ -67,6 +69,72 @@ pub fn configure_as_floating_panel() {
 /// No-op on non-macOS platforms
 pub fn configure_as_floating_panel() {}
 
+// ============================================================================
+// Input Placeholder Configuration
+// ============================================================================
+
+/// Default placeholder text for the main search input
+pub const DEFAULT_PLACEHOLDER: &str = "Script Kit";
+
+/// Configuration for input field placeholder behavior
+/// 
+/// When using this configuration:
+/// - Cursor should be positioned at FAR LEFT (index 0) when input is empty
+/// - Placeholder text appears dimmed/muted when no user input
+/// - Placeholder disappears immediately when user starts typing
+#[derive(Debug, Clone)]
+pub struct PlaceholderConfig {
+    /// The placeholder text to display when input is empty
+    pub text: String,
+    /// Whether cursor should appear at left (true) or right (false) of placeholder
+    pub cursor_at_left: bool,
+}
+
+impl Default for PlaceholderConfig {
+    fn default() -> Self {
+        Self {
+            text: DEFAULT_PLACEHOLDER.to_string(),
+            cursor_at_left: true,
+        }
+    }
+}
+
+impl PlaceholderConfig {
+    /// Create a new placeholder configuration with custom text
+    pub fn new(text: impl Into<String>) -> Self {
+        Self {
+            text: text.into(),
+            cursor_at_left: true,
+        }
+    }
+    
+    /// Log when placeholder state changes (for observability)
+    pub fn log_state_change(&self, is_showing_placeholder: bool) {
+        crate::logging::log(
+            "PLACEHOLDER",
+            &format!(
+                "Placeholder state changed: showing={}, text='{}', cursor_at_left={}",
+                is_showing_placeholder,
+                self.text,
+                self.cursor_at_left
+            ),
+        );
+    }
+    
+    /// Log cursor position on input focus (for observability)
+    pub fn log_cursor_position(&self, position: usize, is_empty: bool) {
+        crate::logging::log(
+            "PLACEHOLDER",
+            &format!(
+                "Cursor position on focus: pos={}, input_empty={}, expected_left={}",
+                position,
+                is_empty,
+                is_empty && self.cursor_at_left
+            ),
+        );
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -88,5 +156,34 @@ mod tests {
         assert!(WindowVibrancy::Opaque.is_opaque());
         assert!(!WindowVibrancy::Blurred.is_opaque());
         assert!(!WindowVibrancy::Transparent.is_opaque());
+    }
+    
+    // Placeholder configuration tests
+    
+    #[test]
+    fn test_default_placeholder_text() {
+        assert_eq!(DEFAULT_PLACEHOLDER, "Script Kit");
+    }
+    
+    #[test]
+    fn test_placeholder_config_default() {
+        let config = PlaceholderConfig::default();
+        assert_eq!(config.text, "Script Kit");
+        assert!(config.cursor_at_left);
+    }
+    
+    #[test]
+    fn test_placeholder_config_new() {
+        let config = PlaceholderConfig::new("Custom Placeholder");
+        assert_eq!(config.text, "Custom Placeholder");
+        assert!(config.cursor_at_left);
+    }
+    
+    #[test]
+    fn test_placeholder_cursor_at_left_by_default() {
+        // Verify that cursor_at_left is true by default
+        // This ensures cursor appears at FAR LEFT when input is empty
+        let config = PlaceholderConfig::default();
+        assert!(config.cursor_at_left, "Cursor should be at left by default for proper placeholder behavior");
     }
 }

@@ -2,6 +2,7 @@ use gpui::{
     div, svg, prelude::*, px, point, rgb, rgba, size, App, Application, Bounds, Context, Render,
     Window, WindowBounds, WindowOptions, SharedString, FocusHandle, Focusable, Entity,
     WindowHandle, Timer, Pixels, WindowBackgroundAppearance, AnyElement, BoxShadow, hsla,
+    uniform_list, UniformListScrollHandle, ScrollStrategy,
 };
 use global_hotkey::{GlobalHotKeyManager, GlobalHotKeyEvent, HotKeyState, hotkey::{HotKey, Modifiers, Code}};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -29,6 +30,7 @@ use std::sync::{Arc, Mutex, mpsc};
 use protocol::{Message, Choice};
 use actions::{ActionsDialog, ScriptInfo};
 use syntax::highlight_code_lines;
+use panel::DEFAULT_PLACEHOLDER;
 
 /// Channel for sending prompt messages from script thread to UI
 type PromptChannel = (mpsc::Sender<PromptMessage>, mpsc::Receiver<PromptMessage>);
@@ -449,9 +451,8 @@ struct ScriptListApp {
     prompt_receiver: Option<mpsc::Receiver<PromptMessage>>,
     // Channel for sending responses back to script
     response_sender: Option<mpsc::Sender<Message>>,
-    // Scroll state for script list
-    scroll_offset: usize,           // Index of first visible item
-    viewport_height: usize,         // Number of items that fit in viewport
+    // Scroll handle for uniform_list (automatic virtualized scrolling)
+    list_scroll_handle: UniformListScrollHandle,
     // Actions popup overlay
     show_actions_popup: bool,
     // ActionsDialog entity for focus management
@@ -488,6 +489,7 @@ impl ScriptListApp {
         logging::log("APP", "Loaded theme with system appearance detection");
         logging::log("APP", &format!("Loaded config: hotkey={:?}+{}, bun_path={:?}", 
             config.hotkey.modifiers, config.hotkey.key, config.bun_path));
+        logging::log("UI", "Script Kit logo SVG loaded for header rendering");
         
         // Start cursor blink timer
         cx.spawn(async move |this, mut cx| {
@@ -518,8 +520,7 @@ impl ScriptListApp {
             arg_selected_index: 0,
             prompt_receiver: None,
             response_sender: None,
-            scroll_offset: 0,
-            viewport_height: 9,  // ~9 items visible at a time (allows margin for footer)
+            list_scroll_handle: UniformListScrollHandle::new(),
             show_actions_popup: false,
             actions_dialog: None,
             cursor_visible: true,
@@ -560,9 +561,9 @@ impl ScriptListApp {
         self.scripts = scripts::read_scripts();
         self.scriptlets = scripts::read_scriptlets();
         self.selected_index = 0;
-        self.scroll_offset = 0;
+        self.list_scroll_handle.scroll_to_item(0, ScrollStrategy::Top);
         logging::log("APP", &format!("Scripts refreshed: {} scripts, {} scriptlets loaded", self.scripts.len(), self.scriptlets.len()));
-        logging::log("SCROLL", "Scripts refreshed - reset: selected_index=0, scroll_offset=0");
+        logging::log("SCROLL", "Scripts refreshed - reset: selected_index=0");
         cx.notify();
     }
 
@@ -601,16 +602,9 @@ impl ScriptListApp {
     fn move_selection_up(&mut self, cx: &mut Context<Self>) {
         if self.selected_index > 0 {
             self.selected_index -= 1;
-            
-            // Scroll if item is above visible area
-            if self.selected_index < self.scroll_offset {
-                self.scroll_offset = self.selected_index;
-            }
-            
-            logging::log("SCROLL", &format!(
-                "Up: selected_index={}, scroll_offset={}, viewport={}",
-                self.selected_index, self.scroll_offset, self.viewport_height
-            ));
+            // uniform_list handles scrolling automatically via scroll_to_item
+            self.list_scroll_handle.scroll_to_item(self.selected_index, ScrollStrategy::Nearest);
+            logging::log("SCROLL", &format!("Up: selected_index={}", self.selected_index));
             cx.notify();
         }
     }
@@ -619,17 +613,9 @@ impl ScriptListApp {
         let filtered_len = self.filtered_results().len();
         if self.selected_index < filtered_len.saturating_sub(1) {
             self.selected_index += 1;
-            
-            // Scroll if item is below visible area
-            let last_visible = self.scroll_offset + self.viewport_height;
-            if self.selected_index >= last_visible {
-                self.scroll_offset = self.selected_index - self.viewport_height + 1;
-            }
-            
-            logging::log("SCROLL", &format!(
-                "Down: selected_index={}, scroll_offset={}, viewport={}, last_visible={}",
-                self.selected_index, self.scroll_offset, self.viewport_height, last_visible
-            ));
+            // uniform_list handles scrolling automatically via scroll_to_item
+            self.list_scroll_handle.scroll_to_item(self.selected_index, ScrollStrategy::Nearest);
+            logging::log("SCROLL", &format!("Down: selected_index={}", self.selected_index));
             cx.notify();
         }
     }
@@ -654,18 +640,18 @@ impl ScriptListApp {
         if clear {
             self.filter_text.clear();
             self.selected_index = 0;
-            self.scroll_offset = 0;
-            logging::log("SCROLL", "Filter cleared - reset: selected_index=0, scroll_offset=0");
+            self.list_scroll_handle.scroll_to_item(0, ScrollStrategy::Top);
+            logging::log("SCROLL", "Filter cleared - reset: selected_index=0");
         } else if backspace && !self.filter_text.is_empty() {
             self.filter_text.pop();
             self.selected_index = 0;
-            self.scroll_offset = 0;
-            logging::log("SCROLL", "Filter backspace - reset: selected_index=0, scroll_offset=0");
+            self.list_scroll_handle.scroll_to_item(0, ScrollStrategy::Top);
+            logging::log("SCROLL", "Filter backspace - reset: selected_index=0");
         } else if let Some(ch) = new_char {
             self.filter_text.push(ch);
             self.selected_index = 0;
-            self.scroll_offset = 0;
-            logging::log("SCROLL", &format!("Filter char '{}' - reset: selected_index=0, scroll_offset=0", ch));
+            self.list_scroll_handle.scroll_to_item(0, ScrollStrategy::Top);
+            logging::log("SCROLL", &format!("Filter char '{}' - reset: selected_index=0", ch));
         }
         cx.notify();
     }
@@ -1015,7 +1001,7 @@ impl ScriptListApp {
         // Clear filter and selection state for fresh menu
         self.filter_text.clear();
         self.selected_index = 0;
-        self.scroll_offset = 0;
+        self.list_scroll_handle.scroll_to_item(0, ScrollStrategy::Top);
         
         // Clear output
         self.last_output = None;
@@ -1546,116 +1532,112 @@ impl ScriptListApp {
         let total_len = self.scripts.len() + self.scriptlets.len();
         let theme = &self.theme;
         
-        // Handle edge cases for scroll bounds
-        // Keep selected_index in valid bounds
+        // Handle edge cases - keep selected_index in valid bounds
         if self.selected_index >= filtered_len && filtered_len > 0 {
             self.selected_index = filtered_len.saturating_sub(1);
         }
-        
-        // Ensure scroll_offset doesn't go past list
-        let max_offset = filtered_len.saturating_sub(self.viewport_height);
-        if self.scroll_offset > max_offset {
-            self.scroll_offset = max_offset;
-        }
 
-        // Build script list - tight, clean spacing
-        let mut list_container = div().flex().flex_col().w_full();
+        // Clone values needed for the uniform_list closure
+        let selected_index = self.selected_index;
+        let theme_colors = theme.colors.clone();
 
-        if filtered_len == 0 {
-            list_container = list_container.child(
-                div()
-                    .w_full()
-                    .py(px(24.))
-                    .text_center()
-                    .text_color(rgb(theme.colors.text.muted))
-                    .font_family(".AppleSystemUIFont")
-                    .child(if self.filter_text.is_empty() {
-                        "No scripts or snippets found".to_string()
-                    } else {
-                        format!("No results match '{}'", self.filter_text)
-                    }),
-            );
+        // Build script list using uniform_list for proper virtualized scrolling
+        let list_element: AnyElement = if filtered_len == 0 {
+            div()
+                .w_full()
+                .h_full()
+                .flex()
+                .items_center()
+                .justify_center()
+                .text_color(rgb(theme.colors.text.muted))
+                .font_family(".AppleSystemUIFont")
+                .child(if self.filter_text.is_empty() {
+                    "No scripts or snippets found".to_string()
+                } else {
+                    format!("No results match '{}'", self.filter_text)
+                })
+                .into_any_element()
         } else {
-            // Only render visible items (scroll_offset to scroll_offset + viewport_height)
-            // This provides a performance benefit - we only render what's visible
-            let visible_items: Vec<_> = filtered.iter()
-                .skip(self.scroll_offset)
-                .take(self.viewport_height)
-                .enumerate()
-                .collect();
-            
-            // PERF: Log viewport rendering stats
-            let visible_count = visible_items.len();
-            logging::log("PERF", &format!(
-                "Rendering {} items (scroll_offset={}, viewport={}, total={})",
-                visible_count, self.scroll_offset, self.viewport_height, filtered_len
-            ));
-            
-            for (display_idx, result) in visible_items {
-                // The actual index in the filtered list
-                let actual_idx = self.scroll_offset + display_idx;
-                let is_selected = actual_idx == self.selected_index;
-                
-                // Get name, description, and shortcut based on type
-                let (name_display, description, shortcut) = match result {
-                    scripts::SearchResult::Script(sm) => {
-                        (sm.script.name.clone(), sm.script.description.clone(), None::<String>)
+            // Use uniform_list for automatic virtualized scrolling
+            uniform_list(
+                "script-list",
+                filtered_len,
+                cx.processor(move |_this, visible_range, _window, _cx| {
+                    let mut items = Vec::new();
+                    let filtered = _this.filtered_results();
+                    
+                    for ix in visible_range {
+                        if let Some(result) = filtered.get(ix) {
+                            let is_selected = ix == selected_index;
+                            
+                            // Get name, description, and shortcut based on type
+                            let (name_display, description, shortcut) = match result {
+                                scripts::SearchResult::Script(sm) => {
+                                    (sm.script.name.clone(), sm.script.description.clone(), None::<String>)
+                                }
+                                scripts::SearchResult::Scriptlet(sm) => {
+                                    (sm.scriptlet.name.clone(), sm.scriptlet.description.clone(), sm.scriptlet.shortcut.clone())
+                                }
+                            };
+                            
+                            // Subtle selection backgrounds
+                            let selected_bg = rgba((theme_colors.accent.selected_subtle << 8) | 0x80);
+                            let hover_bg = rgba((theme_colors.accent.selected_subtle << 8) | 0x40);
+                            
+                            // Build content with name + description
+                            let mut item_content = div()
+                                .flex_1().min_w(px(0.)).overflow_hidden()
+                                .flex().flex_col().gap(px(2.));
+                            
+                            // Name
+                            item_content = item_content.child(
+                                div().text_sm().font_weight(gpui::FontWeight::MEDIUM).overflow_hidden().child(name_display)
+                            );
+                            
+                            // Description - use accent color when selected, truncate to single line
+                            if let Some(desc) = description {
+                                let desc_color = if is_selected { rgb(theme_colors.accent.selected) } else { rgb(theme_colors.text.muted) };
+                                item_content = item_content.child(
+                                    div().text_xs().text_color(desc_color).overflow_hidden().max_h(px(16.)).child(desc)
+                                );
+                            }
+                            
+                            // Fixed height item for uniform_list (52px = room for name + description + padding)
+                            items.push(
+                                div()
+                                    .id(ix)
+                                    .w_full()
+                                    .h(px(52.))  // Fixed height for uniform_list
+                                    .px(px(12.))
+                                    .flex()
+                                    .items_center()
+                                    .child(
+                                        div()
+                                            .w_full()
+                                            .h_full()
+                                            .px(px(12.))
+                                            .bg(if is_selected { selected_bg } else { rgba(0x00000000) })
+                                            .hover(|s| s.bg(hover_bg))
+                                            .text_color(if is_selected { rgb(theme_colors.text.primary) } else { rgb(theme_colors.text.secondary) })
+                                            .font_family(".AppleSystemUIFont")
+                                            .cursor_pointer()
+                                            .flex().flex_row().items_center().justify_between().gap_2()
+                                            .child(item_content)
+                                            .child(
+                                                div().flex().flex_row().items_center().gap_2().flex_shrink_0()
+                                                    .child(if let Some(sc) = shortcut { div().text_xs().text_color(rgb(theme_colors.text.dimmed)).child(sc) } else { div() })
+                                            )
+                                    ),
+                            );
+                        }
                     }
-                    scripts::SearchResult::Scriptlet(sm) => {
-                        (sm.scriptlet.name.clone(), sm.scriptlet.description.clone(), sm.scriptlet.shortcut.clone())
-                    }
-                };
-                
-                // Subtle selection backgrounds
-                let selected_bg = rgba((theme.colors.accent.selected_subtle << 8) | 0x80);
-                let hover_bg = rgba((theme.colors.accent.selected_subtle << 8) | 0x40);
-                
-                // Build content with name + description
-                let mut item_content = div()
-                    .flex_1().min_w(px(0.)).overflow_hidden()
-                    .flex().flex_col().gap(px(2.));
-                
-                // Name
-                item_content = item_content.child(
-                    div().text_sm().font_weight(gpui::FontWeight::MEDIUM).overflow_hidden().child(name_display)
-                );
-                
-                // Description - use accent color when selected, truncate to single line
-                if let Some(desc) = description {
-                    let desc_color = if is_selected { rgb(theme.colors.accent.selected) } else { rgb(theme.colors.text.muted) };
-                    item_content = item_content.child(
-                        div().text_xs().text_color(desc_color).overflow_hidden().max_h(px(16.)).child(desc)
-                    );
-                }
-                
-                list_container = list_container.child(
-                    div()
-                        .w_full()
-                        .px(px(12.))
-                        .child(
-                            div()
-                                .w_full()
-                                .px(px(12.))
-                                .py(px(6.))
-                                // No rounded corners - flat design
-                                .bg(if is_selected { selected_bg } else { rgba(0x00000000) })
-                                .hover(|s| s.bg(hover_bg))
-                                .text_color(if is_selected { rgb(theme.colors.text.primary) } else { rgb(theme.colors.text.secondary) })
-                                .font_family(".AppleSystemUIFont")
-                                .cursor_pointer()
-                                .flex().flex_row().items_center().justify_between().gap_2()
-                                // Left: name + description
-                                .child(item_content)
-                                // Right: shortcut + action button
-                                .child(
-                                    div().flex().flex_row().items_center().gap_2().flex_shrink_0()
-                                        .child(if let Some(sc) = shortcut { div().text_xs().text_color(rgb(theme.colors.text.dimmed)).child(sc) } else { div() })
-                                        .child(div().text_xs().text_color(rgb(theme.colors.text.muted)).child("⋯"))
-                                )
-                        ),
-                );
-            }
-        }
+                    items
+                }),
+            )
+            .h_full()
+            .track_scroll(&self.list_scroll_handle)
+            .into_any_element()
+        };
 
         // Log panel
         let log_panel = if self.show_logs {
@@ -1682,7 +1664,8 @@ impl ScriptListApp {
         };
 
         let filter_display = if self.filter_text.is_empty() {
-            SharedString::from("Type a command...")
+            logging::log("PLACEHOLDER", &format!("Using DEFAULT_PLACEHOLDER: '{}'", DEFAULT_PLACEHOLDER));
+            SharedString::from(DEFAULT_PLACEHOLDER)
         } else {
             SharedString::from(self.filter_text.clone())
         };
@@ -1776,6 +1759,7 @@ impl ScriptListApp {
                     .items_center()
                     .gap_3()
                     // Search input with blinking cursor
+                    // Cursor appears at LEFT when input is empty (before placeholder text)
                     .child(
                         div()
                             .flex_1()
@@ -1784,27 +1768,31 @@ impl ScriptListApp {
                             .items_center()
                             .text_xl()
                             .text_color(if filter_is_empty { rgb(theme.colors.text.muted) } else { rgb(theme.colors.text.primary) })
+                            // When empty: cursor FIRST (at left), then placeholder
+                            // When typing: text, then cursor at end
+                            .when(filter_is_empty, |d| d.child(div().w(px(2.)).h(px(24.)).mr(px(4.)).when(self.cursor_visible, |d| d.bg(rgb(theme.colors.text.primary)))))
                             .child(filter_display)
-                            .child(div().w(px(2.)).h(px(24.)).ml(px(2.)).when(self.cursor_visible, |d| d.bg(rgb(theme.colors.text.primary))))
+                            .when(!filter_is_empty, |d| d.child(div().w(px(2.)).h(px(24.)).ml(px(2.)).when(self.cursor_visible, |d| d.bg(rgb(theme.colors.text.primary)))))
                     )
-                    // Run button
+                    // Run button - all text in accent.selected color (gold/yellow)
+                    .child({
+                        logging::log("THEME", &format!("Button text color: accent.selected=#{:06x}", theme.colors.accent.selected));
+                        div().flex().flex_row().items_center().gap_1().text_sm().text_color(rgb(theme.colors.accent.selected))
+                            .child("Run").child("↵")
+                    })
+                    .child(div().text_color(rgb(theme.colors.text.dimmed)).child("|"))
+                    // Actions button - all text in accent.selected color (gold/yellow)
                     .child(
-                        div().flex().flex_row().items_center().gap_1().text_sm().text_color(rgb(theme.colors.text.muted))
-                            .child("Run").child(div().text_color(rgb(theme.colors.text.dimmed)).child("↵"))
+                        div().flex().flex_row().items_center().gap_1().text_sm().text_color(rgb(theme.colors.accent.selected))
+                            .child("Actions").child("⌘ K")
                     )
                     .child(div().text_color(rgb(theme.colors.text.dimmed)).child("|"))
-                    // Actions button
-                    .child(
-                        div().flex().flex_row().items_center().gap_1().text_sm().text_color(rgb(theme.colors.text.muted))
-                            .child("Actions").child(div().text_color(rgb(theme.colors.text.dimmed)).child("⌘ K"))
-                    )
-                    .child(div().text_color(rgb(theme.colors.text.dimmed)).child("|"))
-                    // Script Kit Logo (SVG)
+                    // Script Kit Logo - actual SVG file loaded from filesystem
                     .child(
                         svg()
-                            .path(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/logo.svg"))
+                            .external_path(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/logo.svg"))
                             .size(px(20.))
-                            .text_color(rgb(theme.colors.text.muted))
+                            .text_color(rgb(theme.colors.accent.selected))
                     ),
             )
             // Subtle divider - semi-transparent
@@ -1824,17 +1812,13 @@ impl ScriptListApp {
                     .min_h(px(0.))  // Critical: allows flex container to shrink properly
                     .w_full()
                     .overflow_hidden()
-                    // Left side: Script list (50% width)
+                    // Left side: Script list (50% width) - uses uniform_list for auto-scrolling
                     .child(
                         div()
                             .w_1_2()      // 50% width
                             .h_full()     // Take full height
                             .min_h(px(0.))  // Allow shrinking
-                            .flex()
-                            .flex_col()
-                            .py(px(4.))
-                            .overflow_y_hidden()
-                            .child(list_container)
+                            .child(list_element)
                     )
                     // Right side: Preview panel (50% width)
                     .child(

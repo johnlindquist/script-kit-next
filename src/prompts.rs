@@ -174,12 +174,15 @@ impl Render for ArgPrompt {
                     .child(input_display),
             );
 
-        // Render choice list
+        // Render choice list - fills all available vertical space
+        // Uses flex_1() to grow and fill the remaining height after input container
         let mut choices_container = div()
             .flex()
             .flex_col()
-            .flex_1()
-            .w_full();
+            .flex_1()            // Grow to fill available space (no bottom gap)
+            .min_h(px(0.))       // Allow shrinking (prevents overflow)
+            .w_full()
+            .overflow_y_hidden(); // Clip content at container boundary
 
         if self.filtered_choices.is_empty() {
             choices_container = choices_container.child(
@@ -246,19 +249,21 @@ impl Render for ArgPrompt {
             }
         }
 
-        // Main container
+        // Main container - fills entire window height with no bottom gap
+        // Layout: input_container (fixed height) + choices_container (flex_1 fills rest)
         div()
             .flex()
             .flex_col()
             .w_full()
-            .h_full()
+            .h_full()            // Fill container height completely
+            .min_h(px(0.))       // Allow proper flex behavior
             .bg(rgb(0x1e1e1e))
             .text_color(rgb(0xcccccc))
             .key_context("arg_prompt")
             .track_focus(&self.focus_handle)
             .on_key_down(handle_key)
             .child(input_container)
-            .child(choices_container)
+            .child(choices_container)  // Uses flex_1 to fill all remaining space to bottom
     }
 }
 
@@ -353,11 +358,14 @@ impl Render for DivPrompt {
         // Extract and render text content
         let display_text = Self::strip_html_tags(&self.html);
 
+        // Main container - fills entire window height with no bottom gap
+        // Content area uses flex_1 to fill all remaining space
         div()
             .flex()
             .flex_col()
             .w_full()
-            .h_full()
+            .h_full()            // Fill container height completely  
+            .min_h(px(0.))       // Allow proper flex behavior
             .bg(rgb(0x1e1e1e))
             .text_color(rgb(0xcccccc))
             .p(px(16.))
@@ -366,17 +374,12 @@ impl Render for DivPrompt {
             .on_key_down(handle_key)
             .child(
                 div()
-                    .flex_1()
+                    .flex_1()            // Grow to fill available space to bottom
+                    .min_h(px(0.))       // Allow shrinking
                     .w_full()
+                    .overflow_y_hidden() // Clip content at container boundary
                     .child(display_text),
             )
-            .child(
-                div()
-                    .w_full()
-                    .pt(px(16.))
-                    .text_color(rgb(0x888888))
-                    .text_sm()
-                    .child("Press Enter or Escape to continue"),
-            )
+            // Footer removed - content now extends to bottom of container
     }
 }
