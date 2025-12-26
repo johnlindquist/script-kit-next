@@ -406,6 +406,116 @@ This reduces both brightness and saturation for a muted appearance.
    [THEME] Using focused colors (is_focused=true)
    ```
 
+## Scroll Performance Optimization
+
+The application includes a keyboard scroll performance fix that prevents UI hangs during fast keyboard repeat. When users hold down arrow keys to scroll through long lists, events can arrive faster than the UI can render individual updates (up to 100+ events per second).
+
+### The Problem
+
+Without optimization, each key event would trigger:
+1. Selection index update
+2. Scroll position recalculation
+3. Full list re-render
+4. Visibility recalculation
+
+At 100 events/second, this creates an unbounded event queue that freezes the UI.
+
+### The Solution: Event Coalescing
+
+The fix implements a **20ms coalescing window** that batches rapid key events:
+
+1. **Direction Tracking**: Tracks whether user is scrolling up or down
+2. **Event Counting**: Accumulates events within the coalescing window
+3. **Batched Updates**: Single UI update for multiple key events
+4. **Delta Movement**: `move_selection_by(delta)` jumps N items at once
+
+Key implementation in `src/main.rs`:
+- `ScrollDirection` enum tracks up/down direction
+- `process_arrow_key_with_coalescing()` handles event batching
+- `flush_pending_scroll()` applies accumulated delta
+- `move_selection_by(delta)` moves selection by N items
+
+### Performance Instrumentation
+
+The `src/perf.rs` module provides timing utilities:
+
+- **KeyEventTracker**: Measures key event rates and processing latency
+- **ScrollTimer**: Tracks scroll operation timing
+- **FrameTimer**: Monitors frame rates and dropped frames
+- **TimingGuard**: RAII-style timing with threshold alerts
+
+Usage in code:
+```rust
+use crate::perf::{start_key_event, end_key_event, log_perf_summary};
+
+let start = start_key_event();
+// ... handle key event ...
+end_key_event(start);
+```
+
+### Performance Logging
+
+The `src/logging.rs` module includes scroll-specific log functions:
+
+- `log_key_event_rate()` - Key events per second
+- `log_scroll_queue_depth()` - Pending scroll events
+- `log_render_stall()` - Detects UI freezes
+- `log_scroll_batch()` - Batched scroll operations
+- `log_key_repeat_timing()` - Time between key repeats
+
+View performance logs with `Cmd+L` and filter for:
+```
+[KEY_PERF], [SCROLL_TIMING], [FRAME_PERF], [PERF_SLOW]
+```
+
+### Running Performance Tests
+
+**SDK Test Harness** (`tests/sdk/test-scroll-perf.ts`):
+```bash
+# Run via bun (requires kit-sdk setup)
+bun run tests/sdk/test-scroll-perf.ts
+```
+
+Test cases:
+1. **scroll-normal**: 200ms interval (baseline)
+2. **scroll-fast**: 50ms interval
+3. **scroll-rapid**: 10ms interval (simulates key hold)
+4. **scroll-burst**: Rapid bursts with pauses
+
+**Benchmark Script** (`scripts/scroll-bench.ts`):
+```bash
+# Runs multiple iterations and outputs statistics
+npx tsx scripts/scroll-bench.ts
+```
+
+Benchmark output includes:
+- Min/Max/Avg latency per iteration
+- P50, P95, P99 percentiles
+- Pass/Fail assessment (P95 < 50ms threshold)
+
+### Performance Thresholds
+
+| Metric | Threshold | Description |
+|--------|-----------|-------------|
+| P95 Latency | < 50ms | 95th percentile key response time |
+| Slow Key Event | > 16.67ms | Exceeds 60fps frame budget |
+| Slow Scroll | > 8ms | Single scroll operation time |
+| Dropped Frame | > 32ms | Below 30fps threshold |
+
+### Interpreting Results
+
+**Good performance:**
+```
+[KEY_PERF] rate=45.0/s avg=2.50ms slow=0.0% total=100
+[SCROLL_TIMING] avg=1.50ms max=5.00ms slow=0 total=50
+```
+
+**Performance regression:**
+```
+[KEY_PERF] rate=45.0/s avg=25.00ms slow=15.0% total=100
+[PERF_SLOW] key_event took 35.00ms (threshold: 16.67ms)
+```
+
 ## Next Steps
 
 1. ✅ Install `cargo-watch`: `cargo install cargo-watch`
@@ -414,5 +524,6 @@ This reduces both brightness and saturation for a muted appearance.
 4. ✅ Configure hotkey in `~/.kit/config.json`
 5. ✅ Use `Cmd+L` to view logs while developing
 6. ✅ (NEW!) Customize focus-aware theme in `~/.kit/theme.json`
+7. ✅ (NEW!) Run scroll performance benchmarks to validate UI responsiveness
 
 Happy hacking! 🚀

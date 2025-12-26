@@ -8,6 +8,7 @@ pub mod executor;
 pub mod list_item;
 pub mod logging;
 pub mod panel;
+pub mod perf;
 pub mod protocol;
 pub mod prompts;
 pub mod scripts;

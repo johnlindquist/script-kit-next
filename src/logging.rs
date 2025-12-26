@@ -51,11 +51,10 @@ pub fn log(category: &str, message: &str) {
         }
     }
     
-    // Write to file
+    // Write to file (no flush - let OS buffer for performance)
     if let Some(mutex) = LOG_FILE.get() {
         if let Ok(mut file) = mutex.lock() {
             let _ = writeln!(file, "{}", line);
-            let _ = file.flush();
         }
     }
 }
@@ -206,5 +205,99 @@ pub fn log_scroll_event_rate(events_per_second: f32) {
     log_debug("SCROLL_PERF", &format!(
         "EVENT_RATE eps={:.1}{}",
         events_per_second, marker
+    ));
+}
+
+// =============================================================================
+// KEY EVENT & SCROLL QUEUE METRICS
+// Category: SCROLL_PERF
+// Purpose: Track input rates, frame gaps, queue depth, and render stalls
+// =============================================================================
+
+/// Log keyboard event rate (events per second) for detecting fast key repeat
+pub fn log_key_event_rate(events_per_sec: f64) {
+    let is_fast = events_per_sec > 30.0;
+    let is_very_fast = events_per_sec > 60.0;
+    let marker = if is_very_fast {
+        " [VERY_FAST]"
+    } else if is_fast {
+        " [FAST]"
+    } else {
+        ""
+    };
+    log_debug("SCROLL_PERF", &format!(
+        "KEY_EVENT_RATE eps={:.1}{}",
+        events_per_sec, marker
+    ));
+}
+
+/// Log frame timing gap (when frames take longer than expected)
+pub fn log_frame_gap(gap_ms: u64) {
+    let is_significant = gap_ms > 16; // More than one frame at 60fps
+    let is_severe = gap_ms > 100;
+    let marker = if is_severe {
+        " [SEVERE]"
+    } else if is_significant {
+        " [SLOW]"
+    } else {
+        ""
+    };
+    log_debug("SCROLL_PERF", &format!(
+        "FRAME_GAP gap_ms={}{}",
+        gap_ms, marker
+    ));
+}
+
+/// Log scroll queue depth (number of pending scroll operations)
+pub fn log_scroll_queue_depth(depth: usize) {
+    let is_backed_up = depth > 5;
+    let is_critical = depth > 20;
+    let marker = if is_critical {
+        " [CRITICAL]"
+    } else if is_backed_up {
+        " [BACKED_UP]"
+    } else {
+        ""
+    };
+    log_debug("SCROLL_PERF", &format!(
+        "QUEUE_DEPTH depth={}{}",
+        depth, marker
+    ));
+}
+
+/// Log render stall (when render blocks for too long)
+pub fn log_render_stall(duration_ms: u64) {
+    let is_stall = duration_ms > 16;
+    let is_hang = duration_ms > 100;
+    let marker = if is_hang {
+        " [HANG]"
+    } else if is_stall {
+        " [STALL]"
+    } else {
+        ""
+    };
+    log("SCROLL_PERF", &format!(
+        "RENDER_STALL duration_ms={}{}",
+        duration_ms, marker
+    ));
+}
+
+/// Log scroll operation batch (when multiple scroll events are coalesced)
+pub fn log_scroll_batch(batch_size: usize, coalesced_from: usize) {
+    if coalesced_from > batch_size {
+        log_debug("SCROLL_PERF", &format!(
+            "BATCH_COALESCE processed={} from={}",
+            batch_size, coalesced_from
+        ));
+    }
+}
+
+/// Log key repeat timing for debugging fast scroll issues
+pub fn log_key_repeat_timing(key: &str, interval_ms: u64, repeat_count: u32) {
+    let is_fast = interval_ms < 50;
+    let marker = if is_fast { " [FAST_REPEAT]" } else { "" };
+    log_debug("SCROLL_PERF", &format!(
+        "KEY_REPEAT key={} interval_ms={} count={}{}",
+        key, interval_ms, repeat_count, marker
     ));
 }

@@ -27,6 +27,7 @@ mod actions;
 mod list_item;
 mod syntax;
 mod utils;
+mod perf;
 
 use list_item::{ListItem, ListItemColors, LIST_ITEM_HEIGHT};
 use utils::strip_html_tags;
@@ -473,6 +474,9 @@ struct ScriptListApp {
     filter_cache_key: String,
     // Scroll stabilization: track last scrolled-to index to avoid redundant scroll_to_item calls
     last_scrolled_index: Option<usize>,
+    // Preview cache: avoid re-reading file and re-highlighting on every render
+    preview_cache_path: Option<String>,
+    preview_cache_lines: Vec<syntax::HighlightedLine>,
 }
 
 impl ScriptListApp {
@@ -545,6 +549,9 @@ impl ScriptListApp {
             filter_cache_key: String::from("\0_UNINITIALIZED_\0"), // Sentinel value to force initial compute
             // Scroll stabilization: start with no last scrolled index
             last_scrolled_index: None,
+            // Preview cache: start empty, will populate on first render
+            preview_cache_path: None,
+            preview_cache_lines: Vec::new(),
         }
     }
     
@@ -582,14 +589,11 @@ impl ScriptListApp {
         self.scripts = scripts::read_scripts();
         self.scriptlets = scripts::read_scriptlets();
         self.selected_index = 0;
-        self.last_scrolled_index = None; // Reset scroll tracking
-        logging::log_scroll_to_item(0, "scripts_refreshed");
+        self.last_scrolled_index = None;
         self.list_scroll_handle.scroll_to_item(0, ScrollStrategy::Top);
         self.last_scrolled_index = Some(0);
-        // P1: Invalidate cache when scripts change
         self.invalidate_filter_cache();
         logging::log("APP", &format!("Scripts refreshed: {} scripts, {} scriptlets loaded", self.scripts.len(), self.scriptlets.len()));
-        logging::log("SCROLL", "Scripts refreshed - reset: selected_index=0");
         cx.notify();
     }
 
@@ -654,6 +658,45 @@ impl ScriptListApp {
         logging::log_debug("CACHE", "Filter cache INVALIDATED");
         self.filter_cache_key = String::from("\0_INVALIDATED_\0");
     }
+    
+    /// Get or update the preview cache for syntax-highlighted code lines.
+    /// Only re-reads and re-highlights when the script path actually changes.
+    /// Returns cached lines if path matches, otherwise updates cache and returns new lines.
+    fn get_or_update_preview_cache(&mut self, script_path: &str, lang: &str) -> &[syntax::HighlightedLine] {
+        // Check if cache is valid for this path
+        if self.preview_cache_path.as_deref() == Some(script_path) && !self.preview_cache_lines.is_empty() {
+            logging::log_debug("CACHE", &format!("Preview cache HIT for '{}'", script_path));
+            return &self.preview_cache_lines;
+        }
+        
+        // Cache miss - need to re-read and re-highlight
+        logging::log_debug("CACHE", &format!("Preview cache MISS - loading '{}'", script_path));
+        
+        self.preview_cache_path = Some(script_path.to_string());
+        self.preview_cache_lines = match std::fs::read_to_string(script_path) {
+            Ok(content) => {
+                // Only take first 15 lines for preview
+                let preview: String = content
+                    .lines()
+                    .take(15)
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                syntax::highlight_code_lines(&preview, lang)
+            }
+            Err(e) => {
+                logging::log("ERROR", &format!("Failed to read preview: {}", e));
+                Vec::new()
+            }
+        };
+        
+        &self.preview_cache_lines
+    }
+    
+    /// Invalidate the preview cache (call when selection might change to different script)
+    fn invalidate_preview_cache(&mut self) {
+        self.preview_cache_path = None;
+        self.preview_cache_lines.clear();
+    }
 
     fn filtered_scripts(&self) -> Vec<scripts::Script> {
         if self.filter_text.is_empty() {
@@ -670,9 +713,7 @@ impl ScriptListApp {
     fn move_selection_up(&mut self, cx: &mut Context<Self>) {
         if self.selected_index > 0 {
             self.selected_index -= 1;
-            // Scroll stabilization: only call scroll_to_item if index actually changed
             self.scroll_to_selected_if_needed("keyboard_up");
-            logging::log("SCROLL", &format!("Up: selected_index={}", self.selected_index));
             cx.notify();
         }
     }
@@ -681,9 +722,7 @@ impl ScriptListApp {
         let filtered_len = self.filtered_results().len();
         if self.selected_index < filtered_len.saturating_sub(1) {
             self.selected_index += 1;
-            // Scroll stabilization: only call scroll_to_item if index actually changed
             self.scroll_to_selected_if_needed("keyboard_down");
-            logging::log("SCROLL", &format!("Down: selected_index={}", self.selected_index));
             cx.notify();
         }
     }
@@ -695,25 +734,18 @@ impl ScriptListApp {
         
         // Check if we've already scrolled to this index
         if self.last_scrolled_index == Some(target) {
-            logging::log_scroll_to_item(target, &format!("{} (SKIPPED - already at index)", reason));
             return;
         }
         
-        // Log and perform the scroll
-        let perf_start = logging::log_scroll_perf_start(&format!("scroll_to_item_{}", reason));
-        logging::log_scroll_to_item(target, reason);
+        // Perform the scroll (logging removed for performance)
         self.list_scroll_handle.scroll_to_item(target, ScrollStrategy::Nearest);
         self.last_scrolled_index = Some(target);
-        logging::log_scroll_perf_end(&format!("scroll_to_item_{}", reason), perf_start);
     }
     
     /// Update selected index from mouse hover and scroll if needed
     fn set_selected_index_from_hover(&mut self, index: usize, cx: &mut Context<Self>) {
         if self.selected_index != index {
-            logging::log_mouse_hover_state(index, true, true);
             self.selected_index = index;
-            // Don't scroll on hover - let the user scroll naturally with mouse
-            // This prevents scroll jitter when hovering near viewport edges
             cx.notify();
         }
     }
@@ -738,27 +770,21 @@ impl ScriptListApp {
         if clear {
             self.filter_text.clear();
             self.selected_index = 0;
-            self.last_scrolled_index = None; // Reset scroll tracking on filter change
-            logging::log_scroll_to_item(0, "filter_cleared");
+            self.last_scrolled_index = None;
             self.list_scroll_handle.scroll_to_item(0, ScrollStrategy::Top);
             self.last_scrolled_index = Some(0);
-            logging::log("SCROLL", "Filter cleared - reset: selected_index=0");
         } else if backspace && !self.filter_text.is_empty() {
             self.filter_text.pop();
             self.selected_index = 0;
-            self.last_scrolled_index = None; // Reset scroll tracking on filter change
-            logging::log_scroll_to_item(0, "filter_backspace");
+            self.last_scrolled_index = None;
             self.list_scroll_handle.scroll_to_item(0, ScrollStrategy::Top);
             self.last_scrolled_index = Some(0);
-            logging::log("SCROLL", "Filter backspace - reset: selected_index=0");
         } else if let Some(ch) = new_char {
             self.filter_text.push(ch);
             self.selected_index = 0;
-            self.last_scrolled_index = None; // Reset scroll tracking on filter change
-            logging::log_scroll_to_item(0, "filter_char_added");
+            self.last_scrolled_index = None;
             self.list_scroll_handle.scroll_to_item(0, ScrollStrategy::Top);
             self.last_scrolled_index = Some(0);
-            logging::log("SCROLL", &format!("Filter char '{}' - reset: selected_index=0", ch));
         }
         cx.notify();
     }
@@ -1167,8 +1193,7 @@ impl ScriptListApp {
         // Clear filter and selection state for fresh menu
         self.filter_text.clear();
         self.selected_index = 0;
-        self.last_scrolled_index = None; // Reset scroll tracking
-        logging::log_scroll_to_item(0, "reset_to_script_list");
+        self.last_scrolled_index = None;
         self.list_scroll_handle.scroll_to_item(0, ScrollStrategy::Top);
         self.last_scrolled_index = Some(0);
         
@@ -1360,18 +1385,25 @@ impl ScriptListApp {
     }
     
     /// Render the preview panel showing details of the selected script/scriptlet
-    fn render_preview_panel(&self, _cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_preview_panel(&mut self, _cx: &mut Context<Self>) -> impl IntoElement {
         let filtered = self.filtered_results();
-        let selected_result = filtered.get(self.selected_index);
-        let theme = &self.theme;
+        let selected_result = filtered.get(self.selected_index).cloned();
+        
+        // Pre-extract all theme colors before any mutable borrows
+        let bg_main = self.theme.colors.background.main;
+        let ui_border = self.theme.colors.ui.border;
+        let text_primary = self.theme.colors.text.primary;
+        let text_muted = self.theme.colors.text.muted;
+        let text_secondary = self.theme.colors.text.secondary;
+        let bg_search_box = self.theme.colors.background.search_box;
         
         // Preview panel container with left border separator
         let mut panel = div()
             .w_full()
             .h_full()
-            .bg(rgb(theme.colors.background.main))
+            .bg(rgb(bg_main))
             .border_l_1()
-            .border_color(rgba((theme.colors.ui.border << 8) | 0x80))
+            .border_color(rgba((ui_border << 8) | 0x80))
             .p(px(16.))
             .flex()
             .flex_col()
@@ -1379,21 +1411,17 @@ impl ScriptListApp {
             .font_family(".AppleSystemUIFont");
         
         match selected_result {
-            Some(result) => {
+            Some(ref result) => {
                 match result {
                     scripts::SearchResult::Script(script_match) => {
                         let script = &script_match.script;
-                        logging::log("UI", &format!(
-                            "Preview panel updated: Script '{}' ({})",
-                            script.name, script.extension
-                        ));
                         
                         // Script name header
                         panel = panel.child(
                             div()
                                 .text_lg()
                                 .font_weight(gpui::FontWeight::SEMIBOLD)
-                                .text_color(rgb(theme.colors.text.primary))
+                                .text_color(rgb(text_primary))
                                 .pb(px(8.))
                                 .child(format!("{}.{}", script.name, script.extension))
                         );
@@ -1427,14 +1455,14 @@ impl ScriptListApp {
                                     .child(
                                         div()
                                             .text_xs()
-                                            .text_color(rgb(theme.colors.text.muted))
+                                            .text_color(rgb(text_muted))
                                             .pb(px(2.))
                                             .child("Description")
                                     )
                                     .child(
                                         div()
                                             .text_sm()
-                                            .text_color(rgb(theme.colors.text.secondary))
+                                            .text_color(rgb(text_secondary))
                                             .child(desc.clone())
                                     )
                             );
@@ -1445,7 +1473,7 @@ impl ScriptListApp {
                             div()
                                 .w_full()
                                 .h(px(1.))
-                                .bg(rgba((theme.colors.ui.border << 8) | 0x60))
+                                .bg(rgba((ui_border << 8) | 0x60))
                                 .my(px(8.))
                         );
                         
@@ -1453,15 +1481,15 @@ impl ScriptListApp {
                         panel = panel.child(
                             div()
                                 .text_xs()
-                                .text_color(rgb(theme.colors.text.muted))
+                                .text_color(rgb(text_muted))
                                 .pb(px(8.))
                                 .child("Code Preview")
                         );
                         
-                        // Read and display code preview with syntax highlighting
-                        let code_preview = Self::read_script_preview(&script.path, 15);
-                        let lang = script.extension.as_str();
-                        let lines = highlight_code_lines(&code_preview, lang);
+                        // Use cached syntax-highlighted lines (avoids file I/O and highlighting on every render)
+                        let script_path = script.path.to_string_lossy().to_string();
+                        let lang = script.extension.clone();
+                        let lines = self.get_or_update_preview_cache(&script_path, &lang).to_vec();
                         
                         // Build code container - render line by line with monospace font
                         let mut code_container = div()
@@ -1469,7 +1497,7 @@ impl ScriptListApp {
                             .min_w(px(280.))
                             .p(px(12.))
                             .rounded(px(6.))
-                            .bg(rgba((theme.colors.background.search_box << 8) | 0x80))
+                            .bg(rgba((bg_search_box << 8) | 0x80))
                             .overflow_hidden()
                             .flex()
                             .flex_col();
@@ -1504,17 +1532,13 @@ impl ScriptListApp {
                     }
                     scripts::SearchResult::Scriptlet(scriptlet_match) => {
                         let scriptlet = &scriptlet_match.scriptlet;
-                        logging::log("UI", &format!(
-                            "Preview panel updated: Scriptlet '{}' ({})",
-                            scriptlet.name, scriptlet.tool
-                        ));
                         
                         // Scriptlet name header
                         panel = panel.child(
                             div()
                                 .text_lg()
                                 .font_weight(gpui::FontWeight::SEMIBOLD)
-                                .text_color(rgb(theme.colors.text.primary))
+                                .text_color(rgb(text_primary))
                                 .pb(px(8.))
                                 .child(scriptlet.name.clone())
                         );
@@ -1542,8 +1566,8 @@ impl ScriptListApp {
                                         .px(px(6.))
                                         .py(px(2.))
                                         .rounded(px(4.))
-                                        .bg(rgba((theme.colors.ui.border << 8) | 0xff))
-                                        .text_color(rgb(theme.colors.text.secondary))
+                                        .bg(rgba((ui_border << 8) | 0xff))
+                                        .text_color(rgb(text_secondary))
                                         .child(scriptlet.tool.clone())
                                 )
                         );
@@ -1558,14 +1582,14 @@ impl ScriptListApp {
                                     .child(
                                         div()
                                             .text_xs()
-                                            .text_color(rgb(theme.colors.text.muted))
+                                            .text_color(rgb(text_muted))
                                             .pb(px(2.))
                                             .child("Description")
                                     )
                                     .child(
                                         div()
                                             .text_sm()
-                                            .text_color(rgb(theme.colors.text.secondary))
+                                            .text_color(rgb(text_secondary))
                                             .child(desc.clone())
                                     )
                             );
@@ -1581,14 +1605,14 @@ impl ScriptListApp {
                                     .child(
                                         div()
                                             .text_xs()
-                                            .text_color(rgb(theme.colors.text.muted))
+                                            .text_color(rgb(text_muted))
                                             .pb(px(2.))
                                             .child("Hotkey")
                                     )
                                     .child(
                                         div()
                                             .text_sm()
-                                            .text_color(rgb(theme.colors.text.secondary))
+                                            .text_color(rgb(text_secondary))
                                             .child(shortcut.clone())
                                     )
                             );
@@ -1599,7 +1623,7 @@ impl ScriptListApp {
                             div()
                                 .w_full()
                                 .h(px(1.))
-                                .bg(rgba((theme.colors.ui.border << 8) | 0x60))
+                                .bg(rgba((ui_border << 8) | 0x60))
                                 .my(px(8.))
                         );
                         
@@ -1607,12 +1631,13 @@ impl ScriptListApp {
                         panel = panel.child(
                             div()
                                 .text_xs()
-                                .text_color(rgb(theme.colors.text.muted))
+                                .text_color(rgb(text_muted))
                                 .pb(px(8.))
                                 .child("Content Preview")
                         );
                         
                         // Display scriptlet code with syntax highlighting (first 15 lines)
+                        // Note: Scriptlets store code in memory, no file I/O needed (no cache benefit)
                         let code_preview: String = scriptlet.code
                             .lines()
                             .take(15)
@@ -1633,7 +1658,7 @@ impl ScriptListApp {
                             .min_w(px(280.))
                             .p(px(12.))
                             .rounded(px(6.))
-                            .bg(rgba((theme.colors.background.search_box << 8) | 0x80))
+                            .bg(rgba((bg_search_box << 8) | 0x80))
                             .overflow_hidden()
                             .flex()
                             .flex_col();
@@ -1678,7 +1703,7 @@ impl ScriptListApp {
                         .flex()
                         .items_center()
                         .justify_center()
-                        .text_color(rgb(theme.colors.text.muted))
+                        .text_color(rgb(text_muted))
                         .child(
                             if self.filter_text.is_empty() && self.scripts.is_empty() && self.scriptlets.is_empty() {
                                 "No scripts or snippets found"
@@ -1761,9 +1786,8 @@ impl ScriptListApp {
                     let current_selected = this.selected_index;
                     // P1: Use cached filtered results inside closure
                     let filtered = this.get_filtered_results_cached();
-                    logging::log("SCROLL", &format!("Script list visible range: {:?} ({} items)", visible_range.clone(), visible_range.clone().count()));
                     
-                    for ix in visible_range.clone() {
+                    for ix in visible_range {
                         if let Some(result) = filtered.get(ix) {
                             let is_selected = ix == current_selected;
                             
@@ -1781,7 +1805,6 @@ impl ScriptListApp {
                             // This gives visual feedback matching keyboard navigation
                             let hover_handler = cx.listener(move |this: &mut ScriptListApp, hovered: &bool, _window, cx| {
                                 if *hovered && this.selected_index != ix {
-                                    logging::log_mouse_enter(ix, None);
                                     this.set_selected_index_from_hover(ix, cx);
                                 }
                             });
@@ -1835,7 +1858,6 @@ impl ScriptListApp {
         };
 
         let filter_display = if self.filter_text.is_empty() {
-            logging::log("PLACEHOLDER", &format!("Using DEFAULT_PLACEHOLDER: '{}'", DEFAULT_PLACEHOLDER));
             SharedString::from(DEFAULT_PLACEHOLDER)
         } else {
             SharedString::from(self.filter_text.clone())
@@ -1846,12 +1868,16 @@ impl ScriptListApp {
             let key_str = event.keystroke.key.to_lowercase();
             let has_cmd = event.keystroke.modifiers.platform;
             
-            logging::log("KEY", &format!("Key pressed: '{}' cmd={}", key_str, has_cmd));
-            
             if has_cmd {
                 match key_str.as_str() {
-                    "l" => { this.toggle_logs(cx); return; }
-                    "k" => { this.toggle_actions(cx, window); return; }
+                    "l" => { 
+                        this.toggle_logs(cx); 
+                        return; 
+                    }
+                    "k" => { 
+                        this.toggle_actions(cx, window); 
+                        return; 
+                    }
                     _ => {}
                 }
             }
@@ -1946,11 +1972,10 @@ impl ScriptListApp {
                             .when(!filter_is_empty, |d| d.child(div().w(px(2.)).h(px(24.)).ml(px(2.)).when(self.cursor_visible, |d| d.bg(rgb(theme.colors.text.primary)))))
                     )
                     // Run button - all text in accent.selected color (gold/yellow)
-                    .child({
-                        logging::log("THEME", &format!("Button text color: accent.selected=#{:06x}", theme.colors.accent.selected));
+                    .child(
                         div().flex().flex_row().items_center().gap_1().text_sm().text_color(rgb(theme.colors.accent.selected))
                             .child("Run").child("↵")
-                    })
+                    )
                     .child(div().text_color(rgb(theme.colors.text.dimmed)).child("|"))
                     // Actions button - all text in accent.selected color (gold/yellow)
                     .child(
