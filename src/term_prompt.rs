@@ -21,8 +21,8 @@ const SLOW_RENDER_THRESHOLD_MS: u128 = 16; // 60fps threshold
 const CELL_WIDTH: f32 = 8.4;
 const CELL_HEIGHT: f32 = 17.0;
 
-/// Terminal refresh interval (ms) - faster for smoother output
-const REFRESH_INTERVAL_MS: u64 = 8; // ~120fps for smoother terminal output
+/// Terminal refresh interval (ms) - 30fps is plenty for terminal output
+const REFRESH_INTERVAL_MS: u64 = 33; // ~30fps, reduces CPU load significantly
 
 /// Minimum terminal size
 const MIN_COLS: u16 = 20;
@@ -222,12 +222,14 @@ impl TermPrompt {
         }
     }
 
-    /// Render terminal content as text lines (more efficient than per-cell divs)
-    /// This approach renders entire lines at once with inline styling for colors
+    /// Render terminal content efficiently by batching consecutive cells with same style.
+    /// Instead of creating 2400+ divs (80x30), we batch runs of same-styled text,
+    /// typically reducing to ~50-100 elements per frame.
     fn render_content(&self, content: &TerminalContent) -> impl IntoElement {
         let colors = &self.theme.colors;
         let default_bg = rgb(colors.background.log_panel);
         let cursor_bg = rgb(colors.accent.selected);
+        let default_fg = rgb(colors.text.primary);
         
         let mut lines_container = div()
             .flex()
@@ -243,63 +245,90 @@ impl TermPrompt {
         for (line_idx, cells) in content.styled_lines.iter().enumerate() {
             let is_cursor_line = line_idx == content.cursor_line;
             
-            // Build a row with flex for each character cell
+            // Build a row - we'll batch consecutive cells with same styling
             let mut row = div()
                 .flex()
                 .flex_row()
                 .w_full()
                 .h(px(CELL_HEIGHT));
 
-            for (col_idx, cell) in cells.iter().enumerate() {
-                let is_cursor = is_cursor_line && col_idx == content.cursor_col;
+            // Batch consecutive cells with same styling
+            let mut batch_start = 0;
+            while batch_start < cells.len() {
+                let first_cell = &cells[batch_start];
+                let is_cursor_start = is_cursor_line && batch_start == content.cursor_col;
                 
-                // Convert Rgb to u32 for GPUI
-                let fg_u32 = (cell.fg.r as u32) << 16 | (cell.fg.g as u32) << 8 | (cell.fg.b as u32);
-                let bg_u32 = (cell.bg.r as u32) << 16 | (cell.bg.g as u32) << 8 | (cell.bg.b as u32);
+                // Get styling for this batch
+                let fg_u32 = (first_cell.fg.r as u32) << 16 | (first_cell.fg.g as u32) << 8 | (first_cell.fg.b as u32);
+                let bg_u32 = (first_cell.bg.r as u32) << 16 | (first_cell.bg.g as u32) << 8 | (first_cell.bg.b as u32);
+                let attrs = first_cell.attrs;
                 
-                let fg_color = if is_cursor {
+                // Find how many consecutive cells have the same styling (excluding cursor position)
+                let mut batch_end = batch_start + 1;
+                
+                // If this is the cursor cell, it's always its own batch
+                if !is_cursor_start {
+                    while batch_end < cells.len() {
+                        let cell = &cells[batch_end];
+                        let is_cursor_here = is_cursor_line && batch_end == content.cursor_col;
+                        
+                        // Stop if cursor or different styling
+                        if is_cursor_here {
+                            break;
+                        }
+                        
+                        let cell_fg = (cell.fg.r as u32) << 16 | (cell.fg.g as u32) << 8 | (cell.fg.b as u32);
+                        let cell_bg = (cell.bg.r as u32) << 16 | (cell.bg.g as u32) << 8 | (cell.bg.b as u32);
+                        
+                        if cell_fg != fg_u32 || cell_bg != bg_u32 || cell.attrs != attrs {
+                            break;
+                        }
+                        
+                        batch_end += 1;
+                    }
+                }
+                
+                // Build the text for this batch
+                let batch_text: String = cells[batch_start..batch_end]
+                    .iter()
+                    .map(|c| if c.c == '\0' { ' ' } else { c.c })
+                    .collect();
+                
+                let batch_width = (batch_end - batch_start) as f32 * CELL_WIDTH;
+                
+                // Determine colors
+                let fg_color = if is_cursor_start {
                     rgb(bg_u32) // Invert for cursor
                 } else {
                     rgb(fg_u32)
                 };
-
-                let bg_color = if is_cursor {
-                    cursor_bg
-                } else if bg_u32 == 0x000000 || bg_u32 == colors.background.log_panel {
-                    // Skip background for default black/terminal bg (optimization)
-                    default_bg
-                } else {
-                    rgb(bg_u32)
-                };
-
-                // Build character - handle empty/null chars
-                let ch: SharedString = if cell.c == '\0' || cell.c == ' ' {
-                    " ".into()
-                } else {
-                    cell.c.to_string().into()
-                };
-
-                let mut cell_div = div()
-                    .w(px(CELL_WIDTH))
+                
+                let has_custom_bg = is_cursor_start || (bg_u32 != 0x000000 && bg_u32 != colors.background.log_panel);
+                
+                let mut span = div()
+                    .w(px(batch_width))
                     .h(px(CELL_HEIGHT))
                     .flex_shrink_0()
-                    .text_color(fg_color)
-                    .child(ch);
+                    .text_color(if fg_u32 == 0 { default_fg } else { fg_color })
+                    .child(SharedString::from(batch_text));
                 
-                // Only set background if it's not the default
-                if is_cursor || (bg_u32 != 0x000000 && bg_u32 != colors.background.log_panel) {
-                    cell_div = cell_div.bg(bg_color);
+                // Apply background only if needed
+                if is_cursor_start {
+                    span = span.bg(cursor_bg);
+                } else if has_custom_bg {
+                    span = span.bg(rgb(bg_u32));
                 }
                 
                 // Apply text attributes
-                if cell.attrs.contains(CellAttributes::BOLD) {
-                    cell_div = cell_div.font_weight(gpui::FontWeight::BOLD);
+                if attrs.contains(CellAttributes::BOLD) {
+                    span = span.font_weight(gpui::FontWeight::BOLD);
                 }
-                if cell.attrs.contains(CellAttributes::UNDERLINE) {
-                    cell_div = cell_div.text_decoration_1();
+                if attrs.contains(CellAttributes::UNDERLINE) {
+                    span = span.text_decoration_1();
                 }
-
-                row = row.child(cell_div);
+                
+                row = row.child(span);
+                batch_start = batch_end;
             }
 
             lines_container = lines_container.child(row);
