@@ -32,11 +32,13 @@ mod utils;
 mod perf;
 mod error;
 mod designs;
+mod term_prompt;
+mod terminal;
 
 use list_item::{ListItem, ListItemColors, LIST_ITEM_HEIGHT};
 use utils::strip_html_tags;
 use error::ErrorSeverity;
-use designs::{DesignVariant, uses_default_renderer};
+use designs::{DesignVariant, render_design_item};
 
 use std::sync::{Arc, Mutex, mpsc};
 use protocol::{Message, Choice};
@@ -309,6 +311,11 @@ enum AppView {
         html: String,
         tailwind: Option<String>,
     },
+    /// Showing a terminal prompt from a script
+    TermPrompt {
+        id: String,
+        entity: Entity<term_prompt::TermPrompt>,
+    },
 }
 
 /// Wrapper to hold a script session that can be shared across async boundaries
@@ -319,6 +326,7 @@ type SharedSession = Arc<Mutex<Option<executor::ScriptSession>>>;
 enum PromptMessage {
     ShowArg { id: String, placeholder: String, choices: Vec<Choice> },
     ShowDiv { id: String, html: String, tailwind: Option<String> },
+    ShowTerm { id: String, command: Option<String> },
     HideWindow,
     OpenBrowser { url: String },
     ScriptExit,
@@ -608,10 +616,25 @@ impl ScriptListApp {
     /// This allows hot-swapping between design styles without restarting.
     /// Use Cmd+1 through Cmd+0 to switch designs.
     fn switch_design(&mut self, variant: DesignVariant, cx: &mut Context<Self>) {
-        if self.current_design != variant {
-            logging::log("UI", &format!("Switching design: {:?} -> {:?}", self.current_design, variant));
+        let old_design = self.current_design;
+        if old_design != variant {
+            logging::log("DESIGN", &format!(
+                "Switching design: {:?} -> {:?} (shortcut: Cmd+{})",
+                old_design, 
+                variant,
+                variant.shortcut_number().map(|n| n.to_string()).unwrap_or_else(|| "?".to_string())
+            ));
+            logging::log("DESIGN", &format!(
+                "Design '{}': {}",
+                variant.name(),
+                variant.description()
+            ));
             self.current_design = variant;
+            // Force a full re-render with the new design
             cx.notify();
+            logging::log("DESIGN", "Design switch complete, UI notified");
+        } else {
+            logging::log_debug("DESIGN", &format!("Design {:?} already active, no switch needed", variant));
         }
     }
     
@@ -1065,6 +1088,9 @@ impl ScriptListApp {
                                     Message::Div { id, html, tailwind } => {
                                         Some(PromptMessage::ShowDiv { id, html, tailwind })
                                     }
+                                    Message::Term { id, command } => {
+                                        Some(PromptMessage::ShowTerm { id, command })
+                                    }
                                     Message::Exit { .. } => {
                                         Some(PromptMessage::ScriptExit)
                                     }
@@ -1133,6 +1159,39 @@ impl ScriptListApp {
                 logging::log("UI", &format!("Showing div prompt: {}", id));
                 self.current_view = AppView::DivPrompt { id, html, tailwind };
                 cx.notify();
+            }
+            PromptMessage::ShowTerm { id, command } => {
+                logging::log("UI", &format!("Showing term prompt: {} (command: {:?})", id, command));
+                
+                // Create submit callback for terminal
+                let response_sender = self.response_sender.clone();
+                let submit_callback: std::sync::Arc<dyn Fn(String, Option<String>) + Send + Sync> = 
+                    std::sync::Arc::new(move |id, value| {
+                        if let Some(ref sender) = response_sender {
+                            let response = Message::Submit { id, value };
+                            if let Err(e) = sender.send(response) {
+                                logging::log("UI", &format!("Failed to send terminal response: {}", e));
+                            }
+                        }
+                    });
+                
+                match term_prompt::TermPrompt::new(
+                    id.clone(),
+                    command,
+                    self.focus_handle.clone(),
+                    submit_callback,
+                    std::sync::Arc::new(self.theme.clone()),
+                ) {
+                    Ok(term_prompt) => {
+                        let entity = cx.new(|_| term_prompt);
+                        self.current_view = AppView::TermPrompt { id, entity };
+                        cx.notify();
+                    }
+                    Err(e) => {
+                        tracing::error!(error = %e, "Failed to create terminal");
+                        logging::log("ERROR", &format!("Failed to create terminal: {}", e));
+                    }
+                }
             }
             PromptMessage::ScriptExit => {
                 logging::log("VISIBILITY", "=== ScriptExit message received ===");
@@ -1248,6 +1307,7 @@ impl ScriptListApp {
             AppView::ActionsDialog => "ActionsDialog",
             AppView::ArgPrompt { .. } => "ArgPrompt",
             AppView::DivPrompt { .. } => "DivPrompt",
+            AppView::TermPrompt { .. } => "TermPrompt",
         };
         
         logging::log("UI", &format!("Resetting to script list (was: {})", old_view));
@@ -1298,7 +1358,7 @@ impl ScriptListApp {
     
     /// Check if we're currently in a prompt view (script is running)
     fn is_in_prompt(&self) -> bool {
-        matches!(self.current_view, AppView::ArgPrompt { .. } | AppView::DivPrompt { .. })
+        matches!(self.current_view, AppView::ArgPrompt { .. } | AppView::DivPrompt { .. } | AppView::TermPrompt { .. })
     }
       
       /// Submit a response to the current prompt
@@ -1435,6 +1495,7 @@ impl Render for ScriptListApp {
             AppView::ActionsDialog => self.render_actions_dialog(cx),
             AppView::ArgPrompt { id, placeholder, choices } => self.render_arg_prompt(id, placeholder, choices, cx),
             AppView::DivPrompt { id, html, tailwind } => self.render_div_prompt(id, html, tailwind, cx),
+            AppView::TermPrompt { entity, .. } => self.render_term_prompt(entity, cx),
         }
     }
 }
@@ -1881,15 +1942,6 @@ impl ScriptListApp {
     }
     
     fn render_script_list(&mut self, cx: &mut Context<Self>) -> AnyElement {
-        // Design dispatch: check if we should use a custom renderer
-        // Currently all variants use the default implementation.
-        // When custom renderers are implemented, they will be called here.
-        if !uses_default_renderer(self.current_design) {
-            // Future: return custom_renderer.render_script_list(self, cx);
-            // For now, log and fall through to default
-            logging::log("UI", &format!("Custom renderer for {:?} not yet implemented, using default", self.current_design));
-        }
-        
         // P1: Use cached filtered results
         let filtered = self.get_filtered_results_cached();
         let filtered_len = filtered.len();
@@ -1928,6 +1980,11 @@ impl ScriptListApp {
             // Note: Hover-to-select is implemented via on_mouse_down on each item wrapper
             // to update selected_index when the user clicks (selecting on hover alone would
             // be too aggressive - we update on hover enter instead for visual highlight)
+            
+            // Get current design for dispatch
+            let current_design = self.current_design;
+            logging::log("DESIGN", &format!("Rendering list with design: {:?}", current_design));
+            
             uniform_list(
                 "script-list",
                 filtered_len,
@@ -1935,22 +1992,14 @@ impl ScriptListApp {
                     let mut items = Vec::new();
                     // Get the current selected_index FIRST before borrowing this via get_filtered_results_cached
                     let current_selected = this.selected_index;
+                    // Get current design from app state
+                    let design = this.current_design;
                     // P1: Use cached filtered results inside closure
                     let filtered = this.get_filtered_results_cached();
                     
                     for ix in visible_range {
                         if let Some(result) = filtered.get(ix) {
                             let is_selected = ix == current_selected;
-                            
-                            // Get name, description, and shortcut based on type
-                            let (name_display, description, shortcut) = match result {
-                                scripts::SearchResult::Script(sm) => {
-                                    (sm.script.name.clone(), sm.script.description.clone(), None::<String>)
-                                }
-                                scripts::SearchResult::Scriptlet(sm) => {
-                                    (sm.scriptlet.name.clone(), sm.scriptlet.description.clone(), sm.scriptlet.shortcut.clone())
-                                }
-                            };
                             
                             // Create hover handler that updates selected_index when mouse enters
                             // This gives visual feedback matching keyboard navigation
@@ -1960,19 +2009,22 @@ impl ScriptListApp {
                                 }
                             });
                             
-                            // Use shared ListItem component for consistent design
+                            // Dispatch to design-specific item renderer
+                            // This allows each design to have its own unique visual style
+                            let item_element = render_design_item(
+                                design,
+                                result,
+                                ix,
+                                is_selected,
+                                list_colors,
+                            );
+                            
                             // Wrap in div with hover handler for hover-to-select behavior
                             items.push(
                                 div()
                                     .id(ElementId::NamedInteger("script-item".into(), ix as u64))
                                     .on_hover(hover_handler)
-                                    .child(
-                                        ListItem::new(name_display, list_colors)
-                                            .index(ix)
-                                            .description_opt(description)
-                                            .shortcut_opt(shortcut)
-                                            .selected(is_selected)
-                                    ),
+                                    .child(item_element),
                             );
                         }
                     }
@@ -2557,7 +2609,29 @@ impl ScriptListApp {
                     .child("Press Enter or Escape to continue")
             )
             .into_any_element()
-    }    
+    }
+    
+    fn render_term_prompt(&mut self, entity: Entity<term_prompt::TermPrompt>, _cx: &mut Context<Self>) -> AnyElement {
+        let theme = &self.theme;
+        
+        // Use theme opacity and shadow settings
+        let opacity = self.theme.get_opacity();
+        let bg_hex = theme.colors.background.main;
+        let bg_with_alpha = self.hex_to_rgba_with_opacity(bg_hex, opacity.main);
+        let box_shadows = self.create_box_shadows();
+        
+        div()
+            .flex()
+            .flex_col()
+            .bg(rgba(bg_with_alpha))
+            .shadow(box_shadows)
+            .w_full()
+            .h_full()
+            .rounded(px(12.))
+            .child(entity)
+            .into_any_element()
+    }
+    
     fn render_actions_dialog(&mut self, cx: &mut Context<Self>) -> AnyElement {
         let theme = &self.theme;
         

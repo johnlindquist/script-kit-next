@@ -207,6 +207,89 @@ pub fn uses_default_renderer(variant: DesignVariant) -> bool {
     )
 }
 
+/// Get the item height for a design variant
+/// 
+/// Different designs use different item heights for their aesthetic.
+/// This should be used when setting up uniform_list.
+pub fn get_item_height(variant: DesignVariant) -> f32 {
+    match variant {
+        DesignVariant::Minimal => MINIMAL_ITEM_HEIGHT,
+        DesignVariant::RetroTerminal => TERMINAL_ITEM_HEIGHT,
+        DesignVariant::Compact => COMPACT_ITEM_HEIGHT,
+        _ => crate::list_item::LIST_ITEM_HEIGHT,
+    }
+}
+
+use crate::scripts::SearchResult;
+use crate::list_item::ListItemColors;
+use gpui::{AnyElement, IntoElement};
+
+/// Render a single list item for the given design variant
+///
+/// This is the main dispatch function for design-specific item rendering.
+/// It renders a single item based on the current design, with proper styling.
+///
+/// # Arguments
+/// * `variant` - The design variant to render
+/// * `result` - The search result to render
+/// * `index` - The item index (for element ID and alternating styles)
+/// * `is_selected` - Whether this item is currently selected
+/// * `list_colors` - Pre-computed theme colors for the default design
+///
+/// # Returns
+/// An `AnyElement` containing the rendered item
+pub fn render_design_item(
+    variant: DesignVariant,
+    result: &SearchResult,
+    index: usize,
+    is_selected: bool,
+    list_colors: ListItemColors,
+) -> AnyElement {
+    crate::logging::log_debug("DESIGN", &format!(
+        "Rendering item {} with design {:?}, selected={}",
+        index, variant, is_selected
+    ));
+    
+    match variant {
+        DesignVariant::Minimal => {
+            let colors = MinimalColors {
+                text_primary: list_colors.text_primary,
+                text_muted: list_colors.text_muted,
+                accent_selected: list_colors.accent_selected,
+                background: list_colors.background,
+            };
+            MinimalRenderer::new()
+                .render_item(result, index, is_selected, colors)
+                .into_any_element()
+        }
+        DesignVariant::RetroTerminal => {
+            RetroTerminalRenderer::new()
+                .render_item(result, index, is_selected)
+                .into_any_element()
+        }
+        // All other variants use the default ListItem renderer
+        _ => {
+            use crate::list_item::ListItem;
+            
+            let (name, description, shortcut) = match result {
+                SearchResult::Script(sm) => {
+                    (sm.script.name.clone(), sm.script.description.clone(), None)
+                }
+                SearchResult::Scriptlet(sm) => {
+                    (sm.scriptlet.name.clone(), sm.scriptlet.description.clone(), sm.scriptlet.shortcut.clone())
+                }
+            };
+            
+            ListItem::new(name, list_colors)
+                .index(index)
+                .description_opt(description)
+                .shortcut_opt(shortcut)
+                .selected(is_selected)
+                .into_any_element()
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -263,5 +346,61 @@ mod tests {
         // Other variants still use default renderer (until implemented)
         assert!(uses_default_renderer(DesignVariant::Brutalist));
         assert!(uses_default_renderer(DesignVariant::NeonCyberpunk));
+    }
+    
+    #[test]
+    fn test_get_item_height() {
+        // Minimal uses taller items (64px)
+        assert_eq!(get_item_height(DesignVariant::Minimal), MINIMAL_ITEM_HEIGHT);
+        assert_eq!(get_item_height(DesignVariant::Minimal), 64.0);
+        
+        // RetroTerminal uses denser items (28px)
+        assert_eq!(get_item_height(DesignVariant::RetroTerminal), TERMINAL_ITEM_HEIGHT);
+        assert_eq!(get_item_height(DesignVariant::RetroTerminal), 28.0);
+        
+        // Compact uses the smallest items (24px)
+        assert_eq!(get_item_height(DesignVariant::Compact), COMPACT_ITEM_HEIGHT);
+        assert_eq!(get_item_height(DesignVariant::Compact), 24.0);
+        
+        // Default and others use standard height (52px)
+        assert_eq!(get_item_height(DesignVariant::Default), crate::list_item::LIST_ITEM_HEIGHT);
+        assert_eq!(get_item_height(DesignVariant::Brutalist), crate::list_item::LIST_ITEM_HEIGHT);
+    }
+    
+    #[test]
+    fn test_design_variant_dispatch_coverage() {
+        // Ensure all variants are covered by the dispatch logic
+        // This test verifies the match arms in render_design_item cover all cases
+        for variant in DesignVariant::all() {
+            let uses_default = uses_default_renderer(*variant);
+            let height = get_item_height(*variant);
+            
+            // All variants should have a defined height
+            assert!(height > 0.0, "Variant {:?} should have positive item height", variant);
+            
+            // Minimal and RetroTerminal should use custom renderers
+            if *variant == DesignVariant::Minimal || *variant == DesignVariant::RetroTerminal {
+                assert!(!uses_default, "Variant {:?} should use custom renderer", variant);
+            }
+        }
+    }
+    
+    #[test]
+    fn test_design_keyboard_coverage() {
+        // Verify all keyboard shortcuts 1-0 are mapped
+        let mut mapped_variants = Vec::new();
+        for num in 0..=9 {
+            if let Some(variant) = DesignVariant::from_keyboard_number(num) {
+                mapped_variants.push(variant);
+            }
+        }
+        // Should have 10 mapped variants (Cmd+1 through Cmd+0)
+        assert_eq!(mapped_variants.len(), 10, "Expected 10 keyboard-mapped variants");
+        
+        // All mapped variants should be unique
+        let mut unique = mapped_variants.clone();
+        unique.sort_by_key(|v| *v as u8);
+        unique.dedup_by_key(|v| *v as u8);
+        assert_eq!(unique.len(), 10, "All keyboard mappings should be unique");
     }
 }

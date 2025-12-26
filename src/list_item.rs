@@ -23,6 +23,8 @@ pub struct ListItemColors {
     pub text_dimmed: u32,
     pub accent_selected: u32,
     pub accent_selected_subtle: u32,
+    pub background: u32,
+    pub background_selected: u32,
 }
 
 impl ListItemColors {
@@ -35,6 +37,8 @@ impl ListItemColors {
             text_dimmed: theme.colors.text.dimmed,
             accent_selected: theme.colors.accent.selected,
             accent_selected_subtle: theme.colors.accent.selected_subtle,
+            background: theme.colors.background.main,
+            background_selected: theme.colors.accent.selected_subtle,
         }
     }
 }
