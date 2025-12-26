@@ -48,7 +48,7 @@ async-channel = "2.3"          # Async channel for stdin command listener
 # Selected text functionality (getSelectedText/setSelectedText)
 get-selected-text = "0.1"      # Hybrid AX + clipboard fallback for reading selected text
 arboard = "3.6"                # Clipboard access for setSelectedText fallback
-enigo = "0.6"                  # Keyboard simulation for Cmd+V fallback
+# Note: We use core-graphics directly for Cmd+V simulation (more reliable than enigo on macOS)
 macos-accessibility-client = "0.0.1"  # Permission checking for accessibility APIs
 
 [build-dependencies]

@@ -15,7 +15,6 @@
 
 use anyhow::{bail, Context, Result};
 use arboard::Clipboard;
-use enigo::{Direction, Enigo, Key, Keyboard, Settings};
 use get_selected_text::get_selected_text as get_selected_text_impl;
 use macos_accessibility_client::accessibility;
 use std::process::Command;
@@ -198,7 +197,7 @@ pub fn set_selected_text(text: &str) -> Result<()> {
 /// This function:
 /// 1. Saves the current clipboard contents
 /// 2. Sets the clipboard to the new text
-/// 3. Simulates Cmd+V to paste
+/// 3. Simulates Cmd+V to paste using Core Graphics (more reliable than enigo)
 /// 4. Restores the original clipboard (best effort)
 fn set_via_clipboard_fallback(text: &str) -> Result<()> {
     let mut clipboard = Clipboard::new().context("Failed to access clipboard")?;
@@ -215,21 +214,8 @@ fn set_via_clipboard_fallback(text: &str) -> Result<()> {
     // Small delay to ensure clipboard is set
     thread::sleep(Duration::from_millis(10));
 
-    // Simulate Cmd+V using enigo v0.6 API
-    let mut enigo = Enigo::new(&Settings::default()).context("Failed to create Enigo instance")?;
-
-    // Press Cmd+V
-    enigo
-        .key(Key::Meta, Direction::Press)
-        .context("Failed to press Meta key")?;
-    thread::sleep(Duration::from_millis(5));
-    enigo
-        .key(Key::Unicode('v'), Direction::Click)
-        .context("Failed to click 'v' key")?;
-    thread::sleep(Duration::from_millis(5));
-    enigo
-        .key(Key::Meta, Direction::Release)
-        .context("Failed to release Meta key")?;
+    // Simulate Cmd+V using Core Graphics (more reliable on macOS than enigo)
+    simulate_paste_with_cg()?;
 
     // Wait for paste to complete
     thread::sleep(Duration::from_millis(50));
@@ -246,6 +232,40 @@ fn set_via_clipboard_fallback(text: &str) -> Result<()> {
     }
 
     info!("Set selected text via clipboard fallback");
+    Ok(())
+}
+
+/// Simulate Cmd+V paste using Core Graphics events.
+/// This is more reliable on macOS than using enigo.
+fn simulate_paste_with_cg() -> Result<()> {
+    use core_graphics::event::{CGEvent, CGEventFlags, CGEventTapLocation, CGKeyCode};
+    use core_graphics::event_source::{CGEventSource, CGEventSourceStateID};
+
+    // 'v' key is keycode 9 on macOS
+    const KEY_V: CGKeyCode = 9;
+
+    let source = CGEventSource::new(CGEventSourceStateID::HIDSystemState)
+        .ok()
+        .context("Failed to create CGEventSource")?;
+
+    // Create key down event for 'v' with Cmd modifier
+    let key_down = CGEvent::new_keyboard_event(source.clone(), KEY_V, true)
+        .ok()
+        .context("Failed to create key down event")?;
+    key_down.set_flags(CGEventFlags::CGEventFlagCommand);
+
+    // Create key up event for 'v' with Cmd modifier
+    let key_up = CGEvent::new_keyboard_event(source, KEY_V, false)
+        .ok()
+        .context("Failed to create key up event")?;
+    key_up.set_flags(CGEventFlags::CGEventFlagCommand);
+
+    // Post events
+    key_down.post(CGEventTapLocation::HID);
+    thread::sleep(Duration::from_millis(5));
+    key_up.post(CGEventTapLocation::HID);
+
+    debug!("Simulated Cmd+V via Core Graphics");
     Ok(())
 }
 
