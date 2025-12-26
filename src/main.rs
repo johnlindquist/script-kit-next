@@ -1104,6 +1104,10 @@ impl ScriptListApp {
                 // Channel for sending responses from UI to writer thread
                 let (response_tx, response_rx) = mpsc::channel::<Message>();
                 
+                // Clone response_tx for the reader thread to handle direct responses
+                // (e.g., getSelectedText, setSelectedText, checkAccessibility)
+                let reader_response_tx = response_tx.clone();
+                
                 // Writer thread - handles sending responses to script
                 std::thread::spawn(move || {
                     use std::io::Write;
@@ -1148,6 +1152,21 @@ impl ScriptListApp {
                         match stdout_reader.next_message() {
                             Ok(Some(msg)) => {
                                 logging::log("EXEC", &format!("Received message: {:?}", msg));
+                                
+                                // First, try to handle selected text messages directly (no UI needed)
+                                match executor::handle_selected_text_message(&msg) {
+                                    executor::SelectedTextHandleResult::Handled(response) => {
+                                        logging::log("EXEC", &format!("Handled selected text message, sending response: {:?}", response));
+                                        if let Err(e) = reader_response_tx.send(response) {
+                                            logging::log("EXEC", &format!("Failed to send selected text response: {}", e));
+                                        }
+                                        continue;
+                                    }
+                                    executor::SelectedTextHandleResult::NotHandled => {
+                                        // Fall through to UI message handling
+                                    }
+                                }
+                                
                                 let prompt_msg = match msg {
                                     Message::Arg { id, placeholder, choices } => {
                                         Some(PromptMessage::ShowArg { id, placeholder, choices })
@@ -2097,10 +2116,6 @@ impl ScriptListApp {
             // Note: Hover-to-select is implemented via on_mouse_down on each item wrapper
             // to update selected_index when the user clicks (selecting on hover alone would
             // be too aggressive - we update on hover enter instead for visual highlight)
-            
-            // Get current design for dispatch
-            let current_design = self.current_design;
-            logging::log("DESIGN", &format!("Rendering list with design: {:?}", current_design));
             
             uniform_list(
                 "script-list",
