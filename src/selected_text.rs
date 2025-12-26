@@ -67,6 +67,7 @@ pub fn request_accessibility_permission() -> bool {
 ///
 /// # Errors
 /// Returns error if unable to spawn the open command.
+#[allow(dead_code)] // Will be used for permission UI prompts
 #[instrument]
 pub fn open_accessibility_settings() -> Result<()> {
     info!("Opening accessibility settings");
@@ -84,6 +85,7 @@ pub fn open_accessibility_settings() -> Result<()> {
 ///
 /// # Returns
 /// `true` if permission is granted (either already or after request).
+#[allow(dead_code)] // Will be used for permission UI prompts
 #[instrument]
 pub fn show_permission_dialog() -> Result<bool> {
     // First, check if already granted
