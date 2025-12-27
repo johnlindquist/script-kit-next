@@ -649,24 +649,25 @@ impl EditorPrompt {
             ("a", true, false, false) => self.select_all(),
             
             // Navigation (basic arrow keys, with or without shift for selection)
-            ("arrowleft", false, _, false) => self.move_left(shift),
-            ("arrowright", false, _, false) => self.move_right(shift),
-            ("arrowup", false, _, false) => self.move_up(shift),
-            ("arrowdown", false, _, false) => self.move_down(shift),
+            // GPUI may send "up" or "arrowup" depending on platform/context
+            ("left" | "arrowleft", false, _, false) => self.move_left(shift),
+            ("right" | "arrowright", false, _, false) => self.move_right(shift),
+            ("up" | "arrowup", false, _, false) => self.move_up(shift),
+            ("down" | "arrowdown", false, _, false) => self.move_down(shift),
             
             // Word navigation (Alt/Option + arrow)
-            ("arrowleft", false, _, true) => self.move_word_left(shift),
-            ("arrowright", false, _, true) => self.move_word_right(shift),
+            ("left" | "arrowleft", false, _, true) => self.move_word_left(shift),
+            ("right" | "arrowright", false, _, true) => self.move_word_right(shift),
             
             // Line start/end (Cmd+Left/Right on Mac)
-            ("arrowleft", true, _, false) => self.move_to_line_start(shift),
-            ("arrowright", true, _, false) => self.move_to_line_end(shift),
+            ("left" | "arrowleft", true, _, false) => self.move_to_line_start(shift),
+            ("right" | "arrowright", true, _, false) => self.move_to_line_end(shift),
             ("home", false, _, _) => self.move_to_line_start(shift),
             ("end", false, _, _) => self.move_to_line_end(shift),
             
             // Document start/end (Cmd+Up/Down on Mac, Cmd+Home/End)
-            ("arrowup", true, _, false) => self.move_to_document_start(shift),
-            ("arrowdown", true, _, false) => self.move_to_document_end(shift),
+            ("up" | "arrowup", true, _, false) => self.move_to_document_start(shift),
+            ("down" | "arrowdown", true, _, false) => self.move_to_document_end(shift),
             ("home", true, _, _) => self.move_to_document_start(shift),
             ("end", true, _, _) => self.move_to_document_end(shift),
             
@@ -1092,5 +1093,53 @@ mod tests {
         let lines = highlight_code_lines(content, "typescript");
         assert!(!lines.is_empty());
         assert!(!lines[0].spans.is_empty());
+    }
+
+    /// Regression test: Verify arrow key patterns match BOTH short and long forms.
+    /// GPUI sends "up"/"down"/"left"/"right" on macOS, but we must also handle
+    /// "arrowup"/"arrowdown"/"arrowleft"/"arrowright" for cross-platform compatibility.
+    /// 
+    /// This test reads the source code and verifies the patterns are correct.
+    /// If this test fails, arrow keys will be broken in the editor!
+    #[test]
+    fn test_arrow_key_patterns_match_both_forms() {
+        let source = include_str!("editor.rs");
+        
+        // These patterns MUST exist - they match both key name variants
+        let required_patterns = [
+            r#""up" | "arrowup""#,
+            r#""down" | "arrowdown""#,
+            r#""left" | "arrowleft""#,
+            r#""right" | "arrowright""#,
+        ];
+        
+        for pattern in required_patterns {
+            assert!(
+                source.contains(pattern),
+                "CRITICAL: Missing arrow key pattern '{}' in editor.rs!\n\
+                 Arrow keys will be BROKEN. GPUI sends short names like 'up' but we must match both forms.\n\
+                 Fix: Use pattern matching like: \"up\" | \"arrowup\" => ...",
+                pattern
+            );
+        }
+        
+        // These patterns are WRONG - they only match one form
+        let forbidden_patterns = [
+            // Standalone arrowup without the short form - this is broken!
+            ("(\"arrowup\", false, _, false)", "arrowup without 'up'"),
+            ("(\"arrowdown\", false, _, false)", "arrowdown without 'down'"),
+            ("(\"arrowleft\", false, _, false)", "arrowleft without 'left'"),
+            ("(\"arrowright\", false, _, false)", "arrowright without 'right'"),
+        ];
+        
+        for (pattern, desc) in forbidden_patterns {
+            assert!(
+                !source.contains(pattern),
+                "CRITICAL: Found broken arrow key pattern ({}) in editor.rs!\n\
+                 Pattern '{}' only matches long form. GPUI sends short names like 'up'.\n\
+                 Fix: Use \"up\" | \"arrowup\" instead of just \"arrowup\"",
+                desc, pattern
+            );
+        }
     }
 }

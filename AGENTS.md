@@ -45,6 +45,107 @@ cargo check && cargo clippy --all-targets -- -D warnings && cargo test
 | **Test Hierarchy** | `tests/smoke/` = E2E flows, `tests/sdk/` = individual SDK methods |
 | **Verification Gate** | Always run `cargo check && cargo clippy && cargo test` before commits |
 | **SDK Preload** | Scripts import `../../scripts/kit-sdk` for global functions (arg, div, md) |
+| **Arrow Key Names** | ALWAYS match BOTH: `"up" \| "arrowup"`, `"down" \| "arrowdown"`, `"left" \| "arrowleft"`, `"right" \| "arrowright"` |
+
+---
+
+## CRITICAL: Autonomous Testing Protocol
+
+<critical>
+**ALL UI changes MUST be tested using the stdin JSON protocol before committing.**
+
+The app accepts JSONL commands via stdin for automated testing. This is the ONLY way to test UI behavior without manual interaction.
+
+### Testing Process
+
+1. **Build the app:**
+   ```bash
+   cargo build
+   ```
+
+2. **Send commands via stdin:**
+   ```bash
+   # Run a script that shows an editor
+   (echo '{"type": "run", "path": "/path/to/test-script.ts"}'; sleep 5) | ./target/debug/script-kit-gpui 2>&1 | grep -i "your_search_term"
+   ```
+
+3. **Available commands:**
+   ```json
+   {"type": "run", "path": "/absolute/path/to/script.ts"}
+   {"type": "show"}
+   {"type": "hide"}
+   ```
+
+4. **Create test scripts in `~/.kenv/scripts/`:**
+   ```typescript
+   // test-editor.ts - Tests editor functionality
+   const result = await editor("test content", "text")
+   console.log("Result:", result)
+   ```
+
+5. **Check logs for behavior:**
+   - Logs go to stderr (pretty) and `~/.kit/logs/script-kit-gpui.jsonl` (machine-readable)
+   - Filter with `grep -i "EDITOR\|KEY\|FOCUS"` to trace specific functionality
+
+### Example: Testing Editor Arrow Keys
+
+```bash
+# Create test script
+cat > ~/.kenv/scripts/test-editor-keys.ts << 'EOF'
+const result = await editor("line1\nline2\nline3", "text")
+console.log("Result:", result)
+EOF
+
+# Run test and check for keyboard handling logs
+(echo '{"type": "run", "path": "'$HOME'/.kenv/scripts/test-editor-keys.ts"}'; sleep 5) | \
+  ./target/debug/script-kit-gpui 2>&1 | grep -i "key\|arrow\|editor"
+```
+
+### Why This Matters
+
+- **Keyboard events require a visible window** - the window must be activated via the protocol
+- **Focus must be set correctly** - check logs for `focus_handle.is_focused=true`
+- **Key names vary by platform** - GPUI may send `"up"` OR `"arrowup"` for arrow keys
+
+### Anti-Pattern: Skipping Autonomous Testing
+
+```
+❌ WRONG: "I can't test keyboard events without manual interaction"
+✅ RIGHT: Use stdin protocol to trigger UI, add logging, verify behavior in logs
+```
+</critical>
+
+---
+
+## CRITICAL: GPUI Keyboard Event Key Names
+
+<critical>
+**GPUI sends SHORT key names for arrow keys, not the `arrow*` variants.**
+
+When handling arrow key events, ALWAYS match BOTH possible names:
+
+```rust
+// ✅ CORRECT - matches both possible key names
+match key.as_str() {
+    "up" | "arrowup" => self.move_up(),
+    "down" | "arrowdown" => self.move_down(),
+    "left" | "arrowleft" => self.move_left(),
+    "right" | "arrowright" => self.move_right(),
+    // ...
+}
+
+// ❌ WRONG - only matches one variant, will fail on some platforms
+match key.as_str() {
+    "arrowup" => self.move_up(),    // BROKEN - GPUI sends "up"
+    "arrowdown" => self.move_down(), // BROKEN - GPUI sends "down"
+    // ...
+}
+```
+
+**Why:** GPUI's `keystroke.key` field contains platform-dependent values. On macOS, arrow keys come through as `"up"`, `"down"`, `"left"`, `"right"`. Always handle both forms.
+
+**Verification:** Search codebase with `grep -n "up.*arrowup\|arrowup.*up" src/*.rs` to see correct patterns.
+</critical>
 
 ---
 
