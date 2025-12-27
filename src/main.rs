@@ -197,7 +197,7 @@ fn move_first_window_to_bounds(bounds: &Bounds<Pixels>) {
 /// 
 /// - Finds the display where the mouse cursor is located
 /// - Centers the window horizontally on that display
-/// - Positions the window at "eye-line" height (upper 12% of the screen)
+/// - Positions the window at "eye-line" height (upper 14% of the screen)
 /// 
 /// This matches the behavior of Raycast/Alfred where the prompt appears on the active display.
 fn calculate_eye_line_bounds_on_mouse_display(
@@ -259,8 +259,8 @@ fn calculate_eye_line_bounds_on_mouse_display(
             display.origin_x, display.origin_y, display.width, display.height
         ));
         
-        // Eye-line: position window top at ~12% from screen top (input bar at eye level)
-        let eye_line_y = display.origin_y + display.height * 0.12;
+        // Eye-line: position window top at ~14% from screen top (input bar at eye level)
+        let eye_line_y = display.origin_y + display.height * 0.14;
         
         // Center horizontally on the display
         let window_width: f64 = window_size.width.into();
