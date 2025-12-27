@@ -41,6 +41,7 @@ mod selected_text;
 mod tray;
 mod editor;
 mod window_resize;
+mod window_manager;
 
 use tray::{TrayManager, TrayMenuAction};
 use editor::EditorPrompt;
@@ -124,70 +125,60 @@ fn get_macos_displays() -> Vec<DisplayBounds> {
 /// PRIMARY screen, and Y increases upward. The primary screen's origin is always (0,0)
 /// at its bottom-left corner. Secondary displays have their own position in this space.
 ///
-/// Move the application's first window to new bounds, regardless of keyWindow status.
-/// This is the reliable way to move the window because we don't depend on keyWindow
-/// being set (which has timing issues with macOS window activation).
+/// Move the application's main window to new bounds using WindowManager.
+/// This uses the registered main window instead of objectAtIndex:0, which
+/// avoids issues with tray icons and other system windows in the array.
 fn move_first_window_to(x: f64, y: f64, width: f64, height: f64) {
     unsafe {
-        let app: id = NSApp();
-        
-        // Get all windows and find our main window directly
-        let windows: id = msg_send![app, windows];
-        let count: usize = msg_send![windows, count];
-        
-        logging::log("POSITION", &format!("move_first_window_to: app has {} windows", count));
-        
-        if count > 0 {
-            // Get the first window (our main window)
-            let window: id = msg_send![windows, objectAtIndex:0usize];
-            
-            if window != nil {
-                // Get the PRIMARY screen's height for coordinate conversion
-                let screens: id = msg_send![class!(NSScreen), screens];
-                let main_screen: id = msg_send![screens, firstObject];
-                let main_screen_frame: NSRect = msg_send![main_screen, frame];
-                let primary_screen_height = main_screen_frame.size.height;
-                
-                // Log current window position before move
-                let current_frame: NSRect = msg_send![window, frame];
-                logging::log("POSITION", &format!(
-                    "Current window frame: origin=({:.0}, {:.0}) size={:.0}x{:.0}",
-                    current_frame.origin.x, current_frame.origin.y,
-                    current_frame.size.width, current_frame.size.height
-                ));
-                
-                // Convert from top-left origin (y down) to bottom-left origin (y up)
-                let flipped_y = primary_screen_height - y - height;
-                
-                logging::log("POSITION", &format!(
-                    "Moving window: target=({:.0}, {:.0}) flipped_y={:.0}",
-                    x, y, flipped_y
-                ));
-                
-                let new_frame = NSRect::new(
-                    NSPoint::new(x, flipped_y),
-                    NSSize::new(width, height),
-                );
-                
-                // Move the window
-                let _: () = msg_send![window, setFrame:new_frame display:true animate:false];
-                
-                // Also bring to front and make key
-                let _: () = msg_send![window, makeKeyAndOrderFront:nil];
-                
-                // Verify the move worked
-                let after_frame: NSRect = msg_send![window, frame];
-                logging::log("POSITION", &format!(
-                    "Window moved: actual=({:.0}, {:.0}) size={:.0}x{:.0}",
-                    after_frame.origin.x, after_frame.origin.y,
-                    after_frame.size.width, after_frame.size.height
-                ));
-            } else {
-                logging::log("POSITION", "ERROR: First window is nil!");
+        // Use WindowManager to get the main window reliably
+        let window = match window_manager::get_main_window() {
+            Some(w) => w,
+            None => {
+                logging::log("POSITION", "WARNING: Main window not registered in WindowManager, cannot move");
+                return;
             }
-        } else {
-            logging::log("POSITION", "ERROR: No windows found!");
-        }
+        };
+        
+        // Get the PRIMARY screen's height for coordinate conversion
+        let screens: id = msg_send![class!(NSScreen), screens];
+        let main_screen: id = msg_send![screens, firstObject];
+        let main_screen_frame: NSRect = msg_send![main_screen, frame];
+        let primary_screen_height = main_screen_frame.size.height;
+        
+        // Log current window position before move
+        let current_frame: NSRect = msg_send![window, frame];
+        logging::log("POSITION", &format!(
+            "Current window frame: origin=({:.0}, {:.0}) size={:.0}x{:.0}",
+            current_frame.origin.x, current_frame.origin.y,
+            current_frame.size.width, current_frame.size.height
+        ));
+        
+        // Convert from top-left origin (y down) to bottom-left origin (y up)
+        let flipped_y = primary_screen_height - y - height;
+        
+        logging::log("POSITION", &format!(
+            "Moving window: target=({:.0}, {:.0}) flipped_y={:.0}",
+            x, y, flipped_y
+        ));
+        
+        let new_frame = NSRect::new(
+            NSPoint::new(x, flipped_y),
+            NSSize::new(width, height),
+        );
+        
+        // Move the window
+        let _: () = msg_send![window, setFrame:new_frame display:true animate:false];
+        
+        // Also bring to front and make key
+        let _: () = msg_send![window, makeKeyAndOrderFront:nil];
+        
+        // Verify the move worked
+        let after_frame: NSRect = msg_send![window, frame];
+        logging::log("POSITION", &format!(
+            "Window moved: actual=({:.0}, {:.0}) size={:.0}x{:.0}",
+            after_frame.origin.x, after_frame.origin.y,
+            after_frame.size.width, after_frame.size.height
+        ));
     }
 }
 
@@ -340,6 +331,8 @@ enum AppView {
         #[allow(dead_code)]
         id: String,
         entity: Entity<EditorPrompt>,
+        /// Separate focus handle for the editor (not shared with parent)
+        focus_handle: FocusHandle,
     },
 }
 
@@ -1412,17 +1405,23 @@ impl ScriptListApp {
                         }
                     });
                 
+                // CRITICAL: Create a SEPARATE focus handle for the editor.
+                // Using the parent's focus handle causes keyboard event routing issues
+                // because the parent checks is_focused() in its render and both parent
+                // and child would be tracking the same handle.
+                let editor_focus_handle = cx.focus_handle();
+                
                 let editor_prompt = EditorPrompt::new(
                     id.clone(),
                     content.unwrap_or_default(),
                     language.unwrap_or_else(|| "typescript".to_string()),
-                    self.focus_handle.clone(),
+                    editor_focus_handle.clone(),
                     submit_callback,
                     std::sync::Arc::new(self.theme.clone()),
                 );
                 
                 let entity = cx.new(|_| editor_prompt);
-                self.current_view = AppView::EditorPrompt { id, entity };
+                self.current_view = AppView::EditorPrompt { id, entity, focus_handle: editor_focus_handle };
                 self.focused_input = FocusedInput::None; // Editor handles its own focus
                 resize_first_window_to_height(height_for_view(ViewType::EditorPrompt, 0));
                 cx.notify();
@@ -1780,17 +1779,32 @@ impl Focusable for ScriptListApp {
 
 impl Render for ScriptListApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        // Ensure we have focus on every render
-        let is_focused = self.focus_handle.is_focused(window);
-        if !is_focused {
-            window.focus(&self.focus_handle, cx);
+        // Dispatch to appropriate view - clone to avoid borrow issues
+        let current_view = self.current_view.clone();
+        
+        // Focus handling depends on the view:
+        // - For EditorPrompt: Use its own focus handle (not the parent's)
+        // - For other views: Use the parent's focus handle
+        match &current_view {
+            AppView::EditorPrompt { focus_handle, .. } => {
+                // EditorPrompt has its own focus handle - focus it
+                let is_focused = focus_handle.is_focused(window);
+                if !is_focused {
+                    window.focus(focus_handle, cx);
+                }
+            }
+            _ => {
+                // Other views use the parent's focus handle
+                let is_focused = self.focus_handle.is_focused(window);
+                if !is_focused {
+                    window.focus(&self.focus_handle, cx);
+                }
+            }
         }
         
         // NOTE: Prompt messages are now handled via event-driven async_channel listener
         // spawned in execute_interactive() - no polling needed in render()
         
-        // Dispatch to appropriate view - clone to avoid borrow issues
-        let current_view = self.current_view.clone();
         match current_view {
             AppView::ScriptList => self.render_script_list(cx),
             AppView::ActionsDialog => self.render_actions_dialog(cx),
@@ -3056,6 +3070,8 @@ impl ScriptListApp {
         let bg_with_alpha = self.hex_to_rgba_with_opacity(bg_hex, opacity.main);
         let box_shadows = self.create_box_shadows();
         
+        // NOTE: The EditorPrompt entity has its own track_focus and on_key_down in its render method.
+        // We do NOT add track_focus here to avoid duplicate focus tracking on the same handle.
         div()
             .flex()
             .flex_col()
@@ -3356,6 +3372,11 @@ fn main() {
                 logging::log("APP", "Focus set on ScriptListApp");
             })
             .unwrap();
+        
+        // Register the main window with WindowManager before tray init
+        // This must happen after GPUI creates the window but before tray creates its windows
+        // so we can reliably find our main window by its expected size (~750x500)
+        window_manager::find_and_register_main_window();
         
         // Window starts hidden - no activation, no panel configuration yet
         // Panel will be configured on first show via hotkey

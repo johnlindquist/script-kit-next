@@ -26,4 +26,5 @@ pub mod theme;
 #[cfg(not(test))]
 pub mod tray;
 pub mod utils;
+pub mod window_manager;
 pub mod window_resize;

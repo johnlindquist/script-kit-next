@@ -9,9 +9,7 @@
 //! the window shrinks when filtering yields no results.
 
 #[cfg(target_os = "macos")]
-use cocoa::appkit::NSApp;
-#[cfg(target_os = "macos")]
-use cocoa::base::{id, nil};
+use cocoa::base::id;
 #[cfg(target_os = "macos")]
 use cocoa::foundation::{NSPoint, NSRect, NSSize};
 #[cfg(target_os = "macos")]
@@ -20,6 +18,7 @@ use objc::{class, msg_send, sel, sel_impl};
 use gpui::{px, Pixels};
 
 use crate::logging;
+use crate::window_manager;
 
 /// Layout constants for height calculations
 pub mod layout {
@@ -187,50 +186,49 @@ pub fn needs_resize(current_height: Pixels, target_height: Pixels, threshold: Pi
     diff > f32::from(threshold)
 }
 
-/// Resize the first window to a new height, keeping it centered horizontally.
+/// Resize the main window to a new height, keeping it centered horizontally.
 ///
 /// This function:
-/// 1. Gets the current window frame
-/// 2. Calculates new frame with the target height
-/// 3. Keeps the window horizontally centered on its current display
-/// 4. Anchors the resize from the top (window top stays fixed)
+/// 1. Gets the main window from WindowManager
+/// 2. Gets the current window frame
+/// 3. Calculates new frame with the target height
+/// 4. Keeps the window horizontally centered on its current display
+/// 5. Anchors the resize from the top (window top stays fixed)
 ///
 /// # Arguments
 /// * `target_height` - The desired window height in pixels
 ///
 /// # Platform
 /// This function only works on macOS. On other platforms, it's a no-op.
+///
+/// # Errors
+/// Logs a warning and returns early if the main window is not registered
+/// in WindowManager. Call `find_and_register_main_window()` first.
 #[cfg(target_os = "macos")]
 pub fn resize_first_window_to_height(target_height: Pixels) {
     let height_f64: f64 = f32::from(target_height) as f64;
 
+    // Get the main window from WindowManager instead of objectAtIndex:0
+    let window = match window_manager::get_main_window() {
+        Some(w) => w,
+        None => {
+            logging::log(
+                "RESIZE",
+                "WARNING: Main window not registered in WindowManager. Call find_and_register_main_window() first.",
+            );
+            return;
+        }
+    };
+
+    logging::log(
+        "RESIZE",
+        &format!(
+            "resize_first_window_to_height: target={:.0} (from WindowManager)",
+            height_f64
+        ),
+    );
+
     unsafe {
-        let app: id = NSApp();
-
-        // Get all windows and find our main window
-        let windows: id = msg_send![app, windows];
-        let count: usize = msg_send![windows, count];
-
-        logging::log(
-            "RESIZE",
-            &format!(
-                "resize_first_window_to_height: target={:.0}, window_count={}",
-                height_f64, count
-            ),
-        );
-
-        if count == 0 {
-            logging::log("RESIZE", "ERROR: No windows found!");
-            return;
-        }
-
-        // Get the first window (our main window)
-        let window: id = msg_send![windows, objectAtIndex:0usize];
-
-        if window == nil {
-            logging::log("RESIZE", "ERROR: First window is nil!");
-            return;
-        }
 
         // Get the PRIMARY screen's height for coordinate conversion
         let screens: id = msg_send![class!(NSScreen), screens];
@@ -296,27 +294,18 @@ pub fn resize_first_window_to_height(target_height: Pixels) {
     }
 }
 
-/// Get the current height of the first window
+/// Get the current height of the main window
 ///
 /// # Returns
-/// The current window height in pixels, or None if no window exists
+/// The current window height in pixels, or None if the main window
+/// is not registered in WindowManager
 #[allow(dead_code)]
 #[cfg(target_os = "macos")]
 pub fn get_first_window_height() -> Option<Pixels> {
+    // Get the main window from WindowManager instead of objectAtIndex:0
+    let window = window_manager::get_main_window()?;
+
     unsafe {
-        let app: id = NSApp();
-        let windows: id = msg_send![app, windows];
-        let count: usize = msg_send![windows, count];
-
-        if count == 0 {
-            return None;
-        }
-
-        let window: id = msg_send![windows, objectAtIndex:0usize];
-        if window == nil {
-            return None;
-        }
-
         let frame: NSRect = msg_send![window, frame];
         Some(px(frame.size.height as f32))
     }

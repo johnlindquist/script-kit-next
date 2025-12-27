@@ -1000,9 +1000,6 @@ impl Render for EditorPrompt {
         let colors = &self.theme.colors;
         let line_count = self.line_count();
 
-        // Toggle cursor blink (simple toggle each render isn't ideal, but works for now)
-        // In production, use a timer like in ScriptListApp
-        
         // Keyboard handler
         let handle_key = cx.listener(|this, event: &gpui::KeyDownEvent, _window, cx| {
             this.handle_key_event(event, cx);
