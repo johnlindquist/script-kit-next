@@ -79,8 +79,9 @@ await runTest('kenvPath-basic', async () => {
 
 await runTest('kitPath-basic', async () => {
   const result = kitPath();
-  if (!result.includes('.kit')) {
-    throw new Error(`Expected .kit in path, got: ${result}`);
+  // kitPath() now returns ~/.kenv paths (deprecated in favor of kenvPath())
+  if (!result.includes('.kenv')) {
+    throw new Error(`Expected .kenv in path, got: ${result}`);
   }
 });
 

@@ -122,7 +122,7 @@ impl Config {
 
 #[instrument(name = "load_config")]
 pub fn load_config() -> Config {
-    let config_path = PathBuf::from(shellexpand::tilde("~/.kit/config.ts").as_ref());
+    let config_path = PathBuf::from(shellexpand::tilde("~/.kenv/config.ts").as_ref());
 
     // Check if config file exists
     if !config_path.exists() {
@@ -185,9 +185,30 @@ pub fn load_config() -> Config {
                         config
                     }
                     Err(e) => {
+                        // Provide helpful error message for common config mistakes
+                        let error_hint = if e.to_string().contains("missing field `hotkey`") {
+                            "\n\nHint: Your config.ts must include a 'hotkey' field. Example:\n\
+                            import type { Config } from \"@johnlindquist/kit\";\n\n\
+                            export default {\n\
+                              hotkey: {\n\
+                                modifiers: [\"meta\"],\n\
+                                key: \"Semicolon\"\n\
+                              }\n\
+                            } satisfies Config;"
+                        } else if e.to_string().contains("missing field `modifiers`") || e.to_string().contains("missing field `key`") {
+                            "\n\nHint: The 'hotkey' field requires 'modifiers' (array) and 'key' (string). Example:\n\
+                            hotkey: {\n\
+                              modifiers: [\"meta\"],  // \"meta\", \"ctrl\", \"alt\", \"shift\"\n\
+                              key: \"Digit0\"         // e.g., \"Semicolon\", \"KeyK\", \"Digit0\"\n\
+                            }"
+                        } else {
+                            ""
+                        };
+                        
                         warn!(
                             error = %e,
                             json_output = %json_str,
+                            hint = %error_hint,
                             "Failed to parse config JSON, using defaults"
                         );
                         Config::default()

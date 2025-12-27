@@ -2,7 +2,7 @@
 //! Structured JSONL logging for AI agents and human-readable stderr output.
 //!
 //! This module provides dual-output logging:
-//! - **JSONL to file** (~/.kit/logs/script-kit-gpui.jsonl) - structured for AI agent parsing
+//! - **JSONL to file** (~/.kenv/logs/script-kit-gpui.jsonl) - structured for AI agent parsing
 //! - **Pretty to stderr** - human-readable for developers
 //! - **Compact AI mode** (SCRIPT_KIT_AI_LOG=1) - ultra-compact line format for AI context
 //!
@@ -414,10 +414,10 @@ pub fn init() -> LoggingGuard {
     }
 }
 
-/// Get the log directory path (~/.kit/logs/)
+/// Get the log directory path (~/.kenv/logs/)
 fn get_log_dir() -> PathBuf {
     dirs::home_dir()
-        .map(|h| h.join(".kit").join("logs"))
+        .map(|h| h.join(".kenv").join("logs"))
         .unwrap_or_else(|| std::env::temp_dir().join("script-kit-logs"))
 }
 

@@ -129,16 +129,69 @@ fn find_executable(name: &str) -> Option<PathBuf> {
     None
 }
 
+/// Ensure tsconfig.json has the @johnlindquist/kit path mapping
+/// Merges with existing config if present
+fn ensure_tsconfig_paths(tsconfig_path: &PathBuf) {
+    use serde_json::{json, Value};
+    
+    let kit_path = json!(["./sdk/kit-sdk.ts"]);
+    
+    // Try to read and parse existing tsconfig
+    let mut config: Value = if tsconfig_path.exists() {
+        match std::fs::read_to_string(tsconfig_path) {
+            Ok(content) => serde_json::from_str(&content).unwrap_or_else(|_| json!({})),
+            Err(_) => json!({}),
+        }
+    } else {
+        json!({})
+    };
+    
+    // Ensure compilerOptions exists
+    if config.get("compilerOptions").is_none() {
+        config["compilerOptions"] = json!({});
+    }
+    
+    // Ensure paths exists in compilerOptions
+    if config["compilerOptions"].get("paths").is_none() {
+        config["compilerOptions"]["paths"] = json!({});
+    }
+    
+    // Check if @johnlindquist/kit path is already correct
+    let current_kit_path = config["compilerOptions"]["paths"].get("@johnlindquist/kit");
+    if current_kit_path == Some(&kit_path) {
+        // Already correct, no need to write
+        return;
+    }
+    
+    // Set the @johnlindquist/kit path
+    config["compilerOptions"]["paths"]["@johnlindquist/kit"] = kit_path;
+    
+    // Write back
+    match serde_json::to_string_pretty(&config) {
+        Ok(json_str) => {
+            if let Err(e) = std::fs::write(tsconfig_path, json_str) {
+                logging::log("EXEC", &format!("Failed to write tsconfig.json: {}", e));
+            } else {
+                logging::log("EXEC", &format!("Updated tsconfig.json with @johnlindquist/kit path"));
+            }
+        }
+        Err(e) => {
+            logging::log("EXEC", &format!("Failed to serialize tsconfig.json: {}", e));
+        }
+    }
+}
+
 /// Extract the embedded SDK to disk if needed
 /// Returns the path to the extracted SDK file
 fn ensure_sdk_extracted() -> Option<PathBuf> {
-    // Target path: ~/.kit/lib/kit-sdk.ts
-    let kit_lib = dirs::home_dir()?.join(".kit/lib");
-    let sdk_path = kit_lib.join("kit-sdk.ts");
+    // Target path: ~/.kenv/sdk/kit-sdk.ts
+    let kenv_dir = dirs::home_dir()?.join(".kenv");
+    let kenv_sdk = kenv_dir.join("sdk");
+    let sdk_path = kenv_sdk.join("kit-sdk.ts");
     
-    // Create dir if needed
-    if !kit_lib.exists() {
-        if let Err(e) = std::fs::create_dir_all(&kit_lib) {
+    // Create sdk/ dir if needed
+    if !kenv_sdk.exists() {
+        if let Err(e) = std::fs::create_dir_all(&kenv_sdk) {
             logging::log("EXEC", &format!("Failed to create SDK dir: {}", e));
             return None;
         }
@@ -155,6 +208,24 @@ fn ensure_sdk_extracted() -> Option<PathBuf> {
     let sdk_len = EMBEDDED_SDK.len();
     logging::log("EXEC", &format!("Extracted SDK to {} ({} bytes)", sdk_path.display(), sdk_len));
     
+    // Ensure tsconfig.json has @johnlindquist/kit path mapping
+    let tsconfig_path = kenv_dir.join("tsconfig.json");
+    ensure_tsconfig_paths(&tsconfig_path);
+    
+    // Always write .gitignore (app-managed)
+    let gitignore_path = kenv_dir.join(".gitignore");
+    let gitignore_content = r#"# SDK files (copied from app on each start)
+sdk/
+logs/
+clipboard-history.db
+"#;
+    if let Err(e) = std::fs::write(&gitignore_path, gitignore_content) {
+        logging::log("EXEC", &format!("Failed to write .gitignore: {}", e));
+        // Non-fatal, continue
+    } else {
+        logging::log("EXEC", &format!("Wrote .gitignore to {}", gitignore_path.display()));
+    }
+    
     Some(sdk_path)
 }
 
@@ -162,17 +233,17 @@ fn ensure_sdk_extracted() -> Option<PathBuf> {
 fn find_sdk_path() -> Option<PathBuf> {
     logging::log("EXEC", "Looking for SDK...");
     
-    // 1. Check ~/.kenv/lib/kit-sdk.ts (user override - highest priority)
+    // 1. Check ~/.kenv/sdk/kit-sdk.ts (primary location)
     if let Some(home) = dirs::home_dir() {
-        let kenv_sdk = home.join(".kenv/lib/kit-sdk.ts");
-        logging::log("EXEC", &format!("  Checking user override: {}", kenv_sdk.display()));
+        let kenv_sdk = home.join(".kenv/sdk/kit-sdk.ts");
+        logging::log("EXEC", &format!("  Checking kenv sdk: {}", kenv_sdk.display()));
         if kenv_sdk.exists() {
-            logging::log("EXEC", &format!("  FOUND SDK (user override): {}", kenv_sdk.display()));
+            logging::log("EXEC", &format!("  FOUND SDK (kenv): {}", kenv_sdk.display()));
             return Some(kenv_sdk);
         }
     }
     
-    // 2. Extract embedded SDK to ~/.kit/lib/kit-sdk.ts (production)
+    // 2. Extract embedded SDK to ~/.kenv/sdk/kit-sdk.ts (production)
     logging::log("EXEC", "  Trying to extract embedded SDK...");
     if let Some(sdk_path) = ensure_sdk_extracted() {
         logging::log("EXEC", &format!("  FOUND SDK (embedded): {}", sdk_path.display()));

@@ -195,6 +195,93 @@ export interface ScreenshotData {
 }
 
 // =============================================================================
+// Config Types (for ~/.kenv/config.ts)
+// =============================================================================
+
+/**
+ * Modifier keys for keyboard shortcuts
+ */
+export type KeyModifier = "meta" | "ctrl" | "alt" | "shift";
+
+/**
+ * Supported key codes for global hotkeys
+ * Based on the W3C UI Events KeyboardEvent code values
+ */
+export type KeyCode =
+  // Letter keys
+  | "KeyA" | "KeyB" | "KeyC" | "KeyD" | "KeyE" | "KeyF" | "KeyG"
+  | "KeyH" | "KeyI" | "KeyJ" | "KeyK" | "KeyL" | "KeyM" | "KeyN"
+  | "KeyO" | "KeyP" | "KeyQ" | "KeyR" | "KeyS" | "KeyT" | "KeyU"
+  | "KeyV" | "KeyW" | "KeyX" | "KeyY" | "KeyZ"
+  // Number keys (top row)
+  | "Digit0" | "Digit1" | "Digit2" | "Digit3" | "Digit4"
+  | "Digit5" | "Digit6" | "Digit7" | "Digit8" | "Digit9"
+  // Special keys
+  | "Space" | "Enter" | "Semicolon"
+  // Function keys (if supported)
+  | "F1" | "F2" | "F3" | "F4" | "F5" | "F6"
+  | "F7" | "F8" | "F9" | "F10" | "F11" | "F12";
+
+/**
+ * Hotkey configuration for keyboard shortcuts
+ */
+export interface HotkeyConfig {
+  /** Modifier keys: "meta" (Cmd on Mac), "ctrl", "alt", "shift" */
+  modifiers: KeyModifier[];
+  /** 
+   * Key code - use one of the KeyCode values
+   * @example "Digit0" for the 0 key
+   * @example "KeyK" for the K key
+   * @example "Semicolon" for the ; key
+   */
+  key: KeyCode;
+}
+
+/**
+ * Content padding configuration for prompts
+ */
+export interface ContentPadding {
+  /** Top padding in pixels (default: 8) */
+  top?: number;
+  /** Left padding in pixels (default: 12) */
+  left?: number;
+  /** Right padding in pixels (default: 12) */
+  right?: number;
+}
+
+/**
+ * Script Kit configuration schema
+ * 
+ * @example
+ * ```typescript
+ * import type { Config } from "@johnlindquist/kit";
+ * 
+ * export default {
+ *   hotkey: {
+ *     modifiers: ["meta"],
+ *     key: "Digit0"
+ *   }
+ * } satisfies Config;
+ * ```
+ */
+export interface Config {
+  /** Main keyboard shortcut to open Script Kit */
+  hotkey: HotkeyConfig;
+  /** Custom path to bun executable */
+  bun_path?: string;
+  /** Preferred editor command (defaults to $EDITOR or "code") */
+  editor?: string;
+  /** Content padding for prompts */
+  padding?: ContentPadding;
+  /** Editor font size in pixels (default: 14) */
+  editorFontSize?: number;
+  /** Terminal font size in pixels (default: 14) */
+  terminalFontSize?: number;
+  /** UI scale factor, 1.0 = 100% (default: 1.0) */
+  uiScale?: number;
+}
+
+// =============================================================================
 // Arg Types (for all calling conventions)
 // =============================================================================
 
@@ -1300,9 +1387,10 @@ declare global {
   function kenvPath(...segments: string[]): string;
   
   /**
-   * Returns path relative to ~/.kit
+   * Returns path relative to ~/.kenv (unified Script Kit directory)
    * @param segments - Path segments to join
-   * @returns Full path from kit directory
+   * @returns Full path from kenv directory
+   * @deprecated Use kenvPath() instead - kitPath() now returns ~/.kenv paths for backwards compatibility
    */
   function kitPath(...segments: string[]): string;
   
@@ -2898,7 +2986,8 @@ globalThis.kenvPath = function kenvPath(...segments: string[]): string {
 };
 
 globalThis.kitPath = function kitPath(...segments: string[]): string {
-  return nodePath.join(os.homedir(), '.kit', ...segments);
+  // Now returns ~/.kenv paths - ~/.kit is deprecated
+  return nodePath.join(os.homedir(), '.kenv', ...segments);
 };
 
 globalThis.tmpPath = function tmpPath(...segments: string[]): string {

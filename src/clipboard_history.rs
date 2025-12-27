@@ -75,16 +75,16 @@ static DB_CONNECTION: OnceLock<Arc<Mutex<Connection>>> = OnceLock::new();
 /// Flag to stop the monitoring thread
 static STOP_MONITORING: OnceLock<Arc<Mutex<bool>>> = OnceLock::new();
 
-/// Get the database path (~/.kit/clipboard-history.db)
+/// Get the database path (~/.kenv/clipboard-history.db)
 fn get_db_path() -> Result<PathBuf> {
-    let kit_dir = PathBuf::from(shellexpand::tilde("~/.kit").as_ref());
+    let kenv_dir = PathBuf::from(shellexpand::tilde("~/.kenv").as_ref());
 
-    // Create ~/.kit if it doesn't exist
-    if !kit_dir.exists() {
-        std::fs::create_dir_all(&kit_dir).context("Failed to create ~/.kit directory")?;
+    // Create ~/.kenv if it doesn't exist
+    if !kenv_dir.exists() {
+        std::fs::create_dir_all(&kenv_dir).context("Failed to create ~/.kenv directory")?;
     }
 
-    Ok(kit_dir.join("clipboard-history.db"))
+    Ok(kenv_dir.join("clipboard-history.db"))
 }
 
 /// Get or create the database connection

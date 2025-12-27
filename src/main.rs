@@ -759,6 +759,11 @@ impl ScriptListApp {
                 Timer::after(std::time::Duration::from_millis(530)).await;
                 let _ = cx.update(|cx| {
                     this.update(cx, |app, cx| {
+                        // Skip cursor blink when window is hidden or no input is focused
+                        if !WINDOW_VISIBLE.load(Ordering::SeqCst) || app.focused_input == FocusedInput::None {
+                            return;
+                        }
+                        
                         app.cursor_visible = !app.cursor_visible;
                         // Also update ActionsDialog cursor if it exists
                         if let Some(ref dialog) = app.actions_dialog {
@@ -1981,6 +1986,7 @@ impl ScriptListApp {
             PromptMessage::ShowDiv { id, html, tailwind } => {
                 logging::log("UI", &format!("Showing div prompt: {}", id));
                 self.current_view = AppView::DivPrompt { id, html, tailwind };
+                self.focused_input = FocusedInput::None; // DivPrompt has no text input
                 defer_resize_to_view(ViewType::DivPrompt, 0, cx);
                 cx.notify();
             }
@@ -2015,6 +2021,7 @@ impl ScriptListApp {
                     Ok(term_prompt) => {
                         let entity = cx.new(|_| term_prompt);
                         self.current_view = AppView::TermPrompt { id, entity };
+                        self.focused_input = FocusedInput::None; // Terminal handles its own cursor
                         defer_resize_to_view(ViewType::TermPrompt, 0, cx);
                         cx.notify();
                     }
@@ -2258,7 +2265,8 @@ impl ScriptListApp {
             AppView::EditorPrompt { .. } => "EditorPrompt",
         };
         
-        logging::log("UI", &format!("Resetting to script list (was: {})", old_view));
+        let old_focused_input = self.focused_input;
+        logging::log("UI", &format!("Resetting to script list (was: {}, focused_input: {:?})", old_view, old_focused_input));
         
         // Belt-and-suspenders: Force-kill the process group using stored PID
         // This runs BEFORE clearing channels to ensure cleanup even if Drop doesn't fire
@@ -2274,6 +2282,12 @@ impl ScriptListApp {
         
         // Reset view
         self.current_view = AppView::ScriptList;
+        
+        // CRITICAL: Reset focused_input to MainFilter so the cursor appears
+        // This was a bug where focused_input could remain as ArgPrompt/None after
+        // script exit, causing the cursor to not show in the main filter.
+        self.focused_input = FocusedInput::MainFilter;
+        logging::log("FOCUS", "Reset focused_input to MainFilter for cursor display");
         
         // Clear arg prompt state
         self.arg_input_text.clear();
@@ -2501,17 +2515,17 @@ impl ScriptListApp {
     /// 
     /// Toasts are positioned in the top-right corner and stack vertically.
     /// Each toast has its own dismiss callback that removes it from the manager.
-    fn render_toasts(&mut self, cx: &mut Context<Self>) -> Option<impl IntoElement> {
+    fn render_toasts(&mut self, _cx: &mut Context<Self>) -> Option<impl IntoElement> {
         // Tick the manager to handle auto-dismiss
         self.toast_manager.tick();
         
         // Clean up dismissed toasts
         self.toast_manager.cleanup();
         
-        // Check if we need to re-render
-        if self.toast_manager.take_needs_notify() {
-            cx.notify();
-        }
+        // Check if toasts need update (consume the flag to prevent repeated checks)
+        // Note: We don't call cx.notify() here as it's an anti-pattern during render.
+        // Toast updates are handled by timer-based refresh mechanisms.
+        let _ = self.toast_manager.take_needs_notify();
         
         let visible = self.toast_manager.visible_toasts();
         if visible.is_empty() {
@@ -3901,8 +3915,24 @@ fn start_hotkey_listener(config: config::Config) {
             "KeyX" => Code::KeyX,
             "KeyY" => Code::KeyY,
             "KeyZ" => Code::KeyZ,
+            // Function keys
+            "F1" => Code::F1,
+            "F2" => Code::F2,
+            "F3" => Code::F3,
+            "F4" => Code::F4,
+            "F5" => Code::F5,
+            "F6" => Code::F6,
+            "F7" => Code::F7,
+            "F8" => Code::F8,
+            "F9" => Code::F9,
+            "F10" => Code::F10,
+            "F11" => Code::F11,
+            "F12" => Code::F12,
             other => {
-                logging::log("HOTKEY", &format!("Unknown key code: {}. Falling back to Semicolon", other));
+                logging::log("HOTKEY", &format!(
+                    "Unknown key code: '{}'. Valid keys: KeyA-KeyZ, Digit0-Digit9, F1-F12, Space, Enter, Semicolon. Falling back to Semicolon",
+                    other
+                ));
                 Code::Semicolon
             }
         };
@@ -4143,7 +4173,7 @@ fn main() {
             logging::log("APP", "Appearance watcher channel closed");
         }).detach();
         
-        // Config reload watcher - watches ~/.kit/config.ts for changes
+        // Config reload watcher - watches ~/.kenv/config.ts for changes
         let window_for_config = window;
         cx.spawn(async move |cx: &mut gpui::AsyncApp| {
             loop {
@@ -4326,7 +4356,7 @@ fn main() {
                                 logging::log("TRAY", "Settings menu item clicked");
                                 // Open config file in editor
                                 let editor = config_for_tray.get_editor();
-                                let config_path = shellexpand::tilde("~/.kit/config.ts").to_string();
+                                let config_path = shellexpand::tilde("~/.kenv/config.ts").to_string();
                                 
                                 logging::log("TRAY", &format!("Opening {} in editor '{}'", config_path, editor));
                                 match std::process::Command::new(&editor)

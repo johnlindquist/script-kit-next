@@ -157,13 +157,13 @@ console.error('[SMOKE] result:', result);
 
 ```bash
 # With SCRIPT_KIT_AI_LOG=1, stderr shows compact logs (SS.mmm|L|C|message)
-# JSONL logs are at ~/.kit/logs/script-kit-gpui.jsonl (full detail)
+# JSONL logs are at ~/.kenv/logs/script-kit-gpui.jsonl (full detail)
 
 # Filter for specific behavior with compact logs:
 echo '{"type": "run", "path": "..."}' | SCRIPT_KIT_AI_LOG=1 ./target/debug/script-kit-gpui 2>&1 | grep -iE 'RESIZE|editor|height'
 
 # Check structured logs:
-tail -50 ~/.kit/logs/script-kit-gpui.jsonl | grep -i resize
+tail -50 ~/.kenv/logs/script-kit-gpui.jsonl | grep -i resize
 ```
 
 ### Example: Testing Window Resize
@@ -753,9 +753,9 @@ fn render_footer(&self, cx: &mut Context<Self>) -> impl IntoElement { ... }
 | Change Type | Mechanism |
 |-------------|-----------|
 | `.rs` files | cargo-watch rebuilds |
-| `~/.kit/theme.json` | File watcher, live reload |
+| `~/.kenv/theme.json` | File watcher, live reload |
 | `~/.kenv/scripts/` | File watcher, live reload |
-| `~/.kit/config.ts` | Requires restart |
+| `~/.kenv/config.ts` | Requires restart |
 
 ### Debugging
 
@@ -819,14 +819,14 @@ src/
   watcher.rs    # File watchers with observability instrumentation
   panel.rs      # macOS panel configuration
   perf.rs       # Performance timing utilities
-  logging.rs    # Dual-output logging: JSONL to ~/.kit/logs/, pretty to stderr
+  logging.rs    # Dual-output logging: JSONL to ~/.kenv/logs/, pretty to stderr
   lib.rs        # Module exports
   utils.rs      # Shared utilities (strip_html_tags, etc.)
 ```
 
 ### Log File Location
 
-Logs are written to `~/.kit/logs/script-kit-gpui.jsonl` in JSONL format for AI agent consumption.
+Logs are written to `~/.kenv/logs/script-kit-gpui.jsonl` in JSONL format for AI agent consumption.
 
 ---
 
@@ -866,7 +866,7 @@ fn load_config(path: &Path) -> Result<Config> {
 }
 
 fn main() -> Result<()> {
-    let config = load_config(Path::new("~/.kit/config.json"))
+    let config = load_config(Path::new("~/.kenv/config.json"))
         .context("Config initialization failed")?;
     
     // Application logic...
@@ -1189,7 +1189,7 @@ For token-efficient logging when AI agents are reading logs, set `SCRIPT_KIT_AI_
 SCRIPT_KIT_AI_LOG=1 ./target/debug/script-kit-gpui 2>&1
 ```
 
-This outputs compact format to stderr: `SS.mmm|L|C|message` (see "AI Compact Log Format" section above for the full legend). Standard JSONL continues to be written to `~/.kit/logs/` for full detail when needed.
+This outputs compact format to stderr: `SS.mmm|L|C|message` (see "AI Compact Log Format" section above for the full legend). Standard JSONL continues to be written to `~/.kenv/logs/` for full detail when needed.
 
 ---
 
@@ -1601,7 +1601,7 @@ fn handle_task(&mut self, task: Task, cx: &mut Context<Self>) {
 
 ### JSONL Log Format
 
-Logs are written to `~/.kit/logs/script-kit-gpui.jsonl`:
+Logs are written to `~/.kenv/logs/script-kit-gpui.jsonl`:
 
 ```json
 {"timestamp":"2024-01-15T10:30:45.123Z","level":"INFO","target":"script_kit::executor","message":"Script executed","fields":{"correlation_id":"abc-123","script_name":"hello.ts","duration_ms":142}}
@@ -1611,18 +1611,18 @@ Logs are written to `~/.kit/logs/script-kit-gpui.jsonl`:
 
 ```bash
 # Find all logs for a correlation ID
-grep '"correlation_id":"abc-123"' ~/.kit/logs/script-kit-gpui.jsonl
+grep '"correlation_id":"abc-123"' ~/.kenv/logs/script-kit-gpui.jsonl
 
 # Find slow operations (>100ms)
-grep '"duration_ms":' ~/.kit/logs/script-kit-gpui.jsonl | \
+grep '"duration_ms":' ~/.kenv/logs/script-kit-gpui.jsonl | \
   jq 'select(.fields.duration_ms > 100)'
 
 # Find errors in last hour
-grep '"level":"ERROR"' ~/.kit/logs/script-kit-gpui.jsonl | \
+grep '"level":"ERROR"' ~/.kenv/logs/script-kit-gpui.jsonl | \
   jq 'select(.timestamp > "2024-01-15T09:30:00")'
 
 # Extract timing metrics
-grep '"duration_ms":' ~/.kit/logs/script-kit-gpui.jsonl | \
+grep '"duration_ms":' ~/.kenv/logs/script-kit-gpui.jsonl | \
   jq -r '.fields.duration_ms' | sort -n | tail -10
 ```
 

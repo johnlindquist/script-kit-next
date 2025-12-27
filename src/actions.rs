@@ -158,7 +158,11 @@ pub const POPUP_PADDING: f32 = 8.0;
 pub const ITEM_PADDING_X: f32 = 12.0;
 pub const ITEM_PADDING_Y: f32 = 8.0;
 /// Fixed height for action items (required for uniform_list virtualization)
-pub const ACTION_ITEM_HEIGHT: f32 = 36.0;
+/// Increased from 36px to 42px for better touch targets and visual breathing room
+pub const ACTION_ITEM_HEIGHT: f32 = 42.0;
+
+/// Width of the left accent bar for selected items
+pub const ACCENT_BAR_WIDTH: f32 = 3.0;
 
 /// ActionsDialog - Compact overlay popup for quick actions
 pub struct ActionsDialog {
@@ -486,19 +490,57 @@ impl Render for ActionsDialog {
             rgb(colors.text_primary)
         };
         
+        // Get accent color for the search input focus indicator
+        let accent_color_hex = if self.design_variant == DesignVariant::Default {
+            self.theme.colors.accent.selected
+        } else {
+            colors.accent
+        };
+        let accent_color = rgb(accent_color_hex);
+        
+        // Focus border color (accent with transparency)
+        let focus_border_color = rgba(hex_with_alpha(accent_color_hex, 0x60));
+        
         let input_container = div()
             .w_full()
             .px(px(spacing.item_padding_x))
-            .py(px(spacing.item_padding_y))
+            .py(px(spacing.item_padding_y + 2.0)) // Slightly more vertical padding
             .bg(search_box_bg)
             .border_t_1()  // Border on top since input is now at bottom
             .border_color(border_color)
             .flex()
             .flex_row()
             .items_center()
+            .gap(px(spacing.gap_md))
             .child(
+                // Search icon or indicator
+                div()
+                    .text_color(dimmed_text)
+                    .text_xs()
+                    .child("⌘K"),
+            )
+            .child(
+                // Search input field with focus indicator
                 div()
                     .flex_1()
+                    .px(px(spacing.padding_sm))
+                    .py(px(spacing.padding_xs))
+                    .bg(if self.search_text.is_empty() { rgba(0x00000000) } else { 
+                        // Subtle inner background when there's text
+                        if self.design_variant == DesignVariant::Default {
+                            rgba(hex_with_alpha(self.theme.colors.background.main, 0x40))
+                        } else {
+                            rgba(hex_with_alpha(colors.background, 0x40))
+                        }
+                    })
+                    .rounded(px(visual.radius_sm))
+                    .border_1()
+                    .border_color(if !self.search_text.is_empty() { 
+                        // Show subtle focus border when typing
+                        focus_border_color
+                    } else { 
+                        rgba(0x00000000) 
+                    })
                     .flex()
                     .flex_row()
                     .items_center()
@@ -515,7 +557,8 @@ impl Render for ActionsDialog {
                                 .w(px(2.))
                                 .h(px(16.))
                                 .mr(px(4.))
-                                .when(self.cursor_visible, |d| d.bg(primary_text))
+                                .rounded(px(1.))
+                                .when(self.cursor_visible, |d| d.bg(accent_color))
                         )
                     })
                     .child(search_display)
@@ -525,7 +568,8 @@ impl Render for ActionsDialog {
                                 .w(px(2.))
                                 .h(px(16.))
                                 .ml(px(2.))
-                                .when(self.cursor_visible, |d| d.bg(primary_text))
+                                .rounded(px(1.))
+                                .when(self.cursor_visible, |d| d.bg(accent_color))
                         )
                     }),
             );
@@ -598,11 +642,29 @@ impl Render for ActionsDialog {
                     
                     let mut items = Vec::new();
                     
+                    // Get border color for category separators
+                    let separator_color = if design_variant == DesignVariant::Default {
+                        rgba(hex_with_alpha(this.theme.colors.ui.border, 0x40))
+                    } else {
+                        rgba(hex_with_alpha(item_colors.border_subtle, 0x40))
+                    };
+                    
                     for idx in visible_range {
                         if let Some(&action_idx) = this.filtered_actions.get(idx) {
                             if let Some(action) = this.actions.get(action_idx) {
                                 let action: &Action = action; // Explicit type annotation
                                 let is_selected = idx == selected_index;
+                                
+                                // Check if this is the first item of a new category
+                                // (for adding a subtle separator line)
+                                let is_category_start = if idx > 0 {
+                                    if let Some(&prev_action_idx) = this.filtered_actions.get(idx - 1) {
+                                        if let Some(prev_action) = this.actions.get(prev_action_idx) {
+                                            let prev_action: &Action = prev_action;
+                                            prev_action.category != action.category
+                                        } else { false }
+                                    } else { false }
+                                } else { false };
                                 
                                 // Match main list styling: bright text when selected, secondary when not
                                 let title_color = if is_selected {
@@ -617,38 +679,77 @@ impl Render for ActionsDialog {
                                 let title_str: String = action.title.clone();
                                 let shortcut_opt: Option<String> = action.shortcut.clone();
 
+                                // Build the action item with left accent bar for selected state
                                 let mut action_item = div()
                                     .id(idx)
                                     .w_full()
                                     .h(px(ACTION_ITEM_HEIGHT)) // Fixed height for uniform_list
-                                    .px(px(item_spacing.item_padding_x))
                                     // Match main list: subtle selection bg, transparent when not selected
                                     .bg(if is_selected { selected_bg } else { rgba(0x00000000) })
+                                    // Add top border for category separator
+                                    .when(is_category_start, |d| d.border_t_1().border_color(separator_color))
                                     .hover(|s| s.bg(hover_bg))
                                     .cursor_pointer()
                                     .flex()
                                     .flex_row()
-                                    .items_center()
-                                    .justify_between();
-
-                                // Left side: title
+                                    .items_center();
+                                
+                                // Left accent bar - only visible when selected
+                                // Get accent color for the left bar
+                                let accent_color = if design_variant == DesignVariant::Default {
+                                    rgb(this.theme.colors.accent.selected)
+                                } else {
+                                    rgb(item_colors.accent)
+                                };
+                                
                                 action_item = action_item.child(
                                     div()
-                                        .text_color(title_color)
-                                        .text_sm()
-                                        .font_weight(if is_selected { gpui::FontWeight::MEDIUM } else { gpui::FontWeight::NORMAL })
-                                        .child(title_str),
+                                        .w(px(ACCENT_BAR_WIDTH))
+                                        .h_full()
+                                        .bg(if is_selected { accent_color } else { rgba(0x00000000) })
                                 );
-
-                                // Right side: keyboard shortcut
-                                if let Some(shortcut) = shortcut_opt {
-                                    action_item = action_item.child(
+                                
+                                // Content container with proper padding (after accent bar)
+                                let content = div()
+                                    .flex_1()
+                                    .px(px(item_spacing.item_padding_x))
+                                    .flex()
+                                    .flex_row()
+                                    .items_center()
+                                    .justify_between()
+                                    .child(
+                                        // Left side: title
                                         div()
+                                            .text_color(title_color)
+                                            .text_sm()
+                                            .font_weight(if is_selected { gpui::FontWeight::MEDIUM } else { gpui::FontWeight::NORMAL })
+                                            .child(title_str),
+                                    );
+
+                                // Right side: keyboard shortcut with pill background
+                                let content = if let Some(shortcut) = shortcut_opt {
+                                    // Get subtle background color for shortcut pill
+                                    let shortcut_bg = if design_variant == DesignVariant::Default {
+                                        rgba((this.theme.colors.background.search_box << 8) | 0x80)
+                                    } else {
+                                        rgba((item_colors.background_tertiary << 8) | 0x80)
+                                    };
+                                    
+                                    content.child(
+                                        div()
+                                            .px(px(6.))
+                                            .py(px(2.))
+                                            .bg(shortcut_bg)
+                                            .rounded(px(4.))
                                             .text_color(shortcut_color)
                                             .text_xs()
                                             .child(shortcut),
-                                    );
-                                }
+                                    )
+                                } else {
+                                    content
+                                };
+                                
+                                action_item = action_item.child(content);
 
                                 items.push(action_item);
                             }
@@ -873,7 +974,8 @@ mod tests {
     #[test]
     fn test_action_item_height_constant() {
         // Fixed height is required for uniform_list virtualization
-        assert_eq!(ACTION_ITEM_HEIGHT, 36.0);
+        // Increased to 42px for better touch targets and visual breathing room
+        assert_eq!(ACTION_ITEM_HEIGHT, 42.0);
         // Ensure item height is positive and reasonable
         const _: () = assert!(ACTION_ITEM_HEIGHT > 0.0);
         const _: () = assert!(ACTION_ITEM_HEIGHT < POPUP_MAX_HEIGHT);
@@ -884,8 +986,8 @@ mod tests {
         // Calculate max visible items that can fit in the popup
         // This helps verify scroll virtualization is worthwhile
         let max_visible = (POPUP_MAX_HEIGHT / ACTION_ITEM_HEIGHT) as usize;
-        // With 400px max height and 36px items, ~11 items fit
-        assert!(max_visible >= 10, "Should fit at least 10 items");
+        // With 400px max height and 42px items, ~9 items fit
+        assert!(max_visible >= 8, "Should fit at least 8 items");
         assert!(max_visible <= 15, "Sanity check on max visible");
     }
 
@@ -901,7 +1003,7 @@ mod tests {
         let max_visible = (POPUP_MAX_HEIGHT / ACTION_ITEM_HEIGHT) as usize;
         
         // With 5 script context actions + 4 global = 9 actions
-        // At 36px height in 400px container, we can fit ~11 items
+        // At 42px height in 400px container, we can fit ~9 items
         // So we might not always overflow, but we're close
         assert!(total_actions >= 8, "Should have at least 8 total actions");
         

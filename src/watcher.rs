@@ -36,7 +36,7 @@ pub enum AppearanceChangeEvent {
     Light,
 }
 
-/// Watches ~/.kit/config.ts for changes and emits reload events
+/// Watches ~/.kenv/config.ts for changes and emits reload events
 pub struct ConfigWatcher {
     tx: Option<Sender<ConfigReloadEvent>>,
     watcher_thread: Option<thread::JoinHandle<()>>,
@@ -58,7 +58,7 @@ impl ConfigWatcher {
 
     /// Start watching the config file for changes
     ///
-    /// This spawns a background thread that watches ~/.kit/config.ts and sends
+    /// This spawns a background thread that watches ~/.kenv/config.ts and sends
     /// reload events through the receiver when changes are detected.
     pub fn start(&mut self) -> NotifyResult<()> {
         let tx = self
@@ -82,7 +82,7 @@ impl ConfigWatcher {
     fn watch_loop(tx: Sender<ConfigReloadEvent>) -> NotifyResult<()> {
         // Expand the config path
         let config_path = PathBuf::from(
-            shellexpand::tilde("~/.kit/config.ts").as_ref()
+            shellexpand::tilde("~/.kenv/config.ts").as_ref()
         );
 
         // Get the parent directory to watch
@@ -176,7 +176,7 @@ impl Drop for ConfigWatcher {
     }
 }
 
-/// Watches ~/.kit/theme.json for changes and emits reload events
+/// Watches ~/.kenv/theme.json for changes and emits reload events
 pub struct ThemeWatcher {
     tx: Option<Sender<ThemeReloadEvent>>,
     watcher_thread: Option<thread::JoinHandle<()>>,
@@ -198,7 +198,7 @@ impl ThemeWatcher {
 
     /// Start watching the theme file for changes
     ///
-    /// This spawns a background thread that watches ~/.kit/theme.json and sends
+    /// This spawns a background thread that watches ~/.kenv/theme.json and sends
     /// reload events through the receiver when changes are detected.
     pub fn start(&mut self) -> NotifyResult<()> {
         let tx = self
@@ -222,7 +222,7 @@ impl ThemeWatcher {
     fn watch_loop(tx: Sender<ThemeReloadEvent>) -> NotifyResult<()> {
         // Expand the theme path
         let theme_path = PathBuf::from(
-            shellexpand::tilde("~/.kit/theme.json").as_ref()
+            shellexpand::tilde("~/.kenv/theme.json").as_ref()
         );
 
         // Get the parent directory to watch
