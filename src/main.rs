@@ -196,6 +196,91 @@ fn move_first_window_to_bounds(bounds: &Bounds<Pixels>) {
     move_first_window_to(x, y, width, height);
 }
 
+/// Capture a screenshot of the app window using macOS screencapture command.
+/// 
+/// Returns a tuple of (png_data, width, height) on success.
+/// The function:
+/// 1. Gets the window ID using AppleScript
+/// 2. Runs screencapture with the window ID to capture just the app window
+/// 3. Reads the PNG file and extracts dimensions from the header
+/// 4. Cleans up the temp file
+#[cfg(target_os = "macos")]
+fn capture_app_screenshot() -> Result<(Vec<u8>, u32, u32), Box<dyn std::error::Error + Send + Sync>> {
+    use std::process::Command;
+    use std::fs;
+    
+    // Create temp file path with timestamp
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)?
+        .as_millis();
+    let screenshot_path = format!("/tmp/script-kit-screenshot-{}.png", timestamp);
+    
+    // Try to get window ID via AppleScript
+    // This looks for the first window of any process whose name contains "script-kit-gpui"
+    let window_id_output = Command::new("osascript")
+        .args(["-e", "tell application \"System Events\" to get id of first window of (first process whose name contains \"script-kit-gpui\")"])
+        .output()?;
+    
+    let window_id = String::from_utf8_lossy(&window_id_output.stdout).trim().to_string();
+    
+    tracing::debug!(window_id = %window_id, "Got window ID for screenshot");
+    
+    // Capture screenshot
+    let capture_result = if !window_id.is_empty() && window_id.parse::<i64>().is_ok() {
+        // Use -l flag to capture specific window by ID
+        // -x: no sound
+        // -o: in window capture mode, do not capture the shadow
+        Command::new("screencapture")
+            .args([&format!("-l{}", window_id), "-x", "-o", &screenshot_path])
+            .output()
+    } else {
+        tracing::warn!("Could not get window ID, falling back to main display capture");
+        // Fallback to main display capture
+        // -m: capture main display only
+        Command::new("screencapture")
+            .args(["-m", "-x", &screenshot_path])
+            .output()
+    };
+    
+    capture_result?;
+    
+    // Read the PNG file
+    let png_data = fs::read(&screenshot_path).map_err(|e| {
+        format!("Failed to read screenshot file: {}", e)
+    })?;
+    
+    // Verify PNG signature and extract dimensions from IHDR chunk
+    // PNG structure: 8-byte signature + chunks
+    // IHDR chunk: 4 bytes length + "IHDR" + 4 bytes width + 4 bytes height + ...
+    if png_data.len() < 24 {
+        let _ = fs::remove_file(&screenshot_path);
+        return Err("Screenshot file too small to be valid PNG".into());
+    }
+    
+    // Check PNG signature (first 8 bytes)
+    let png_signature: [u8; 8] = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+    if png_data[0..8] != png_signature {
+        let _ = fs::remove_file(&screenshot_path);
+        return Err("Invalid PNG signature".into());
+    }
+    
+    // Width is at bytes 16-19, height at bytes 20-23 (big-endian)
+    let width = u32::from_be_bytes([png_data[16], png_data[17], png_data[18], png_data[19]]);
+    let height = u32::from_be_bytes([png_data[20], png_data[21], png_data[22], png_data[23]]);
+    
+    tracing::debug!(width = width, height = height, file_size = png_data.len(), "Screenshot captured");
+    
+    // Clean up temp file
+    let _ = fs::remove_file(&screenshot_path);
+    
+    Ok((png_data, width, height))
+}
+
+#[cfg(not(target_os = "macos"))]
+fn capture_app_screenshot() -> Result<(Vec<u8>, u32, u32), Box<dyn std::error::Error + Send + Sync>> {
+    Err("Screenshot capture is only supported on macOS".into())
+}
+
 /// Calculate window bounds positioned at eye-line height on the display containing the mouse cursor.
 /// 
 /// - Finds the display where the mouse cursor is located
@@ -1641,6 +1726,50 @@ impl ScriptListApp {
                                     continue;
                                 }
                                 
+                                // Handle CaptureScreenshot directly (no UI needed)
+                                if let Message::CaptureScreenshot { request_id } = &msg {
+                                    tracing::info!(request_id = %request_id, "Capturing screenshot");
+                                    
+                                    let response = match capture_app_screenshot() {
+                                        Ok((png_data, width, height)) => {
+                                            use base64::Engine;
+                                            let base64_data = base64::engine::general_purpose::STANDARD.encode(&png_data);
+                                            tracing::info!(
+                                                request_id = %request_id,
+                                                width = width,
+                                                height = height,
+                                                data_len = base64_data.len(),
+                                                "Screenshot captured successfully"
+                                            );
+                                            Message::screenshot_result(
+                                                request_id.clone(),
+                                                base64_data,
+                                                width,
+                                                height,
+                                            )
+                                        }
+                                        Err(e) => {
+                                            tracing::error!(
+                                                request_id = %request_id,
+                                                error = %e,
+                                                "Screenshot capture failed"
+                                            );
+                                            // Send empty result on error
+                                            Message::screenshot_result(
+                                                request_id.clone(),
+                                                String::new(),
+                                                0,
+                                                0,
+                                            )
+                                        }
+                                    };
+                                    
+                                    if let Err(e) = reader_response_tx.send(response) {
+                                        tracing::error!(error = %e, "Failed to send screenshot response");
+                                    }
+                                    continue;
+                                }
+                                
                                 let prompt_msg = match msg {
                                     Message::Arg { id, placeholder, choices } => {
                                         Some(PromptMessage::ShowArg { id, placeholder, choices })
@@ -1724,13 +1853,21 @@ impl ScriptListApp {
                 } else {
                     height_for_view(ViewType::ArgPromptWithChoices, choice_count)
                 };
-                resize_first_window_to_height(target_height);
+                // Defer resize to avoid RefCell borrow conflicts during GPUI updates
+                cx.spawn(async move |_this, _cx| {
+                    Timer::after(std::time::Duration::from_millis(16)).await;
+                    resize_first_window_to_height(target_height);
+                }).detach();
                 cx.notify();
             }
             PromptMessage::ShowDiv { id, html, tailwind } => {
                 logging::log("UI", &format!("Showing div prompt: {}", id));
                 self.current_view = AppView::DivPrompt { id, html, tailwind };
-                resize_first_window_to_height(height_for_view(ViewType::DivPrompt, 0));
+                // Defer resize to avoid RefCell borrow conflicts during GPUI updates
+                cx.spawn(async move |_this, _cx| {
+                    Timer::after(std::time::Duration::from_millis(16)).await;
+                    resize_first_window_to_height(height_for_view(ViewType::DivPrompt, 0));
+                }).detach();
                 cx.notify();
             }
             PromptMessage::ShowTerm { id, command } => {
@@ -1763,7 +1900,11 @@ impl ScriptListApp {
                     Ok(term_prompt) => {
                         let entity = cx.new(|_| term_prompt);
                         self.current_view = AppView::TermPrompt { id, entity };
-                        resize_first_window_to_height(height_for_view(ViewType::TermPrompt, 0));
+                        // Defer resize to avoid RefCell borrow conflicts during GPUI updates
+                        cx.spawn(async move |_this, _cx| {
+                            Timer::after(std::time::Duration::from_millis(16)).await;
+                            resize_first_window_to_height(height_for_view(ViewType::TermPrompt, 0));
+                        }).detach();
                         cx.notify();
                     }
                     Err(e) => {
@@ -1810,7 +1951,16 @@ impl ScriptListApp {
                 let entity = cx.new(|_| editor_prompt);
                 self.current_view = AppView::EditorPrompt { id, entity, focus_handle: editor_focus_handle };
                 self.focused_input = FocusedInput::None; // Editor handles its own focus
-                resize_first_window_to_height(height_for_view(ViewType::EditorPrompt, 0));
+                
+                // CRITICAL: Delay the window resize to the next frame
+                // Using spawn() with a timer ensures resize happens after GPUI's current render cycle completes
+                // This avoids the "RefCell already borrowed" error from native resize during GPUI update
+                cx.spawn(async move |_this, _cx| {
+                    // Small delay to ensure GPUI has finished its render
+                    Timer::after(std::time::Duration::from_millis(16)).await;
+                    resize_first_window_to_height(height_for_view(ViewType::EditorPrompt, 0));
+                })
+                .detach();
                 cx.notify();
             }
             PromptMessage::ScriptExit => {

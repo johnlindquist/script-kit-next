@@ -702,6 +702,28 @@ pub enum Message {
         request_id: String,
         files: Vec<FileSearchResultEntry>,
     },
+
+    // ============================================================
+    // SCREENSHOT CAPTURE
+    // ============================================================
+
+    /// Request to capture app window screenshot
+    #[serde(rename = "captureScreenshot")]
+    CaptureScreenshot {
+        #[serde(rename = "requestId")]
+        request_id: String,
+    },
+
+    /// Response with screenshot data as base64 PNG
+    #[serde(rename = "screenshotResult")]
+    ScreenshotResult {
+        #[serde(rename = "requestId")]
+        request_id: String,
+        /// Base64-encoded PNG data
+        data: String,
+        width: u32,
+        height: u32,
+    },
 }
 
 impl Message {
@@ -816,6 +838,9 @@ impl Message {
             // File search (use request_id)
             Message::FileSearch { request_id, .. } => Some(request_id),
             Message::FileSearchResult { request_id, .. } => Some(request_id),
+            // Screenshot capture (use request_id)
+            Message::CaptureScreenshot { request_id, .. } => Some(request_id),
+            Message::ScreenshotResult { request_id, .. } => Some(request_id),
         }
     }
 
@@ -1281,6 +1306,25 @@ impl Message {
     /// Create a file search result response
     pub fn file_search_result(request_id: String, files: Vec<FileSearchResultEntry>) -> Self {
         Message::FileSearchResult { request_id, files }
+    }
+
+    // ============================================================
+    // Constructor methods for screenshot capture
+    // ============================================================
+
+    /// Create a capture screenshot request
+    pub fn capture_screenshot(request_id: String) -> Self {
+        Message::CaptureScreenshot { request_id }
+    }
+
+    /// Create a screenshot result response
+    pub fn screenshot_result(request_id: String, data: String, width: u32, height: u32) -> Self {
+        Message::ScreenshotResult {
+            request_id,
+            data,
+            width,
+            height,
+        }
     }
 }
 

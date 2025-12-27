@@ -60,11 +60,41 @@ sleep "$WAIT_SECS"
 echo "Capturing screenshot..." | tee -a "$LOG_FILE"
 
 # Try to capture the specific window by finding script-kit-gpui process
-WINDOW_ID=$(osascript -e 'tell application "System Events" to get id of first window of (first process whose name contains "script-kit-gpui")' 2>/dev/null || echo "")
+# AppleScript returns window ID for the process (not always reliable for CLI apps)
+# Try both the debug executable name and the app bundle approach
+WINDOW_ID=""
+
+# Method 1: Try to find by process name containing "script-kit"
+WINDOW_ID=$(osascript -e '
+tell application "System Events"
+    set targetProc to first process whose name contains "script-kit"
+    if exists (window 1 of targetProc) then
+        return id of window 1 of targetProc
+    end if
+end tell
+' 2>/dev/null || echo "")
+
+# Method 2: If that fails, try via CGWindowListCopyWindowInfo
+if [ -z "$WINDOW_ID" ] || [ "$WINDOW_ID" = "" ]; then
+    # Get window ID using swift script that queries CGWindowListCopyWindowInfo
+    WINDOW_ID=$(swift -e '
+import Cocoa
+let windowList = CGWindowListCopyWindowInfo(.optionOnScreenOnly, kCGNullWindowID) as? [[String: Any]] ?? []
+for window in windowList {
+    if let ownerName = window[kCGWindowOwnerName as String] as? String,
+       ownerName.contains("script-kit") {
+        if let windowID = window[kCGWindowNumber as String] as? Int {
+            print(windowID)
+            break
+        }
+    }
+}
+' 2>/dev/null || echo "")
+fi
 
 if [ -n "$WINDOW_ID" ] && [ "$WINDOW_ID" != "" ]; then
     echo "Found window ID: $WINDOW_ID" | tee -a "$LOG_FILE"
-    screencapture -l"$WINDOW_ID" -o "$SCREENSHOT_FILE" 2>>"$LOG_FILE" || screencapture "$SCREENSHOT_FILE"
+    screencapture -l"$WINDOW_ID" -x -o "$SCREENSHOT_FILE" 2>>"$LOG_FILE" || screencapture -m "$SCREENSHOT_FILE"
 else
     echo "Window ID not found, capturing main display..." | tee -a "$LOG_FILE"
     screencapture -m "$SCREENSHOT_FILE"

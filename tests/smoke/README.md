@@ -21,6 +21,9 @@ These are **not Rust tests** - they are TypeScript fixture scripts that verify t
 | `test-user-cancel.ts` | Cancellation handling | Escape key, prompt cancel, graceful exit on cancel |
 | `test-empty-choices.ts` | Edge cases | Single choice, many choices (scroll), empty choices array |
 | `test-process-cleanup.ts` | Process lifecycle | Process termination, resource cleanup |
+| `test-editor-height.ts` | Editor window sizing | Editor fills 700px window height |
+| `test-term-height.ts` | Terminal window sizing | Terminal fills 700px window height |
+| `test-div-height.ts` | Div window sizing | Div uses 500px standard height |
 
 ### Multi-Monitor Testing
 

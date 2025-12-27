@@ -182,6 +182,19 @@ export interface FileSearchResult {
 }
 
 // =============================================================================
+// Screenshot Types
+// =============================================================================
+
+export interface ScreenshotData {
+  /** Base64-encoded PNG data */
+  data: string;
+  /** Width in pixels */
+  width: number;
+  /** Height in pixels */
+  height: number;
+}
+
+// =============================================================================
 // Arg Types (for all calling conventions)
 // =============================================================================
 
@@ -447,6 +460,19 @@ interface GetWindowBoundsMessage {
   requestId: string;
 }
 
+interface CaptureScreenshotMessage {
+  type: 'captureScreenshot';
+  requestId: string;
+}
+
+interface ScreenshotResultMessage {
+  type: 'screenshotResult';
+  requestId: string;
+  data: string;
+  width: number;
+  height: number;
+}
+
 interface KeyboardMessage {
   type: 'keyboard';
   action: 'type' | 'tap';
@@ -550,7 +576,8 @@ type ResponseMessage =
   | ClipboardHistoryResultMessage
   | WindowListResultMessage
   | WindowActionResultMessage
-  | ClipboardHistoryActionResultMessage;
+  | ClipboardHistoryActionResultMessage
+  | ScreenshotResultMessage;
 
 interface ChatMessageType {
   type: 'chat';
@@ -1196,6 +1223,14 @@ declare global {
    * @returns Window bounds with x, y, width, height in pixels
    */
   function getWindowBounds(): Promise<WindowBounds>;
+  
+  /**
+   * Capture a screenshot of the Script Kit window.
+   * Useful for visual testing and debugging layout issues.
+   * 
+   * @returns Promise with base64-encoded PNG data and dimensions
+   */
+  function captureScreenshot(): Promise<ScreenshotData>;
   
   /**
    * Force submit the current prompt with a value
@@ -2756,6 +2791,45 @@ globalThis.getWindowBounds = async function getWindowBounds(): Promise<WindowBou
     const message: GetWindowBoundsMessage = {
       type: 'getWindowBounds',
       requestId: id,
+    };
+    
+    send(message);
+  });
+};
+
+/**
+ * Capture a screenshot of the Script Kit window.
+ * Useful for visual testing and debugging layout issues.
+ * 
+ * @returns Promise with base64-encoded PNG data and dimensions
+ */
+globalThis.captureScreenshot = async function captureScreenshot(): Promise<ScreenshotData> {
+  const requestId = nextId();
+  
+  return new Promise((resolve) => {
+    pending.set(requestId, (msg: ResponseMessage) => {
+      // Handle screenshotResult message type
+      if (msg.type === 'screenshotResult') {
+        const resultMsg = msg as ScreenshotResultMessage;
+        resolve({
+          data: resultMsg.data ?? '',
+          width: resultMsg.width ?? 0,
+          height: resultMsg.height ?? 0,
+        });
+        return;
+      }
+      
+      // Fallback for unexpected message type
+      resolve({
+        data: '',
+        width: 0,
+        height: 0,
+      });
+    });
+    
+    const message: CaptureScreenshotMessage = {
+      type: 'captureScreenshot',
+      requestId,
     };
     
     send(message);

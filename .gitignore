@@ -18,3 +18,4 @@ Thumbs.db
 # Local development
 *.local.md
 .swarmmail.db
+.test-screenshots/

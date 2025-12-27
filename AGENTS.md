@@ -204,6 +204,31 @@ echo '{"type": "run", "path": "'$(pwd)'/tests/smoke/test-editor-height.ts"}' | .
 # The screenshot path is output by the script
 ```
 
+**SDK Screenshot Capture (in-script):**
+```typescript
+// Use the SDK's captureScreenshot() function for programmatic testing
+import '../../scripts/kit-sdk';
+
+// Capture screenshot from within a test script
+const screenshot = await captureScreenshot();
+console.error(`Screenshot: ${screenshot.width}x${screenshot.height}`);
+// screenshot.data contains base64-encoded PNG
+```
+
+**Visual Test Utilities (tests/autonomous/screenshot-utils.ts):**
+```typescript
+import { saveScreenshot, analyzeContentFill, generateReport } from './screenshot-utils';
+
+// Save screenshot to .test-screenshots/
+const path = await saveScreenshot(screenshot.data, 'my-test');
+
+// Analyze if content fills expected area
+const analysis = await analyzeContentFill(path, expectedHeight);
+if (!analysis.pass) {
+  console.error(`Visual check failed: ${analysis.message}`);
+}
+```
+
 **When to use visual testing:**
 - Layout issues (content not filling space, wrong sizes)
 - Styling problems (colors, borders, spacing)

@@ -1039,10 +1039,12 @@ impl Render for EditorPrompt {
         let editor_area = if let Some(total_height) = self.content_height {
             // Explicit height: editor gets total - status bar
             let editor_height = total_height - gpui::px(STATUS_BAR_HEIGHT);
-            tracing::debug!(
-                total_height = ?total_height,
-                editor_height = ?editor_height,
-                "EditorPrompt using explicit height"
+            crate::logging::log(
+                "EDITOR",
+                &format!(
+                    "Render: total_height={:?}, editor_height={:?}, status_bar={}, line_count={}",
+                    total_height, editor_height, STATUS_BAR_HEIGHT, line_count
+                ),
             );
             div()
                 .w_full()
