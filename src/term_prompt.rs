@@ -16,10 +16,17 @@ use crate::prompts::SubmitCallback;
 
 const SLOW_RENDER_THRESHOLD_MS: u128 = 16; // 60fps threshold
 
-/// Terminal cell dimensions (pixels)
-/// Menlo 14pt on macOS typically has ~8.4px cell width, ~17px line height
-const CELL_WIDTH: f32 = 8.4;
-const CELL_HEIGHT: f32 = 17.0;
+/// Terminal font configuration
+const FONT_SIZE: f32 = 14.0;
+/// Line height multiplier - 1.3 provides room for descenders (g, y, p, q, j)
+/// and ascenders while keeping text readable
+const LINE_HEIGHT_MULTIPLIER: f32 = 1.3;
+
+/// Terminal cell dimensions
+/// Cell width is approximately 0.6 × font_size for monospace fonts like Menlo
+const CELL_WIDTH: f32 = FONT_SIZE * 0.6;  // ~8.4px for 14pt
+/// Cell height = font_size × line_height_multiplier
+const CELL_HEIGHT: f32 = FONT_SIZE * LINE_HEIGHT_MULTIPLIER;  // 18.2px for 14pt
 
 /// Terminal refresh interval (ms) - 30fps is plenty for terminal output
 const REFRESH_INTERVAL_MS: u64 = 33; // ~30fps, reduces CPU load significantly
@@ -28,8 +35,8 @@ const REFRESH_INTERVAL_MS: u64 = 33; // ~30fps, reduces CPU load significantly
 const MIN_COLS: u16 = 20;
 const MIN_ROWS: u16 = 5;
 
-/// Padding around terminal content (pixels)
-const TERMINAL_PADDING: f32 = 8.0;
+/// Padding around terminal content (pixels) - now 0 to fill edge-to-edge
+const TERMINAL_PADDING: f32 = 0.0;
 
 /// Terminal prompt GPUI component
 pub struct TermPrompt {
@@ -272,7 +279,8 @@ impl TermPrompt {
             .overflow_hidden()
             .bg(default_bg)
             .font_family("Menlo")
-            .text_size(px(14.0));
+            .text_size(px(FONT_SIZE))
+            .line_height(px(CELL_HEIGHT)); // Use calculated line height for proper descender room
 
         for (line_idx, cells) in content.styled_lines.iter().enumerate() {
             let is_cursor_line = line_idx == content.cursor_line;
@@ -513,13 +521,14 @@ impl Render for TermPrompt {
 
         // Main container with terminal styling
         // Use explicit height if available, otherwise fall back to size_full
+        // NO padding - terminal content should fill edge-to-edge
         let container = div()
             .flex()
             .flex_col()
             .w_full()
             .bg(rgb(colors.background.log_panel)) // Dark terminal background
             .text_color(rgb(colors.text.primary))
-            .p(px(4.0)) // Small padding around terminal
+            .overflow_hidden() // Clip any overflow
             .key_context("term_prompt")
             .track_focus(&self.focus_handle)
             .on_key_down(handle_key);
