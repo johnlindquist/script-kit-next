@@ -182,6 +182,85 @@ pub struct FileSearchResultEntry {
     pub modified_at: Option<String>,
 }
 
+/// Script error data for structured error reporting
+///
+/// Sent when a script execution fails, providing detailed error information
+/// for display in the UI with actionable suggestions.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ScriptErrorData {
+    /// User-friendly error message
+    pub error_message: String,
+    /// Raw stderr output if available
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stderr_output: Option<String>,
+    /// Process exit code if available
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exit_code: Option<i32>,
+    /// Parsed stack trace if available
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stack_trace: Option<String>,
+    /// Path to the script that failed
+    pub script_path: String,
+    /// Actionable fix suggestions
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub suggestions: Vec<String>,
+    /// When the error occurred (ISO 8601 format)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub timestamp: Option<String>,
+}
+
+impl ScriptErrorData {
+    /// Create a new ScriptErrorData with required fields
+    pub fn new(error_message: String, script_path: String) -> Self {
+        ScriptErrorData {
+            error_message,
+            stderr_output: None,
+            exit_code: None,
+            stack_trace: None,
+            script_path,
+            suggestions: Vec::new(),
+            timestamp: None,
+        }
+    }
+
+    /// Add stderr output
+    pub fn with_stderr(mut self, stderr: String) -> Self {
+        self.stderr_output = Some(stderr);
+        self
+    }
+
+    /// Add exit code
+    pub fn with_exit_code(mut self, code: i32) -> Self {
+        self.exit_code = Some(code);
+        self
+    }
+
+    /// Add stack trace
+    pub fn with_stack_trace(mut self, trace: String) -> Self {
+        self.stack_trace = Some(trace);
+        self
+    }
+
+    /// Add suggestions
+    pub fn with_suggestions(mut self, suggestions: Vec<String>) -> Self {
+        self.suggestions = suggestions;
+        self
+    }
+
+    /// Add a single suggestion
+    pub fn add_suggestion(mut self, suggestion: String) -> Self {
+        self.suggestions.push(suggestion);
+        self
+    }
+
+    /// Add timestamp
+    pub fn with_timestamp(mut self, timestamp: String) -> Self {
+        self.timestamp = Some(timestamp);
+        self
+    }
+}
+
 impl Choice {
     pub fn new(name: String, value: String) -> Self {
         Choice {
@@ -724,6 +803,36 @@ pub enum Message {
         width: u32,
         height: u32,
     },
+
+    // ============================================================
+    // ERROR REPORTING
+    // ============================================================
+
+    /// Script error with structured error information
+    #[serde(rename = "setError")]
+    SetError {
+        /// User-friendly error message
+        #[serde(rename = "errorMessage")]
+        error_message: String,
+        /// Raw stderr output if available
+        #[serde(rename = "stderrOutput", skip_serializing_if = "Option::is_none")]
+        stderr_output: Option<String>,
+        /// Process exit code if available
+        #[serde(rename = "exitCode", skip_serializing_if = "Option::is_none")]
+        exit_code: Option<i32>,
+        /// Parsed stack trace if available
+        #[serde(rename = "stackTrace", skip_serializing_if = "Option::is_none")]
+        stack_trace: Option<String>,
+        /// Path to the script that failed
+        #[serde(rename = "scriptPath")]
+        script_path: String,
+        /// Actionable fix suggestions
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        suggestions: Vec<String>,
+        /// When the error occurred (ISO 8601 format)
+        #[serde(skip_serializing_if = "Option::is_none")]
+        timestamp: Option<String>,
+    },
 }
 
 impl Message {
@@ -841,6 +950,8 @@ impl Message {
             // Screenshot capture (use request_id)
             Message::CaptureScreenshot { request_id, .. } => Some(request_id),
             Message::ScreenshotResult { request_id, .. } => Some(request_id),
+            // Error reporting (no ID)
+            Message::SetError { .. } => None,
         }
     }
 
@@ -1324,6 +1435,57 @@ impl Message {
             data,
             width,
             height,
+        }
+    }
+
+    // ============================================================
+    // Constructor methods for error reporting
+    // ============================================================
+
+    /// Create a script error message from ScriptErrorData
+    pub fn set_error(error_data: ScriptErrorData) -> Self {
+        Message::SetError {
+            error_message: error_data.error_message,
+            stderr_output: error_data.stderr_output,
+            exit_code: error_data.exit_code,
+            stack_trace: error_data.stack_trace,
+            script_path: error_data.script_path,
+            suggestions: error_data.suggestions,
+            timestamp: error_data.timestamp,
+        }
+    }
+
+    /// Create a simple script error message with just the message and path
+    pub fn script_error(error_message: String, script_path: String) -> Self {
+        Message::SetError {
+            error_message,
+            stderr_output: None,
+            exit_code: None,
+            stack_trace: None,
+            script_path,
+            suggestions: Vec::new(),
+            timestamp: None,
+        }
+    }
+
+    /// Create a full script error message with all optional fields
+    pub fn script_error_full(
+        error_message: String,
+        script_path: String,
+        stderr_output: Option<String>,
+        exit_code: Option<i32>,
+        stack_trace: Option<String>,
+        suggestions: Vec<String>,
+        timestamp: Option<String>,
+    ) -> Self {
+        Message::SetError {
+            error_message,
+            stderr_output,
+            exit_code,
+            stack_trace,
+            script_path,
+            suggestions,
+            timestamp,
         }
     }
 }
@@ -3115,5 +3277,219 @@ mod tests {
     fn test_file_search_message_ids() {
         assert_eq!(Message::file_search("a".to_string(), "".to_string(), None).id(), Some("a"));
         assert_eq!(Message::file_search_result("b".to_string(), vec![]).id(), Some("b"));
+    }
+
+    // ============================================================
+    // SCRIPT ERROR TESTS
+    // ============================================================
+
+    #[test]
+    fn test_script_error_data_creation() {
+        let error = ScriptErrorData::new(
+            "Failed to import module".to_string(),
+            "/home/user/script.ts".to_string(),
+        );
+        assert_eq!(error.error_message, "Failed to import module");
+        assert_eq!(error.script_path, "/home/user/script.ts");
+        assert_eq!(error.stderr_output, None);
+        assert_eq!(error.exit_code, None);
+        assert_eq!(error.stack_trace, None);
+        assert!(error.suggestions.is_empty());
+        assert_eq!(error.timestamp, None);
+    }
+
+    #[test]
+    fn test_script_error_data_builder() {
+        let error = ScriptErrorData::new("Error".to_string(), "/path/script.ts".to_string())
+            .with_stderr("Error: module not found".to_string())
+            .with_exit_code(1)
+            .with_stack_trace("at line 10\nat line 5".to_string())
+            .with_suggestions(vec!["Install the module".to_string()])
+            .add_suggestion("Check your imports".to_string())
+            .with_timestamp("2024-01-15T10:30:00Z".to_string());
+
+        assert_eq!(error.stderr_output, Some("Error: module not found".to_string()));
+        assert_eq!(error.exit_code, Some(1));
+        assert_eq!(error.stack_trace, Some("at line 10\nat line 5".to_string()));
+        assert_eq!(error.suggestions.len(), 2);
+        assert_eq!(error.suggestions[0], "Install the module");
+        assert_eq!(error.suggestions[1], "Check your imports");
+        assert_eq!(error.timestamp, Some("2024-01-15T10:30:00Z".to_string()));
+    }
+
+    #[test]
+    fn test_serialize_set_error_message() {
+        let error = ScriptErrorData::new(
+            "Script crashed".to_string(),
+            "/home/user/test.ts".to_string(),
+        )
+        .with_exit_code(1);
+
+        let msg = Message::set_error(error);
+        let json = serialize_message(&msg).unwrap();
+        assert!(json.contains("\"type\":\"setError\""));
+        assert!(json.contains("\"errorMessage\":\"Script crashed\""));
+        assert!(json.contains("\"scriptPath\":\"/home/user/test.ts\""));
+        assert!(json.contains("\"exitCode\":1"));
+    }
+
+    #[test]
+    fn test_serialize_set_error_full() {
+        let error = ScriptErrorData::new("Import failed".to_string(), "/scripts/main.ts".to_string())
+            .with_stderr("Error: Cannot find module 'xyz'".to_string())
+            .with_exit_code(1)
+            .with_stack_trace("at import (/scripts/main.ts:1:1)".to_string())
+            .with_suggestions(vec!["Run: npm install xyz".to_string()])
+            .with_timestamp("2024-01-15T10:30:00Z".to_string());
+
+        let msg = Message::set_error(error);
+        let json = serialize_message(&msg).unwrap();
+        assert!(json.contains("\"type\":\"setError\""));
+        assert!(json.contains("\"errorMessage\":\"Import failed\""));
+        assert!(json.contains("\"stderrOutput\":\"Error: Cannot find module 'xyz'\""));
+        assert!(json.contains("\"exitCode\":1"));
+        assert!(json.contains("\"stackTrace\":\"at import (/scripts/main.ts:1:1)\""));
+        assert!(json.contains("\"scriptPath\":\"/scripts/main.ts\""));
+        assert!(json.contains("\"suggestions\":[\"Run: npm install xyz\"]"));
+        assert!(json.contains("\"timestamp\":\"2024-01-15T10:30:00Z\""));
+    }
+
+    #[test]
+    fn test_serialize_set_error_omits_none_fields() {
+        let error = ScriptErrorData::new("Simple error".to_string(), "/path/script.ts".to_string());
+        let msg = Message::set_error(error);
+        let json = serialize_message(&msg).unwrap();
+
+        // Optional fields should be omitted when None
+        assert!(!json.contains("\"stderrOutput\""));
+        assert!(!json.contains("\"exitCode\""));
+        assert!(!json.contains("\"stackTrace\""));
+        assert!(!json.contains("\"timestamp\""));
+        // Empty suggestions should also be omitted
+        assert!(!json.contains("\"suggestions\""));
+    }
+
+    #[test]
+    fn test_parse_set_error_minimal() {
+        let json = r#"{"type":"setError","errorMessage":"Failed","scriptPath":"/test.ts"}"#;
+        let msg = parse_message(json).unwrap();
+        match msg {
+            Message::SetError { error_message, script_path, stderr_output, exit_code, .. } => {
+                assert_eq!(error_message, "Failed");
+                assert_eq!(script_path, "/test.ts");
+                assert_eq!(stderr_output, None);
+                assert_eq!(exit_code, None);
+            }
+            _ => panic!("Expected SetError message"),
+        }
+    }
+
+    #[test]
+    fn test_parse_set_error_full() {
+        let json = r#"{
+            "type": "setError",
+            "errorMessage": "Module not found",
+            "stderrOutput": "Error: xyz not found",
+            "exitCode": 1,
+            "stackTrace": "at line 5",
+            "scriptPath": "/home/user/script.ts",
+            "suggestions": ["Install xyz", "Check path"],
+            "timestamp": "2024-01-15T10:30:00Z"
+        }"#;
+        let msg = parse_message(json).unwrap();
+        match msg {
+            Message::SetError { 
+                error_message, 
+                stderr_output, 
+                exit_code, 
+                stack_trace, 
+                script_path, 
+                suggestions, 
+                timestamp 
+            } => {
+                assert_eq!(error_message, "Module not found");
+                assert_eq!(stderr_output, Some("Error: xyz not found".to_string()));
+                assert_eq!(exit_code, Some(1));
+                assert_eq!(stack_trace, Some("at line 5".to_string()));
+                assert_eq!(script_path, "/home/user/script.ts");
+                assert_eq!(suggestions, vec!["Install xyz", "Check path"]);
+                assert_eq!(timestamp, Some("2024-01-15T10:30:00Z".to_string()));
+            }
+            _ => panic!("Expected SetError message"),
+        }
+    }
+
+    #[test]
+    fn test_script_error_constructor() {
+        let msg = Message::script_error("Error occurred".to_string(), "/test.ts".to_string());
+        match msg {
+            Message::SetError { error_message, script_path, .. } => {
+                assert_eq!(error_message, "Error occurred");
+                assert_eq!(script_path, "/test.ts");
+            }
+            _ => panic!("Expected SetError message"),
+        }
+    }
+
+    #[test]
+    fn test_set_error_message_id() {
+        let msg = Message::script_error("Error".to_string(), "/test.ts".to_string());
+        // SetError messages don't have an ID
+        assert_eq!(msg.id(), None);
+    }
+
+    #[test]
+    fn test_script_error_data_serialization() {
+        // Test the struct serialization directly
+        let error = ScriptErrorData::new("Test error".to_string(), "/path.ts".to_string())
+            .with_exit_code(42);
+
+        let json = serde_json::to_string(&error).unwrap();
+        assert!(json.contains("\"errorMessage\":\"Test error\""));
+        assert!(json.contains("\"scriptPath\":\"/path.ts\""));
+        assert!(json.contains("\"exitCode\":42"));
+    }
+
+    #[test]
+    fn test_script_error_data_deserialization() {
+        let json = r#"{"errorMessage":"Test","scriptPath":"/p.ts","exitCode":1,"suggestions":["a","b"]}"#;
+        let error: ScriptErrorData = serde_json::from_str(json).unwrap();
+        assert_eq!(error.error_message, "Test");
+        assert_eq!(error.script_path, "/p.ts");
+        assert_eq!(error.exit_code, Some(1));
+        assert_eq!(error.suggestions, vec!["a", "b"]);
+    }
+
+    #[test]
+    fn test_script_error_full_constructor() {
+        let msg = Message::script_error_full(
+            "Error".to_string(),
+            "/script.ts".to_string(),
+            Some("stderr output".to_string()),
+            Some(1),
+            Some("stack trace".to_string()),
+            vec!["suggestion 1".to_string()],
+            Some("2024-01-15T10:30:00Z".to_string()),
+        );
+        match msg {
+            Message::SetError { 
+                error_message, 
+                stderr_output, 
+                exit_code, 
+                stack_trace, 
+                script_path, 
+                suggestions, 
+                timestamp 
+            } => {
+                assert_eq!(error_message, "Error");
+                assert_eq!(stderr_output, Some("stderr output".to_string()));
+                assert_eq!(exit_code, Some(1));
+                assert_eq!(stack_trace, Some("stack trace".to_string()));
+                assert_eq!(script_path, "/script.ts");
+                assert_eq!(suggestions, vec!["suggestion 1"]);
+                assert_eq!(timestamp, Some("2024-01-15T10:30:00Z".to_string()));
+            }
+            _ => panic!("Expected SetError message"),
+        }
     }
 }

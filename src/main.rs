@@ -47,10 +47,13 @@ mod window_manager;
 mod clipboard_history;
 mod window_control;
 mod file_search;
+mod toast_manager;
 
 use tray::{TrayManager, TrayMenuAction};
 use editor::EditorPrompt;
 use window_resize::{ViewType, height_for_view, resize_first_window_to_height, initial_window_height, reset_resize_debounce, defer_resize_to_view};
+use crate::toast_manager::ToastManager;
+use crate::components::toast::{Toast, ToastColors, ToastAction};
 
 use list_item::{ListItem, ListItemColors, LIST_ITEM_HEIGHT};
 use utils::strip_html_tags;
@@ -455,6 +458,15 @@ enum PromptMessage {
     ScriptExit,
     /// External command to run a script by path
     RunScript { path: String },
+    /// Script error with detailed information for toast display
+    ScriptError {
+        error_message: String,
+        stderr_output: Option<String>,
+        exit_code: Option<i32>,
+        stack_trace: Option<String>,
+        script_path: String,
+        suggestions: Vec<String>,
+    },
 }
 
 /// External commands that can be sent to the app via stdin
@@ -707,6 +719,8 @@ struct ScriptListApp {
     error_notification: Option<ErrorNotification>,
     // Current design variant for hot-swappable UI designs
     current_design: DesignVariant,
+    // Toast manager for notification queue
+    toast_manager: ToastManager,
 }
 
 impl ScriptListApp {
@@ -793,6 +807,8 @@ impl ScriptListApp {
             error_notification: None,
             // Design system: start with default design
             current_design: DesignVariant::default(),
+            // Toast manager: initialize for error notifications
+            toast_manager: ToastManager::new(),
         }
     }
     
@@ -1249,6 +1265,9 @@ impl ScriptListApp {
     fn execute_interactive(&mut self, script: &scripts::Script, cx: &mut Context<Self>) {
         logging::log("EXEC", &format!("Starting interactive execution: {}", script.name));
         
+        // Store script path for error reporting in reader thread
+        let script_path_for_errors = script.path.to_string_lossy().to_string();
+        
         match executor::execute_script_interactive(&script.path) {
             Ok(session) => {
                 logging::log("EXEC", "Interactive session started successfully");
@@ -1291,10 +1310,12 @@ impl ScriptListApp {
                 
                 let mut stdin = split.stdin;
                 let mut stdout_reader = split.stdout_reader;
+                // Capture stderr for error reporting
+                let stderr_handle = split.stderr;
                 // CRITICAL: Keep process_handle and child alive - they kill the process on drop!
                 // We move them into the reader thread so they live until the script exits.
                 let _process_handle = split.process_handle;
-                let _child = split.child;
+                let mut _child = split.child;
                 
                 // Channel for sending responses from UI to writer thread
                 let (response_tx, response_rx) = mpsc::channel::<Message>();
@@ -1338,10 +1359,13 @@ impl ScriptListApp {
                 // Reader thread - handles receiving messages from script (blocking is OK here)
                 // CRITICAL: Move _process_handle and _child into this thread to keep them alive!
                 // When the reader thread exits, they'll be dropped and the process killed.
+                let script_path_clone = script_path_for_errors.clone();
                 std::thread::spawn(move || {
                     // These variables keep the process alive - they're dropped when the thread exits
                     let _keep_alive_handle = _process_handle;
-                    let _keep_alive_child = _child;
+                    let mut keep_alive_child = _child;
+                    let mut stderr_for_errors = stderr_handle;
+                    let script_path = script_path_clone;
                     
                     loop {
                         // Use next_message_graceful to skip non-JSON lines (e.g., console.log output)
@@ -1810,11 +1834,103 @@ impl ScriptListApp {
                             }
                             Ok(None) => {
                                 logging::log("EXEC", "Script stdout closed (EOF)");
+                                
+                                // Check if process exited with error
+                                let exit_code = match keep_alive_child.try_wait() {
+                                    Ok(Some(status)) => status.code(),
+                                    Ok(None) => {
+                                        // Process still running, wait for it
+                                        match keep_alive_child.wait() {
+                                            Ok(status) => status.code(),
+                                            Err(_) => None,
+                                        }
+                                    }
+                                    Err(_) => None,
+                                };
+                                
+                                logging::log("EXEC", &format!("Script exit code: {:?}", exit_code));
+                                
+                                // If non-zero exit code, capture stderr and send error
+                                if let Some(code) = exit_code {
+                                    if code != 0 {
+                                        // Read stderr if available
+                                        let stderr_output = if let Some(mut stderr) = stderr_for_errors.take() {
+                                            use std::io::Read;
+                                            let mut stderr_str = String::new();
+                                            if stderr.read_to_string(&mut stderr_str).is_ok() && !stderr_str.is_empty() {
+                                                Some(stderr_str)
+                                            } else {
+                                                None
+                                            }
+                                        } else {
+                                            None
+                                        };
+                                        
+                                        if let Some(ref stderr_text) = stderr_output {
+                                            logging::log("EXEC", &format!("Captured stderr ({} bytes)", stderr_text.len()));
+                                            
+                                            // Parse error info and generate suggestions
+                                            let error_message = executor::extract_error_message(stderr_text);
+                                            let stack_trace = executor::parse_stack_trace(stderr_text);
+                                            let suggestions = executor::generate_suggestions(stderr_text, Some(code));
+                                            
+                                            // Send script error message
+                                            let _ = tx.send_blocking(PromptMessage::ScriptError {
+                                                error_message,
+                                                stderr_output: Some(stderr_text.clone()),
+                                                exit_code: Some(code),
+                                                stack_trace,
+                                                script_path: script_path.clone(),
+                                                suggestions,
+                                            });
+                                        } else {
+                                            // No stderr, send generic error
+                                            let _ = tx.send_blocking(PromptMessage::ScriptError {
+                                                error_message: format!("Script exited with code {}", code),
+                                                stderr_output: None,
+                                                exit_code: Some(code),
+                                                stack_trace: None,
+                                                script_path: script_path.clone(),
+                                                suggestions: vec!["Check the script for errors".to_string()],
+                                            });
+                                        }
+                                    }
+                                }
+                                
                                 let _ = tx.send_blocking(PromptMessage::ScriptExit);
                                 break;
                             }
                             Err(e) => {
                                 logging::log("EXEC", &format!("Error reading from script: {}", e));
+                                
+                                // Try to read stderr for error details
+                                let stderr_output = if let Some(mut stderr) = stderr_for_errors.take() {
+                                    use std::io::Read;
+                                    let mut stderr_str = String::new();
+                                    if stderr.read_to_string(&mut stderr_str).is_ok() && !stderr_str.is_empty() {
+                                        Some(stderr_str)
+                                    } else {
+                                        None
+                                    }
+                                } else {
+                                    None
+                                };
+                                
+                                if let Some(ref stderr_text) = stderr_output {
+                                    let error_message = executor::extract_error_message(stderr_text);
+                                    let stack_trace = executor::parse_stack_trace(stderr_text);
+                                    let suggestions = executor::generate_suggestions(stderr_text, None);
+                                    
+                                    let _ = tx.send_blocking(PromptMessage::ScriptError {
+                                        error_message,
+                                        stderr_output: Some(stderr_text.clone()),
+                                        exit_code: None,
+                                        stack_trace,
+                                        script_path: script_path.clone(),
+                                        suggestions,
+                                    });
+                                }
+                                
                                 let _ = tx.send_blocking(PromptMessage::ScriptExit);
                                 break;
                             }
@@ -2037,6 +2153,52 @@ impl ScriptListApp {
                 
                 logging::log("EXEC", &format!("Executing script: {}", script_name));
                 self.execute_interactive(&script, cx);
+            }
+            PromptMessage::ScriptError { 
+                error_message, 
+                stderr_output, 
+                exit_code, 
+                stack_trace, 
+                script_path, 
+                suggestions 
+            } => {
+                logging::log("ERROR", &format!("Script error received: {} (exit code: {:?})", error_message, exit_code));
+                
+                // Create error toast with expandable details
+                // Use stderr_output if available, otherwise use stack_trace
+                let details_text = stderr_output.clone().or_else(|| stack_trace.clone());
+                let toast = Toast::error(error_message.clone(), &self.theme)
+                    .details_opt(details_text.clone())
+                    .duration_ms(Some(10000)); // 10 seconds for errors
+                
+                // Add copy button action if we have stderr/stack trace
+                let toast = if let Some(ref trace) = details_text {
+                    let trace_clone = trace.clone();
+                    toast.action(ToastAction::new(
+                        "Copy Error",
+                        Box::new(move |_, _, _| {
+                            // Copy to clipboard
+                            use arboard::Clipboard;
+                            if let Ok(mut clipboard) = Clipboard::new() {
+                                let _ = clipboard.set_text(trace_clone.clone());
+                                logging::log("UI", "Error copied to clipboard");
+                            }
+                        }),
+                    ))
+                } else {
+                    toast
+                };
+                
+                // Log suggestions if present
+                if !suggestions.is_empty() {
+                    logging::log("ERROR", &format!("Suggestions: {:?}", suggestions));
+                }
+                
+                // Push toast to manager
+                let toast_id = self.toast_manager.push(toast);
+                logging::log("UI", &format!("Toast created for script error: {} (id: {})", script_path, toast_id));
+                
+                cx.notify();
             }
          }
       }
@@ -2333,6 +2495,60 @@ impl ScriptListApp {
                 format!("Error reading file: {}", e)
             }
         }
+    }
+    
+    /// Render toast notifications from the toast manager
+    /// 
+    /// Toasts are positioned in the top-right corner and stack vertically.
+    /// Each toast has its own dismiss callback that removes it from the manager.
+    fn render_toasts(&mut self, cx: &mut Context<Self>) -> Option<impl IntoElement> {
+        // Tick the manager to handle auto-dismiss
+        self.toast_manager.tick();
+        
+        // Clean up dismissed toasts
+        self.toast_manager.cleanup();
+        
+        // Check if we need to re-render
+        if self.toast_manager.take_needs_notify() {
+            cx.notify();
+        }
+        
+        let visible = self.toast_manager.visible_toasts();
+        if visible.is_empty() {
+            return None;
+        }
+        
+        // Use design tokens for consistent spacing
+        let tokens = get_tokens(self.current_design);
+        let spacing = tokens.spacing();
+        
+        // Build toast container (positioned in top-right via absolute positioning)
+        let mut toast_container = div()
+            .absolute()
+            .top(px(spacing.padding_lg))
+            .right(px(spacing.padding_lg))
+            .flex()
+            .flex_col()
+            .gap(px(spacing.gap_sm))
+            .w(px(380.0));  // Fixed width for toasts
+        
+        // Add each visible toast
+        for notification in visible {
+            // Clone the toast for rendering - unfortunately we need to recreate it
+            // since Toast::render consumes self
+            let toast_colors = ToastColors::from_theme(&self.theme, notification.toast.get_variant());
+            let toast = Toast::new(notification.toast.get_message().clone(), toast_colors)
+                .variant(notification.toast.get_variant())
+                .duration_ms(notification.toast.get_duration_ms())
+                .dismissible(true);
+            
+            // Add details if the toast has them
+            let toast = toast.details_opt(notification.toast.get_details().cloned());
+            
+            toast_container = toast_container.child(toast);
+        }
+        
+        Some(toast_container)
     }
     
     /// Render the error notification if one exists
@@ -3172,6 +3388,11 @@ impl ScriptListApp {
                         .child(dialog.clone())
                 );
             }
+        }
+        
+        // Add toast notifications overlay (top-right)
+        if let Some(toasts) = self.render_toasts(cx) {
+            container = container.child(toasts);
         }
         
         container.into_any_element()

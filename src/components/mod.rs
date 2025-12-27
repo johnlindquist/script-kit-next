@@ -6,6 +6,7 @@
 //! # Components
 //!
 //! - [`Button`] - Interactive button with variants (Primary, Ghost, Icon)
+//! - [`Toast`] - Toast notification with variants (Success, Warning, Error, Info)
 //!
 //! # Usage
 //!
@@ -17,6 +18,15 @@
 //!     .variant(ButtonVariant::Primary)
 //!     .shortcut("↵")
 //!     .on_click(Box::new(|_, _, _| println!("Clicked!")));
+//!
+//! // Toast example
+//! use crate::components::{Toast, ToastColors, ToastVariant};
+//!
+//! let toast_colors = ToastColors::from_theme(&theme, ToastVariant::Error);
+//! let toast = Toast::new("An error occurred", toast_colors)
+//!     .variant(ToastVariant::Error)
+//!     .details("Stack trace here...")
+//!     .dismissible(true);
 //! ```
 //!
 //! # Design Patterns
@@ -28,6 +38,10 @@
 //! - **Theme integration**: Use `from_theme()` or `from_design()` for colors
 
 pub mod button;
+pub mod toast;
 
 // Re-export commonly used types
 pub use button::{Button, ButtonColors, ButtonVariant};
+// These re-exports form the public API - allow unused since not all are used in every crate
+#[allow(unused_imports)]
+pub use toast::{Toast, ToastAction, ToastColors, ToastVariant};

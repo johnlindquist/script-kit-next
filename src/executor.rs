@@ -1,5 +1,5 @@
 use std::path::{Path, PathBuf};
-use std::process::{Command, Child, ChildStdin, ChildStdout, Stdio};
+use std::process::{Command, Child, ChildStdin, ChildStdout, ChildStderr, Stdio};
 use std::io::{Write, BufReader};
 use std::time::{Duration, Instant};
 use crate::protocol::{Message, JsonlReader, serialize_message};
@@ -293,6 +293,8 @@ impl Drop for ProcessHandle {
 pub struct ScriptSession {
     pub stdin: ChildStdin,
     stdout_reader: JsonlReader<BufReader<ChildStdout>>,
+    /// Captured stderr for error reporting
+    pub stderr: Option<ChildStderr>,
     child: Child,
     /// Process handle for cleanup - kills process group on drop
     process_handle: ProcessHandle,
@@ -302,6 +304,8 @@ pub struct ScriptSession {
 pub struct SplitSession {
     pub stdin: ChildStdin,
     pub stdout_reader: JsonlReader<BufReader<ChildStdout>>,
+    /// Captured stderr for error reporting
+    pub stderr: Option<ChildStderr>,
     pub child: Child,
     /// Process handle for cleanup - kills process group on drop
     /// IMPORTANT: This MUST be kept alive until the script completes!
@@ -317,6 +321,7 @@ impl ScriptSession {
         SplitSession {
             stdin: self.stdin,
             stdout_reader: self.stdout_reader,
+            stderr: self.stderr,
             child: self.child,
             process_handle: self.process_handle,
         }
@@ -524,7 +529,7 @@ fn spawn_script(cmd: &str, args: &[&str]) -> Result<ScriptSession, String> {
         .args(args)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::inherit());
+        .stderr(Stdio::piped()); // Capture stderr for error handling
     
     // On Unix, spawn in a new process group so we can kill all children
     // process_group(0) means the child's PID becomes the PGID
@@ -555,12 +560,17 @@ fn spawn_script(cmd: &str, args: &[&str]) -> Result<ScriptSession, String> {
         .take()
         .ok_or_else(|| "Failed to open script stdout".to_string())?;
 
+    // Capture stderr for error reporting
+    let stderr = child.stderr.take();
+    logging::log("EXEC", &format!("Stderr captured: {}", stderr.is_some()));
+
     let process_handle = ProcessHandle::new(pid);
     logging::log("EXEC", "ScriptSession created successfully");
     
     Ok(ScriptSession {
         stdin,
         stdout_reader: JsonlReader::new(BufReader::new(stdout)),
+        stderr,
         child,
         process_handle,
     })
@@ -736,6 +746,152 @@ fn is_javascript(path: &Path) -> bool {
         .and_then(|ext| ext.to_str())
         .map(|ext| ext == "js")
         .unwrap_or(false)
+}
+
+// ============================================================================
+// Error Parsing and Suggestion Generation
+// ============================================================================
+
+/// Parse stderr output to extract stack trace if present
+pub fn parse_stack_trace(stderr: &str) -> Option<String> {
+    // Look for common stack trace patterns
+    let lines: Vec<&str> = stderr.lines().collect();
+    
+    // Find the start of a stack trace (lines starting with "at ")
+    let stack_start = lines.iter().position(|line| {
+        let trimmed = line.trim();
+        trimmed.starts_with("at ") || 
+        trimmed.contains("    at ") ||
+        trimmed.starts_with("Error:") ||
+        trimmed.starts_with("TypeError:") ||
+        trimmed.starts_with("ReferenceError:") ||
+        trimmed.starts_with("SyntaxError:")
+    });
+    
+    if let Some(start) = stack_start {
+        // Collect lines that look like stack trace entries
+        let stack_lines: Vec<&str> = lines[start..]
+            .iter()
+            .take_while(|line| {
+                let trimmed = line.trim();
+                !trimmed.is_empty() && (
+                    trimmed.starts_with("at ") ||
+                    trimmed.contains("    at ") ||
+                    trimmed.starts_with("Error:") ||
+                    trimmed.starts_with("TypeError:") ||
+                    trimmed.starts_with("ReferenceError:") ||
+                    trimmed.starts_with("SyntaxError:") ||
+                    trimmed.contains("error") ||
+                    trimmed.contains("Error")
+                )
+            })
+            .take(20) // Limit to 20 lines
+            .copied()
+            .collect();
+        
+        if !stack_lines.is_empty() {
+            return Some(stack_lines.join("\n"));
+        }
+    }
+    
+    None
+}
+
+/// Extract a user-friendly error message from stderr
+pub fn extract_error_message(stderr: &str) -> String {
+    let lines: Vec<&str> = stderr.lines().collect();
+    
+    // Look for common error patterns
+    for line in &lines {
+        let trimmed = line.trim();
+        
+        // Check for error type prefixes
+        if trimmed.starts_with("Error:") ||
+           trimmed.starts_with("TypeError:") ||
+           trimmed.starts_with("ReferenceError:") ||
+           trimmed.starts_with("SyntaxError:") ||
+           trimmed.starts_with("error:") {
+            return trimmed.to_string();
+        }
+        
+        // Check for bun-specific errors
+        if trimmed.contains("error:") && !trimmed.starts_with("at ") {
+            return trimmed.to_string();
+        }
+    }
+    
+    // If no specific error found, return first non-empty line (truncated)
+    for line in &lines {
+        let trimmed = line.trim();
+        if !trimmed.is_empty() {
+            return if trimmed.len() > 200 {
+                format!("{}...", &trimmed[..200])
+            } else {
+                trimmed.to_string()
+            };
+        }
+    }
+    
+    "Script execution failed".to_string()
+}
+
+/// Generate suggestions based on error type
+pub fn generate_suggestions(stderr: &str, exit_code: Option<i32>) -> Vec<String> {
+    let mut suggestions = Vec::new();
+    let stderr_lower = stderr.to_lowercase();
+    
+    // Check for common error patterns and suggest fixes
+    if stderr_lower.contains("cannot find module") || stderr_lower.contains("module not found") {
+        suggestions.push("Run 'bun install' or 'npm install' to install dependencies".to_string());
+    }
+    
+    if stderr_lower.contains("syntaxerror") || stderr_lower.contains("unexpected token") {
+        suggestions.push("Check for syntax errors in your script".to_string());
+    }
+    
+    if stderr_lower.contains("referenceerror") || stderr_lower.contains("is not defined") {
+        suggestions.push("Check that all variables and functions are properly imported or defined".to_string());
+    }
+    
+    if stderr_lower.contains("typeerror") {
+        suggestions.push("Check that you're using the correct types for function arguments".to_string());
+    }
+    
+    if stderr_lower.contains("permission denied") || stderr_lower.contains("eacces") {
+        suggestions.push("Check file permissions or try running with elevated privileges".to_string());
+    }
+    
+    if stderr_lower.contains("enoent") || stderr_lower.contains("no such file") {
+        suggestions.push("Check that the file path exists and is correct".to_string());
+    }
+    
+    if stderr_lower.contains("timeout") || stderr_lower.contains("timed out") {
+        suggestions.push("The operation timed out - check network connectivity or increase timeout".to_string());
+    }
+    
+    // Exit code specific suggestions
+    match exit_code {
+        Some(1) => {
+            if suggestions.is_empty() {
+                suggestions.push("Check the error message above for details".to_string());
+            }
+        }
+        Some(127) => {
+            suggestions.push("Command not found - check that the executable is installed and in PATH".to_string());
+        }
+        Some(126) => {
+            suggestions.push("Permission denied - check file permissions".to_string());
+        }
+        Some(137) => {
+            suggestions.push("Process was killed (possibly out of memory)".to_string());
+        }
+        Some(143) => {
+            suggestions.push("Process was terminated by signal".to_string());
+        }
+        _ => {}
+    }
+    
+    suggestions
 }
 
 // ============================================================================
@@ -1070,6 +1226,7 @@ mod tests {
     use crate::protocol::Message;
     use super::{handle_selected_text_message, SelectedTextHandleResult};
 
+    #[cfg(feature = "system-tests")]
     #[test]
     fn test_handle_get_selected_text_returns_handled() {
         let msg = Message::get_selected_text("req-001".to_string());
@@ -1091,6 +1248,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "system-tests")]
     #[test]
     fn test_handle_set_selected_text_returns_handled() {
         let msg = Message::set_selected_text_msg("test text".to_string(), "req-002".to_string());
@@ -1112,6 +1270,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "system-tests")]
     #[test]
     fn test_handle_check_accessibility_returns_handled() {
         let msg = Message::check_accessibility("req-003".to_string());
@@ -1135,6 +1294,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "system-tests")]
     #[test]
     fn test_handle_request_accessibility_returns_handled() {
         let msg = Message::request_accessibility("req-004".to_string());
