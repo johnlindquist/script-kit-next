@@ -137,7 +137,7 @@ fn find_in_common_paths(name: &str) -> Option<PathBuf> {
 
 fn find_sdk() -> Option<PathBuf> {
     let locations = [
-        dirs::home_dir().map(|h| h.join(".kenv/lib/kit-sdk.ts")),
+        dirs::home_dir().map(|h| h.join(".kenv/sdk/kit-sdk.ts")),
         Some(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("scripts/kit-sdk.ts")),
     ];
     

@@ -58,7 +58,7 @@ cargo check && cargo clippy --all-targets -- -D warnings && cargo test
 | **Bead Protocol** | `hive_start` → Work → `swarm_progress` → `swarm_complete` (NOT `hive_close`) |
 | **Test Hierarchy** | `tests/smoke/` = E2E flows, `tests/sdk/` = SDK methods, `--features system-tests` for clipboard/accessibility |
 | **Verification Gate** | Always run `cargo check && cargo clippy && cargo test` before commits |
-| **SDK Preload** | Scripts import `../../scripts/kit-sdk` for global functions (arg, div, md) |
+| **SDK Preload** | Test scripts import `../../scripts/kit-sdk`; runtime uses embedded SDK extracted to `~/.kenv/sdk/` |
 | **Arrow Key Names** | ALWAYS match BOTH: `"up" \| "arrowup"`, `"down" \| "arrowdown"`, `"left" \| "arrowleft"`, `"right" \| "arrowright"` |
 | **Visual Testing** | Use `./scripts/visual-test.sh <test.ts> <seconds>` to capture screenshots for layout debugging |
 | **AI Log Mode** | Set `SCRIPT_KIT_AI_LOG=1` for token-efficient compact logs (see below) |
@@ -827,6 +827,32 @@ src/
 ### Log File Location
 
 Logs are written to `~/.kenv/logs/script-kit-gpui.jsonl` in JSONL format for AI agent consumption.
+
+### SDK Deployment Architecture
+
+The SDK (`scripts/kit-sdk.ts`) is deployed using a two-tier system:
+
+| Layer | Location | Purpose |
+|-------|----------|---------|
+| **Source** | `scripts/kit-sdk.ts` | Canonical source in repo, watched by build.rs |
+| **Embedded** | Binary (via `include_str!`) | Compiled into the binary at build time |
+| **Runtime** | `~/.kenv/sdk/kit-sdk.ts` | Extracted on app startup for bun preload |
+
+**How it works:**
+
+1. **Build time**: `build.rs` copies `scripts/kit-sdk.ts` to `~/.kenv/sdk/` for development
+2. **Compile time**: `executor.rs` embeds the SDK via `include_str!("../scripts/kit-sdk.ts")`
+3. **Runtime**: `ensure_sdk_extracted()` writes embedded SDK to `~/.kenv/sdk/kit-sdk.ts`
+4. **Execution**: Scripts are run with `bun run --preload ~/.kenv/sdk/kit-sdk.ts <script>`
+
+**Test scripts** import from the source directly (`../../scripts/kit-sdk`) because they run in the development context. Production scripts use the runtime-extracted SDK.
+
+**Path mapping**: The app updates `~/.kenv/tsconfig.json` with:
+```json
+{ "compilerOptions": { "paths": { "@johnlindquist/kit": ["./sdk/kit-sdk.ts"] } } }
+```
+
+This allows scripts to use `import '@johnlindquist/kit'` for IDE support.
 
 ---
 

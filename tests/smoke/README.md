@@ -64,15 +64,15 @@ For testing in a production-like environment:
 # Create scripts directory if needed
 mkdir -p ~/.kenv/scripts
 
-# Copy SDK to lib location
-mkdir -p ~/.kenv/lib
-cp scripts/kit-sdk.ts ~/.kenv/lib/kit-sdk.ts
+# Copy SDK to sdk location (or let the app extract it on startup)
+mkdir -p ~/.kenv/sdk
+cp scripts/kit-sdk.ts ~/.kenv/sdk/kit-sdk.ts
 
 # Copy smoke tests (update import paths first!)
 # Note: You'll need to change the import from:
 #   import '../../scripts/kit-sdk';
 # To:
-#   import '../lib/kit-sdk';
+#   import '../sdk/kit-sdk';
 ```
 
 ### Option 3: Use Bun Directly (SDK Testing Only)
@@ -93,9 +93,9 @@ When running `hello-world.ts`, you should see:
 ```
 [EXEC] execute_script_interactive: tests/smoke/hello-world.ts
 [EXEC] Looking for SDK...
-[EXEC]   Checking: /Users/<you>/.kenv/lib/kit-sdk.ts
+[EXEC]   Checking: /Users/<you>/.kenv/sdk/kit-sdk.ts
 [EXEC]   Checking dev path: /path/to/script-kit-gpui/scripts/kit-sdk.ts
-[EXEC]   FOUND SDK (dev): /path/to/script-kit-gpui/scripts/kit-sdk.ts
+[EXEC]   FOUND SDK (kenv): /Users/<you>/.kenv/sdk/kit-sdk.ts
 [EXEC] Trying: bun run --preload /path/to/sdk tests/smoke/hello-world.ts
 [EXEC] SUCCESS: bun with preload
 [EXEC] Process spawned with PID: 12345
@@ -120,7 +120,7 @@ The scripts also log to stderr for debugging:
 **Symptom:** Executor logs show SDK search failing
 **Solution:** 
 1. Ensure `scripts/kit-sdk.ts` exists in project root
-2. Or copy it to `~/.kenv/lib/kit-sdk.ts`
+2. Or let the app extract it automatically to `~/.kenv/sdk/kit-sdk.ts` on startup
 
 ### Issue: "Failed to spawn 'bun'"
 

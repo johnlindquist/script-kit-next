@@ -15,7 +15,7 @@
  * Expected log output from executor.rs:
  * [EXEC] execute_script_interactive: ~/.kenv/scripts/hello-world-args.ts
  * [EXEC] Looking for SDK...
- * [EXEC] FOUND SDK: ~/.kenv/lib/kit-sdk.ts
+ * [EXEC] FOUND SDK: ~/.kenv/sdk/kit-sdk.ts
  * [EXEC] Trying: bun run --preload <sdk> <script>
  * [EXEC] SUCCESS: bun with preload
  * [EXEC] Process spawned with PID: <pid>
