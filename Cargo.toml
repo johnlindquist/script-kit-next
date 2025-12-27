@@ -65,5 +65,12 @@ rusqlite = { version = "0.31", features = ["bundled"] }
 uuid = { version = "1.0", features = ["v4"] }
 base64 = "0.22"
 
+[features]
+default = []
+# Enable tests that interact with system APIs (clipboard, accessibility, hotkeys)
+# These tests may have side effects like modifying clipboard, opening dialogs, etc.
+# Run with: cargo test --features system-tests
+system-tests = []
+
 [build-dependencies]
 dirs = "5.0"  # For build.rs to copy SDK to ~/.kit/lib/

@@ -275,8 +275,19 @@ fn simulate_paste_with_cg() -> Result<()> {
 // Tests
 // ============================================================================
 
-#[cfg(test)]
-mod tests {
+// ============================================================================
+// Unit Tests (always run with `cargo test`)
+// ============================================================================
+// None - all tests in this module require system interaction
+
+// ============================================================================
+// System Tests (require `cargo test --features system-tests`)
+// ============================================================================
+// These tests interact with macOS accessibility APIs, clipboard, and keyboard
+// simulation. They may have side effects on the system state.
+
+#[cfg(all(test, feature = "system-tests"))]
+mod system_tests {
     use super::*;
 
     #[test]
@@ -301,7 +312,7 @@ mod tests {
         // Instructions:
         // 1. Open TextEdit
         // 2. Type and select "Hello World"
-        // 3. Run this test with: cargo test test_get_selected_text_in_textedit -- --ignored
+        // 3. Run this test with: cargo test --features system-tests test_get_selected_text_in_textedit -- --ignored
         let text = get_selected_text().expect("Should get selected text");
         assert!(!text.is_empty(), "Should have selected text");
         println!("Got selected text: {}", text);
@@ -313,7 +324,7 @@ mod tests {
         // Instructions:
         // 1. Open TextEdit
         // 2. Select some text
-        // 3. Run this test with: cargo test test_set_selected_text -- --ignored
+        // 3. Run this test with: cargo test --features system-tests test_set_selected_text -- --ignored
         set_selected_text("REPLACED").expect("Should set selected text");
         // Verify manually that text was replaced
         println!("Text should be replaced with 'REPLACED'");

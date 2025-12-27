@@ -56,7 +56,7 @@ cargo check && cargo clippy --all-targets -- -D warnings && cargo test
 | **Logging** | Use `tracing` with JSONL format, typed fields, include `correlation_id` and `duration_ms` |
 | **TDD Workflow** | Read tests → Write failing test → Implement → Verify → Commit (Red-Green-Refactor) |
 | **Bead Protocol** | `hive_start` → Work → `swarm_progress` → `swarm_complete` (NOT `hive_close`) |
-| **Test Hierarchy** | `tests/smoke/` = E2E flows, `tests/sdk/` = individual SDK methods |
+| **Test Hierarchy** | `tests/smoke/` = E2E flows, `tests/sdk/` = SDK methods, `--features system-tests` for clipboard/accessibility |
 | **Verification Gate** | Always run `cargo check && cargo clippy && cargo test` before commits |
 | **SDK Preload** | Scripts import `../../scripts/kit-sdk` for global functions (arg, div, md) |
 | **Arrow Key Names** | ALWAYS match BOTH: `"up" \| "arrowup"`, `"down" \| "arrowdown"`, `"left" \| "arrowleft"`, `"right" \| "arrowright"` |
@@ -1398,12 +1398,44 @@ cargo build && ./target/debug/script-kit-gpui tests/sdk/test-arg.ts
 # Run smoke tests
 ./target/debug/script-kit-gpui tests/smoke/hello-world.ts
 
-# Run Rust unit tests
+# Run Rust unit tests (safe, no system side effects)
 cargo test
 
 # Performance benchmark
 npx tsx scripts/scroll-bench.ts
 ```
+
+### System Tests (Separate from Regular Tests)
+
+Some tests interact with macOS system APIs (clipboard, accessibility, keyboard simulation) and may have side effects. These are **excluded from regular `cargo test`** runs and require an explicit feature flag:
+
+```bash
+# Regular tests (safe, no system side effects)
+cargo test
+
+# System tests (may modify clipboard, trigger accessibility prompts, etc.)
+cargo test --features system-tests
+
+# Run specific system test
+cargo test --features system-tests test_permission_check
+
+# Run ignored interactive tests (require manual setup)
+cargo test --features system-tests -- --ignored
+```
+
+| Test Category | Feature Required | Side Effects |
+|--------------|------------------|--------------|
+| `protocol.rs` | None | Pure JSON parsing |
+| `theme.rs` | None | Pure color/serialization |
+| `editor.rs` | None | Pure text manipulation |
+| `clipboard_history.rs` | None | In-memory image data |
+| `selected_text.rs` | `system-tests` | Accessibility APIs, clipboard |
+
+**Why separate?**
+- System tests may modify clipboard contents
+- Accessibility permission prompts can interrupt CI
+- Keyboard simulation can affect other running applications
+- These tests depend on macOS-specific behavior
 
 ### Performance Thresholds
 
