@@ -13,7 +13,8 @@ use cocoa::foundation::{NSPoint, NSRect, NSSize};
 #[cfg(target_os = "macos")]
 use objc::{msg_send, sel, sel_impl};
 
-use gpui::{px, Pixels};
+use gpui::{px, Context, Pixels, Render, Timer};
+use std::time::Duration;
 use tracing::{info, warn};
 
 use crate::logging;
@@ -99,6 +100,42 @@ pub fn height_for_view(view_type: ViewType, _item_count: usize) -> Pixels {
 /// Calculate the initial window height for app startup
 pub fn initial_window_height() -> Pixels {
     layout::STANDARD_HEIGHT
+}
+
+/// Defer a window resize to the next frame to avoid RefCell borrow conflicts.
+///
+/// This is the **preferred way** to trigger resizes from prompt message handlers.
+/// Direct calls to `resize_first_window_to_height` during GPUI's render cycle can cause
+/// "RefCell already borrowed" errors because the native macOS `setFrame:display:animate:`
+/// call happens synchronously within GPUI's update cycle.
+///
+/// # Arguments
+/// * `view_type` - The type of view to resize for
+/// * `item_count` - Item count (used for some view types)
+/// * `cx` - The GPUI context (must implement `Render`)
+///
+/// # Example
+/// ```ignore
+/// // In a prompt message handler:
+/// defer_resize_to_view(ViewType::EditorPrompt, 0, cx);
+/// cx.notify();
+/// ```
+pub fn defer_resize_to_view<T: Render>(view_type: ViewType, item_count: usize, cx: &mut Context<T>) {
+    let target_height = height_for_view(view_type, item_count);
+    
+    cx.spawn(async move |_this, _cx: &mut gpui::AsyncApp| {
+        // 16ms delay (~1 frame at 60fps) ensures GPUI render cycle completes
+        Timer::after(Duration::from_millis(16)).await;
+        
+        // Validate window still exists before resizing
+        if window_manager::get_main_window().is_some() {
+            resize_first_window_to_height(target_height);
+        } else {
+            warn!("defer_resize_to_view: window no longer exists, skipping resize");
+            logging::log("RESIZE", "WARNING: Window gone before deferred resize could execute");
+        }
+    })
+    .detach();
 }
 
 /// Force reset the debounce timer (kept for API compatibility)

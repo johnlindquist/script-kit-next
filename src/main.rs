@@ -50,7 +50,7 @@ mod file_search;
 
 use tray::{TrayManager, TrayMenuAction};
 use editor::EditorPrompt;
-use window_resize::{ViewType, height_for_view, resize_first_window_to_height, initial_window_height, reset_resize_debounce};
+use window_resize::{ViewType, height_for_view, resize_first_window_to_height, initial_window_height, reset_resize_debounce, defer_resize_to_view};
 
 use list_item::{ListItem, ListItemColors, LIST_ITEM_HEIGHT};
 use utils::strip_html_tags;
@@ -1848,26 +1848,18 @@ impl ScriptListApp {
                 self.arg_selected_index = 0;
                 self.focused_input = FocusedInput::ArgPrompt;
                 // Resize window based on number of choices
-                let target_height = if choice_count == 0 {
-                    height_for_view(ViewType::ArgPromptNoChoices, 0)
+                let view_type = if choice_count == 0 {
+                    ViewType::ArgPromptNoChoices
                 } else {
-                    height_for_view(ViewType::ArgPromptWithChoices, choice_count)
+                    ViewType::ArgPromptWithChoices
                 };
-                // Defer resize to avoid RefCell borrow conflicts during GPUI updates
-                cx.spawn(async move |_this, _cx| {
-                    Timer::after(std::time::Duration::from_millis(16)).await;
-                    resize_first_window_to_height(target_height);
-                }).detach();
+                defer_resize_to_view(view_type, choice_count, cx);
                 cx.notify();
             }
             PromptMessage::ShowDiv { id, html, tailwind } => {
                 logging::log("UI", &format!("Showing div prompt: {}", id));
                 self.current_view = AppView::DivPrompt { id, html, tailwind };
-                // Defer resize to avoid RefCell borrow conflicts during GPUI updates
-                cx.spawn(async move |_this, _cx| {
-                    Timer::after(std::time::Duration::from_millis(16)).await;
-                    resize_first_window_to_height(height_for_view(ViewType::DivPrompt, 0));
-                }).detach();
+                defer_resize_to_view(ViewType::DivPrompt, 0, cx);
                 cx.notify();
             }
             PromptMessage::ShowTerm { id, command } => {
@@ -1900,11 +1892,7 @@ impl ScriptListApp {
                     Ok(term_prompt) => {
                         let entity = cx.new(|_| term_prompt);
                         self.current_view = AppView::TermPrompt { id, entity };
-                        // Defer resize to avoid RefCell borrow conflicts during GPUI updates
-                        cx.spawn(async move |_this, _cx| {
-                            Timer::after(std::time::Duration::from_millis(16)).await;
-                            resize_first_window_to_height(height_for_view(ViewType::TermPrompt, 0));
-                        }).detach();
+                        defer_resize_to_view(ViewType::TermPrompt, 0, cx);
                         cx.notify();
                     }
                     Err(e) => {
@@ -1952,15 +1940,7 @@ impl ScriptListApp {
                 self.current_view = AppView::EditorPrompt { id, entity, focus_handle: editor_focus_handle };
                 self.focused_input = FocusedInput::None; // Editor handles its own focus
                 
-                // CRITICAL: Delay the window resize to the next frame
-                // Using spawn() with a timer ensures resize happens after GPUI's current render cycle completes
-                // This avoids the "RefCell already borrowed" error from native resize during GPUI update
-                cx.spawn(async move |_this, _cx| {
-                    // Small delay to ensure GPUI has finished its render
-                    Timer::after(std::time::Duration::from_millis(16)).await;
-                    resize_first_window_to_height(height_for_view(ViewType::EditorPrompt, 0));
-                })
-                .detach();
+                defer_resize_to_view(ViewType::EditorPrompt, 0, cx);
                 cx.notify();
             }
             PromptMessage::ScriptExit => {
