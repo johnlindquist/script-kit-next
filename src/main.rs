@@ -2335,6 +2335,12 @@ impl ScriptListApp {
     fn render_error_notification(&self) -> Option<impl IntoElement> {
         let notification = self.error_notification.as_ref()?;
         
+        // Use design tokens for consistent spacing
+        let tokens = get_tokens(self.current_design);
+        let spacing = tokens.spacing();
+        let visual = tokens.visual();
+        let typography = tokens.typography();
+        
         // Get the appropriate color based on severity
         let bg_color = match notification.severity {
             ErrorSeverity::Error | ErrorSeverity::Critical => self.theme.colors.ui.error,
@@ -2356,17 +2362,17 @@ impl ScriptListApp {
         Some(
             div()
                 .w_full()
-                .mx(px(16.))
-                .mt(px(8.))
-                .px(px(12.))
-                .py(px(8.))
-                .rounded(px(8.))
+                .mx(px(spacing.padding_lg))
+                .mt(px(spacing.padding_sm))
+                .px(px(spacing.padding_md))
+                .py(px(spacing.padding_sm))
+                .rounded(px(visual.radius_md))
                 .bg(rgb(bg_color))
                 .flex()
                 .flex_row()
                 .items_center()
                 .gap_2()
-                .font_family(".AppleSystemUIFont")
+                .font_family(typography.font_family)
                 // Icon
                 .child(
                     div()
@@ -2432,7 +2438,7 @@ impl ScriptListApp {
                                 .text_lg()
                                 .font_weight(gpui::FontWeight::SEMIBOLD)
                                 .text_color(rgb(text_primary))
-                                .pb(px(8.))
+                                .pb(px(spacing.padding_sm))
                                 .child(format!("{}.{}", script.name, script.extension))
                         );
                         
@@ -2444,12 +2450,12 @@ impl ScriptListApp {
                                 div()
                                     .flex()
                                     .flex_col()
-                                    .pb(px(12.))
+                                    .pb(px(spacing.padding_md))
                                     .child(
                                         div()
                                             .text_xs()
                                             .text_color(rgb(text_muted))
-                                            .pb(px(2.))
+                                            .pb(px(spacing.padding_xs / 2.0))
                                             .child("Description")
                                     )
                                     .child(
@@ -2465,9 +2471,9 @@ impl ScriptListApp {
                         panel = panel.child(
                             div()
                                 .w_full()
-                                .h(px(1.))
+                                .h(px(visual.border_thin))
                                 .bg(rgba((ui_border << 8) | 0x60))
-                                .my(px(8.))
+                                .my(px(spacing.padding_sm))
                         );
                         
                         // Code preview header
@@ -2475,7 +2481,7 @@ impl ScriptListApp {
                             div()
                                 .text_xs()
                                 .text_color(rgb(text_muted))
-                                .pb(px(8.))
+                                .pb(px(spacing.padding_sm))
                                 .child("Code Preview")
                         );
                         
@@ -2503,7 +2509,7 @@ impl ScriptListApp {
                                 .w_full()
                                 .font_family(typography.font_family_mono)
                                 .text_xs()
-                                .min_h(px(16.)); // Line height
+                                .min_h(px(spacing.padding_lg)); // Line height
                             
                             if line.spans.is_empty() {
                                 // Empty line - add a space to preserve height
@@ -2532,7 +2538,7 @@ impl ScriptListApp {
                                 .text_lg()
                                 .font_weight(gpui::FontWeight::SEMIBOLD)
                                 .text_color(rgb(text_primary))
-                                .pb(px(8.))
+                                .pb(px(spacing.padding_sm))
                                 .child(scriptlet.name.clone())
                         );
                         
@@ -2544,12 +2550,12 @@ impl ScriptListApp {
                                 div()
                                     .flex()
                                     .flex_col()
-                                    .pb(px(12.))
+                                    .pb(px(spacing.padding_md))
                                     .child(
                                         div()
                                             .text_xs()
                                             .text_color(rgb(text_muted))
-                                            .pb(px(2.))
+                                            .pb(px(spacing.padding_xs / 2.0))
                                             .child("Description")
                                     )
                                     .child(
@@ -2567,12 +2573,12 @@ impl ScriptListApp {
                                 div()
                                     .flex()
                                     .flex_col()
-                                    .pb(px(12.))
+                                    .pb(px(spacing.padding_md))
                                     .child(
                                         div()
                                             .text_xs()
                                             .text_color(rgb(text_muted))
-                                            .pb(px(2.))
+                                            .pb(px(spacing.padding_xs / 2.0))
                                             .child("Hotkey")
                                     )
                                     .child(
@@ -2588,9 +2594,9 @@ impl ScriptListApp {
                         panel = panel.child(
                             div()
                                 .w_full()
-                                .h(px(1.))
+                                .h(px(visual.border_thin))
                                 .bg(rgba((ui_border << 8) | 0x60))
-                                .my(px(8.))
+                                .my(px(spacing.padding_sm))
                         );
                         
                         // Content preview header
@@ -2598,7 +2604,7 @@ impl ScriptListApp {
                             div()
                                 .text_xs()
                                 .text_color(rgb(text_muted))
-                                .pb(px(8.))
+                                .pb(px(spacing.padding_sm))
                                 .child("Content Preview")
                         );
                         
@@ -2637,7 +2643,7 @@ impl ScriptListApp {
                                 .w_full()
                                 .font_family(typography.font_family_mono)
                                 .text_xs()
-                                .min_h(px(16.)); // Line height
+                                .min_h(px(spacing.padding_lg)); // Line height
                             
                             if line.spans.is_empty() {
                                 // Empty line - add a space to preserve height
@@ -2820,7 +2826,7 @@ impl ScriptListApp {
                 .bg(rgb(theme.colors.background.log_panel))
                 .border_t_1()
                 .border_color(rgb(theme.colors.ui.border))
-                .p(px(12.))
+                .p(px(design_spacing.padding_md))
                 .max_h(px(120.))
                 .font_family("SF Mono");
             
@@ -3033,17 +3039,17 @@ impl ScriptListApp {
                             // ALWAYS render cursor div to prevent layout shift, but only show bg when focused + visible
                             .when(filter_is_empty, |d| d.child(
                                 div()
-                                    .w(px(2.))
-                                    .h(px(24.))
-                                    .mr(px(4.))
+                                    .w(px(design_visual.border_normal))
+                                    .h(px(design_spacing.padding_xl))
+                                    .mr(px(design_spacing.padding_xs))
                                     .when(self.focused_input == FocusedInput::MainFilter && self.cursor_visible, |d| d.bg(rgb(text_primary)))
                             ))
                             .child(filter_display)
                             .when(!filter_is_empty, |d| d.child(
                                 div()
-                                    .w(px(2.))
-                                    .h(px(24.))
-                                    .ml(px(2.))
+                                    .w(px(design_visual.border_normal))
+                                    .h(px(design_spacing.padding_xl))
+                                    .ml(px(design_visual.border_normal))
                                     .when(self.focused_input == FocusedInput::MainFilter && self.cursor_visible, |d| d.bg(rgb(text_primary)))
                             ))
                     )
@@ -3153,8 +3159,8 @@ impl ScriptListApp {
                 container = container.child(
                     div()
                         .absolute()
-                        .right(px(16.))
-                        .bottom(px(16.))  // Near bottom edge
+                        .right(px(design_spacing.padding_lg))
+                        .bottom(px(design_spacing.padding_lg))  // Near bottom edge
                         .child(dialog.clone())
                 );
             }
@@ -3343,17 +3349,17 @@ impl ScriptListApp {
                             // ALWAYS render cursor div to prevent layout shift, but only show bg when focused + visible
                             .when(input_is_empty, |d| d.child(
                                 div()
-                                    .w(px(2.))
-                                    .h(px(24.))
-                                    .mr(px(4.))
+                                    .w(px(design_visual.border_normal))
+                                    .h(px(design_spacing.padding_xl))
+                                    .mr(px(design_spacing.padding_xs))
                                     .when(self.focused_input == FocusedInput::ArgPrompt && self.cursor_visible, |d| d.bg(rgb(text_primary)))
                             ))
                             .child(input_display)
                             .when(!input_is_empty, |d| d.child(
                                 div()
-                                    .w(px(2.))
-                                    .h(px(24.))
-                                    .ml(px(2.))
+                                    .w(px(design_visual.border_normal))
+                                    .h(px(design_spacing.padding_xl))
+                                    .ml(px(design_visual.border_normal))
                                     .when(self.focused_input == FocusedInput::ArgPrompt && self.cursor_visible, |d| d.bg(rgb(text_primary)))
                             ))
                     )
@@ -3367,8 +3373,8 @@ impl ScriptListApp {
             // Divider
             .child(
                 div()
-                    .mx(px(16.))
-                    .h(px(1.))
+                    .mx(px(design_spacing.padding_lg))
+                    .h(px(design_visual.border_thin))
                     .bg(rgba((ui_border << 8) | 0x60))
             )
             // P0: Choice list using virtualized uniform_list
@@ -3379,15 +3385,15 @@ impl ScriptListApp {
                     .flex_1()
                     .min_h(px(0.))  // P0: Allow flex container to shrink
                     .w_full()
-                    .py(px(4.))
+                    .py(px(design_spacing.padding_xs))
                     .child(list_element)
             )
             // Footer
             .child(
                 div()
                     .w_full()
-                    .px(px(16.))
-                    .py(px(10.))
+                    .px(px(design_spacing.padding_lg))
+                    .py(px(design_spacing.padding_sm + design_visual.border_normal))  // 8 + 2 = 10px
                     .border_t_1()
                     .border_color(rgba((ui_border << 8) | 0x60))
                     .text_xs()

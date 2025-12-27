@@ -128,6 +128,17 @@ pub struct EditorPrompt {
     
     // Layout - explicit height for proper sizing (GPUI entities don't inherit parent flex sizing)
     content_height: Option<gpui::Pixels>,
+    
+    // Change detection for render logging (avoid spam)
+    last_render_state: Option<RenderState>,
+}
+
+/// Tracked state for change detection in render logging
+#[derive(Debug, Clone, PartialEq)]
+struct RenderState {
+    line_count: usize,
+    total_height: Option<gpui::Pixels>,
+    editor_height: Option<gpui::Pixels>,
 }
 
 impl EditorPrompt {
@@ -193,6 +204,7 @@ impl EditorPrompt {
             on_submit,
             theme,
             content_height,
+            last_render_state: None,
         }
     }
     
@@ -1039,13 +1051,26 @@ impl Render for EditorPrompt {
         let editor_area = if let Some(total_height) = self.content_height {
             // Explicit height: editor gets total - status bar
             let editor_height = total_height - gpui::px(STATUS_BAR_HEIGHT);
-            crate::logging::log(
-                "EDITOR",
-                &format!(
-                    "Render: total_height={:?}, editor_height={:?}, status_bar={}, line_count={}",
-                    total_height, editor_height, STATUS_BAR_HEIGHT, line_count
-                ),
-            );
+            
+            // Only log when render state changes (avoid log spam every ~500ms)
+            let current_state = RenderState {
+                line_count,
+                total_height: Some(total_height),
+                editor_height: Some(editor_height),
+            };
+            
+            if self.last_render_state.as_ref() != Some(&current_state) {
+                tracing::debug!(
+                    target: "script_kit_gpui::editor",
+                    total_height = ?total_height,
+                    editor_height = ?editor_height,
+                    status_bar = STATUS_BAR_HEIGHT,
+                    line_count = line_count,
+                    "Editor render state changed"
+                );
+                self.last_render_state = Some(current_state);
+            }
+            
             div()
                 .w_full()
                 .h(editor_height)
