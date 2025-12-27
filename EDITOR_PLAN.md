@@ -28,14 +28,15 @@ await editor("Hello World", [
 
 1. [Current State Analysis](#1-current-state-analysis)
 2. [API Requirements](#2-api-requirements)
-3. [Architecture Options](#3-architecture-options)
-4. [Recommended Approach](#4-recommended-approach)
-5. [Implementation Phases](#5-implementation-phases)
-6. [Technical Design](#6-technical-design)
-7. [File Changes](#7-file-changes)
-8. [Testing Strategy](#8-testing-strategy)
-9. [Timeline Estimate](#9-timeline-estimate)
-10. [Risks and Mitigations](#10-risks-and-mitigations)
+3. [Zed Reusability Analysis](#3-zed-reusability-analysis) *(NEW)*
+4. [Architecture Options](#4-architecture-options)
+5. [Recommended Approach](#5-recommended-approach)
+6. [Implementation Phases](#6-implementation-phases)
+7. [Technical Design](#7-technical-design)
+8. [File Changes](#8-file-changes)
+9. [Testing Strategy](#9-testing-strategy)
+10. [Timeline Estimate](#10-timeline-estimate)
+11. [Risks and Mitigations](#11-risks-and-mitigations)
 
 ---
 
@@ -154,7 +155,114 @@ editor.focus(): void;
 
 ---
 
-## 3. Architecture Options
+## 3. Zed Reusability Analysis
+
+### Critical Finding: License Restrictions
+
+Zed's codebase has **mixed licensing** that significantly impacts what can be reused:
+
+| License | Crates | Can Reuse? |
+|---------|--------|------------|
+| **Apache-2.0** | `gpui`, `sum_tree`, `collections`, `util` | **YES** |
+| **GPL-3.0** | `rope`, `text`, `editor`, `language`, `ui`, `theme`, `multi_buffer` | **NO** (would require Script Kit to become GPL-3.0) |
+
+### What We CAN Reuse from Zed
+
+#### 1. GPUI Framework (Apache-2.0) - Already Using
+
+We already depend on GPUI. Key APIs for editor:
+
+```rust
+// Text rendering with syntax highlighting
+StyledText::new(text)
+    .with_highlights(&text_style, highlights)
+
+// Key GPUI text APIs:
+- TextLayout          // Measures text, maps indices to pixels
+- StyledText          // Renders text with different style runs  
+- InteractiveText     // Clickable/hoverable text regions
+- HighlightStyle      // Style attributes for text spans
+- TextRun             // A run of text with uniform styling
+```
+
+#### 2. GPUI Patterns to Follow
+
+From Zed's editor implementation, these patterns are key:
+
+**Pattern 1: Text Layout and Index Mapping**
+```rust
+// GPUI's TextLayout provides:
+text_layout.index_for_position(point)  // pixel -> byte index
+text_layout.position_for_index(idx)    // byte index -> pixel position
+```
+
+**Pattern 2: Styled Text with Highlights**
+```rust
+StyledText::new(text)
+    .with_highlights(&text_style, vec![
+        (0..5, HighlightStyle { color: Some(keyword_color), ..default }),
+        (6..10, HighlightStyle { color: Some(string_color), ..default }),
+    ])
+```
+
+**Pattern 3: Focus and Key Handling**
+```rust
+div()
+    .key_context("Editor")
+    .track_focus(&self.focus_handle)
+    .on_key_down(cx.listener(|this, event, _, cx| { ... }))
+```
+
+#### 3. sum_tree Crate (Apache-2.0) - Could Vendor
+
+The `sum_tree` crate is a powerful B+ tree for efficient text operations:
+- O(log n) insertions/deletions
+- Multiple "dimensions" for seeking (bytes, chars, lines)
+- Used by Zed's rope implementation
+
+**Decision**: For MVP, use `ropey` crate (MIT, simpler API). Consider `sum_tree` for advanced features later.
+
+### What We CANNOT Reuse (GPL-3.0)
+
+| Crate | Purpose | Alternative |
+|-------|---------|-------------|
+| `rope` | Text buffer | Use `ropey` (MIT) |
+| `text` | CRDT operations | Implement simple undo/redo |
+| `editor` | Full editor component | Build from scratch with GPUI |
+| `language` | Tree-sitter integration | Use `tree-sitter` directly (MIT) |
+| `ui` | UI component library | Use existing GPUI primitives |
+
+### Key GPUI Text APIs (from `gpui/src/elements/text.rs`)
+
+```rust
+// TextLayout - measures and positions text
+pub struct TextLayout {
+    // index_for_position: pixel point -> byte index
+    pub fn index_for_position(&self, position: Point<Pixels>) -> Result<usize, usize>
+    
+    // position_for_index: byte index -> pixel point  
+    pub fn position_for_index(&self, index: usize) -> Option<Point<Pixels>>
+    
+    // Get layout for specific line
+    pub fn line_layout_for_index(&self, index: usize) -> Option<Arc<WrappedLineLayout>>
+}
+
+// StyledText - renders text with different styles per region
+pub struct StyledText {
+    pub fn new(text: impl Into<SharedString>) -> Self
+    pub fn with_highlights(self, style: &TextStyle, highlights: Vec<(Range<usize>, HighlightStyle)>) -> Self
+}
+
+// InteractiveText - adds click/hover handlers
+pub struct InteractiveText {
+    pub fn on_click(self, ranges: Vec<Range<usize>>, listener: impl Fn(usize, ...)) -> Self
+    pub fn on_hover(self, listener: impl Fn(Option<usize>, ...)) -> Self
+}
+```
+
+---
+
+## 4. Architecture Options
 
 ### Option A: GPUI Native with Ropey + Syntect
 
@@ -218,28 +326,37 @@ Embed Monaco editor via WebView.
 
 ---
 
-## 4. Recommended Approach
+## 5. Recommended Approach
 
-**Option A with phased tree-sitter migration** - Build native GPUI editor with ropey + existing syntect, then optionally migrate to tree-sitter later.
+**Option A with GPUI patterns from Zed** - Build native GPUI editor with ropey + existing syntect, following Zed's architectural patterns for text rendering.
 
 ### Rationale
 
 1. **Leverages existing code**: syntect highlighting already works in `src/syntax.rs`
-2. **Minimal new dependencies**: Only add `ropey` crate
-3. **Performance**: Native GPUI = fastest possible rendering
-4. **Control**: Can optimize for Script Kit's specific use case
-5. **No licensing issues**: ropey is MIT licensed
+2. **Use GPUI's text APIs**: `StyledText`, `TextLayout`, `InteractiveText` are all Apache-2.0
+3. **Follow Zed's patterns**: Study how Zed handles text rendering, cursor positioning, keyboard input
+4. **Minimal new dependencies**: Only add `ropey` crate
+5. **No licensing issues**: ropey (MIT) + GPUI patterns (Apache-2.0)
 
 ### Key Dependencies
 
 ```toml
 # Add to Cargo.toml
-ropey = "1.6"  # Efficient rope-based text buffer
+ropey = "1.6"  # Efficient rope-based text buffer (MIT)
 ```
+
+### GPUI APIs to Leverage
+
+| API | Purpose | How We'll Use It |
+|-----|---------|------------------|
+| `StyledText` | Render text with style runs | Syntax-highlighted code display |
+| `TextLayout` | Text measurement | Map click positions to character indices |
+| `InteractiveText` | Clickable text | Line number clicks, link detection |
+| `HighlightStyle` | Style attributes | Convert syntect colors to GPUI styles |
 
 ---
 
-## 5. Implementation Phases
+## 6. Implementation Phases
 
 ### Phase 1: Read-Only Code Viewer (Week 1)
 
@@ -297,9 +414,79 @@ Add remaining features:
 
 ---
 
-## 6. Technical Design
+## 7. Technical Design
 
-### 6.1 EditorPrompt Struct
+### 7.1 Key GPUI Patterns from Zed
+
+Before diving into implementation, here are the critical patterns learned from Zed's codebase:
+
+#### Text Rendering Pattern
+
+Zed uses `StyledText` with `HighlightStyle` runs for syntax highlighting:
+
+```rust
+// Convert our syntect highlights to GPUI HighlightStyle
+fn syntect_to_gpui_highlights(spans: &[HighlightedSpan]) -> Vec<(Range<usize>, HighlightStyle)> {
+    let mut offset = 0;
+    spans.iter().map(|span| {
+        let range = offset..offset + span.text.len();
+        offset = range.end;
+        (range, HighlightStyle {
+            color: Some(rgba(span.color)),  // Convert u32 to Rgba
+            ..Default::default()
+        })
+    }).collect()
+}
+
+// Render with StyledText
+StyledText::new(line_text)
+    .with_highlights(&window.text_style(), highlights)
+```
+
+#### Cursor Position Mapping Pattern
+
+GPUI's `TextLayout` provides bidirectional mapping between pixels and indices:
+
+```rust
+// After layout, we can map positions
+let layout = text_element.layout();
+
+// Click position -> character index
+match layout.index_for_position(click_point) {
+    Ok(index) => { /* exact match */ }
+    Err(index) => { /* nearest character */ }
+}
+
+// Character index -> screen position (for cursor rendering)
+if let Some(point) = layout.position_for_index(cursor_index) {
+    // Render cursor at this point
+}
+```
+
+#### Input Handling Pattern
+
+Zed uses a combination of key context and action dispatch:
+
+```rust
+div()
+    .key_context("Editor")  // Enables editor-specific keybindings
+    .track_focus(&self.focus_handle)
+    .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
+        // Handle special keys
+        match event.keystroke.key.as_str() {
+            "left" | "right" | "up" | "down" => this.handle_navigation(event, cx),
+            "backspace" | "delete" => this.handle_delete(event, cx),
+            _ => {
+                // Character input via ime_key
+                if let Some(text) = &event.keystroke.ime_key {
+                    this.insert_text(text, cx);
+                }
+            }
+        }
+    }))
+```
+
+### 7.2 EditorPrompt Struct
 
 ```rust
 // src/editor.rs
@@ -338,6 +525,10 @@ pub struct EditorPrompt {
     highlighted_lines: Vec<HighlightedLine>,
     scroll_handle: UniformListScrollHandle,
     line_height: Pixels,
+    
+    // Text layout for cursor positioning (from GPUI)
+    // This gets populated during render and used for click->index mapping
+    line_layouts: Vec<TextLayout>,
     
     // History
     undo_stack: Vec<EditOp>,
@@ -557,7 +748,7 @@ impl EditorPrompt {
 }
 ```
 
-### 6.2 Render Implementation
+### 7.3 Render Implementation (Using GPUI StyledText Pattern)
 
 ```rust
 impl Render for EditorPrompt {
@@ -690,7 +881,7 @@ impl EditorPrompt {
 }
 ```
 
-### 6.3 Main.rs Integration
+### 7.4 Main.rs Integration
 
 ```rust
 // In handle_script_message() match statement
@@ -718,7 +909,7 @@ Message::Editor { id, content, language, .. } => {
 
 ---
 
-## 7. File Changes
+## 8. File Changes
 
 ### New Files
 
@@ -744,7 +935,7 @@ Message::Editor { id, content, language, .. } => {
 
 ---
 
-## 8. Testing Strategy
+## 9. Testing Strategy
 
 ### Unit Tests
 
@@ -814,7 +1005,7 @@ const result = await editor("original");
 
 ---
 
-## 9. Timeline Estimate
+## 10. Timeline Estimate
 
 | Phase | Duration | Deliverable |
 |-------|----------|-------------|
@@ -826,7 +1017,7 @@ const result = await editor("original");
 
 ---
 
-## 10. Risks and Mitigations
+## 11. Risks and Mitigations
 
 ### Risk 1: Complex Cursor Positioning
 
@@ -922,8 +1113,25 @@ The ropey crate provides:
 
 This plan provides a clear path from the current state (protocol defined, SDK ready, syntax highlighting working) to a fully functional editor prompt. The phased approach allows for incremental progress with working milestones at each phase.
 
+### What We Learned from Zed
+
+| Aspect | Finding | Our Approach |
+|--------|---------|--------------|
+| **Licensing** | Core editor crates are GPL-3.0 | Cannot reuse directly |
+| **GPUI APIs** | `StyledText`, `TextLayout`, `InteractiveText` are Apache-2.0 | Use these directly |
+| **Text Buffer** | Zed's `rope` is GPL-3.0 | Use `ropey` (MIT) instead |
+| **Patterns** | Key context, action dispatch, text layout mapping | Follow these patterns |
+| **sum_tree** | Apache-2.0, powerful B+ tree | Consider for future optimization |
+
+### Key GPUI Patterns to Apply
+
+1. **StyledText with highlights** - Convert syntect spans to GPUI `HighlightStyle`
+2. **TextLayout mapping** - Use `index_for_position()` and `position_for_index()` for cursor
+3. **Key context + listeners** - Handle keyboard input via `on_key_down` with `key_context`
+4. **Focus tracking** - Use `track_focus()` for proper focus handling
+
 **Next Steps:**
 1. Add `ropey` to Cargo.toml
-2. Create `src/editor.rs` with `EditorPrompt` struct
+2. Create `src/editor.rs` with `EditorPrompt` struct using GPUI patterns
 3. Add `Message::Editor` handling in `src/main.rs`
 4. Run `tests/sdk/test-editor.ts` to validate

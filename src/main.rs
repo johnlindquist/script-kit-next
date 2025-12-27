@@ -1278,6 +1278,7 @@ impl ScriptListApp {
                 self.current_view = AppView::ArgPrompt { id, placeholder, choices };
                 self.arg_input_text.clear();
                 self.arg_selected_index = 0;
+                self.focused_input = FocusedInput::ArgPrompt;
                 cx.notify();
             }
             PromptMessage::ShowDiv { id, html, tailwind } => {
@@ -2640,7 +2641,6 @@ impl ScriptListApp {
         
         // P4: Pre-compute theme values for arg prompt using design tokens for GLOBAL theming
         let arg_list_colors = ListItemColors::from_design(&design_colors);
-        let accent_selected = design_colors.accent;
         let text_primary = design_colors.text_primary;
         let text_muted = design_colors.text_muted;
         
@@ -2724,23 +2724,34 @@ impl ScriptListApp {
                     .flex_row()
                     .items_center()
                     .gap_3()
-                    .child(
-                        div()
-                            .w(px(24.))
-                            .h(px(24.))
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .text_color(rgb(accent_selected))
-                            .text_lg()
-                            .child("?")
-                    )
+                    // Search input with blinking cursor (same as main menu)
+                    // Cursor appears at LEFT when input is empty (before placeholder text)
                     .child(
                         div()
                             .flex_1()
+                            .flex()
+                            .flex_row()
+                            .items_center()
                             .text_xl()
                             .text_color(if input_is_empty { rgb(text_muted) } else { rgb(text_primary) })
+                            // When empty: cursor FIRST (at left), then placeholder
+                            // When typing: text, then cursor at end
+                            // ALWAYS render cursor div to prevent layout shift, but only show bg when focused + visible
+                            .when(input_is_empty, |d| d.child(
+                                div()
+                                    .w(px(2.))
+                                    .h(px(24.))
+                                    .mr(px(4.))
+                                    .when(self.focused_input == FocusedInput::ArgPrompt && self.cursor_visible, |d| d.bg(rgb(text_primary)))
+                            ))
                             .child(input_display)
+                            .when(!input_is_empty, |d| d.child(
+                                div()
+                                    .w(px(2.))
+                                    .h(px(24.))
+                                    .ml(px(2.))
+                                    .when(self.focused_input == FocusedInput::ArgPrompt && self.cursor_visible, |d| d.bg(rgb(text_primary)))
+                            ))
                     )
                     .child(
                         div()
