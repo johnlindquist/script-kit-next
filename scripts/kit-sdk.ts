@@ -118,6 +118,69 @@ export interface FindOptions {
   onlyin?: string;
 }
 
+export interface WindowBounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+// =============================================================================
+// Clipboard History Types
+// =============================================================================
+
+export interface ClipboardHistoryEntry {
+  entryId: string;
+  content: string;
+  contentType: 'text' | 'image';
+  timestamp: string;
+  pinned: boolean;
+}
+
+// =============================================================================
+// Window Management Types (System Windows)
+// =============================================================================
+
+export interface SystemWindowInfo {
+  windowId: number;
+  title: string;
+  appName: string;
+  bounds?: TargetWindowBounds;
+  isMinimized?: boolean;
+  isActive?: boolean;
+}
+
+export interface TargetWindowBounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export type TilePosition = 
+  | 'left'
+  | 'right'
+  | 'top'
+  | 'bottom'
+  | 'top-left'
+  | 'top-right'
+  | 'bottom-left'
+  | 'bottom-right'
+  | 'center'
+  | 'maximize';
+
+// =============================================================================
+// File Search Types
+// =============================================================================
+
+export interface FileSearchResult {
+  path: string;
+  name: string;
+  isDirectory: boolean;
+  size?: number;
+  modifiedAt?: string;
+}
+
 // =============================================================================
 // Arg Types (for all calling conventions)
 // =============================================================================
@@ -379,6 +442,11 @@ interface RequestAccessibilityMessage {
   requestId: string;
 }
 
+interface GetWindowBoundsMessage {
+  type: 'getWindowBounds';
+  requestId: string;
+}
+
 interface KeyboardMessage {
   type: 'keyboard';
   action: 'type' | 'tap';
@@ -399,6 +467,90 @@ interface SubmitMessage {
   id: string;
   value: string | null;
 }
+
+// Response messages from GPUI that need to be handled like submit
+interface FileSearchResultMessage {
+  type: 'fileSearchResult';
+  requestId: string;
+  files: Array<{
+    path: string;
+    name: string;
+    isDirectory: boolean;
+    is_directory?: boolean;
+    size?: number;
+    modifiedAt?: string;
+    modified_at?: string;
+  }>;
+}
+
+// clipboardHistoryList is sent for list responses
+interface ClipboardHistoryListMessage {
+  type: 'clipboardHistoryList';
+  requestId: string;
+  entries: Array<{
+    entryId: string;
+    entry_id?: string;
+    content: string;
+    contentType: string;
+    content_type?: string;
+    timestamp: string;
+    pinned: boolean;
+  }>;
+}
+
+// clipboardHistoryResult is sent for action success/error
+interface ClipboardHistoryResultMessage {
+  type: 'clipboardHistoryResult';
+  requestId: string;
+  success: boolean;
+  error?: string;
+}
+
+interface WindowListResultMessage {
+  type: 'windowListResult';
+  requestId: string;
+  windows: Array<{
+    windowId: number;
+    window_id?: number;
+    title: string;
+    appName: string;
+    app_name?: string;
+    bounds?: {
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+    };
+    isMinimized?: boolean;
+    is_minimized?: boolean;
+    isActive?: boolean;
+    is_active?: boolean;
+  }>;
+}
+
+interface WindowActionResultMessage {
+  type: 'windowActionResult';
+  requestId: string;
+  success: boolean;
+  error?: string;
+}
+
+interface ClipboardHistoryActionResultMessage {
+  type: 'clipboardHistoryActionResult';
+  requestId: string;
+  success: boolean;
+  error?: string;
+}
+
+// Union type for all response messages
+type ResponseMessage = 
+  | SubmitMessage 
+  | FileSearchResultMessage 
+  | ClipboardHistoryListMessage
+  | ClipboardHistoryResultMessage
+  | WindowListResultMessage
+  | WindowActionResultMessage
+  | ClipboardHistoryActionResultMessage;
 
 interface ChatMessageType {
   type: 'chat';
@@ -464,6 +616,45 @@ interface WidgetEventMessage {
   id: string;
   event: 'click' | 'input' | 'close' | 'moved' | 'resized';
   data?: WidgetEvent | WidgetInputEvent | { x: number; y: number } | { width: number; height: number };
+}
+
+// =============================================================================
+// Clipboard History Message Types
+// =============================================================================
+
+interface ClipboardHistoryMessage {
+  type: 'clipboardHistory';
+  requestId: string;
+  action: 'list' | 'pin' | 'unpin' | 'remove' | 'clear';
+  entryId?: string;
+}
+
+// =============================================================================
+// Window Management Message Types
+// =============================================================================
+
+interface WindowListMessage {
+  type: 'windowList';
+  requestId: string;
+}
+
+interface WindowActionMessage {
+  type: 'windowAction';
+  requestId: string;
+  action: 'focus' | 'close' | 'minimize' | 'maximize' | 'resize' | 'move';
+  windowId?: number;
+  bounds?: TargetWindowBounds;
+}
+
+// =============================================================================
+// File Search Message Types
+// =============================================================================
+
+interface FileSearchMessage {
+  type: 'fileSearch';
+  requestId: string;
+  query: string;
+  onlyin?: string;
 }
 
 // =============================================================================
@@ -576,32 +767,71 @@ let messageId = 0;
 
 const nextId = (): string => String(++messageId);
 
-const pending = new Map<string, (msg: SubmitMessage) => void>();
+// Generic pending map that can handle any response type
+const pending = new Map<string, (msg: ResponseMessage) => void>();
 
 function send(msg: object): void {
   process.stdout.write(`${JSON.stringify(msg)}\n`);
 }
 
-const rl = readline.createInterface({
-  input: process.stdin,
-  output: process.stdout,
-  terminal: false,
-});
+// Use raw stdin reading instead of readline interface
+// This works better with bun's --preload mode
+let stdinBuffer = '';
 
-rl.on('line', (line: string) => {
-  try {
-    const msg = JSON.parse(line) as SubmitMessage;
-    if (msg.type === 'submit' && pending.has(msg.id)) {
-      const resolver = pending.get(msg.id);
-      if (resolver) {
-        pending.delete(msg.id);
-        resolver(msg);
+// Set up raw stdin handling
+process.stdin.setEncoding('utf8');
+process.stdin.on('data', (chunk: string) => {
+  stdinBuffer += chunk;
+  
+  // Process complete lines
+  let newlineIndex;
+  while ((newlineIndex = stdinBuffer.indexOf('\n')) !== -1) {
+    const line = stdinBuffer.substring(0, newlineIndex);
+    stdinBuffer = stdinBuffer.substring(newlineIndex + 1);
+    
+    if (line.trim()) {
+      try {
+        const msg = JSON.parse(line) as ResponseMessage;
+        
+        // Get the ID based on message type
+        let id: string | undefined;
+        if (msg.type === 'submit') {
+          id = (msg as SubmitMessage).id;
+        } else if ('requestId' in msg) {
+          id = (msg as { requestId: string }).requestId;
+        }
+        
+        if (id && pending.has(id)) {
+          const resolver = pending.get(id);
+          if (resolver) {
+            pending.delete(id);
+            resolver(msg);
+          }
+        }
+        
+        // Also emit a custom event for widget handlers
+        if (msg.type === 'widgetEvent') {
+          process.emit('widgetEvent' as any, msg);
+        }
+      } catch (e) {
+        // Ignore parse errors - they're usually test output
       }
     }
-  } catch {
-    // Silently ignore non-JSON lines
   }
 });
+
+// Keep a reference for backwards compatibility with widget code
+// This is a dummy readline interface that just delegates to the raw stdin handler
+const rl = {
+  listeners: () => [],
+  removeListener: () => {},
+  on: (event: string, handler: (...args: any[]) => void) => {
+    if (event === 'line') {
+      // Widget handlers will use this - redirect to our custom event
+      process.on('widgetEvent' as any, handler);
+    }
+  },
+};
 
 // =============================================================================
 // Global API Functions (Script Kit v1 pattern - no imports needed)
@@ -960,6 +1190,14 @@ declare global {
   function blur(): Promise<void>;
   
   /**
+   * Get the current window bounds (position and size).
+   * Useful for testing window resize behavior and layout verification.
+   * 
+   * @returns Window bounds with x, y, width, height in pixels
+   */
+  function getWindowBounds(): Promise<WindowBounds>;
+  
+  /**
    * Force submit the current prompt with a value
    * @param value - Value to submit
    */
@@ -1115,6 +1353,108 @@ declare global {
    * @param data - Data to inspect
    */
   function inspect(data: unknown): Promise<void>;
+  
+  // =============================================================================
+  // Clipboard History Functions
+  // =============================================================================
+  
+  /**
+   * Get the clipboard history list
+   * @returns Array of clipboard history entries
+   */
+  function clipboardHistory(): Promise<ClipboardHistoryEntry[]>;
+  
+  /**
+   * Pin a clipboard history entry to prevent auto-removal
+   * @param entryId - ID of the entry to pin
+   */
+  function clipboardHistoryPin(entryId: string): Promise<void>;
+  
+  /**
+   * Unpin a clipboard history entry
+   * @param entryId - ID of the entry to unpin
+   */
+  function clipboardHistoryUnpin(entryId: string): Promise<void>;
+  
+  /**
+   * Remove a specific entry from clipboard history
+   * @param entryId - ID of the entry to remove
+   */
+  function clipboardHistoryRemove(entryId: string): Promise<void>;
+  
+  /**
+   * Clear all clipboard history entries (except pinned ones)
+   */
+  function clipboardHistoryClear(): Promise<void>;
+  
+  // =============================================================================
+  // Window Management Functions (System Windows)
+  // =============================================================================
+  
+  /**
+   * Get list of all system windows
+   * @returns Array of window information objects
+   */
+  function getWindows(): Promise<SystemWindowInfo[]>;
+  
+  /**
+   * Focus a specific window by ID
+   * @param windowId - ID of the window to focus
+   */
+  function focusWindow(windowId: number): Promise<void>;
+  
+  /**
+   * Close a specific window by ID
+   * @param windowId - ID of the window to close
+   */
+  function closeWindow(windowId: number): Promise<void>;
+  
+  /**
+   * Minimize a specific window by ID
+   * @param windowId - ID of the window to minimize
+   */
+  function minimizeWindow(windowId: number): Promise<void>;
+  
+  /**
+   * Maximize a specific window by ID
+   * @param windowId - ID of the window to maximize
+   */
+  function maximizeWindow(windowId: number): Promise<void>;
+  
+  /**
+   * Move a window to specific coordinates
+   * @param windowId - ID of the window to move
+   * @param x - New x coordinate
+   * @param y - New y coordinate
+   */
+  function moveWindow(windowId: number, x: number, y: number): Promise<void>;
+  
+  /**
+   * Resize a window to specific dimensions
+   * @param windowId - ID of the window to resize
+   * @param width - New width
+   * @param height - New height
+   */
+  function resizeWindow(windowId: number, width: number, height: number): Promise<void>;
+  
+  /**
+   * Tile a window to a specific screen position
+   * @param windowId - ID of the window to tile
+   * @param position - Tile position (left, right, top-left, etc.)
+   */
+  function tileWindow(windowId: number, position: TilePosition): Promise<void>;
+  
+  // =============================================================================
+  // File Search Functions
+  // =============================================================================
+  
+  /**
+   * Search for files using Spotlight/mdfind
+   * @param query - Search query string
+   * @param options - Search options including directory filter
+   * @returns Array of matching file results
+   */
+  function fileSearch(query: string, options?: FindOptions): Promise<FileSearchResult[]>;
 }
 
 /**
@@ -2015,54 +2355,32 @@ const widgetHandlers = new Map<string, {
   onResized?: (size: { width: number; height: number }) => void;
 }>();
 
-// Extend the message handler to also handle widget events
-const originalLine = rl.listeners('line')[0] as ((line: string) => void) | undefined;
-if (originalLine) {
-  rl.removeListener('line', originalLine);
+// Widget event handler - listens to custom widgetEvent from stdin handler
+function handleWidgetEvent(msg: { id: string; event: string; data?: unknown }) {
+  if (widgetHandlers.has(msg.id)) {
+    const handlers = widgetHandlers.get(msg.id);
+    if (handlers) {
+      switch (msg.event) {
+        case 'click':
+          handlers.onClick?.(msg.data as WidgetEvent);
+          break;
+        case 'input':
+          handlers.onInput?.(msg.data as WidgetInputEvent);
+          break;
+        case 'close':
+          handlers.onClose?.();
+          widgetHandlers.delete(msg.id);
+          break;
+        case 'resized':
+          handlers.onResized?.(msg.data as { width: number; height: number });
+          break;
+      }
+    }
+  }
 }
 
-rl.on('line', (line: string) => {
-  try {
-    const msg = JSON.parse(line);
-    
-    // Handle submit messages (existing functionality)
-    if (msg.type === 'submit' && pending.has(msg.id)) {
-      const resolver = pending.get(msg.id);
-      if (resolver) {
-        pending.delete(msg.id);
-        resolver(msg);
-      }
-      return;
-    }
-    
-    // Handle widget events
-    if (msg.type === 'widgetEvent' && widgetHandlers.has(msg.id)) {
-      const handlers = widgetHandlers.get(msg.id);
-      if (handlers) {
-        switch (msg.event) {
-          case 'click':
-            handlers.onClick?.(msg.data as WidgetEvent);
-            break;
-          case 'input':
-            handlers.onInput?.(msg.data as WidgetInputEvent);
-            break;
-          case 'close':
-            handlers.onClose?.();
-            widgetHandlers.delete(msg.id);
-            break;
-          case 'moved':
-            handlers.onMoved?.(msg.data as { x: number; y: number });
-            break;
-          case 'resized':
-            handlers.onResized?.(msg.data as { width: number; height: number });
-            break;
-        }
-      }
-    }
-  } catch {
-    // Silently ignore non-JSON lines
-  }
-});
+// Register widget event handler with the stdin message handler
+process.on('widgetEvent' as any, handleWidgetEvent);
 
 globalThis.widget = async function widget(
   html: string,
@@ -2404,6 +2722,46 @@ globalThis.blur = async function blur(): Promise<void> {
   send(message);
 };
 
+/**
+ * Get the current window bounds (position and size).
+ * Useful for testing window resize behavior and layout verification.
+ * 
+ * @returns Window bounds with x, y, width, height in pixels
+ */
+globalThis.getWindowBounds = async function getWindowBounds(): Promise<WindowBounds> {
+  const id = nextId();
+  
+  return new Promise((resolve) => {
+    pending.set(id, (msg: SubmitMessage) => {
+      // Value comes back as JSON with window bounds
+      const value = msg.value ?? '{}';
+      try {
+        const parsed = JSON.parse(value);
+        resolve({
+          x: parsed.x ?? 0,
+          y: parsed.y ?? 0,
+          width: parsed.width ?? 0,
+          height: parsed.height ?? 0,
+        });
+      } catch {
+        resolve({
+          x: 0,
+          y: 0,
+          width: 0,
+          height: 0,
+        });
+      }
+    });
+    
+    const message: GetWindowBoundsMessage = {
+      type: 'getWindowBounds',
+      requestId: id,
+    };
+    
+    send(message);
+  });
+};
+
 // Prompt Control
 globalThis.submit = function submit(value: unknown): void {
   const message: ForceSubmitMessage = { type: 'forceSubmit', value };
@@ -2413,6 +2771,8 @@ globalThis.submit = function submit(value: unknown): void {
 globalThis.exit = function exit(code?: number): void {
   const message: ExitMessage = { type: 'exit', code };
   send(message);
+  // Actually terminate the process so autonomous tests don't hang
+  process.exit(code ?? 0);
 };
 
 globalThis.wait = function wait(ms: number): Promise<void> {
@@ -2685,4 +3045,515 @@ globalThis.run = async function run(scriptName: string, ...args: string[]): Prom
 globalThis.inspect = async function inspect(data: unknown): Promise<void> {
   const message: InspectMessage = { type: 'inspect', data };
   send(message);
+};
+
+// =============================================================================
+// Clipboard History Functions
+// =============================================================================
+
+globalThis.clipboardHistory = async function clipboardHistory(): Promise<ClipboardHistoryEntry[]> {
+  const id = nextId();
+  
+  return new Promise((resolve) => {
+    pending.set(id, (msg: ResponseMessage) => {
+      // Handle clipboardHistoryList message type (sent by Rust for list requests)
+      if (msg.type === 'clipboardHistoryList') {
+        const listMsg = msg as ClipboardHistoryListMessage;
+        resolve((listMsg.entries ?? []).map((entry) => ({
+          entryId: entry.entryId ?? entry.entry_id ?? '',
+          content: entry.content ?? '',
+          contentType: (entry.contentType ?? entry.content_type ?? 'text') as 'text' | 'image',
+          timestamp: entry.timestamp ?? '',
+          pinned: entry.pinned ?? false,
+        })));
+        return;
+      }
+      
+      // Fallback to submit message handling (backwards compatibility)
+      const submitMsg = msg as SubmitMessage;
+      const value = submitMsg.value ?? '[]';
+      try {
+        const parsed = JSON.parse(value);
+        if (Array.isArray(parsed)) {
+          resolve(parsed.map((entry: {
+            entryId?: string;
+            entry_id?: string;
+            content?: string;
+            contentType?: string;
+            content_type?: string;
+            timestamp?: string;
+            pinned?: boolean;
+          }) => ({
+            entryId: entry.entryId ?? entry.entry_id ?? '',
+            content: entry.content ?? '',
+            contentType: (entry.contentType ?? entry.content_type ?? 'text') as 'text' | 'image',
+            timestamp: entry.timestamp ?? '',
+            pinned: entry.pinned ?? false,
+          })));
+        } else {
+          resolve([]);
+        }
+      } catch {
+        resolve([]);
+      }
+    });
+    
+    const message: ClipboardHistoryMessage = {
+      type: 'clipboardHistory',
+      requestId: id,
+      action: 'list',
+    };
+    
+    send(message);
+  });
+};
+
+globalThis.clipboardHistoryPin = async function clipboardHistoryPin(entryId: string): Promise<void> {
+  const id = nextId();
+  
+  return new Promise((resolve, reject) => {
+    pending.set(id, (msg: ResponseMessage) => {
+      if (msg.type === 'clipboardHistoryResult') {
+        const resultMsg = msg as ClipboardHistoryResultMessage;
+        if (resultMsg.success) {
+          resolve();
+        } else {
+          reject(new Error(resultMsg.error ?? 'Unknown error'));
+        }
+      } else {
+        resolve(); // Fallback
+      }
+    });
+    
+    const message: ClipboardHistoryMessage = {
+      type: 'clipboardHistory',
+      requestId: id,
+      action: 'pin',
+      entryId,
+    };
+    
+    send(message);
+  });
+};
+
+globalThis.clipboardHistoryUnpin = async function clipboardHistoryUnpin(entryId: string): Promise<void> {
+  const id = nextId();
+  
+  return new Promise((resolve, reject) => {
+    pending.set(id, (msg: ResponseMessage) => {
+      if (msg.type === 'clipboardHistoryResult') {
+        const resultMsg = msg as ClipboardHistoryResultMessage;
+        if (resultMsg.success) {
+          resolve();
+        } else {
+          reject(new Error(resultMsg.error ?? 'Unknown error'));
+        }
+      } else {
+        resolve(); // Fallback
+      }
+    });
+    
+    const message: ClipboardHistoryMessage = {
+      type: 'clipboardHistory',
+      requestId: id,
+      action: 'unpin',
+      entryId,
+    };
+    
+    send(message);
+  });
+};
+
+globalThis.clipboardHistoryRemove = async function clipboardHistoryRemove(entryId: string): Promise<void> {
+  const id = nextId();
+  
+  return new Promise((resolve, reject) => {
+    pending.set(id, (msg: ResponseMessage) => {
+      if (msg.type === 'clipboardHistoryResult') {
+        const resultMsg = msg as ClipboardHistoryResultMessage;
+        if (resultMsg.success) {
+          resolve();
+        } else {
+          reject(new Error(resultMsg.error ?? 'Unknown error'));
+        }
+      } else {
+        resolve(); // Fallback
+      }
+    });
+    
+    const message: ClipboardHistoryMessage = {
+      type: 'clipboardHistory',
+      requestId: id,
+      action: 'remove',
+      entryId,
+    };
+    
+    send(message);
+  });
+};
+
+globalThis.clipboardHistoryClear = async function clipboardHistoryClear(): Promise<void> {
+  const id = nextId();
+  
+  return new Promise((resolve, reject) => {
+    pending.set(id, (msg: ResponseMessage) => {
+      if (msg.type === 'clipboardHistoryResult') {
+        const resultMsg = msg as ClipboardHistoryResultMessage;
+        if (resultMsg.success) {
+          resolve();
+        } else {
+          reject(new Error(resultMsg.error ?? 'Unknown error'));
+        }
+      } else {
+        resolve();
+      }
+    });
+    
+    const message: ClipboardHistoryMessage = {
+      type: 'clipboardHistory',
+      requestId: id,
+      action: 'clear',
+    };
+    
+    send(message);
+  });
+};
+
+// =============================================================================
+// Window Management Functions (System Windows)
+// =============================================================================
+
+globalThis.getWindows = async function getWindows(): Promise<SystemWindowInfo[]> {
+  const id = nextId();
+  
+  return new Promise((resolve) => {
+    pending.set(id, (msg: ResponseMessage) => {
+      // Handle WindowListResult message type
+      if (msg.type === 'windowListResult') {
+        const resultMsg = msg as WindowListResultMessage;
+        resolve(resultMsg.windows.map((win) => ({
+          windowId: win.windowId ?? win.window_id ?? 0,
+          title: win.title ?? '',
+          appName: win.appName ?? win.app_name ?? '',
+          bounds: win.bounds,
+          isMinimized: win.isMinimized ?? win.is_minimized,
+          isActive: win.isActive ?? win.is_active,
+        })));
+        return;
+      }
+      
+      // Fallback to submit message handling (backwards compatibility)
+      const submitMsg = msg as SubmitMessage;
+      const value = submitMsg.value ?? '[]';
+      try {
+        const parsed = JSON.parse(value);
+        if (Array.isArray(parsed)) {
+          resolve(parsed.map((win: {
+            windowId?: number;
+            window_id?: number;
+            title?: string;
+            appName?: string;
+            app_name?: string;
+            bounds?: TargetWindowBounds;
+            isMinimized?: boolean;
+            is_minimized?: boolean;
+            isActive?: boolean;
+            is_active?: boolean;
+          }) => ({
+            windowId: win.windowId ?? win.window_id ?? 0,
+            title: win.title ?? '',
+            appName: win.appName ?? win.app_name ?? '',
+            bounds: win.bounds,
+            isMinimized: win.isMinimized ?? win.is_minimized,
+            isActive: win.isActive ?? win.is_active,
+          })));
+        } else {
+          resolve([]);
+        }
+      } catch {
+        resolve([]);
+      }
+    });
+    
+    const message: WindowListMessage = {
+      type: 'windowList',
+      requestId: id,
+    };
+    
+    send(message);
+  });
+};
+
+globalThis.focusWindow = async function focusWindow(windowId: number): Promise<void> {
+  const id = nextId();
+  
+  return new Promise((resolve, reject) => {
+    pending.set(id, (msg: SubmitMessage) => {
+      if (msg.value && msg.value.startsWith('ERROR:')) {
+        reject(new Error(msg.value.substring(6).trim()));
+      } else {
+        resolve();
+      }
+    });
+    
+    const message: WindowActionMessage = {
+      type: 'windowAction',
+      requestId: id,
+      action: 'focus',
+      windowId,
+    };
+    
+    send(message);
+  });
+};
+
+globalThis.closeWindow = async function closeWindow(windowId: number): Promise<void> {
+  const id = nextId();
+  
+  return new Promise((resolve, reject) => {
+    pending.set(id, (msg: SubmitMessage) => {
+      if (msg.value && msg.value.startsWith('ERROR:')) {
+        reject(new Error(msg.value.substring(6).trim()));
+      } else {
+        resolve();
+      }
+    });
+    
+    const message: WindowActionMessage = {
+      type: 'windowAction',
+      requestId: id,
+      action: 'close',
+      windowId,
+    };
+    
+    send(message);
+  });
+};
+
+globalThis.minimizeWindow = async function minimizeWindow(windowId: number): Promise<void> {
+  const id = nextId();
+  
+  return new Promise((resolve, reject) => {
+    pending.set(id, (msg: SubmitMessage) => {
+      if (msg.value && msg.value.startsWith('ERROR:')) {
+        reject(new Error(msg.value.substring(6).trim()));
+      } else {
+        resolve();
+      }
+    });
+    
+    const message: WindowActionMessage = {
+      type: 'windowAction',
+      requestId: id,
+      action: 'minimize',
+      windowId,
+    };
+    
+    send(message);
+  });
+};
+
+globalThis.maximizeWindow = async function maximizeWindow(windowId: number): Promise<void> {
+  const id = nextId();
+  
+  return new Promise((resolve, reject) => {
+    pending.set(id, (msg: SubmitMessage) => {
+      if (msg.value && msg.value.startsWith('ERROR:')) {
+        reject(new Error(msg.value.substring(6).trim()));
+      } else {
+        resolve();
+      }
+    });
+    
+    const message: WindowActionMessage = {
+      type: 'windowAction',
+      requestId: id,
+      action: 'maximize',
+      windowId,
+    };
+    
+    send(message);
+  });
+};
+
+globalThis.moveWindow = async function moveWindow(windowId: number, x: number, y: number): Promise<void> {
+  const id = nextId();
+  
+  return new Promise((resolve, reject) => {
+    pending.set(id, (msg: SubmitMessage) => {
+      if (msg.value && msg.value.startsWith('ERROR:')) {
+        reject(new Error(msg.value.substring(6).trim()));
+      } else {
+        resolve();
+      }
+    });
+    
+    const message: WindowActionMessage = {
+      type: 'windowAction',
+      requestId: id,
+      action: 'move',
+      windowId,
+      bounds: { x, y, width: 0, height: 0 },
+    };
+    
+    send(message);
+  });
+};
+
+globalThis.resizeWindow = async function resizeWindow(windowId: number, width: number, height: number): Promise<void> {
+  const id = nextId();
+  
+  return new Promise((resolve, reject) => {
+    pending.set(id, (msg: SubmitMessage) => {
+      if (msg.value && msg.value.startsWith('ERROR:')) {
+        reject(new Error(msg.value.substring(6).trim()));
+      } else {
+        resolve();
+      }
+    });
+    
+    const message: WindowActionMessage = {
+      type: 'windowAction',
+      requestId: id,
+      action: 'resize',
+      windowId,
+      bounds: { x: 0, y: 0, width, height },
+    };
+    
+    send(message);
+  });
+};
+
+/**
+ * Calculate bounds for tiling a window to a specific screen position
+ */
+function calculateTileBounds(position: TilePosition, screenWidth: number, screenHeight: number): TargetWindowBounds {
+  const halfWidth = Math.floor(screenWidth / 2);
+  const halfHeight = Math.floor(screenHeight / 2);
+  
+  switch (position) {
+    case 'left':
+      return { x: 0, y: 0, width: halfWidth, height: screenHeight };
+    case 'right':
+      return { x: halfWidth, y: 0, width: halfWidth, height: screenHeight };
+    case 'top':
+      return { x: 0, y: 0, width: screenWidth, height: halfHeight };
+    case 'bottom':
+      return { x: 0, y: halfHeight, width: screenWidth, height: halfHeight };
+    case 'top-left':
+      return { x: 0, y: 0, width: halfWidth, height: halfHeight };
+    case 'top-right':
+      return { x: halfWidth, y: 0, width: halfWidth, height: halfHeight };
+    case 'bottom-left':
+      return { x: 0, y: halfHeight, width: halfWidth, height: halfHeight };
+    case 'bottom-right':
+      return { x: halfWidth, y: halfHeight, width: halfWidth, height: halfHeight };
+    case 'center':
+      const centerWidth = Math.floor(screenWidth * 0.6);
+      const centerHeight = Math.floor(screenHeight * 0.6);
+      return { 
+        x: Math.floor((screenWidth - centerWidth) / 2), 
+        y: Math.floor((screenHeight - centerHeight) / 2), 
+        width: centerWidth, 
+        height: centerHeight 
+      };
+    case 'maximize':
+      return { x: 0, y: 0, width: screenWidth, height: screenHeight };
+    default:
+      return { x: 0, y: 0, width: screenWidth, height: screenHeight };
+  }
+}
+
+globalThis.tileWindow = async function tileWindow(windowId: number, position: TilePosition): Promise<void> {
+  // Get screen dimensions - for now use reasonable defaults
+  // In a real implementation, this would query the actual screen size
+  const screenWidth = 1920;
+  const screenHeight = 1080;
+  
+  const bounds = calculateTileBounds(position, screenWidth, screenHeight);
+  
+  const id = nextId();
+  
+  return new Promise((resolve, reject) => {
+    pending.set(id, (msg: SubmitMessage) => {
+      if (msg.value && msg.value.startsWith('ERROR:')) {
+        reject(new Error(msg.value.substring(6).trim()));
+      } else {
+        resolve();
+      }
+    });
+    
+    // Combine move and resize into a single action
+    const message: WindowActionMessage = {
+      type: 'windowAction',
+      requestId: id,
+      action: 'resize',
+      windowId,
+      bounds,
+    };
+    
+    send(message);
+  });
+};
+
+// =============================================================================
+// File Search Functions
+// =============================================================================
+
+globalThis.fileSearch = async function fileSearch(query: string, options?: FindOptions): Promise<FileSearchResult[]> {
+  const id = nextId();
+  
+  return new Promise((resolve) => {
+    pending.set(id, (msg: ResponseMessage) => {
+      // Handle FileSearchResult message type
+      if (msg.type === 'fileSearchResult') {
+        const resultMsg = msg as FileSearchResultMessage;
+        resolve(resultMsg.files.map((file) => ({
+          path: file.path ?? '',
+          name: file.name ?? '',
+          isDirectory: file.isDirectory ?? file.is_directory ?? false,
+          size: file.size,
+          modifiedAt: file.modifiedAt ?? file.modified_at,
+        })));
+        return;
+      }
+      
+      // Fallback to submit message handling (backwards compatibility)
+      const submitMsg = msg as SubmitMessage;
+      const value = submitMsg.value ?? '[]';
+      try {
+        const parsed = JSON.parse(value);
+        if (Array.isArray(parsed)) {
+          resolve(parsed.map((file: {
+            path?: string;
+            name?: string;
+            isDirectory?: boolean;
+            is_directory?: boolean;
+            size?: number;
+            modifiedAt?: string;
+            modified_at?: string;
+          }) => ({
+            path: file.path ?? '',
+            name: file.name ?? '',
+            isDirectory: file.isDirectory ?? file.is_directory ?? false,
+            size: file.size,
+            modifiedAt: file.modifiedAt ?? file.modified_at,
+          })));
+        } else {
+          resolve([]);
+        }
+      } catch {
+        resolve([]);
+      }
+    });
+    
+    const message: FileSearchMessage = {
+      type: 'fileSearch',
+      requestId: id,
+      query,
+      onlyin: options?.onlyin,
+    };
+    
+    send(message);
+  });
 };

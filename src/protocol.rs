@@ -101,6 +101,87 @@ pub enum MouseAction {
     SetPosition,
 }
 
+/// Clipboard entry type for clipboard history
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum ClipboardEntryType {
+    Text,
+    Image,
+}
+
+/// Clipboard history action type
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum ClipboardHistoryAction {
+    List,
+    Pin,
+    Unpin,
+    Remove,
+    Clear,
+}
+
+/// Window action type for window management
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum WindowActionType {
+    Focus,
+    Close,
+    Minimize,
+    Maximize,
+    Resize,
+    Move,
+}
+
+/// Window bounds for window management (integer-based for system windows)
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct TargetWindowBounds {
+    pub x: i32,
+    pub y: i32,
+    pub width: u32,
+    pub height: u32,
+}
+
+/// Clipboard history entry data for list responses
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct ClipboardHistoryEntryData {
+    #[serde(rename = "entryId")]
+    pub entry_id: String,
+    pub content: String,
+    #[serde(rename = "contentType")]
+    pub content_type: ClipboardEntryType,
+    pub timestamp: String,
+    pub pinned: bool,
+}
+
+/// System window information
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct SystemWindowInfo {
+    #[serde(rename = "windowId")]
+    pub window_id: u32,
+    pub title: String,
+    #[serde(rename = "appName")]
+    pub app_name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bounds: Option<TargetWindowBounds>,
+    #[serde(rename = "isMinimized", skip_serializing_if = "Option::is_none")]
+    pub is_minimized: Option<bool>,
+    #[serde(rename = "isActive", skip_serializing_if = "Option::is_none")]
+    pub is_active: Option<bool>,
+}
+
+/// File search result entry
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct FileSearchResultEntry {
+    pub path: String,
+    pub name: String,
+    #[serde(rename = "isDirectory")]
+    pub is_directory: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub size: Option<u64>,
+    #[serde(rename = "modifiedAt", skip_serializing_if = "Option::is_none")]
+    pub modified_at: Option<String>,
+}
+
 impl Choice {
     pub fn new(name: String, value: String) -> Self {
         Choice {
@@ -366,6 +447,8 @@ pub enum Message {
     /// Clipboard operations
     #[serde(rename = "clipboard")]
     Clipboard {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        id: Option<String>,
         action: ClipboardAction,
         #[serde(skip_serializing_if = "Option::is_none")]
         format: Option<ClipboardFormat>,
@@ -459,6 +542,28 @@ pub enum Message {
     },
 
     // ============================================================
+    // WINDOW INFORMATION
+    // ============================================================
+
+    /// Get current window bounds (position and size)
+    #[serde(rename = "getWindowBounds")]
+    GetWindowBounds {
+        #[serde(rename = "requestId")]
+        request_id: String,
+    },
+
+    /// Response with window bounds
+    #[serde(rename = "windowBounds")]
+    WindowBounds {
+        x: f64,
+        y: f64,
+        width: f64,
+        height: f64,
+        #[serde(rename = "requestId")]
+        request_id: String,
+    },
+
+    // ============================================================
     // SELECTED TEXT RESPONSES
     // ============================================================
 
@@ -486,6 +591,116 @@ pub enum Message {
         granted: bool,
         #[serde(rename = "requestId")]
         request_id: String,
+    },
+
+    // ============================================================
+    // CLIPBOARD HISTORY
+    // ============================================================
+
+    /// Request clipboard history operation
+    #[serde(rename = "clipboardHistory")]
+    ClipboardHistory {
+        #[serde(rename = "requestId")]
+        request_id: String,
+        action: ClipboardHistoryAction,
+        /// Entry ID for pin/unpin/remove operations
+        #[serde(rename = "entryId", skip_serializing_if = "Option::is_none")]
+        entry_id: Option<String>,
+    },
+
+    /// Response with a clipboard history entry
+    #[serde(rename = "clipboardHistoryEntry")]
+    ClipboardHistoryEntry {
+        #[serde(rename = "requestId")]
+        request_id: String,
+        #[serde(rename = "entryId")]
+        entry_id: String,
+        content: String,
+        #[serde(rename = "contentType")]
+        content_type: ClipboardEntryType,
+        timestamp: String,
+        pinned: bool,
+    },
+
+    /// Response with list of clipboard history entries
+    #[serde(rename = "clipboardHistoryList")]
+    ClipboardHistoryList {
+        #[serde(rename = "requestId")]
+        request_id: String,
+        entries: Vec<ClipboardHistoryEntryData>,
+    },
+
+    /// Response for clipboard history action result
+    #[serde(rename = "clipboardHistoryResult")]
+    ClipboardHistoryResult {
+        #[serde(rename = "requestId")]
+        request_id: String,
+        success: bool,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        error: Option<String>,
+    },
+
+    // ============================================================
+    // WINDOW MANAGEMENT (System Windows)
+    // ============================================================
+
+    /// Request list of all system windows
+    #[serde(rename = "windowList")]
+    WindowList {
+        #[serde(rename = "requestId")]
+        request_id: String,
+    },
+
+    /// Perform action on a system window
+    #[serde(rename = "windowAction")]
+    WindowAction {
+        #[serde(rename = "requestId")]
+        request_id: String,
+        action: WindowActionType,
+        #[serde(rename = "windowId", skip_serializing_if = "Option::is_none")]
+        window_id: Option<u32>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        bounds: Option<TargetWindowBounds>,
+    },
+
+    /// Response with list of system windows
+    #[serde(rename = "windowListResult")]
+    WindowListResult {
+        #[serde(rename = "requestId")]
+        request_id: String,
+        windows: Vec<SystemWindowInfo>,
+    },
+
+    /// Response for window action result
+    #[serde(rename = "windowActionResult")]
+    WindowActionResult {
+        #[serde(rename = "requestId")]
+        request_id: String,
+        success: bool,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        error: Option<String>,
+    },
+
+    // ============================================================
+    // FILE SEARCH
+    // ============================================================
+
+    /// Request file search
+    #[serde(rename = "fileSearch")]
+    FileSearch {
+        #[serde(rename = "requestId")]
+        request_id: String,
+        query: String,
+        #[serde(rename = "onlyin", skip_serializing_if = "Option::is_none")]
+        only_in: Option<String>,
+    },
+
+    /// Response with file search results
+    #[serde(rename = "fileSearchResult")]
+    FileSearchResult {
+        #[serde(rename = "requestId")]
+        request_id: String,
+        files: Vec<FileSearchResultEntry>,
     },
 }
 
@@ -566,7 +781,7 @@ impl Message {
             Message::SetStatus { .. } => None,
             // System control (no ID)
             Message::Menu { .. } => None,
-            Message::Clipboard { .. } => None,
+            Message::Clipboard { id, .. } => id.as_deref(),
             Message::Keyboard { .. } => None,
             Message::Mouse { .. } => None,
             Message::Show {} => None,
@@ -585,6 +800,22 @@ impl Message {
             Message::SelectedText { request_id, .. } => Some(request_id),
             Message::TextSet { request_id, .. } => Some(request_id),
             Message::AccessibilityStatus { request_id, .. } => Some(request_id),
+            // Window information (use request_id)
+            Message::GetWindowBounds { request_id, .. } => Some(request_id),
+            Message::WindowBounds { request_id, .. } => Some(request_id),
+            // Clipboard history (use request_id)
+            Message::ClipboardHistory { request_id, .. } => Some(request_id),
+            Message::ClipboardHistoryEntry { request_id, .. } => Some(request_id),
+            Message::ClipboardHistoryList { request_id, .. } => Some(request_id),
+            Message::ClipboardHistoryResult { request_id, .. } => Some(request_id),
+            // Window management (use request_id)
+            Message::WindowList { request_id, .. } => Some(request_id),
+            Message::WindowAction { request_id, .. } => Some(request_id),
+            Message::WindowListResult { request_id, .. } => Some(request_id),
+            Message::WindowActionResult { request_id, .. } => Some(request_id),
+            // File search (use request_id)
+            Message::FileSearch { request_id, .. } => Some(request_id),
+            Message::FileSearchResult { request_id, .. } => Some(request_id),
         }
     }
 
@@ -745,6 +976,7 @@ impl Message {
     /// Create a clipboard read message
     pub fn clipboard_read(format: Option<ClipboardFormat>) -> Self {
         Message::Clipboard {
+            id: None,
             action: ClipboardAction::Read,
             format,
             content: None,
@@ -754,6 +986,7 @@ impl Message {
     /// Create a clipboard write message
     pub fn clipboard_write(content: String, format: Option<ClipboardFormat>) -> Self {
         Message::Clipboard {
+            id: None,
             action: ClipboardAction::Write,
             format,
             content: Some(content),
@@ -869,6 +1102,185 @@ impl Message {
             granted,
             request_id,
         }
+    }
+
+    // ============================================================
+    // Constructor methods for window information
+    // ============================================================
+
+    /// Create a get window bounds request
+    pub fn get_window_bounds(request_id: String) -> Self {
+        Message::GetWindowBounds { request_id }
+    }
+
+    /// Create a window bounds response
+    pub fn window_bounds(x: f64, y: f64, width: f64, height: f64, request_id: String) -> Self {
+        Message::WindowBounds {
+            x,
+            y,
+            width,
+            height,
+            request_id,
+        }
+    }
+
+    // ============================================================
+    // Constructor methods for clipboard history
+    // ============================================================
+
+    /// Create a clipboard history list request
+    pub fn clipboard_history_list(request_id: String) -> Self {
+        Message::ClipboardHistory {
+            request_id,
+            action: ClipboardHistoryAction::List,
+            entry_id: None,
+        }
+    }
+
+    /// Create a clipboard history pin request
+    pub fn clipboard_history_pin(request_id: String, entry_id: String) -> Self {
+        Message::ClipboardHistory {
+            request_id,
+            action: ClipboardHistoryAction::Pin,
+            entry_id: Some(entry_id),
+        }
+    }
+
+    /// Create a clipboard history unpin request
+    pub fn clipboard_history_unpin(request_id: String, entry_id: String) -> Self {
+        Message::ClipboardHistory {
+            request_id,
+            action: ClipboardHistoryAction::Unpin,
+            entry_id: Some(entry_id),
+        }
+    }
+
+    /// Create a clipboard history remove request
+    pub fn clipboard_history_remove(request_id: String, entry_id: String) -> Self {
+        Message::ClipboardHistory {
+            request_id,
+            action: ClipboardHistoryAction::Remove,
+            entry_id: Some(entry_id),
+        }
+    }
+
+    /// Create a clipboard history clear request
+    pub fn clipboard_history_clear(request_id: String) -> Self {
+        Message::ClipboardHistory {
+            request_id,
+            action: ClipboardHistoryAction::Clear,
+            entry_id: None,
+        }
+    }
+
+    /// Create a clipboard history entry response
+    pub fn clipboard_history_entry(
+        request_id: String,
+        entry_id: String,
+        content: String,
+        content_type: ClipboardEntryType,
+        timestamp: String,
+        pinned: bool,
+    ) -> Self {
+        Message::ClipboardHistoryEntry {
+            request_id,
+            entry_id,
+            content,
+            content_type,
+            timestamp,
+            pinned,
+        }
+    }
+
+    /// Create a clipboard history list response
+    pub fn clipboard_history_list_response(
+        request_id: String,
+        entries: Vec<ClipboardHistoryEntryData>,
+    ) -> Self {
+        Message::ClipboardHistoryList { request_id, entries }
+    }
+
+    /// Create a clipboard history result (success)
+    pub fn clipboard_history_success(request_id: String) -> Self {
+        Message::ClipboardHistoryResult {
+            request_id,
+            success: true,
+            error: None,
+        }
+    }
+
+    /// Create a clipboard history result (error)
+    pub fn clipboard_history_error(request_id: String, error: String) -> Self {
+        Message::ClipboardHistoryResult {
+            request_id,
+            success: false,
+            error: Some(error),
+        }
+    }
+
+    // ============================================================
+    // Constructor methods for window management
+    // ============================================================
+
+    /// Create a window list request
+    pub fn window_list(request_id: String) -> Self {
+        Message::WindowList { request_id }
+    }
+
+    /// Create a window action request
+    pub fn window_action(
+        request_id: String,
+        action: WindowActionType,
+        window_id: Option<u32>,
+        bounds: Option<TargetWindowBounds>,
+    ) -> Self {
+        Message::WindowAction {
+            request_id,
+            action,
+            window_id,
+            bounds,
+        }
+    }
+
+    /// Create a window list response
+    pub fn window_list_result(request_id: String, windows: Vec<SystemWindowInfo>) -> Self {
+        Message::WindowListResult { request_id, windows }
+    }
+
+    /// Create a window action result (success)
+    pub fn window_action_success(request_id: String) -> Self {
+        Message::WindowActionResult {
+            request_id,
+            success: true,
+            error: None,
+        }
+    }
+
+    /// Create a window action result (error)
+    pub fn window_action_error(request_id: String, error: String) -> Self {
+        Message::WindowActionResult {
+            request_id,
+            success: false,
+            error: Some(error),
+        }
+    }
+
+    // ============================================================
+    // Constructor methods for file search
+    // ============================================================
+
+    /// Create a file search request
+    pub fn file_search(request_id: String, query: String, only_in: Option<String>) -> Self {
+        Message::FileSearch {
+            request_id,
+            query,
+            only_in,
+        }
+    }
+
+    /// Create a file search result response
+    pub fn file_search_result(request_id: String, files: Vec<FileSearchResultEntry>) -> Self {
+        Message::FileSearchResult { request_id, files }
     }
 }
 
@@ -1729,7 +2141,7 @@ mod tests {
         let json = r#"{"type":"clipboard","action":"read","format":"image"}"#;
         let msg = parse_message(json).unwrap();
         match msg {
-            Message::Clipboard { action, format, content } => {
+            Message::Clipboard { action, format, content, .. } => {
                 assert_eq!(action, ClipboardAction::Read);
                 assert_eq!(format, Some(ClipboardFormat::Image));
                 assert_eq!(content, None);
@@ -2257,5 +2669,407 @@ mod tests {
         assert_eq!(Message::text_set_success("f".to_string()).id(), Some("f"));
         assert_eq!(Message::text_set_error("".to_string(), "g".to_string()).id(), Some("g"));
         assert_eq!(Message::accessibility_status(true, "h".to_string()).id(), Some("h"));
+    }
+
+    // ============================================================
+    // WINDOW BOUNDS TESTS
+    // ============================================================
+
+    #[test]
+    fn test_serialize_get_window_bounds() {
+        let msg = Message::get_window_bounds("req-wb-1".to_string());
+        let json = serialize_message(&msg).unwrap();
+        assert!(json.contains("\"type\":\"getWindowBounds\""));
+        assert!(json.contains("\"requestId\":\"req-wb-1\""));
+    }
+
+    #[test]
+    fn test_parse_get_window_bounds() {
+        let json = r#"{"type":"getWindowBounds","requestId":"req-wb-2"}"#;
+        let msg = parse_message(json).unwrap();
+        match msg {
+            Message::GetWindowBounds { request_id } => {
+                assert_eq!(request_id, "req-wb-2");
+            }
+            _ => panic!("Expected GetWindowBounds message"),
+        }
+    }
+
+    #[test]
+    fn test_serialize_window_bounds() {
+        let msg = Message::window_bounds(100.0, 200.0, 750.0, 400.0, "req-wb-3".to_string());
+        let json = serialize_message(&msg).unwrap();
+        assert!(json.contains("\"type\":\"windowBounds\""));
+        assert!(json.contains("\"x\":100"));
+        assert!(json.contains("\"y\":200"));
+        assert!(json.contains("\"width\":750"));
+        assert!(json.contains("\"height\":400"));
+        assert!(json.contains("\"requestId\":\"req-wb-3\""));
+    }
+
+    #[test]
+    fn test_parse_window_bounds() {
+        let json = r#"{"type":"windowBounds","x":50.5,"y":100.5,"width":800.0,"height":600.0,"requestId":"req-wb-4"}"#;
+        let msg = parse_message(json).unwrap();
+        match msg {
+            Message::WindowBounds { x, y, width, height, request_id } => {
+                assert!((x - 50.5).abs() < 0.01);
+                assert!((y - 100.5).abs() < 0.01);
+                assert!((width - 800.0).abs() < 0.01);
+                assert!((height - 600.0).abs() < 0.01);
+                assert_eq!(request_id, "req-wb-4");
+            }
+            _ => panic!("Expected WindowBounds message"),
+        }
+    }
+
+    #[test]
+    fn test_window_bounds_message_ids() {
+        assert_eq!(Message::get_window_bounds("a".to_string()).id(), Some("a"));
+        assert_eq!(Message::window_bounds(0.0, 0.0, 0.0, 0.0, "b".to_string()).id(), Some("b"));
+    }
+
+    // ============================================================
+    // CLIPBOARD HISTORY TESTS
+    // ============================================================
+
+    #[test]
+    fn test_clipboard_entry_type_serialization() {
+        assert_eq!(serde_json::to_string(&ClipboardEntryType::Text).unwrap(), "\"text\"");
+        assert_eq!(serde_json::to_string(&ClipboardEntryType::Image).unwrap(), "\"image\"");
+    }
+
+    #[test]
+    fn test_clipboard_history_action_serialization() {
+        assert_eq!(serde_json::to_string(&ClipboardHistoryAction::List).unwrap(), "\"list\"");
+        assert_eq!(serde_json::to_string(&ClipboardHistoryAction::Pin).unwrap(), "\"pin\"");
+        assert_eq!(serde_json::to_string(&ClipboardHistoryAction::Unpin).unwrap(), "\"unpin\"");
+        assert_eq!(serde_json::to_string(&ClipboardHistoryAction::Remove).unwrap(), "\"remove\"");
+        assert_eq!(serde_json::to_string(&ClipboardHistoryAction::Clear).unwrap(), "\"clear\"");
+    }
+
+    #[test]
+    fn test_serialize_clipboard_history_list() {
+        let msg = Message::clipboard_history_list("req-ch-1".to_string());
+        let json = serialize_message(&msg).unwrap();
+        assert!(json.contains("\"type\":\"clipboardHistory\""));
+        assert!(json.contains("\"requestId\":\"req-ch-1\""));
+        assert!(json.contains("\"action\":\"list\""));
+        assert!(!json.contains("\"entryId\"")); // Should be omitted when None
+    }
+
+    #[test]
+    fn test_parse_clipboard_history_list() {
+        let json = r#"{"type":"clipboardHistory","requestId":"req-ch-2","action":"list"}"#;
+        let msg = parse_message(json).unwrap();
+        match msg {
+            Message::ClipboardHistory { request_id, action, entry_id } => {
+                assert_eq!(request_id, "req-ch-2");
+                assert_eq!(action, ClipboardHistoryAction::List);
+                assert_eq!(entry_id, None);
+            }
+            _ => panic!("Expected ClipboardHistory message"),
+        }
+    }
+
+    #[test]
+    fn test_serialize_clipboard_history_pin() {
+        let msg = Message::clipboard_history_pin("req-ch-3".to_string(), "entry-1".to_string());
+        let json = serialize_message(&msg).unwrap();
+        assert!(json.contains("\"type\":\"clipboardHistory\""));
+        assert!(json.contains("\"action\":\"pin\""));
+        assert!(json.contains("\"entryId\":\"entry-1\""));
+    }
+
+    #[test]
+    fn test_parse_clipboard_history_pin() {
+        let json = r#"{"type":"clipboardHistory","requestId":"req-ch-4","action":"pin","entryId":"entry-2"}"#;
+        let msg = parse_message(json).unwrap();
+        match msg {
+            Message::ClipboardHistory { request_id, action, entry_id } => {
+                assert_eq!(request_id, "req-ch-4");
+                assert_eq!(action, ClipboardHistoryAction::Pin);
+                assert_eq!(entry_id, Some("entry-2".to_string()));
+            }
+            _ => panic!("Expected ClipboardHistory message"),
+        }
+    }
+
+    #[test]
+    fn test_serialize_clipboard_history_entry() {
+        let msg = Message::clipboard_history_entry(
+            "req-che-1".to_string(),
+            "entry-1".to_string(),
+            "Hello World".to_string(),
+            ClipboardEntryType::Text,
+            "2024-01-15T10:30:00Z".to_string(),
+            true,
+        );
+        let json = serialize_message(&msg).unwrap();
+        assert!(json.contains("\"type\":\"clipboardHistoryEntry\""));
+        assert!(json.contains("\"requestId\":\"req-che-1\""));
+        assert!(json.contains("\"entryId\":\"entry-1\""));
+        assert!(json.contains("\"content\":\"Hello World\""));
+        assert!(json.contains("\"contentType\":\"text\""));
+        assert!(json.contains("\"pinned\":true"));
+    }
+
+    #[test]
+    fn test_parse_clipboard_history_entry() {
+        let json = r#"{"type":"clipboardHistoryEntry","requestId":"req-che-2","entryId":"entry-2","content":"Test","contentType":"image","timestamp":"2024-01-15","pinned":false}"#;
+        let msg = parse_message(json).unwrap();
+        match msg {
+            Message::ClipboardHistoryEntry { request_id, entry_id, content, content_type, timestamp, pinned } => {
+                assert_eq!(request_id, "req-che-2");
+                assert_eq!(entry_id, "entry-2");
+                assert_eq!(content, "Test");
+                assert_eq!(content_type, ClipboardEntryType::Image);
+                assert_eq!(timestamp, "2024-01-15");
+                assert!(!pinned);
+            }
+            _ => panic!("Expected ClipboardHistoryEntry message"),
+        }
+    }
+
+    #[test]
+    fn test_serialize_clipboard_history_list_response() {
+        let entries = vec![
+            ClipboardHistoryEntryData {
+                entry_id: "e1".to_string(),
+                content: "Hello".to_string(),
+                content_type: ClipboardEntryType::Text,
+                timestamp: "2024-01-15".to_string(),
+                pinned: false,
+            }
+        ];
+        let msg = Message::clipboard_history_list_response("req-chl-1".to_string(), entries);
+        let json = serialize_message(&msg).unwrap();
+        assert!(json.contains("\"type\":\"clipboardHistoryList\""));
+        assert!(json.contains("\"entries\""));
+    }
+
+    #[test]
+    fn test_serialize_clipboard_history_result() {
+        let msg = Message::clipboard_history_success("req-chr-1".to_string());
+        let json = serialize_message(&msg).unwrap();
+        assert!(json.contains("\"type\":\"clipboardHistoryResult\""));
+        assert!(json.contains("\"success\":true"));
+        assert!(!json.contains("\"error\""));
+    }
+
+    #[test]
+    fn test_clipboard_history_message_ids() {
+        assert_eq!(Message::clipboard_history_list("a".to_string()).id(), Some("a"));
+        assert_eq!(Message::clipboard_history_pin("b".to_string(), "x".to_string()).id(), Some("b"));
+        assert_eq!(Message::clipboard_history_entry(
+            "c".to_string(), "".to_string(), "".to_string(), 
+            ClipboardEntryType::Text, "".to_string(), false
+        ).id(), Some("c"));
+        assert_eq!(Message::clipboard_history_list_response("d".to_string(), vec![]).id(), Some("d"));
+        assert_eq!(Message::clipboard_history_success("e".to_string()).id(), Some("e"));
+    }
+
+    // ============================================================
+    // WINDOW MANAGEMENT TESTS
+    // ============================================================
+
+    #[test]
+    fn test_window_action_type_serialization() {
+        assert_eq!(serde_json::to_string(&WindowActionType::Focus).unwrap(), "\"focus\"");
+        assert_eq!(serde_json::to_string(&WindowActionType::Close).unwrap(), "\"close\"");
+        assert_eq!(serde_json::to_string(&WindowActionType::Minimize).unwrap(), "\"minimize\"");
+        assert_eq!(serde_json::to_string(&WindowActionType::Maximize).unwrap(), "\"maximize\"");
+        assert_eq!(serde_json::to_string(&WindowActionType::Resize).unwrap(), "\"resize\"");
+        assert_eq!(serde_json::to_string(&WindowActionType::Move).unwrap(), "\"move\"");
+    }
+
+    #[test]
+    fn test_serialize_target_window_bounds() {
+        let bounds = TargetWindowBounds { x: 100, y: 200, width: 800, height: 600 };
+        let json = serde_json::to_string(&bounds).unwrap();
+        assert!(json.contains("\"x\":100"));
+        assert!(json.contains("\"y\":200"));
+        assert!(json.contains("\"width\":800"));
+        assert!(json.contains("\"height\":600"));
+    }
+
+    #[test]
+    fn test_parse_target_window_bounds() {
+        let json = r#"{"x":-50,"y":100,"width":1024,"height":768}"#;
+        let bounds: TargetWindowBounds = serde_json::from_str(json).unwrap();
+        assert_eq!(bounds.x, -50);
+        assert_eq!(bounds.y, 100);
+        assert_eq!(bounds.width, 1024);
+        assert_eq!(bounds.height, 768);
+    }
+
+    #[test]
+    fn test_serialize_window_list() {
+        let msg = Message::window_list("req-wl-1".to_string());
+        let json = serialize_message(&msg).unwrap();
+        assert!(json.contains("\"type\":\"windowList\""));
+        assert!(json.contains("\"requestId\":\"req-wl-1\""));
+    }
+
+    #[test]
+    fn test_parse_window_list() {
+        let json = r#"{"type":"windowList","requestId":"req-wl-2"}"#;
+        let msg = parse_message(json).unwrap();
+        match msg {
+            Message::WindowList { request_id } => {
+                assert_eq!(request_id, "req-wl-2");
+            }
+            _ => panic!("Expected WindowList message"),
+        }
+    }
+
+    #[test]
+    fn test_serialize_window_action() {
+        let bounds = TargetWindowBounds { x: 0, y: 0, width: 500, height: 400 };
+        let msg = Message::window_action(
+            "req-wa-1".to_string(),
+            WindowActionType::Resize,
+            Some(12345),
+            Some(bounds),
+        );
+        let json = serialize_message(&msg).unwrap();
+        assert!(json.contains("\"type\":\"windowAction\""));
+        assert!(json.contains("\"action\":\"resize\""));
+        assert!(json.contains("\"windowId\":12345"));
+        assert!(json.contains("\"width\":500"));
+    }
+
+    #[test]
+    fn test_parse_window_action() {
+        let json = r#"{"type":"windowAction","requestId":"req-wa-2","action":"focus","windowId":999}"#;
+        let msg = parse_message(json).unwrap();
+        match msg {
+            Message::WindowAction { request_id, action, window_id, bounds } => {
+                assert_eq!(request_id, "req-wa-2");
+                assert_eq!(action, WindowActionType::Focus);
+                assert_eq!(window_id, Some(999));
+                assert_eq!(bounds, None);
+            }
+            _ => panic!("Expected WindowAction message"),
+        }
+    }
+
+    #[test]
+    fn test_serialize_window_list_result() {
+        let windows = vec![
+            SystemWindowInfo {
+                window_id: 1,
+                title: "Terminal".to_string(),
+                app_name: "Terminal.app".to_string(),
+                bounds: Some(TargetWindowBounds { x: 0, y: 0, width: 800, height: 600 }),
+                is_minimized: Some(false),
+                is_active: Some(true),
+            }
+        ];
+        let msg = Message::window_list_result("req-wlr-1".to_string(), windows);
+        let json = serialize_message(&msg).unwrap();
+        assert!(json.contains("\"type\":\"windowListResult\""));
+        assert!(json.contains("\"windows\""));
+        assert!(json.contains("\"windowId\":1"));
+        assert!(json.contains("\"appName\":\"Terminal.app\""));
+    }
+
+    #[test]
+    fn test_serialize_window_action_result() {
+        let msg = Message::window_action_success("req-war-1".to_string());
+        let json = serialize_message(&msg).unwrap();
+        assert!(json.contains("\"type\":\"windowActionResult\""));
+        assert!(json.contains("\"success\":true"));
+        assert!(!json.contains("\"error\""));
+    }
+
+    #[test]
+    fn test_window_management_message_ids() {
+        assert_eq!(Message::window_list("a".to_string()).id(), Some("a"));
+        assert_eq!(Message::window_action("b".to_string(), WindowActionType::Focus, None, None).id(), Some("b"));
+        assert_eq!(Message::window_list_result("c".to_string(), vec![]).id(), Some("c"));
+        assert_eq!(Message::window_action_success("d".to_string()).id(), Some("d"));
+    }
+
+    // ============================================================
+    // FILE SEARCH TESTS
+    // ============================================================
+
+    #[test]
+    fn test_serialize_file_search() {
+        let msg = Message::file_search("req-fs-1".to_string(), "*.rs".to_string(), Some("/home/user".to_string()));
+        let json = serialize_message(&msg).unwrap();
+        assert!(json.contains("\"type\":\"fileSearch\""));
+        assert!(json.contains("\"requestId\":\"req-fs-1\""));
+        assert!(json.contains("\"query\":\"*.rs\""));
+        assert!(json.contains("\"onlyin\":\"/home/user\""));
+    }
+
+    #[test]
+    fn test_parse_file_search() {
+        let json = r#"{"type":"fileSearch","requestId":"req-fs-2","query":"test","onlyin":"/tmp"}"#;
+        let msg = parse_message(json).unwrap();
+        match msg {
+            Message::FileSearch { request_id, query, only_in } => {
+                assert_eq!(request_id, "req-fs-2");
+                assert_eq!(query, "test");
+                assert_eq!(only_in, Some("/tmp".to_string()));
+            }
+            _ => panic!("Expected FileSearch message"),
+        }
+    }
+
+    #[test]
+    fn test_parse_file_search_without_onlyin() {
+        let json = r#"{"type":"fileSearch","requestId":"req-fs-3","query":"main.rs"}"#;
+        let msg = parse_message(json).unwrap();
+        match msg {
+            Message::FileSearch { request_id, query, only_in } => {
+                assert_eq!(request_id, "req-fs-3");
+                assert_eq!(query, "main.rs");
+                assert_eq!(only_in, None);
+            }
+            _ => panic!("Expected FileSearch message"),
+        }
+    }
+
+    #[test]
+    fn test_serialize_file_search_result() {
+        let files = vec![
+            FileSearchResultEntry {
+                path: "/home/user/test.rs".to_string(),
+                name: "test.rs".to_string(),
+                is_directory: false,
+                size: Some(1024),
+                modified_at: Some("2024-01-15T10:30:00Z".to_string()),
+            }
+        ];
+        let msg = Message::file_search_result("req-fsr-1".to_string(), files);
+        let json = serialize_message(&msg).unwrap();
+        assert!(json.contains("\"type\":\"fileSearchResult\""));
+        assert!(json.contains("\"files\""));
+        assert!(json.contains("\"path\":\"/home/user/test.rs\""));
+        assert!(json.contains("\"isDirectory\":false"));
+    }
+
+    #[test]
+    fn test_parse_file_search_result() {
+        let json = r#"{"type":"fileSearchResult","requestId":"req-fsr-2","files":[{"path":"/tmp/a","name":"a","isDirectory":true}]}"#;
+        let msg = parse_message(json).unwrap();
+        match msg {
+            Message::FileSearchResult { request_id, files } => {
+                assert_eq!(request_id, "req-fsr-2");
+                assert_eq!(files.len(), 1);
+                assert_eq!(files[0].path, "/tmp/a");
+                assert!(files[0].is_directory);
+            }
+            _ => panic!("Expected FileSearchResult message"),
+        }
+    }
+
+    #[test]
+    fn test_file_search_message_ids() {
+        assert_eq!(Message::file_search("a".to_string(), "".to_string(), None).id(), Some("a"));
+        assert_eq!(Message::file_search_result("b".to_string(), vec![]).id(), Some("b"));
     }
 }

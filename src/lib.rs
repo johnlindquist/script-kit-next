@@ -28,3 +28,8 @@ pub mod tray;
 pub mod utils;
 pub mod window_manager;
 pub mod window_resize;
+
+// Phase 1 system API modules
+pub mod clipboard_history;
+pub mod window_control;
+pub mod file_search;
