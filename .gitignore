@@ -1,6 +1,5 @@
 # Rust
 target/
-Cargo.lock
 **/*.rs.bk
 *.pdb
 
@@ -15,7 +14,29 @@ Cargo.lock
 .DS_Store
 Thumbs.db
 
+# Node.js
+node_modules/
+
 # Local development
 *.local.md
 .swarmmail.db
 .test-screenshots/
+
+# OpenCode / Agent tooling
+.opencode/
+.beads/
+
+# Logs
+*.log
+
+# SQLite databases (except tracked ones)
+*.db
+*.db-*
+
+# Secrets (should never be committed)
+.env
+.env.*
+*.secret
+*.pem
+*.key
+credentials.json
