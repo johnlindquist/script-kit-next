@@ -648,27 +648,27 @@ impl EditorPrompt {
             // Select all
             ("a", true, false, false) => self.select_all(),
             
-            // Navigation
-            ("arrowleft", false, shift, false) => self.move_left(shift),
-            ("arrowright", false, shift, false) => self.move_right(shift),
-            ("arrowup", false, shift, false) => self.move_up(shift),
-            ("arrowdown", false, shift, false) => self.move_down(shift),
+            // Navigation (basic arrow keys, with or without shift for selection)
+            ("arrowleft", false, _, false) => self.move_left(shift),
+            ("arrowright", false, _, false) => self.move_right(shift),
+            ("arrowup", false, _, false) => self.move_up(shift),
+            ("arrowdown", false, _, false) => self.move_down(shift),
             
             // Word navigation (Alt/Option + arrow)
-            ("arrowleft", false, shift, true) => self.move_word_left(shift),
-            ("arrowright", false, shift, true) => self.move_word_right(shift),
+            ("arrowleft", false, _, true) => self.move_word_left(shift),
+            ("arrowright", false, _, true) => self.move_word_right(shift),
             
             // Line start/end (Cmd+Left/Right on Mac)
-            ("arrowleft", true, shift, false) => self.move_to_line_start(shift),
-            ("arrowright", true, shift, false) => self.move_to_line_end(shift),
-            ("home", false, shift, _) => self.move_to_line_start(shift),
-            ("end", false, shift, _) => self.move_to_line_end(shift),
+            ("arrowleft", true, _, false) => self.move_to_line_start(shift),
+            ("arrowright", true, _, false) => self.move_to_line_end(shift),
+            ("home", false, _, _) => self.move_to_line_start(shift),
+            ("end", false, _, _) => self.move_to_line_end(shift),
             
             // Document start/end (Cmd+Up/Down on Mac, Cmd+Home/End)
-            ("arrowup", true, shift, false) => self.move_to_document_start(shift),
-            ("arrowdown", true, shift, false) => self.move_to_document_end(shift),
-            ("home", true, shift, _) => self.move_to_document_start(shift),
-            ("end", true, shift, _) => self.move_to_document_end(shift),
+            ("arrowup", true, _, false) => self.move_to_document_start(shift),
+            ("arrowdown", true, _, false) => self.move_to_document_end(shift),
+            ("home", true, _, _) => self.move_to_document_start(shift),
+            ("end", true, _, _) => self.move_to_document_end(shift),
             
             // Editing
             ("backspace", _, _, _) => self.backspace(),
@@ -753,7 +753,7 @@ impl EditorPrompt {
             .flex_row()
             .h(line_height)
             .w_full()
-            .font_family("Berkeley Mono, Menlo, Monaco, Consolas, monospace")
+            .font_family("Menlo")
             .text_sm()
             .child(
                 // Line number gutter
@@ -959,7 +959,7 @@ impl EditorPrompt {
             .bg(rgb(colors.background.title_bar))
             .border_t_1()
             .border_color(rgb(colors.ui.border))
-            .font_family("Berkeley Mono, Menlo, Monaco, Consolas, monospace")
+            .font_family("Menlo")
             .child(
                 div()
                     .flex()
@@ -1018,7 +1018,7 @@ impl Render for EditorPrompt {
             .w_full()
             .h_full()
             .bg(rgb(colors.background.main))
-            .font_family("Berkeley Mono, Menlo, Monaco, Consolas, monospace")
+            .font_family("Menlo")
             .child(
                 // Editor content area with virtualized line rendering
                 div()

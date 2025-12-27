@@ -531,9 +531,14 @@ impl HotkeyPoller {
                             logging::log("HOTKEY", "Window activated and focused");
                             
                             // Step 5: Check if we need to reset to script list (after script completion)
+                            // IMPORTANT: Use reset_to_script_list_skip_resize() here because we just
+                            // positioned the window with move_first_window_to_bounds(). There's a race
+                            // condition where macOS hasn't finished processing the move before resize
+                            // tries to read the window frame - it would get the OLD position and put
+                            // the window on the wrong display. The window size was set during the move.
                             if NEEDS_RESET.compare_exchange(true, false, Ordering::SeqCst, Ordering::SeqCst).is_ok() {
-                                logging::log("VISIBILITY", "NEEDS_RESET was true - clearing and resetting to script list");
-                                view.reset_to_script_list(cx);
+                                logging::log("VISIBILITY", "NEEDS_RESET was true - clearing and resetting to script list (skip resize)");
+                                view.reset_to_script_list_skip_resize(cx);
                             }
                         });
                         
@@ -1555,8 +1560,18 @@ impl ScriptListApp {
         logging::log("EXEC", "=== Script cancellation complete ===");
     }
     
-    /// Reset all state and return to the script list view
-    fn reset_to_script_list(&mut self, cx: &mut Context<Self>) {
+    /// Reset all state and return to the script list view.
+    /// 
+    /// # Arguments
+    /// * `skip_resize` - If true, skip the window resize. This is needed when the window
+    ///   was just positioned via `move_first_window_to_bounds()` because there's a race
+    ///   condition: macOS hasn't finished processing the move before we try to resize.
+    ///   The resize reads the window's current frame, but gets the OLD position (before
+    ///   the move), causing the window to appear on the wrong display.
+    ///   
+    ///   IMPORTANT: Only set `skip_resize=true` when calling immediately after
+    ///   `move_first_window_to_bounds()` in the hotkey/tray show handlers.
+    fn reset_to_script_list_inner(&mut self, cx: &mut Context<Self>, skip_resize: bool) {
         let old_view = match &self.current_view {
             AppView::ScriptList => "ScriptList",
             AppView::ActionsDialog => "ActionsDialog",
@@ -1566,7 +1581,7 @@ impl ScriptListApp {
             AppView::EditorPrompt { .. } => "EditorPrompt",
         };
         
-        logging::log("UI", &format!("Resetting to script list (was: {})", old_view));
+        logging::log("UI", &format!("Resetting to script list (was: {}, skip_resize: {})", old_view, skip_resize));
         
         // Belt-and-suspenders: Force-kill the process group using stored PID
         // This runs BEFORE clearing channels to ensure cleanup even if Drop doesn't fire
@@ -1596,9 +1611,13 @@ impl ScriptListApp {
         self.list_scroll_handle.scroll_to_item(0, ScrollStrategy::Top);
         self.last_scrolled_index = Some(0);
         
-        // Resize window for script list
-        let count = self.scripts.len() + self.scriptlets.len();
-        resize_first_window_to_height(height_for_view(ViewType::ScriptList, count));
+        // Resize window for script list.
+        // SKIP when called right after move_first_window_to_bounds() - there's a race condition
+        // where macOS hasn't updated the window frame yet, causing resize to use the wrong position.
+        if !skip_resize {
+            let count = self.scripts.len() + self.scriptlets.len();
+            resize_first_window_to_height(height_for_view(ViewType::ScriptList, count));
+        }
         
         // Clear output
         self.last_output = None;
@@ -1614,6 +1633,28 @@ impl ScriptListApp {
         
         logging::log("UI", "State reset complete - view is now ScriptList (filter, selection, scroll cleared)");
         cx.notify();
+    }
+    
+    /// Reset all state and return to the script list view.
+    /// This is the standard method that includes window resizing.
+    /// 
+    /// NOTE: If you're calling this immediately after positioning the window with
+    /// `move_first_window_to_bounds()`, use `reset_to_script_list_skip_resize()` instead
+    /// to avoid a race condition that causes the window to appear on the wrong display.
+    fn reset_to_script_list(&mut self, cx: &mut Context<Self>) {
+        self.reset_to_script_list_inner(cx, false);
+    }
+    
+    /// Reset all state and return to the script list view, WITHOUT resizing.
+    /// 
+    /// Use this variant when:
+    /// - Called immediately after `move_first_window_to_bounds()` (e.g., in hotkey/tray handlers)
+    /// - The window was just positioned and we don't want to race with that positioning
+    /// 
+    /// The window size was already set correctly during the move, so resize is unnecessary
+    /// and would cause a race condition leading to wrong display positioning.
+    fn reset_to_script_list_skip_resize(&mut self, cx: &mut Context<Self>) {
+        self.reset_to_script_list_inner(cx, true);
     }
     
     /// Check if we're currently in a prompt view (script is running)
@@ -3499,9 +3540,12 @@ fn main() {
                                         let focus_handle = view.focus_handle(ctx);
                                         win.focus(&focus_handle, ctx);
                                         
-                                        // Reset if needed
+                                        // Reset if needed.
+                                        // IMPORTANT: Use reset_to_script_list_skip_resize() because we just
+                                        // positioned the window with move_first_window_to_bounds(). See the
+                                        // hotkey handler for detailed explanation of the race condition.
                                         if NEEDS_RESET.compare_exchange(true, false, Ordering::SeqCst, Ordering::SeqCst).is_ok() {
-                                            view.reset_to_script_list(ctx);
+                                            view.reset_to_script_list_skip_resize(ctx);
                                         }
                                     });
                                 });
