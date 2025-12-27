@@ -60,5 +60,10 @@ resvg = "0.45"                        # SVG to PNG conversion for tray icon
 usvg = "0.45"                         # SVG parsing (used by resvg)
 tiny-skia = "0.11"                    # 2D graphics library for SVG rendering
 
+# Clipboard history storage
+rusqlite = { version = "0.31", features = ["bundled"] }
+uuid = { version = "1.0", features = ["v4"] }
+base64 = "0.22"
+
 [build-dependencies]
 dirs = "5.0"  # For build.rs to copy SDK to ~/.kit/lib/

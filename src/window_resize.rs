@@ -1,21 +1,20 @@
 //! Dynamic Window Resizing Module
 //!
-//! Handles dynamic window height calculations for Script Kit GPUI.
-//! The window resizes based on content:
-//! - Empty/no choices: Compact height (input field only)
-//! - With choices: Expands to show list items
+//! Handles window height for different view types in Script Kit GPUI.
 //!
-//! This matches the behavior of the original Script Kit where
-//! the window shrinks when filtering yields no results.
+//! **Key Rules:**
+//! - ScriptList (main window with preview): FIXED at 500px, never resizes
+//! - ArgPrompt with choices (has preview): FIXED at 500px, never resizes  
+//! - ArgPrompt without choices (input only): Compact 120px
+//! - Editor/Div/Term: Full height 700px
 
-#[cfg(target_os = "macos")]
-use cocoa::base::id;
 #[cfg(target_os = "macos")]
 use cocoa::foundation::{NSPoint, NSRect, NSSize};
 #[cfg(target_os = "macos")]
-use objc::{class, msg_send, sel, sel_impl};
+use objc::{msg_send, sel, sel_impl};
 
 use gpui::{px, Pixels};
+use tracing::{info, warn};
 
 use crate::logging;
 use crate::window_manager;
@@ -24,124 +23,31 @@ use crate::window_manager;
 pub mod layout {
     use gpui::{px, Pixels};
 
-    /// Fixed header height (logo + input field area)
-    pub const HEADER_HEIGHT: Pixels = px(100.0);
-
-    /// Height of each list item
-    pub const LIST_ITEM_HEIGHT: Pixels = px(52.0);
-
-    /// Footer/actions bar height when visible
-    pub const FOOTER_HEIGHT: Pixels = px(44.0);
-
-    /// Minimum window height (header only, no list)
+    /// Minimum window height (header only, no list) - for input-only prompts
     pub const MIN_HEIGHT: Pixels = px(120.0);
 
-    /// Maximum window height (cap to prevent overly tall windows)
+    /// Standard height for views with preview panel (script list, arg with choices)
+    /// This is FIXED - these views do NOT resize dynamically
+    pub const STANDARD_HEIGHT: Pixels = px(500.0);
+
+    /// Maximum window height for full-content views (editor, div, term)
     pub const MAX_HEIGHT: Pixels = px(700.0);
-
-    /// Default window width (constant)
-    #[allow(dead_code)]
-    pub const WINDOW_WIDTH: Pixels = px(750.0);
-
-    /// Maximum number of visible items before scrolling
-    pub const MAX_VISIBLE_ITEMS: usize = 10;
-
-    /// Padding at bottom of list area
-    pub const LIST_PADDING: Pixels = px(8.0);
 }
 
-/// Configuration for window resize behavior
-#[derive(Debug, Clone, Copy)]
-#[allow(dead_code)]
-pub struct ResizeConfig {
-    /// Whether to animate the resize (future feature)
-    pub animate: bool,
-    /// Debounce time in milliseconds for rapid resize events
-    pub debounce_ms: u64,
-    /// Whether to include footer in height calculation
-    pub include_footer: bool,
-}
-
-impl Default for ResizeConfig {
-    fn default() -> Self {
-        Self {
-            animate: false,
-            debounce_ms: 16, // ~60fps
-            include_footer: true,
-        }
-    }
-}
-
-/// Calculate the optimal window height based on content
-///
-/// # Arguments
-/// * `item_count` - Number of items in the filtered list
-/// * `config` - Resize configuration options
-///
-/// # Returns
-/// The calculated window height in pixels
-pub fn calculate_window_height(item_count: usize, config: &ResizeConfig) -> Pixels {
-    use layout::*;
-
-    if item_count == 0 {
-        // No items: compact mode (header only)
-        logging::log(
-            "RESIZE",
-            &format!("Compact mode: 0 items -> height={:.0}", f32::from(MIN_HEIGHT)),
-        );
-        return MIN_HEIGHT;
-    }
-
-    // Calculate list height based on visible items
-    let visible_items = item_count.min(MAX_VISIBLE_ITEMS);
-    let list_height = px(visible_items as f32 * f32::from(LIST_ITEM_HEIGHT));
-
-    // Total height = header + list + optional footer + padding
-    let mut total_height = HEADER_HEIGHT + list_height + LIST_PADDING;
-
-    if config.include_footer {
-        total_height += FOOTER_HEIGHT;
-    }
-
-    // Clamp to min/max bounds
-    let final_height = if total_height < MIN_HEIGHT {
-        MIN_HEIGHT
-    } else if total_height > MAX_HEIGHT {
-        MAX_HEIGHT
-    } else {
-        total_height
-    };
-
-    logging::log(
-        "RESIZE",
-        &format!(
-            "Height calc: {} items, {} visible -> header({:.0}) + list({:.0}) + footer({:.0}) = {:.0}",
-            item_count,
-            visible_items,
-            f32::from(HEADER_HEIGHT),
-            f32::from(list_height),
-            if config.include_footer { f32::from(FOOTER_HEIGHT) } else { 0.0 },
-            f32::from(final_height)
-        ),
-    );
-
-    final_height
-}
-
-/// Calculate window height for specific view types
+/// View types for height calculation
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ViewType {
-    /// Script list view (main launcher)
+    /// Script list view (main launcher) - has preview panel, FIXED height
     ScriptList,
-    /// Arg prompt with choices
+    /// Arg prompt with choices - has preview panel, FIXED height
     ArgPromptWithChoices,
-    /// Arg prompt without choices (input only)
+    /// Arg prompt without choices (input only) - compact height
     ArgPromptNoChoices,
-    /// Div prompt (HTML display)
+    /// Div prompt (HTML display) - full height
     DivPrompt,
-    /// Editor prompt (code editor)
+    /// Editor prompt (code editor) - full height
     EditorPrompt,
-    /// Terminal prompt
+    /// Terminal prompt - full height
     TermPrompt,
 }
 
@@ -149,114 +55,118 @@ pub enum ViewType {
 ///
 /// # Arguments
 /// * `view_type` - The type of view being displayed
-/// * `item_count` - Number of items (for list-based views)
+/// * `_item_count` - Unused, kept for API compatibility
 ///
 /// # Returns
-/// The optimal window height for this view
-pub fn height_for_view(view_type: ViewType, item_count: usize) -> Pixels {
+/// The window height for this view type
+pub fn height_for_view(view_type: ViewType, _item_count: usize) -> Pixels {
     use layout::*;
 
-    match view_type {
-        ViewType::ScriptList | ViewType::ArgPromptWithChoices => {
-            calculate_window_height(item_count, &ResizeConfig::default())
+    let height = match view_type {
+        // Views with preview panel - FIXED height, no dynamic resizing
+        // DivPrompt also uses standard height to match main window
+        ViewType::ScriptList | ViewType::ArgPromptWithChoices | ViewType::DivPrompt => {
+            STANDARD_HEIGHT
         }
+        // Input-only prompt - compact
         ViewType::ArgPromptNoChoices => {
-            // Just header, no list
             MIN_HEIGHT
         }
-        ViewType::DivPrompt | ViewType::EditorPrompt | ViewType::TermPrompt => {
-            // Full height for content views
+        // Full content views (editor, terminal) - max height
+        ViewType::EditorPrompt | ViewType::TermPrompt => {
             MAX_HEIGHT
         }
-    }
+    };
+    
+    // Log to both legacy and structured logging
+    let height_px = f32::from(height);
+    info!(
+        view_type = ?view_type,
+        height_px = height_px,
+        "height_for_view calculated"
+    );
+    logging::log(
+        "RESIZE",
+        &format!(
+            "height_for_view({:?}) = {:.0}",
+            view_type, height_px
+        ),
+    );
+    
+    height
 }
 
-/// Determine if window resize is needed
-///
-/// # Arguments
-/// * `current_height` - Current window height
-/// * `target_height` - Desired window height
-/// * `threshold` - Minimum difference to trigger resize (prevents jitter)
-///
-/// # Returns
-/// `true` if resize is needed, `false` if heights are close enough
-#[allow(dead_code)]
-pub fn needs_resize(current_height: Pixels, target_height: Pixels, threshold: Pixels) -> bool {
-    let diff = (f32::from(current_height) - f32::from(target_height)).abs();
-    diff > f32::from(threshold)
+/// Calculate the initial window height for app startup
+pub fn initial_window_height() -> Pixels {
+    layout::STANDARD_HEIGHT
 }
 
-/// Resize the main window to a new height, keeping it centered horizontally.
-///
-/// This function:
-/// 1. Gets the main window from WindowManager
-/// 2. Gets the current window frame
-/// 3. Calculates new frame with the target height
-/// 4. Keeps the window horizontally centered on its current display
-/// 5. Anchors the resize from the top (window top stays fixed)
+/// Force reset the debounce timer (kept for API compatibility)
+pub fn reset_resize_debounce() {
+    // No-op - we removed debouncing since resizes are now rare
+}
+
+/// Resize the main window to a new height, keeping the top edge fixed.
 ///
 /// # Arguments
 /// * `target_height` - The desired window height in pixels
 ///
 /// # Platform
 /// This function only works on macOS. On other platforms, it's a no-op.
-///
-/// # Errors
-/// Logs a warning and returns early if the main window is not registered
-/// in WindowManager. Call `find_and_register_main_window()` first.
 #[cfg(target_os = "macos")]
 pub fn resize_first_window_to_height(target_height: Pixels) {
     let height_f64: f64 = f32::from(target_height) as f64;
 
-    // Get the main window from WindowManager instead of objectAtIndex:0
+    // Get the main window from WindowManager
     let window = match window_manager::get_main_window() {
         Some(w) => w,
         None => {
+            warn!("Main window not registered in WindowManager, cannot resize");
             logging::log(
                 "RESIZE",
-                "WARNING: Main window not registered in WindowManager. Call find_and_register_main_window() first.",
+                "WARNING: Main window not registered in WindowManager.",
             );
             return;
         }
     };
 
-    logging::log(
-        "RESIZE",
-        &format!(
-            "resize_first_window_to_height: target={:.0} (from WindowManager)",
-            height_f64
-        ),
-    );
-
     unsafe {
-
-        // Get the PRIMARY screen's height for coordinate conversion
-        let screens: id = msg_send![class!(NSScreen), screens];
-        let main_screen: id = msg_send![screens, firstObject];
-        let main_screen_frame: NSRect = msg_send![main_screen, frame];
-        let _primary_screen_height = main_screen_frame.size.height;
-
         // Get current window frame
         let current_frame: NSRect = msg_send![window, frame];
+        
+        // Skip if height is already correct (within 1px tolerance)
+        let current_height = current_frame.size.height;
+        if (current_height - height_f64).abs() < 1.0 {
+            info!(
+                current_height = current_height,
+                target_height = height_f64,
+                "Skip resize - already at target height"
+            );
+            logging::log(
+                "RESIZE",
+                &format!("Skip resize - already at height {:.0}", height_f64),
+            );
+            return;
+        }
 
+        info!(
+            from_height = current_height,
+            to_height = height_f64,
+            "Resizing window"
+        );
         logging::log(
             "RESIZE",
             &format!(
-                "Current frame: origin=({:.0}, {:.0}) size={:.0}x{:.0}",
-                current_frame.origin.x,
-                current_frame.origin.y,
-                current_frame.size.width,
-                current_frame.size.height
+                "Resize: {:.0} -> {:.0}",
+                current_height, height_f64
             ),
         );
 
         // Calculate height difference
-        let height_delta = height_f64 - current_frame.size.height;
+        let height_delta = height_f64 - current_height;
 
         // macOS coordinate system: Y=0 at bottom, increases upward
-        // To keep the TOP of the window fixed, we need to adjust the origin.y
-        // When height increases, origin.y should decrease
-        // When height decreases, origin.y should increase
+        // To keep the TOP of the window fixed, adjust origin.y
         let new_origin_y = current_frame.origin.y - height_delta;
 
         let new_frame = NSRect::new(
@@ -264,45 +174,15 @@ pub fn resize_first_window_to_height(target_height: Pixels) {
             NSSize::new(current_frame.size.width, height_f64),
         );
 
-        logging::log(
-            "RESIZE",
-            &format!(
-                "New frame: origin=({:.0}, {:.0}) size={:.0}x{:.0} (height_delta={:.0})",
-                new_frame.origin.x,
-                new_frame.origin.y,
-                new_frame.size.width,
-                new_frame.size.height,
-                height_delta
-            ),
-        );
-
-        // Apply the new frame (with optional animation in the future)
+        // Apply the new frame
         let _: () = msg_send![window, setFrame:new_frame display:true animate:false];
-
-        // Verify the resize worked
-        let after_frame: NSRect = msg_send![window, frame];
-        logging::log(
-            "RESIZE",
-            &format!(
-                "After resize: origin=({:.0}, {:.0}) size={:.0}x{:.0}",
-                after_frame.origin.x,
-                after_frame.origin.y,
-                after_frame.size.width,
-                after_frame.size.height
-            ),
-        );
     }
 }
 
 /// Get the current height of the main window
-///
-/// # Returns
-/// The current window height in pixels, or None if the main window
-/// is not registered in WindowManager
 #[allow(dead_code)]
 #[cfg(target_os = "macos")]
 pub fn get_first_window_height() -> Option<Pixels> {
-    // Get the main window from WindowManager instead of objectAtIndex:0
     let window = window_manager::get_main_window()?;
 
     unsafe {
@@ -324,116 +204,55 @@ pub fn get_first_window_height() -> Option<Pixels> {
     None
 }
 
-/// High-level function to update window size based on item count.
-///
-/// This is the main entry point for dynamic resizing:
-/// 1. Calculates the target height based on item count
-/// 2. Gets the current window height
-/// 3. Only resizes if the difference exceeds a threshold
-///
-/// # Arguments
-/// * `item_count` - Number of items in the list
-/// * `config` - Resize configuration options
-///
-/// # Returns
-/// `true` if resize was performed, `false` if skipped
-#[allow(dead_code)]
-pub fn update_window_for_item_count(item_count: usize, config: &ResizeConfig) -> bool {
-    let target_height = calculate_window_height(item_count, config);
-
-    // Get current height to check if resize is needed
-    if let Some(current_height) = get_first_window_height() {
-        let threshold = px(10.0); // 10px threshold to prevent jitter
-
-        if needs_resize(current_height, target_height, threshold) {
-            logging::log(
-                "RESIZE",
-                &format!(
-                    "Resizing: {} items, current={:.0} -> target={:.0}",
-                    item_count,
-                    f32::from(current_height),
-                    f32::from(target_height)
-                ),
-            );
-            resize_first_window_to_height(target_height);
-            return true;
-        } else {
-            logging::log(
-                "RESIZE",
-                &format!(
-                    "Skip resize: {} items, current={:.0} ≈ target={:.0}",
-                    item_count,
-                    f32::from(current_height),
-                    f32::from(target_height)
-                ),
-            );
-        }
-    } else {
-        // No current height available, just resize
-        logging::log(
-            "RESIZE",
-            &format!(
-                "Resizing (no current height): {} items -> target={:.0}",
-                item_count,
-                f32::from(target_height)
-            ),
-        );
-        resize_first_window_to_height(target_height);
-        return true;
-    }
-
-    false
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use gpui::px;
 
     #[test]
-    fn test_zero_items_compact_height() {
-        let height = calculate_window_height(0, &ResizeConfig::default());
-        assert_eq!(height, layout::MIN_HEIGHT);
+    fn test_script_list_fixed_height() {
+        // Script list should always be STANDARD_HEIGHT regardless of item count
+        assert_eq!(height_for_view(ViewType::ScriptList, 0), layout::STANDARD_HEIGHT);
+        assert_eq!(height_for_view(ViewType::ScriptList, 5), layout::STANDARD_HEIGHT);
+        assert_eq!(height_for_view(ViewType::ScriptList, 100), layout::STANDARD_HEIGHT);
+    }
+    
+    #[test]
+    fn test_arg_with_choices_fixed_height() {
+        // Arg with choices should always be STANDARD_HEIGHT
+        assert_eq!(height_for_view(ViewType::ArgPromptWithChoices, 0), layout::STANDARD_HEIGHT);
+        assert_eq!(height_for_view(ViewType::ArgPromptWithChoices, 3), layout::STANDARD_HEIGHT);
+        assert_eq!(height_for_view(ViewType::ArgPromptWithChoices, 50), layout::STANDARD_HEIGHT);
     }
 
     #[test]
-    fn test_single_item_height() {
-        let height = calculate_window_height(1, &ResizeConfig::default());
-        // Should be header + 1 item + footer + padding
-        let expected = layout::HEADER_HEIGHT
-            + layout::LIST_ITEM_HEIGHT
-            + layout::FOOTER_HEIGHT
-            + layout::LIST_PADDING;
-        assert_eq!(height, expected);
-    }
-
-    #[test]
-    fn test_max_visible_items() {
-        // More items than max visible should cap at MAX_VISIBLE_ITEMS
-        let height = calculate_window_height(100, &ResizeConfig::default());
-        let max_list_height = px(layout::MAX_VISIBLE_ITEMS as f32 * f32::from(layout::LIST_ITEM_HEIGHT));
-        let expected_max = layout::HEADER_HEIGHT
-            + max_list_height
-            + layout::FOOTER_HEIGHT
-            + layout::LIST_PADDING;
-        assert_eq!(height, expected_max.min(layout::MAX_HEIGHT));
-    }
-
-    #[test]
-    fn test_needs_resize_threshold() {
-        let current = px(500.0);
-        let target_close = px(502.0);
-        let target_far = px(600.0);
-        let threshold = px(5.0);
-
-        assert!(!needs_resize(current, target_close, threshold));
-        assert!(needs_resize(current, target_far, threshold));
-    }
-
-    #[test]
-    fn test_view_types() {
+    fn test_arg_no_choices_compact() {
+        // Arg without choices should be MIN_HEIGHT
         assert_eq!(height_for_view(ViewType::ArgPromptNoChoices, 0), layout::MIN_HEIGHT);
+    }
+
+    #[test]
+    fn test_full_height_views() {
+        // Editor and Terminal use MAX_HEIGHT (700px)
         assert_eq!(height_for_view(ViewType::EditorPrompt, 0), layout::MAX_HEIGHT);
-        assert_eq!(height_for_view(ViewType::DivPrompt, 0), layout::MAX_HEIGHT);
+        assert_eq!(height_for_view(ViewType::TermPrompt, 0), layout::MAX_HEIGHT);
+    }
+    
+    #[test]
+    fn test_div_prompt_standard_height() {
+        // DivPrompt uses STANDARD_HEIGHT (500px) to match main window
+        assert_eq!(height_for_view(ViewType::DivPrompt, 0), layout::STANDARD_HEIGHT);
+    }
+    
+    #[test]
+    fn test_initial_window_height() {
+        assert_eq!(initial_window_height(), layout::STANDARD_HEIGHT);
+    }
+    
+    #[test]
+    fn test_height_constants() {
+        assert_eq!(layout::MIN_HEIGHT, px(120.0));
+        assert_eq!(layout::STANDARD_HEIGHT, px(500.0));
+        assert_eq!(layout::MAX_HEIGHT, px(700.0));
     }
 }
