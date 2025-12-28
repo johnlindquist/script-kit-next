@@ -131,6 +131,92 @@ impl PlaceholderConfig {
     }
 }
 
+// ============================================================================
+// Cursor Styling Constants
+// ============================================================================
+
+/// Standard cursor width in pixels for text input fields
+/// 
+/// This matches the standard cursor width used in editor.rs and provides
+/// visual consistency across all input fields.
+pub const CURSOR_WIDTH: f32 = 2.0;
+
+/// Cursor height for large text (.text_lg() / 18px font)
+/// 
+/// This value is calculated to align properly with GPUI's .text_lg() text rendering:
+/// - GPUI's text_lg() uses ~18px font size
+/// - With natural line height (~1.55), this gives ~28px line height
+/// - Cursor should be 18px with 5px top/bottom spacing for vertical centering
+/// 
+/// NOTE: This value differs from `font_size_lg * line_height_normal` in design tokens
+/// because GPUI's .text_lg() has different line-height than our token calculations.
+/// Using this constant ensures proper cursor-text alignment.
+pub const CURSOR_HEIGHT_LG: f32 = 18.0;
+
+/// Cursor height for small text (.text_sm() / 12px font)
+pub const CURSOR_HEIGHT_SM: f32 = 14.0;
+
+/// Cursor height for medium text (.text_md() / 14px font)
+pub const CURSOR_HEIGHT_MD: f32 = 16.0;
+
+/// Vertical margin for cursor centering within text line
+/// 
+/// Apply this as `.my(px(CURSOR_MARGIN_Y))` to vertically center the cursor
+/// within its text line. This follows the editor.rs pattern.
+pub const CURSOR_MARGIN_Y: f32 = 2.0;
+
+/// Configuration for input cursor styling
+/// 
+/// Use this struct to ensure consistent cursor appearance across all input fields.
+/// The cursor should:
+/// 1. Use a fixed height matching the text size (not calculated from design tokens)
+/// 2. Use vertical margin for centering within the line
+/// 3. Be rendered as an always-present div to prevent layout shift, with bg toggled
+#[derive(Debug, Clone, Copy)]
+pub struct CursorStyle {
+    /// Cursor width in pixels
+    pub width: f32,
+    /// Cursor height in pixels (should match text size, not line height)
+    pub height: f32,
+    /// Vertical margin for centering
+    pub margin_y: f32,
+}
+
+impl Default for CursorStyle {
+    fn default() -> Self {
+        Self::large()
+    }
+}
+
+impl CursorStyle {
+    /// Cursor style for large text (.text_lg())
+    pub const fn large() -> Self {
+        Self {
+            width: CURSOR_WIDTH,
+            height: CURSOR_HEIGHT_LG,
+            margin_y: CURSOR_MARGIN_Y,
+        }
+    }
+    
+    /// Cursor style for medium text (.text_md())
+    pub const fn medium() -> Self {
+        Self {
+            width: CURSOR_WIDTH,
+            height: CURSOR_HEIGHT_MD,
+            margin_y: CURSOR_MARGIN_Y,
+        }
+    }
+    
+    /// Cursor style for small text (.text_sm())
+    pub const fn small() -> Self {
+        Self {
+            width: CURSOR_WIDTH,
+            height: CURSOR_HEIGHT_SM,
+            margin_y: CURSOR_MARGIN_Y,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -181,5 +267,52 @@ mod tests {
         // This ensures cursor appears at FAR LEFT when input is empty
         let config = PlaceholderConfig::default();
         assert!(config.cursor_at_left, "Cursor should be at left by default for proper placeholder behavior");
+    }
+    
+    // Cursor styling tests
+    
+    #[test]
+    fn test_cursor_width_constant() {
+        assert_eq!(CURSOR_WIDTH, 2.0);
+    }
+    
+    #[test]
+    fn test_cursor_height_lg_matches_text_lg() {
+        // CURSOR_HEIGHT_LG should be 18px to match GPUI's .text_lg() font size
+        // This ensures proper vertical alignment of cursor with text
+        assert_eq!(CURSOR_HEIGHT_LG, 18.0);
+    }
+    
+    #[test]
+    fn test_cursor_heights_proportional() {
+        // Cursor heights should be proportional to text sizes
+        // Use const blocks to satisfy clippy::assertions_on_constants
+        const _: () = { assert!(CURSOR_HEIGHT_SM < CURSOR_HEIGHT_MD); };
+        const _: () = { assert!(CURSOR_HEIGHT_MD < CURSOR_HEIGHT_LG); };
+    }
+    
+    #[test]
+    fn test_cursor_style_default_is_large() {
+        let style = CursorStyle::default();
+        assert_eq!(style.height, CURSOR_HEIGHT_LG);
+        assert_eq!(style.width, CURSOR_WIDTH);
+    }
+    
+    #[test]
+    fn test_cursor_style_constructors() {
+        let large = CursorStyle::large();
+        assert_eq!(large.height, CURSOR_HEIGHT_LG);
+        
+        let medium = CursorStyle::medium();
+        assert_eq!(medium.height, CURSOR_HEIGHT_MD);
+        
+        let small = CursorStyle::small();
+        assert_eq!(small.height, CURSOR_HEIGHT_SM);
+    }
+    
+    #[test]
+    fn test_cursor_margin_constant() {
+        // Margin should be 2px for proper vertical centering
+        assert_eq!(CURSOR_MARGIN_Y, 2.0);
     }
 }

@@ -2615,8 +2615,10 @@ impl ScriptListApp {
                         self.last_output = Some(SharedString::from(format!("Failed to launch: {}", app_name)));
                     } else {
                         logging::log("EXEC", &format!("Launched app: {}", app_name));
-                        // Hide window after launching app
+                        // Hide window after launching app and set reset flag
+                        // so filter_text is cleared when window is shown again
                         WINDOW_VISIBLE.store(false, Ordering::SeqCst);
+                        NEEDS_RESET.store(true, Ordering::SeqCst);
                         cx.hide();
                     }
                 } else {
@@ -2664,8 +2666,10 @@ impl ScriptListApp {
             cx.notify();
         } else {
             logging::log("EXEC", &format!("Launched app: {}", app.name));
-            // Hide window after launching app
+            // Hide window after launching app and set reset flag
+            // so filter_text is cleared when window is shown again
             WINDOW_VISIBLE.store(false, Ordering::SeqCst);
+            NEEDS_RESET.store(true, Ordering::SeqCst);
             cx.hide();
         }
     }
@@ -2685,8 +2689,10 @@ impl ScriptListApp {
             cx.notify();
         } else {
             logging::log("EXEC", &format!("Focused window: {}", window.title));
-            // Hide Script Kit after focusing window
+            // Hide Script Kit after focusing window and set reset flag
+            // so filter_text is cleared when window is shown again
             WINDOW_VISIBLE.store(false, Ordering::SeqCst);
+            NEEDS_RESET.store(true, Ordering::SeqCst);
             cx.hide();
         }
     }
@@ -4860,9 +4866,15 @@ impl ScriptListApp {
                             // When NOT in actions mode, show normal preview
                             .when(!self.show_actions_popup, |d| d.child(self.render_preview_panel(cx)))
                             // When IN actions mode, show actions dialog inline
+                            // Use flex + justify_end to position dialog closer to right edge
                             .when_some(
                                 if self.show_actions_popup { self.actions_dialog.clone() } else { None },
-                                |d, dialog| d.child(dialog)
+                                |d, dialog| d
+                                    .flex()
+                                    .justify_end()
+                                    .pr(px(8.))  // Small padding from right edge
+                                    .pt(px(8.))  // Small padding from top
+                                    .child(dialog)
                             )
                     ),
             );

@@ -529,8 +529,9 @@ impl Render for ActionsDialog {
             )
             .child(
                 // Search input field with focus indicator
+                // Use fixed width instead of flex_1 to prevent layout shift when typing
                 div()
-                    .flex_1()
+                    .w(px(240.0))
                     .px(px(spacing.padding_sm))
                     .py(px(spacing.padding_xs))
                     .bg(if self.search_text.is_empty() { rgba(0x00000000) } else { 
