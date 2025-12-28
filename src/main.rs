@@ -4964,9 +4964,9 @@ impl ScriptListApp {
                                 Some(path_str.to_string())
                             };
                             
-                            // Use real icon if available, fallback to emoji
-                            let icon = match &app.icon_data {
-                                Some(data) => list_item::IconKind::Image(data.clone()),
+                            // Use pre-decoded icon if available, fallback to emoji
+                            let icon = match &app.icon {
+                                Some(img) => list_item::IconKind::Image(img.clone()),
                                 None => list_item::IconKind::Emoji("📱".to_string()),
                             };
                             

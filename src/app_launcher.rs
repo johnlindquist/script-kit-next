@@ -37,11 +37,11 @@ use cocoa::foundation::NSString as CocoaNSString;
 #[cfg(target_os = "macos")]
 use objc::{class, msg_send, sel, sel_impl};
 
-/// Icon data as PNG bytes wrapped in Arc for efficient sharing
-pub type IconData = Arc<Vec<u8>>;
+/// Pre-decoded icon image for efficient rendering
+pub type DecodedIcon = Arc<gpui::RenderImage>;
 
 /// Information about an installed application
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct AppInfo {
     /// Display name of the application (e.g., "Safari")
     pub name: String,
@@ -49,8 +49,20 @@ pub struct AppInfo {
     pub path: PathBuf,
     /// Bundle identifier from Info.plist (e.g., "com.apple.Safari")
     pub bundle_id: Option<String>,
-    /// Icon as PNG bytes (32x32), extracted via NSWorkspace
-    pub icon_data: Option<IconData>,
+    /// Pre-decoded icon image (32x32), ready for rendering
+    /// **IMPORTANT**: This is pre-decoded to avoid PNG decoding on every render frame
+    pub icon: Option<DecodedIcon>,
+}
+
+impl std::fmt::Debug for AppInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AppInfo")
+            .field("name", &self.name)
+            .field("path", &self.path)
+            .field("bundle_id", &self.bundle_id)
+            .field("icon", &self.icon.as_ref().map(|_| "<RenderImage>"))
+            .finish()
+    }
 }
 
 /// Cached list of applications (scanned once, reused)
@@ -185,17 +197,20 @@ fn parse_app_bundle(path: &Path) -> Option<AppInfo> {
     // Try to extract bundle identifier from Info.plist
     let bundle_id = extract_bundle_id(path);
 
-    // Extract icon using NSWorkspace (macOS only)
+    // Extract and pre-decode icon using NSWorkspace (macOS only)
+    // Pre-decoding here is CRITICAL for performance - avoids PNG decode on every render
     #[cfg(target_os = "macos")]
-    let icon_data = extract_app_icon(path);
+    let icon = extract_app_icon(path).and_then(|png_bytes| {
+        crate::list_item::decode_png_to_render_image(&png_bytes).ok()
+    });
     #[cfg(not(target_os = "macos"))]
-    let icon_data = None;
+    let icon = None;
 
     Some(AppInfo {
         name,
         path: path.to_path_buf(),
         bundle_id,
-        icon_data,
+        icon,
     })
 }
 
@@ -229,8 +244,9 @@ fn extract_bundle_id(app_path: &Path) -> Option<String> {
 ///
 /// Uses macOS Cocoa APIs to get the icon for an application bundle.
 /// The icon is converted to PNG format at 32x32 pixels for list display.
+/// Returns raw PNG bytes - caller should decode once and cache the RenderImage.
 #[cfg(target_os = "macos")]
-fn extract_app_icon(app_path: &Path) -> Option<IconData> {
+fn extract_app_icon(app_path: &Path) -> Option<Vec<u8>> {
     use std::slice;
 
     let path_str = app_path.to_str()?;
@@ -292,7 +308,7 @@ fn extract_app_icon(app_path: &Path) -> Option<IconData> {
         // Copy bytes to Vec<u8>
         let png_bytes = slice::from_raw_parts(bytes, length).to_vec();
 
-        Some(Arc::new(png_bytes))
+        Some(png_bytes)
     }
 }
 
@@ -507,11 +523,11 @@ mod tests {
     }
 
     #[test]
-    fn test_app_has_icon_data() {
+    fn test_app_has_icon() {
         let apps = scan_applications();
 
         // Check that at least some apps have icons (most should)
-        let apps_with_icons = apps.iter().filter(|a| a.icon_data.is_some()).count();
+        let apps_with_icons = apps.iter().filter(|a| a.icon.is_some()).count();
 
         // Most apps should have icons - at least 50%
         assert!(

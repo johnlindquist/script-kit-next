@@ -403,9 +403,9 @@ pub fn render_design_item(
                     (bm.entry.name.clone(), Some(bm.entry.description.clone()), None, Some(IconKind::Emoji(emoji)))
                 }
                 SearchResult::App(am) => {
-                    // Apps use real extracted icons, fallback to generic emoji
-                    let icon = match &am.app.icon_data {
-                        Some(data) => IconKind::Image(data.clone()),
+                    // Apps use pre-decoded icons, fallback to generic emoji
+                    let icon = match &am.app.icon {
+                        Some(img) => IconKind::Image(img.clone()),
                         None => IconKind::Emoji("📱".to_string()),
                     };
                     (am.app.name.clone(), None, None, Some(icon))

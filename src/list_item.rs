@@ -9,13 +9,13 @@ use gpui::*;
 use std::sync::Arc;
 use crate::logging;
 
-/// Icon type for list items - supports both emoji strings and PNG image data
+/// Icon type for list items - supports both emoji strings and pre-decoded images
 #[derive(Clone)]
 pub enum IconKind {
     /// Text/emoji icon (e.g., "📜", "⚡")
     Emoji(String),
-    /// PNG image data as bytes (for app icons)
-    Image(Arc<Vec<u8>>),
+    /// Pre-decoded render image (for app icons) - MUST be pre-decoded, not raw PNG bytes
+    Image(Arc<RenderImage>),
 }
 
 /// Fixed height for list items (same as main script list)
@@ -173,15 +173,15 @@ impl ListItem {
         self
     }
     
-    /// Set a PNG image icon from bytes
-    pub fn icon_image(mut self, data: Arc<Vec<u8>>) -> Self {
-        self.icon = Some(IconKind::Image(data));
+    /// Set a pre-decoded RenderImage icon
+    pub fn icon_image(mut self, image: Arc<RenderImage>) -> Self {
+        self.icon = Some(IconKind::Image(image));
         self
     }
     
-    /// Set an optional image icon
-    pub fn icon_image_opt(mut self, data: Option<Arc<Vec<u8>>>) -> Self {
-        self.icon = data.map(IconKind::Image);
+    /// Set an optional pre-decoded image icon
+    pub fn icon_image_opt(mut self, image: Option<Arc<RenderImage>>) -> Self {
+        self.icon = image.map(IconKind::Image);
         self
     }
     
@@ -228,9 +228,9 @@ impl RenderOnce for ListItem {
                     .flex_shrink_0()
                     .child(emoji.clone())
             }
-            Some(IconKind::Image(png_data)) => {
-                // Render PNG image using GPUI's img() with a custom loader
-                let data = png_data.clone();
+            Some(IconKind::Image(render_image)) => {
+                // Render pre-decoded image directly (no decoding on render - critical for perf)
+                let image = render_image.clone();
                 div()
                     .w(px(20.))
                     .h(px(20.))
@@ -240,11 +240,7 @@ impl RenderOnce for ListItem {
                     .flex_shrink_0()
                     .child(
                         img(move |_window: &mut Window, _cx: &mut App| {
-                            // Decode PNG to RenderImage
-                            match decode_png_to_render_image(&data) {
-                                Ok(image) => Some(Ok(image)),
-                                Err(_) => None,
-                            }
+                            Some(Ok(image.clone()))
                         })
                         .w(px(20.))
                         .h(px(20.))
@@ -367,9 +363,14 @@ impl RenderOnce for ListItem {
 
 /// Decode PNG bytes to GPUI RenderImage
 /// 
+/// Decode PNG bytes to a GPUI RenderImage
+/// 
 /// Uses the `image` crate to decode PNG data and creates a GPUI-compatible
 /// RenderImage for display. Returns an Arc<RenderImage> for caching.
-fn decode_png_to_render_image(png_data: &[u8]) -> Result<Arc<RenderImage>, image::ImageError> {
+/// 
+/// **IMPORTANT**: Call this ONCE when loading icons, NOT during rendering.
+/// Decoding PNGs on every render frame causes severe performance issues.
+pub fn decode_png_to_render_image(png_data: &[u8]) -> Result<Arc<RenderImage>, image::ImageError> {
     use image::GenericImageView;
     use smallvec::SmallVec;
     
@@ -389,6 +390,16 @@ fn decode_png_to_render_image(png_data: &[u8]) -> Result<Arc<RenderImage>, image
     let render_image = RenderImage::new(SmallVec::from_elem(frame, 1));
     
     Ok(Arc::new(render_image))
+}
+
+/// Create an IconKind from PNG bytes by pre-decoding them
+/// 
+/// Returns None if decoding fails. This should be called once when loading
+/// icons, not during rendering.
+pub fn icon_from_png(png_data: &[u8]) -> Option<IconKind> {
+    decode_png_to_render_image(png_data)
+        .ok()
+        .map(IconKind::Image)
 }
 
 // Note: Tests omitted for this module due to GPUI macro recursion limit issues.
