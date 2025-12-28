@@ -128,7 +128,12 @@ pub struct ListItem {
     on_hover: Option<OnHoverCallback>,
     /// Semantic ID for AI-driven UX targeting. Format: {type}:{index}:{value}
     semantic_id: Option<String>,
+    /// Show left accent bar when selected (3px colored bar on left edge)
+    show_accent_bar: bool,
 }
+
+/// Width of the left accent bar for selected items
+pub const ACCENT_BAR_WIDTH: f32 = 3.0;
 
 impl ListItem {
     /// Create a new list item with the given name and pre-computed colors
@@ -143,7 +148,14 @@ impl ListItem {
             index: None,
             on_hover: None,
             semantic_id: None,
+            show_accent_bar: false,
         }
+    }
+    
+    /// Enable the left accent bar (3px colored bar shown when selected)
+    pub fn with_accent_bar(mut self, show: bool) -> Self {
+        self.show_accent_bar = show;
+        self
     }
     
     /// Set the index of this item in the list (required for hover callback to work)
@@ -381,13 +393,27 @@ impl RenderOnce for ListItem {
             ElementId::NamedInteger("list-item".into(), element_idx as u64)
         };
         
+        // Build accent bar element (only visible when selected and enabled)
+        let accent_bar = if self.show_accent_bar {
+            let accent_color = rgb(colors.accent_selected);
+            div()
+                .w(px(ACCENT_BAR_WIDTH))
+                .h_full()
+                .flex_shrink_0()
+                .bg(if self.selected { accent_color } else { rgba(0x00000000) })
+        } else {
+            div().w(px(0.)).h(px(0.)) // No space if accent bar disabled
+        };
+        
         // Base container with ID for stateful interactivity
         // Horizontal padding px(4.) to provide slight inset from window edge
         let mut container = div()
             .w_full()
             .h(px(LIST_ITEM_HEIGHT))
-            .px(px(4.))
+            .pl(px(4.)) // Left padding only (accent bar goes inside)
+            .pr(px(4.)) // Right padding
             .flex()
+            .flex_row()
             .items_center()
             .id(element_id);
         
@@ -408,7 +434,8 @@ impl RenderOnce for ListItem {
             });
         }
         
-        container.child(inner_content)
+        // Add accent bar first (on left), then content
+        container.child(accent_bar).child(inner_content)
     }
 }
 

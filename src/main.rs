@@ -5059,6 +5059,7 @@ impl ScriptListApp {
                                     ListItem::new(choice.name.clone(), arg_list_colors)
                                         .description_opt(choice.description.clone())
                                         .selected(is_selected)
+                                        .with_accent_bar(true)
                                 )
                         } else {
                             div().id(ix).h(px(LIST_ITEM_HEIGHT))
@@ -5735,7 +5736,8 @@ impl ScriptListApp {
                             // Build list item with optional thumbnail
                             let mut item = ListItem::new(name, list_colors)
                                 .description_opt(Some(relative_time))
-                                .selected(is_selected);
+                                .selected(is_selected)
+                                .with_accent_bar(true);
                             
                             // Add thumbnail for images, text icon for text entries
                             if let Some(render_image) = cached_image {
@@ -6267,6 +6269,7 @@ impl ScriptListApp {
                                         .icon_kind(icon)
                                         .description_opt(description)
                                         .selected(is_selected)
+                                        .with_accent_bar(true)
                                 )
                         } else {
                             div().id(ix).h(px(LIST_ITEM_HEIGHT))
@@ -6577,6 +6580,7 @@ impl ScriptListApp {
                                     ListItem::new(name, list_colors)
                                         .description_opt(Some(description))
                                         .selected(is_selected)
+                                        .with_accent_bar(true)
                                 )
                         } else {
                             div().id(ix).h(px(LIST_ITEM_HEIGHT))

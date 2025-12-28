@@ -422,6 +422,7 @@ pub fn render_design_item(
                 .description_opt(description)
                 .shortcut_opt(shortcut)
                 .selected(is_selected)
+                .with_accent_bar(true)
                 .into_any_element()
         }
     }
