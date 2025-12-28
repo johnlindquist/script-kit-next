@@ -90,7 +90,8 @@ When `SCRIPT_KIT_AI_LOG=1`, stderr uses token-efficient format for AI agents:
 | W | WINDOW_MGR | X | ERROR |
 | M | MOUSE_HOVER | L | SCROLL_STATE |
 | Q | SCROLL_PERF | D | DESIGN |
-| G | SCRIPT | N | CONFIG |
+| B | SCRIPT | N | CONFIG |
+| Z | RESIZE |   |        |
 
 **Example transformation:**
 ```

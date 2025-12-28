@@ -80,6 +80,7 @@ fn category_to_code(category: &str) -> char {
         "SCROLL_STATE" => 'L',
         "SCROLL_PERF" => 'Q',
         "SCRIPT" => 'B', // B for Bun/script
+        "CONFIG" => 'N', // N for coNfig
         "RESIZE" => 'Z',
         "TRAY" => 'H', // Tray is part of Hotkey subsystem
         "DESIGN" => 'D', // Design system
@@ -1130,6 +1131,14 @@ mod tests {
     }
 
     #[test]
+    fn test_category_to_code_config() {
+        // From: "Successfully loaded config from ~/.kenv/config.ts"
+        assert_eq!(category_to_code("CONFIG"), 'N');
+        assert_eq!(category_to_code("config"), 'N');
+        assert_eq!(category_to_code("Config"), 'N');
+    }
+
+    #[test]
     fn test_category_to_code_perf() {
         // From: "Startup loading: 33.30ms total (331 scripts in 5.03ms)"
         assert_eq!(category_to_code("PERF"), 'R');
@@ -1157,6 +1166,7 @@ mod tests {
             ("SCROLL_STATE", 'L'),
             ("SCROLL_PERF", 'Q'),
             ("SCRIPT", 'B'),
+            ("CONFIG", 'N'),
             ("RESIZE", 'Z'),
             ("DESIGN", 'D'),
         ];
