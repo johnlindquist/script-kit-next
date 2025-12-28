@@ -125,13 +125,18 @@ impl ArgPrompt {
         }
     }
 
-    /// Submit the selected choice
+    /// Submit the selected choice, or input_text if no choices available
     fn submit_selected(&mut self) {
         if let Some(&choice_idx) = self.filtered_choices.get(self.selected_index) {
+            // Case 1: There are filtered choices - submit the selected one
             if let Some(choice) = self.choices.get(choice_idx) {
                 (self.on_submit)(self.id.clone(), Some(choice.value.clone()));
             }
+        } else if !self.input_text.is_empty() {
+            // Case 2: No choices available but user typed something - submit input_text
+            (self.on_submit)(self.id.clone(), Some(self.input_text.clone()));
         }
+        // Case 3: No choices and no input - do nothing (prevent empty submissions)
     }
 
     /// Cancel - submit None
