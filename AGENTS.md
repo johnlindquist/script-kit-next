@@ -62,6 +62,7 @@ cargo check && cargo clippy --all-targets -- -D warnings && cargo test
 | **Arrow Key Names** | ALWAYS match BOTH: `"up" \| "arrowup"`, `"down" \| "arrowdown"`, `"left" \| "arrowleft"`, `"right" \| "arrowright"` |
 | **Visual Testing** | Use `./scripts/visual-test.sh <test.ts> <seconds>` to capture screenshots for layout debugging |
 | **AI Log Mode** | Set `SCRIPT_KIT_AI_LOG=1` for token-efficient compact logs (see below) |
+| **Config Settings** | Font sizes and padding are configurable via `~/.kenv/config.ts` - use `config.get_*()` helpers |
 
 ---
 
@@ -854,6 +855,89 @@ The SDK (`scripts/kit-sdk.ts`) is deployed using a two-tier system:
 ```
 
 This allows scripts to use `import '@johnlindquist/kit'` for IDE support.
+
+### User Configuration (config.ts)
+
+The app reads settings from `~/.kenv/config.ts`. Configuration is loaded at startup and accessible throughout the app via the `Config` struct.
+
+**Example config.ts:**
+```typescript
+import type { Config } from "@johnlindquist/kit";
+
+export default {
+  // Required: Global hotkey to show/hide Script Kit
+  hotkey: {
+    modifiers: ["meta"],  // "meta", "ctrl", "alt", "shift"
+    key: "Semicolon"      // Key codes like "KeyK", "Digit0", "Semicolon"
+  },
+  
+  // Optional: UI Settings
+  padding: {
+    top: 8,      // default: 8
+    left: 12,    // default: 12
+    right: 12    // default: 12
+  },
+  editorFontSize: 16,      // default: 14
+  terminalFontSize: 14,    // default: 14
+  uiScale: 1.0,            // default: 1.0
+  
+  // Optional: Built-in features
+  builtIns: {
+    clipboardHistory: true,  // default: true
+    appLauncher: true        // default: true
+  },
+  
+  // Optional: Custom paths
+  bun_path: "/opt/homebrew/bin/bun",  // default: auto-detected
+  editor: "code"                       // default: $EDITOR or "code"
+} satisfies Config;
+```
+
+**Using config values in Rust:**
+```rust
+// Get values with fallbacks to defaults
+let font_size = self.config.get_editor_font_size();     // f32, default: 14.0
+let term_font = self.config.get_terminal_font_size();   // f32, default: 14.0
+let padding = self.config.get_padding();                 // ContentPadding struct
+let ui_scale = self.config.get_ui_scale();              // f32, default: 1.0
+let builtins = self.config.get_builtins();              // BuiltInConfig struct
+let editor_cmd = self.config.get_editor();              // String, default: "code"
+```
+
+**Config defaults (from `src/config.rs`):**
+| Setting | Default | Type |
+|---------|---------|------|
+| `padding.top` | 8.0 | f32 |
+| `padding.left` | 12.0 | f32 |
+| `padding.right` | 12.0 | f32 |
+| `editorFontSize` | 14.0 | f32 |
+| `terminalFontSize` | 14.0 | f32 |
+| `uiScale` | 1.0 | f32 |
+| `clipboardHistory` | true | bool |
+| `appLauncher` | true | bool |
+
+**Dynamic font sizing:**
+
+Editor and terminal prompts calculate dimensions based on configured font size:
+```rust
+// In EditorPrompt
+fn font_size(&self) -> f32 {
+    self.config.get_editor_font_size()  // Reads from config
+}
+
+fn line_height(&self) -> f32 {
+    self.font_size() * LINE_HEIGHT_MULTIPLIER  // 1.43 for editor
+}
+
+// In TermPrompt
+fn cell_width(&self) -> f32 {
+    BASE_CELL_WIDTH * (self.font_size() / BASE_FONT_SIZE)  // Scales with font
+}
+
+fn cell_height(&self) -> f32 {
+    self.font_size() * LINE_HEIGHT_MULTIPLIER  // 1.3 for terminal
+}
+```
 
 ---
 
