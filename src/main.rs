@@ -3886,7 +3886,7 @@ impl ScriptListApp {
                         d
                             // Run button with click handler
                             .child(
-                                Button::new("Run", button_colors.clone())
+                                Button::new("Run", button_colors)
                                     .variant(ButtonVariant::Ghost)
                                     .shortcut("↵")
                                     .on_click(Box::new(move |_, _window, cx| {

@@ -2670,7 +2670,7 @@ code here
         
         // "hist" should fuzzy match "history" keyword
         let results = fuzzy_search_builtins(&builtins, "hist");
-        assert!(results.len() >= 1);
+        assert!(!results.is_empty());
         assert_eq!(results[0].entry.name, "Clipboard History");
     }
 }

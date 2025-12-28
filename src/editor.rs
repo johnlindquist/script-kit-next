@@ -30,10 +30,12 @@ use crate::theme::Theme;
 /// Signature: (id: String, value: Option<String>)
 pub type SubmitCallback = Arc<dyn Fn(String, Option<String>) + Send + Sync>;
 
-/// Character width in pixels (monospace)
-const CHAR_WIDTH: f32 = 8.4;
-/// Line height in pixels
-const LINE_HEIGHT: f32 = 20.0;
+/// Character width in pixels (monospace) - base value for 14pt font
+const BASE_CHAR_WIDTH: f32 = 8.4;
+/// Base font size for calculating ratios
+const BASE_FONT_SIZE: f32 = 14.0;
+/// Line height multiplier (relative to font size)
+const LINE_HEIGHT_MULTIPLIER: f32 = 1.43; // 20/14 ≈ 1.43
 /// Gutter width for line numbers
 const GUTTER_WIDTH: f32 = 50.0;
 /// Maximum undo history size
@@ -218,6 +220,22 @@ impl EditorPrompt {
     /// Set the content height (for dynamic resizing)
     pub fn set_height(&mut self, height: gpui::Pixels) {
         self.content_height = Some(height);
+    }
+    
+    /// Get the configured font size
+    fn font_size(&self) -> f32 {
+        self.config.get_editor_font_size()
+    }
+    
+    /// Get the line height based on configured font size
+    fn line_height(&self) -> f32 {
+        self.font_size() * LINE_HEIGHT_MULTIPLIER
+    }
+    
+    /// Get char width scaled to configured font size
+    #[allow(dead_code)]
+    fn char_width(&self) -> f32 {
+        BASE_CHAR_WIDTH * (self.font_size() / BASE_FONT_SIZE)
     }
 
     /// Get the current content as a String
@@ -783,7 +801,8 @@ impl EditorPrompt {
         selection_range: Option<(usize, usize)>,
         colors: &crate::theme::ColorScheme,
     ) -> impl IntoElement {
-        let line_height = px(LINE_HEIGHT);
+        let line_height = px(self.line_height());
+        let font_size = px(self.font_size());
         let gutter_width = px(GUTTER_WIDTH);
         
         // Build the line content with syntax highlighting, cursor, and selection
@@ -800,7 +819,7 @@ impl EditorPrompt {
             .h(line_height)
             .w_full()
             .font_family("Menlo")
-            .text_sm()
+            .text_size(font_size)
             .child(
                 // Line number gutter
                 div()
@@ -982,9 +1001,10 @@ impl EditorPrompt {
 
     /// Render the cursor
     fn render_cursor(&self, colors: &crate::theme::ColorScheme) -> impl IntoElement {
+        let cursor_height = self.line_height() - 4.0;
         div()
             .w(px(2.0))
-            .h(px(LINE_HEIGHT - 4.0))
+            .h(px(cursor_height))
             .bg(rgb(colors.accent.selected))
             .my(px(2.0))
     }

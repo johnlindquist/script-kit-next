@@ -333,7 +333,7 @@ fn ensure_tsconfig_paths(tsconfig_path: &PathBuf) {
             if let Err(e) = std::fs::write(tsconfig_path, json_str) {
                 logging::log("EXEC", &format!("Failed to write tsconfig.json: {}", e));
             } else {
-                logging::log("EXEC", &format!("Updated tsconfig.json with @johnlindquist/kit path"));
+                logging::log("EXEC", "Updated tsconfig.json with @johnlindquist/kit path");
             }
         }
         Err(e) => {

@@ -17,19 +17,25 @@ use crate::prompts::SubmitCallback;
 
 const SLOW_RENDER_THRESHOLD_MS: u128 = 16; // 60fps threshold
 
-/// Terminal font configuration
-const FONT_SIZE: f32 = 14.0;
+/// Base font size for calculating ratios
+const BASE_FONT_SIZE: f32 = 14.0;
 /// Line height multiplier - 1.3 provides room for descenders (g, y, p, q, j)
 /// and ascenders while keeping text readable
 const LINE_HEIGHT_MULTIPLIER: f32 = 1.3;
 
-/// Terminal cell dimensions
+/// Terminal cell dimensions at base font size
 /// Cell width for Menlo 14pt is 8.4287px (measured). We use a slightly larger value
 /// to be conservative and prevent the last character from wrapping to the next line.
 /// Using 8.5px ensures we never tell the PTY we have more columns than can render.
-const CELL_WIDTH: f32 = 8.5;  // Conservative value for Menlo 14pt (actual: 8.4287px)
-/// Cell height = font_size × line_height_multiplier
-const CELL_HEIGHT: f32 = FONT_SIZE * LINE_HEIGHT_MULTIPLIER;  // 18.2px for 14pt
+const BASE_CELL_WIDTH: f32 = 8.5;  // Conservative value for Menlo 14pt (actual: 8.4287px)
+/// Default cell height at base font size (used for tests and static calculations)
+const BASE_CELL_HEIGHT: f32 = BASE_FONT_SIZE * LINE_HEIGHT_MULTIPLIER;  // 18.2px for 14pt
+
+// Aliases for backwards compatibility with tests
+#[allow(dead_code)]
+const CELL_WIDTH: f32 = BASE_CELL_WIDTH;
+#[allow(dead_code)]
+const CELL_HEIGHT: f32 = BASE_CELL_HEIGHT;
 
 /// Terminal refresh interval (ms) - 30fps is plenty for terminal output
 const REFRESH_INTERVAL_MS: u64 = 33; // ~30fps, reduces CPU load significantly
@@ -120,18 +126,41 @@ impl TermPrompt {
         self.content_height = Some(height);
     }
     
-    /// Calculate terminal dimensions from pixel size with padding
+    /// Get the configured font size
+    fn font_size(&self) -> f32 {
+        self.config.get_terminal_font_size()
+    }
+    
+    /// Get cell width scaled to configured font size
+    fn cell_width(&self) -> f32 {
+        BASE_CELL_WIDTH * (self.font_size() / BASE_FONT_SIZE)
+    }
+    
+    /// Get cell height scaled to configured font size
+    fn cell_height(&self) -> f32 {
+        self.font_size() * LINE_HEIGHT_MULTIPLIER
+    }
+    
+    /// Calculate terminal dimensions from pixel size with padding (uses default cell dimensions)
+    /// This version uses the base font size dimensions, suitable for tests and static calculations.
+    #[cfg(test)]
     fn calculate_terminal_size(width: Pixels, height: Pixels, padding_left: f32, padding_right: f32, padding_top: f32, padding_bottom: f32) -> (u16, u16) {
+        Self::calculate_terminal_size_with_cells(width, height, padding_left, padding_right, padding_top, padding_bottom, CELL_WIDTH, CELL_HEIGHT)
+    }
+    
+    /// Calculate terminal dimensions from pixel size with padding and custom cell dimensions
+    #[allow(clippy::too_many_arguments)]
+    fn calculate_terminal_size_with_cells(width: Pixels, height: Pixels, padding_left: f32, padding_right: f32, padding_top: f32, padding_bottom: f32, cell_width: f32, cell_height: f32) -> (u16, u16) {
         // Subtract padding from available space
         let available_width = f32::from(width) - padding_left - padding_right;
         let available_height = f32::from(height) - padding_top - padding_bottom;
         
         // Calculate columns and rows
         // Use floor() for cols to ensure we never tell the PTY we have more columns
-        // than can actually be rendered. Combined with a conservative CELL_WIDTH (8.5px
-        // vs actual 8.4287px), this prevents the last character from wrapping.
-        let cols = (available_width / CELL_WIDTH).floor() as u16;
-        let rows = (available_height / CELL_HEIGHT).floor() as u16;
+        // than can actually be rendered. Combined with a conservative cell_width,
+        // this prevents the last character from wrapping.
+        let cols = (available_width / cell_width).floor() as u16;
+        let rows = (available_height / cell_height).floor() as u16;
         
         // Apply minimum bounds
         let cols = cols.max(MIN_COLS);
@@ -143,8 +172,10 @@ impl TermPrompt {
     /// Resize terminal if needed based on new dimensions
     fn resize_if_needed(&mut self, width: Pixels, height: Pixels) {
         let padding = self.config.get_padding();
+        let cell_width = self.cell_width();
+        let cell_height = self.cell_height();
         // Note: We use padding.top for bottom padding as well (see render() which uses pb(px(padding.top)))
-        let (new_cols, new_rows) = Self::calculate_terminal_size(width, height, padding.left, padding.right, padding.top, padding.top);
+        let (new_cols, new_rows) = Self::calculate_terminal_size_with_cells(width, height, padding.left, padding.right, padding.top, padding.top, cell_width, cell_height);
         
         if (new_cols, new_rows) != self.last_size {
             debug!(
@@ -280,6 +311,11 @@ impl TermPrompt {
         let cursor_bg = rgb(colors.accent.selected);
         let default_fg = rgb(colors.text.primary);
         
+        // Get dynamic font sizing
+        let font_size = self.font_size();
+        let cell_height = self.cell_height();
+        let cell_width = self.cell_width();
+        
         let mut lines_container = div()
             .flex()
             .flex_col()
@@ -289,8 +325,8 @@ impl TermPrompt {
             .overflow_hidden()
             .bg(default_bg)
             .font_family("Menlo")
-            .text_size(px(FONT_SIZE))
-            .line_height(px(CELL_HEIGHT)); // Use calculated line height for proper descender room
+            .text_size(px(font_size))
+            .line_height(px(cell_height)); // Use calculated line height for proper descender room
 
         for (line_idx, cells) in content.styled_lines.iter().enumerate() {
             let is_cursor_line = line_idx == content.cursor_line;
@@ -300,7 +336,7 @@ impl TermPrompt {
                 .flex()
                 .flex_row()
                 .w_full()
-                .h(px(CELL_HEIGHT));
+                .h(px(cell_height));
 
             // Batch consecutive cells with same styling
             let mut batch_start = 0;
@@ -344,7 +380,7 @@ impl TermPrompt {
                     .map(|c| if c.c == '\0' { ' ' } else { c.c })
                     .collect();
                 
-                let batch_width = (batch_end - batch_start) as f32 * CELL_WIDTH;
+                let batch_width = (batch_end - batch_start) as f32 * cell_width;
                 
                 // Determine colors
                 let fg_color = if is_cursor_start {
@@ -367,7 +403,7 @@ impl TermPrompt {
                 
                 let mut span = div()
                     .w(px(batch_width))
-                    .h(px(CELL_HEIGHT))
+                    .h(px(cell_height))
                     .flex_shrink_0()
                     .bg(bg_color) // Always apply background to prevent bleed-through
                     .text_color(if fg_u32 == 0 { default_fg } else { fg_color })
