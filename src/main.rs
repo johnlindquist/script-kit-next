@@ -1531,9 +1531,60 @@ impl ScriptListApp {
                 logging::log("UI", "Copy path action");
                 let filtered = self.filtered_results();
                 if let Some(result) = filtered.get(self.selected_index) {
-                    match result {
+                    let path_opt = match result {
                         scripts::SearchResult::Script(script_match) => {
-                            let path_str = script_match.script.path.to_string_lossy().to_string();
+                            Some(script_match.script.path.to_string_lossy().to_string())
+                        }
+                        scripts::SearchResult::App(app_match) => {
+                            Some(app_match.app.path.to_string_lossy().to_string())
+                        }
+                        scripts::SearchResult::Scriptlet(_) => {
+                            self.last_output = Some(SharedString::from("Cannot copy scriptlet path"));
+                            None
+                        }
+                        scripts::SearchResult::BuiltIn(_) => {
+                            self.last_output = Some(SharedString::from("Cannot copy built-in path"));
+                            None
+                        }
+                        scripts::SearchResult::Window(_) => {
+                            self.last_output = Some(SharedString::from("Cannot copy window path"));
+                            None
+                        }
+                    };
+                    
+                    if let Some(path_str) = path_opt {
+                        // Use pbcopy on macOS for reliable clipboard access
+                        #[cfg(target_os = "macos")]
+                        {
+                            use std::process::{Command, Stdio};
+                            use std::io::Write;
+                            
+                            match Command::new("pbcopy")
+                                .stdin(Stdio::piped())
+                                .spawn()
+                            {
+                                Ok(mut child) => {
+                                    if let Some(ref mut stdin) = child.stdin {
+                                        if stdin.write_all(path_str.as_bytes()).is_ok() {
+                                            let _ = child.wait();
+                                            logging::log("UI", &format!("Copied path to clipboard: {}", path_str));
+                                            self.last_output = Some(SharedString::from(format!("Copied: {}", path_str)));
+                                        } else {
+                                            logging::log("ERROR", "Failed to write to pbcopy stdin");
+                                            self.last_output = Some(SharedString::from("Failed to copy path"));
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    logging::log("ERROR", &format!("Failed to spawn pbcopy: {}", e));
+                                    self.last_output = Some(SharedString::from("Failed to copy path"));
+                                }
+                            }
+                        }
+                        
+                        // Fallback for non-macOS platforms
+                        #[cfg(not(target_os = "macos"))]
+                        {
                             use arboard::Clipboard;
                             match Clipboard::new() {
                                 Ok(mut clipboard) => {
@@ -1553,37 +1604,6 @@ impl ScriptListApp {
                                     self.last_output = Some(SharedString::from("Failed to access clipboard"));
                                 }
                             }
-                        }
-                        scripts::SearchResult::Scriptlet(_) => {
-                            self.last_output = Some(SharedString::from("Cannot copy scriptlet path"));
-                        }
-                        scripts::SearchResult::BuiltIn(_) => {
-                            self.last_output = Some(SharedString::from("Cannot copy built-in path"));
-                        }
-                        scripts::SearchResult::App(app_match) => {
-                            let path_str = app_match.app.path.to_string_lossy().to_string();
-                            use arboard::Clipboard;
-                            match Clipboard::new() {
-                                Ok(mut clipboard) => {
-                                    match clipboard.set_text(&path_str) {
-                                        Ok(_) => {
-                                            logging::log("UI", &format!("Copied app path to clipboard: {}", path_str));
-                                            self.last_output = Some(SharedString::from(format!("Copied: {}", path_str)));
-                                        }
-                                        Err(e) => {
-                                            logging::log("ERROR", &format!("Failed to copy app path: {}", e));
-                                            self.last_output = Some(SharedString::from("Failed to copy path"));
-                                        }
-                                    }
-                                }
-                                Err(e) => {
-                                    logging::log("ERROR", &format!("Failed to access clipboard: {}", e));
-                                    self.last_output = Some(SharedString::from("Failed to access clipboard"));
-                                }
-                            }
-                        }
-                        scripts::SearchResult::Window(_) => {
-                            self.last_output = Some(SharedString::from("Cannot copy window path"));
                         }
                     }
                 } else {
