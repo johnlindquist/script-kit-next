@@ -5073,13 +5073,6 @@ impl ScriptListApp {
                     .flex_row()
                     .items_center()
                     .gap_3()
-                    // Title
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(rgb(text_dimmed))
-                            .child("📋 Clipboard")
-                    )
                     // Search input with blinking cursor
                     .child(
                         div()
