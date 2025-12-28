@@ -53,14 +53,19 @@ mod toast_manager;
 mod builtins;
 mod app_launcher;
 
+// Frecency tracking for script usage
+mod frecency;
+
 use tray::{TrayManager, TrayMenuAction};
 use editor::EditorPrompt;
 use window_resize::{ViewType, height_for_view, resize_first_window_to_height, initial_window_height, reset_resize_debounce, defer_resize_to_view};
 use crate::toast_manager::ToastManager;
 use crate::components::toast::{Toast, ToastColors, ToastAction};
 
-use list_item::{ListItem, ListItemColors, LIST_ITEM_HEIGHT};
+use list_item::{ListItem, ListItemColors, LIST_ITEM_HEIGHT, GroupedListItem, render_section_header};
 use utils::strip_html_tags;
+use frecency::FrecencyStore;
+use scripts::get_grouped_results;
 use error::ErrorSeverity;
 use designs::{DesignVariant, render_design_item, get_tokens};
 use components::{Button, ButtonColors, ButtonVariant};
@@ -762,6 +767,8 @@ struct ScriptListApp {
     toast_manager: ToastManager,
     // Cache for decoded clipboard images (entry_id -> RenderImage)
     clipboard_image_cache: std::collections::HashMap<String, Arc<gpui::RenderImage>>,
+    // Frecency store for tracking script usage
+    frecency_store: FrecencyStore,
 }
 
 impl ScriptListApp {
@@ -777,6 +784,10 @@ impl ScriptListApp {
         
         let theme = theme::load_theme();
         let config = config::load_config();
+        
+        // Load frecency data for recently-used script tracking
+        let mut frecency_store = FrecencyStore::new();
+        frecency_store.load().ok(); // Ignore errors - starts fresh if file doesn't exist
         
         // Load built-in entries based on config
         let builtin_entries = builtins::get_builtin_entries(&config.get_builtins());
@@ -914,6 +925,8 @@ impl ScriptListApp {
             toast_manager: ToastManager::new(),
             // Clipboard image cache: decoded RenderImages for thumbnails/preview
             clipboard_image_cache: std::collections::HashMap::new(),
+            // Frecency store for tracking script usage
+            frecency_store,
         }
     }
     
@@ -1133,17 +1146,71 @@ impl ScriptListApp {
     }
 
     fn move_selection_up(&mut self, cx: &mut Context<Self>) {
+        // Get grouped results to check for section headers
+        let (grouped_items, _) = get_grouped_results(
+            &self.scripts,
+            &self.scriptlets,
+            &self.builtin_entries,
+            &self.apps,
+            &self.frecency_store,
+            &self.filter_text,
+        );
+        
         if self.selected_index > 0 {
-            self.selected_index -= 1;
+            let mut new_index = self.selected_index - 1;
+            
+            // Skip section headers when moving up
+            while new_index > 0 {
+                if let Some(GroupedListItem::SectionHeader(_)) = grouped_items.get(new_index) {
+                    new_index -= 1;
+                } else {
+                    break;
+                }
+            }
+            
+            // Make sure we didn't land on a section header at index 0
+            if let Some(GroupedListItem::SectionHeader(_)) = grouped_items.get(new_index) {
+                // Stay at current position if we can't find a valid item
+                return;
+            }
+            
+            self.selected_index = new_index;
             self.scroll_to_selected_if_needed("keyboard_up");
             cx.notify();
         }
     }
 
     fn move_selection_down(&mut self, cx: &mut Context<Self>) {
-        let filtered_len = self.filtered_results().len();
-        if self.selected_index < filtered_len.saturating_sub(1) {
-            self.selected_index += 1;
+        // Get grouped results to check for section headers
+        let (grouped_items, _) = get_grouped_results(
+            &self.scripts,
+            &self.scriptlets,
+            &self.builtin_entries,
+            &self.apps,
+            &self.frecency_store,
+            &self.filter_text,
+        );
+        
+        let item_count = grouped_items.len();
+        if self.selected_index < item_count.saturating_sub(1) {
+            let mut new_index = self.selected_index + 1;
+            
+            // Skip section headers when moving down
+            while new_index < item_count.saturating_sub(1) {
+                if let Some(GroupedListItem::SectionHeader(_)) = grouped_items.get(new_index) {
+                    new_index += 1;
+                } else {
+                    break;
+                }
+            }
+            
+            // Make sure we didn't land on a section header at the end
+            if let Some(GroupedListItem::SectionHeader(_)) = grouped_items.get(new_index) {
+                // Stay at current position if we can't find a valid item
+                return;
+            }
+            
+            self.selected_index = new_index;
             self.scroll_to_selected_if_needed("keyboard_down");
             cx.notify();
         }
@@ -1173,28 +1240,57 @@ impl ScriptListApp {
     }
 
     fn execute_selected(&mut self, cx: &mut Context<Self>) {
-        let filtered = self.filtered_results();
-        if let Some(result) = filtered.get(self.selected_index).cloned() {
-            match result {
-                scripts::SearchResult::Script(script_match) => {
-                    logging::log("EXEC", &format!("Executing script: {}", script_match.script.name));
-                    self.execute_interactive(&script_match.script, cx);
-                }
-                scripts::SearchResult::Scriptlet(scriptlet_match) => {
-                    logging::log("EXEC", &format!("Executing scriptlet: {}", scriptlet_match.scriptlet.name));
-                    self.execute_scriptlet(&scriptlet_match.scriptlet, cx);
-                }
-                scripts::SearchResult::BuiltIn(builtin_match) => {
-                    logging::log("EXEC", &format!("Executing built-in: {}", builtin_match.entry.name));
-                    self.execute_builtin(&builtin_match.entry, cx);
-                }
-                scripts::SearchResult::App(app_match) => {
-                    logging::log("EXEC", &format!("Launching app: {}", app_match.app.name));
-                    self.execute_app(&app_match.app, cx);
-                }
-                scripts::SearchResult::Window(window_match) => {
-                    logging::log("EXEC", &format!("Focusing window: {}", window_match.window.title));
-                    self.execute_window_focus(&window_match.window, cx);
+        // Get grouped results to map from selected_index to actual result
+        let (grouped_items, flat_results) = get_grouped_results(
+            &self.scripts,
+            &self.scriptlets,
+            &self.builtin_entries,
+            &self.apps,
+            &self.frecency_store,
+            &self.filter_text,
+        );
+        
+        // Get the grouped item at selected_index and extract the result index
+        let result_idx = match grouped_items.get(self.selected_index) {
+            Some(GroupedListItem::Item(idx)) => Some(*idx),
+            Some(GroupedListItem::SectionHeader(_)) => None, // Section headers are not selectable
+            None => None,
+        };
+        
+        if let Some(idx) = result_idx {
+            if let Some(result) = flat_results.get(idx).cloned() {
+                // Record frecency usage before executing
+                let frecency_path = match &result {
+                    scripts::SearchResult::Script(sm) => sm.script.path.to_string_lossy().to_string(),
+                    scripts::SearchResult::App(am) => am.app.path.to_string_lossy().to_string(),
+                    scripts::SearchResult::BuiltIn(bm) => format!("builtin:{}", bm.entry.name),
+                    scripts::SearchResult::Scriptlet(sm) => format!("scriptlet:{}", sm.scriptlet.name),
+                    scripts::SearchResult::Window(wm) => format!("window:{}:{}", wm.window.app, wm.window.title),
+                };
+                self.frecency_store.record_use(&frecency_path);
+                self.frecency_store.save().ok(); // Best-effort save
+                
+                match result {
+                    scripts::SearchResult::Script(script_match) => {
+                        logging::log("EXEC", &format!("Executing script: {}", script_match.script.name));
+                        self.execute_interactive(&script_match.script, cx);
+                    }
+                    scripts::SearchResult::Scriptlet(scriptlet_match) => {
+                        logging::log("EXEC", &format!("Executing scriptlet: {}", scriptlet_match.scriptlet.name));
+                        self.execute_scriptlet(&scriptlet_match.scriptlet, cx);
+                    }
+                    scripts::SearchResult::BuiltIn(builtin_match) => {
+                        logging::log("EXEC", &format!("Executing built-in: {}", builtin_match.entry.name));
+                        self.execute_builtin(&builtin_match.entry, cx);
+                    }
+                    scripts::SearchResult::App(app_match) => {
+                        logging::log("EXEC", &format!("Launching app: {}", app_match.app.name));
+                        self.execute_app(&app_match.app, cx);
+                    }
+                    scripts::SearchResult::Window(window_match) => {
+                        logging::log("EXEC", &format!("Focusing window: {}", window_match.window.title));
+                        self.execute_window_focus(&window_match.window, cx);
+                    }
                 }
             }
         }
@@ -1234,13 +1330,22 @@ impl ScriptListApp {
     
     /// Update window size based on current view and item count.
     /// This implements dynamic window resizing:
-    /// - Script list: resize based on filtered results
+    /// - Script list: resize based on filtered results (including section headers)
     /// - Arg prompt: resize based on filtered choices
     /// - Div/Editor/Term: use full height
     fn update_window_size(&self) {
         let (view_type, item_count) = match &self.current_view {
             AppView::ScriptList => {
-                let count = self.filtered_results().len();
+                // Get grouped results which includes section headers
+                let (grouped_items, _) = get_grouped_results(
+                    &self.scripts,
+                    &self.scriptlets,
+                    &self.builtin_entries,
+                    &self.apps,
+                    &self.frecency_store,
+                    &self.filter_text,
+                );
+                let count = grouped_items.len();
                 (ViewType::ScriptList, count)
             }
             AppView::ArgPrompt { choices, .. } => {
@@ -2387,8 +2492,12 @@ impl ScriptListApp {
             }
             PromptMessage::ScriptExit => {
                 logging::log("VISIBILITY", "=== ScriptExit message received ===");
-                let is_visible = WINDOW_VISIBLE.load(Ordering::SeqCst);
-                logging::log("VISIBILITY", &format!("WINDOW_VISIBLE is: {} (script exit doesn't change this)", is_visible));
+                let was_visible = WINDOW_VISIBLE.load(Ordering::SeqCst);
+                logging::log("VISIBILITY", &format!("WINDOW_VISIBLE was: {}", was_visible));
+                
+                // CRITICAL: Update visibility state so hotkey toggle works correctly
+                WINDOW_VISIBLE.store(false, Ordering::SeqCst);
+                logging::log("VISIBILITY", "WINDOW_VISIBLE set to: false");
                 
                 // Set flag so next hotkey show will reset to script list
                 NEEDS_RESET.store(true, Ordering::SeqCst);
@@ -2396,6 +2505,10 @@ impl ScriptListApp {
                 
                 self.reset_to_script_list(cx);
                 logging::log("VISIBILITY", "reset_to_script_list() called");
+                
+                // Hide window when script completes - scripts only stay active while code is running
+                cx.hide();
+                logging::log("VISIBILITY", "cx.hide() called - window hidden on script completion");
             }
             PromptMessage::HideWindow => {
                 logging::log("VISIBILITY", "=== HideWindow message received ===");
@@ -3176,8 +3289,21 @@ impl ScriptListApp {
     
     /// Render the preview panel showing details of the selected script/scriptlet
     fn render_preview_panel(&mut self, _cx: &mut Context<Self>) -> impl IntoElement {
-        let filtered = self.filtered_results();
-        let selected_result = filtered.get(self.selected_index).cloned();
+        // Get grouped results to map from selected_index to actual result
+        let (grouped_items, flat_results) = get_grouped_results(
+            &self.scripts,
+            &self.scriptlets,
+            &self.builtin_entries,
+            &self.apps,
+            &self.frecency_store,
+            &self.filter_text,
+        );
+        
+        // Get the result index from the grouped item
+        let selected_result = match grouped_items.get(self.selected_index) {
+            Some(GroupedListItem::Item(idx)) => flat_results.get(*idx).cloned(),
+            _ => None,
+        };
         
         // Use design tokens for GLOBAL theming - design applies to ALL components
         let tokens = get_tokens(self.current_design);
@@ -3741,28 +3867,47 @@ impl ScriptListApp {
     
     /// Get the ScriptInfo for the currently focused/selected script
     fn get_focused_script_info(&self) -> Option<ScriptInfo> {
-        let filtered = self.filtered_results();
-        if let Some(result) = filtered.get(self.selected_index) {
-            match result {
-                scripts::SearchResult::Script(m) => {
-                    Some(ScriptInfo::new(&m.script.name, m.script.path.to_string_lossy()))
+        // Get grouped results to map from selected_index to actual result
+        let (grouped_items, flat_results) = get_grouped_results(
+            &self.scripts,
+            &self.scriptlets,
+            &self.builtin_entries,
+            &self.apps,
+            &self.frecency_store,
+            &self.filter_text,
+        );
+        
+        // Get the result index from the grouped item
+        let result_idx = match grouped_items.get(self.selected_index) {
+            Some(GroupedListItem::Item(idx)) => Some(*idx),
+            _ => None,
+        };
+        
+        if let Some(idx) = result_idx {
+            if let Some(result) = flat_results.get(idx) {
+                match result {
+                    scripts::SearchResult::Script(m) => {
+                        Some(ScriptInfo::new(&m.script.name, m.script.path.to_string_lossy()))
+                    }
+                    scripts::SearchResult::Scriptlet(m) => {
+                        // Scriptlets don't have a path, use name as identifier
+                        Some(ScriptInfo::new(&m.scriptlet.name, format!("scriptlet:{}", &m.scriptlet.name)))
+                    }
+                    scripts::SearchResult::BuiltIn(m) => {
+                        // Built-ins use their id as identifier
+                        Some(ScriptInfo::new(&m.entry.name, format!("builtin:{}", &m.entry.id)))
+                    }
+                    scripts::SearchResult::App(m) => {
+                        // Apps use their path as identifier
+                        Some(ScriptInfo::new(&m.app.name, m.app.path.to_string_lossy().to_string()))
+                    }
+                    scripts::SearchResult::Window(m) => {
+                        // Windows use their id as identifier
+                        Some(ScriptInfo::new(&m.window.title, format!("window:{}", m.window.id)))
+                    }
                 }
-                scripts::SearchResult::Scriptlet(m) => {
-                    // Scriptlets don't have a path, use name as identifier
-                    Some(ScriptInfo::new(&m.scriptlet.name, format!("scriptlet:{}", &m.scriptlet.name)))
-                }
-                scripts::SearchResult::BuiltIn(m) => {
-                    // Built-ins use their id as identifier
-                    Some(ScriptInfo::new(&m.entry.name, format!("builtin:{}", &m.entry.id)))
-                }
-                scripts::SearchResult::App(m) => {
-                    // Apps use their path as identifier
-                    Some(ScriptInfo::new(&m.app.name, m.app.path.to_string_lossy().to_string()))
-                }
-                scripts::SearchResult::Window(m) => {
-                    // Windows use their id as identifier
-                    Some(ScriptInfo::new(&m.window.title, format!("window:{}", m.window.id)))
-                }
+            } else {
+                None
             }
         } else {
             None
@@ -3770,40 +3915,61 @@ impl ScriptListApp {
     }
     
     fn render_script_list(&mut self, cx: &mut Context<Self>) -> AnyElement {
-        // P1: Use cached filtered results
-        let filtered = self.get_filtered_results_cached();
-        let filtered_len = filtered.len();
-        let _total_len = self.scripts.len() + self.scriptlets.len();
-        let theme = &self.theme;
-        
         // Get design tokens for current design variant
         let tokens = get_tokens(self.current_design);
         let design_colors = tokens.colors();
         let design_spacing = tokens.spacing();
         let design_visual = tokens.visual();
         let design_typography = tokens.typography();
+        let theme = &self.theme;
         
         // For Default design, use theme.colors for backward compatibility
         // For other designs, use design tokens
         let is_default_design = self.current_design == DesignVariant::Default;
         
-        // Handle edge cases - keep selected_index in valid bounds
-        if self.selected_index >= filtered_len && filtered_len > 0 {
-            self.selected_index = filtered_len.saturating_sub(1);
-        }
-
-        // Note: selected_index is now accessed from `this` inside the processor closure
-        
         // P4: Pre-compute theme values using ListItemColors
-        let list_colors = ListItemColors::from_theme(theme);
+        let _list_colors = ListItemColors::from_theme(theme);
         logging::log_debug("PERF", "P4: Using ListItemColors for render closure");
+
+        // Get grouped or flat results based on filter state
+        // When filter is empty, use frecency-grouped results with RECENT/MAIN sections
+        // When filtering, use flat fuzzy search results
+        let (grouped_items, flat_results) = get_grouped_results(
+            &self.scripts,
+            &self.scriptlets,
+            &self.builtin_entries,
+            &self.apps,
+            &self.frecency_store,
+            &self.filter_text,
+        );
+        
+        let item_count = grouped_items.len();
+        let _total_len = self.scripts.len() + self.scriptlets.len();
+        
+        // Handle edge cases - keep selected_index in valid bounds
+        // Also skip section headers when adjusting bounds
+        if item_count > 0 {
+            if self.selected_index >= item_count {
+                self.selected_index = item_count.saturating_sub(1);
+            }
+            // If we land on a section header, move to first valid item
+            if let Some(GroupedListItem::SectionHeader(_)) = grouped_items.get(self.selected_index) {
+                // Move down to find first Item
+                for (i, item) in grouped_items.iter().enumerate().skip(self.selected_index) {
+                    if matches!(item, GroupedListItem::Item(_)) {
+                        self.selected_index = i;
+                        break;
+                    }
+                }
+            }
+        }
 
         // Build script list using uniform_list for proper virtualized scrolling
         // Use design tokens for empty state styling
         let empty_text_color = if is_default_design { theme.colors.text.muted } else { design_colors.text_muted };
         let empty_font_family = if is_default_design { ".AppleSystemUIFont" } else { design_typography.font_family };
         
-        let list_element: AnyElement = if filtered_len == 0 {
+        let list_element: AnyElement = if item_count == 0 {
             div()
                 .w_full()
                 .h_full()
@@ -3824,47 +3990,67 @@ impl ScriptListApp {
             // to update selected_index when the user clicks (selecting on hover alone would
             // be too aggressive - we update on hover enter instead for visual highlight)
             
+            // Clone grouped_items and flat_results for the closure
+            let grouped_items_clone = grouped_items.clone();
+            let flat_results_clone = flat_results.clone();
+            
             uniform_list(
                 "script-list",
-                filtered_len,
+                item_count,
                 cx.processor(move |this, visible_range: std::ops::Range<usize>, _window, cx| {
                     let mut items = Vec::new();
-                    // Get the current selected_index FIRST before borrowing this via get_filtered_results_cached
+                    // Get the current selected_index FIRST
                     let current_selected = this.selected_index;
                     // Get current design from app state
                     let design = this.current_design;
-                    // P1: Use cached filtered results inside closure
-                    let filtered = this.get_filtered_results_cached();
+                    // Pre-compute colors for section headers
+                    let colors = ListItemColors::from_theme(&this.theme);
                     
-                    for ix in visible_range {
-                        if let Some(result) = filtered.get(ix) {
-                            let is_selected = ix == current_selected;
-                            
-                            // Create hover handler that updates selected_index when mouse enters
-                            // This gives visual feedback matching keyboard navigation
-                            let hover_handler = cx.listener(move |this: &mut ScriptListApp, hovered: &bool, _window, cx| {
-                                if *hovered && this.selected_index != ix {
-                                    this.set_selected_index_from_hover(ix, cx);
+                    for ix in visible_range.clone() {
+                        if let Some(grouped_item) = grouped_items_clone.get(ix) {
+                            match grouped_item {
+                                GroupedListItem::SectionHeader(label) => {
+                                    // Render section header (RECENT, MAIN)
+                                    // Use LIST_ITEM_HEIGHT to maintain uniform height for virtualization
+                                    items.push(
+                                        div()
+                                            .id(ElementId::NamedInteger("section-header".into(), ix as u64))
+                                            .h(px(LIST_ITEM_HEIGHT))
+                                            .child(render_section_header(label, colors)),
+                                    );
                                 }
-                            });
-                            
-                            // Dispatch to design-specific item renderer
-                            // This allows each design to have its own unique visual style
-                            let item_element = render_design_item(
-                                design,
-                                result,
-                                ix,
-                                is_selected,
-                                list_colors,
-                            );
-                            
-                            // Wrap in div with hover handler for hover-to-select behavior
-                            items.push(
-                                div()
-                                    .id(ElementId::NamedInteger("script-item".into(), ix as u64))
-                                    .on_hover(hover_handler)
-                                    .child(item_element),
-                            );
+                                GroupedListItem::Item(result_idx) => {
+                                    // Get the actual result from flat_results
+                                    if let Some(result) = flat_results_clone.get(*result_idx) {
+                                        let is_selected = ix == current_selected;
+                                        
+                                        // Create hover handler that updates selected_index when mouse enters
+                                        // Skip hover for section headers (they're not selectable)
+                                        let hover_handler = cx.listener(move |this: &mut ScriptListApp, hovered: &bool, _window, cx| {
+                                            if *hovered && this.selected_index != ix {
+                                                this.set_selected_index_from_hover(ix, cx);
+                                            }
+                                        });
+                                        
+                                        // Dispatch to design-specific item renderer
+                                        let item_element = render_design_item(
+                                            design,
+                                            result,
+                                            ix,
+                                            is_selected,
+                                            colors,
+                                        );
+                                        
+                                        // Wrap in div with hover handler for hover-to-select behavior
+                                        items.push(
+                                            div()
+                                                .id(ElementId::NamedInteger("script-item".into(), ix as u64))
+                                                .on_hover(hover_handler)
+                                                .child(item_element),
+                                        );
+                                    }
+                                }
+                            }
                         }
                     }
                     items
