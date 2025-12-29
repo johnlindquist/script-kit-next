@@ -791,6 +791,9 @@ struct ScriptListApp {
     clipboard_image_cache: std::collections::HashMap<String, Arc<gpui::RenderImage>>,
     // Frecency store for tracking script usage
     frecency_store: FrecencyStore,
+    // Mouse hover tracking - independent from selected_index (keyboard focus)
+    // hovered_index shows subtle visual feedback, selected_index shows full focus styling
+    hovered_index: Option<usize>,
 }
 
 impl ScriptListApp {
@@ -953,6 +956,8 @@ impl ScriptListApp {
             clipboard_image_cache: std::collections::HashMap::new(),
             // Frecency store for tracking script usage
             frecency_store,
+            // Mouse hover tracking - starts as None (no item hovered)
+            hovered_index: None,
         }
     }
     
@@ -1288,14 +1293,6 @@ impl ScriptListApp {
         cx.notify();
     }
     
-    /// Update selected index from mouse hover and scroll if needed
-    fn set_selected_index_from_hover(&mut self, index: usize, cx: &mut Context<Self>) {
-        if self.selected_index != index {
-            self.selected_index = index;
-            cx.notify();
-        }
-    }
-
     fn execute_selected(&mut self, cx: &mut Context<Self>) {
         // Get grouped results to map from selected_index to actual result
         let (grouped_items, flat_results) = get_grouped_results(
@@ -4477,8 +4474,10 @@ impl ScriptListApp {
                 item_count,
                 cx.processor(move |this, visible_range: std::ops::Range<usize>, _window, cx| {
                     let mut items = Vec::new();
-                    // Get the current selected_index FIRST
+                    // Get the current selected_index (keyboard focus) FIRST
                     let current_selected = this.selected_index;
+                    // Get the current hovered_index (mouse hover - separate from selected)
+                    let current_hovered = this.hovered_index;
                     // Get current design from app state
                     let design = this.current_design;
                     // Pre-compute colors for section headers
@@ -4501,29 +4500,56 @@ impl ScriptListApp {
                                     // Get the actual result from flat_results
                                     if let Some(result) = flat_results_clone.get(*result_idx) {
                                         let is_selected = ix == current_selected;
+                                        let is_hovered = current_hovered == Some(ix);
                                         
-                                        // Create hover handler that updates selected_index when mouse enters
-                                        // Skip hover for section headers (they're not selectable)
+                                        // Create hover handler that updates hovered_index (subtle visual)
+                                        // This is SEPARATE from selected_index (full focus styling)
                                         let hover_handler = cx.listener(move |this: &mut ScriptListApp, hovered: &bool, _window, cx| {
-                                            if *hovered && this.selected_index != ix {
-                                                this.set_selected_index_from_hover(ix, cx);
+                                            if *hovered {
+                                                // Mouse entered - set hovered_index
+                                                if this.hovered_index != Some(ix) {
+                                                    this.hovered_index = Some(ix);
+                                                    cx.notify();
+                                                }
+                                            } else {
+                                                // Mouse left - clear hovered_index if it was this item
+                                                if this.hovered_index == Some(ix) {
+                                                    this.hovered_index = None;
+                                                    cx.notify();
+                                                }
+                                            }
+                                        });
+                                        
+                                        // Create click handler that sets selected_index to clicked item
+                                        // This gives full focus styling (dark bg + accent bar)
+                                        // NOTE: Click only focuses - Enter key executes
+                                        let click_handler = cx.listener(move |this: &mut ScriptListApp, _event: &gpui::ClickEvent, _window, cx| {
+                                            if this.selected_index != ix {
+                                                this.selected_index = ix;
+                                                cx.notify();
                                             }
                                         });
                                         
                                         // Dispatch to design-specific item renderer
+                                        // is_hovered provides subtle visual feedback (25% opacity bg)
+                                        // is_selected provides full focus styling (50% opacity bg + accent bar)
                                         let item_element = render_design_item(
                                             design,
                                             result,
                                             ix,
                                             is_selected,
+                                            is_hovered,
                                             colors,
                                         );
                                         
-                                        // Wrap in div with hover handler for hover-to-select behavior
+                                        // Wrap in div with hover and click handlers
+                                        // - hover: updates hovered_index for subtle visual feedback
+                                        // - click: sets selected_index (focus only, Enter to execute)
                                         items.push(
                                             div()
                                                 .id(ElementId::NamedInteger("script-item".into(), ix as u64))
                                                 .on_hover(hover_handler)
+                                                .on_click(click_handler)
                                                 .child(item_element),
                                         );
                                     }

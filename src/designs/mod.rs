@@ -352,7 +352,8 @@ use gpui::{AnyElement, IntoElement};
 /// * `variant` - The design variant to render
 /// * `result` - The search result to render
 /// * `index` - The item index (for element ID and alternating styles)
-/// * `is_selected` - Whether this item is currently selected
+/// * `is_selected` - Whether this item is currently selected (full focus styling)
+/// * `is_hovered` - Whether this item is currently hovered (subtle visual feedback)
 /// * `list_colors` - Pre-computed theme colors for the default design
 ///
 /// # Returns
@@ -362,11 +363,12 @@ pub fn render_design_item(
     result: &SearchResult,
     index: usize,
     is_selected: bool,
+    is_hovered: bool,
     list_colors: ListItemColors,
 ) -> AnyElement {
     crate::logging::log_debug("DESIGN", &format!(
-        "Rendering item {} with design {:?}, selected={}",
-        index, variant, is_selected
+        "Rendering item {} with design {:?}, selected={}, hovered={}",
+        index, variant, is_selected, is_hovered
     ));
     
     match variant {
@@ -448,6 +450,7 @@ pub fn render_design_item(
                 .description_opt(description)
                 .shortcut_opt(shortcut)
                 .selected(is_selected)
+                .hovered(is_hovered)
                 .with_accent_bar(true)
                 .into_any_element()
         }

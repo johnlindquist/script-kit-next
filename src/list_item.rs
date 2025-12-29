@@ -100,7 +100,8 @@ pub type OnHoverCallback = Box<dyn Fn(usize, bool) + 'static>;
 /// - Description (optional, shown below name)
 /// - Icon (optional, emoji or PNG image displayed left of name)
 /// - Shortcut badge (optional, right-aligned)
-/// - Selection state with themed colors
+/// - Selection state with themed colors (full focus styling)
+/// - Hover state with subtle visual feedback (separate from selection)
 /// - Hover callback for mouse interaction (optional)
 /// - Semantic ID for AI-driven targeting (optional)
 ///
@@ -112,6 +113,7 @@ pub type OnHoverCallback = Box<dyn Fn(usize, bool) + 'static>;
 ///     .description("A helpful script")
 ///     .shortcut("⌘K")
 ///     .selected(true)
+///     .hovered(false)
 ///     .index(0)
 ///     .semantic_id("choice:0:my-script")
 ///     .on_hover(Box::new(|index, hovered| {
@@ -125,6 +127,8 @@ pub struct ListItem {
     shortcut: Option<String>,
     icon: Option<IconKind>,
     selected: bool,
+    /// Whether this item is being hovered (subtle visual feedback, separate from selected)
+    hovered: bool,
     colors: ListItemColors,
     /// Index of this item in the list (needed for hover callback)
     index: Option<usize>,
@@ -148,6 +152,7 @@ impl ListItem {
             shortcut: None,
             icon: None,
             selected: false,
+            hovered: false,
             colors,
             index: None,
             on_hover: None,
@@ -251,6 +256,16 @@ impl ListItem {
     /// Set whether this item is selected
     pub fn selected(mut self, selected: bool) -> Self {
         self.selected = selected;
+        self
+    }
+    
+    /// Set whether this item is hovered (subtle visual feedback)
+    /// 
+    /// Hovered items show a subtle background tint (25% opacity).
+    /// This is separate from `selected` which shows full focus styling
+    /// (50% opacity background + accent bar).
+    pub fn hovered(mut self, hovered: bool) -> Self {
+        self.hovered = hovered;
         self
     }
 }
@@ -395,15 +410,25 @@ impl RenderOnce for ListItem {
             div()
         };
         
+        // Determine background color based on selection/hover state
+        // Priority: selected (full focus styling) > hovered (subtle feedback) > transparent
+        let bg_color = if self.selected {
+            selected_bg  // 50% opacity - full focus styling
+        } else if self.hovered {
+            hover_bg     // 25% opacity - subtle hover feedback
+        } else {
+            rgba(0x00000000)  // transparent
+        };
+        
         // Build the inner content div with all styling
         // Horizontal padding px(12.) and vertical padding py(6.) for comfortable spacing
+        // NOTE: We manage hover state explicitly via is_hovered, not CSS .hover() pseudo-state
         let inner_content = div()
             .w_full()
             .h_full()
             .px(px(12.))
             .py(px(6.))
-            .bg(if self.selected { selected_bg } else { rgba(0x00000000) })
-            .hover(|s| s.bg(hover_bg))
+            .bg(bg_color)
             .text_color(if self.selected { rgb(colors.text_primary) } else { rgb(colors.text_secondary) })
             .font_family(".AppleSystemUIFont")
             .cursor_pointer()
