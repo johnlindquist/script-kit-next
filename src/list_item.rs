@@ -8,14 +8,18 @@
 use gpui::*;
 use std::sync::Arc;
 use crate::logging;
+use crate::designs::icon_variations::{IconName, icon_name_from_str};
 
-/// Icon type for list items - supports both emoji strings and pre-decoded images
+/// Icon type for list items - supports emoji strings, SVG icons, and pre-decoded images
 #[derive(Clone)]
 pub enum IconKind {
     /// Text/emoji icon (e.g., "📜", "⚡")
     Emoji(String),
     /// Pre-decoded render image (for app icons) - MUST be pre-decoded, not raw PNG bytes
     Image(Arc<RenderImage>),
+    /// SVG icon by name (e.g., "File", "Terminal", "Code")
+    /// Maps to IconName from designs::icon_variations
+    Svg(String),
 }
 
 /// Fixed height for list items (same as main script list)
@@ -298,6 +302,42 @@ impl RenderOnce for ListItem {
                         .object_fit(ObjectFit::Contain)
                     )
             }
+            Some(IconKind::Svg(name)) => {
+                // Convert string to IconName and render SVG
+                // Use external_path() for file system SVGs (not path() which is for embedded assets)
+                if let Some(icon_name) = icon_name_from_str(name) {
+                    let svg_path = icon_name.external_path();
+                    div()
+                        .w(px(20.))
+                        .h(px(20.))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .flex_shrink_0()
+                        .child(
+                            svg()
+                                .external_path(svg_path)
+                                .size(px(16.))
+                                .text_color(icon_text_color)
+                        )
+                } else {
+                    // Fallback to Code icon if name not recognized
+                    let svg_path = IconName::Code.external_path();
+                    div()
+                        .w(px(20.))
+                        .h(px(20.))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .flex_shrink_0()
+                        .child(
+                            svg()
+                                .external_path(svg_path)
+                                .size(px(16.))
+                                .text_color(icon_text_color)
+                        )
+                }
+            }
             None => {
                 div().w(px(0.)).h(px(0.)) // No space if no icon
             }
@@ -506,14 +546,17 @@ pub fn icon_from_png(png_data: &[u8]) -> Option<IconKind> {
 
 /// Render a section header for grouped lists (e.g., "RECENT", "MAIN")
 /// 
-/// Visual design matches Script Kit's section headers:
+/// Visual design for minimal, unobtrusive section headers:
 /// - ALL CAPS text
-/// - Small font (~11-12px via text_xs)
-/// - Medium font weight
-/// - Muted color
-/// - Vertical spacing: pt(16px) pb(4px)
-/// - Horizontal padding: px(16px) matching list items
+/// - Small font (~10-11px via text_xs)
+/// - Light font weight for subtle appearance
+/// - Dimmed color (more subtle than muted)
+/// - Bottom-aligned within the row (text sits at the bottom edge)
+/// - Left-aligned with list item padding
 /// - No background, no border
+/// 
+/// NOTE: The container height is set by the parent (usually LIST_ITEM_HEIGHT for uniform_list).
+/// This function returns a full-height flex container that positions text at the bottom.
 /// 
 /// # Arguments
 /// * `label` - The section label (will be uppercased)
@@ -525,19 +568,22 @@ pub fn icon_from_png(png_data: &[u8]) -> Option<IconKind> {
 /// render_section_header("Recent", colors)
 /// ```
 pub fn render_section_header(label: &str, colors: ListItemColors) -> impl IntoElement {
+    // Full-height container that positions content at the bottom
+    // The parent sets h(px(LIST_ITEM_HEIGHT)), so we use h_full() to fill it
+    // and items_end() to push content to the bottom
     div()
         .w_full()
-        .h(px(SECTION_HEADER_HEIGHT))
-        .pt(px(16.))
-        .pb(px(4.))
+        .h_full()  // Fill parent's height (LIST_ITEM_HEIGHT)
         .px(px(16.))
+        .pb(px(4.))  // Small bottom padding so text doesn't touch next item
         .flex()
-        .items_end()
+        .flex_col()
+        .justify_end()  // Push content to bottom
         .child(
             div()
                 .text_xs()
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(rgb(colors.text_muted))
+                .font_weight(FontWeight::LIGHT)  // Light weight for subtle appearance
+                .text_color(rgb(colors.text_dimmed))  // Use dimmed for even more subtle
                 .child(label.to_uppercase())
         )
 }

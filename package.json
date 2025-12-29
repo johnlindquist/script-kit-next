@@ -1,5 +1,6 @@
 {
   "devDependencies": {
+    "@opencode-ai/plugin": "^1.0.207",
     "typescript": "^5.9.3"
   },
   "imports": {

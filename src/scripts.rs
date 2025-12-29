@@ -19,6 +19,9 @@ pub struct Script {
     pub path: PathBuf,
     pub extension: String,
     pub description: Option<String>,
+    /// Icon name from // Icon: metadata (e.g., "File", "Terminal", "Star")
+    /// Defaults to "Code" if not specified
+    pub icon: Option<String>,
 }
 
 /// Represents a scriptlet parsed from a markdown file
@@ -135,6 +138,8 @@ impl SearchResult {
 pub struct ScriptMetadata {
     pub name: Option<String>,
     pub description: Option<String>,
+    /// Icon name (e.g., "File", "Terminal", "Star", "Folder")
+    pub icon: Option<String>,
 }
 
 /// Parse a single metadata line with lenient matching
@@ -175,7 +180,7 @@ pub fn parse_metadata_line(line: &str) -> Option<(String, String)> {
 }
 
 /// Extract metadata from script content
-/// Parses lines looking for "// Name:" and "// Description:" with lenient matching
+/// Parses lines looking for "// Name:", "// Description:", and "// Icon:" with lenient matching
 /// Only checks the first 20 lines of the file
 pub fn extract_script_metadata(content: &str) -> ScriptMetadata {
     let mut metadata = ScriptMetadata::default();
@@ -191,6 +196,11 @@ pub fn extract_script_metadata(content: &str) -> ScriptMetadata {
                 "description" => {
                     if metadata.description.is_none() && !value.is_empty() {
                         metadata.description = Some(value);
+                    }
+                }
+                "icon" => {
+                    if metadata.icon.is_none() && !value.is_empty() {
+                        metadata.icon = Some(value);
                     }
                 }
                 _ => {} // Ignore other metadata keys for now
@@ -589,6 +599,7 @@ pub fn read_scripts() -> Vec<Script> {
                                                 path: path.clone(),
                                                 extension: ext_str.to_string(),
                                                 description: script_metadata.description,
+                                                icon: script_metadata.icon,
                                             });
                                         }
                                     }
@@ -1473,6 +1484,7 @@ mod tests {
             name: "test".to_string(),
             path: PathBuf::from("/test/path"),
             extension: "ts".to_string(),
+                icon: None,
             description: None,
         };
         assert_eq!(script.name, "test");
@@ -1486,12 +1498,14 @@ mod tests {
                 name: "openfile".to_string(),
                 path: PathBuf::from("/test/openfile.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: Some("Open a file dialog".to_string()),
             },
             Script {
                 name: "savefile".to_string(),
                 path: PathBuf::from("/test/savefile.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: None,
             },
         ];
@@ -1509,6 +1523,7 @@ mod tests {
                 name: "test1".to_string(),
                 path: PathBuf::from("/test/test1.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: None,
             },
         ];
@@ -1525,18 +1540,21 @@ mod tests {
                 name: "openfile".to_string(),
                 path: PathBuf::from("/test/openfile.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: Some("Open a file dialog".to_string()),
             },
             Script {
                 name: "open".to_string(),
                 path: PathBuf::from("/test/open.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: Some("Basic open function".to_string()),
             },
             Script {
                 name: "reopen".to_string(),
                 path: PathBuf::from("/test/reopen.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: None,
             },
         ];
@@ -1572,6 +1590,7 @@ mod tests {
                 name: "open".to_string(),
                 path: PathBuf::from("/test/open.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: Some("Open a file".to_string()),
             },
         ];
@@ -1603,6 +1622,7 @@ mod tests {
                 name: "test".to_string(),
                 path: PathBuf::from("/test.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: None,
             },
             score: 100,
@@ -1766,6 +1786,7 @@ mod tests {
                 name: "test".to_string(),
                 path: PathBuf::from("/test.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: None,
             },
         ];
@@ -1781,12 +1802,14 @@ mod tests {
                 name: "test1".to_string(),
                 path: PathBuf::from("/test1.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: None,
             },
             Script {
                 name: "test2".to_string(),
                 path: PathBuf::from("/test2.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: None,
             },
         ];
@@ -1802,12 +1825,14 @@ mod tests {
                 name: "foo".to_string(),
                 path: PathBuf::from("/foo.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: Some("database connection helper".to_string()),
             },
             Script {
                 name: "bar".to_string(),
                 path: PathBuf::from("/bar.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: Some("ui component".to_string()),
             },
         ];
@@ -1824,12 +1849,14 @@ mod tests {
                 name: "foo".to_string(),
                 path: PathBuf::from("/home/user/.kenv/scripts/open.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: None,
             },
             Script {
                 name: "bar".to_string(),
                 path: PathBuf::from("/home/user/.other/bar.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: None,
             },
         ];
@@ -1846,12 +1873,14 @@ mod tests {
                 name: "exactmatch".to_string(),
                 path: PathBuf::from("/test.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: None,
             },
             Script {
                 name: "other".to_string(),
                 path: PathBuf::from("/test.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: Some("exactmatch in description".to_string()),
             },
         ];
@@ -1891,6 +1920,7 @@ mod tests {
                 name: "script1".to_string(),
                 path: PathBuf::from("/script1.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: None,
             },
         ];
@@ -1910,6 +1940,7 @@ mod tests {
                 name: "test".to_string(),
                 path: PathBuf::from("/test.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: Some("test script".to_string()),
             },
         ];
@@ -1936,6 +1967,7 @@ mod tests {
                 name: "TestScript".to_string(),
                 path: PathBuf::from("/test.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: Some("A test script".to_string()),
             },
             score: 100,
@@ -1998,6 +2030,7 @@ mod tests {
             name: "test".to_string(),
             path: PathBuf::from("/test.ts"),
             extension: "ts".to_string(),
+                icon: None,
             description: None, // Would be extracted from file if existed
         };
         assert_eq!(script.name, "test");
@@ -2296,6 +2329,7 @@ const x = 1;
             name: "myScript".to_string(),
             path: PathBuf::from("/home/user/.kenv/scripts/myScript.ts"),
             extension: "ts".to_string(),
+                icon: None,
             description: Some("My custom script".to_string()),
         };
 
@@ -2311,6 +2345,7 @@ const x = 1;
             name: "original".to_string(),
             path: PathBuf::from("/test.ts"),
             extension: "ts".to_string(),
+                icon: None,
             description: Some("desc".to_string()),
         };
 
@@ -2351,12 +2386,14 @@ const x = 1;
                 name: "openFile".to_string(),
                 path: PathBuf::from("/openFile.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: None,
             },
             Script {
                 name: "saveFile".to_string(),
                 path: PathBuf::from("/saveFile.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: None,
             },
         ];
@@ -2376,6 +2413,7 @@ const x = 1;
                 name: "TestName".to_string(),
                 path: PathBuf::from("/test.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: None,
             },
             score: 50,
@@ -2433,18 +2471,21 @@ third()
                 name: "alpha".to_string(),
                 path: PathBuf::from("/alpha.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: None,
             },
             Script {
                 name: "beta".to_string(),
                 path: PathBuf::from("/beta.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: None,
             },
             Script {
                 name: "gamma".to_string(),
                 path: PathBuf::from("/gamma.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: None,
             },
         ];
@@ -2493,18 +2534,21 @@ third()
                 name: "zebra".to_string(),
                 path: PathBuf::from("/zebra.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: None,
             },
             Script {
                 name: "apple".to_string(),
                 path: PathBuf::from("/apple.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: None,
             },
             Script {
                 name: "monkey".to_string(),
                 path: PathBuf::from("/monkey.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: None,
             },
         ];
@@ -2542,6 +2586,7 @@ third()
                 name: format!("script_{:03}", i),
                 path: PathBuf::from(format!("/script_{}.ts", i)),
                 extension: "ts".to_string(),
+                icon: None,
                 description: Some(format!("Script number {}", i)),
             });
         }
@@ -2559,6 +2604,7 @@ third()
                 name: "openfile".to_string(),
                 path: PathBuf::from("/test.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: Some("Opens a file".to_string()),
             },
         ];
@@ -2616,6 +2662,7 @@ open("https://example.com");
                 name: "test".to_string(),
                 path: PathBuf::from("/test.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: None,
             },
         ];
@@ -2636,6 +2683,7 @@ open("https://example.com");
                 name: "test".to_string(),
                 path: PathBuf::from("/test.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: None,
             },
         ];
@@ -2674,6 +2722,7 @@ const obj = { key: "value" };
                 name: "café".to_string(),
                 path: PathBuf::from("/cafe.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: None,
             },
         ];
@@ -2690,6 +2739,7 @@ const obj = { key: "value" };
             name: "test".to_string(),
             path: PathBuf::from("/test.ts"),
             extension: "ts".to_string(),
+                icon: None,
             description: None,
         };
 
@@ -2700,6 +2750,7 @@ const obj = { key: "value" };
             path: PathBuf::from("/test.js"),
             extension: "js".to_string(),
             description: None,
+            icon: None,
         };
 
         assert_eq!(script_js.extension, "js");
@@ -2755,6 +2806,7 @@ code here
                 name: "test".to_string(),
                 path: PathBuf::from("/test.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: None,
             },
             score: 0,
@@ -2800,12 +2852,14 @@ code here
                 name: "open".to_string(),
                 path: PathBuf::from("/open.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: None,
             },
             Script {
                 name: "reopen".to_string(),
                 path: PathBuf::from("/reopen.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: None,
             },
         ];
@@ -2824,12 +2878,14 @@ code here
                 name: "test".to_string(),
                 path: PathBuf::from("/test.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: None,
             },
             Script {
                 name: "other".to_string(),
                 path: PathBuf::from("/other.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: Some("test description".to_string()),
             },
         ];
@@ -2846,12 +2902,14 @@ code here
                 name: "test".to_string(),
                 path: PathBuf::from("/test.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: None,
             },
             Script {
                 name: "other".to_string(),
                 path: PathBuf::from("/test/other.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: None,
             },
         ];
@@ -2895,12 +2953,14 @@ code here
                 name: "open".to_string(),
                 path: PathBuf::from("/open.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: Some("Open a file".to_string()),
             },
             Script {
                 name: "openfile".to_string(),
                 path: PathBuf::from("/openfile.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: None,
             },
         ];
@@ -2919,6 +2979,7 @@ code here
                 name: "OpenFile".to_string(),
                 path: PathBuf::from("/openfile.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: None,
             },
         ];
@@ -2935,12 +2996,14 @@ code here
                 name: "aaa".to_string(),
                 path: PathBuf::from("/aaa.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: Some("test".to_string()),
             },
             Script {
                 name: "bbb".to_string(),
                 path: PathBuf::from("/bbb.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: Some("test".to_string()),
             },
         ];
@@ -2971,6 +3034,7 @@ code here
                 name: "test".to_string(),
                 path: PathBuf::from("/test.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: Some("Test script".to_string()),
             },
         ];
@@ -2998,6 +3062,7 @@ code here
                 name: "test".to_string(),
                 path: PathBuf::from("/test.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: None,
             },
         ];
@@ -3015,12 +3080,14 @@ code here
                 name: "open file".to_string(),
                 path: PathBuf::from("/openfile.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: None,
             },
             Script {
                 name: "save".to_string(),
                 path: PathBuf::from("/save.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: None,
             },
         ];
@@ -3038,6 +3105,7 @@ code here
                 name: "database".to_string(),
                 path: PathBuf::from("/database.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: Some("database connection".to_string()),
             },
         ];
@@ -3055,18 +3123,21 @@ code here
                 name: "zzzFile".to_string(),
                 path: PathBuf::from("/home/user/.kenv/scripts/zzzFile.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: Some("Opens a file dialog".to_string()),
             },
             Script {
                 name: "someScript".to_string(),
                 path: PathBuf::from("/home/user/.kenv/scripts/someScript.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: Some("Does something".to_string()),
             },
             Script {
                 name: "saveData".to_string(),
                 path: PathBuf::from("/home/user/.kenv/scripts/saveData.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: Some("Saves data to file".to_string()),
             },
         ];
@@ -3086,18 +3157,21 @@ code here
                 name: "grep".to_string(),
                 path: PathBuf::from("/grep.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: Some("Search files with grep".to_string()),
             },
             Script {
                 name: "find".to_string(),
                 path: PathBuf::from("/grep-utils.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: Some("Find files".to_string()),
             },
             Script {
                 name: "search".to_string(),
                 path: PathBuf::from("/search.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: None,
             },
         ];
@@ -3117,6 +3191,7 @@ code here
                 name: "copyClipboard".to_string(),
                 path: PathBuf::from("/copy.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: Some("Copy to clipboard".to_string()),
             },
         ];
@@ -3287,6 +3362,7 @@ code here
                 name: "my-clipboard".to_string(),
                 path: PathBuf::from("/clipboard.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: Some("My clipboard script".to_string()),
             },
         ];
@@ -3319,6 +3395,7 @@ code here
                 name: "history".to_string(),
                 path: PathBuf::from("/history.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: None,
             },
         ];
@@ -3348,6 +3425,7 @@ code here
                 name: "test".to_string(),
                 path: PathBuf::from("/test.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: None,
             },
         ];
@@ -3455,6 +3533,7 @@ code here
                 name: "test_script".to_string(),
                 path: PathBuf::from("/test.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: None,
             },
         ];
@@ -3487,12 +3566,14 @@ code here
                 name: "open".to_string(),
                 path: PathBuf::from("/open.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: None,
             },
             Script {
                 name: "save".to_string(),
                 path: PathBuf::from("/save.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: None,
             },
         ];
@@ -3522,12 +3603,14 @@ code here
                 name: "alpha".to_string(),
                 path: PathBuf::from("/alpha.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: None,
             },
             Script {
                 name: "beta".to_string(),
                 path: PathBuf::from("/beta.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: None,
             },
         ];
@@ -3559,18 +3642,21 @@ code here
                 name: "alpha".to_string(),
                 path: PathBuf::from("/alpha.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: None,
             },
             Script {
                 name: "beta".to_string(),
                 path: PathBuf::from("/beta.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: None,
             },
             Script {
                 name: "gamma".to_string(),
                 path: PathBuf::from("/gamma.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: None,
             },
         ];
@@ -3619,12 +3705,14 @@ code here
                 name: "test-script".to_string(),
                 path: PathBuf::from("/test-script.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: Some("A frequently used script".to_string()),
             },
             Script {
                 name: "another-script".to_string(),
                 path: PathBuf::from("/another-script.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: None,
             },
         ];
@@ -3721,6 +3809,7 @@ code here
                 name: "my-frequent-script".to_string(),
                 path: PathBuf::from("/my-frequent-script.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: Some("User's frequently used script".to_string()),
             },
         ];
@@ -3794,12 +3883,14 @@ code here
                 name: "alpha-script".to_string(),
                 path: PathBuf::from("/alpha-script.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: None,
             },
             Script {
                 name: "zebra-script".to_string(),
                 path: PathBuf::from("/zebra-script.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: None,
             },
         ];
@@ -3879,12 +3970,14 @@ code here
                 name: "alpha-script".to_string(),
                 path: PathBuf::from("/alpha-script.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: None,
             },
             Script {
                 name: "zebra-script".to_string(),
                 path: PathBuf::from("/zebra-script.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: None,
             },
         ];
@@ -3957,12 +4050,14 @@ code here
                 name: "first".to_string(),
                 path: PathBuf::from("/first.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: None,
             },
             Script {
                 name: "second".to_string(),
                 path: PathBuf::from("/second.ts"),
                 extension: "ts".to_string(),
+                icon: None,
                 description: None,
             },
         ];

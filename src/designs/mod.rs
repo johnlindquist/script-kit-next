@@ -27,6 +27,9 @@ pub mod playful;
 pub mod paper;
 pub mod apple_hig;
 pub mod neon_cyberpunk;
+pub mod icon_variations;
+pub mod separator_variations;
+pub mod group_header_variations;
 
 // Re-export the trait and types
 pub use traits::{DesignRenderer, DesignRendererBox};
@@ -390,29 +393,52 @@ pub fn render_design_item(
             // Extract name, description, shortcut, and icon based on result type
             let (name, description, shortcut, icon_kind) = match result {
                 SearchResult::Script(sm) => {
-                    // Scripts get a scroll/document emoji
-                    (sm.script.name.clone(), sm.script.description.clone(), None, Some(IconKind::Emoji("📜".to_string())))
+                    // Use script's icon metadata if present, otherwise default to "Code" SVG
+                    let icon = match &sm.script.icon {
+                        Some(icon_name) => IconKind::Svg(icon_name.clone()),
+                        None => IconKind::Svg("Code".to_string()),
+                    };
+                    (sm.script.name.clone(), sm.script.description.clone(), None, Some(icon))
                 }
                 SearchResult::Scriptlet(sm) => {
-                    // Scriptlets get a lightning bolt for quick actions
-                    (sm.scriptlet.name.clone(), sm.scriptlet.description.clone(), sm.scriptlet.shortcut.clone(), Some(IconKind::Emoji("⚡".to_string())))
+                    // Scriptlets use BoltFilled SVG for quick actions
+                    (sm.scriptlet.name.clone(), sm.scriptlet.description.clone(), sm.scriptlet.shortcut.clone(), Some(IconKind::Svg("BoltFilled".to_string())))
                 }
                 SearchResult::BuiltIn(bm) => {
-                    // Built-ins use their configured icon or default to gear
-                    let emoji = bm.entry.icon.clone().unwrap_or_else(|| "⚙️".to_string());
-                    (bm.entry.name.clone(), Some(bm.entry.description.clone()), None, Some(IconKind::Emoji(emoji)))
+                    // Built-ins: try to map their icon to SVG, fallback to Settings
+                    let icon = match &bm.entry.icon {
+                        Some(emoji) => {
+                            // Try to infer SVG from common emoji patterns
+                            match emoji.as_str() {
+                                "⚙️" | "🔧" => IconKind::Svg("Settings".to_string()),
+                                "📋" => IconKind::Svg("Copy".to_string()),
+                                "🔍" | "🔎" => IconKind::Svg("MagnifyingGlass".to_string()),
+                                "📁" => IconKind::Svg("Folder".to_string()),
+                                "🖥️" | "💻" => IconKind::Svg("Terminal".to_string()),
+                                "⚡" | "🔥" => IconKind::Svg("BoltFilled".to_string()),
+                                "⭐" | "🌟" => IconKind::Svg("StarFilled".to_string()),
+                                "✓" | "✅" => IconKind::Svg("Check".to_string()),
+                                "▶️" | "🎬" => IconKind::Svg("PlayFilled".to_string()),
+                                "🗑️" => IconKind::Svg("Trash".to_string()),
+                                "➕" => IconKind::Svg("Plus".to_string()),
+                                _ => IconKind::Svg("Settings".to_string()),
+                            }
+                        }
+                        None => IconKind::Svg("Settings".to_string()),
+                    };
+                    (bm.entry.name.clone(), Some(bm.entry.description.clone()), None, Some(icon))
                 }
                 SearchResult::App(am) => {
-                    // Apps use pre-decoded icons, fallback to generic emoji
+                    // Apps use pre-decoded icons, fallback to File SVG
                     let icon = match &am.app.icon {
                         Some(img) => IconKind::Image(img.clone()),
-                        None => IconKind::Emoji("📱".to_string()),
+                        None => IconKind::Svg("File".to_string()),
                     };
                     (am.app.name.clone(), None, None, Some(icon))
                 }
                 SearchResult::Window(wm) => {
-                    // Windows get a window emoji, title as name, app as description
-                    (wm.window.title.clone(), Some(wm.window.app.clone()), None, Some(IconKind::Emoji("🪟".to_string())))
+                    // Windows get a generic File icon, title as name, app as description
+                    (wm.window.title.clone(), Some(wm.window.app.clone()), None, Some(IconKind::Svg("File".to_string())))
                 }
             };
             

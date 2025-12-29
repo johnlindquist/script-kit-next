@@ -31,6 +31,8 @@ pub enum BuiltInFeature {
     App(String),
     /// Window switcher for managing and tiling windows
     WindowSwitcher,
+    /// Design gallery for viewing separator and icon variations
+    DesignGallery,
 }
 
 /// A built-in feature entry that appears in the main search
@@ -134,6 +136,17 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         debug!("Added Window Switcher built-in entry");
     }
 
+    // Design Gallery is always available (developer tool)
+    entries.push(BuiltInEntry::new_with_icon(
+        "builtin-design-gallery",
+        "Design Gallery",
+        "Browse separator styles and icon variations",
+        vec!["design", "gallery", "separator", "icon", "style", "theme", "variations"],
+        BuiltInFeature::DesignGallery,
+        "🎨",
+    ));
+    debug!("Added Design Gallery built-in entry");
+
     debug!(count = entries.len(), "Built-in entries loaded");
     entries
 }
@@ -168,8 +181,8 @@ mod tests {
         let config = BuiltInConfig::default();
         let entries = get_builtin_entries(&config);
 
-        // Clipboard history and window switcher are built-ins (apps appear directly in search)
-        assert_eq!(entries.len(), 2);
+        // Clipboard history, window switcher, and design gallery are built-ins (apps appear directly in search)
+        assert_eq!(entries.len(), 3);
 
         // Check clipboard history entry
         let clipboard = entries.iter().find(|e| e.id == "builtin-clipboard-history");
@@ -207,9 +220,12 @@ mod tests {
         };
         let entries = get_builtin_entries(&config);
 
-        assert_eq!(entries.len(), 1);
+        // Clipboard history + Design Gallery (always enabled)
+        assert_eq!(entries.len(), 2);
         assert_eq!(entries[0].id, "builtin-clipboard-history");
         assert_eq!(entries[0].feature, BuiltInFeature::ClipboardHistory);
+        assert_eq!(entries[1].id, "builtin-design-gallery");
+        assert_eq!(entries[1].feature, BuiltInFeature::DesignGallery);
     }
 
     #[test]
@@ -222,7 +238,9 @@ mod tests {
         let entries = get_builtin_entries(&config);
 
         // App launcher no longer creates a built-in entry (apps appear in main search)
-        assert_eq!(entries.len(), 0);
+        // But Design Gallery is always enabled
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].id, "builtin-design-gallery");
     }
 
     #[test]
@@ -234,7 +252,9 @@ mod tests {
         };
         let entries = get_builtin_entries(&config);
 
-        assert!(entries.is_empty());
+        // Design Gallery is always enabled
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].id, "builtin-design-gallery");
     }
 
     #[test]
@@ -246,10 +266,12 @@ mod tests {
         };
         let entries = get_builtin_entries(&config);
 
-        assert_eq!(entries.len(), 1);
+        // Window switcher + Design Gallery (always enabled)
+        assert_eq!(entries.len(), 2);
         assert_eq!(entries[0].id, "builtin-window-switcher");
         assert_eq!(entries[0].feature, BuiltInFeature::WindowSwitcher);
         assert_eq!(entries[0].icon, Some("🪟".to_string()));
+        assert_eq!(entries[1].id, "builtin-design-gallery");
     }
 
     #[test]
@@ -263,6 +285,10 @@ mod tests {
             BuiltInFeature::WindowSwitcher,
             BuiltInFeature::WindowSwitcher
         );
+        assert_eq!(
+            BuiltInFeature::DesignGallery,
+            BuiltInFeature::DesignGallery
+        );
         assert_ne!(
             BuiltInFeature::ClipboardHistory,
             BuiltInFeature::AppLauncher
@@ -272,6 +298,10 @@ mod tests {
             BuiltInFeature::WindowSwitcher
         );
         assert_ne!(BuiltInFeature::AppLauncher, BuiltInFeature::WindowSwitcher);
+        assert_ne!(
+            BuiltInFeature::DesignGallery,
+            BuiltInFeature::ClipboardHistory
+        );
 
         // Test App variant
         assert_eq!(
