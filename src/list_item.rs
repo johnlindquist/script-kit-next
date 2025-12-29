@@ -448,6 +448,22 @@ impl RenderOnce for ListItem {
 /// **IMPORTANT**: Call this ONCE when loading icons, NOT during rendering.
 /// Decoding PNGs on every render frame causes severe performance issues.
 pub fn decode_png_to_render_image(png_data: &[u8]) -> Result<Arc<RenderImage>, image::ImageError> {
+    decode_png_to_render_image_internal(png_data, false)
+}
+
+/// Decode PNG bytes to GPUI RenderImage with RGBA→BGRA conversion for Metal
+/// 
+/// GPUI/Metal expects BGRA pixel format. When creating RenderImage directly
+/// from image::Frame (bypassing GPUI's internal loaders), we must do the
+/// RGBA→BGRA conversion ourselves. This matches what GPUI does internally
+/// in platform.rs for loaded images.
+/// 
+/// **IMPORTANT**: Call this ONCE when loading icons, NOT during rendering.
+pub fn decode_png_to_render_image_with_bgra_conversion(png_data: &[u8]) -> Result<Arc<RenderImage>, image::ImageError> {
+    decode_png_to_render_image_internal(png_data, true)
+}
+
+fn decode_png_to_render_image_internal(png_data: &[u8], convert_to_bgra: bool) -> Result<Arc<RenderImage>, image::ImageError> {
     use image::GenericImageView;
     use smallvec::SmallVec;
     
@@ -455,12 +471,21 @@ pub fn decode_png_to_render_image(png_data: &[u8]) -> Result<Arc<RenderImage>, i
     let img = image::load_from_memory(png_data)?;
     
     // Convert to RGBA8
-    let rgba = img.to_rgba8();
+    let mut rgba = img.to_rgba8();
     let (width, height) = img.dimensions();
     
-    // Create Frame from RGBA buffer
+    // Convert RGBA to BGRA for Metal/GPUI rendering
+    // GPUI's internal image loading does this swap (see gpui/src/platform.rs)
+    // We must do the same when creating RenderImage directly from image::Frame
+    if convert_to_bgra {
+        for pixel in rgba.chunks_exact_mut(4) {
+            pixel.swap(0, 2);  // Swap R and B: RGBA -> BGRA
+        }
+    }
+    
+    // Create Frame from buffer (now in BGRA order if converted)
     let buffer = image::RgbaImage::from_raw(width, height, rgba.into_raw())
-        .expect("Failed to create RGBA image buffer");
+        .expect("Failed to create image buffer");
     let frame = image::Frame::new(buffer);
     
     // Create RenderImage

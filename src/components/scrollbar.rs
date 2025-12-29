@@ -144,6 +144,9 @@ pub struct Scrollbar {
     colors: ScrollbarColors,
     /// Container height in pixels (for calculating thumb position)
     container_height: Option<f32>,
+    /// Whether the scrollbar is visible (for scroll-activity-aware fade)
+    /// When Some(true), shows at full opacity; Some(false), hidden; None, always visible
+    is_visible: Option<bool>,
 }
 
 impl Scrollbar {
@@ -166,6 +169,7 @@ impl Scrollbar {
             scroll_offset,
             colors,
             container_height: None,
+            is_visible: None,
         }
     }
 
@@ -174,6 +178,17 @@ impl Scrollbar {
     /// If not set, the scrollbar will use percentage-based positioning
     pub fn container_height(mut self, height: f32) -> Self {
         self.container_height = Some(height);
+        self
+    }
+
+    /// Set the scrollbar visibility for scroll-activity-aware fade
+    ///
+    /// - `true`: Show scrollbar at full opacity (during scroll activity)
+    /// - `false`: Hide scrollbar (0 opacity, after scroll fade-out)
+    /// 
+    /// If not called, the scrollbar uses default behavior (always visible when content overflows)
+    pub fn visible(mut self, is_visible: bool) -> Self {
+        self.is_visible = Some(is_visible);
         self
     }
 
@@ -210,6 +225,18 @@ impl RenderOnce for Scrollbar {
             return div().into_any_element();
         }
 
+        // Handle scroll-activity-aware visibility
+        // When is_visible is Some(false), use 0.0 opacity (hidden)
+        // When is_visible is Some(true) or None, use the configured opacity
+        let thumb_opacity = match self.is_visible {
+            Some(false) => 0.0,
+            _ => self.colors.thumb_opacity,
+        };
+        let thumb_hover_opacity = match self.is_visible {
+            Some(false) => 0.0,
+            _ => self.colors.thumb_hover_opacity,
+        };
+
         let colors = self.colors;
         let thumb_height_ratio = self.thumb_height_ratio();
         let thumb_position_ratio = self.thumb_position_ratio();
@@ -245,10 +272,10 @@ impl RenderOnce for Scrollbar {
                 .right_0()
                 .h(px(height))
                 .rounded(px(SCROLLBAR_WIDTH / 2.0))
-                .bg(rgba((colors.thumb << 8) | ((colors.thumb_opacity * 255.0) as u32)))
+                .bg(rgba((colors.thumb << 8) | ((thumb_opacity * 255.0) as u32)))
                 .hover(move |s| {
                     s.bg(rgba(
-                        (colors.thumb_hover << 8) | ((colors.thumb_hover_opacity * 255.0) as u32),
+                        (colors.thumb_hover << 8) | ((thumb_hover_opacity * 255.0) as u32),
                     ))
                 })
         } else {
@@ -281,12 +308,12 @@ impl RenderOnce for Scrollbar {
                         .flex_basis(relative(thumb_flex))
                         .rounded(px(SCROLLBAR_WIDTH / 2.0))
                         .bg(rgba(
-                            (colors.thumb << 8) | ((colors.thumb_opacity * 255.0) as u32),
+                            (colors.thumb << 8) | ((thumb_opacity * 255.0) as u32),
                         ))
                         .hover(move |s| {
                             s.bg(rgba(
                                 (colors.thumb_hover << 8)
-                                    | ((colors.thumb_hover_opacity * 255.0) as u32),
+                                    | ((thumb_hover_opacity * 255.0) as u32),
                             ))
                         }),
                 )

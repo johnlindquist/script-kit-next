@@ -613,6 +613,9 @@ impl HotkeyPoller {
                                 logging::log("HOTKEY", "In prompt mode - canceling script before hiding");
                                 view.cancel_script_execution(ctx);
                             }
+                            // Reset UI state before hiding (clears selection, scroll position, filter)
+                            logging::log("HOTKEY", "Resetting to script list before hiding");
+                            view.reset_to_script_list(ctx);
                         });
                         
                         // Always hide the window when hotkey pressed while visible
@@ -728,6 +731,11 @@ struct ScriptListApp {
     theme: theme::Theme,
     #[allow(dead_code)]
     config: config::Config,
+    // Scroll activity tracking for scrollbar fade
+    /// Whether scroll activity is happening (scrollbar should be visible)
+    is_scrolling: bool,
+    /// Timestamp of last scroll activity (for fade-out timer)
+    last_scroll_time: Option<std::time::Instant>,
     // Interactive script state
     current_view: AppView,
     script_session: SharedSession,
@@ -899,6 +907,9 @@ impl ScriptListApp {
             show_logs: false,
             theme,
             config,
+            // Scroll activity tracking: start with scrollbar hidden
+            is_scrolling: false,
+            last_scroll_time: None,
             current_view: AppView::ScriptList,
             script_session: Arc::new(Mutex::new(None)),
             arg_input_text: String::new(),
@@ -1181,6 +1192,7 @@ impl ScriptListApp {
             
             self.selected_index = new_index;
             self.scroll_to_selected_if_needed("keyboard_up");
+            self.trigger_scroll_activity(cx);
             cx.notify();
         }
     }
@@ -1217,6 +1229,7 @@ impl ScriptListApp {
             
             self.selected_index = new_index;
             self.scroll_to_selected_if_needed("keyboard_down");
+            self.trigger_scroll_activity(cx);
             cx.notify();
         }
     }
@@ -1234,6 +1247,35 @@ impl ScriptListApp {
         // Perform the scroll (logging removed for performance)
         self.list_scroll_handle.scroll_to_item(target, ScrollStrategy::Nearest);
         self.last_scrolled_index = Some(target);
+    }
+    
+    /// Trigger scroll activity - shows the scrollbar and schedules fade-out
+    /// 
+    /// This should be called whenever scroll-related activity occurs:
+    /// - Keyboard up/down navigation
+    /// - scroll_to_item calls
+    /// - Mouse wheel scrolling (if tracked)
+    fn trigger_scroll_activity(&mut self, cx: &mut Context<Self>) {
+        self.is_scrolling = true;
+        self.last_scroll_time = Some(std::time::Instant::now());
+        
+        // Schedule fade-out after 1000ms of inactivity
+        cx.spawn(async move |this, cx| {
+            Timer::after(std::time::Duration::from_millis(1000)).await;
+            let _ = cx.update(|cx| {
+                this.update(cx, |app, cx| {
+                    // Only hide if no new scroll activity occurred
+                    if let Some(last_time) = app.last_scroll_time {
+                        if last_time.elapsed() >= std::time::Duration::from_millis(1000) {
+                            app.is_scrolling = false;
+                            cx.notify();
+                        }
+                    }
+                })
+            });
+        }).detach();
+        
+        cx.notify();
     }
     
     /// Update selected index from mouse hover and scroll if needed
@@ -4366,13 +4408,14 @@ impl ScriptListApp {
                 ScrollbarColors::from_design(&design_colors)
             };
             
-            // Create scrollbar (only visible if content overflows)
+            // Create scrollbar (only visible if content overflows and scrolling is active)
             let scrollbar = Scrollbar::new(
                 item_count,
                 visible_items,
                 scroll_offset,
                 scrollbar_colors,
-            ).container_height(estimated_container_height);
+            ).container_height(estimated_container_height)
+             .visible(self.is_scrolling);
             
             let list = uniform_list(
                 "script-list",
@@ -4608,6 +4651,9 @@ impl ScriptListApp {
                     } else {
                         // Update visibility state for hotkey toggle
                         WINDOW_VISIBLE.store(false, Ordering::SeqCst);
+                        // Reset UI state before hiding (clears selection, scroll position, filter)
+                        logging::log("UI", "Resetting to script list before hiding via Escape");
+                        this.reset_to_script_list(cx);
                         logging::log("HOTKEY", "Window hidden via Escape key");
                         // PERF: Measure window hide latency
                         let hide_start = std::time::Instant::now();

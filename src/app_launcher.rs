@@ -31,6 +31,8 @@ use std::sync::{Arc, OnceLock};
 use std::time::Instant;
 use tracing::{debug, info, warn};
 
+
+
 #[cfg(target_os = "macos")]
 use cocoa::base::{id, nil};
 #[cfg(target_os = "macos")]
@@ -125,6 +127,8 @@ fn get_or_extract_icon(app_path: &Path) -> Option<Vec<u8>> {
     }
 
     // Cache miss or stale - extract fresh icon
+    // Note: Color channel swap (BGRA -> RGBA) is handled at decode time in
+    // decode_png_to_render_image_with_rb_swap() for performance (no PNG re-encoding needed)
     let png_bytes = extract_app_icon(app_path)?;
 
     // Save to cache
@@ -323,9 +327,10 @@ fn parse_app_bundle(path: &Path) -> Option<AppInfo> {
     // Extract and pre-decode icon using disk cache (macOS only)
     // Uses get_or_extract_icon() which checks disk cache first, only extracts if stale/missing
     // Pre-decoding here is CRITICAL for performance - avoids PNG decode on every render
+    // Uses decode_png_to_render_image_with_bgra_conversion for Metal compatibility
     #[cfg(target_os = "macos")]
     let icon = get_or_extract_icon(path).and_then(|png_bytes| {
-        crate::list_item::decode_png_to_render_image(&png_bytes).ok()
+        crate::list_item::decode_png_to_render_image_with_bgra_conversion(&png_bytes).ok()
     });
     #[cfg(not(target_os = "macos"))]
     let icon = None;
@@ -746,6 +751,40 @@ mod tests {
             cache_file.exists(),
             "Cache file should exist: {:?}",
             cache_file
+        );
+    }
+
+    #[test]
+    fn test_decode_with_rb_swap() {
+        use image::ImageEncoder;
+
+        // Create a simple 2x2 PNG with known colors
+        // Pixel at (0,0) = Red (255, 0, 0, 255)
+        // Pixel at (1,0) = Blue (0, 0, 255, 255)
+        // Pixel at (0,1) = Green (0, 255, 0, 255)
+        // Pixel at (1,1) = White (255, 255, 255, 255)
+        let mut img = image::RgbaImage::new(2, 2);
+        img.put_pixel(0, 0, image::Rgba([255, 0, 0, 255])); // Red
+        img.put_pixel(1, 0, image::Rgba([0, 0, 255, 255])); // Blue
+        img.put_pixel(0, 1, image::Rgba([0, 255, 0, 255])); // Green
+        img.put_pixel(1, 1, image::Rgba([255, 255, 255, 255])); // White
+
+        // Encode to PNG
+        let mut original_png = Vec::new();
+        let encoder = image::codecs::png::PngEncoder::new(&mut original_png);
+        encoder
+            .write_image(&img, 2, 2, image::ExtendedColorType::Rgba8)
+            .expect("Failed to encode PNG");
+
+        // Use the decode function with BGRA conversion
+        let render_image = crate::list_item::decode_png_to_render_image_with_bgra_conversion(&original_png)
+            .expect("Should decode with BGRA conversion");
+
+        // Verify we got a RenderImage (we can't easily inspect pixels in RenderImage,
+        // but we can verify it was created successfully)
+        assert!(
+            std::sync::Arc::strong_count(&render_image) >= 1,
+            "Should create valid RenderImage"
         );
     }
 

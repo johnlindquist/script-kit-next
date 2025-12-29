@@ -1,34 +1,63 @@
-// Name: Test App Icons Display
-// Description: Verify macOS app icons are displayed in the list
+// Name: Test App Icons Color Channels
+// Description: Test that app icons have correct color channels (not BGRA/RGBA swapped)
 
 import '../../scripts/kit-sdk';
+import { saveScreenshot } from '../autonomous/screenshot-utils';
 
-console.error('[SMOKE] Testing app icon display...');
+console.error('[SMOKE] Testing app icon color channels...');
 
-// This test just shows the main list which includes apps with icons
-// A user should see real app icons (not just emoji) for installed apps
+// Capture screenshot BEFORE showing the prompt to test icon rendering
+// Wait a moment for the app to fully initialize
+await new Promise(resolve => setTimeout(resolve, 500));
 
-await arg("Search for apps to see their icons", [
+// Capture screenshot for visual verification first
+try {
+    const screenshot = await captureScreenshot();
+    console.error(`[SMOKE] Initial screenshot captured: ${screenshot.width}x${screenshot.height}`);
+    
+    // Save screenshot for visual inspection
+    const savedPath = await saveScreenshot(screenshot.data, 'app-icons-initial');
+    console.error(`[SMOKE] Screenshot saved to: ${savedPath}`);
+} catch (e) {
+    console.error(`[SMOKE] Initial screenshot failed: ${e}`);
+}
+
+// Use a short timeout to show the prompt briefly then exit
+// This avoids blocking on user input
+const timeout = 2000; // 2 seconds to view
+
+// Start a timer to exit
+setTimeout(() => {
+    console.error('[SMOKE] Test timeout - exiting');
+    process.exit(0);
+}, timeout);
+
+// Show the prompt - this will trigger icon extraction
+// The icons should appear with correct colors (not inverted R/B)
+console.error('[SMOKE] Showing arg prompt with app choices...');
+const result = await arg("Test app icons - check colors (auto-exits in 2s)", [
+    {
+        name: "Calculator",
+        value: "calculator", 
+        description: "Calculator icon should have correct colors (orange/white)",
+    },
     {
         name: "Safari",
         value: "safari",
-        description: "Should show Safari icon (not 📱)",
+        description: "Safari icon should have blue/red compass (not yellow/cyan)",
     },
     {
-        name: "Finder", 
+        name: "Finder",
         value: "finder",
-        description: "Should show Finder icon (not 📱)",
+        description: "Finder icon should have blue face (not orange)",
     },
     {
-        name: "Calculator",
-        value: "calculator",
-        description: "Should show Calculator icon (not 📱)",
-    },
-    {
-        name: "Type an app name to search",
-        value: "search",
-        description: "Apps from /Applications should have real icons",
+        name: "Done - exit test",
+        value: "done",
+        description: "Select to exit",
     }
 ]);
 
-console.error('[SMOKE] App icon test complete');
+// Log the result
+console.error(`[SMOKE] Selected: ${result}`);
+console.error('[SMOKE] App icon color test complete');
