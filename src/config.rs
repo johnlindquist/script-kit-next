@@ -20,6 +20,9 @@ pub const DEFAULT_CLIPBOARD_HISTORY: bool = true;
 pub const DEFAULT_APP_LAUNCHER: bool = true;
 pub const DEFAULT_WINDOW_SWITCHER: bool = true;
 
+/// Default process limits
+pub const DEFAULT_HEALTH_CHECK_INTERVAL_MS: u64 = 5000;
+
 /// Configuration for built-in features (clipboard history, app launcher, etc.)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -51,6 +54,35 @@ impl Default for BuiltInConfig {
             clipboard_history: DEFAULT_CLIPBOARD_HISTORY,
             app_launcher: DEFAULT_APP_LAUNCHER,
             window_switcher: DEFAULT_WINDOW_SWITCHER,
+        }
+    }
+}
+
+/// Configuration for process resource limits and health monitoring
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProcessLimits {
+    /// Maximum memory usage in MB (None = no limit)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_memory_mb: Option<u64>,
+    /// Maximum runtime in seconds (None = no limit)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_runtime_seconds: Option<u64>,
+    /// Health check interval in milliseconds (default: 5000)
+    #[serde(default = "default_health_check_interval_ms")]
+    pub health_check_interval_ms: u64,
+}
+
+fn default_health_check_interval_ms() -> u64 {
+    DEFAULT_HEALTH_CHECK_INTERVAL_MS
+}
+
+impl Default for ProcessLimits {
+    fn default() -> Self {
+        ProcessLimits {
+            max_memory_mb: None,
+            max_runtime_seconds: None,
+            health_check_interval_ms: DEFAULT_HEALTH_CHECK_INTERVAL_MS,
         }
     }
 }
@@ -116,6 +148,9 @@ pub struct Config {
     /// Built-in features configuration (clipboard history, app launcher, etc.)
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "builtIns")]
     pub built_ins: Option<BuiltInConfig>,
+    /// Process resource limits and health monitoring configuration
+    #[serde(default, skip_serializing_if = "Option::is_none", rename = "processLimits")]
+    pub process_limits: Option<ProcessLimits>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -138,6 +173,7 @@ impl Default for Config {
             terminal_font_size: None, // Will use DEFAULT_TERMINAL_FONT_SIZE via getter
             ui_scale: None,           // Will use DEFAULT_UI_SCALE via getter
             built_ins: None,          // Will use BuiltInConfig::default() via getter
+            process_limits: None,     // Will use ProcessLimits::default() via getter
         }
     }
 }
@@ -182,6 +218,12 @@ impl Config {
     #[allow(dead_code)] // Will be used by builtins module
     pub fn get_builtins(&self) -> BuiltInConfig {
         self.built_ins.clone().unwrap_or_default()
+    }
+
+    /// Returns the process limits configuration, or defaults if not configured
+    #[allow(dead_code)] // Will be used by process_manager module
+    pub fn get_process_limits(&self) -> ProcessLimits {
+        self.process_limits.clone().unwrap_or_default()
     }
 }
 
@@ -313,6 +355,7 @@ mod tests {
             terminal_font_size: None,
             ui_scale: None,
             built_ins: None,
+            process_limits: None,
         };
 
         let json = serde_json::to_string(&config).unwrap();
@@ -349,6 +392,7 @@ mod tests {
             terminal_font_size: None,
             ui_scale: None,
             built_ins: None,
+            process_limits: None,
         };
         assert_eq!(config.bun_path, Some("/custom/path/bun".to_string()));
     }
@@ -367,6 +411,7 @@ mod tests {
             terminal_font_size: None,
             ui_scale: None,
             built_ins: None,
+            process_limits: None,
         };
         assert_eq!(config.bun_path, None);
     }
@@ -385,6 +430,7 @@ mod tests {
             terminal_font_size: None,
             ui_scale: None,
             built_ins: None,
+            process_limits: None,
         };
 
         let json = serde_json::to_string(&config).unwrap();
@@ -408,6 +454,7 @@ mod tests {
             terminal_font_size: None,
             ui_scale: None,
             built_ins: None,
+            process_limits: None,
         };
 
         let json = serde_json::to_string(&config).unwrap();
@@ -498,6 +545,7 @@ mod tests {
             terminal_font_size: None,
             ui_scale: None,
             built_ins: None,
+            process_limits: None,
         };
 
         assert_eq!(config.hotkey.modifiers.len(), 0);
@@ -522,6 +570,7 @@ mod tests {
                 terminal_font_size: None,
                 ui_scale: None,
                 built_ins: None,
+                process_limits: None,
             };
 
             let json = serde_json::to_string(&config).unwrap();
@@ -545,6 +594,7 @@ mod tests {
             terminal_font_size: None,
             ui_scale: None,
             built_ins: None,
+            process_limits: None,
         };
 
         let json = serde_json::to_string(&config).unwrap();
@@ -568,6 +618,7 @@ mod tests {
             terminal_font_size: None,
             ui_scale: None,
             built_ins: None,
+            process_limits: None,
         };
 
         let json = serde_json::to_string(&config).unwrap();
@@ -592,6 +643,7 @@ mod tests {
             terminal_font_size: None,
             ui_scale: None,
             built_ins: None,
+            process_limits: None,
         };
 
         // Config editor takes precedence
@@ -618,6 +670,7 @@ mod tests {
             terminal_font_size: None,
             ui_scale: None,
             built_ins: None,
+            process_limits: None,
         };
 
         // Should fall back to EDITOR env var
@@ -650,6 +703,7 @@ mod tests {
             terminal_font_size: None,
             ui_scale: None,
             built_ins: None,
+            process_limits: None,
         };
 
         // Should fall back to "code" default
@@ -682,6 +736,7 @@ mod tests {
             terminal_font_size: None,
             ui_scale: None,
             built_ins: None,
+            process_limits: None,
         };
 
         // Config editor should win
@@ -783,6 +838,7 @@ mod tests {
             terminal_font_size: None,
             ui_scale: None,
             built_ins: None,
+            process_limits: None,
         };
 
         let padding = config.get_padding();
@@ -811,6 +867,7 @@ mod tests {
             terminal_font_size: None,
             ui_scale: None,
             built_ins: None,
+            process_limits: None,
         };
 
         assert_eq!(config.get_editor_font_size(), 16.0);
@@ -836,6 +893,7 @@ mod tests {
             terminal_font_size: Some(12.0),
             ui_scale: None,
             built_ins: None,
+            process_limits: None,
         };
 
         assert_eq!(config.get_terminal_font_size(), 12.0);
@@ -861,6 +919,7 @@ mod tests {
             terminal_font_size: None,
             ui_scale: Some(1.5),
             built_ins: None,
+            process_limits: None,
         };
 
         assert_eq!(config.get_ui_scale(), 1.5);
@@ -947,6 +1006,7 @@ mod tests {
             terminal_font_size: Some(12.0),
             ui_scale: Some(1.5),
             built_ins: None,
+            process_limits: None,
         };
 
         let json = serde_json::to_string(&config).unwrap();
@@ -1041,6 +1101,7 @@ mod tests {
                 app_launcher: false,
                 window_switcher: true,
             }),
+            process_limits: None,
         };
 
         let builtins = config.get_builtins();
@@ -1127,6 +1188,7 @@ mod tests {
             terminal_font_size: None,
             ui_scale: None,
             built_ins: Some(BuiltInConfig::default()),
+            process_limits: None,
         };
 
         let json = serde_json::to_string(&config).unwrap();
@@ -1152,6 +1214,234 @@ mod tests {
         assert_eq!(original.clipboard_history, restored.clipboard_history);
         assert_eq!(original.app_launcher, restored.app_launcher);
         assert_eq!(original.window_switcher, restored.window_switcher);
+    }
+
+    // ProcessLimits tests
+    #[test]
+    fn test_process_limits_default() {
+        let limits = ProcessLimits::default();
+        assert_eq!(limits.max_memory_mb, None);
+        assert_eq!(limits.max_runtime_seconds, None);
+        assert_eq!(limits.health_check_interval_ms, DEFAULT_HEALTH_CHECK_INTERVAL_MS);
+    }
+
+    #[test]
+    fn test_process_limits_default_constant() {
+        assert_eq!(DEFAULT_HEALTH_CHECK_INTERVAL_MS, 5000);
+    }
+
+    #[test]
+    fn test_process_limits_serialization_camel_case() {
+        let limits = ProcessLimits {
+            max_memory_mb: Some(512),
+            max_runtime_seconds: Some(300),
+            health_check_interval_ms: 3000,
+        };
+
+        let json = serde_json::to_string(&limits).unwrap();
+
+        // Should use camelCase in JSON
+        assert!(json.contains("maxMemoryMb"));
+        assert!(json.contains("maxRuntimeSeconds"));
+        assert!(json.contains("healthCheckIntervalMs"));
+        // Should NOT use snake_case
+        assert!(!json.contains("max_memory_mb"));
+        assert!(!json.contains("max_runtime_seconds"));
+        assert!(!json.contains("health_check_interval_ms"));
+    }
+
+    #[test]
+    fn test_process_limits_deserialization_camel_case() {
+        let json = r#"{
+            "maxMemoryMb": 1024,
+            "maxRuntimeSeconds": 600,
+            "healthCheckIntervalMs": 2000
+        }"#;
+
+        let limits: ProcessLimits = serde_json::from_str(json).unwrap();
+
+        assert_eq!(limits.max_memory_mb, Some(1024));
+        assert_eq!(limits.max_runtime_seconds, Some(600));
+        assert_eq!(limits.health_check_interval_ms, 2000);
+    }
+
+    #[test]
+    fn test_process_limits_deserialization_with_defaults() {
+        // Partial config - missing fields should use defaults
+        let json = r#"{"maxMemoryMb": 256}"#;
+        let limits: ProcessLimits = serde_json::from_str(json).unwrap();
+
+        assert_eq!(limits.max_memory_mb, Some(256));
+        assert_eq!(limits.max_runtime_seconds, None); // Default
+        assert_eq!(limits.health_check_interval_ms, DEFAULT_HEALTH_CHECK_INTERVAL_MS); // Default
+    }
+
+    #[test]
+    fn test_process_limits_deserialization_empty() {
+        // Empty object should use all defaults
+        let json = r#"{}"#;
+        let limits: ProcessLimits = serde_json::from_str(json).unwrap();
+
+        assert_eq!(limits.max_memory_mb, None);
+        assert_eq!(limits.max_runtime_seconds, None);
+        assert_eq!(limits.health_check_interval_ms, DEFAULT_HEALTH_CHECK_INTERVAL_MS);
+    }
+
+    #[test]
+    fn test_process_limits_serialization_skips_none() {
+        let limits = ProcessLimits::default();
+        let json = serde_json::to_string(&limits).unwrap();
+
+        // None values should not appear in JSON
+        assert!(!json.contains("maxMemoryMb"));
+        assert!(!json.contains("maxRuntimeSeconds"));
+        // But healthCheckIntervalMs always appears (has value)
+        assert!(json.contains("healthCheckIntervalMs"));
+    }
+
+    #[test]
+    fn test_config_with_process_limits() {
+        let config = Config {
+            hotkey: HotkeyConfig {
+                modifiers: vec!["meta".to_string()],
+                key: "Semicolon".to_string(),
+            },
+            bun_path: None,
+            editor: None,
+            padding: None,
+            editor_font_size: None,
+            terminal_font_size: None,
+            ui_scale: None,
+            built_ins: None,
+            process_limits: Some(ProcessLimits {
+                max_memory_mb: Some(512),
+                max_runtime_seconds: Some(300),
+                health_check_interval_ms: 3000,
+            }),
+        };
+
+        let limits = config.get_process_limits();
+        assert_eq!(limits.max_memory_mb, Some(512));
+        assert_eq!(limits.max_runtime_seconds, Some(300));
+        assert_eq!(limits.health_check_interval_ms, 3000);
+    }
+
+    #[test]
+    fn test_config_get_process_limits_default() {
+        let config = Config::default();
+        let limits = config.get_process_limits();
+
+        // Should return defaults when process_limits is None
+        assert_eq!(limits.max_memory_mb, None);
+        assert_eq!(limits.max_runtime_seconds, None);
+        assert_eq!(limits.health_check_interval_ms, DEFAULT_HEALTH_CHECK_INTERVAL_MS);
+    }
+
+    #[test]
+    fn test_config_deserialization_with_process_limits() {
+        let json = r#"{
+            "hotkey": {
+                "modifiers": ["meta"],
+                "key": "Semicolon"
+            },
+            "processLimits": {
+                "maxMemoryMb": 1024,
+                "maxRuntimeSeconds": 600,
+                "healthCheckIntervalMs": 2000
+            }
+        }"#;
+
+        let config: Config = serde_json::from_str(json).unwrap();
+
+        assert!(config.process_limits.is_some());
+        let limits = config.get_process_limits();
+        assert_eq!(limits.max_memory_mb, Some(1024));
+        assert_eq!(limits.max_runtime_seconds, Some(600));
+        assert_eq!(limits.health_check_interval_ms, 2000);
+    }
+
+    #[test]
+    fn test_config_deserialization_without_process_limits() {
+        // Existing configs without processLimits should still work
+        let json = r#"{
+            "hotkey": {
+                "modifiers": ["meta"],
+                "key": "Semicolon"
+            }
+        }"#;
+
+        let config: Config = serde_json::from_str(json).unwrap();
+
+        assert!(config.process_limits.is_none());
+
+        // Getter should return defaults
+        let limits = config.get_process_limits();
+        assert_eq!(limits.max_memory_mb, None);
+        assert_eq!(limits.max_runtime_seconds, None);
+        assert_eq!(limits.health_check_interval_ms, DEFAULT_HEALTH_CHECK_INTERVAL_MS);
+    }
+
+    #[test]
+    fn test_config_serialization_skips_none_process_limits() {
+        let config = Config::default();
+        let json = serde_json::to_string(&config).unwrap();
+
+        // None values should not appear in JSON
+        assert!(!json.contains("processLimits"));
+    }
+
+    #[test]
+    fn test_config_serialization_includes_set_process_limits() {
+        let config = Config {
+            hotkey: HotkeyConfig {
+                modifiers: vec!["meta".to_string()],
+                key: "Semicolon".to_string(),
+            },
+            bun_path: None,
+            editor: None,
+            padding: None,
+            editor_font_size: None,
+            terminal_font_size: None,
+            ui_scale: None,
+            built_ins: None,
+            process_limits: Some(ProcessLimits::default()),
+        };
+
+        let json = serde_json::to_string(&config).unwrap();
+
+        assert!(json.contains("processLimits"));
+        assert!(json.contains("healthCheckIntervalMs"));
+    }
+
+    #[test]
+    fn test_process_limits_roundtrip() {
+        // Test full roundtrip serialization/deserialization
+        let original = ProcessLimits {
+            max_memory_mb: Some(256),
+            max_runtime_seconds: Some(120),
+            health_check_interval_ms: 10000,
+        };
+
+        let json = serde_json::to_string(&original).unwrap();
+        let restored: ProcessLimits = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(original.max_memory_mb, restored.max_memory_mb);
+        assert_eq!(original.max_runtime_seconds, restored.max_runtime_seconds);
+        assert_eq!(original.health_check_interval_ms, restored.health_check_interval_ms);
+    }
+
+    #[test]
+    fn test_process_limits_clone() {
+        let original = ProcessLimits {
+            max_memory_mb: Some(512),
+            max_runtime_seconds: Some(300),
+            health_check_interval_ms: 5000,
+        };
+        let cloned = original.clone();
+
+        assert_eq!(original.max_memory_mb, cloned.max_memory_mb);
+        assert_eq!(original.max_runtime_seconds, cloned.max_runtime_seconds);
+        assert_eq!(original.health_check_interval_ms, cloned.health_check_interval_ms);
     }
 
 }

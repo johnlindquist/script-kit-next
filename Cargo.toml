@@ -78,6 +78,13 @@ libc = "0.2.178"
 # Keyring integration for secure secret storage (env prompt)
 keyring = "3"
 
+# Process monitoring for orphan detection and cleanup
+sysinfo = "0.33"
+
+# Core Foundation for CFRunLoop (keyboard monitoring)
+core-foundation = "0.10"
+foreign-types = "0.5"
+
 [features]
 default = ["ocr"]
 # Enable tests that interact with system APIs (clipboard, accessibility, hotkeys)
@@ -86,6 +93,9 @@ default = ["ocr"]
 system-tests = []
 # OCR support using macOS Vision framework (enabled by default on macOS)
 ocr = []
+
+[dev-dependencies]
+tempfile = "3"
 
 [build-dependencies]
 dirs = "5.0"  # For build.rs to copy SDK to ~/.kit/lib/

@@ -62,6 +62,16 @@ mod frecency;
 // Scriptlet parsing and variable substitution
 mod scriptlets;
 
+// Text expansion system components (macOS only)
+#[cfg(target_os = "macos")]
+mod keyboard_monitor;
+mod expand_matcher;
+mod text_injector;
+
+// Expand manager - text expansion system integration
+#[cfg(target_os = "macos")]
+mod expand_manager;
+
 use tray::{TrayManager, TrayMenuAction};
 use editor::EditorPrompt;
 use prompts::{SelectPrompt, PathPrompt, EnvPrompt, DropPrompt, TemplatePrompt};
@@ -8939,6 +8949,61 @@ fn main() {
         logging::log("APP", &format!("Failed to initialize clipboard history: {}", e));
     } else {
         logging::log("APP", "Clipboard history monitoring initialized");
+    }
+    
+    // Initialize text expansion system (background thread with keyboard monitoring)
+    // This must be done early, before the GPUI run loop starts
+    #[cfg(target_os = "macos")]
+    {
+        use expand_manager::ExpandManager;
+        
+        // Spawn initialization in a thread to not block startup
+        std::thread::spawn(move || {
+            logging::log("EXPAND", "Initializing text expansion system");
+            
+            // Check accessibility permissions first
+            if !ExpandManager::has_accessibility_permission() {
+                logging::log("EXPAND", "Accessibility permissions not granted - text expansion disabled");
+                logging::log("EXPAND", "Enable in System Preferences > Privacy & Security > Accessibility");
+                return;
+            }
+            
+            let mut manager = ExpandManager::new();
+            
+            // Load scriptlets with expand triggers
+            match manager.load_scriptlets() {
+                Ok(count) => {
+                    if count == 0 {
+                        logging::log("EXPAND", "No expand triggers found in scriptlets");
+                        return;
+                    }
+                    logging::log("EXPAND", &format!("Loaded {} expand triggers", count));
+                }
+                Err(e) => {
+                    logging::log("EXPAND", &format!("Failed to load scriptlets: {}", e));
+                    return;
+                }
+            }
+            
+            // Enable keyboard monitoring
+            match manager.enable() {
+                Ok(()) => {
+                    logging::log("EXPAND", "Text expansion system enabled");
+                    
+                    // List registered triggers
+                    for (trigger, name) in manager.list_triggers() {
+                        logging::log("EXPAND", &format!("  Trigger '{}' -> {}", trigger, name));
+                    }
+                    
+                    // Keep the manager alive - it will run until the process exits
+                    // The keyboard monitor thread is managed by the KeyboardMonitor
+                    std::mem::forget(manager);
+                }
+                Err(e) => {
+                    logging::log("EXPAND", &format!("Failed to enable text expansion: {:?}", e));
+                }
+            }
+        });
     }
     
     // Load config early so we can use it for hotkey registration AND pass to ScriptListApp

@@ -5,6 +5,7 @@ use std::io::{Write, BufReader};
 use std::time::{Duration, Instant};
 use crate::protocol::{Message, JsonlReader, serialize_message};
 use crate::logging;
+use crate::process_manager::PROCESS_MANAGER;
 use crate::scriptlets::{Scriptlet, SHELL_TOOLS, format_scriptlet, process_conditionals};
 use tracing::{info, error, debug, warn, instrument};
 
@@ -447,14 +448,22 @@ fn find_sdk_path() -> Option<PathBuf> {
 pub struct ProcessHandle {
     /// Process ID (used as PGID since we spawn with process_group(0))
     pid: u32,
+    /// Path to the script being executed (for process tracking)
+    /// Used during registration with PROCESS_MANAGER in new()
+    #[allow(dead_code)]
+    script_path: String,
     /// Whether the process has been explicitly killed
     killed: bool,
 }
 
 impl ProcessHandle {
-    fn new(pid: u32) -> Self {
-        logging::log("EXEC", &format!("ProcessHandle created for PID {}", pid));
-        Self { pid, killed: false }
+    fn new(pid: u32, script_path: String) -> Self {
+        logging::log("EXEC", &format!("ProcessHandle created for PID {} (script: {})", pid, script_path));
+        
+        // Register with global process manager for tracking
+        PROCESS_MANAGER.register_process(pid, &script_path);
+        
+        Self { pid, script_path, killed: false }
     }
 
     /// Kill the process group (Unix) or just the process (other platforms)
@@ -519,6 +528,10 @@ impl ProcessHandle {
 impl Drop for ProcessHandle {
     fn drop(&mut self) {
         logging::log("EXEC", &format!("ProcessHandle dropping for PID {}", self.pid));
+        
+        // Unregister from global process manager BEFORE killing
+        PROCESS_MANAGER.unregister_process(self.pid);
+        
         self.kill();
     }
 }
@@ -675,7 +688,7 @@ pub fn execute_script_interactive(path: &Path) -> Result<ScriptSession, String> 
     if let Some(ref sdk) = sdk_path {
         let sdk_str = sdk.to_str().unwrap_or("");
         logging::log("EXEC", &format!("Trying: bun run --preload {} {}", sdk_str, path_str));
-        match spawn_script("bun", &["run", "--preload", sdk_str, path_str]) {
+        match spawn_script("bun", &["run", "--preload", sdk_str, path_str], path_str) {
             Ok(session) => {
                 info!(
                     duration_ms = start.elapsed().as_millis() as u64,
@@ -696,7 +709,7 @@ pub fn execute_script_interactive(path: &Path) -> Result<ScriptSession, String> 
     // Try bun without preload as fallback
     if is_typescript(path) {
         logging::log("EXEC", &format!("Trying: bun run {}", path_str));
-        match spawn_script("bun", &["run", path_str]) {
+        match spawn_script("bun", &["run", path_str], path_str) {
             Ok(session) => {
                 info!(
                     duration_ms = start.elapsed().as_millis() as u64,
@@ -717,7 +730,7 @@ pub fn execute_script_interactive(path: &Path) -> Result<ScriptSession, String> 
     // Try node for JavaScript files
     if is_javascript(path) {
         logging::log("EXEC", &format!("Trying: node {}", path_str));
-        match spawn_script("node", &[path_str]) {
+        match spawn_script("node", &[path_str], path_str) {
             Ok(session) => {
                 info!(
                     duration_ms = start.elapsed().as_millis() as u64,
@@ -749,7 +762,7 @@ pub fn execute_script_interactive(path: &Path) -> Result<ScriptSession, String> 
 
 /// Spawn a script as an interactive process with piped stdin/stdout
 #[instrument(skip_all, fields(cmd = %cmd))]
-fn spawn_script(cmd: &str, args: &[&str]) -> Result<ScriptSession, String> {
+fn spawn_script(cmd: &str, args: &[&str], script_path: &str) -> Result<ScriptSession, String> {
     // Try to find the executable in common locations
     let executable = find_executable(cmd)
         .map(|p| p.to_string_lossy().into_owned())
@@ -798,7 +811,7 @@ fn spawn_script(cmd: &str, args: &[&str]) -> Result<ScriptSession, String> {
     let stderr = child.stderr.take();
     logging::log("EXEC", &format!("Stderr captured: {}", stderr.is_some()));
 
-    let process_handle = ProcessHandle::new(pid);
+    let process_handle = ProcessHandle::new(pid, script_path.to_string());
     logging::log("EXEC", "ScriptSession created successfully");
     
     Ok(ScriptSession {
@@ -2141,7 +2154,7 @@ mod tests {
     #[test]
     fn test_process_handle_double_kill_is_safe() {
         // Double kill should not panic
-        let mut handle = ProcessHandle::new(99999); // Non-existent PID
+        let mut handle = ProcessHandle::new(99999, "[test:double_kill]".to_string()); // Non-existent PID
         handle.kill();
         handle.kill(); // Should be safe to call again
         assert!(handle.killed);
@@ -2150,17 +2163,38 @@ mod tests {
     #[test]
     fn test_process_handle_drop_calls_kill() {
         // Create a handle and let it drop
-        let handle = ProcessHandle::new(99998); // Non-existent PID
+        let handle = ProcessHandle::new(99998, "[test:drop_kill]".to_string()); // Non-existent PID
         assert!(!handle.killed);
         drop(handle);
         // If we get here without panic, drop successfully called kill
+    }
+
+    #[test]
+    fn test_process_handle_registers_with_process_manager() {
+        // ProcessHandle::new() internally calls PROCESS_MANAGER.register_process()
+        // and Drop calls PROCESS_MANAGER.unregister_process()
+        
+        // Create a handle which should register with PROCESS_MANAGER
+        let test_pid = 88888u32; // Non-existent PID
+        let test_script = "/test/integration_test.ts";
+        
+        // Create handle - this calls register_process() internally
+        let handle = ProcessHandle::new(test_pid, test_script.to_string());
+        
+        // Verify handle has correct PID
+        assert_eq!(handle.pid, test_pid);
+        
+        // Drop will call unregister_process() - this should not panic
+        drop(handle);
+        
+        // If we get here, register/unregister cycle completed successfully
     }
 
     #[cfg(unix)]
     #[test]
     fn test_spawn_and_kill_process() {
         // Spawn a simple process that sleeps
-        let result = spawn_script("sleep", &["10"]);
+        let result = spawn_script("sleep", &["10"], "[test:sleep]");
         
         if let Ok(mut session) = result {
             let pid = session.pid();
@@ -2185,7 +2219,7 @@ mod tests {
     #[test]
     fn test_drop_kills_process() {
         // Spawn a process
-        let result = spawn_script("sleep", &["30"]);
+        let result = spawn_script("sleep", &["30"], "[test:sleep]");
         
         if let Ok(session) = result {
             let pid = session.pid();
@@ -2230,7 +2264,7 @@ mod tests {
     #[test]
     fn test_split_session_kill() {
         // Spawn a process and split it
-        let result = spawn_script("sleep", &["10"]);
+        let result = spawn_script("sleep", &["10"], "[test:sleep]");
         
         if let Ok(session) = result {
             let pid = session.pid();

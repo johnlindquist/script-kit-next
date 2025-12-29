@@ -42,8 +42,27 @@ pub mod app_launcher;
 // Frecency tracking for script usage
 pub mod frecency;
 
+// Process management for tracking bun script processes
+pub mod process_manager;
+
 // Scriptlet parsing and variable substitution
 pub mod scriptlets;
+
+// Text injection for text expansion/snippet systems
+pub mod text_injector;
+
+// Expand trigger matching for text expansion
+pub mod expand_matcher;
+
+// Global keyboard monitoring for system-wide keystroke capture
+// Required for text expansion triggers typed in any application
+#[cfg(target_os = "macos")]
+pub mod keyboard_monitor;
+
+// Expand manager - ties together keyboard monitoring, trigger matching,
+// and text injection for the complete text expansion system
+#[cfg(target_os = "macos")]
+pub mod expand_manager;
 
 // OCR module - macOS Vision framework integration
 #[cfg(feature = "ocr")]
