@@ -221,9 +221,9 @@ impl ThemeAdapter {
     /// - `theme.colors.accent.selected` → cursor
     /// - `theme.colors.accent.selected_subtle` → selection background
     /// - `theme.colors.text.secondary` → selection foreground
+    /// - `theme.colors.terminal.*` → ANSI color palette (all 16 colors)
     ///
-    /// The ANSI color palette is derived from theme colors where possible,
-    /// with sensible defaults for colors not represented in the theme.
+    /// All 16 ANSI colors are now fully themeable via `theme.colors.terminal`.
     pub fn from_theme(theme: &Theme) -> Self {
         let colors = &theme.colors;
 
@@ -233,23 +233,25 @@ impl ThemeAdapter {
         let selection_background = hex_to_rgb(colors.accent.selected_subtle);
         let selection_foreground = hex_to_rgb(colors.text.secondary);
 
-        // Build ANSI colors, using theme colors where appropriate
+        // Use all 16 ANSI colors from theme's terminal palette
+        let terminal = &colors.terminal;
         let ansi = AnsiColors {
-            // Use theme's success color for green
-            green: hex_to_rgb(colors.ui.success),
-            // Use theme's error color for red
-            red: hex_to_rgb(colors.ui.error),
-            // Use theme's warning color for yellow
-            yellow: hex_to_rgb(colors.ui.warning),
-            // Use theme's info color for blue
-            blue: hex_to_rgb(colors.ui.info),
-            // Use theme's muted text for bright black (gray)
-            bright_black: hex_to_rgb(colors.text.muted),
-            // Use theme's primary text for white
-            white: hex_to_rgb(colors.text.secondary),
-            bright_white: hex_to_rgb(colors.text.primary),
-            // Rest use defaults
-            ..AnsiColors::default()
+            black: hex_to_rgb(terminal.black),
+            red: hex_to_rgb(terminal.red),
+            green: hex_to_rgb(terminal.green),
+            yellow: hex_to_rgb(terminal.yellow),
+            blue: hex_to_rgb(terminal.blue),
+            magenta: hex_to_rgb(terminal.magenta),
+            cyan: hex_to_rgb(terminal.cyan),
+            white: hex_to_rgb(terminal.white),
+            bright_black: hex_to_rgb(terminal.bright_black),
+            bright_red: hex_to_rgb(terminal.bright_red),
+            bright_green: hex_to_rgb(terminal.bright_green),
+            bright_yellow: hex_to_rgb(terminal.bright_yellow),
+            bright_blue: hex_to_rgb(terminal.bright_blue),
+            bright_magenta: hex_to_rgb(terminal.bright_magenta),
+            bright_cyan: hex_to_rgb(terminal.bright_cyan),
+            bright_white: hex_to_rgb(terminal.bright_white),
         };
 
         Self {

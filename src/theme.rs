@@ -4,6 +4,9 @@ use std::path::PathBuf;
 use std::process::Command;
 use tracing::{info, warn, error, debug};
 
+/// Transparent color constant (fully transparent black)
+pub const TRANSPARENT: u32 = 0x00000000;
+
 /// Hex color representation (u32)
 pub type HexColor = u32;
 
@@ -243,6 +246,156 @@ pub struct UIColors {
     pub info: HexColor,
 }
 
+/// Terminal ANSI color palette (16 colors)
+///
+/// These colors are used by the embedded terminal emulator for ANSI escape sequences.
+/// Colors 0-7 are the normal palette, colors 8-15 are the bright variants.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TerminalColors {
+    /// ANSI 0: Black
+    #[serde(default = "default_terminal_black")]
+    pub black: HexColor,
+    /// ANSI 1: Red
+    #[serde(default = "default_terminal_red")]
+    pub red: HexColor,
+    /// ANSI 2: Green
+    #[serde(default = "default_terminal_green")]
+    pub green: HexColor,
+    /// ANSI 3: Yellow
+    #[serde(default = "default_terminal_yellow")]
+    pub yellow: HexColor,
+    /// ANSI 4: Blue
+    #[serde(default = "default_terminal_blue")]
+    pub blue: HexColor,
+    /// ANSI 5: Magenta
+    #[serde(default = "default_terminal_magenta")]
+    pub magenta: HexColor,
+    /// ANSI 6: Cyan
+    #[serde(default = "default_terminal_cyan")]
+    pub cyan: HexColor,
+    /// ANSI 7: White
+    #[serde(default = "default_terminal_white")]
+    pub white: HexColor,
+    /// ANSI 8: Bright Black (Gray)
+    #[serde(default = "default_terminal_bright_black")]
+    pub bright_black: HexColor,
+    /// ANSI 9: Bright Red
+    #[serde(default = "default_terminal_bright_red")]
+    pub bright_red: HexColor,
+    /// ANSI 10: Bright Green
+    #[serde(default = "default_terminal_bright_green")]
+    pub bright_green: HexColor,
+    /// ANSI 11: Bright Yellow
+    #[serde(default = "default_terminal_bright_yellow")]
+    pub bright_yellow: HexColor,
+    /// ANSI 12: Bright Blue
+    #[serde(default = "default_terminal_bright_blue")]
+    pub bright_blue: HexColor,
+    /// ANSI 13: Bright Magenta
+    #[serde(default = "default_terminal_bright_magenta")]
+    pub bright_magenta: HexColor,
+    /// ANSI 14: Bright Cyan
+    #[serde(default = "default_terminal_bright_cyan")]
+    pub bright_cyan: HexColor,
+    /// ANSI 15: Bright White
+    #[serde(default = "default_terminal_bright_white")]
+    pub bright_white: HexColor,
+}
+
+// Terminal color defaults (VS Code dark theme inspired)
+fn default_terminal_black() -> HexColor { 0x000000 }
+fn default_terminal_red() -> HexColor { 0xcd3131 }
+fn default_terminal_green() -> HexColor { 0x0dbc79 }
+fn default_terminal_yellow() -> HexColor { 0xe5e510 }
+fn default_terminal_blue() -> HexColor { 0x2472c8 }
+fn default_terminal_magenta() -> HexColor { 0xbc3fbc }
+fn default_terminal_cyan() -> HexColor { 0x11a8cd }
+fn default_terminal_white() -> HexColor { 0xe5e5e5 }
+fn default_terminal_bright_black() -> HexColor { 0x666666 }
+fn default_terminal_bright_red() -> HexColor { 0xf14c4c }
+fn default_terminal_bright_green() -> HexColor { 0x23d18b }
+fn default_terminal_bright_yellow() -> HexColor { 0xf5f543 }
+fn default_terminal_bright_blue() -> HexColor { 0x3b8eea }
+fn default_terminal_bright_magenta() -> HexColor { 0xd670d6 }
+fn default_terminal_bright_cyan() -> HexColor { 0x29b8db }
+fn default_terminal_bright_white() -> HexColor { 0xffffff }
+
+impl Default for TerminalColors {
+    fn default() -> Self {
+        Self::dark_default()
+    }
+}
+
+impl TerminalColors {
+    /// Dark mode terminal colors (VS Code dark inspired)
+    pub fn dark_default() -> Self {
+        TerminalColors {
+            black: 0x000000,
+            red: 0xcd3131,
+            green: 0x0dbc79,
+            yellow: 0xe5e510,
+            blue: 0x2472c8,
+            magenta: 0xbc3fbc,
+            cyan: 0x11a8cd,
+            white: 0xe5e5e5,
+            bright_black: 0x666666,
+            bright_red: 0xf14c4c,
+            bright_green: 0x23d18b,
+            bright_yellow: 0xf5f543,
+            bright_blue: 0x3b8eea,
+            bright_magenta: 0xd670d6,
+            bright_cyan: 0x29b8db,
+            bright_white: 0xffffff,
+        }
+    }
+    
+    /// Light mode terminal colors
+    pub fn light_default() -> Self {
+        TerminalColors {
+            black: 0x000000,
+            red: 0xcd3131,
+            green: 0x00bc00,
+            yellow: 0x949800,
+            blue: 0x0451a5,
+            magenta: 0xbc05bc,
+            cyan: 0x0598bc,
+            white: 0x555555,
+            bright_black: 0x666666,
+            bright_red: 0xcd3131,
+            bright_green: 0x14ce14,
+            bright_yellow: 0xb5ba00,
+            bright_blue: 0x0451a5,
+            bright_magenta: 0xbc05bc,
+            bright_cyan: 0x0598bc,
+            bright_white: 0xa5a5a5,
+        }
+    }
+    
+    /// Get color by ANSI index (0-15)
+    #[allow(dead_code)]
+    pub fn get(&self, index: u8) -> HexColor {
+        match index {
+            0 => self.black,
+            1 => self.red,
+            2 => self.green,
+            3 => self.yellow,
+            4 => self.blue,
+            5 => self.magenta,
+            6 => self.cyan,
+            7 => self.white,
+            8 => self.bright_black,
+            9 => self.bright_red,
+            10 => self.bright_green,
+            11 => self.bright_yellow,
+            12 => self.bright_blue,
+            13 => self.bright_magenta,
+            14 => self.bright_cyan,
+            15 => self.bright_white,
+            _ => self.black, // Fallback
+        }
+    }
+}
+
 /// Default error color (red-500)
 fn default_error_color() -> HexColor {
     0xef4444
@@ -277,6 +430,9 @@ pub struct FocusColorScheme {
     /// Optional cursor styling
     #[serde(default)]
     pub cursor: Option<CursorStyle>,
+    /// Terminal ANSI colors (optional, defaults provided)
+    #[serde(default)]
+    pub terminal: TerminalColors,
 }
 
 /// Complete color scheme definition
@@ -286,6 +442,9 @@ pub struct ColorScheme {
     pub text: TextColors,
     pub accent: AccentColors,
     pub ui: UIColors,
+    /// Terminal ANSI colors (optional, defaults provided)
+    #[serde(default)]
+    pub terminal: TerminalColors,
 }
 
 /// Window focus-aware theme with separate styles for focused and unfocused states
@@ -340,6 +499,7 @@ impl FocusColorScheme {
             text: self.text.clone(),
             accent: self.accent.clone(),
             ui: self.ui.clone(),
+            terminal: self.terminal.clone(),
         }
     }
 }
@@ -372,6 +532,7 @@ impl ColorScheme {
                 warning: 0xf59e0b, // amber-500
                 info: 0x3b82f6,    // blue-500
             },
+            terminal: TerminalColors::dark_default(),
         }
     }
 
@@ -402,6 +563,7 @@ impl ColorScheme {
                 warning: 0xd97706, // amber-600 (darker for light mode)
                 info: 0x2563eb,    // blue-600 (darker for light mode)
             },
+            terminal: TerminalColors::light_default(),
         }
     }
 
@@ -447,6 +609,24 @@ impl ColorScheme {
                 error: darken_hex(self.ui.error),
                 warning: darken_hex(self.ui.warning),
                 info: darken_hex(self.ui.info),
+            },
+            terminal: TerminalColors {
+                black: darken_hex(self.terminal.black),
+                red: darken_hex(self.terminal.red),
+                green: darken_hex(self.terminal.green),
+                yellow: darken_hex(self.terminal.yellow),
+                blue: darken_hex(self.terminal.blue),
+                magenta: darken_hex(self.terminal.magenta),
+                cyan: darken_hex(self.terminal.cyan),
+                white: darken_hex(self.terminal.white),
+                bright_black: darken_hex(self.terminal.bright_black),
+                bright_red: darken_hex(self.terminal.bright_red),
+                bright_green: darken_hex(self.terminal.bright_green),
+                bright_yellow: darken_hex(self.terminal.bright_yellow),
+                bright_blue: darken_hex(self.terminal.bright_blue),
+                bright_magenta: darken_hex(self.terminal.bright_magenta),
+                bright_cyan: darken_hex(self.terminal.bright_cyan),
+                bright_white: darken_hex(self.terminal.bright_white),
             },
         }
     }
@@ -765,7 +945,7 @@ impl ListItemColors {
         debug!(selected_subtle = format!("#{:06x}", selected_subtle), "Extracting list item colors");
         
         ListItemColors {
-            background: rgba(0x00000000),  // Fully transparent
+            background: rgba(TRANSPARENT),  // Fully transparent
             background_hover: rgba((selected_subtle << 8) | 0x40),  // 25% opacity
             background_selected: rgba((selected_subtle << 8) | 0x80),  // 50% opacity
             text: rgb(colors.text.primary),
