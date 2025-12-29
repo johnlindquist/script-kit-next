@@ -463,6 +463,11 @@ enum AppView {
         filter: String,
         selected_index: usize,
     },
+    /// Showing design gallery (separator and icon variations)
+    DesignGalleryView {
+        filter: String,
+        selected_index: usize,
+    },
 }
 
 /// Wrapper to hold a script session that can be shared across async boundaries
@@ -523,6 +528,8 @@ enum ExternalCommand {
     Hide,
     /// Set the filter text (for testing)
     SetFilter { text: String },
+    /// Trigger a built-in feature by name (for testing)
+    TriggerBuiltin { name: String },
 }
 
 /// Start a thread that listens on stdin for external JSONL commands.
@@ -754,6 +761,8 @@ struct ScriptListApp {
     clipboard_list_scroll_handle: UniformListScrollHandle,
     // Scroll handle for window switcher list
     window_list_scroll_handle: UniformListScrollHandle,
+    // Scroll handle for design gallery list
+    design_gallery_scroll_handle: UniformListScrollHandle,
     // Actions popup overlay
     show_actions_popup: bool,
     // ActionsDialog entity for focus management
@@ -920,6 +929,7 @@ impl ScriptListApp {
             arg_list_scroll_handle: UniformListScrollHandle::new(),
             clipboard_list_scroll_handle: UniformListScrollHandle::new(),
             window_list_scroll_handle: UniformListScrollHandle::new(),
+            design_gallery_scroll_handle: UniformListScrollHandle::new(),
             show_actions_popup: false,
             actions_dialog: None,
             cursor_visible: true,
@@ -1439,6 +1449,18 @@ impl ScriptListApp {
                         w.title.to_lowercase().contains(&filter_lower) || 
                         w.app.to_lowercase().contains(&filter_lower)
                     }).count()
+                };
+                (ViewType::ScriptList, filtered_count)
+            }
+            AppView::DesignGalleryView { filter, .. } => {
+                // Calculate total gallery items (separators + icons)
+                let total_items = designs::separator_variations::SeparatorStyle::count()
+                    + designs::icon_variations::total_icon_count();
+                let filtered_count = if filter.is_empty() {
+                    total_items
+                } else {
+                    // For now, return total - filtering can be added later
+                    total_items
                 };
                 (ViewType::ScriptList, filtered_count)
             }
@@ -2526,6 +2548,7 @@ impl ScriptListApp {
                 description: scriptlet.description.clone(),
                 path: temp_file,
                 extension: "ts".to_string(),
+                icon: None,
             };
             
             self.execute_interactive(&script, cx);
@@ -2693,6 +2716,16 @@ impl ScriptListApp {
                         );
                     }
                 }
+                cx.notify();
+            }
+            builtins::BuiltInFeature::DesignGallery => {
+                logging::log("EXEC", "Opening Design Gallery");
+                self.current_view = AppView::DesignGalleryView {
+                    filter: String::new(),
+                    selected_index: 0,
+                };
+                // Use standard height for design gallery view
+                defer_resize_to_view(ViewType::ScriptList, 0, cx);
                 cx.notify();
             }
         }
@@ -2946,6 +2979,7 @@ impl ScriptListApp {
                     description: Some(format!("External script: {}", path)),
                     path: script_path,
                     extension,
+                    icon: None,
                 };
                 
                 logging::log("EXEC", &format!("Executing script: {}", script_name));
@@ -3175,6 +3209,21 @@ impl ScriptListApp {
                                 None,
                             )
                         }
+                        AppView::DesignGalleryView { filter, selected_index } => {
+                            let total_items = designs::separator_variations::SeparatorStyle::count()
+                                + designs::icon_variations::total_icon_count()
+                                + 8 + 6; // headers
+                            (
+                                "designGallery".to_string(),
+                                None,
+                                None,
+                                filter.clone(),
+                                total_items,
+                                total_items,
+                                *selected_index as i32,
+                                None,
+                            )
+                        }
                     };
                 
                 // Focus state: we use focused_input as a proxy since we don't have Window access here.
@@ -3295,6 +3344,7 @@ impl ScriptListApp {
             AppView::ClipboardHistoryView { .. } => "ClipboardHistoryView",
             AppView::AppLauncherView { .. } => "AppLauncherView",
             AppView::WindowSwitcherView { .. } => "WindowSwitcherView",
+            AppView::DesignGalleryView { .. } => "DesignGalleryView",
         };
         
         let old_focused_input = self.focused_input;
@@ -3364,7 +3414,8 @@ impl ScriptListApp {
             AppView::EditorPrompt { .. } |
             AppView::ClipboardHistoryView { .. } |
             AppView::AppLauncherView { .. } |
-            AppView::WindowSwitcherView { .. }
+            AppView::WindowSwitcherView { .. } |
+            AppView::DesignGalleryView { .. }
         )
     }
       
@@ -3528,6 +3579,9 @@ impl Render for ScriptListApp {
             }
             AppView::WindowSwitcherView { windows, filter, selected_index } => {
                 self.render_window_switcher(windows, filter, selected_index, cx)
+            }
+            AppView::DesignGalleryView { filter, selected_index } => {
+                self.render_design_gallery(filter, selected_index, cx)
             }
         }
     }
@@ -4037,6 +4091,7 @@ impl ScriptListApp {
                             builtins::BuiltInFeature::AppLauncher => "Application Launcher".to_string(),
                             builtins::BuiltInFeature::App(name) => name.clone(),
                             builtins::BuiltInFeature::WindowSwitcher => "Window Manager".to_string(),
+                            builtins::BuiltInFeature::DesignGallery => "Design Gallery".to_string(),
                         };
                         panel = panel.child(
                             div()
@@ -6986,6 +7041,991 @@ impl ScriptListApp {
         
         cx.notify();
     }
+    
+    /// Render design gallery view with group header and icon variations
+    fn render_design_gallery(
+        &mut self,
+        filter: String,
+        selected_index: usize,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        use designs::group_header_variations::{GroupHeaderStyle, GroupHeaderCategory};
+        use designs::icon_variations::{IconName, IconCategory, IconStyle};
+        
+        // Use design tokens for GLOBAL theming
+        let tokens = get_tokens(self.current_design);
+        let design_colors = tokens.colors();
+        let design_spacing = tokens.spacing();
+        let design_typography = tokens.typography();
+        let design_visual = tokens.visual();
+        
+        // Use design tokens for global theming
+        let opacity = self.theme.get_opacity();
+        let bg_hex = design_colors.background;
+        let bg_with_alpha = self.hex_to_rgba_with_opacity(bg_hex, opacity.main);
+        let box_shadows = self.create_box_shadows();
+        
+        // Build gallery items: group headers grouped by category, then icons grouped by category
+        #[derive(Clone)]
+        enum GalleryItem {
+            GroupHeaderCategory(GroupHeaderCategory),
+            GroupHeader(GroupHeaderStyle),
+            IconCategoryHeader(IconCategory),
+            Icon(IconName, IconStyle),
+        }
+        
+        let mut gallery_items: Vec<GalleryItem> = Vec::new();
+        
+        // Add group headers by category
+        for category in GroupHeaderCategory::all() {
+            gallery_items.push(GalleryItem::GroupHeaderCategory(*category));
+            for style in category.styles() {
+                gallery_items.push(GalleryItem::GroupHeader(*style));
+            }
+        }
+        
+        // Add icons by category, showing each icon with default style
+        for category in IconCategory::all() {
+            gallery_items.push(GalleryItem::IconCategoryHeader(*category));
+            for icon in category.icons() {
+                gallery_items.push(GalleryItem::Icon(icon, IconStyle::Default));
+            }
+        }
+        
+        // Filter items based on current filter
+        let filtered_items: Vec<(usize, GalleryItem)> = if filter.is_empty() {
+            gallery_items.iter().enumerate().map(|(i, item)| (i, item.clone())).collect()
+        } else {
+            let filter_lower = filter.to_lowercase();
+            gallery_items.iter()
+                .enumerate()
+                .filter(|(_, item)| {
+                    match item {
+                        GalleryItem::GroupHeaderCategory(cat) => cat.name().to_lowercase().contains(&filter_lower),
+                        GalleryItem::GroupHeader(style) => {
+                            style.name().to_lowercase().contains(&filter_lower) ||
+                            style.description().to_lowercase().contains(&filter_lower)
+                        }
+                        GalleryItem::IconCategoryHeader(cat) => cat.name().to_lowercase().contains(&filter_lower),
+                        GalleryItem::Icon(icon, _) => {
+                            icon.name().to_lowercase().contains(&filter_lower) ||
+                            icon.description().to_lowercase().contains(&filter_lower)
+                        }
+                    }
+                })
+                .map(|(i, item)| (i, item.clone()))
+                .collect()
+        };
+        let filtered_len = filtered_items.len();
+        
+        // Key handler for design gallery
+        let handle_key = cx.listener(move |this: &mut Self, event: &gpui::KeyDownEvent, _window: &mut Window, cx: &mut Context<Self>| {
+            let key_str = event.keystroke.key.to_lowercase();
+            logging::log("KEY", &format!("DesignGallery key: '{}'", key_str));
+            
+            if let AppView::DesignGalleryView { filter, selected_index } = &mut this.current_view {
+                // Re-compute filtered_len for this scope
+                let total_items = GroupHeaderStyle::count()
+                    + IconName::count()
+                    + GroupHeaderCategory::all().len()
+                    + IconCategory::all().len();
+                let current_filtered_len = total_items;
+                
+                match key_str.as_str() {
+                    "up" | "arrowup" => {
+                        if *selected_index > 0 {
+                            *selected_index -= 1;
+                            this.design_gallery_scroll_handle.scroll_to_item(*selected_index, ScrollStrategy::Nearest);
+                            cx.notify();
+                        }
+                    }
+                    "down" | "arrowdown" => {
+                        if *selected_index < current_filtered_len.saturating_sub(1) {
+                            *selected_index += 1;
+                            this.design_gallery_scroll_handle.scroll_to_item(*selected_index, ScrollStrategy::Nearest);
+                            cx.notify();
+                        }
+                    }
+                    "escape" => {
+                        logging::log("KEY", "ESC in DesignGallery - returning to script list");
+                        this.reset_to_script_list(cx);
+                    }
+                    "backspace" => {
+                        if !filter.is_empty() {
+                            filter.pop();
+                            *selected_index = 0;
+                            this.design_gallery_scroll_handle.scroll_to_item(0, ScrollStrategy::Top);
+                            cx.notify();
+                        }
+                    }
+                    _ => {
+                        if let Some(ref key_char) = event.keystroke.key_char {
+                            if let Some(ch) = key_char.chars().next() {
+                                if !ch.is_control() {
+                                    filter.push(ch);
+                                    *selected_index = 0;
+                                    this.design_gallery_scroll_handle.scroll_to_item(0, ScrollStrategy::Top);
+                                    cx.notify();
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        
+        let input_display = if filter.is_empty() {
+            SharedString::from("Search design variations...")
+        } else {
+            SharedString::from(filter.clone())
+        };
+        let input_is_empty = filter.is_empty();
+        
+        // Pre-compute colors
+        let list_colors = ListItemColors::from_design(&design_colors);
+        let text_primary = design_colors.text_primary;
+        let text_muted = design_colors.text_muted;
+        let text_dimmed = design_colors.text_dimmed;
+        let ui_border = design_colors.border;
+        let _accent = design_colors.accent;
+        
+        // Build virtualized list
+        let list_element: AnyElement = if filtered_len == 0 {
+            div()
+                .w_full()
+                .py(px(design_spacing.padding_xl))
+                .text_center()
+                .text_color(rgb(design_colors.text_muted))
+                .font_family(design_typography.font_family)
+                .child("No items match your filter")
+                .into_any_element()
+        } else {
+            // Clone data for the closure
+            let items_for_closure = filtered_items.clone();
+            let selected = selected_index;
+            let _list_colors_clone = list_colors; // Kept for future use
+            let design_spacing_clone = design_spacing;
+            let design_typography_clone = design_typography;
+            let design_visual_clone = design_visual;
+            let design_colors_clone = design_colors;
+            
+            uniform_list(
+                "design-gallery",
+                filtered_len,
+                move |visible_range, _window, _cx| {
+                    visible_range.map(|ix| {
+                        if let Some((_, item)) = items_for_closure.get(ix) {
+                            let is_selected = ix == selected;
+                            
+                            let element: AnyElement = match item {
+                                GalleryItem::GroupHeaderCategory(category) => {
+                                    // Category header - styled as section header
+                                    div()
+                                        .id(ElementId::NamedInteger("gallery-header-cat".into(), ix as u64))
+                                        .w_full()
+                                        .h(px(32.0))
+                                        .px(px(design_spacing_clone.padding_lg))
+                                        .flex()
+                                        .items_center()
+                                        .bg(rgba((design_colors_clone.background_secondary << 8) | 0x80))
+                                        .child(
+                                            div()
+                                                .text_sm()
+                                                .font_weight(gpui::FontWeight::BOLD)
+                                                .text_color(rgb(design_colors_clone.accent))
+                                                .child(format!("── Group Headers: {} ──", category.name()))
+                                        )
+                                        .into_any_element()
+                                }
+                                GalleryItem::GroupHeader(style) => {
+                                    render_group_header_item(ix, is_selected, style, &design_spacing_clone, &design_typography_clone, &design_visual_clone, &design_colors_clone)
+                                }
+                                GalleryItem::IconCategoryHeader(category) => {
+                                    // Icon category header
+                                    div()
+                                        .id(ElementId::NamedInteger("gallery-icon-cat".into(), ix as u64))
+                                        .w_full()
+                                        .h(px(32.0))
+                                        .px(px(design_spacing_clone.padding_lg))
+                                        .flex()
+                                        .items_center()
+                                        .bg(rgba((design_colors_clone.background_secondary << 8) | 0x80))
+                                        .child(
+                                            div()
+                                                .text_sm()
+                                                .font_weight(gpui::FontWeight::BOLD)
+                                                .text_color(rgb(design_colors_clone.accent))
+                                                .child(format!("── Icons: {} ──", category.name()))
+                                        )
+                                        .into_any_element()
+                                }
+                                GalleryItem::Icon(icon, _style) => {
+                                    // Render icon item with SVG
+                                    let icon_path = icon.external_path();
+                                    let name_owned = icon.name().to_string();
+                                    let desc_owned = icon.description().to_string();
+                                    
+                                    let mut item_div = div()
+                                        .id(ElementId::NamedInteger("gallery-icon".into(), ix as u64))
+                                        .w_full()
+                                        .h(px(LIST_ITEM_HEIGHT))
+                                        .px(px(design_spacing_clone.padding_lg))
+                                        .flex()
+                                        .flex_row()
+                                        .items_center()
+                                        .gap(px(design_spacing_clone.gap_md));
+                                    
+                                    if is_selected {
+                                        item_div = item_div.bg(rgb(design_colors_clone.background_selected));
+                                    }
+                                    
+                                    item_div
+                                        // Icon preview with SVG
+                                        .child(
+                                            div()
+                                                .w(px(32.0))
+                                                .h(px(32.0))
+                                                .rounded(px(4.0))
+                                                .bg(rgba((design_colors_clone.background_secondary << 8) | 0x60))
+                                                .flex()
+                                                .items_center()
+                                                .justify_center()
+                                                .child(
+                                                    svg()
+                                                        .external_path(icon_path)
+                                                        .size(px(16.0))
+                                                        .text_color(rgb(design_colors_clone.text_primary))
+                                                )
+                                        )
+                                        // Name and description
+                                        .child(
+                                            div()
+                                                .flex_1()
+                                                .flex()
+                                                .flex_col()
+                                                .gap(px(2.0))
+                                                .child(
+                                                    div()
+                                                        .text_sm()
+                                                        .font_weight(gpui::FontWeight::MEDIUM)
+                                                        .text_color(rgb(design_colors_clone.text_primary))
+                                                        .child(name_owned)
+                                                )
+                                                .child(
+                                                    div()
+                                                        .text_xs()
+                                                        .text_color(rgb(design_colors_clone.text_muted))
+                                                        .overflow_x_hidden()
+                                                        .child(desc_owned)
+                                                )
+                                        )
+                                        .into_any_element()
+                                }
+                            };
+                            element
+                        } else {
+                            div().id(ElementId::NamedInteger("gallery-empty".into(), ix as u64)).h(px(LIST_ITEM_HEIGHT)).into_any_element()
+                        }
+                    }).collect()
+                },
+            )
+            .w_full()
+            .h_full()
+            .track_scroll(&self.design_gallery_scroll_handle)
+            .into_any_element()
+        };
+        
+        // Build the full view
+        div()
+            .flex()
+            .flex_col()
+            .bg(rgba(bg_with_alpha))
+            .shadow(box_shadows)
+            .w_full()
+            .h_full()
+            .rounded(px(design_visual.radius_lg))
+            .text_color(rgb(text_primary))
+            .font_family(design_typography.font_family)
+            .key_context("design_gallery")
+            .track_focus(&self.focus_handle)
+            .on_key_down(handle_key)
+            // Header with input
+            .child(
+                div()
+                    .w_full()
+                    .px(px(design_spacing.padding_lg))
+                    .py(px(design_spacing.padding_md))
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .gap_3()
+                    // Gallery icon
+                    .child(
+                        div()
+                            .text_xl()
+                            .child("🎨")
+                    )
+                    // Search input with blinking cursor
+                    .child(
+                        div()
+                            .flex_1()
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .text_lg()
+                            .text_color(if input_is_empty { rgb(text_muted) } else { rgb(text_primary) })
+                            .when(input_is_empty, |d| d.child(
+                                div()
+                                    .w(px(design_visual.border_normal))
+                                    .h(px(CURSOR_HEIGHT_LG))
+                                    .my(px(CURSOR_MARGIN_Y))
+                                    .mr(px(design_spacing.padding_xs))
+                                    .when(self.cursor_visible, |d| d.bg(rgb(text_primary)))
+                            ))
+                            .child(input_display)
+                            .when(!input_is_empty, |d| d.child(
+                                div()
+                                    .w(px(design_visual.border_normal))
+                                    .h(px(CURSOR_HEIGHT_LG))
+                                    .my(px(CURSOR_MARGIN_Y))
+                                    .ml(px(design_visual.border_normal))
+                                    .when(self.cursor_visible, |d| d.bg(rgb(text_primary)))
+                            ))
+                    )
+                    .child(
+                        div()
+                            .text_sm()
+                            .text_color(rgb(text_dimmed))
+                            .child(format!("{} items", filtered_len))
+                    ),
+            )
+            // Divider
+            .child(
+                div()
+                    .mx(px(design_spacing.padding_lg))
+                    .h(px(design_visual.border_thin))
+                    .bg(rgba((ui_border << 8) | 0x60))
+            )
+            // Main content area - just the list (no preview panel for gallery)
+            .child(
+                div()
+                    .flex_1()
+                    .w_full()
+                    .h_full()
+                    .min_h(px(0.))
+                    .overflow_hidden()
+                    .py(px(design_spacing.padding_xs))
+                    .child(list_element)
+            )
+            // Footer with hint
+            .child(
+                div()
+                    .w_full()
+                    .px(px(design_spacing.padding_lg))
+                    .py(px(design_spacing.padding_sm))
+                    .border_t_1()
+                    .border_color(rgba((ui_border << 8) | 0x40))
+                    .text_xs()
+                    .text_color(rgb(text_dimmed))
+                    .child("↑↓ navigate • Esc back")
+            )
+            .into_any_element()
+    }
+}
+
+/// Helper function to render a group header style item with actual visual styling
+fn render_group_header_item(
+    ix: usize,
+    is_selected: bool,
+    style: &designs::group_header_variations::GroupHeaderStyle,
+    spacing: &designs::DesignSpacing,
+    typography: &designs::DesignTypography,
+    visual: &designs::DesignVisual,
+    colors: &designs::DesignColors,
+) -> AnyElement {
+    use designs::group_header_variations::GroupHeaderStyle;
+    
+    let name_owned = style.name().to_string();
+    let desc_owned = style.description().to_string();
+    
+    let mut item_div = div()
+        .id(ElementId::NamedInteger("gallery-header".into(), ix as u64))
+        .w_full()
+        .h(px(LIST_ITEM_HEIGHT))
+        .px(px(spacing.padding_lg))
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap(px(spacing.gap_md));
+    
+    if is_selected {
+        item_div = item_div.bg(rgb(colors.background_selected));
+    }
+    
+    // Create the preview element based on the style
+    let preview = match style {
+        // Text Only styles - vary font weight and style
+        GroupHeaderStyle::UppercaseLeft => {
+            div()
+                .w(px(140.0))
+                .h(px(28.0))
+                .rounded(px(visual.radius_sm))
+                .bg(rgba((colors.background_secondary << 8) | 0x60))
+                .flex()
+                .items_center()
+                .px(px(8.0))
+                .text_xs()
+                .font_weight(gpui::FontWeight::SEMIBOLD)
+                .text_color(rgb(colors.text_secondary))
+                .child("MAIN")
+        }
+        GroupHeaderStyle::UppercaseCenter => {
+            div()
+                .w(px(140.0))
+                .h(px(28.0))
+                .rounded(px(visual.radius_sm))
+                .bg(rgba((colors.background_secondary << 8) | 0x60))
+                .flex()
+                .items_center()
+                .justify_center()
+                .text_xs()
+                .font_weight(gpui::FontWeight::SEMIBOLD)
+                .text_color(rgb(colors.text_secondary))
+                .child("MAIN")
+        }
+        GroupHeaderStyle::SmallCapsLeft => {
+            div()
+                .w(px(140.0))
+                .h(px(28.0))
+                .rounded(px(visual.radius_sm))
+                .bg(rgba((colors.background_secondary << 8) | 0x60))
+                .flex()
+                .items_center()
+                .px(px(8.0))
+                .text_xs()
+                .font_weight(gpui::FontWeight::MEDIUM)
+                .text_color(rgb(colors.text_secondary))
+                .child("MAIN")  // Would use font-variant: small-caps if available
+        }
+        GroupHeaderStyle::BoldLeft => {
+            div()
+                .w(px(140.0))
+                .h(px(28.0))
+                .rounded(px(visual.radius_sm))
+                .bg(rgba((colors.background_secondary << 8) | 0x60))
+                .flex()
+                .items_center()
+                .px(px(8.0))
+                .text_xs()
+                .font_weight(gpui::FontWeight::BOLD)
+                .text_color(rgb(colors.text_primary))
+                .child("MAIN")
+        }
+        GroupHeaderStyle::LightLeft => {
+            div()
+                .w(px(140.0))
+                .h(px(28.0))
+                .rounded(px(visual.radius_sm))
+                .bg(rgba((colors.background_secondary << 8) | 0x60))
+                .flex()
+                .items_center()
+                .px(px(8.0))
+                .text_xs()
+                .font_weight(gpui::FontWeight::LIGHT)
+                .text_color(rgb(colors.text_muted))
+                .child("MAIN")
+        }
+        GroupHeaderStyle::MonospaceLeft => {
+            div()
+                .w(px(140.0))
+                .h(px(28.0))
+                .rounded(px(visual.radius_sm))
+                .bg(rgba((colors.background_secondary << 8) | 0x60))
+                .flex()
+                .items_center()
+                .px(px(8.0))
+                .text_xs()
+                .font_family(typography.font_family_mono)
+                .text_color(rgb(colors.text_secondary))
+                .child("MAIN")
+        }
+        
+        // With Lines styles
+        GroupHeaderStyle::LineLeft => {
+            div()
+                .w(px(140.0))
+                .h(px(28.0))
+                .rounded(px(visual.radius_sm))
+                .bg(rgba((colors.background_secondary << 8) | 0x60))
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap(px(6.0))
+                .px(px(8.0))
+                .child(
+                    div()
+                        .w(px(24.0))
+                        .h(px(1.0))
+                        .bg(rgb(colors.border))
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .font_weight(gpui::FontWeight::MEDIUM)
+                        .text_color(rgb(colors.text_secondary))
+                        .child("MAIN")
+                )
+        }
+        GroupHeaderStyle::LineRight => {
+            div()
+                .w(px(140.0))
+                .h(px(28.0))
+                .rounded(px(visual.radius_sm))
+                .bg(rgba((colors.background_secondary << 8) | 0x60))
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap(px(6.0))
+                .px(px(8.0))
+                .child(
+                    div()
+                        .text_xs()
+                        .font_weight(gpui::FontWeight::MEDIUM)
+                        .text_color(rgb(colors.text_secondary))
+                        .child("MAIN")
+                )
+                .child(
+                    div()
+                        .flex_1()
+                        .h(px(1.0))
+                        .bg(rgb(colors.border))
+                )
+        }
+        GroupHeaderStyle::LineBothSides => {
+            div()
+                .w(px(140.0))
+                .h(px(28.0))
+                .rounded(px(visual.radius_sm))
+                .bg(rgba((colors.background_secondary << 8) | 0x60))
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap(px(6.0))
+                .px(px(8.0))
+                .child(
+                    div()
+                        .flex_1()
+                        .h(px(1.0))
+                        .bg(rgb(colors.border))
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .font_weight(gpui::FontWeight::MEDIUM)
+                        .text_color(rgb(colors.text_secondary))
+                        .child("MAIN")
+                )
+                .child(
+                    div()
+                        .flex_1()
+                        .h(px(1.0))
+                        .bg(rgb(colors.border))
+                )
+        }
+        GroupHeaderStyle::LineBelow => {
+            div()
+                .w(px(140.0))
+                .h(px(28.0))
+                .rounded(px(visual.radius_sm))
+                .bg(rgba((colors.background_secondary << 8) | 0x60))
+                .flex()
+                .flex_col()
+                .justify_center()
+                .px(px(8.0))
+                .gap(px(2.0))
+                .child(
+                    div()
+                        .text_xs()
+                        .font_weight(gpui::FontWeight::MEDIUM)
+                        .text_color(rgb(colors.text_secondary))
+                        .child("MAIN")
+                )
+                .child(
+                    div()
+                        .w(px(40.0))
+                        .h(px(1.0))
+                        .bg(rgb(colors.border))
+                )
+        }
+        GroupHeaderStyle::LineAbove => {
+            div()
+                .w(px(140.0))
+                .h(px(28.0))
+                .rounded(px(visual.radius_sm))
+                .bg(rgba((colors.background_secondary << 8) | 0x60))
+                .flex()
+                .flex_col()
+                .justify_center()
+                .px(px(8.0))
+                .gap(px(2.0))
+                .child(
+                    div()
+                        .w(px(40.0))
+                        .h(px(1.0))
+                        .bg(rgb(colors.border))
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .font_weight(gpui::FontWeight::MEDIUM)
+                        .text_color(rgb(colors.text_secondary))
+                        .child("MAIN")
+                )
+        }
+        GroupHeaderStyle::DoubleLine => {
+            div()
+                .w(px(140.0))
+                .h(px(28.0))
+                .rounded(px(visual.radius_sm))
+                .bg(rgba((colors.background_secondary << 8) | 0x60))
+                .flex()
+                .flex_col()
+                .justify_center()
+                .items_center()
+                .gap(px(1.0))
+                .child(div().w(px(100.0)).h(px(1.0)).bg(rgb(colors.border)))
+                .child(
+                    div()
+                        .text_xs()
+                        .font_weight(gpui::FontWeight::MEDIUM)
+                        .text_color(rgb(colors.text_secondary))
+                        .child("MAIN")
+                )
+                .child(div().w(px(100.0)).h(px(1.0)).bg(rgb(colors.border)))
+        }
+        
+        // With Background styles
+        GroupHeaderStyle::PillBackground => {
+            div()
+                .w(px(140.0))
+                .h(px(28.0))
+                .rounded(px(visual.radius_sm))
+                .bg(rgba((colors.background_secondary << 8) | 0x60))
+                .flex()
+                .items_center()
+                .px(px(8.0))
+                .child(
+                    div()
+                        .px(px(8.0))
+                        .py(px(2.0))
+                        .rounded(px(10.0))
+                        .bg(rgba((colors.accent << 8) | 0x30))
+                        .text_xs()
+                        .font_weight(gpui::FontWeight::MEDIUM)
+                        .text_color(rgb(colors.accent))
+                        .child("MAIN")
+                )
+        }
+        GroupHeaderStyle::FullWidthBackground => {
+            div()
+                .w(px(140.0))
+                .h(px(28.0))
+                .rounded(px(visual.radius_sm))
+                .bg(rgba((colors.accent << 8) | 0x20))
+                .flex()
+                .items_center()
+                .px(px(8.0))
+                .text_xs()
+                .font_weight(gpui::FontWeight::SEMIBOLD)
+                .text_color(rgb(colors.text_primary))
+                .child("MAIN")
+        }
+        GroupHeaderStyle::SubtleBackground => {
+            div()
+                .w(px(140.0))
+                .h(px(28.0))
+                .rounded(px(visual.radius_sm))
+                .bg(rgba((colors.background_secondary << 8) | 0x90))
+                .flex()
+                .items_center()
+                .px(px(8.0))
+                .text_xs()
+                .font_weight(gpui::FontWeight::MEDIUM)
+                .text_color(rgb(colors.text_secondary))
+                .child("MAIN")
+        }
+        GroupHeaderStyle::GradientFade => {
+            // Simulated with opacity fade
+            div()
+                .w(px(140.0))
+                .h(px(28.0))
+                .rounded(px(visual.radius_sm))
+                .bg(rgba((colors.background_secondary << 8) | 0x60))
+                .flex()
+                .items_center()
+                .px(px(8.0))
+                .child(
+                    div()
+                        .px(px(16.0))
+                        .text_xs()
+                        .font_weight(gpui::FontWeight::MEDIUM)
+                        .text_color(rgb(colors.text_secondary))
+                        .child("~  MAIN  ~")
+                )
+        }
+        GroupHeaderStyle::BorderedBox => {
+            div()
+                .w(px(140.0))
+                .h(px(28.0))
+                .rounded(px(visual.radius_sm))
+                .bg(rgba((colors.background_secondary << 8) | 0x60))
+                .flex()
+                .items_center()
+                .px(px(8.0))
+                .child(
+                    div()
+                        .px(px(8.0))
+                        .py(px(2.0))
+                        .border_1()
+                        .border_color(rgb(colors.border))
+                        .rounded(px(2.0))
+                        .text_xs()
+                        .font_weight(gpui::FontWeight::MEDIUM)
+                        .text_color(rgb(colors.text_secondary))
+                        .child("MAIN")
+                )
+        }
+        
+        // Minimal styles
+        GroupHeaderStyle::DotPrefix => {
+            div()
+                .w(px(140.0))
+                .h(px(28.0))
+                .rounded(px(visual.radius_sm))
+                .bg(rgba((colors.background_secondary << 8) | 0x60))
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap(px(6.0))
+                .px(px(8.0))
+                .child(
+                    div()
+                        .w(px(4.0))
+                        .h(px(4.0))
+                        .rounded(px(2.0))
+                        .bg(rgb(colors.text_muted))
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(rgb(colors.text_secondary))
+                        .child("MAIN")
+                )
+        }
+        GroupHeaderStyle::DashPrefix => {
+            div()
+                .w(px(140.0))
+                .h(px(28.0))
+                .rounded(px(visual.radius_sm))
+                .bg(rgba((colors.background_secondary << 8) | 0x60))
+                .flex()
+                .items_center()
+                .px(px(8.0))
+                .text_xs()
+                .text_color(rgb(colors.text_secondary))
+                .child("- MAIN")
+        }
+        GroupHeaderStyle::BulletPrefix => {
+            div()
+                .w(px(140.0))
+                .h(px(28.0))
+                .rounded(px(visual.radius_sm))
+                .bg(rgba((colors.background_secondary << 8) | 0x60))
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap(px(6.0))
+                .px(px(8.0))
+                .child(
+                    div()
+                        .w(px(6.0))
+                        .h(px(6.0))
+                        .rounded(px(3.0))
+                        .bg(rgb(colors.accent))
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(rgb(colors.text_secondary))
+                        .child("MAIN")
+                )
+        }
+        GroupHeaderStyle::ArrowPrefix => {
+            div()
+                .w(px(140.0))
+                .h(px(28.0))
+                .rounded(px(visual.radius_sm))
+                .bg(rgba((colors.background_secondary << 8) | 0x60))
+                .flex()
+                .items_center()
+                .px(px(8.0))
+                .text_xs()
+                .text_color(rgb(colors.text_secondary))
+                .child("\u{25B8} MAIN")
+        }
+        GroupHeaderStyle::ChevronPrefix => {
+            div()
+                .w(px(140.0))
+                .h(px(28.0))
+                .rounded(px(visual.radius_sm))
+                .bg(rgba((colors.background_secondary << 8) | 0x60))
+                .flex()
+                .items_center()
+                .px(px(8.0))
+                .text_xs()
+                .text_color(rgb(colors.text_secondary))
+                .child("\u{203A} MAIN")
+        }
+        GroupHeaderStyle::Dimmed => {
+            div()
+                .w(px(140.0))
+                .h(px(28.0))
+                .rounded(px(visual.radius_sm))
+                .bg(rgba((colors.background_secondary << 8) | 0x60))
+                .flex()
+                .items_center()
+                .px(px(8.0))
+                .text_xs()
+                .opacity(0.5)
+                .text_color(rgb(colors.text_muted))
+                .child("MAIN")
+        }
+        
+        // Decorative styles
+        GroupHeaderStyle::Bracketed => {
+            div()
+                .w(px(140.0))
+                .h(px(28.0))
+                .rounded(px(visual.radius_sm))
+                .bg(rgba((colors.background_secondary << 8) | 0x60))
+                .flex()
+                .items_center()
+                .px(px(8.0))
+                .text_xs()
+                .text_color(rgb(colors.text_secondary))
+                .child("[MAIN]")
+        }
+        GroupHeaderStyle::Quoted => {
+            div()
+                .w(px(140.0))
+                .h(px(28.0))
+                .rounded(px(visual.radius_sm))
+                .bg(rgba((colors.background_secondary << 8) | 0x60))
+                .flex()
+                .items_center()
+                .px(px(8.0))
+                .text_xs()
+                .text_color(rgb(colors.text_secondary))
+                .child("\"MAIN\"")
+        }
+        GroupHeaderStyle::Tagged => {
+            div()
+                .w(px(140.0))
+                .h(px(28.0))
+                .rounded(px(visual.radius_sm))
+                .bg(rgba((colors.background_secondary << 8) | 0x60))
+                .flex()
+                .items_center()
+                .px(px(8.0))
+                .child(
+                    div()
+                        .px(px(6.0))
+                        .py(px(1.0))
+                        .bg(rgba((colors.accent << 8) | 0x40))
+                        .rounded(px(2.0))
+                        .text_xs()
+                        .font_weight(gpui::FontWeight::MEDIUM)
+                        .text_color(rgb(colors.accent))
+                        .child("MAIN")
+                )
+        }
+        GroupHeaderStyle::Numbered => {
+            div()
+                .w(px(140.0))
+                .h(px(28.0))
+                .rounded(px(visual.radius_sm))
+                .bg(rgba((colors.background_secondary << 8) | 0x60))
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap(px(6.0))
+                .px(px(8.0))
+                .child(
+                    div()
+                        .text_xs()
+                        .font_weight(gpui::FontWeight::BOLD)
+                        .text_color(rgb(colors.accent))
+                        .child("01.")
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(rgb(colors.text_secondary))
+                        .child("MAIN")
+                )
+        }
+        GroupHeaderStyle::IconPrefix => {
+            div()
+                .w(px(140.0))
+                .h(px(28.0))
+                .rounded(px(visual.radius_sm))
+                .bg(rgba((colors.background_secondary << 8) | 0x60))
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap(px(6.0))
+                .px(px(8.0))
+                .child(
+                    div()
+                        .w(px(8.0))
+                        .h(px(8.0))
+                        .bg(rgb(colors.accent))
+                        .rounded(px(1.0))
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(rgb(colors.text_secondary))
+                        .child("MAIN")
+                )
+        }
+    };
+    
+    item_div
+        // Preview element
+        .child(preview)
+        // Name and description
+        .child(
+            div()
+                .flex_1()
+                .flex()
+                .flex_col()
+                .gap(px(2.0))
+                .child(
+                    div()
+                        .text_sm()
+                        .font_weight(gpui::FontWeight::MEDIUM)
+                        .text_color(rgb(colors.text_primary))
+                        .child(name_owned)
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(rgb(colors.text_muted))
+                        .child(desc_owned)
+                )
+        )
+        .into_any_element()
 }
 
 fn start_hotkey_listener(config: config::Config) {
@@ -7372,11 +8412,35 @@ fn main() {
         // External command listener - receives commands via stdin (event-driven, no polling)
         let stdin_rx = start_stdin_listener();
         let window_for_stdin = window;
+        
+        // Track if we've received any stdin commands (for timeout warning)
+        static STDIN_RECEIVED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+        
+        // Spawn a timeout warning task - helps AI agents detect when they forgot to use stdin protocol
+        cx.spawn(async move |_cx: &mut gpui::AsyncApp| {
+            Timer::after(std::time::Duration::from_secs(2)).await;
+            if !STDIN_RECEIVED.load(std::sync::atomic::Ordering::SeqCst) {
+                logging::log("STDIN", "");
+                logging::log("STDIN", "╔════════════════════════════════════════════════════════════════════════════╗");
+                logging::log("STDIN", "║  WARNING: No stdin JSON received after 2 seconds                          ║");
+                logging::log("STDIN", "║                                                                            ║");
+                logging::log("STDIN", "║  If you're testing, use the stdin JSON protocol:                          ║");
+                logging::log("STDIN", "║  echo '{\"type\":\"run\",\"path\":\"...\"}' | ./target/debug/script-kit-gpui     ║");
+                logging::log("STDIN", "║                                                                            ║");
+                logging::log("STDIN", "║  Command line args do NOT work:                                           ║");
+                logging::log("STDIN", "║  ./target/debug/script-kit-gpui test.ts  # WRONG - does nothing!          ║");
+                logging::log("STDIN", "╚════════════════════════════════════════════════════════════════════════════╝");
+                logging::log("STDIN", "");
+            }
+        }).detach();
+        
         cx.spawn(async move |cx: &mut gpui::AsyncApp| {
             logging::log("STDIN", "Async stdin command handler started");
             
             // Event-driven: recv().await yields until a command arrives
             while let Ok(cmd) = stdin_rx.recv().await {
+                // Mark that we've received stdin (clears the timeout warning)
+                STDIN_RECEIVED.store(true, std::sync::atomic::Ordering::SeqCst);
                 logging::log("STDIN", &format!("Processing external command: {:?}", cmd));
                 
                 let _ = cx.update(|cx| {
@@ -7413,6 +8477,40 @@ fn main() {
                                 let _ = view.get_filtered_results_cached(); // Update cache
                                 view.selected_index = 0;
                                 view.update_window_size();
+                            }
+                            ExternalCommand::TriggerBuiltin { ref name } => {
+                                logging::log("STDIN", &format!("Triggering built-in: '{}'", name));
+                                // Match built-in name and trigger the corresponding feature
+                                match name.to_lowercase().as_str() {
+                                    "design-gallery" | "designgallery" | "design gallery" => {
+                                        view.current_view = AppView::DesignGalleryView {
+                                            filter: String::new(),
+                                            selected_index: 0,
+                                        };
+                                        view.update_window_size();
+                                    }
+                                    "clipboard" | "clipboard-history" | "clipboardhistory" => {
+                                        let entries = clipboard_history::get_cached_entries(100);
+                                        view.current_view = AppView::ClipboardHistoryView {
+                                            entries,
+                                            filter: String::new(),
+                                            selected_index: 0,
+                                        };
+                                        view.update_window_size();
+                                    }
+                                    "apps" | "app-launcher" | "applauncher" => {
+                                        let apps = view.apps.clone();
+                                        view.current_view = AppView::AppLauncherView {
+                                            apps,
+                                            filter: String::new(),
+                                            selected_index: 0,
+                                        };
+                                        view.update_window_size();
+                                    }
+                                    _ => {
+                                        logging::log("ERROR", &format!("Unknown built-in: '{}'", name));
+                                    }
+                                }
                             }
                         }
                         ctx.notify();

@@ -4,9 +4,17 @@
 // This file uses Bun's built-in fs and path APIs.
 // Run with: bun run tests/autonomous/screenshot-utils.ts
 
+// Bun globals for Node.js compatibility
+declare const process: { cwd: () => string };
+
 // Use Bun's built-in APIs
+// @ts-ignore - Bun supports node: protocol
 const fs = await import('node:fs/promises');
+// @ts-ignore - Bun supports node: protocol
 const path = await import('node:path');
+
+// Import diff utilities
+import { compareImages, type DiffResult, type DiffOptions } from './screenshot-diff';
 
 // Directory where screenshots are saved (relative to project root)
 const SCREENSHOT_DIR = '.test-screenshots';
@@ -364,3 +372,273 @@ export async function getScreenshotDirectoryStats(): Promise<{
     };
   }
 }
+
+// ============================================================================
+// Visual Regression Testing Functions
+// ============================================================================
+
+// Directory for baseline screenshots
+const BASELINE_DIR = 'test-screenshots/baselines';
+
+/**
+ * Detailed diff result with additional metadata
+ */
+export interface DetailedDiffResult extends DiffResult {
+  /** Test name for reporting */
+  testName: string;
+  /** Path to baseline image */
+  baselinePath: string;
+  /** Path to actual image */
+  actualPath: string;
+  /** Whether this is a new baseline (no previous baseline existed) */
+  isNewBaseline: boolean;
+}
+
+/**
+ * Options for visual comparison
+ */
+export interface VisualCompareOptions {
+  /** Tolerance for color difference per channel (0-255, default: 0) */
+  tolerance?: number;
+  /** Threshold percentage for considering images as matching (default: 0.1) */
+  thresholdPercent?: number;
+  /** Whether to generate a diff image on mismatch (default: true) */
+  generateDiffImage?: boolean;
+  /** Whether to auto-create baseline if missing (default: false) */
+  autoCreateBaseline?: boolean;
+}
+
+/**
+ * Ensure the baseline directory exists
+ */
+async function ensureBaselineDir(): Promise<void> {
+  const dir = path.resolve(process.cwd(), BASELINE_DIR);
+  await fs.mkdir(dir, { recursive: true });
+}
+
+/**
+ * Get the baseline path for a test
+ */
+function getBaselinePath(testName: string): string {
+  const safeName = testName.replace(/[^a-zA-Z0-9_-]/g, '-');
+  return path.resolve(process.cwd(), BASELINE_DIR, `${safeName}.png`);
+}
+
+/**
+ * Check if a baseline exists for a test
+ */
+export async function baselineExists(testName: string): Promise<boolean> {
+  const baselinePath = getBaselinePath(testName);
+  try {
+    await fs.access(baselinePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Create or update a baseline image
+ * @param testName - Name of the test (used for filename)
+ * @param screenshotPath - Path to the screenshot to use as baseline
+ * @returns Path to the created baseline
+ */
+export async function createBaseline(testName: string, screenshotPath: string): Promise<string> {
+  await ensureBaselineDir();
+  
+  const baselinePath = getBaselinePath(testName);
+  
+  // Copy screenshot to baseline location
+  const data = await fs.readFile(screenshotPath);
+  await fs.writeFile(baselinePath, data);
+  
+  return baselinePath;
+}
+
+/**
+ * Compare a screenshot against its baseline with detailed results
+ * 
+ * @param testName - Name of the test (determines baseline filename)
+ * @param actualPath - Path to the actual screenshot to compare
+ * @param options - Comparison options
+ * @returns Detailed diff result
+ */
+export async function screenshotsDiff(
+  testName: string,
+  actualPath: string,
+  options: VisualCompareOptions = {}
+): Promise<DetailedDiffResult> {
+  const {
+    tolerance = 0,
+    thresholdPercent = 0.1,
+    generateDiffImage = true,
+    autoCreateBaseline = false,
+  } = options;
+  
+  const baselinePath = getBaselinePath(testName);
+  const hasBaseline = await baselineExists(testName);
+  
+  // If no baseline exists
+  if (!hasBaseline) {
+    if (autoCreateBaseline) {
+      await createBaseline(testName, actualPath);
+      return {
+        testName,
+        baselinePath,
+        actualPath,
+        isNewBaseline: true,
+        match: true,
+        diffPercent: 0,
+        diffPixelCount: 0,
+        totalPixels: 0,
+        width: 0,
+        height: 0,
+        dimensionsMatch: true,
+      };
+    }
+    
+    return {
+      testName,
+      baselinePath,
+      actualPath,
+      isNewBaseline: false,
+      match: false,
+      diffPercent: 100,
+      diffPixelCount: 0,
+      totalPixels: 0,
+      width: 0,
+      height: 0,
+      dimensionsMatch: false,
+      error: `No baseline exists for test "${testName}". Create one with createBaseline() or set autoCreateBaseline: true`,
+    };
+  }
+  
+  // Compare against baseline
+  const diffResult = await compareImages(baselinePath, actualPath, {
+    tolerance,
+    thresholdPercent,
+    generateDiffImage,
+    diffImagePath: generateDiffImage 
+      ? path.resolve(process.cwd(), BASELINE_DIR, `${testName.replace(/[^a-zA-Z0-9_-]/g, '-')}-diff.png`)
+      : undefined,
+  });
+  
+  return {
+    testName,
+    baselinePath,
+    actualPath,
+    isNewBaseline: false,
+    ...diffResult,
+  };
+}
+
+/**
+ * Assert that a screenshot matches its baseline within tolerance
+ * Throws an error if images don't match, suitable for test assertions
+ * 
+ * @param testName - Name of the test
+ * @param actualPath - Path to the actual screenshot
+ * @param options - Comparison options
+ * @throws Error if images don't match or baseline is missing
+ */
+export async function assertVisuallySimilar(
+  testName: string,
+  actualPath: string,
+  options: VisualCompareOptions = {}
+): Promise<void> {
+  const result = await screenshotsDiff(testName, actualPath, {
+    thresholdPercent: 0.1, // Default 0.1% tolerance
+    ...options,
+  });
+  
+  if (result.isNewBaseline) {
+    console.log(`[BASELINE] Created new baseline for "${testName}": ${result.baselinePath}`);
+    return;
+  }
+  
+  if (!result.match) {
+    const details = [
+      `Visual regression detected for "${testName}"`,
+      `Diff: ${result.diffPercent}% (${result.diffPixelCount} pixels)`,
+      `Baseline: ${result.baselinePath}`,
+      `Actual: ${result.actualPath}`,
+    ];
+    
+    if (result.diffImagePath) {
+      details.push(`Diff image: ${result.diffImagePath}`);
+    }
+    
+    if (result.error) {
+      details.push(`Error: ${result.error}`);
+    }
+    
+    throw new Error(details.join('\n'));
+  }
+}
+
+/**
+ * Format detailed diff result as JSONL for machine parsing
+ */
+export function formatDiffResultJSONL(result: DetailedDiffResult): string {
+  return JSON.stringify({
+    test: result.testName,
+    status: result.match ? 'pass' : 'fail',
+    timestamp: new Date().toISOString(),
+    is_new_baseline: result.isNewBaseline,
+    diff_percent: result.diffPercent,
+    diff_pixels: result.diffPixelCount,
+    total_pixels: result.totalPixels,
+    dimensions: `${result.width}x${result.height}`,
+    dimensions_match: result.dimensionsMatch,
+    baseline_path: result.baselinePath,
+    actual_path: result.actualPath,
+    diff_image: result.diffImagePath,
+    error: result.error,
+  });
+}
+
+/**
+ * List all baselines
+ * @returns Array of { testName, path } objects
+ */
+export async function listBaselines(): Promise<Array<{ testName: string; path: string }>> {
+  await ensureBaselineDir();
+  const dir = path.resolve(process.cwd(), BASELINE_DIR);
+  
+  try {
+    const files = await fs.readdir(dir);
+    const pngFiles = files.filter((f: string) => f.endsWith('.png') && !f.endsWith('-diff.png'));
+    
+    return pngFiles.map((f: string) => ({
+      testName: f.replace('.png', ''),
+      path: path.join(dir, f),
+    }));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Delete a baseline
+ * @param testName - Name of the test
+ * @returns true if deleted, false if didn't exist
+ */
+export async function deleteBaseline(testName: string): Promise<boolean> {
+  const baselinePath = getBaselinePath(testName);
+  try {
+    await fs.unlink(baselinePath);
+    // Also try to delete diff image if it exists
+    const diffPath = baselinePath.replace('.png', '-diff.png');
+    try {
+      await fs.unlink(diffPath);
+    } catch {
+      // Ignore if diff doesn't exist
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Re-export types from screenshot-diff
+export type { DiffResult, DiffOptions };

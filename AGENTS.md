@@ -1895,6 +1895,9 @@ Before every commit, verify:
 - **GPUI Docs**: https://docs.rs/gpui/latest/gpui/
 - **Zed Source**: https://github.com/zed-industries/zed/tree/main/crates/gpui
 - **Project Research**: See `GPUI_RESEARCH.md`, `GPUI_IMPROVEMENTS_REPORT.md`
+- **Protocol Reference**: See `docs/PROTOCOL.md` for complete JSONL message specification (59+ message types)
+- **Future Roadmap**: See `docs/ROADMAP.md` for planned protocol extensions and features
+- **Archived Docs**: See `docs/archive/` for historical documentation
 
 ## Landing the Plane (Session Completion)
 
