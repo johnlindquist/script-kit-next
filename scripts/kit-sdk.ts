@@ -4245,19 +4245,14 @@ declare global {
 
   // Metadata and Schema globals (set at top of script, parsed by app)
   var metadata: ScriptMetadata;
-  var schema: ScriptSchema;
-
-  // ==========================================================================
-  // Schema Type Inference (also exported from module for import usage)
-  // ==========================================================================
   
   /**
-   * Helper function to define a schema with full type inference.
-   * Assigns to global `schema` and returns the typed schema for inference.
+   * Schema definition for typed input/output.
+   * Use `as const` for full type inference with input() and output().
    * 
    * @example
    * ```typescript
-   * const mySchema = defineSchema({
+   * schema = {
    *   input: {
    *     greeting: { type: 'string', required: true },
    *     count: { type: 'number' }
@@ -4265,18 +4260,59 @@ declare global {
    *   output: {
    *     message: { type: 'string' }
    *   }
-   * } as const);
+   * } as const
    * 
-   * // Types are inferred!
-   * const { greeting, count } = await input<InferInput<typeof mySchema>>();
-   * output({ message: `${greeting} x${count}` } satisfies InferOutput<typeof mySchema>);
+   * // Types are automatically inferred!
+   * const { greeting, count } = await input()
+   * //      ^ string   ^ number | undefined
+   * 
+   * output({ message: `${greeting} x${count}` })
    * ```
    */
-  function defineSchema<T extends ScriptSchema>(schema: T): T;
+  var schema: ScriptSchema;
+
+  // Schema type inference utilities - use with `typeof schema`
+  type InferInput<S> = S extends { input: infer I extends Record<string, SchemaFieldDef> }
+    ? { [K in keyof I as I[K] extends { required: true } ? K : never]: 
+        I[K] extends { enum: readonly (infer E)[] } ? E :
+        I[K] extends { type: 'array'; items: infer IT extends SchemaFieldType } ? SchemaTypeMap[IT][] :
+        I[K] extends { type: infer T extends SchemaFieldType } ? SchemaTypeMap[T] : unknown 
+      } & { [K in keyof I as I[K] extends { required: true } ? never : K]?: 
+        I[K] extends { enum: readonly (infer E)[] } ? E :
+        I[K] extends { type: 'array'; items: infer IT extends SchemaFieldType } ? SchemaTypeMap[IT][] :
+        I[K] extends { type: infer T extends SchemaFieldType } ? SchemaTypeMap[T] : unknown 
+      }
+    : Record<string, unknown>;
+    
+  type InferOutput<S> = S extends { output: infer O extends Record<string, SchemaFieldDef> }
+    ? { [K in keyof O]?: 
+        O[K] extends { enum: readonly (infer E)[] } ? E :
+        O[K] extends { type: 'array'; items: infer IT extends SchemaFieldType } ? SchemaTypeMap[IT][] :
+        O[K] extends { type: infer T extends SchemaFieldType } ? SchemaTypeMap[T] : unknown 
+      }
+    : Record<string, unknown>;
+    
+  type SchemaTypeMap = {
+    string: string;
+    number: number;
+    boolean: boolean;
+    array: unknown[];
+    object: Record<string, unknown>;
+    any: unknown;
+  };
 
   // AI-First Protocol functions
-  function input<T extends Record<string, unknown> = Record<string, unknown>>(): Promise<T>;
-  function output(data: Record<string, unknown>): void;
+  /**
+   * Get typed input from schema.
+   * Types are inferred from global `schema` when using `as const`.
+   */
+  function input<T = InferInput<typeof schema>>(): Promise<T>;
+  
+  /**
+   * Send typed output matching schema.
+   * Types are inferred from global `schema` when using `as const`.
+   */
+  function output<T = InferOutput<typeof schema>>(data: T): void;
   /** @internal */
   function _setScriptInput(data: Record<string, unknown>): void;
   /** @internal */
