@@ -685,39 +685,52 @@ export type InferOutput<S extends { output?: Record<string, SchemaFieldDef> }> =
     : Record<string, unknown>;
 
 /**
- * Helper function to define a schema with full type inference.
- * Using this instead of direct assignment enables TypeScript to infer
- * the exact types for input() and output() calls.
+ * Interface for the typed API returned by defineSchema.
+ */
+export interface TypedSchemaAPI<TInput, TOutput> {
+  /** Get typed input matching the schema's input definition */
+  input: () => Promise<TInput>;
+  /** Send typed output matching the schema's output definition */
+  output: (data: Partial<TOutput>) => void;
+}
+
+/**
+ * Define a schema and get typed input/output functions.
+ * This is the recommended way to get full type inference.
  * 
  * @example
  * ```typescript
- * // Define schema with type inference
- * const schema = defineSchema({
+ * const { input, output } = defineSchema({
  *   input: {
  *     greeting: { type: 'string', required: true },
- *     recipient: { type: 'string', default: 'World' }
+ *     count: { type: 'number' }
  *   },
  *   output: {
- *     message: { type: 'string' },
- *     timestamp: { type: 'string' }
+ *     message: { type: 'string' }
  *   }
- * });
+ * } as const)
  * 
- * // Now input() and output() are fully typed!
- * const { greeting, recipient } = await input<InferInput<typeof schema>>();
- * //     ^ string    ^ string | undefined
+ * // Types are fully inferred!
+ * const { greeting, count } = await input()
+ * //      ^ string   ^ number | undefined
  * 
- * output({ message: `${greeting}, ${recipient}!` });
- * //       ^ TypeScript knows this must be { message?: string; timestamp?: string }
+ * output({ message: `Hello ${greeting}!` })
  * ```
  * 
- * @param schema - The schema definition object
- * @returns The same schema with preserved literal types for inference
+ * @param schemaDefinition - The schema definition object (use `as const` for best inference)
+ * @returns Object with typed `input()` and `output()` functions
  */
-export function defineSchema<T extends ScriptSchema>(schema: T): T {
-  // Also assign to global for runtime parsing by the app
-  (globalThis as any).schema = schema;
-  return schema;
+export function defineSchema<T extends ScriptSchema>(
+  schemaDefinition: T
+): TypedSchemaAPI<InferInput<T>, InferOutput<T>> & { schema: T } {
+  // Assign to global for runtime parsing by the app
+  (globalThis as any).schema = schemaDefinition;
+  
+  return {
+    schema: schemaDefinition,
+    input: (globalThis as any).input as () => Promise<InferInput<T>>,
+    output: (globalThis as any).output as (data: Partial<InferOutput<T>>) => void,
+  };
 }
 
 /**
@@ -4301,18 +4314,47 @@ declare global {
     any: unknown;
   };
 
-  // AI-First Protocol functions
+  /** Typed API returned by defineSchema */
+  interface TypedSchemaAPI<TInput, TOutput> {
+    input: () => Promise<TInput>;
+    output: (data: Partial<TOutput>) => void;
+  }
+
   /**
-   * Get typed input from schema.
-   * Types are inferred from global `schema` when using `as const`.
+   * Define a schema and get typed input/output functions.
+   * This is the recommended way to use schema with full type inference.
+   * 
+   * @example
+   * ```typescript
+   * const { input, output } = defineSchema({
+   *   input: {
+   *     greeting: { type: 'string', required: true },
+   *     count: { type: 'number' }
+   *   },
+   *   output: {
+   *     message: { type: 'string' }
+   *   }
+   * } as const)
+   * 
+   * // Types are fully inferred!
+   * const { greeting, count } = await input()
+   * output({ message: `Hello ${greeting}!` })
+   * ```
    */
-  function input<T = InferInput<typeof schema>>(): Promise<T>;
+  function defineSchema<T extends ScriptSchema>(
+    schema: T
+  ): TypedSchemaAPI<InferInput<T>, InferOutput<T>> & { schema: T };
+
+  // AI-First Protocol functions (untyped versions - use defineSchema for typed versions)
+  /**
+   * Get input data. For typed version, use defineSchema().
+   */
+  function input<T = Record<string, unknown>>(): Promise<T>;
   
   /**
-   * Send typed output matching schema.
-   * Types are inferred from global `schema` when using `as const`.
+   * Send output data. For typed version, use defineSchema().
    */
-  function output<T = InferOutput<typeof schema>>(data: T): void;
+  function output(data: Record<string, unknown>): void;
   /** @internal */
   function _setScriptInput(data: Record<string, unknown>): void;
   /** @internal */

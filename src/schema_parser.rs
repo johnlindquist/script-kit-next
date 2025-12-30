@@ -153,11 +153,12 @@ pub fn extract_schema(content: &str) -> SchemaParseResult {
     result
 }
 
-/// Find the `schema = ` assignment in the content
+/// Find the `schema = ` assignment or `defineSchema({` call in the content
 fn find_schema_assignment(content: &str) -> Option<(usize, usize)> {
-    let patterns = ["schema=", "schema =", "schema  ="];
+    // First try direct assignment patterns: schema = { ... }
+    let assignment_patterns = ["schema=", "schema =", "schema  ="];
     
-    for pattern in patterns {
+    for pattern in assignment_patterns {
         if let Some(idx) = content.find(pattern) {
             let after_eq = idx + pattern.len();
             let rest = &content[after_eq..];
@@ -169,6 +170,17 @@ fn find_schema_assignment(content: &str) -> Option<(usize, usize)> {
                     break;
                 }
             }
+        }
+    }
+    
+    // Then try defineSchema() function pattern: defineSchema({ ... })
+    let define_patterns = ["defineSchema({", "defineSchema ({", "defineSchema  ({"];
+    
+    for pattern in define_patterns {
+        if let Some(idx) = content.find(pattern) {
+            // Find the opening brace after defineSchema
+            let after_define = idx + pattern.len() - 1; // -1 because pattern includes '{'
+            return Some((idx, after_define));
         }
     }
     
@@ -661,5 +673,76 @@ schema = {
         let result = extract_schema(content);
         // serde should error on unknown enum variant
         assert!(result.schema.is_none() || result.schema.as_ref().unwrap().input.is_empty());
+    }
+
+    // TDD: Test for defineSchema() function pattern
+    // This pattern should also work for MCP tool detection
+    #[test]
+    fn test_parse_define_schema_function() {
+        let content = r#"
+import "@johnlindquist/kit"
+
+const { input, output } = defineSchema({
+    input: {
+        greeting: { type: "string", required: true, description: "Greeting message" },
+        count: { type: "number" }
+    },
+    output: {
+        message: { type: "string", description: "Response message" }
+    }
+} as const)
+
+const { greeting } = await input()
+output({ message: `Hello ${greeting}!` })
+"#;
+        let result = extract_schema(content);
+        assert!(result.schema.is_some(), "defineSchema() should be parseable. Errors: {:?}", result.errors);
+        
+        let schema = result.schema.unwrap();
+        assert_eq!(schema.input.len(), 2, "Should have 2 input fields");
+        assert_eq!(schema.output.len(), 1, "Should have 1 output field");
+        
+        // Verify input fields
+        let greeting = schema.input.get("greeting").expect("Should have greeting field");
+        assert!(greeting.required, "greeting should be required");
+        assert_eq!(greeting.description, Some("Greeting message".to_string()));
+        
+        let count = schema.input.get("count").expect("Should have count field");
+        assert!(!count.required, "count should not be required");
+        
+        // Verify output fields
+        let message = schema.output.get("message").expect("Should have message field");
+        assert_eq!(message.description, Some("Response message".to_string()));
+    }
+
+    // TDD: Test that both patterns work (direct assignment and defineSchema)
+    #[test]
+    fn test_parse_both_schema_patterns() {
+        // Direct assignment pattern
+        let direct = r#"
+schema = {
+    input: { name: { type: "string", required: true } }
+}
+"#;
+        let result1 = extract_schema(direct);
+        assert!(result1.schema.is_some(), "Direct assignment should work");
+        
+        // defineSchema function pattern
+        let define_fn = r#"
+const { input, output } = defineSchema({
+    input: { name: { type: "string", required: true } }
+} as const)
+"#;
+        let result2 = extract_schema(define_fn);
+        assert!(result2.schema.is_some(), "defineSchema() should work");
+        
+        // Both should produce same schema
+        let schema1 = result1.schema.unwrap();
+        let schema2 = result2.schema.unwrap();
+        assert_eq!(schema1.input.len(), schema2.input.len());
+        assert_eq!(
+            schema1.input.get("name").unwrap().required,
+            schema2.input.get("name").unwrap().required
+        );
     }
 }

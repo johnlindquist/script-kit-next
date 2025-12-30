@@ -260,7 +260,7 @@ async function runTests() {
   }
 
   // ============================================
-  // Test 8: defineSchema assigns to global and returns typed schema
+  // Test 8: defineSchema assigns to global and returns typed API
   // ============================================
   resetState();
   {
@@ -269,8 +269,8 @@ async function runTests() {
     const start = Date.now();
     
     try {
-      // Call defineSchema
-      const mySchema = defineSchema({
+      // Call defineSchema - now returns { schema, input, output }
+      const api = defineSchema({
         input: {
           name: { type: 'string', required: true },
           count: { type: 'number' }
@@ -280,22 +280,23 @@ async function runTests() {
         }
       });
       
-      // Check it returns the schema
-      const hasInput = mySchema.input && 'name' in mySchema.input;
-      const hasOutput = mySchema.output && 'result' in mySchema.output;
+      // Check it returns the schema and typed functions
+      const hasSchema = api.schema && 'input' in api.schema;
+      const hasInputFn = typeof api.input === 'function';
+      const hasOutputFn = typeof api.output === 'function';
       
       // Check it assigns to global schema
       const globalSchema = (globalThis as any).schema;
       const globalHasInput = globalSchema?.input && 'name' in globalSchema.input;
       
-      if (hasInput && hasOutput && globalHasInput) {
+      if (hasSchema && hasInputFn && hasOutputFn && globalHasInput) {
         logTest(testName, 'pass', { 
-          result: { returnedSchema: !!mySchema, globalAssigned: !!globalSchema },
+          result: { hasSchema, hasInputFn, hasOutputFn, globalAssigned: !!globalSchema },
           duration_ms: Date.now() - start 
         });
       } else {
         logTest(testName, 'fail', { 
-          error: `defineSchema didn't work correctly: hasInput=${hasInput}, hasOutput=${hasOutput}, globalHasInput=${globalHasInput}`,
+          error: `defineSchema didn't work correctly: hasSchema=${hasSchema}, hasInputFn=${hasInputFn}, hasOutputFn=${hasOutputFn}, globalHasInput=${globalHasInput}`,
           duration_ms: Date.now() - start 
         });
       }
