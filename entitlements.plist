@@ -2,24 +2,66 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <!-- JIT and unsigned executable memory for bun runtime -->
-    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
-    <true/>
+    <!-- 
+    ENTITLEMENTS vs RUNTIME PERMISSIONS
+    ====================================
+    Entitlements: Baked into code signature, enable specific capabilities
+    Runtime Permissions: User grants in System Preferences at runtime
+    
+    Script Kit requires BOTH:
+    - Entitlements below (for notarization/hardened runtime)
+    - User-granted Accessibility permission (for keyboard monitoring)
+    
+    The app prompts for Accessibility permission on first launch.
+    -->
+
+    <!-- === HARDENED RUNTIME EXCEPTIONS === -->
+    <!-- Required for bun/Node.js JIT compilation -->
     <key>com.apple.security.cs.allow-jit</key>
     <true/>
     
-    <!-- Disable library validation for loading plugins -->
+    <!-- Required for bun runtime to execute generated code -->
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+    
+    <!-- Required to load bun and other non-Apple signed libraries -->
     <key>com.apple.security.cs.disable-library-validation</key>
     <true/>
     
-    <!-- AppleScript automation support -->
+    <!-- Required for scripts that spawn child processes -->
+    <key>com.apple.security.cs.disable-executable-page-protection</key>
+    <true/>
+
+    <!-- === AUTOMATION === -->
+    <!-- Required for AppleScript/osascript automation in scripts -->
     <key>com.apple.security.automation.apple-events</key>
     <true/>
-    
-    <!-- Hardware access for scripts that need it -->
+
+    <!-- === HARDWARE ACCESS === -->
+    <!-- For scripts using microphone (e.g., voice input) -->
     <key>com.apple.security.device.audio-input</key>
     <true/>
+    
+    <!-- For scripts using camera (e.g., webcam capture) -->
     <key>com.apple.security.device.camera</key>
+    <true/>
+
+    <!-- === NETWORK === -->
+    <!-- For scripts making HTTP requests -->
+    <key>com.apple.security.network.client</key>
+    <true/>
+    
+    <!-- For scripts running local servers -->
+    <key>com.apple.security.network.server</key>
+    <true/>
+
+    <!-- === FILE ACCESS === -->
+    <!-- Scripts need to read/write files outside the sandbox -->
+    <key>com.apple.security.files.user-selected.read-write</key>
+    <true/>
+    
+    <!-- For file watchers and script loading from ~/.kenv -->
+    <key>com.apple.security.files.downloads.read-write</key>
     <true/>
 </dict>
 </plist>
