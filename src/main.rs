@@ -4124,6 +4124,7 @@ impl ScriptListApp {
                 extension: "ts".to_string(),
                 icon: None,
                 alias: None,
+                shortcut: None,
             };
 
             self.execute_interactive(&script, cx);
@@ -4654,6 +4655,7 @@ impl ScriptListApp {
                     extension,
                     icon: None,
                     alias: None,
+                    shortcut: None,
                 };
 
                 logging::log("EXEC", &format!("Executing script: {}", script_name));

@@ -24,6 +24,8 @@ pub struct Script {
     pub icon: Option<String>,
     /// Alias for quick triggering (e.g., "gc" for "git-commit")
     pub alias: Option<String>,
+    /// Keyboard shortcut for direct invocation (e.g., "opt i", "cmd shift k")
+    pub shortcut: Option<String>,
 }
 
 /// Represents a scriptlet parsed from a markdown file
@@ -163,6 +165,8 @@ pub struct ScriptMetadata {
     pub icon: Option<String>,
     /// Alias for quick invocation (e.g., "gpt" triggers on "gpt ")
     pub alias: Option<String>,
+    /// Keyboard shortcut for direct invocation (e.g., "opt i", "cmd shift k")
+    pub shortcut: Option<String>,
 }
 
 /// Schedule metadata extracted from script file comments
@@ -239,6 +243,11 @@ pub fn extract_script_metadata(content: &str) -> ScriptMetadata {
                 "alias" => {
                     if metadata.alias.is_none() && !value.is_empty() {
                         metadata.alias = Some(value);
+                    }
+                }
+                "shortcut" => {
+                    if metadata.shortcut.is_none() && !value.is_empty() {
+                        metadata.shortcut = Some(value);
                     }
                 }
                 _ => {} // Ignore other metadata keys for now
@@ -712,6 +721,7 @@ pub fn read_scripts() -> Vec<Script> {
                                                 description: script_metadata.description,
                                                 icon: script_metadata.icon,
                                                 alias: script_metadata.alias,
+                                                shortcut: script_metadata.shortcut,
                                             });
                                         }
                                     }
@@ -1838,6 +1848,7 @@ mod tests {
             icon: None,
             description: None,
             alias: None,
+            shortcut: None,
         };
         assert_eq!(script.name, "test");
         assert_eq!(script.extension, "ts");
@@ -1853,6 +1864,7 @@ mod tests {
                 icon: None,
                 description: Some("Open a file dialog".to_string()),
                 alias: None,
+                shortcut: None,
             },
             Script {
                 name: "savefile".to_string(),
@@ -1861,6 +1873,7 @@ mod tests {
                 icon: None,
                 description: None,
                 alias: None,
+                shortcut: None,
             },
         ];
 
@@ -1879,6 +1892,7 @@ mod tests {
             icon: None,
             description: None,
             alias: None,
+            shortcut: None,
         }];
 
         let results = fuzzy_search_scripts(&scripts, "");
@@ -1896,6 +1910,7 @@ mod tests {
                 icon: None,
                 description: Some("Open a file dialog".to_string()),
                 alias: None,
+                shortcut: None,
             },
             Script {
                 name: "open".to_string(),
@@ -1904,6 +1919,7 @@ mod tests {
                 icon: None,
                 description: Some("Basic open function".to_string()),
                 alias: None,
+                shortcut: None,
             },
             Script {
                 name: "reopen".to_string(),
@@ -1912,6 +1928,7 @@ mod tests {
                 icon: None,
                 description: None,
                 alias: None,
+                shortcut: None,
             },
         ];
 
@@ -1948,6 +1965,7 @@ mod tests {
             icon: None,
             description: Some("Open a file".to_string()),
             alias: None,
+            shortcut: None,
         }];
 
         let scriptlets = vec![test_scriptlet_with_desc(
@@ -1983,6 +2001,7 @@ mod tests {
                 icon: None,
                 description: None,
                 alias: None,
+                shortcut: None,
             },
             score: 100,
             filename: "test.ts".to_string(),
@@ -2151,6 +2170,7 @@ mod tests {
             icon: None,
             description: None,
             alias: None,
+            shortcut: None,
         }];
 
         let results = fuzzy_search_scripts(&scripts, "nonexistent");
@@ -2167,6 +2187,7 @@ mod tests {
                 icon: None,
                 description: None,
                 alias: None,
+                shortcut: None,
             },
             Script {
                 name: "test2".to_string(),
@@ -2175,6 +2196,7 @@ mod tests {
                 icon: None,
                 description: None,
                 alias: None,
+                shortcut: None,
             },
         ];
 
@@ -2192,6 +2214,7 @@ mod tests {
                 icon: None,
                 description: Some("database connection helper".to_string()),
                 alias: None,
+                shortcut: None,
             },
             Script {
                 name: "bar".to_string(),
@@ -2200,6 +2223,7 @@ mod tests {
                 icon: None,
                 description: Some("ui component".to_string()),
                 alias: None,
+                shortcut: None,
             },
         ];
 
@@ -2218,6 +2242,7 @@ mod tests {
                 icon: None,
                 description: None,
                 alias: None,
+                shortcut: None,
             },
             Script {
                 name: "bar".to_string(),
@@ -2226,6 +2251,7 @@ mod tests {
                 icon: None,
                 description: None,
                 alias: None,
+                shortcut: None,
             },
         ];
 
@@ -2244,6 +2270,7 @@ mod tests {
                 icon: None,
                 description: None,
                 alias: None,
+                shortcut: None,
             },
             Script {
                 name: "other".to_string(),
@@ -2252,6 +2279,7 @@ mod tests {
                 icon: None,
                 description: Some("exactmatch in description".to_string()),
                 alias: None,
+                shortcut: None,
             },
         ];
 
@@ -2295,6 +2323,7 @@ mod tests {
             icon: None,
             description: None,
             alias: None,
+            shortcut: None,
         }];
 
         let scriptlets = vec![test_scriptlet("Snippet1", "ts", "code")];
@@ -2312,6 +2341,7 @@ mod tests {
             icon: None,
             description: Some("test script".to_string()),
             alias: None,
+            shortcut: None,
         }];
 
         let scriptlets = vec![test_scriptlet_with_desc(
@@ -2342,6 +2372,7 @@ mod tests {
                 icon: None,
                 description: Some("A test script".to_string()),
                 alias: None,
+                shortcut: None,
             },
             score: 100,
             filename: "test.ts".to_string(),
@@ -2409,6 +2440,7 @@ mod tests {
             icon: None,
             description: None, // Would be extracted from file if existed
             alias: None,
+            shortcut: None,
         };
         assert_eq!(script.name, "test");
     }
@@ -2612,6 +2644,151 @@ const x = 1;
         assert_eq!(metadata.description, Some("A description".to_string()));
     }
 
+    // ============================================
+    // SHORTCUT METADATA PARSING TESTS
+    // ============================================
+
+    #[test]
+    fn test_extract_script_metadata_with_shortcut() {
+        let content = r#"// Name: Quick Action
+// Description: Run a quick action
+// Shortcut: opt i
+const x = 1;
+"#;
+        let metadata = extract_script_metadata(content);
+        assert_eq!(metadata.name, Some("Quick Action".to_string()));
+        assert_eq!(metadata.description, Some("Run a quick action".to_string()));
+        assert_eq!(metadata.shortcut, Some("opt i".to_string()));
+    }
+
+    #[test]
+    fn test_extract_script_metadata_shortcut_with_modifiers() {
+        let content = r#"// Shortcut: cmd shift k
+const x = 1;
+"#;
+        let metadata = extract_script_metadata(content);
+        assert_eq!(metadata.shortcut, Some("cmd shift k".to_string()));
+    }
+
+    #[test]
+    fn test_extract_script_metadata_shortcut_ctrl_alt() {
+        let content = r#"// Shortcut: ctrl alt t
+const x = 1;
+"#;
+        let metadata = extract_script_metadata(content);
+        assert_eq!(metadata.shortcut, Some("ctrl alt t".to_string()));
+    }
+
+    #[test]
+    fn test_extract_script_metadata_shortcut_only() {
+        let content = r#"// Shortcut: opt space
+const x = 1;
+"#;
+        let metadata = extract_script_metadata(content);
+        assert_eq!(metadata.name, None);
+        assert_eq!(metadata.alias, None);
+        assert_eq!(metadata.shortcut, Some("opt space".to_string()));
+    }
+
+    #[test]
+    fn test_extract_script_metadata_shortcut_with_alias() {
+        let content = r#"// Name: Git Status
+// Alias: gs
+// Shortcut: cmd g
+const x = 1;
+"#;
+        let metadata = extract_script_metadata(content);
+        assert_eq!(metadata.name, Some("Git Status".to_string()));
+        assert_eq!(metadata.alias, Some("gs".to_string()));
+        assert_eq!(metadata.shortcut, Some("cmd g".to_string()));
+    }
+
+    #[test]
+    fn test_extract_script_metadata_shortcut_case_insensitive() {
+        // Shortcut key should be case-insensitive (SHORTCUT, Shortcut, shortcut)
+        for variant in [
+            "// Shortcut: opt x",
+            "// shortcut: opt x",
+            "// SHORTCUT: opt x",
+        ] {
+            let content = format!("{}\nconst x = 1;", variant);
+            let metadata = extract_script_metadata(&content);
+            assert_eq!(
+                metadata.shortcut,
+                Some("opt x".to_string()),
+                "Failed for variant: {}",
+                variant
+            );
+        }
+    }
+
+    #[test]
+    fn test_extract_script_metadata_shortcut_lenient_whitespace() {
+        // Test lenient whitespace handling like other metadata fields
+        let variants = [
+            "//Shortcut:opt j",
+            "//Shortcut: opt j",
+            "// Shortcut:opt j",
+            "// Shortcut: opt j",
+            "//  Shortcut: opt j",
+        ];
+
+        for variant in variants {
+            let content = format!("{}\nconst x = 1;", variant);
+            let metadata = extract_script_metadata(&content);
+            assert_eq!(
+                metadata.shortcut,
+                Some("opt j".to_string()),
+                "Failed for variant: {}",
+                variant
+            );
+        }
+    }
+
+    #[test]
+    fn test_extract_script_metadata_shortcut_empty_ignored() {
+        // Empty shortcut value should be ignored
+        let content = r#"// Shortcut:
+// Name: Has a name
+const x = 1;
+"#;
+        let metadata = extract_script_metadata(content);
+        assert_eq!(metadata.shortcut, None);
+        assert_eq!(metadata.name, Some("Has a name".to_string()));
+    }
+
+    #[test]
+    fn test_extract_script_metadata_first_shortcut_wins() {
+        // If multiple Shortcut: lines exist, the first one wins
+        let content = r#"// Shortcut: first shortcut
+// Shortcut: second shortcut
+const x = 1;
+"#;
+        let metadata = extract_script_metadata(content);
+        assert_eq!(metadata.shortcut, Some("first shortcut".to_string()));
+    }
+
+    #[test]
+    fn test_extract_script_metadata_all_fields() {
+        // Test all metadata fields together
+        let content = r#"// Name: Complete Script
+// Description: A complete script with all metadata
+// Icon: Terminal
+// Alias: cs
+// Shortcut: cmd shift c
+const x = 1;
+"#;
+        let metadata = extract_script_metadata(content);
+        assert_eq!(metadata.name, Some("Complete Script".to_string()));
+        assert_eq!(
+            metadata.description,
+            Some("A complete script with all metadata".to_string())
+        );
+        assert_eq!(metadata.icon, Some("Terminal".to_string()));
+        assert_eq!(metadata.alias, Some("cs".to_string()));
+        assert_eq!(metadata.shortcut, Some("cmd shift c".to_string()));
+    }
+
     #[test]
     fn test_extract_script_metadata_no_metadata() {
         let content = r#"const x = 1;
@@ -2735,6 +2912,7 @@ const x = 1;
             icon: None,
             description: Some("My custom script".to_string()),
             alias: None,
+            shortcut: None,
         };
 
         assert_eq!(script.name, "myScript");
@@ -2752,6 +2930,7 @@ const x = 1;
             icon: None,
             description: Some("desc".to_string()),
             alias: None,
+            shortcut: None,
         };
 
         let cloned = original.clone();
@@ -2799,6 +2978,7 @@ const x = 1;
                 icon: None,
                 description: None,
                 alias: None,
+                shortcut: None,
             },
             Script {
                 name: "saveFile".to_string(),
@@ -2807,6 +2987,7 @@ const x = 1;
                 icon: None,
                 description: None,
                 alias: None,
+                shortcut: None,
             },
         ];
 
@@ -2826,6 +3007,7 @@ const x = 1;
                 icon: None,
                 description: None,
                 alias: None,
+                shortcut: None,
             },
             score: 50,
             filename: "test.ts".to_string(),
@@ -2889,6 +3071,7 @@ third()
                 icon: None,
                 description: None,
                 alias: None,
+                shortcut: None,
             },
             Script {
                 name: "beta".to_string(),
@@ -2897,6 +3080,7 @@ third()
                 icon: None,
                 description: None,
                 alias: None,
+                shortcut: None,
             },
             Script {
                 name: "gamma".to_string(),
@@ -2905,6 +3089,7 @@ third()
                 icon: None,
                 description: None,
                 alias: None,
+                shortcut: None,
             },
         ];
 
@@ -2955,6 +3140,7 @@ third()
                 icon: None,
                 description: None,
                 alias: None,
+                shortcut: None,
             },
             Script {
                 name: "apple".to_string(),
@@ -2963,6 +3149,7 @@ third()
                 icon: None,
                 description: None,
                 alias: None,
+                shortcut: None,
             },
             Script {
                 name: "monkey".to_string(),
@@ -2971,6 +3158,7 @@ third()
                 icon: None,
                 description: None,
                 alias: None,
+                shortcut: None,
             },
         ];
 
@@ -3010,6 +3198,7 @@ third()
                 icon: None,
                 description: Some(format!("Script number {}", i)),
                 alias: None,
+                shortcut: None,
             });
         }
 
@@ -3028,6 +3217,7 @@ third()
             icon: None,
             description: Some("Opens a file".to_string()),
             alias: None,
+            shortcut: None,
         }];
 
         let results = fuzzy_search_scripts(&scripts, "open");
@@ -3085,6 +3275,7 @@ open("https://example.com");
             icon: None,
             description: None,
             alias: None,
+            shortcut: None,
         }];
 
         let result1 = fuzzy_search_scripts(&scripts, "test");
@@ -3105,6 +3296,7 @@ open("https://example.com");
             icon: None,
             description: None,
             alias: None,
+            shortcut: None,
         }];
 
         let results = fuzzy_search_scripts(&scripts, "test");
@@ -3145,6 +3337,7 @@ const obj = { key: "value" };
             icon: None,
             description: None,
             alias: None,
+            shortcut: None,
         }];
 
         // Should be able to search for the ASCII version
@@ -3162,6 +3355,7 @@ const obj = { key: "value" };
             icon: None,
             description: None,
             alias: None,
+            shortcut: None,
         };
 
         assert_eq!(script.extension, "ts");
@@ -3173,6 +3367,7 @@ const obj = { key: "value" };
             description: None,
             icon: None,
             alias: None,
+            shortcut: None,
         };
 
         assert_eq!(script_js.extension, "js");
@@ -3234,6 +3429,7 @@ code here
                 icon: None,
                 description: None,
                 alias: None,
+                shortcut: None,
             },
             score: 0,
             filename: "test.ts".to_string(),
@@ -3285,6 +3481,7 @@ code here
                 icon: None,
                 description: None,
                 alias: None,
+                shortcut: None,
             },
             Script {
                 name: "reopen".to_string(),
@@ -3293,6 +3490,7 @@ code here
                 icon: None,
                 description: None,
                 alias: None,
+                shortcut: None,
             },
         ];
 
@@ -3313,6 +3511,7 @@ code here
                 icon: None,
                 description: None,
                 alias: None,
+                shortcut: None,
             },
             Script {
                 name: "other".to_string(),
@@ -3321,6 +3520,7 @@ code here
                 icon: None,
                 description: Some("test description".to_string()),
                 alias: None,
+                shortcut: None,
             },
         ];
 
@@ -3339,6 +3539,7 @@ code here
                 icon: None,
                 description: None,
                 alias: None,
+                shortcut: None,
             },
             Script {
                 name: "other".to_string(),
@@ -3347,6 +3548,7 @@ code here
                 icon: None,
                 description: None,
                 alias: None,
+                shortcut: None,
             },
         ];
 
@@ -3392,6 +3594,7 @@ code here
                 icon: None,
                 description: Some("Open a file".to_string()),
                 alias: None,
+                shortcut: None,
             },
             Script {
                 name: "openfile".to_string(),
@@ -3400,6 +3603,7 @@ code here
                 icon: None,
                 description: None,
                 alias: None,
+                shortcut: None,
             },
         ];
 
@@ -3419,6 +3623,7 @@ code here
             icon: None,
             description: None,
             alias: None,
+            shortcut: None,
         }];
 
         let results = fuzzy_search_scripts(&scripts, "OPEN");
@@ -3436,6 +3641,7 @@ code here
                 icon: None,
                 description: Some("test".to_string()),
                 alias: None,
+                shortcut: None,
             },
             Script {
                 name: "bbb".to_string(),
@@ -3444,6 +3650,7 @@ code here
                 icon: None,
                 description: Some("test".to_string()),
                 alias: None,
+                shortcut: None,
             },
         ];
 
@@ -3475,6 +3682,7 @@ code here
             icon: None,
             description: Some("Test script".to_string()),
             alias: None,
+            shortcut: None,
         }];
 
         let scriptlets = vec![test_scriptlet_with_desc(
@@ -3505,6 +3713,7 @@ code here
             icon: None,
             description: None,
             alias: None,
+            shortcut: None,
         }];
 
         let results = fuzzy_search_scripts(&scripts, "es");
@@ -3523,6 +3732,7 @@ code here
                 icon: None,
                 description: None,
                 alias: None,
+                shortcut: None,
             },
             Script {
                 name: "save".to_string(),
@@ -3531,6 +3741,7 @@ code here
                 icon: None,
                 description: None,
                 alias: None,
+                shortcut: None,
             },
         ];
 
@@ -3549,6 +3760,7 @@ code here
             icon: None,
             description: Some("database connection".to_string()),
             alias: None,
+            shortcut: None,
         }];
 
         let results = fuzzy_search_scripts(&scripts, "database");
@@ -3567,6 +3779,7 @@ code here
                 icon: None,
                 description: Some("Opens a file dialog".to_string()),
                 alias: None,
+                shortcut: None,
             },
             Script {
                 name: "someScript".to_string(),
@@ -3575,6 +3788,7 @@ code here
                 icon: None,
                 description: Some("Does something".to_string()),
                 alias: None,
+                shortcut: None,
             },
             Script {
                 name: "saveData".to_string(),
@@ -3583,6 +3797,7 @@ code here
                 icon: None,
                 description: Some("Saves data to file".to_string()),
                 alias: None,
+                shortcut: None,
             },
         ];
 
@@ -3604,6 +3819,7 @@ code here
                 icon: None,
                 description: Some("Search files with grep".to_string()),
                 alias: None,
+                shortcut: None,
             },
             Script {
                 name: "find".to_string(),
@@ -3612,6 +3828,7 @@ code here
                 icon: None,
                 description: Some("Find files".to_string()),
                 alias: None,
+                shortcut: None,
             },
             Script {
                 name: "search".to_string(),
@@ -3620,6 +3837,7 @@ code here
                 icon: None,
                 description: None,
                 alias: None,
+                shortcut: None,
             },
         ];
 
@@ -3640,6 +3858,7 @@ code here
             icon: None,
             description: Some("Copy to clipboard".to_string()),
             alias: None,
+            shortcut: None,
         }];
 
         let mut quick_copy =
@@ -3820,6 +4039,7 @@ code here
             icon: None,
             description: Some("My clipboard script".to_string()),
             alias: None,
+            shortcut: None,
         }];
 
         let scriptlets = vec![test_scriptlet_with_desc(
@@ -3860,6 +4080,7 @@ code here
             icon: None,
             description: None,
             alias: None,
+            shortcut: None,
         }];
 
         let builtins = create_test_builtins();
@@ -3889,6 +4110,7 @@ code here
             icon: None,
             description: None,
             alias: None,
+            shortcut: None,
         }];
 
         let scriptlets = vec![test_scriptlet("Test Snippet", "ts", "test()")];
@@ -3994,6 +4216,7 @@ code here
             icon: None,
             description: None,
             alias: None,
+            shortcut: None,
         }];
         let scriptlets: Vec<Scriptlet> = vec![];
         let builtins: Vec<BuiltInEntry> = vec![];
@@ -4027,6 +4250,7 @@ code here
                 icon: None,
                 description: None,
                 alias: None,
+                shortcut: None,
             },
             Script {
                 name: "save".to_string(),
@@ -4035,6 +4259,7 @@ code here
                 icon: None,
                 description: None,
                 alias: None,
+                shortcut: None,
             },
         ];
         let scriptlets: Vec<Scriptlet> = vec![];
@@ -4070,6 +4295,7 @@ code here
                 icon: None,
                 description: None,
                 alias: None,
+                shortcut: None,
             },
             Script {
                 name: "beta".to_string(),
@@ -4078,6 +4304,7 @@ code here
                 icon: None,
                 description: None,
                 alias: None,
+                shortcut: None,
             },
         ];
         let scriptlets: Vec<Scriptlet> = vec![];
@@ -4109,6 +4336,7 @@ code here
                 icon: None,
                 description: None,
                 alias: None,
+                shortcut: None,
             },
             Script {
                 name: "beta".to_string(),
@@ -4117,6 +4345,7 @@ code here
                 icon: None,
                 description: None,
                 alias: None,
+                shortcut: None,
             },
             Script {
                 name: "gamma".to_string(),
@@ -4125,6 +4354,7 @@ code here
                 icon: None,
                 description: None,
                 alias: None,
+                shortcut: None,
             },
         ];
         let scriptlets: Vec<Scriptlet> = vec![];
@@ -4174,6 +4404,7 @@ code here
                 icon: None,
                 description: Some("A frequently used script".to_string()),
                 alias: None,
+                shortcut: None,
             },
             Script {
                 name: "another-script".to_string(),
@@ -4182,6 +4413,7 @@ code here
                 icon: None,
                 description: None,
                 alias: None,
+                shortcut: None,
             },
         ];
         let scriptlets: Vec<Scriptlet> = vec![];
@@ -4280,6 +4512,7 @@ code here
             icon: None,
             description: Some("User's frequently used script".to_string()),
             alias: None,
+            shortcut: None,
         }];
         let scriptlets: Vec<Scriptlet> = vec![];
         let builtins = create_test_builtins(); // Clipboard History, App Launcher
@@ -4352,6 +4585,7 @@ code here
                 icon: None,
                 description: None,
                 alias: None,
+                shortcut: None,
             },
             Script {
                 name: "zebra-script".to_string(),
@@ -4360,6 +4594,7 @@ code here
                 icon: None,
                 description: None,
                 alias: None,
+                shortcut: None,
             },
         ];
         let scriptlets: Vec<Scriptlet> = vec![];
@@ -4441,6 +4676,7 @@ code here
                 icon: None,
                 description: None,
                 alias: None,
+                shortcut: None,
             },
             Script {
                 name: "zebra-script".to_string(),
@@ -4449,6 +4685,7 @@ code here
                 icon: None,
                 description: None,
                 alias: None,
+                shortcut: None,
             },
         ];
         let scriptlets: Vec<Scriptlet> = vec![];
@@ -4523,6 +4760,7 @@ code here
                 icon: None,
                 description: None,
                 alias: None,
+                shortcut: None,
             },
             Script {
                 name: "second".to_string(),
@@ -4531,6 +4769,7 @@ code here
                 icon: None,
                 description: None,
                 alias: None,
+                shortcut: None,
             },
         ];
         let scriptlets: Vec<Scriptlet> = vec![];
@@ -4569,6 +4808,7 @@ code here
                 icon: None,
                 description: None,
                 alias: None,
+                shortcut: None,
             },
             Script {
                 name: "Other Script".to_string(),
@@ -4577,6 +4817,7 @@ code here
                 icon: None,
                 description: None,
                 alias: None,
+                shortcut: None,
             },
         ];
 
@@ -4598,6 +4839,7 @@ code here
                 icon: None,
                 description: None,
                 alias: None,
+                shortcut: None,
             },
             Script {
                 name: "Save Data".to_string(),
@@ -4606,6 +4848,7 @@ code here
                 icon: None,
                 description: None,
                 alias: None,
+                shortcut: None,
             },
         ];
 
@@ -4625,6 +4868,7 @@ code here
             icon: None,
             description: None,
             alias: None,
+            shortcut: None,
         }];
 
         let results = fuzzy_search_scripts(&scripts, "test");
@@ -4646,6 +4890,7 @@ code here
                 icon: None,
                 description: None,
                 alias: None,
+                shortcut: None,
             },
             Script {
                 name: "bar".to_string(),                           // Name doesn't match
@@ -4654,6 +4899,7 @@ code here
                 icon: None,
                 description: None,
                 alias: None,
+                shortcut: None,
             },
         ];
 
@@ -4676,6 +4922,7 @@ code here
             icon: None,
             description: None,
             alias: None,
+            shortcut: None,
         }];
 
         let results = fuzzy_search_scripts(&scripts, "opf");
@@ -4697,6 +4944,7 @@ code here
             icon: None,
             description: None,
             alias: None,
+            shortcut: None,
         }];
 
         let results = fuzzy_search_scripts(&scripts, "mts");
@@ -4890,6 +5138,7 @@ code here
             icon: None,
             description: None,
             alias: None,
+            shortcut: None,
         }];
 
         let results = fuzzy_search_scripts(&scripts, "");
