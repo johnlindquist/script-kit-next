@@ -24,6 +24,8 @@ These are **not Rust tests** - they are TypeScript fixture scripts that verify t
 | `test-editor-height.ts` | Editor window sizing | Editor fills 700px window height |
 | `test-term-height.ts` | Terminal window sizing | Terminal fills 700px window height |
 | `test-div-height.ts` | Div window sizing | Div uses 500px standard height |
+| `test-scheduler.ts` | Cron scheduling | Scripts with `// Cron:` metadata run on schedule |
+| `test-schedule-natural.ts` | Natural language scheduling | Scripts with `// Schedule:` metadata run on schedule |
 
 ### Multi-Monitor Testing
 
@@ -321,6 +323,131 @@ The test script logs to stderr with `[TEST]` prefix:
 [TEST] Result: PASS
 [TEST] ════════════════════════════════════════════════════════
 ```
+
+## Scheduled Script Execution
+
+Script Kit supports automatic script execution via cron expressions or natural language schedules.
+
+### Scheduling Metadata
+
+Add scheduling metadata to the top of your script:
+
+#### Cron Scheduling
+
+```typescript
+// Cron: * * * * *
+// Name: My Scheduled Script
+```
+
+**Cron expression format:** `minute hour day-of-month month day-of-week`
+
+| Field | Values | Special Characters |
+|-------|--------|-------------------|
+| Minute | 0-59 | `*` `,` `-` `/` |
+| Hour | 0-23 | `*` `,` `-` `/` |
+| Day of Month | 1-31 | `*` `,` `-` `/` |
+| Month | 1-12 | `*` `,` `-` `/` |
+| Day of Week | 0-6 (Sun=0) | `*` `,` `-` `/` |
+
+**Common cron patterns:**
+
+| Pattern | Meaning |
+|---------|---------|
+| `* * * * *` | Every minute |
+| `0 * * * *` | Every hour (at minute 0) |
+| `0 0 * * *` | Every day at midnight |
+| `0 9 * * 1-5` | Weekdays at 9 AM |
+| `*/5 * * * *` | Every 5 minutes |
+| `0 0 1 * *` | First day of every month |
+
+#### Natural Language Scheduling
+
+```typescript
+// Schedule: every minute
+// Name: My Natural Schedule Script
+```
+
+**Supported natural language phrases:**
+
+| Phrase | Equivalent Cron |
+|--------|-----------------|
+| `every minute` | `* * * * *` |
+| `every hour` | `0 * * * *` |
+| `every day` | `0 0 * * *` |
+| `every day at 9am` | `0 9 * * *` |
+| `every monday` | `0 0 * * 1` |
+| `every weekday` | `0 0 * * 1-5` |
+| `every 5 minutes` | `*/5 * * * *` |
+| `every 30 minutes` | `*/30 * * * *` |
+
+### How It Works
+
+1. **Discovery**: When Script Kit starts, it scans `~/.kenv/scripts/` for scripts with `// Cron:` or `// Schedule:` metadata
+2. **Scheduling**: The scheduler calculates the next execution time for each scheduled script
+3. **Execution**: When a script is due, it runs automatically (even if the main window is hidden)
+4. **File Watching**: Changes to scripts are detected and schedules are updated automatically
+
+### Testing Scheduled Scripts
+
+#### Test Script Files
+
+| File | Schedule | Purpose |
+|------|----------|---------|
+| `test-scheduler.ts` | `* * * * *` (every minute) | Tests cron-based scheduling |
+| `test-schedule-natural.ts` | `every minute` | Tests natural language scheduling |
+
+Both test scripts:
+- Log execution to `~/.kenv/logs/scheduler-test.log` or `schedule-natural-test.log`
+- Display a confirmation div that auto-closes after 3 seconds
+- Can be used to verify the scheduler is working
+
+#### Manual Testing
+
+1. **Copy test scripts to kenv:**
+   ```bash
+   cp tests/smoke/test-scheduler.ts ~/.kenv/scripts/
+   cp tests/smoke/test-schedule-natural.ts ~/.kenv/scripts/
+   ```
+
+2. **Start Script Kit:**
+   ```bash
+   cargo build && ./target/debug/script-kit-gpui
+   ```
+
+3. **Wait for execution** - Scripts will run at the next minute boundary
+
+4. **Check logs:**
+   ```bash
+   tail -f ~/.kenv/logs/scheduler-test.log
+   tail -f ~/.kenv/logs/schedule-natural-test.log
+   ```
+
+#### Expected Log Output
+
+```
+[CRON] Executed: 2025-01-15T10:30:00.123Z
+[CRON] Executed: 2025-01-15T10:31:00.456Z
+```
+
+#### Debugging
+
+Check the app logs for scheduler activity:
+
+```bash
+# With AI compact logs
+SCRIPT_KIT_AI_LOG=1 ./target/debug/script-kit-gpui 2>&1 | grep -i schedul
+
+# Full JSONL logs
+tail -f ~/.kenv/logs/script-kit-gpui.jsonl | grep -i schedul
+```
+
+### Best Practices
+
+1. **Keep scheduled scripts fast** - They run in the background, long-running scripts may queue up
+2. **Use logging** - Write to log files to track execution history
+3. **Handle errors gracefully** - Unhandled errors won't stop the scheduler but will be logged
+4. **Auto-close UI** - If your script shows UI, auto-close it with `setTimeout(() => process.exit(0), 3000)`
+5. **Test with frequent schedules first** - Use `* * * * *` to verify it works, then change to your actual schedule
 
 ## CI Integration (Future)
 
