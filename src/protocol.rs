@@ -847,6 +847,14 @@ pub enum Message {
         message: Option<String>,
     },
 
+    /// HUD (heads-up display) overlay message
+    #[serde(rename = "hud")]
+    Hud {
+        text: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        duration_ms: Option<u64>,
+    },
+
     // ============================================================
     // SYSTEM CONTROL MESSAGES
     // ============================================================
@@ -1290,6 +1298,37 @@ pub enum Message {
         #[serde(rename = "exitCode", skip_serializing_if = "Option::is_none")]
         exit_code: Option<i32>,
     },
+
+    // ============================================================
+    // TEST INFRASTRUCTURE
+    // ============================================================
+    /// Simulate a mouse click at specific coordinates (for testing)
+    ///
+    /// This message is used by test infrastructure to simulate mouse clicks
+    /// at specified window-relative coordinates. It enables automated visual
+    /// testing of click behaviors without requiring actual user interaction.
+    #[serde(rename = "simulateClick")]
+    SimulateClick {
+        #[serde(rename = "requestId")]
+        request_id: String,
+        /// X coordinate relative to the window
+        x: f64,
+        /// Y coordinate relative to the window
+        y: f64,
+        /// Optional button: "left" (default), "right", or "middle"
+        #[serde(skip_serializing_if = "Option::is_none")]
+        button: Option<String>,
+    },
+
+    /// Response after simulating a click
+    #[serde(rename = "simulateClickResult")]
+    SimulateClickResult {
+        #[serde(rename = "requestId")]
+        request_id: String,
+        success: bool,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        error: Option<String>,
+    },
 }
 
 impl Message {
@@ -1367,6 +1406,7 @@ impl Message {
             Message::Beep {} => None,
             Message::Say { .. } => None,
             Message::SetStatus { .. } => None,
+            Message::Hud { .. } => None,
             // System control (no ID)
             Message::Menu { .. } => None,
             Message::Clipboard { id, .. } => id.as_deref(),
@@ -1422,6 +1462,9 @@ impl Message {
             Message::GetScriptlets { request_id, .. } => Some(request_id),
             Message::ScriptletList { request_id, .. } => Some(request_id),
             Message::ScriptletResult { request_id, .. } => Some(request_id),
+            // Test infrastructure (use request_id)
+            Message::SimulateClick { request_id, .. } => Some(request_id),
+            Message::SimulateClickResult { request_id, .. } => Some(request_id),
         }
     }
 
@@ -1572,6 +1615,11 @@ impl Message {
     /// Create a set status message
     pub fn set_status(status: String, message: Option<String>) -> Self {
         Message::SetStatus { status, message }
+    }
+
+    /// Create a HUD overlay message
+    pub fn hud(text: String, duration_ms: Option<u64>) -> Self {
+        Message::Hud { text, duration_ms }
     }
 
     /// Create a menu message
@@ -2113,6 +2161,58 @@ impl Message {
             output: None,
             error: Some(error),
             exit_code,
+        }
+    }
+
+    // ============================================================
+    // Constructor methods for test infrastructure
+    // ============================================================
+
+    /// Create a simulate click request
+    ///
+    /// Coordinates are relative to the window's content area.
+    pub fn simulate_click(request_id: String, x: f64, y: f64) -> Self {
+        Message::SimulateClick {
+            request_id,
+            x,
+            y,
+            button: None,
+        }
+    }
+
+    /// Create a simulate click request with a specific button
+    ///
+    /// Coordinates are relative to the window's content area.
+    /// Button can be "left", "right", or "middle".
+    pub fn simulate_click_with_button(
+        request_id: String,
+        x: f64,
+        y: f64,
+        button: String,
+    ) -> Self {
+        Message::SimulateClick {
+            request_id,
+            x,
+            y,
+            button: Some(button),
+        }
+    }
+
+    /// Create a successful simulate click result
+    pub fn simulate_click_success(request_id: String) -> Self {
+        Message::SimulateClickResult {
+            request_id,
+            success: true,
+            error: None,
+        }
+    }
+
+    /// Create a failed simulate click result
+    pub fn simulate_click_error(request_id: String, error: String) -> Self {
+        Message::SimulateClickResult {
+            request_id,
+            success: false,
+            error: Some(error),
         }
     }
 }
@@ -2971,6 +3071,51 @@ mod tests {
         }
     }
 
+    #[test]
+    fn test_serialize_hud_message() {
+        let msg = Message::hud("Copied!".to_string(), None);
+        let json = serialize_message(&msg).unwrap();
+        assert!(json.contains("\"type\":\"hud\""));
+        assert!(json.contains("\"text\":\"Copied!\""));
+        // duration_ms should be omitted when None
+        assert!(!json.contains("\"duration_ms\""));
+    }
+
+    #[test]
+    fn test_serialize_hud_message_with_duration() {
+        let msg = Message::hud("Warning".to_string(), Some(4000));
+        let json = serialize_message(&msg).unwrap();
+        assert!(json.contains("\"type\":\"hud\""));
+        assert!(json.contains("\"text\":\"Warning\""));
+        assert!(json.contains("\"duration_ms\":4000"));
+    }
+
+    #[test]
+    fn test_parse_hud_message_basic() {
+        let json = r#"{"type":"hud","text":"Copied!"}"#;
+        let msg = parse_message(json).unwrap();
+        match msg {
+            Message::Hud { text, duration_ms } => {
+                assert_eq!(text, "Copied!");
+                assert_eq!(duration_ms, None);
+            }
+            _ => panic!("Expected Hud message"),
+        }
+    }
+
+    #[test]
+    fn test_parse_hud_message_with_duration() {
+        let json = r#"{"type":"hud","text":"Warning","duration_ms":4000}"#;
+        let msg = parse_message(json).unwrap();
+        match msg {
+            Message::Hud { text, duration_ms } => {
+                assert_eq!(text, "Warning");
+                assert_eq!(duration_ms, Some(4000));
+            }
+            _ => panic!("Expected Hud message"),
+        }
+    }
+
     // ============================================================
     // SYSTEM CONTROL MESSAGE TESTS
     // ============================================================
@@ -3248,6 +3393,7 @@ mod tests {
         assert_eq!(Message::beep().id(), None);
         assert_eq!(Message::say("".to_string(), None).id(), None);
         assert_eq!(Message::set_status("".to_string(), None).id(), None);
+        assert_eq!(Message::hud("".to_string(), None).id(), None);
         assert_eq!(Message::menu(None, None).id(), None);
         assert_eq!(Message::clipboard_read(None).id(), None);
         assert_eq!(Message::keyboard_type("".to_string()).id(), None);
@@ -5308,5 +5454,155 @@ mod tests {
             }
             _ => panic!("Expected ForceSubmit message"),
         }
+    }
+
+    // ============================================================
+    // SIMULATE CLICK TESTS (Test Infrastructure)
+    // ============================================================
+
+    #[test]
+    fn test_serialize_simulate_click() {
+        let msg = Message::simulate_click("req-click-1".to_string(), 100.0, 200.0);
+        let json = serialize_message(&msg).unwrap();
+        assert!(json.contains("\"type\":\"simulateClick\""));
+        assert!(json.contains("\"requestId\":\"req-click-1\""));
+        assert!(json.contains("\"x\":100"));
+        assert!(json.contains("\"y\":200"));
+        // button should be omitted when None
+        assert!(!json.contains("\"button\""));
+    }
+
+    #[test]
+    fn test_serialize_simulate_click_with_button() {
+        let msg = Message::simulate_click_with_button(
+            "req-click-2".to_string(),
+            50.5,
+            75.5,
+            "right".to_string(),
+        );
+        let json = serialize_message(&msg).unwrap();
+        assert!(json.contains("\"type\":\"simulateClick\""));
+        assert!(json.contains("\"x\":50.5"));
+        assert!(json.contains("\"y\":75.5"));
+        assert!(json.contains("\"button\":\"right\""));
+    }
+
+    #[test]
+    fn test_parse_simulate_click_basic() {
+        let json = r#"{"type":"simulateClick","requestId":"req-click-3","x":150,"y":250}"#;
+        let msg = parse_message(json).unwrap();
+        match msg {
+            Message::SimulateClick {
+                request_id,
+                x,
+                y,
+                button,
+            } => {
+                assert_eq!(request_id, "req-click-3");
+                assert!((x - 150.0).abs() < 0.01);
+                assert!((y - 250.0).abs() < 0.01);
+                assert_eq!(button, None);
+            }
+            _ => panic!("Expected SimulateClick message"),
+        }
+    }
+
+    #[test]
+    fn test_parse_simulate_click_with_button() {
+        let json =
+            r#"{"type":"simulateClick","requestId":"req-click-4","x":100,"y":200,"button":"middle"}"#;
+        let msg = parse_message(json).unwrap();
+        match msg {
+            Message::SimulateClick {
+                request_id,
+                x,
+                y,
+                button,
+            } => {
+                assert_eq!(request_id, "req-click-4");
+                assert!((x - 100.0).abs() < 0.01);
+                assert!((y - 200.0).abs() < 0.01);
+                assert_eq!(button, Some("middle".to_string()));
+            }
+            _ => panic!("Expected SimulateClick message"),
+        }
+    }
+
+    #[test]
+    fn test_serialize_simulate_click_result_success() {
+        let msg = Message::simulate_click_success("req-click-5".to_string());
+        let json = serialize_message(&msg).unwrap();
+        assert!(json.contains("\"type\":\"simulateClickResult\""));
+        assert!(json.contains("\"requestId\":\"req-click-5\""));
+        assert!(json.contains("\"success\":true"));
+        assert!(!json.contains("\"error\""));
+    }
+
+    #[test]
+    fn test_serialize_simulate_click_result_error() {
+        let msg = Message::simulate_click_error(
+            "req-click-6".to_string(),
+            "Coordinates out of bounds".to_string(),
+        );
+        let json = serialize_message(&msg).unwrap();
+        assert!(json.contains("\"type\":\"simulateClickResult\""));
+        assert!(json.contains("\"success\":false"));
+        assert!(json.contains("\"error\":\"Coordinates out of bounds\""));
+    }
+
+    #[test]
+    fn test_parse_simulate_click_result_success() {
+        let json = r#"{"type":"simulateClickResult","requestId":"req-click-7","success":true}"#;
+        let msg = parse_message(json).unwrap();
+        match msg {
+            Message::SimulateClickResult {
+                request_id,
+                success,
+                error,
+            } => {
+                assert_eq!(request_id, "req-click-7");
+                assert!(success);
+                assert_eq!(error, None);
+            }
+            _ => panic!("Expected SimulateClickResult message"),
+        }
+    }
+
+    #[test]
+    fn test_parse_simulate_click_result_error() {
+        let json = r#"{"type":"simulateClickResult","requestId":"req-click-8","success":false,"error":"Failed"}"#;
+        let msg = parse_message(json).unwrap();
+        match msg {
+            Message::SimulateClickResult {
+                request_id,
+                success,
+                error,
+            } => {
+                assert_eq!(request_id, "req-click-8");
+                assert!(!success);
+                assert_eq!(error, Some("Failed".to_string()));
+            }
+            _ => panic!("Expected SimulateClickResult message"),
+        }
+    }
+
+    #[test]
+    fn test_simulate_click_message_ids() {
+        assert_eq!(
+            Message::simulate_click("a".to_string(), 0.0, 0.0).id(),
+            Some("a")
+        );
+        assert_eq!(
+            Message::simulate_click_with_button("b".to_string(), 0.0, 0.0, "left".to_string()).id(),
+            Some("b")
+        );
+        assert_eq!(
+            Message::simulate_click_success("c".to_string()).id(),
+            Some("c")
+        );
+        assert_eq!(
+            Message::simulate_click_error("d".to_string(), "err".to_string()).id(),
+            Some("d")
+        );
     }
 }
