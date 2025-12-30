@@ -194,6 +194,15 @@ export interface ScreenshotData {
   height: number;
 }
 
+export interface ScreenshotOptions {
+  /**
+   * If true, capture at full retina resolution (2x).
+   * If false (default), scale down to 1x resolution for smaller file sizes.
+   * @default false
+   */
+  hiDpi?: boolean;
+}
+
 // =============================================================================
 // Config Types (for ~/.kenv/config.ts)
 // =============================================================================
@@ -223,62 +232,322 @@ export type KeyCode =
   | "F7" | "F8" | "F9" | "F10" | "F11" | "F12";
 
 /**
- * Hotkey configuration for keyboard shortcuts
+ * Hotkey configuration for global keyboard shortcuts.
+ * Defines the modifier keys and main key for activating Script Kit.
+ * 
+ * @example Cmd+; (default on Mac)
+ * ```typescript
+ * hotkey: {
+ *   modifiers: ["meta"],
+ *   key: "Semicolon"
+ * }
+ * ```
+ * 
+ * @example Ctrl+Shift+Space
+ * ```typescript
+ * hotkey: {
+ *   modifiers: ["ctrl", "shift"],
+ *   key: "Space"
+ * }
+ * ```
  */
 export interface HotkeyConfig {
-  /** Modifier keys: "meta" (Cmd on Mac), "ctrl", "alt", "shift" */
+  /**
+   * Modifier keys that must be held while pressing the main key.
+   * - "meta" = Cmd on Mac, Win on Windows
+   * - "ctrl" = Control key
+   * - "alt" = Option on Mac, Alt on Windows
+   * - "shift" = Shift key
+   * 
+   * @default ["meta"] (Cmd on Mac)
+   * @example ["meta"] // Just Cmd
+   * @example ["meta", "shift"] // Cmd+Shift
+   * @example ["ctrl", "alt"] // Ctrl+Alt
+   */
   modifiers: KeyModifier[];
-  /** 
-   * Key code - use one of the KeyCode values
-   * @example "Digit0" for the 0 key
-   * @example "KeyK" for the K key
-   * @example "Semicolon" for the ; key
+  
+  /**
+   * The main key code (W3C UI Events KeyboardEvent code format).
+   * Common values:
+   * - Letter keys: "KeyA" through "KeyZ"
+   * - Number keys: "Digit0" through "Digit9"
+   * - Special keys: "Space", "Enter", "Semicolon"
+   * - Function keys: "F1" through "F12"
+   * 
+   * @default "Semicolon" (the ; key)
+   * @example "Semicolon" // The ; key
+   * @example "KeyK" // The K key
+   * @example "Digit0" // The 0 key
+   * @example "Space" // The spacebar
    */
   key: KeyCode;
 }
 
 /**
- * Content padding configuration for prompts
+ * Content padding configuration for prompts (terminal, editor, etc.)
+ * All values are in pixels.
+ * 
+ * @example
+ * ```typescript
+ * padding: {
+ *   top: 16,
+ *   left: 20,
+ *   right: 20
+ * }
+ * ```
  */
 export interface ContentPadding {
-  /** Top padding in pixels (default: 8) */
+  /**
+   * Top padding in pixels
+   * @default 8
+   * @example 16
+   */
   top?: number;
-  /** Left padding in pixels (default: 12) */
+  
+  /**
+   * Left padding in pixels
+   * @default 12
+   * @example 20
+   */
   left?: number;
-  /** Right padding in pixels (default: 12) */
+  
+  /**
+   * Right padding in pixels
+   * @default 12
+   * @example 20
+   */
   right?: number;
 }
 
 /**
- * Script Kit configuration schema
+ * Configuration for built-in features (clipboard history, app launcher, window switcher).
+ * These are optional features that can be enabled or disabled.
  * 
  * @example
+ * ```typescript
+ * builtIns: {
+ *   clipboardHistory: true,
+ *   appLauncher: true,
+ *   windowSwitcher: false
+ * }
+ * ```
+ */
+export interface BuiltInConfig {
+  /**
+   * Enable the clipboard history built-in feature.
+   * When enabled, Script Kit tracks clipboard changes and provides a searchable history.
+   * @default true
+   * @example false // Disable clipboard history
+   */
+  clipboardHistory?: boolean;
+  
+  /**
+   * Enable the app launcher built-in feature.
+   * When enabled, Script Kit can search and launch applications.
+   * @default true
+   * @example false // Disable app launcher
+   */
+  appLauncher?: boolean;
+  
+  /**
+   * Enable the window switcher built-in feature.
+   * When enabled, Script Kit provides a window switcher for managing open windows.
+   * @default true
+   * @example false // Disable window switcher
+   */
+  windowSwitcher?: boolean;
+}
+
+/**
+ * Configuration for process resource limits and health monitoring.
+ * Use these settings to control script execution resources and monitoring.
+ * 
+ * @example
+ * ```typescript
+ * processLimits: {
+ *   maxMemoryMb: 512,
+ *   maxRuntimeSeconds: 300,
+ *   healthCheckIntervalMs: 10000
+ * }
+ * ```
+ */
+export interface ProcessLimits {
+  /**
+   * Maximum memory usage in megabytes (MB).
+   * Scripts exceeding this limit may be terminated.
+   * Set to undefined/null for no limit.
+   * 
+   * @default undefined (no limit)
+   * @example 512 // Limit scripts to 512 MB
+   * @example 1024 // Limit scripts to 1 GB
+   */
+  maxMemoryMb?: number;
+  
+  /**
+   * Maximum runtime in seconds.
+   * Scripts running longer than this will be terminated.
+   * Set to undefined/null for no limit.
+   * 
+   * @default undefined (no limit)
+   * @example 60 // 1 minute timeout
+   * @example 300 // 5 minute timeout
+   * @example 3600 // 1 hour timeout
+   */
+  maxRuntimeSeconds?: number;
+  
+  /**
+   * Health check interval in milliseconds.
+   * How often Script Kit checks on running scripts for resource usage.
+   * Lower values = more responsive limits but more overhead.
+   * 
+   * @default 5000 (5 seconds)
+   * @example 1000 // Check every 1 second (more responsive)
+   * @example 10000 // Check every 10 seconds (less overhead)
+   */
+  healthCheckIntervalMs?: number;
+}
+
+/**
+ * Script Kit configuration schema.
+ * 
+ * This configuration is loaded from `~/.kenv/config.ts` and controls
+ * Script Kit's behavior, appearance, and built-in features.
+ * 
+ * @example Minimal configuration (only hotkey required)
  * ```typescript
  * import type { Config } from "@johnlindquist/kit";
  * 
  * export default {
  *   hotkey: {
  *     modifiers: ["meta"],
- *     key: "Digit0"
+ *     key: "Semicolon"
+ *   }
+ * } satisfies Config;
+ * ```
+ * 
+ * @example Full configuration with all options
+ * ```typescript
+ * import type { Config } from "@johnlindquist/kit";
+ * 
+ * export default {
+ *   hotkey: {
+ *     modifiers: ["meta"],
+ *     key: "Semicolon"
+ *   },
+ *   editor: "code",
+ *   padding: { top: 8, left: 12, right: 12 },
+ *   editorFontSize: 14,
+ *   terminalFontSize: 14,
+ *   uiScale: 1.0,
+ *   builtIns: {
+ *     clipboardHistory: true,
+ *     appLauncher: true,
+ *     windowSwitcher: true
+ *   },
+ *   processLimits: {
+ *     maxMemoryMb: 512,
+ *     maxRuntimeSeconds: 300,
+ *     healthCheckIntervalMs: 5000
  *   }
  * } satisfies Config;
  * ```
  */
 export interface Config {
-  /** Main keyboard shortcut to open Script Kit */
+  /**
+   * Main keyboard shortcut to open Script Kit.
+   * This is the global hotkey that activates Script Kit from any application.
+   * 
+   * @required This field is required
+   * @example { modifiers: ["meta"], key: "Semicolon" } // Cmd+; on Mac
+   * @example { modifiers: ["ctrl", "shift"], key: "Space" } // Ctrl+Shift+Space
+   */
   hotkey: HotkeyConfig;
-  /** Custom path to bun executable */
+  
+  /**
+   * Custom path to the bun executable.
+   * Use this if bun is not in your PATH or you want to use a specific version.
+   * 
+   * @default undefined (auto-detected from PATH)
+   * @example "/opt/homebrew/bin/bun"
+   * @example "/usr/local/bin/bun"
+   */
   bun_path?: string;
-  /** Preferred editor command (defaults to $EDITOR or "code") */
+  
+  /**
+   * Preferred editor command for "Open in Editor" actions.
+   * Falls back to $EDITOR environment variable, then to "code" (VS Code).
+   * 
+   * @default undefined (uses $EDITOR or "code")
+   * @example "code" // VS Code
+   * @example "vim" // Vim
+   * @example "nvim" // Neovim
+   * @example "subl" // Sublime Text
+   * @example "zed" // Zed
+   */
   editor?: string;
-  /** Content padding for prompts */
+  
+  /**
+   * Content padding for prompt areas (terminal, editor, etc.).
+   * Controls the spacing around content in various prompts.
+   * 
+   * @default { top: 8, left: 12, right: 12 }
+   * @example { top: 16, left: 20, right: 20 } // More spacious
+   * @example { top: 4, left: 8, right: 8 } // More compact
+   */
   padding?: ContentPadding;
-  /** Editor font size in pixels (default: 14) */
+  
+  /**
+   * Font size for the editor prompt in pixels.
+   * Affects the Monaco-style code editor.
+   * 
+   * @default 14
+   * @example 12 // Smaller for more code visibility
+   * @example 16 // Larger for better readability
+   * @example 18 // Extra large
+   */
   editorFontSize?: number;
-  /** Terminal font size in pixels (default: 14) */
+  
+  /**
+   * Font size for the terminal prompt in pixels.
+   * Affects the integrated terminal.
+   * 
+   * @default 14
+   * @example 12 // Smaller terminal font
+   * @example 16 // Larger terminal font
+   */
   terminalFontSize?: number;
-  /** UI scale factor, 1.0 = 100% (default: 1.0) */
+  
+  /**
+   * UI scale factor for the entire interface.
+   * 1.0 = 100% (normal), 1.5 = 150% (larger), 0.8 = 80% (smaller).
+   * 
+   * @default 1.0
+   * @example 1.25 // 125% scale
+   * @example 1.5 // 150% scale for HiDPI or accessibility
+   * @example 0.9 // Slightly smaller
+   */
   uiScale?: number;
+  
+  /**
+   * Configuration for built-in features.
+   * Enable or disable clipboard history, app launcher, and window switcher.
+   * 
+   * @default { clipboardHistory: true, appLauncher: true, windowSwitcher: true }
+   * @example { clipboardHistory: false } // Disable only clipboard history
+   * @example { appLauncher: false, windowSwitcher: false } // Disable launcher and switcher
+   */
+  builtIns?: BuiltInConfig;
+  
+  /**
+   * Process resource limits and health monitoring configuration.
+   * Control memory usage, runtime limits, and monitoring frequency for scripts.
+   * 
+   * @default { healthCheckIntervalMs: 5000 } (no memory or runtime limits)
+   * @example { maxMemoryMb: 512 } // Limit scripts to 512 MB
+   * @example { maxRuntimeSeconds: 60 } // 1 minute timeout
+   * @example { maxMemoryMb: 256, maxRuntimeSeconds: 30, healthCheckIntervalMs: 1000 }
+   */
+  processLimits?: ProcessLimits;
 }
 
 // =============================================================================
@@ -524,6 +793,7 @@ interface GetWindowBoundsMessage {
 interface CaptureScreenshotMessage {
   type: 'captureScreenshot';
   requestId: string;
+  hiDpi?: boolean;
 }
 
 interface ScreenshotResultMessage {
@@ -1233,9 +1503,11 @@ declare global {
    * Capture a screenshot of the Script Kit window.
    * Useful for visual testing and debugging layout issues.
    * 
+   * @param options - Screenshot options
+   * @param options.hiDpi - If true, capture at full retina resolution (2x). Default false for 1x.
    * @returns Promise with base64-encoded PNG data and dimensions
    */
-  function captureScreenshot(): Promise<ScreenshotData>;
+  function captureScreenshot(options?: ScreenshotOptions): Promise<ScreenshotData>;
   
   /**
    * Force submit the current prompt with a value
@@ -2824,9 +3096,13 @@ globalThis.getWindowBounds = async function getWindowBounds(): Promise<WindowBou
  * Capture a screenshot of the Script Kit window.
  * Useful for visual testing and debugging layout issues.
  * 
+ * @param options - Screenshot options
+ * @param options.hiDpi - If true, capture at full retina resolution (2x). Default false for 1x.
  * @returns Promise with base64-encoded PNG data and dimensions
  */
-globalThis.captureScreenshot = async function captureScreenshot(): Promise<ScreenshotData> {
+globalThis.captureScreenshot = async function captureScreenshot(
+  options?: ScreenshotOptions
+): Promise<ScreenshotData> {
   const requestId = nextId();
   
   return new Promise((resolve) => {
@@ -2853,6 +3129,7 @@ globalThis.captureScreenshot = async function captureScreenshot(): Promise<Scree
     const message: CaptureScreenshotMessage = {
       type: 'captureScreenshot',
       requestId,
+      hiDpi: options?.hiDpi ?? false,
     };
     
     send(message);

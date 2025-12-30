@@ -1130,6 +1130,9 @@ pub enum Message {
     CaptureScreenshot {
         #[serde(rename = "requestId")]
         request_id: String,
+        /// If true, return full retina resolution (2x). If false (default), scale down to 1x.
+        #[serde(rename = "hiDpi", skip_serializing_if = "Option::is_none")]
+        hi_dpi: Option<bool>,
     },
 
     /// Response with screenshot data as base64 PNG
@@ -1966,7 +1969,15 @@ impl Message {
 
     /// Create a capture screenshot request
     pub fn capture_screenshot(request_id: String) -> Self {
-        Message::CaptureScreenshot { request_id }
+        Message::CaptureScreenshot {
+            request_id,
+            hi_dpi: None,
+        }
+    }
+
+    /// Create a capture screenshot request with hi_dpi option
+    pub fn capture_screenshot_with_options(request_id: String, hi_dpi: Option<bool>) -> Self {
+        Message::CaptureScreenshot { request_id, hi_dpi }
     }
 
     /// Create a screenshot result response
