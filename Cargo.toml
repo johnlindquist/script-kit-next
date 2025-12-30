@@ -99,3 +99,17 @@ tempfile = "3"
 
 [build-dependencies]
 dirs = "5.0"  # For build.rs to copy SDK to ~/.kit/lib/
+
+# macOS bundle metadata for cargo-bundle
+# Run: cargo bundle --release
+[package.metadata.bundle]
+name = "Script Kit"
+identifier = "com.scriptkit.app"
+icon = ["assets/icon.png", "assets/icon@2x.png", "assets/icon.icns"]
+version = "0.1.0"
+copyright = "Copyright (c) 2024 Script Kit. All rights reserved."
+category = "public.app-category.developer-tools"
+short_description = "Automation made simple"
+osx_minimum_system_version = "10.15"
+osx_url_schemes = ["scriptkit"]
+resources = ["assets/*"]
