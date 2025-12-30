@@ -39,12 +39,12 @@ const HORIZONTAL_PADDING: f32 = 20.0;
 const VERTICAL_PADDING: f32 = 12.0;
 
 // Playful color palette
-const CORAL: u32 = 0xff6b6b;      // Primary - warm, energetic
-const MINT: u32 = 0x4ecdc4;       // Secondary - fresh, friendly
-const LAVENDER: u32 = 0xa29bfe;   // Accent - soft, playful
-const CREAM: u32 = 0xfff9f0;      // Background - warm white
+const CORAL: u32 = 0xff6b6b; // Primary - warm, energetic
+const MINT: u32 = 0x4ecdc4; // Secondary - fresh, friendly
+const LAVENDER: u32 = 0xa29bfe; // Accent - soft, playful
+const CREAM: u32 = 0xfff9f0; // Background - warm white
 const DARK_CORAL: u32 = 0xe55555; // Darker coral for borders
-const SOFT_GRAY: u32 = 0x6c6c6c;  // Muted text
+const SOFT_GRAY: u32 = 0x6c6c6c; // Muted text
 const NEAR_WHITE: u32 = 0xffffff; // Pure white for contrast
 
 /// Pre-computed colors for playful list item rendering
@@ -128,19 +128,19 @@ impl PlayfulRenderer {
     /// Render the playful search bar
     fn render_search_bar(&self, filter_text: &str, is_empty: bool) -> Div {
         let colors = self.colors;
-        
+
         let display_text = if is_empty {
             "🔍 Search for something fun...".to_string()
         } else {
             format!("🔍 {}", filter_text)
         };
-        
+
         let text_color = if is_empty {
             rgb(colors.soft_gray)
         } else {
             rgb(colors.dark_coral)
         };
-        
+
         div()
             .w_full()
             .px(px(HORIZONTAL_PADDING))
@@ -163,15 +163,15 @@ impl PlayfulRenderer {
                             .text_lg()
                             .font_weight(FontWeight::MEDIUM)
                             .text_color(text_color)
-                            .child(display_text)
-                    )
+                            .child(display_text),
+                    ),
             )
     }
 
     /// Render an empty state with playful messaging
     fn render_empty_state(&self, filter_text: &str) -> Div {
         let colors = self.colors;
-        
+
         div()
             .w_full()
             .h_full()
@@ -180,11 +180,7 @@ impl PlayfulRenderer {
             .items_center()
             .justify_center()
             .gap(px(12.))
-            .child(
-                div()
-                    .text_3xl()
-                    .child("🎪")
-            )
+            .child(div().text_3xl().child("🎪"))
             .child(
                 div()
                     .text_color(rgb(colors.soft_gray))
@@ -194,7 +190,7 @@ impl PlayfulRenderer {
                         "No scripts yet - let's create some!".to_string()
                     } else {
                         format!("No matches for '{}' - try something else!", filter_text)
-                    })
+                    }),
             )
     }
 
@@ -209,31 +205,31 @@ impl PlayfulRenderer {
         index: usize,
     ) -> AnyElement {
         let colors = self.colors;
-        
+
         // Get fun emoji for this script
         let emoji = get_emoji_for_name(name);
-        
+
         // Sparkle prefix for selected items
         let display_name = if is_selected {
             format!("✨ {} {}", emoji, name)
         } else {
             format!("{} {}", emoji, name)
         };
-        
+
         // Card colors: selected uses coral bg, others use white
         let (bg_color, text_color, border_color) = if is_selected {
             (rgb(colors.coral), rgb(colors.white), rgb(colors.dark_coral))
         } else {
             (rgb(colors.white), rgb(colors.dark_coral), rgb(colors.mint))
         };
-        
+
         // Description color
         let desc_color = if is_selected {
-            rgba(0xffffffcc)  // White with opacity
+            rgba(0xffffffcc) // White with opacity
         } else {
             rgb(colors.soft_gray)
         };
-        
+
         // Build shortcut pill badge if present
         let shortcut_el = if let Some(s) = shortcut {
             div()
@@ -248,7 +244,7 @@ impl PlayfulRenderer {
         } else {
             div()
         };
-        
+
         // Build description element if present
         let desc_el = if let Some(desc) = description {
             div()
@@ -258,7 +254,7 @@ impl PlayfulRenderer {
         } else {
             div()
         };
-        
+
         // Build card item
         div()
             .id(ElementId::NamedInteger("playful-item".into(), index as u64))
@@ -292,11 +288,11 @@ impl PlayfulRenderer {
                                     .text_base()
                                     .font_weight(FontWeight::SEMIBOLD)
                                     .text_color(text_color)
-                                    .child(display_name)
+                                    .child(display_name),
                             )
-                            .child(desc_el)
+                            .child(desc_el),
                     )
-                    .child(shortcut_el)
+                    .child(shortcut_el),
             )
             .into_any_element()
     }
@@ -309,20 +305,16 @@ impl Default for PlayfulRenderer {
 }
 
 impl<App: 'static> DesignRenderer<App> for PlayfulRenderer {
-    fn render_script_list(
-        &self,
-        _app: &App,
-        _cx: &mut Context<App>,
-    ) -> AnyElement {
+    fn render_script_list(&self, _app: &App, _cx: &mut Context<App>) -> AnyElement {
         // Note: This is a standalone renderer that doesn't have access to app state.
         // In a real integration, we would need to pass the filtered scripts,
         // selected index, and filter text through the trait method.
         //
         // For now, this demonstrates the visual structure.
         // Full integration requires modifying the trait to pass necessary data.
-        
+
         let colors = self.colors;
-        
+
         // Main container - warm cream background with bouncy card feel
         div()
             .w_full()
@@ -346,18 +338,14 @@ impl<App: 'static> DesignRenderer<App> for PlayfulRenderer {
                             .flex_row()
                             .items_center()
                             .gap(px(8.))
-                            .child(
-                                div()
-                                    .text_2xl()
-                                    .child("🎉")
-                            )
+                            .child(div().text_2xl().child("🎉"))
                             .child(
                                 div()
                                     .text_xl()
                                     .font_weight(FontWeight::BOLD)
                                     .text_color(rgb(colors.coral))
-                                    .child("Script Kit")
-                            )
+                                    .child("Script Kit"),
+                            ),
                     )
                     .child(
                         // Item count badge
@@ -369,19 +357,19 @@ impl<App: 'static> DesignRenderer<App> for PlayfulRenderer {
                             .text_sm()
                             .font_weight(FontWeight::BOLD)
                             .text_color(rgb(colors.white))
-                            .child("Ready to play!")
-                    )
+                            .child("Ready to play!"),
+                    ),
             )
             .child(self.render_search_bar("", true))
             .child(
                 div()
                     .flex_1()
                     .overflow_hidden()
-                    .child(self.render_empty_state(""))
+                    .child(self.render_empty_state("")),
             )
             .into_any_element()
     }
-    
+
     fn variant(&self) -> DesignVariant {
         DesignVariant::Playful
     }
@@ -412,11 +400,7 @@ pub fn render_playful_header(title: &str, colors: PlayfulColors) -> impl IntoEle
                 .flex_row()
                 .items_center()
                 .gap(px(8.))
-                .child(
-                    div()
-                        .text_xl()
-                        .child("🎉"),
-                )
+                .child(div().text_xl().child("🎉"))
                 .child(
                     div()
                         .text_lg()
@@ -454,51 +438,43 @@ pub fn render_playful_preview_panel(
         rgb(colors.soft_gray)
     };
 
-    div()
-        .w_full()
-        .h_full()
-        .p(px(16.))
-        .child(
-            div()
-                .w_full()
-                .h_full()
-                .p(px(20.))
-                .bg(rgb(colors.white))
-                .border(px(BORDER_WIDTH))
-                .border_color(rgb(colors.mint))
-                .rounded(px(CARD_RADIUS))
-                .shadow_md()
-                .flex()
-                .flex_col()
-                .child(
-                    div()
-                        .flex()
-                        .flex_row()
-                        .items_center()
-                        .gap(px(8.))
-                        .mb(px(16.))
-                        .child(
-                            div()
-                                .text_lg()
-                                .child(emoji),
-                        )
-                        .child(
-                            div()
-                                .text_sm()
-                                .font_weight(FontWeight::BOLD)
-                                .text_color(rgb(colors.lavender))
-                                .child("Preview"),
-                        ),
-                )
-                .child(
-                    div()
-                        .flex_1()
-                        .text_base()
-                        .text_color(text_color)
-                        .overflow_hidden()
-                        .child(display_content.to_string()),
-                ),
-        )
+    div().w_full().h_full().p(px(16.)).child(
+        div()
+            .w_full()
+            .h_full()
+            .p(px(20.))
+            .bg(rgb(colors.white))
+            .border(px(BORDER_WIDTH))
+            .border_color(rgb(colors.mint))
+            .rounded(px(CARD_RADIUS))
+            .shadow_md()
+            .flex()
+            .flex_col()
+            .child(
+                div()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .gap(px(8.))
+                    .mb(px(16.))
+                    .child(div().text_lg().child(emoji))
+                    .child(
+                        div()
+                            .text_sm()
+                            .font_weight(FontWeight::BOLD)
+                            .text_color(rgb(colors.lavender))
+                            .child("Preview"),
+                    ),
+            )
+            .child(
+                div()
+                    .flex_1()
+                    .text_base()
+                    .text_color(text_color)
+                    .overflow_hidden()
+                    .child(display_content.to_string()),
+            ),
+    )
 }
 
 /// Render playful-styled log panel

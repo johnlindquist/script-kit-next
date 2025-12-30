@@ -207,7 +207,11 @@ impl ToastManager {
 
     /// Dismiss all toasts
     pub fn dismiss_all(&mut self) {
-        let count = self.notifications.iter().filter(|n| !n.is_dismissed).count();
+        let count = self
+            .notifications
+            .iter()
+            .filter(|n| !n.is_dismissed)
+            .count();
 
         for notification in &mut self.notifications {
             notification.dismiss();
@@ -215,10 +219,7 @@ impl ToastManager {
 
         if count > 0 {
             self.needs_notify = true;
-            tracing::debug!(
-                count = count,
-                "All toasts dismissed"
-            );
+            tracing::debug!(count = count, "All toasts dismissed");
         }
     }
 
@@ -241,7 +242,10 @@ impl ToastManager {
 
     /// Get count of visible (non-dismissed) toasts
     pub fn visible_count(&self) -> usize {
-        self.notifications.iter().filter(|n| !n.is_dismissed).count()
+        self.notifications
+            .iter()
+            .filter(|n| !n.is_dismissed)
+            .count()
     }
 
     /// Get total count of all toasts (including dismissed)
@@ -289,10 +293,7 @@ impl ToastManager {
         let cleaned = before_count - self.notifications.len();
 
         if cleaned > 0 {
-            tracing::debug!(
-                count = cleaned,
-                "Cleaned up dismissed toasts"
-            );
+            tracing::debug!(count = cleaned, "Cleaned up dismissed toasts");
         }
 
         cleaned

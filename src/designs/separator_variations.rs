@@ -97,142 +97,134 @@ use super::DesignVariant;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum SeparatorStyle {
     // ── Line-Based (7 styles) ──────────────────────────────────────────────
-    
     /// Solid horizontal line across the full width
     #[default]
     SolidLine,
-    
+
     /// Dotted line pattern: · · · · ·
     DottedLine,
-    
+
     /// Dashed line pattern: ─ ─ ─ ─ ─
     DashedLine,
-    
+
     /// Double parallel lines: ═══════════
     DoubleLine,
-    
+
     /// Ultra-thin 1px line (hairline)
     HairlineSingle,
-    
+
     /// Thick bar (4px height)
     ThickBar,
-    
+
     /// Line that fades at the edges (gradient effect)
     FadeEdges,
 
     // ── Typographic (5 styles) ─────────────────────────────────────────────
-    
     /// ALL CAPS label with lines: ── RECENT ──
     UppercaseLabel,
-    
+
     /// Small caps styled label
     SmallCapsLabel,
-    
+
     /// Italic text style for labels
     ItalicLabel,
-    
+
     /// Bold heavy label with side marks: ▌RECENT▐
     BoldLabel,
-    
+
     /// Label with underline decoration below
     UnderlinedLabel,
 
     // ── Decorative (6 styles) ──────────────────────────────────────────────
-    
     /// Chevron arrows before label: ›› RECENT
     ChevronArrow,
-    
+
     /// Centered dots around label: ••• RECENT •••
     DotsCenter,
-    
+
     /// Diamond shapes at ends: ◆─────◆
     DiamondDivider,
-    
+
     /// Square brackets around label: [ RECENT ]
     BracketWrap,
-    
+
     /// Arrow pointer before label: ▶ RECENT
     ArrowPointer,
-    
+
     /// Star decorations: ★ ─── ★
     StarDivider,
 
     // ── Spacing-Based (4 styles) ───────────────────────────────────────────
-    
     /// Extra large vertical gap (24px)
     LargeGap,
-    
+
     /// Minimal vertical gap (8px)
     TightGap,
-    
+
     /// Label indented from left edge
     IndentedLabel,
-    
+
     /// Label at left with indented content below
     HangingIndent,
 
     // ── Background (4 styles) ──────────────────────────────────────────────
-    
     /// Subtle filled background behind label
     SubtleFill,
-    
+
     /// Gradient background that fades at edges
     GradientFade,
-    
+
     /// Frosted glass panel effect
     FrostedPanel,
-    
+
     /// Rounded pill/badge containing label
     PillBadge,
 
     // ── Minimalist (5 styles) ──────────────────────────────────────────────
-    
     /// No visual separator, only vertical spacing
     Invisible,
-    
+
     /// Single centered dot: •
     SingleDot,
-    
+
     /// Vertical pipe character: │
     PipeChar,
-    
+
     /// Colon prefix: : RECENT
     ColonPrefix,
-    
+
     /// Slash prefix: / RECENT
     SlashPrefix,
 
     // ── Retro (5 styles) ───────────────────────────────────────────────────
-    
     /// ASCII art box: +--[ LABEL ]--+
     AsciiBox,
-    
+
     /// Unicode box drawing: ├── LABEL ──┤
     BoxDrawing,
-    
+
     /// Terminal prompt style: ~/recent $
     TerminalPrompt,
-    
+
     /// DOS-style double lines: ══[ LABEL ]══
     DosStyle,
-    
+
     /// Typewriter double-rule effect
     TypewriterRule,
 
     // ── Modern (5 styles) ──────────────────────────────────────────────────
-    
     /// Animated opacity fade effect
     AnimatedFade,
-    
+
     /// Blur overlay effect description
     BlurOverlay,
-    
+
     /// Neon glow effect around text/lines
     NeonGlow,
-    
+
     /// Glass card with backdrop blur
     GlassCard,
-    
+
     /// Floating label with elevation shadow
     FloatingLabel,
 }
@@ -248,73 +240,69 @@ pub enum SeparatorStyle {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SeparatorConfig {
     // ── Dimensions ─────────────────────────────────────────────────────────
-    
     /// Total height of the separator (including padding)
     pub height: f32,
-    
+
     /// Thickness of line elements (for line-based styles)
     pub line_thickness: f32,
-    
+
     /// Horizontal padding from container edges
     pub padding_x: f32,
-    
+
     /// Vertical padding above the separator
     pub padding_top: f32,
-    
+
     /// Vertical padding below the separator
     pub padding_bottom: f32,
-    
+
     /// Indent from left edge (for indented styles)
     pub indent: f32,
 
     // ── Colors (as 0xRRGGBB hex values) ────────────────────────────────────
-    
     /// Primary color for lines and decorations
     pub color_primary: u32,
-    
+
     /// Secondary/muted color for subtle elements
     pub color_secondary: u32,
-    
+
     /// Background color (for filled styles)
     pub color_background: u32,
-    
+
     /// Text color for labels
     pub color_text: u32,
 
     // ── Typography ─────────────────────────────────────────────────────────
-    
     /// Font size for label text
     pub font_size: f32,
-    
+
     /// Whether label should be uppercase
     pub uppercase: bool,
-    
+
     /// Whether label should be bold
     pub bold: bool,
-    
+
     /// Whether label should be italic
     pub italic: bool,
-    
+
     /// Letter spacing adjustment (0.0 = normal)
     pub letter_spacing: f32,
 
     // ── Visual Effects ─────────────────────────────────────────────────────
-    
     /// Corner radius for rounded elements
     pub border_radius: f32,
-    
+
     /// Opacity (0.0 - 1.0)
     pub opacity: f32,
-    
+
     /// Shadow blur radius (0.0 = no shadow)
     pub shadow_blur: f32,
-    
+
     /// Shadow offset Y
     pub shadow_offset_y: f32,
-    
+
     /// Whether to show decorative elements
     pub show_decorations: bool,
-    
+
     /// Gap between decorations and label
     pub decoration_gap: f32,
 }
@@ -323,7 +311,7 @@ impl Default for SeparatorConfig {
     fn default() -> Self {
         Self {
             // Dimensions
-            height: 24.0,        // Standard section header height
+            height: 24.0, // Standard section header height
             line_thickness: 1.0,
             padding_x: 16.0,
             padding_top: 8.0,
@@ -331,17 +319,17 @@ impl Default for SeparatorConfig {
             indent: 0.0,
 
             // Colors (default dark theme)
-            color_primary: 0x464647,     // Border color
-            color_secondary: 0x3a3a3a,   // Subtle border
-            color_background: 0x2a2a2a,  // Selected bg
-            color_text: 0x808080,        // Muted text
+            color_primary: 0x464647,    // Border color
+            color_secondary: 0x3a3a3a,  // Subtle border
+            color_background: 0x2a2a2a, // Selected bg
+            color_text: 0x808080,       // Muted text
 
             // Typography
             font_size: 11.0,
             uppercase: true,
             bold: false,
             italic: false,
-            letter_spacing: 1.0,         // Slight spacing for caps
+            letter_spacing: 1.0, // Slight spacing for caps
 
             // Visual effects
             border_radius: 0.0,
@@ -478,102 +466,83 @@ impl SeparatorStyle {
     pub fn description(&self) -> &'static str {
         match self {
             // Line-Based
-            SeparatorStyle::SolidLine => 
-                "A clean, solid horizontal line spanning the full width",
-            SeparatorStyle::DottedLine => 
-                "A series of evenly spaced dots forming a horizontal line",
-            SeparatorStyle::DashedLine => 
-                "A line made of short dashes with gaps between them",
-            SeparatorStyle::DoubleLine => 
-                "Two parallel horizontal lines creating a stronger visual break",
-            SeparatorStyle::HairlineSingle => 
-                "An ultra-thin 1-pixel line for subtle separation",
-            SeparatorStyle::ThickBar => 
-                "A bold 4-pixel thick bar for prominent division",
-            SeparatorStyle::FadeEdges => 
-                "A line that gradually fades to transparent at both edges",
-            
+            SeparatorStyle::SolidLine => "A clean, solid horizontal line spanning the full width",
+            SeparatorStyle::DottedLine => {
+                "A series of evenly spaced dots forming a horizontal line"
+            }
+            SeparatorStyle::DashedLine => "A line made of short dashes with gaps between them",
+            SeparatorStyle::DoubleLine => {
+                "Two parallel horizontal lines creating a stronger visual break"
+            }
+            SeparatorStyle::HairlineSingle => "An ultra-thin 1-pixel line for subtle separation",
+            SeparatorStyle::ThickBar => "A bold 4-pixel thick bar for prominent division",
+            SeparatorStyle::FadeEdges => "A line that gradually fades to transparent at both edges",
+
             // Typographic
-            SeparatorStyle::UppercaseLabel => 
-                "ALL CAPS label with horizontal lines extending from both sides",
-            SeparatorStyle::SmallCapsLabel => 
-                "Label styled in small caps with subtle side decorations",
-            SeparatorStyle::ItalicLabel => 
-                "Label rendered in italics with em-dash decorations",
-            SeparatorStyle::BoldLabel => 
-                "Heavy bold label with vertical bar accents",
-            SeparatorStyle::UnderlinedLabel => 
-                "Label with an underline decoration directly beneath the text",
-            
+            SeparatorStyle::UppercaseLabel => {
+                "ALL CAPS label with horizontal lines extending from both sides"
+            }
+            SeparatorStyle::SmallCapsLabel => {
+                "Label styled in small caps with subtle side decorations"
+            }
+            SeparatorStyle::ItalicLabel => "Label rendered in italics with em-dash decorations",
+            SeparatorStyle::BoldLabel => "Heavy bold label with vertical bar accents",
+            SeparatorStyle::UnderlinedLabel => {
+                "Label with an underline decoration directly beneath the text"
+            }
+
             // Decorative
-            SeparatorStyle::ChevronArrow => 
-                "Double chevron arrows pointing right before the label",
-            SeparatorStyle::DotsCenter => 
-                "Label surrounded by bullet point decorations",
-            SeparatorStyle::DiamondDivider => 
-                "Diamond shapes at each end of a horizontal line",
-            SeparatorStyle::BracketWrap => 
-                "Label enclosed in square brackets",
-            SeparatorStyle::ArrowPointer => 
-                "Filled arrow/triangle pointing right before the label",
-            SeparatorStyle::StarDivider => 
-                "Star symbols at each end of the separator line",
-            
+            SeparatorStyle::ChevronArrow => "Double chevron arrows pointing right before the label",
+            SeparatorStyle::DotsCenter => "Label surrounded by bullet point decorations",
+            SeparatorStyle::DiamondDivider => "Diamond shapes at each end of a horizontal line",
+            SeparatorStyle::BracketWrap => "Label enclosed in square brackets",
+            SeparatorStyle::ArrowPointer => "Filled arrow/triangle pointing right before the label",
+            SeparatorStyle::StarDivider => "Star symbols at each end of the separator line",
+
             // Spacing-Based
-            SeparatorStyle::LargeGap => 
-                "Extra vertical whitespace (24px) for strong visual grouping",
-            SeparatorStyle::TightGap => 
-                "Minimal vertical spacing (8px) for compact layouts",
-            SeparatorStyle::IndentedLabel => 
-                "Label offset from the left edge with increased left margin",
-            SeparatorStyle::HangingIndent => 
-                "Label flush left with subsequent content indented below",
-            
+            SeparatorStyle::LargeGap => {
+                "Extra vertical whitespace (24px) for strong visual grouping"
+            }
+            SeparatorStyle::TightGap => "Minimal vertical spacing (8px) for compact layouts",
+            SeparatorStyle::IndentedLabel => {
+                "Label offset from the left edge with increased left margin"
+            }
+            SeparatorStyle::HangingIndent => {
+                "Label flush left with subsequent content indented below"
+            }
+
             // Background
-            SeparatorStyle::SubtleFill => 
-                "Full-width background fill in a muted color behind the label",
-            SeparatorStyle::GradientFade => 
-                "Background that fades from solid center to transparent edges",
-            SeparatorStyle::FrostedPanel => 
-                "Frosted glass effect panel containing the label",
-            SeparatorStyle::PillBadge => 
-                "Label inside a rounded pill/capsule shape",
-            
+            SeparatorStyle::SubtleFill => {
+                "Full-width background fill in a muted color behind the label"
+            }
+            SeparatorStyle::GradientFade => {
+                "Background that fades from solid center to transparent edges"
+            }
+            SeparatorStyle::FrostedPanel => "Frosted glass effect panel containing the label",
+            SeparatorStyle::PillBadge => "Label inside a rounded pill/capsule shape",
+
             // Minimalist
-            SeparatorStyle::Invisible => 
-                "No visible separator, only standard vertical spacing",
-            SeparatorStyle::SingleDot => 
-                "A single centered bullet point as a minimal divider",
-            SeparatorStyle::PipeChar => 
-                "A vertical pipe character as a minimal marker",
-            SeparatorStyle::ColonPrefix => 
-                "A colon before the label for namespace-like appearance",
-            SeparatorStyle::SlashPrefix => 
-                "A forward slash before the label for path-like appearance",
-            
+            SeparatorStyle::Invisible => "No visible separator, only standard vertical spacing",
+            SeparatorStyle::SingleDot => "A single centered bullet point as a minimal divider",
+            SeparatorStyle::PipeChar => "A vertical pipe character as a minimal marker",
+            SeparatorStyle::ColonPrefix => "A colon before the label for namespace-like appearance",
+            SeparatorStyle::SlashPrefix => {
+                "A forward slash before the label for path-like appearance"
+            }
+
             // Retro
-            SeparatorStyle::AsciiBox => 
-                "Classic ASCII art box using + and - characters",
-            SeparatorStyle::BoxDrawing => 
-                "Unicode box drawing characters for a technical look",
-            SeparatorStyle::TerminalPrompt => 
-                "Styled like a terminal/shell prompt: ~/path $",
-            SeparatorStyle::DosStyle => 
-                "Double-line DOS/BIOS style with box characters",
-            SeparatorStyle::TypewriterRule => 
-                "Stacked single and double rules like a typewriter",
-            
+            SeparatorStyle::AsciiBox => "Classic ASCII art box using + and - characters",
+            SeparatorStyle::BoxDrawing => "Unicode box drawing characters for a technical look",
+            SeparatorStyle::TerminalPrompt => "Styled like a terminal/shell prompt: ~/path $",
+            SeparatorStyle::DosStyle => "Double-line DOS/BIOS style with box characters",
+            SeparatorStyle::TypewriterRule => "Stacked single and double rules like a typewriter",
+
             // Modern
-            SeparatorStyle::AnimatedFade => 
-                "Label that fades in with a smooth opacity animation",
-            SeparatorStyle::BlurOverlay => 
-                "Backdrop blur effect behind the separator region",
-            SeparatorStyle::NeonGlow => 
-                "Glowing neon effect around text and lines",
-            SeparatorStyle::GlassCard => 
-                "Glassmorphism card with blur, border, and shadow",
-            SeparatorStyle::FloatingLabel => 
-                "Label elevated with a drop shadow for depth",
+            SeparatorStyle::AnimatedFade => "Label that fades in with a smooth opacity animation",
+            SeparatorStyle::BlurOverlay => "Backdrop blur effect behind the separator region",
+            SeparatorStyle::NeonGlow => "Glowing neon effect around text and lines",
+            SeparatorStyle::GlassCard => "Glassmorphism card with blur, border, and shadow",
+            SeparatorStyle::FloatingLabel => "Label elevated with a drop shadow for depth",
         }
     }
 
@@ -638,34 +607,34 @@ impl SeparatorStyle {
         match self {
             // Line-Based configurations
             SeparatorStyle::SolidLine => base,
-            
+
             SeparatorStyle::DottedLine => SeparatorConfig {
                 line_thickness: 2.0,
                 ..base
             },
-            
+
             SeparatorStyle::DashedLine => SeparatorConfig {
                 line_thickness: 2.0,
                 ..base
             },
-            
+
             SeparatorStyle::DoubleLine => SeparatorConfig {
                 height: 28.0,
                 line_thickness: 1.0,
                 ..base
             },
-            
+
             SeparatorStyle::HairlineSingle => SeparatorConfig {
                 line_thickness: 0.5,
                 opacity: 0.5,
                 ..base
             },
-            
+
             SeparatorStyle::ThickBar => SeparatorConfig {
                 line_thickness: 4.0,
                 ..base
             },
-            
+
             SeparatorStyle::FadeEdges => SeparatorConfig {
                 line_thickness: 2.0,
                 opacity: 0.8,
@@ -679,20 +648,20 @@ impl SeparatorStyle {
                 show_decorations: true,
                 ..base
             },
-            
+
             SeparatorStyle::SmallCapsLabel => SeparatorConfig {
                 uppercase: false,
                 font_size: 10.0,
                 letter_spacing: 0.5,
                 ..base
             },
-            
+
             SeparatorStyle::ItalicLabel => SeparatorConfig {
                 italic: true,
                 uppercase: false,
                 ..base
             },
-            
+
             SeparatorStyle::BoldLabel => SeparatorConfig {
                 bold: true,
                 uppercase: true,
@@ -700,7 +669,7 @@ impl SeparatorStyle {
                 color_text: 0xa0a0a0,
                 ..base
             },
-            
+
             SeparatorStyle::UnderlinedLabel => SeparatorConfig {
                 line_thickness: 1.0,
                 padding_bottom: 6.0,
@@ -713,32 +682,32 @@ impl SeparatorStyle {
                 decoration_gap: 6.0,
                 ..base
             },
-            
+
             SeparatorStyle::DotsCenter => SeparatorConfig {
                 show_decorations: true,
                 decoration_gap: 8.0,
                 ..base
             },
-            
+
             SeparatorStyle::DiamondDivider => SeparatorConfig {
                 show_decorations: true,
                 decoration_gap: 12.0,
                 ..base
             },
-            
+
             SeparatorStyle::BracketWrap => SeparatorConfig {
                 show_decorations: true,
                 decoration_gap: 4.0,
                 ..base
             },
-            
+
             SeparatorStyle::ArrowPointer => SeparatorConfig {
                 show_decorations: true,
                 decoration_gap: 8.0,
                 color_primary: 0xfbbf24, // Accent color
                 ..base
             },
-            
+
             SeparatorStyle::StarDivider => SeparatorConfig {
                 show_decorations: true,
                 decoration_gap: 12.0,
@@ -753,7 +722,7 @@ impl SeparatorStyle {
                 padding_bottom: 8.0,
                 ..base
             },
-            
+
             SeparatorStyle::TightGap => SeparatorConfig {
                 height: 16.0,
                 padding_top: 4.0,
@@ -761,12 +730,12 @@ impl SeparatorStyle {
                 font_size: 10.0,
                 ..base
             },
-            
+
             SeparatorStyle::IndentedLabel => SeparatorConfig {
                 indent: 24.0,
                 ..base
             },
-            
+
             SeparatorStyle::HangingIndent => SeparatorConfig {
                 indent: 0.0,
                 padding_bottom: 2.0,
@@ -780,13 +749,13 @@ impl SeparatorStyle {
                 border_radius: 0.0,
                 ..base
             },
-            
+
             SeparatorStyle::GradientFade => SeparatorConfig {
                 color_background: 0x2a2a2a,
                 opacity: 0.6,
                 ..base
             },
-            
+
             SeparatorStyle::FrostedPanel => SeparatorConfig {
                 color_background: 0x3a3a3a,
                 border_radius: 6.0,
@@ -795,7 +764,7 @@ impl SeparatorStyle {
                 shadow_offset_y: 2.0,
                 ..base
             },
-            
+
             SeparatorStyle::PillBadge => SeparatorConfig {
                 color_background: 0x3a3a3a,
                 border_radius: 12.0,
@@ -811,27 +780,27 @@ impl SeparatorStyle {
                 opacity: 0.0,
                 ..base
             },
-            
+
             SeparatorStyle::SingleDot => SeparatorConfig {
                 show_decorations: true,
                 font_size: 8.0,
                 opacity: 0.5,
                 ..base
             },
-            
+
             SeparatorStyle::PipeChar => SeparatorConfig {
                 show_decorations: true,
                 opacity: 0.4,
                 ..base
             },
-            
+
             SeparatorStyle::ColonPrefix => SeparatorConfig {
                 show_decorations: true,
                 decoration_gap: 4.0,
                 opacity: 0.6,
                 ..base
             },
-            
+
             SeparatorStyle::SlashPrefix => SeparatorConfig {
                 show_decorations: true,
                 decoration_gap: 4.0,
@@ -847,7 +816,7 @@ impl SeparatorStyle {
                 color_primary: 0x00ff00,
                 ..base
             },
-            
+
             SeparatorStyle::BoxDrawing => SeparatorConfig {
                 height: 24.0,
                 font_size: 12.0,
@@ -855,7 +824,7 @@ impl SeparatorStyle {
                 color_primary: 0x808080,
                 ..base
             },
-            
+
             SeparatorStyle::TerminalPrompt => SeparatorConfig {
                 uppercase: false,
                 font_size: 12.0,
@@ -863,7 +832,7 @@ impl SeparatorStyle {
                 color_primary: 0x00aa00,
                 ..base
             },
-            
+
             SeparatorStyle::DosStyle => SeparatorConfig {
                 height: 28.0,
                 font_size: 12.0,
@@ -871,7 +840,7 @@ impl SeparatorStyle {
                 color_primary: 0x555555,
                 ..base
             },
-            
+
             SeparatorStyle::TypewriterRule => SeparatorConfig {
                 height: 32.0,
                 line_thickness: 1.0,
@@ -883,21 +852,21 @@ impl SeparatorStyle {
                 opacity: 0.8,
                 ..base
             },
-            
+
             SeparatorStyle::BlurOverlay => SeparatorConfig {
                 color_background: 0x1e1e1e,
                 opacity: 0.7,
                 border_radius: 4.0,
                 ..base
             },
-            
+
             SeparatorStyle::NeonGlow => SeparatorConfig {
                 color_primary: 0x00ffff, // Cyan glow
                 color_text: 0x00ffff,
                 shadow_blur: 8.0,
                 ..base
             },
-            
+
             SeparatorStyle::GlassCard => SeparatorConfig {
                 color_background: 0x3a3a3a,
                 border_radius: 8.0,
@@ -906,7 +875,7 @@ impl SeparatorStyle {
                 opacity: 0.9,
                 ..base
             },
-            
+
             SeparatorStyle::FloatingLabel => SeparatorConfig {
                 shadow_blur: 6.0,
                 shadow_offset_y: 2.0,
@@ -918,7 +887,7 @@ impl SeparatorStyle {
     }
 
     /// Get the text prefix/decoration for this separator style (if any).
-    /// 
+    ///
     /// Returns an optional tuple of (prefix, suffix) strings.
     pub fn decorations(&self) -> Option<(&'static str, &'static str)> {
         match self {
@@ -940,7 +909,7 @@ impl SeparatorStyle {
     }
 
     /// Check if this separator style is compatible with a given design variant.
-    /// 
+    ///
     /// Some separator styles work better with certain design systems.
     pub fn is_compatible_with(&self, variant: DesignVariant) -> bool {
         match self.category() {
@@ -949,13 +918,12 @@ impl SeparatorStyle {
                 variant,
                 DesignVariant::RetroTerminal | DesignVariant::Default
             ),
-            
+
             // Modern styles work with most modern designs
-            SeparatorCategory::Modern => !matches!(
-                variant,
-                DesignVariant::RetroTerminal | DesignVariant::Paper
-            ),
-            
+            SeparatorCategory::Modern => {
+                !matches!(variant, DesignVariant::RetroTerminal | DesignVariant::Paper)
+            }
+
             // All other categories are universally compatible
             _ => true,
         }
@@ -1145,11 +1113,7 @@ mod tests {
 
         for category in categories {
             let styles = category.styles();
-            assert!(
-                !styles.is_empty(),
-                "Category {:?} has no styles",
-                category
-            );
+            assert!(!styles.is_empty(), "Category {:?} has no styles", category);
         }
     }
 
@@ -1168,8 +1132,11 @@ mod tests {
     #[test]
     fn test_config_defaults_are_reasonable() {
         let config = SeparatorConfig::default();
-        
-        assert_eq!(config.height, 24.0, "Default height should match SECTION_HEADER_HEIGHT");
+
+        assert_eq!(
+            config.height, 24.0,
+            "Default height should match SECTION_HEADER_HEIGHT"
+        );
         assert!(config.line_thickness >= 0.5 && config.line_thickness <= 4.0);
         assert!(config.padding_x > 0.0);
         assert!(config.opacity >= 0.0 && config.opacity <= 1.0);

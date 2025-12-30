@@ -174,16 +174,12 @@ impl AppleHIGRenderer {
 
     /// Render a separator between list items
     fn render_separator(&self) -> Div {
-        div()
-            .w_full()
-            .h(px(1.))
-            .bg(rgb(colors::CARD_BG))
-            .child(
-                div()
-                    .ml(px(SEPARATOR_INSET))
-                    .h(px(1.))
-                    .bg(rgb(colors::SEPARATOR)),
-            )
+        div().w_full().h(px(1.)).bg(rgb(colors::CARD_BG)).child(
+            div()
+                .ml(px(SEPARATOR_INSET))
+                .h(px(1.))
+                .bg(rgb(colors::SEPARATOR)),
+        )
     }
 
     /// Render the iOS-style search bar
@@ -239,17 +235,13 @@ impl AppleHIGRenderer {
 
     /// Render a section header
     fn render_section_header(&self, title: &str) -> Div {
-        div()
-            .w_full()
-            .px(px(32.))
-            .py(px(8.))
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(rgb(colors::TEXT_TERTIARY))
-                    .font_family(".AppleSystemUIFont")
-                    .child(title.to_uppercase()),
-            )
+        div().w_full().px(px(32.)).py(px(8.)).child(
+            div()
+                .text_xs()
+                .text_color(rgb(colors::TEXT_TERTIARY))
+                .font_family(".AppleSystemUIFont")
+                .child(title.to_uppercase()),
+        )
     }
 }
 
@@ -264,7 +256,7 @@ impl<App> DesignRenderer<App> for AppleHIGRenderer {
         // This is a placeholder implementation that demonstrates the design
         // The actual integration with ScriptListApp will happen when the
         // design system is fully wired up
-        
+
         let container = div()
             .w_full()
             .h_full()
@@ -377,93 +369,84 @@ pub fn render_apple_hig_preview_panel(content: Option<&str>) -> impl IntoElement
         rgb(colors::TEXT_TERTIARY)
     };
 
-    div()
-        .w_full()
-        .h_full()
-        .p(px(16.))
-        .child(
-            div()
-                .w_full()
-                .h_full()
-                .p(px(16.))
-                .bg(rgb(colors::CARD_BG))
-                .rounded(px(GROUP_RADIUS))
-                .shadow(vec![BoxShadow {
-                    color: hsla(0., 0., 0., 0.05),
-                    offset: point(px(0.), px(1.)),
-                    blur_radius: px(3.),
-                    spread_radius: px(0.),
-                }])
-                .flex()
-                .flex_col()
-                .font_family(".AppleSystemUIFont")
-                .child(
-                    div()
-                        .text_xs()
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(rgb(colors::TEXT_TERTIARY))
-                        .mb(px(12.))
-                        .child("PREVIEW"),
-                )
-                .child(
-                    div()
-                        .flex_1()
-                        .text_sm()
-                        .text_color(text_color)
-                        .overflow_hidden()
-                        .child(display_content.to_string()),
-                ),
-        )
+    div().w_full().h_full().p(px(16.)).child(
+        div()
+            .w_full()
+            .h_full()
+            .p(px(16.))
+            .bg(rgb(colors::CARD_BG))
+            .rounded(px(GROUP_RADIUS))
+            .shadow(vec![BoxShadow {
+                color: hsla(0., 0., 0., 0.05),
+                offset: point(px(0.), px(1.)),
+                blur_radius: px(3.),
+                spread_radius: px(0.),
+            }])
+            .flex()
+            .flex_col()
+            .font_family(".AppleSystemUIFont")
+            .child(
+                div()
+                    .text_xs()
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(rgb(colors::TEXT_TERTIARY))
+                    .mb(px(12.))
+                    .child("PREVIEW"),
+            )
+            .child(
+                div()
+                    .flex_1()
+                    .text_sm()
+                    .text_color(text_color)
+                    .overflow_hidden()
+                    .child(display_content.to_string()),
+            ),
+    )
 }
 
 /// Render Apple HIG-styled log panel
 ///
 /// iOS-style console with monospace font and grouped appearance.
 pub fn render_apple_hig_log_panel(logs: &[String]) -> impl IntoElement {
-    div()
-        .w_full()
-        .h(px(150.))
-        .px(px(16.))
-        .pb(px(16.))
-        .child(
-            div()
-                .w_full()
-                .h_full()
-                .p(px(12.))
-                .bg(rgb(colors::CARD_BG))
-                .rounded(px(GROUP_RADIUS))
-                .shadow(vec![BoxShadow {
-                    color: hsla(0., 0., 0., 0.05),
-                    offset: point(px(0.), px(1.)),
-                    blur_radius: px(3.),
-                    spread_radius: px(0.),
-                }])
-                .flex()
-                .flex_col()
-                .font_family("SF Mono")
-                .child(
-                    div()
-                        .text_xs()
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(rgb(colors::TEXT_TERTIARY))
-                        .mb(px(8.))
-                        .child("CONSOLE"),
-                )
-                .child(
-                    div()
-                        .flex_1()
-                        .overflow_hidden()
-                        .flex()
-                        .flex_col()
-                        .gap(px(4.))
-                        .children(logs.iter().map(|log| {
-                            div()
-                                .text_xs()
-                                .text_color(rgb(colors::TEXT_SECONDARY))
-                                .child(log.clone())
-                        })),
-                ),
-        )
+    div().w_full().h(px(150.)).px(px(16.)).pb(px(16.)).child(
+        div()
+            .w_full()
+            .h_full()
+            .p(px(12.))
+            .bg(rgb(colors::CARD_BG))
+            .rounded(px(GROUP_RADIUS))
+            .shadow(vec![BoxShadow {
+                color: hsla(0., 0., 0., 0.05),
+                offset: point(px(0.), px(1.)),
+                blur_radius: px(3.),
+                spread_radius: px(0.),
+            }])
+            .flex()
+            .flex_col()
+            .font_family("SF Mono")
+            .child(
+                div()
+                    .text_xs()
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(rgb(colors::TEXT_TERTIARY))
+                    .mb(px(8.))
+                    .child("CONSOLE"),
+            )
+            .child(
+                div()
+                    .flex_1()
+                    .overflow_hidden()
+                    .flex()
+                    .flex_col()
+                    .gap(px(4.))
+                    .children(logs.iter().map(|log| {
+                        div()
+                            .text_xs()
+                            .text_color(rgb(colors::TEXT_SECONDARY))
+                            .child(log.clone())
+                    })),
+            ),
+    )
 }
 
 /// Render Apple HIG-styled window container

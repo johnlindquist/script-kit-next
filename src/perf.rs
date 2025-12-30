@@ -126,7 +126,8 @@ impl KeyEventTracker {
 
     /// Time since last event in milliseconds (for detecting bursts)
     pub fn time_since_last_event_ms(&self) -> Option<f64> {
-        self.last_event.map(|last| last.elapsed().as_secs_f64() * 1000.0)
+        self.last_event
+            .map(|last| last.elapsed().as_secs_f64() * 1000.0)
     }
 
     /// Log current statistics

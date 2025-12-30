@@ -82,9 +82,9 @@ fn category_to_code(category: &str) -> char {
         "SCRIPT" => 'B', // B for Bun/script
         "CONFIG" => 'N', // N for coNfig
         "RESIZE" => 'Z',
-        "TRAY" => 'H', // Tray is part of Hotkey subsystem
+        "TRAY" => 'H',   // Tray is part of Hotkey subsystem
         "DESIGN" => 'D', // Design system
-        _ => '-', // Unknown category
+        _ => '-',        // Unknown category
     }
 }
 
@@ -496,14 +496,12 @@ pub fn log_debug(_category: &str, _message: &str) {
 // =============================================================================
 
 /// Log a script execution event with structured fields
-pub fn log_script_event(
-    script_id: &str,
-    action: &str,
-    duration_ms: Option<u64>,
-    success: bool,
-) {
-    add_to_buffer("SCRIPT", &format!("{} {} (success={})", action, script_id, success));
-    
+pub fn log_script_event(script_id: &str, action: &str, duration_ms: Option<u64>, success: bool) {
+    add_to_buffer(
+        "SCRIPT",
+        &format!("{} {} (success={})", action, script_id, success),
+    );
+
     match duration_ms {
         Some(duration) => {
             tracing::info!(
@@ -512,7 +510,9 @@ pub fn log_script_event(
                 action = action,
                 duration_ms = duration,
                 success = success,
-                "Script {} {}", action, script_id
+                "Script {} {}",
+                action,
+                script_id
             );
         }
         None => {
@@ -521,7 +521,9 @@ pub fn log_script_event(
                 script_id = script_id,
                 action = action,
                 success = success,
-                "Script {} {}", action, script_id
+                "Script {} {}",
+                action,
+                script_id
             );
         }
     }
@@ -540,7 +542,8 @@ pub fn log_ui_event(component: &str, action: &str, details: Option<&str>) {
         component = component,
         action = action,
         details = details,
-        "{}", msg
+        "{}",
+        msg
     );
 }
 
@@ -553,7 +556,9 @@ pub fn log_key_event(key: &str, modifiers: &str, action: &str) {
         key = key,
         modifiers = modifiers,
         action = action,
-        "Key {} {}", action, key
+        "Key {} {}",
+        action,
+        key
     );
 }
 
@@ -562,7 +567,10 @@ pub fn log_perf(operation: &str, duration_ms: u64, threshold_ms: u64) {
     let is_slow = duration_ms > threshold_ms;
     let level_marker = if is_slow { "SLOW" } else { "OK" };
 
-    add_to_buffer("PERF", &format!("{} {}ms [{}]", operation, duration_ms, level_marker));
+    add_to_buffer(
+        "PERF",
+        &format!("{} {}ms [{}]", operation, duration_ms, level_marker),
+    );
 
     if is_slow {
         tracing::warn!(
@@ -571,7 +579,10 @@ pub fn log_perf(operation: &str, duration_ms: u64, threshold_ms: u64) {
             duration_ms = duration_ms,
             threshold_ms = threshold_ms,
             is_slow = true,
-            "Slow operation: {} took {}ms (threshold: {}ms)", operation, duration_ms, threshold_ms
+            "Slow operation: {} took {}ms (threshold: {}ms)",
+            operation,
+            duration_ms,
+            threshold_ms
         );
     } else {
         tracing::debug!(
@@ -580,7 +591,9 @@ pub fn log_perf(operation: &str, duration_ms: u64, threshold_ms: u64) {
             duration_ms = duration_ms,
             threshold_ms = threshold_ms,
             is_slow = false,
-            "Operation {} completed in {}ms", operation, duration_ms
+            "Operation {} completed in {}ms",
+            operation,
+            duration_ms
         );
     }
 }
@@ -598,7 +611,8 @@ pub fn log_error(category: &str, error: &str, context: Option<&str>) {
         category = category,
         error_message = error,
         context = context,
-        "{}", msg
+        "{}",
+        msg
     );
 }
 
@@ -611,37 +625,48 @@ pub fn log_error(category: &str, error: &str, context: Option<&str>) {
 /// Log mouse enter event on a list item
 pub fn log_mouse_enter(item_index: usize, item_id: Option<&str>) {
     let id_info = item_id.unwrap_or("none");
-    add_to_buffer("MOUSE_HOVER", &format!("ENTER item_index={} id={}", item_index, id_info));
+    add_to_buffer(
+        "MOUSE_HOVER",
+        &format!("ENTER item_index={} id={}", item_index, id_info),
+    );
 
     tracing::debug!(
         event_type = "mouse_hover",
         action = "enter",
         item_index = item_index,
         item_id = id_info,
-        "Mouse enter item {}", item_index
+        "Mouse enter item {}",
+        item_index
     );
 }
 
 /// Log mouse leave event on a list item
 pub fn log_mouse_leave(item_index: usize, item_id: Option<&str>) {
     let id_info = item_id.unwrap_or("none");
-    add_to_buffer("MOUSE_HOVER", &format!("LEAVE item_index={} id={}", item_index, id_info));
+    add_to_buffer(
+        "MOUSE_HOVER",
+        &format!("LEAVE item_index={} id={}", item_index, id_info),
+    );
 
     tracing::debug!(
         event_type = "mouse_hover",
         action = "leave",
         item_index = item_index,
         item_id = id_info,
-        "Mouse leave item {}", item_index
+        "Mouse leave item {}",
+        item_index
     );
 }
 
 /// Log mouse hover state change (for tracking focus/highlight transitions)
 pub fn log_mouse_hover_state(item_index: usize, is_hovered: bool, is_focused: bool) {
-    add_to_buffer("MOUSE_HOVER", &format!(
-        "STATE item_index={} hovered={} focused={}",
-        item_index, is_hovered, is_focused
-    ));
+    add_to_buffer(
+        "MOUSE_HOVER",
+        &format!(
+            "STATE item_index={} hovered={} focused={}",
+            item_index, is_hovered, is_focused
+        ),
+    );
 
     tracing::debug!(
         event_type = "mouse_hover",
@@ -649,7 +674,10 @@ pub fn log_mouse_hover_state(item_index: usize, is_hovered: bool, is_focused: bo
         item_index = item_index,
         is_hovered = is_hovered,
         is_focused = is_focused,
-        "Hover state: item {} hovered={} focused={}", item_index, is_hovered, is_focused
+        "Hover state: item {} hovered={} focused={}",
+        item_index,
+        is_hovered,
+        is_focused
     );
 }
 
@@ -661,10 +689,13 @@ pub fn log_mouse_hover_state(item_index: usize, is_hovered: bool, is_focused: bo
 
 /// Log scroll position change
 pub fn log_scroll_position(scroll_top: f32, visible_start: usize, visible_end: usize) {
-    add_to_buffer("SCROLL_STATE", &format!(
-        "POSITION scroll_top={:.2} visible_range={}..{}",
-        scroll_top, visible_start, visible_end
-    ));
+    add_to_buffer(
+        "SCROLL_STATE",
+        &format!(
+            "POSITION scroll_top={:.2} visible_range={}..{}",
+            scroll_top, visible_start, visible_end
+        ),
+    );
 
     tracing::debug!(
         event_type = "scroll_state",
@@ -672,32 +703,40 @@ pub fn log_scroll_position(scroll_top: f32, visible_start: usize, visible_end: u
         scroll_top = scroll_top,
         visible_start = visible_start,
         visible_end = visible_end,
-        "Scroll position: {:.2} (visible {}..{})", scroll_top, visible_start, visible_end
+        "Scroll position: {:.2} (visible {}..{})",
+        scroll_top,
+        visible_start,
+        visible_end
     );
 }
 
 /// Log scroll_to_item call
 pub fn log_scroll_to_item(target_index: usize, reason: &str) {
-    add_to_buffer("SCROLL_STATE", &format!(
-        "SCROLL_TO_ITEM target={} reason={}",
-        target_index, reason
-    ));
+    add_to_buffer(
+        "SCROLL_STATE",
+        &format!("SCROLL_TO_ITEM target={} reason={}", target_index, reason),
+    );
 
     tracing::debug!(
         event_type = "scroll_state",
         action = "scroll_to_item",
         target_index = target_index,
         reason = reason,
-        "Scroll to item {} (reason: {})", target_index, reason
+        "Scroll to item {} (reason: {})",
+        target_index,
+        reason
     );
 }
 
 /// Log scroll bounds/viewport info
 pub fn log_scroll_bounds(viewport_height: f32, content_height: f32, item_count: usize) {
-    add_to_buffer("SCROLL_STATE", &format!(
-        "BOUNDS viewport={:.2} content={:.2} items={}",
-        viewport_height, content_height, item_count
-    ));
+    add_to_buffer(
+        "SCROLL_STATE",
+        &format!(
+            "BOUNDS viewport={:.2} content={:.2} items={}",
+            viewport_height, content_height, item_count
+        ),
+    );
 
     tracing::debug!(
         event_type = "scroll_state",
@@ -705,16 +744,19 @@ pub fn log_scroll_bounds(viewport_height: f32, content_height: f32, item_count: 
         viewport_height = viewport_height,
         content_height = content_height,
         item_count = item_count,
-        "Scroll bounds: viewport={:.2} content={:.2} items={}", viewport_height, content_height, item_count
+        "Scroll bounds: viewport={:.2} content={:.2} items={}",
+        viewport_height,
+        content_height,
+        item_count
     );
 }
 
 /// Log scroll adjustment (when scroll position is programmatically corrected)
 pub fn log_scroll_adjustment(from: f32, to: f32, reason: &str) {
-    add_to_buffer("SCROLL_STATE", &format!(
-        "ADJUSTMENT from={:.2} to={:.2} reason={}",
-        from, to, reason
-    ));
+    add_to_buffer(
+        "SCROLL_STATE",
+        &format!("ADJUSTMENT from={:.2} to={:.2} reason={}", from, to, reason),
+    );
 
     tracing::debug!(
         event_type = "scroll_state",
@@ -722,7 +764,10 @@ pub fn log_scroll_adjustment(from: f32, to: f32, reason: &str) {
         from = from,
         to = to,
         reason = reason,
-        "Scroll adjustment: {:.2} -> {:.2} ({})", from, to, reason
+        "Scroll adjustment: {:.2} -> {:.2} ({})",
+        from,
+        to,
+        reason
     );
 }
 
@@ -747,7 +792,8 @@ pub fn log_scroll_perf_start(operation: &str) -> u128 {
             action = "start",
             operation = operation,
             start_micros = start,
-            "Scroll perf start: {}", operation
+            "Scroll perf start: {}",
+            operation
         );
     }
 
@@ -764,13 +810,18 @@ pub fn log_scroll_perf_end(operation: &str, start_micros: u128) {
 
     #[cfg(debug_assertions)]
     {
-        add_to_buffer("SCROLL_PERF", &format!("END {} duration_us={}", operation, duration));
+        add_to_buffer(
+            "SCROLL_PERF",
+            &format!("END {} duration_us={}", operation, duration),
+        );
         tracing::trace!(
             event_type = "scroll_perf",
             action = "end",
             operation = operation,
             duration_us = duration,
-            "Scroll perf end: {} ({}us)", operation, duration
+            "Scroll perf end: {} ({}us)",
+            operation,
+            duration
         );
     }
 
@@ -787,10 +838,13 @@ pub fn log_scroll_frame(frame_time_ms: f32, expected_frame_ms: f32) {
     #[cfg(debug_assertions)]
     {
         let marker = if is_slow { " [SLOW]" } else { "" };
-        add_to_buffer("SCROLL_PERF", &format!(
-            "FRAME time={:.2}ms expected={:.2}ms{}",
-            frame_time_ms, expected_frame_ms, marker
-        ));
+        add_to_buffer(
+            "SCROLL_PERF",
+            &format!(
+                "FRAME time={:.2}ms expected={:.2}ms{}",
+                frame_time_ms, expected_frame_ms, marker
+            ),
+        );
 
         if is_slow {
             tracing::warn!(
@@ -799,7 +853,9 @@ pub fn log_scroll_frame(frame_time_ms: f32, expected_frame_ms: f32) {
                 frame_time_ms = frame_time_ms,
                 expected_frame_ms = expected_frame_ms,
                 is_slow = true,
-                "Slow frame: {:.2}ms (expected {:.2}ms)", frame_time_ms, expected_frame_ms
+                "Slow frame: {:.2}ms (expected {:.2}ms)",
+                frame_time_ms,
+                expected_frame_ms
             );
         } else {
             tracing::trace!(
@@ -808,7 +864,8 @@ pub fn log_scroll_frame(frame_time_ms: f32, expected_frame_ms: f32) {
                 frame_time_ms = frame_time_ms,
                 expected_frame_ms = expected_frame_ms,
                 is_slow = false,
-                "Frame: {:.2}ms", frame_time_ms
+                "Frame: {:.2}ms",
+                frame_time_ms
             );
         }
     }
@@ -826,7 +883,10 @@ pub fn log_scroll_event_rate(events_per_second: f32) {
     #[cfg(debug_assertions)]
     {
         let marker = if is_rapid { " [RAPID]" } else { "" };
-        add_to_buffer("SCROLL_PERF", &format!("EVENT_RATE eps={:.1}{}", events_per_second, marker));
+        add_to_buffer(
+            "SCROLL_PERF",
+            &format!("EVENT_RATE eps={:.1}{}", events_per_second, marker),
+        );
 
         if is_rapid {
             tracing::debug!(
@@ -834,7 +894,8 @@ pub fn log_scroll_event_rate(events_per_second: f32) {
                 action = "event_rate",
                 events_per_second = events_per_second,
                 is_rapid = true,
-                "Rapid scroll events: {:.1}/s", events_per_second
+                "Rapid scroll events: {:.1}/s",
+                events_per_second
             );
         }
     }
@@ -865,7 +926,10 @@ pub fn log_key_event_rate(events_per_sec: f64) {
         } else {
             ""
         };
-        add_to_buffer("SCROLL_PERF", &format!("KEY_EVENT_RATE eps={:.1}{}", events_per_sec, marker));
+        add_to_buffer(
+            "SCROLL_PERF",
+            &format!("KEY_EVENT_RATE eps={:.1}{}", events_per_sec, marker),
+        );
 
         tracing::debug!(
             event_type = "scroll_perf",
@@ -873,7 +937,8 @@ pub fn log_key_event_rate(events_per_sec: f64) {
             events_per_sec = events_per_sec,
             is_fast = is_fast,
             is_very_fast = is_very_fast,
-            "Key event rate: {:.1}/s", events_per_sec
+            "Key event rate: {:.1}/s",
+            events_per_sec
         );
     }
 
@@ -897,7 +962,10 @@ pub fn log_frame_gap(gap_ms: u64) {
         } else {
             ""
         };
-        add_to_buffer("SCROLL_PERF", &format!("FRAME_GAP gap_ms={}{}", gap_ms, marker));
+        add_to_buffer(
+            "SCROLL_PERF",
+            &format!("FRAME_GAP gap_ms={}{}", gap_ms, marker),
+        );
 
         if is_severe {
             tracing::warn!(
@@ -905,7 +973,8 @@ pub fn log_frame_gap(gap_ms: u64) {
                 action = "frame_gap",
                 gap_ms = gap_ms,
                 is_severe = true,
-                "Severe frame gap: {}ms", gap_ms
+                "Severe frame gap: {}ms",
+                gap_ms
             );
         } else if is_significant {
             tracing::debug!(
@@ -913,7 +982,8 @@ pub fn log_frame_gap(gap_ms: u64) {
                 action = "frame_gap",
                 gap_ms = gap_ms,
                 is_significant = true,
-                "Frame gap: {}ms", gap_ms
+                "Frame gap: {}ms",
+                gap_ms
             );
         }
     }
@@ -938,7 +1008,10 @@ pub fn log_scroll_queue_depth(depth: usize) {
         } else {
             ""
         };
-        add_to_buffer("SCROLL_PERF", &format!("QUEUE_DEPTH depth={}{}", depth, marker));
+        add_to_buffer(
+            "SCROLL_PERF",
+            &format!("QUEUE_DEPTH depth={}{}", depth, marker),
+        );
 
         if is_critical {
             tracing::warn!(
@@ -946,7 +1019,8 @@ pub fn log_scroll_queue_depth(depth: usize) {
                 action = "queue_depth",
                 depth = depth,
                 is_critical = true,
-                "Critical queue depth: {}", depth
+                "Critical queue depth: {}",
+                depth
             );
         } else if is_backed_up {
             tracing::debug!(
@@ -954,7 +1028,8 @@ pub fn log_scroll_queue_depth(depth: usize) {
                 action = "queue_depth",
                 depth = depth,
                 is_backed_up = true,
-                "Queue backed up: {}", depth
+                "Queue backed up: {}",
+                depth
             );
         }
     }
@@ -977,7 +1052,10 @@ pub fn log_render_stall(duration_ms: u64) {
     } else {
         ""
     };
-    add_to_buffer("SCROLL_PERF", &format!("RENDER_STALL duration_ms={}{}", duration_ms, marker));
+    add_to_buffer(
+        "SCROLL_PERF",
+        &format!("RENDER_STALL duration_ms={}{}", duration_ms, marker),
+    );
 
     if is_hang {
         tracing::error!(
@@ -985,7 +1063,8 @@ pub fn log_render_stall(duration_ms: u64) {
             action = "render_stall",
             duration_ms = duration_ms,
             is_hang = true,
-            "Render hang: {}ms", duration_ms
+            "Render hang: {}ms",
+            duration_ms
         );
     } else if is_stall {
         tracing::warn!(
@@ -993,7 +1072,8 @@ pub fn log_render_stall(duration_ms: u64) {
             action = "render_stall",
             duration_ms = duration_ms,
             is_stall = true,
-            "Render stall: {}ms", duration_ms
+            "Render stall: {}ms",
+            duration_ms
         );
     }
 }
@@ -1003,17 +1083,22 @@ pub fn log_scroll_batch(batch_size: usize, coalesced_from: usize) {
     if coalesced_from > batch_size {
         #[cfg(debug_assertions)]
         {
-            add_to_buffer("SCROLL_PERF", &format!(
-                "BATCH_COALESCE processed={} from={}",
-                batch_size, coalesced_from
-            ));
+            add_to_buffer(
+                "SCROLL_PERF",
+                &format!(
+                    "BATCH_COALESCE processed={} from={}",
+                    batch_size, coalesced_from
+                ),
+            );
 
             tracing::debug!(
                 event_type = "scroll_perf",
                 action = "batch_coalesce",
                 batch_size = batch_size,
                 coalesced_from = coalesced_from,
-                "Coalesced {} scroll events to {}", coalesced_from, batch_size
+                "Coalesced {} scroll events to {}",
+                coalesced_from,
+                batch_size
             );
         }
 
@@ -1031,10 +1116,13 @@ pub fn log_key_repeat_timing(key: &str, interval_ms: u64, repeat_count: u32) {
     #[cfg(debug_assertions)]
     {
         let marker = if is_fast { " [FAST_REPEAT]" } else { "" };
-        add_to_buffer("SCROLL_PERF", &format!(
-            "KEY_REPEAT key={} interval_ms={} count={}{}",
-            key, interval_ms, repeat_count, marker
-        ));
+        add_to_buffer(
+            "SCROLL_PERF",
+            &format!(
+                "KEY_REPEAT key={} interval_ms={} count={}{}",
+                key, interval_ms, repeat_count, marker
+            ),
+        );
 
         tracing::debug!(
             event_type = "scroll_perf",
@@ -1043,7 +1131,10 @@ pub fn log_key_repeat_timing(key: &str, interval_ms: u64, repeat_count: u32) {
             interval_ms = interval_ms,
             repeat_count = repeat_count,
             is_fast = is_fast,
-            "Key repeat: {} interval={}ms count={}", key, interval_ms, repeat_count
+            "Key repeat: {} interval={}ms count={}",
+            key,
+            interval_ms,
+            repeat_count
         );
     }
 

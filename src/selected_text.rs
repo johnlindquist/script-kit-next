@@ -206,7 +206,10 @@ fn set_via_clipboard_fallback(text: &str) -> Result<()> {
 
     // Save original clipboard contents
     let original = clipboard.get_text().ok();
-    debug!(had_original = original.is_some(), "Saved original clipboard");
+    debug!(
+        had_original = original.is_some(),
+        "Saved original clipboard"
+    );
 
     // Set new text to clipboard
     clipboard

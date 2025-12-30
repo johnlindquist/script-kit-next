@@ -96,9 +96,9 @@ impl ScrollbarColors {
 impl Default for ScrollbarColors {
     fn default() -> Self {
         Self {
-            track: 0x464647,       // Default border color
+            track: 0x464647, // Default border color
             track_opacity: 0.1,
-            thumb: 0x808080,       // Default muted color
+            thumb: 0x808080, // Default muted color
             thumb_opacity: 0.4,
             thumb_hover: 0xcccccc, // Default secondary color
             thumb_hover_opacity: 0.6,
@@ -185,7 +185,7 @@ impl Scrollbar {
     ///
     /// - `true`: Show scrollbar at full opacity (during scroll activity)
     /// - `false`: Hide scrollbar (0 opacity, after scroll fade-out)
-    /// 
+    ///
     /// If not called, the scrollbar uses default behavior (always visible when content overflows)
     pub fn visible(mut self, is_visible: bool) -> Self {
         self.is_visible = Some(is_visible);
@@ -307,13 +307,10 @@ impl RenderOnce for Scrollbar {
                         .min_h(px(MIN_THUMB_HEIGHT))
                         .flex_basis(relative(thumb_flex))
                         .rounded(px(SCROLLBAR_WIDTH / 2.0))
-                        .bg(rgba(
-                            (colors.thumb << 8) | ((thumb_opacity * 255.0) as u32),
-                        ))
+                        .bg(rgba((colors.thumb << 8) | ((thumb_opacity * 255.0) as u32)))
                         .hover(move |s| {
                             s.bg(rgba(
-                                (colors.thumb_hover << 8)
-                                    | ((thumb_hover_opacity * 255.0) as u32),
+                                (colors.thumb_hover << 8) | ((thumb_hover_opacity * 255.0) as u32),
                             ))
                         }),
                 )

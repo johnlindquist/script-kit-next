@@ -73,21 +73,26 @@ fn extract_labels(html: &str) -> HashMap<String, String> {
     let mut labels = HashMap::new();
 
     // Labels with `for` attribute
-    let label_regex = Regex::new(r#"<label\s+[^>]*for\s*=\s*["']([^"']+)["'][^>]*>([^<]*)</label>"#)
-        .unwrap();
+    let label_regex =
+        Regex::new(r#"<label\s+[^>]*for\s*=\s*["']([^"']+)["'][^>]*>([^<]*)</label>"#).unwrap();
     for cap in label_regex.captures_iter(html) {
         if let (Some(for_attr), Some(text)) = (cap.get(1), cap.get(2)) {
-            labels.insert(for_attr.as_str().to_string(), text.as_str().trim().to_string());
+            labels.insert(
+                for_attr.as_str().to_string(),
+                text.as_str().trim().to_string(),
+            );
         }
     }
 
     // Also check for simpler labels without other attributes
-    let simple_label_regex = Regex::new(r#"<label\s+for\s*=\s*["']([^"']+)["']\s*>([^<]*)</label>"#)
-        .unwrap();
+    let simple_label_regex =
+        Regex::new(r#"<label\s+for\s*=\s*["']([^"']+)["']\s*>([^<]*)</label>"#).unwrap();
     for cap in simple_label_regex.captures_iter(html) {
         if let (Some(for_attr), Some(text)) = (cap.get(1), cap.get(2)) {
             let key = for_attr.as_str().to_string();
-            labels.entry(key).or_insert_with(|| text.as_str().trim().to_string());
+            labels
+                .entry(key)
+                .or_insert_with(|| text.as_str().trim().to_string());
         }
     }
 
@@ -115,9 +120,15 @@ fn parse_attributes(attrs_str: &str) -> HashMap<String, String> {
 }
 
 /// Convert input element attributes to a Field.
-fn input_to_field(attrs: &HashMap<String, String>, labels: &HashMap<String, String>) -> Option<Field> {
+fn input_to_field(
+    attrs: &HashMap<String, String>,
+    labels: &HashMap<String, String>,
+) -> Option<Field> {
     let name = attrs.get("name")?.clone();
-    let field_type = attrs.get("type").cloned().unwrap_or_else(|| "text".to_string());
+    let field_type = attrs
+        .get("type")
+        .cloned()
+        .unwrap_or_else(|| "text".to_string());
 
     // Skip hidden inputs and submit buttons
     if field_type == "hidden" || field_type == "submit" || field_type == "button" {
@@ -188,7 +199,10 @@ fn textarea_to_field(
 }
 
 /// Convert select element to a Field.
-fn select_to_field(attrs: &HashMap<String, String>, labels: &HashMap<String, String>) -> Option<Field> {
+fn select_to_field(
+    attrs: &HashMap<String, String>,
+    labels: &HashMap<String, String>,
+) -> Option<Field> {
     let name = attrs.get("name")?.clone();
 
     let mut field = Field::new(name.clone());
@@ -281,13 +295,17 @@ mod tests {
 
     #[test]
     fn test_parse_textarea() {
-        let html = r#"<textarea name="bio" placeholder="Tell us about yourself">Hello world</textarea>"#;
+        let html =
+            r#"<textarea name="bio" placeholder="Tell us about yourself">Hello world</textarea>"#;
         let fields = parse_form_html(html);
 
         assert_eq!(fields.len(), 1);
         assert_eq!(fields[0].name, "bio");
         assert_eq!(fields[0].field_type, Some("textarea".to_string()));
-        assert_eq!(fields[0].placeholder, Some("Tell us about yourself".to_string()));
+        assert_eq!(
+            fields[0].placeholder,
+            Some("Tell us about yourself".to_string())
+        );
         assert_eq!(fields[0].value, Some("Hello world".to_string()));
     }
 

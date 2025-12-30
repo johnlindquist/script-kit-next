@@ -623,17 +623,11 @@ mod tests {
         let adapter = ThemeAdapter::from_theme(&theme);
 
         // Green should be mapped from success color
-        assert_eq!(
-            adapter.ansi_color(2),
-            hex_to_rgb(theme.colors.ui.success)
-        );
+        assert_eq!(adapter.ansi_color(2), hex_to_rgb(theme.colors.ui.success));
         // Red should be mapped from error color
         assert_eq!(adapter.ansi_color(1), hex_to_rgb(theme.colors.ui.error));
         // Yellow should be mapped from warning color
-        assert_eq!(
-            adapter.ansi_color(3),
-            hex_to_rgb(theme.colors.ui.warning)
-        );
+        assert_eq!(adapter.ansi_color(3), hex_to_rgb(theme.colors.ui.warning));
         // Blue should be mapped from info color
         assert_eq!(adapter.ansi_color(4), hex_to_rgb(theme.colors.ui.info));
     }
@@ -736,7 +730,11 @@ mod tests {
 
     #[test]
     fn test_dim_color_no_change() {
-        let color = Rgb { r: 100, g: 150, b: 200 };
+        let color = Rgb {
+            r: 100,
+            g: 150,
+            b: 200,
+        };
         let dimmed = dim_color(color, 1.0);
         // Should be unchanged
         assert_eq!(dimmed.r, 100);

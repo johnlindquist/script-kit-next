@@ -6,7 +6,7 @@ use tracing::{error, warn};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ErrorSeverity {
     Info,     // Blue - informational
-    Warning,  // Yellow - recoverable  
+    Warning,  // Yellow - recoverable
     Error,    // Red - operation failed
     Critical, // Red + modal - requires user action
 }
@@ -16,23 +16,30 @@ pub enum ErrorSeverity {
 #[derive(Error, Debug)]
 pub enum ScriptKitError {
     #[error("Script execution failed: {message}")]
-    ScriptExecution { message: String, script_path: Option<String> },
-    
+    ScriptExecution {
+        message: String,
+        script_path: Option<String>,
+    },
+
     #[error("Failed to parse protocol message: {0}")]
     ProtocolParse(#[from] serde_json::Error),
-    
+
     #[error("Theme loading failed for '{path}': {source}")]
-    ThemeLoad { path: String, #[source] source: std::io::Error },
-    
+    ThemeLoad {
+        path: String,
+        #[source]
+        source: std::io::Error,
+    },
+
     #[error("Configuration error: {0}")]
     Config(String),
-    
+
     #[error("Process spawn failed: {0}")]
     ProcessSpawn(String),
-    
+
     #[error("File watch error: {0}")]
     FileWatch(String),
-    
+
     #[error("Window operation failed: {0}")]
     Window(String),
 }
@@ -50,7 +57,7 @@ impl ScriptKitError {
             Self::Window(_) => ErrorSeverity::Error,
         }
     }
-    
+
     pub fn user_message(&self) -> String {
         match self {
             Self::ScriptExecution { message, .. } => message.clone(),
@@ -84,7 +91,7 @@ impl<T, E: std::fmt::Debug> NotifyResultExt<T> for std::result::Result<T, E> {
             }
         }
     }
-    
+
     fn warn_on_err(self) -> Option<T> {
         match self {
             Ok(v) => Some(v),

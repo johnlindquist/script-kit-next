@@ -116,11 +116,7 @@ impl Default for MinimalRenderer {
 }
 
 impl<App: 'static> DesignRenderer<App> for MinimalRenderer {
-    fn render_script_list(
-        &self,
-        _app: &App,
-        _cx: &mut Context<App>,
-    ) -> AnyElement {
+    fn render_script_list(&self, _app: &App, _cx: &mut Context<App>) -> AnyElement {
         // This is a placeholder implementation
         // The actual rendering is done via render_minimal_list() helper
         // which should be called from ScriptListApp with the actual data
@@ -171,10 +167,7 @@ pub fn render_minimal_search_bar(
             .bg(rgb(colors.accent_selected))
             .ml(px(2.))
     } else {
-        div()
-            .w(px(2.))
-            .h(px(20.))
-            .ml(px(2.))
+        div().w(px(2.)).h(px(20.)).ml(px(2.))
     };
 
     div()
@@ -190,16 +183,13 @@ pub fn render_minimal_search_bar(
                 .font_weight(FontWeight::THIN)
                 .font_family(".AppleSystemUIFont")
                 .text_color(text_color)
-                .child(display_text.to_string())
+                .child(display_text.to_string()),
         )
         .child(cursor)
 }
 
 /// Render the empty state for minimal design
-pub fn render_minimal_empty_state(
-    filter_text: &str,
-    colors: MinimalColors,
-) -> impl IntoElement {
+pub fn render_minimal_empty_state(filter_text: &str, colors: MinimalColors) -> impl IntoElement {
     let message = if filter_text.is_empty() {
         "No scripts found"
     } else {
@@ -239,12 +229,10 @@ pub fn render_minimal_list(
         .bg(rgb(colors.background))
         .flex()
         .flex_col()
-        .children(
-            results.iter().enumerate().map(|(index, result)| {
-                let is_selected = index == selected_index;
-                renderer.render_item(result, index, is_selected, colors)
-            })
-        )
+        .children(results.iter().enumerate().map(|(index, result)| {
+            let is_selected = index == selected_index;
+            renderer.render_item(result, index, is_selected, colors)
+        }))
 }
 
 /// Get minimal design constants for external use
@@ -269,7 +257,7 @@ impl MinimalConstants {
 // ============================================================================
 
 /// Window container styling configuration for Minimal design
-/// 
+///
 /// Returns the styling parameters that should be applied to the window container.
 /// Minimal design uses maximum whitespace with no borders or decorations.
 #[derive(Debug, Clone, Copy)]
@@ -302,7 +290,7 @@ impl Default for MinimalWindowConfig {
 }
 
 /// Get the minimal window container configuration
-/// 
+///
 /// Returns a struct with styling parameters for the window container.
 /// Use this to configure the main window wrapper in Minimal design.
 pub fn render_minimal_window_container() -> MinimalWindowConfig {
@@ -310,10 +298,10 @@ pub fn render_minimal_window_container() -> MinimalWindowConfig {
 }
 
 /// Render the minimal header/search bar
-/// 
+///
 /// This is an alias for `render_minimal_search_bar` for API consistency
 /// with other design variants that use a "header" concept.
-/// 
+///
 /// Minimal design shows just the typed text with a blinking cursor,
 /// no box or border - pure minimal aesthetic.
 pub fn render_minimal_header(
@@ -325,17 +313,14 @@ pub fn render_minimal_header(
 }
 
 /// Render the minimal preview panel
-/// 
+///
 /// Displays content in a clean, minimal style with:
 /// - Maximum whitespace (80px horizontal padding)
 /// - NO borders
 /// - Thin typography
 /// - Subtle text colors
 /// - Content only, no decorative elements
-pub fn render_minimal_preview_panel(
-    content: &str,
-    colors: MinimalColors,
-) -> impl IntoElement {
+pub fn render_minimal_preview_panel(content: &str, colors: MinimalColors) -> impl IntoElement {
     // If content is empty, show nothing (true minimal)
     if content.is_empty() {
         return div()
@@ -363,17 +348,14 @@ pub fn render_minimal_preview_panel(
 }
 
 /// Render the minimal log panel
-/// 
+///
 /// Displays log entries in a clean, minimal style with:
 /// - Maximum whitespace
 /// - NO borders or separators
 /// - Muted text for log entries
 /// - Thin monospace typography for readability
 /// - Each log entry on its own line
-pub fn render_minimal_log_panel(
-    logs: &[String],
-    colors: MinimalColors,
-) -> impl IntoElement {
+pub fn render_minimal_log_panel(logs: &[String], colors: MinimalColors) -> impl IntoElement {
     // If no logs, show minimal empty state
     if logs.is_empty() {
         return div()
@@ -396,36 +378,29 @@ pub fn render_minimal_log_panel(
         .font_weight(FontWeight::THIN)
         .text_sm()
         .text_color(rgb(colors.text_muted))
-        .children(
-            logs.iter().map(|log| {
-                div()
-                    .w_full()
-                    .py(px(2.))
-                    // Subtle opacity change on hover for interactivity hint
-                    .hover(|s| s.opacity(0.7))
-                    .child(log.clone())
-            })
-        )
+        .children(logs.iter().map(|log| {
+            div()
+                .w_full()
+                .py(px(2.))
+                // Subtle opacity change on hover for interactivity hint
+                .hover(|s| s.opacity(0.7))
+                .child(log.clone())
+        }))
         .into_any_element()
 }
 
 /// Render a minimal divider line
-/// 
+///
 /// Returns an invisible spacer instead of a visual line.
 /// Minimal design avoids visual dividers, using whitespace instead.
 pub fn render_minimal_divider() -> impl IntoElement {
-    div()
-        .w_full()
-        .h(px(VERTICAL_PADDING))
+    div().w_full().h(px(VERTICAL_PADDING))
 }
 
 /// Render minimal action button (text only, no background)
-/// 
+///
 /// Minimal action buttons are just text with accent color on hover.
-pub fn render_minimal_action_button(
-    label: &str,
-    colors: MinimalColors,
-) -> impl IntoElement {
+pub fn render_minimal_action_button(label: &str, colors: MinimalColors) -> impl IntoElement {
     div()
         .px(px(16.))
         .py(px(8.))
@@ -439,7 +414,7 @@ pub fn render_minimal_action_button(
 }
 
 /// Render a minimal status indicator
-/// 
+///
 /// Just shows text with appropriate color, no icons or badges.
 pub fn render_minimal_status(
     status_text: &str,
@@ -463,5 +438,5 @@ pub fn render_minimal_status(
 // Note: Tests omitted due to GPUI macro recursion limit issues.
 // Constants are verified via usage in the main application.
 // MinimalConstants::item_height() = 64.0
-// MinimalConstants::horizontal_padding() = 80.0  
+// MinimalConstants::horizontal_padding() = 80.0
 // MinimalConstants::vertical_padding() = 24.0

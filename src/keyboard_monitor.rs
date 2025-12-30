@@ -247,10 +247,10 @@ impl KeyboardMonitor {
             vec![CGEventType::KeyDown],
             move |_proxy, _event_type, event: &CGEvent| {
                 debug!("CGEventTap callback invoked - key event received!");
-                
+
                 // Extract key event information
                 let key_event = Self::extract_key_event(event);
-                
+
                 debug!(
                     character = ?key_event.character,
                     key_code = key_event.key_code,
@@ -268,7 +268,9 @@ impl KeyboardMonitor {
         let event_tap = match event_tap_result {
             Ok(tap) => tap,
             Err(()) => {
-                error!("Failed to create CGEventTap - accessibility permissions may not be granted");
+                error!(
+                    "Failed to create CGEventTap - accessibility permissions may not be granted"
+                );
                 running.store(false, Ordering::SeqCst);
                 return;
             }
@@ -329,8 +331,7 @@ impl KeyboardMonitor {
         use core_graphics::event::CGEventFlags;
 
         // Get key code
-        let key_code =
-            event.get_integer_value_field(EventField::KEYBOARD_EVENT_KEYCODE) as u16;
+        let key_code = event.get_integer_value_field(EventField::KEYBOARD_EVENT_KEYCODE) as u16;
 
         // Get modifier flags
         let flags = event.get_flags();
@@ -340,8 +341,7 @@ impl KeyboardMonitor {
         let command = flags.contains(CGEventFlags::CGEventFlagCommand);
 
         // Check if auto-repeat
-        let is_repeat =
-            event.get_integer_value_field(EventField::KEYBOARD_EVENT_AUTOREPEAT) != 0;
+        let is_repeat = event.get_integer_value_field(EventField::KEYBOARD_EVENT_AUTOREPEAT) != 0;
 
         // Try to get the character from the event
         // This uses the CGEventKeyboardGetUnicodeString function internally
@@ -381,12 +381,7 @@ impl KeyboardMonitor {
             use foreign_types::ForeignType;
             // Get raw pointer to the CGEvent for FFI call
             let event_ptr = event.as_ptr();
-            CGEventKeyboardGetUnicodeString(
-                event_ptr,
-                4,
-                &mut actual_len,
-                buffer.as_mut_ptr(),
-            );
+            CGEventKeyboardGetUnicodeString(event_ptr, 4, &mut actual_len, buffer.as_mut_ptr());
         }
 
         if actual_len > 0 {

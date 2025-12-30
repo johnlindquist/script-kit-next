@@ -15,12 +15,12 @@ pub mod list_item;
 pub mod logging;
 pub mod panel;
 pub mod perf;
-pub mod protocol;
 pub mod prompts;
+pub mod protocol;
 pub mod scripts;
 pub mod selected_text;
-pub mod term_prompt;
 pub mod syntax;
+pub mod term_prompt;
 pub mod terminal;
 pub mod theme;
 pub mod toast_manager;
@@ -32,12 +32,12 @@ pub mod window_resize;
 
 // Phase 1 system API modules
 pub mod clipboard_history;
-pub mod window_control;
 pub mod file_search;
+pub mod window_control;
 
 // Built-in features registry
-pub mod builtins;
 pub mod app_launcher;
+pub mod builtins;
 
 // Frecency tracking for script usage
 pub mod frecency;

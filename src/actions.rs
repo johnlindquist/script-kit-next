@@ -1,8 +1,8 @@
 //! Actions Dialog Module
 //!
-//! Provides a searchable action menu as a compact overlay popup for quick access 
+//! Provides a searchable action menu as a compact overlay popup for quick access
 //! to script management and global actions (edit, create, settings, quit, etc.)
-//! 
+//!
 //! The dialog renders as a floating overlay popup with:
 //! - Fixed dimensions (320x400px max)
 //! - Rounded corners and box shadow
@@ -11,16 +11,15 @@
 
 #![allow(dead_code)]
 
-use gpui::{
-    div, point, prelude::*, px, rgb, rgba, uniform_list, App, BoxShadow, 
-    Context, FocusHandle, Focusable, Hsla, Render, ScrollStrategy, SharedString, 
-    UniformListScrollHandle, Window,
-};
-use std::sync::Arc;
+use crate::components::scrollbar::{Scrollbar, ScrollbarColors};
+use crate::designs::{get_tokens, DesignColors, DesignVariant};
 use crate::logging;
 use crate::theme;
-use crate::designs::{DesignVariant, DesignColors, get_tokens};
-use crate::components::scrollbar::{Scrollbar, ScrollbarColors};
+use gpui::{
+    div, point, prelude::*, px, rgb, rgba, uniform_list, App, BoxShadow, Context, FocusHandle,
+    Focusable, Hsla, Render, ScrollStrategy, SharedString, UniformListScrollHandle, Window,
+};
+use std::sync::Arc;
 
 /// Callback for action selection
 /// Signature: (action_id: String)
@@ -61,9 +60,9 @@ pub struct Action {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ActionCategory {
-    ScriptContext,  // Actions specific to the focused script
-    ScriptOps,      // Edit, Create, Delete script operations
-    GlobalOps,      // Settings, Quit, etc.
+    ScriptContext, // Actions specific to the focused script
+    ScriptOps,     // Edit, Create, Delete script operations
+    GlobalOps,     // Settings, Quit, etc.
 }
 
 impl Action {
@@ -96,25 +95,29 @@ pub fn get_path_context_actions(path_info: &PathInfo) -> Vec<Action> {
             "Copy Path",
             Some("Copy the full path to clipboard".to_string()),
             ActionCategory::ScriptContext,
-        ).with_shortcut("⌘⇧C"),
+        )
+        .with_shortcut("⌘⇧C"),
         Action::new(
             "open_in_finder",
             "Open in Finder",
             Some("Reveal in Finder".to_string()),
             ActionCategory::ScriptContext,
-        ).with_shortcut("⌘⇧F"),
+        )
+        .with_shortcut("⌘⇧F"),
         Action::new(
             "open_in_editor",
             "Open in Editor",
             Some("Open in $EDITOR".to_string()),
             ActionCategory::ScriptContext,
-        ).with_shortcut("⌘E"),
+        )
+        .with_shortcut("⌘E"),
         Action::new(
             "open_in_terminal",
             "Open in Terminal",
             Some("Open terminal at this location".to_string()),
             ActionCategory::ScriptContext,
-        ).with_shortcut("⌘T"),
+        )
+        .with_shortcut("⌘T"),
         Action::new(
             "copy_filename",
             "Copy Filename",
@@ -124,28 +127,40 @@ pub fn get_path_context_actions(path_info: &PathInfo) -> Vec<Action> {
         Action::new(
             "move_to_trash",
             "Move to Trash",
-            Some(format!("Delete {}", if path_info.is_dir { "folder" } else { "file" })),
+            Some(format!(
+                "Delete {}",
+                if path_info.is_dir { "folder" } else { "file" }
+            )),
             ActionCategory::ScriptContext,
-        ).with_shortcut("⌘⌫"),
+        )
+        .with_shortcut("⌘⌫"),
     ];
-    
+
     // Add directory-specific action for navigating into
     if path_info.is_dir {
-        actions.insert(0, Action::new(
-            "open_directory",
-            format!("Open \"{}\"", path_info.name),
-            Some("Navigate into this directory".to_string()),
-            ActionCategory::ScriptContext,
-        ).with_shortcut("↵"));
+        actions.insert(
+            0,
+            Action::new(
+                "open_directory",
+                format!("Open \"{}\"", path_info.name),
+                Some("Navigate into this directory".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("↵"),
+        );
     } else {
-        actions.insert(0, Action::new(
-            "select_file",
-            format!("Select \"{}\"", path_info.name),
-            Some("Submit this file".to_string()),
-            ActionCategory::ScriptContext,
-        ).with_shortcut("↵"));
+        actions.insert(
+            0,
+            Action::new(
+                "select_file",
+                format!("Select \"{}\"", path_info.name),
+                Some("Submit this file".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("↵"),
+        );
     }
-    
+
     actions
 }
 
@@ -157,31 +172,36 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
             format!("Run \"{}\"", script.name),
             Some("Execute this script".to_string()),
             ActionCategory::ScriptContext,
-        ).with_shortcut("↵"),
+        )
+        .with_shortcut("↵"),
         Action::new(
             "edit_script",
             "Edit Script",
             Some("Open in $EDITOR".to_string()),
             ActionCategory::ScriptContext,
-        ).with_shortcut("⌘E"),
+        )
+        .with_shortcut("⌘E"),
         Action::new(
             "view_logs",
             "View Logs",
             Some("Show script execution logs".to_string()),
             ActionCategory::ScriptContext,
-        ).with_shortcut("⌘L"),
+        )
+        .with_shortcut("⌘L"),
         Action::new(
             "reveal_in_finder",
             "Reveal in Finder",
             Some("Show script file in Finder".to_string()),
             ActionCategory::ScriptContext,
-        ).with_shortcut("⌘⇧F"),
+        )
+        .with_shortcut("⌘⇧F"),
         Action::new(
             "copy_path",
             "Copy Path",
             Some("Copy script path to clipboard".to_string()),
             ActionCategory::ScriptContext,
-        ).with_shortcut("⌘⇧C"),
+        )
+        .with_shortcut("⌘⇧C"),
     ]
 }
 
@@ -193,25 +213,29 @@ pub fn get_global_actions() -> Vec<Action> {
             "Create New Script",
             Some("Create a new TypeScript script".to_string()),
             ActionCategory::ScriptOps,
-        ).with_shortcut("⌘N"),
+        )
+        .with_shortcut("⌘N"),
         Action::new(
             "reload_scripts",
             "Reload Scripts",
             Some("Refresh the scripts list".to_string()),
             ActionCategory::GlobalOps,
-        ).with_shortcut("⌘R"),
+        )
+        .with_shortcut("⌘R"),
         Action::new(
             "settings",
             "Settings",
             Some("Configure preferences".to_string()),
             ActionCategory::GlobalOps,
-        ).with_shortcut("⌘,"),
+        )
+        .with_shortcut("⌘,"),
         Action::new(
             "quit",
             "Quit Script Kit",
             Some("Exit the application".to_string()),
             ActionCategory::GlobalOps,
-        ).with_shortcut("⌘Q"),
+        )
+        .with_shortcut("⌘Q"),
     ]
 }
 
@@ -273,9 +297,15 @@ impl ActionsDialog {
         focused_script: Option<ScriptInfo>,
         theme: Arc<theme::Theme>,
     ) -> Self {
-        Self::with_script_and_design(focus_handle, on_select, focused_script, theme, DesignVariant::Default)
+        Self::with_script_and_design(
+            focus_handle,
+            on_select,
+            focused_script,
+            theme,
+            DesignVariant::Default,
+        )
     }
-    
+
     pub fn with_design(
         focus_handle: FocusHandle,
         on_select: ActionCallback,
@@ -284,7 +314,7 @@ impl ActionsDialog {
     ) -> Self {
         Self::with_script_and_design(focus_handle, on_select, None, theme, design_variant)
     }
-    
+
     /// Create ActionsDialog for a path (file/folder) with path-specific actions
     pub fn with_path(
         focus_handle: FocusHandle,
@@ -294,14 +324,17 @@ impl ActionsDialog {
     ) -> Self {
         let actions = get_path_context_actions(path_info);
         let filtered_actions: Vec<usize> = (0..actions.len()).collect();
-        
-        logging::log("ACTIONS", &format!(
-            "ActionsDialog created for path: {} (is_dir={}) with {} actions", 
-            path_info.path,
-            path_info.is_dir,
-            actions.len()
-        ));
-        
+
+        logging::log(
+            "ACTIONS",
+            &format!(
+                "ActionsDialog created for path: {} (is_dir={}) with {} actions",
+                path_info.path,
+                path_info.is_dir,
+                actions.len()
+            ),
+        );
+
         ActionsDialog {
             actions,
             filtered_actions,
@@ -327,14 +360,17 @@ impl ActionsDialog {
     ) -> Self {
         let actions = Self::build_actions(&focused_script);
         let filtered_actions: Vec<usize> = (0..actions.len()).collect();
-        
-        logging::log("ACTIONS", &format!(
-            "ActionsDialog created with {} actions, script: {:?}, design: {:?}", 
-            actions.len(),
-            focused_script.as_ref().map(|s| &s.name),
-            design_variant
-        ));
-        
+
+        logging::log(
+            "ACTIONS",
+            &format!(
+                "ActionsDialog created with {} actions, script: {:?}, design: {:?}",
+                actions.len(),
+                focused_script.as_ref().map(|s| &s.name),
+                design_variant
+            ),
+        );
+
         // Log theme color configuration for debugging
         logging::log("ACTIONS_THEME", &format!(
             "Theme colors applied: bg_main=#{:06x}, bg_search=#{:06x}, text_primary=#{:06x}, accent_selected=#{:06x}",
@@ -343,7 +379,7 @@ impl ActionsDialog {
             theme.colors.text.primary,
             theme.colors.accent.selected
         ));
-        
+
         ActionsDialog {
             actions,
             filtered_actions,
@@ -359,12 +395,12 @@ impl ActionsDialog {
             hide_search: false,
         }
     }
-    
+
     /// Update cursor visibility (called from parent's blink timer)
     pub fn set_cursor_visible(&mut self, visible: bool) {
         self.cursor_visible = visible;
     }
-    
+
     /// Hide the search input (for inline mode where header has search)
     pub fn set_hide_search(&mut self, hide: bool) {
         self.hide_search = hide;
@@ -373,15 +409,15 @@ impl ActionsDialog {
     /// Build the complete actions list based on focused script
     fn build_actions(focused_script: &Option<ScriptInfo>) -> Vec<Action> {
         let mut actions = Vec::new();
-        
+
         // Add script-specific actions first if a script is focused
         if let Some(script) = focused_script {
             actions.extend(get_script_context_actions(script));
         }
-        
+
         // Add global actions
         actions.extend(get_global_actions());
-        
+
         actions
     }
 
@@ -416,7 +452,13 @@ impl ActionsDialog {
         }
         self.selected_index = 0; // Reset selection when filtering
         self.scroll_handle.scroll_to_item(0, ScrollStrategy::Top);
-        logging::log_debug("ACTIONS_SCROLL", &format!("Filter changed: reset to top, {} results", self.filtered_actions.len()));
+        logging::log_debug(
+            "ACTIONS_SCROLL",
+            &format!(
+                "Filter changed: reset to top, {} results",
+                self.filtered_actions.len()
+            ),
+        );
     }
 
     /// Handle character input
@@ -439,8 +481,12 @@ impl ActionsDialog {
     pub fn move_up(&mut self, cx: &mut Context<Self>) {
         if self.selected_index > 0 {
             self.selected_index -= 1;
-            self.scroll_handle.scroll_to_item(self.selected_index, ScrollStrategy::Nearest);
-            logging::log_debug("ACTIONS_SCROLL", &format!("Up: selected_index={}", self.selected_index));
+            self.scroll_handle
+                .scroll_to_item(self.selected_index, ScrollStrategy::Nearest);
+            logging::log_debug(
+                "ACTIONS_SCROLL",
+                &format!("Up: selected_index={}", self.selected_index),
+            );
             cx.notify();
         }
     }
@@ -449,8 +495,12 @@ impl ActionsDialog {
     pub fn move_down(&mut self, cx: &mut Context<Self>) {
         if self.selected_index < self.filtered_actions.len().saturating_sub(1) {
             self.selected_index += 1;
-            self.scroll_handle.scroll_to_item(self.selected_index, ScrollStrategy::Nearest);
-            logging::log_debug("ACTIONS_SCROLL", &format!("Down: selected_index={}", self.selected_index));
+            self.scroll_handle
+                .scroll_to_item(self.selected_index, ScrollStrategy::Nearest);
+            logging::log_debug(
+                "ACTIONS_SCROLL",
+                &format!("Down: selected_index={}", self.selected_index),
+            );
             cx.notify();
         }
     }
@@ -485,27 +535,43 @@ impl ActionsDialog {
     fn create_popup_shadow() -> Vec<BoxShadow> {
         vec![
             BoxShadow {
-                color: Hsla { h: 0.0, s: 0.0, l: 0.0, a: 0.3 },
+                color: Hsla {
+                    h: 0.0,
+                    s: 0.0,
+                    l: 0.0,
+                    a: 0.3,
+                },
                 offset: point(px(0.0), px(4.0)),
                 blur_radius: px(16.0),
                 spread_radius: px(0.0),
             },
             BoxShadow {
-                color: Hsla { h: 0.0, s: 0.0, l: 0.0, a: 0.15 },
+                color: Hsla {
+                    h: 0.0,
+                    s: 0.0,
+                    l: 0.0,
+                    a: 0.15,
+                },
                 offset: point(px(0.0), px(8.0)),
                 blur_radius: px(32.0),
                 spread_radius: px(-4.0),
             },
         ]
     }
-    
+
     /// Get colors for the search box based on design variant
     /// Returns: (search_box_bg, border_color, muted_text, dimmed_text, secondary_text)
-    fn get_search_colors(&self, colors: &crate::designs::DesignColors) -> (gpui::Rgba, gpui::Rgba, gpui::Rgba, gpui::Rgba, gpui::Rgba) {
+    fn get_search_colors(
+        &self,
+        colors: &crate::designs::DesignColors,
+    ) -> (gpui::Rgba, gpui::Rgba, gpui::Rgba, gpui::Rgba, gpui::Rgba) {
         use gpui::{rgb, rgba};
         if self.design_variant == DesignVariant::Default {
             (
-                rgba(hex_with_alpha(self.theme.colors.background.search_box, 0xcc)),
+                rgba(hex_with_alpha(
+                    self.theme.colors.background.search_box,
+                    0xcc,
+                )),
                 rgba(hex_with_alpha(self.theme.colors.ui.border, 0x80)),
                 rgb(self.theme.colors.text.muted),
                 rgb(self.theme.colors.text.dimmed),
@@ -521,10 +587,13 @@ impl ActionsDialog {
             )
         }
     }
-    
+
     /// Get colors for the main container based on design variant
     /// Returns: (main_bg, container_border, container_text)
-    fn get_container_colors(&self, colors: &crate::designs::DesignColors) -> (gpui::Rgba, gpui::Rgba, gpui::Rgba) {
+    fn get_container_colors(
+        &self,
+        colors: &crate::designs::DesignColors,
+    ) -> (gpui::Rgba, gpui::Rgba, gpui::Rgba) {
         use gpui::{rgb, rgba};
         if self.design_variant == DesignVariant::Default {
             (
@@ -555,7 +624,7 @@ impl Render for ActionsDialog {
         let colors = tokens.colors();
         let spacing = tokens.spacing();
         let visual = tokens.visual();
-        
+
         // NOTE: Key handling is done by the parent (ScriptListApp in main.rs)
         // which routes all keyboard events to this dialog's methods.
         // We do NOT attach our own on_key_down handler to avoid double-processing.
@@ -568,16 +637,16 @@ impl Render for ActionsDialog {
         };
 
         // Use helper method for design/theme color extraction
-        let (search_box_bg, border_color, _muted_text, dimmed_text, _secondary_text) = 
+        let (search_box_bg, border_color, _muted_text, dimmed_text, _secondary_text) =
             self.get_search_colors(&colors);
-        
+
         // Get primary text color for cursor (matches main list styling)
         let primary_text = if self.design_variant == DesignVariant::Default {
             rgb(self.theme.colors.text.primary)
         } else {
             rgb(colors.text_primary)
         };
-        
+
         // Get accent color for the search input focus indicator
         let accent_color_hex = if self.design_variant == DesignVariant::Default {
             self.theme.colors.accent.selected
@@ -585,24 +654,24 @@ impl Render for ActionsDialog {
             colors.accent
         };
         let accent_color = rgb(accent_color_hex);
-        
+
         // Focus border color (accent with transparency)
         let focus_border_color = rgba(hex_with_alpha(accent_color_hex, 0x60));
-        
+
         // Input container with fixed height and width to prevent any layout shifts
         // The entire row is constrained to prevent resizing when text is entered
         let input_container = div()
-            .w(px(POPUP_WIDTH))  // Match parent width exactly
+            .w(px(POPUP_WIDTH)) // Match parent width exactly
             .min_w(px(POPUP_WIDTH))
             .max_w(px(POPUP_WIDTH))
-            .h(px(44.0))  // Fixed height for the input row
+            .h(px(44.0)) // Fixed height for the input row
             .min_h(px(44.0))
             .max_h(px(44.0))
-            .overflow_hidden()  // Prevent any content from causing shifts
+            .overflow_hidden() // Prevent any content from causing shifts
             .px(px(spacing.item_padding_x))
             .py(px(spacing.item_padding_y + 2.0)) // Slightly more vertical padding
             .bg(search_box_bg)
-            .border_t_1()  // Border on top since input is now at bottom
+            .border_t_1() // Border on top since input is now at bottom
             .border_color(border_color)
             .flex()
             .flex_row()
@@ -611,7 +680,7 @@ impl Render for ActionsDialog {
             .child(
                 // Search icon or indicator - fixed width to prevent shifts
                 div()
-                    .w(px(24.0))  // Fixed width for the icon container
+                    .w(px(24.0)) // Fixed width for the icon container
                     .min_w(px(24.0))
                     .text_color(dimmed_text)
                     .text_xs()
@@ -622,11 +691,11 @@ impl Render for ActionsDialog {
                 // CRITICAL: Use flex_shrink_0 to prevent flexbox from shrinking this container
                 // The border/bg MUST stay at fixed width regardless of content
                 div()
-                    .flex_shrink_0()  // PREVENT flexbox from shrinking this!
+                    .flex_shrink_0() // PREVENT flexbox from shrinking this!
                     .w(px(240.0))
                     .min_w(px(240.0))
                     .max_w(px(240.0))
-                    .h(px(28.0))      // Fixed height too
+                    .h(px(28.0)) // Fixed height too
                     .min_h(px(28.0))
                     .max_h(px(28.0))
                     .overflow_hidden()
@@ -634,16 +703,30 @@ impl Render for ActionsDialog {
                     .py(px(spacing.padding_xs))
                     // ALWAYS show background - just vary intensity
                     .bg(if self.design_variant == DesignVariant::Default {
-                        rgba(hex_with_alpha(self.theme.colors.background.main, if self.search_text.is_empty() { 0x20 } else { 0x40 }))
+                        rgba(hex_with_alpha(
+                            self.theme.colors.background.main,
+                            if self.search_text.is_empty() {
+                                0x20
+                            } else {
+                                0x40
+                            },
+                        ))
                     } else {
-                        rgba(hex_with_alpha(colors.background, if self.search_text.is_empty() { 0x20 } else { 0x40 }))
+                        rgba(hex_with_alpha(
+                            colors.background,
+                            if self.search_text.is_empty() {
+                                0x20
+                            } else {
+                                0x40
+                            },
+                        ))
                     })
                     .rounded(px(visual.radius_sm))
                     .border_1()
                     // ALWAYS show border - just vary intensity
-                    .border_color(if !self.search_text.is_empty() { 
+                    .border_color(if !self.search_text.is_empty() {
                         focus_border_color
-                    } else { 
+                    } else {
                         border_color
                     })
                     .flex()
@@ -662,9 +745,9 @@ impl Render for ActionsDialog {
                             div()
                                 .w(px(2.))
                                 .h(px(16.))
-                                .mr(px(2.))  // Use consistent 2px margin
+                                .mr(px(2.)) // Use consistent 2px margin
                                 .rounded(px(1.))
-                                .when(self.cursor_visible, |d| d.bg(accent_color))
+                                .when(self.cursor_visible, |d| d.bg(accent_color)),
                         )
                     })
                     .child(search_display)
@@ -674,9 +757,9 @@ impl Render for ActionsDialog {
                             div()
                                 .w(px(2.))
                                 .h(px(16.))
-                                .ml(px(2.))  // Consistent 2px margin
+                                .ml(px(2.)) // Consistent 2px margin
                                 .rounded(px(1.))
-                                .when(self.cursor_visible, |d| d.bg(accent_color))
+                                .when(self.cursor_visible, |d| d.bg(accent_color)),
                         )
                     }),
             );
@@ -703,18 +786,22 @@ impl Render for ActionsDialog {
             let selected_index = self.selected_index;
             let filtered_len = self.filtered_actions.len();
             let design_variant = self.design_variant;
-            
-            logging::log_debug("ACTIONS_SCROLL", &format!(
-                "Rendering uniform_list: {} items, selected={}",
-                filtered_len, selected_index
-            ));
-            
+
+            logging::log_debug(
+                "ACTIONS_SCROLL",
+                &format!(
+                    "Rendering uniform_list: {} items, selected={}",
+                    filtered_len, selected_index
+                ),
+            );
+
             // Calculate scrollbar parameters
             // Container height for actions (excluding search box)
             let search_box_height = if self.hide_search { 0.0 } else { 60.0 };
-            let container_height = (filtered_len as f32 * ACTION_ITEM_HEIGHT).min(POPUP_MAX_HEIGHT - search_box_height);
+            let container_height = (filtered_len as f32 * ACTION_ITEM_HEIGHT)
+                .min(POPUP_MAX_HEIGHT - search_box_height);
             let visible_items = (container_height / ACTION_ITEM_HEIGHT) as usize;
-            
+
             // Use selected_index as approximate scroll offset
             // When scrolling, the selected item should be visible, so this gives a reasonable estimate
             let scroll_offset = if selected_index > visible_items.saturating_sub(1) {
@@ -722,182 +809,210 @@ impl Render for ActionsDialog {
             } else {
                 0
             };
-            
+
             // Get scrollbar colors from theme or design
             let scrollbar_colors = if self.design_variant == DesignVariant::Default {
                 ScrollbarColors::from_theme(&self.theme)
             } else {
                 ScrollbarColors::from_design(&colors)
             };
-            
+
             // Create scrollbar (only visible if content overflows)
-            let scrollbar = Scrollbar::new(
-                filtered_len,
-                visible_items,
-                scroll_offset,
-                scrollbar_colors,
-            ).container_height(container_height);
-            
+            let scrollbar =
+                Scrollbar::new(filtered_len, visible_items, scroll_offset, scrollbar_colors)
+                    .container_height(container_height);
+
             let list = uniform_list(
                 "actions-list",
                 filtered_len,
-                cx.processor(move |this: &mut ActionsDialog, visible_range, _window, _cx| {
-                    logging::log_debug("ACTIONS_SCROLL", &format!(
-                        "Actions visible range: {:?} (total={})",
-                        visible_range, this.filtered_actions.len()
-                    ));
-                    
-                    // Get tokens for list item rendering
-                    let item_tokens = get_tokens(design_variant);
-                    let item_colors = item_tokens.colors();
-                    let item_spacing = item_tokens.spacing();
-                    let _item_visual = item_tokens.visual();
-                    
-                    // Extract colors for list items - MATCH main list styling exactly
-                    // Uses accent_selected_subtle with 0x80 alpha (same as ListItem)
-                    let (selected_bg, hover_bg, primary_text, secondary_text, dimmed_text) = 
-                        if design_variant == DesignVariant::Default {
-                            (
-                                // Selected: subtle background with 50% opacity (matches ListItem)
-                                rgba((this.theme.colors.accent.selected_subtle << 8) | 0x80),
-                                // Hover: subtle background with 25% opacity (matches ListItem)
-                                rgba((this.theme.colors.accent.selected_subtle << 8) | 0x40),
-                                rgb(this.theme.colors.text.primary),
-                                rgb(this.theme.colors.text.secondary),
-                                rgb(this.theme.colors.text.dimmed),
-                            )
+                cx.processor(
+                    move |this: &mut ActionsDialog, visible_range, _window, _cx| {
+                        logging::log_debug(
+                            "ACTIONS_SCROLL",
+                            &format!(
+                                "Actions visible range: {:?} (total={})",
+                                visible_range,
+                                this.filtered_actions.len()
+                            ),
+                        );
+
+                        // Get tokens for list item rendering
+                        let item_tokens = get_tokens(design_variant);
+                        let item_colors = item_tokens.colors();
+                        let item_spacing = item_tokens.spacing();
+                        let _item_visual = item_tokens.visual();
+
+                        // Extract colors for list items - MATCH main list styling exactly
+                        // Uses accent_selected_subtle with 0x80 alpha (same as ListItem)
+                        let (selected_bg, hover_bg, primary_text, secondary_text, dimmed_text) =
+                            if design_variant == DesignVariant::Default {
+                                (
+                                    // Selected: subtle background with 50% opacity (matches ListItem)
+                                    rgba((this.theme.colors.accent.selected_subtle << 8) | 0x80),
+                                    // Hover: subtle background with 25% opacity (matches ListItem)
+                                    rgba((this.theme.colors.accent.selected_subtle << 8) | 0x40),
+                                    rgb(this.theme.colors.text.primary),
+                                    rgb(this.theme.colors.text.secondary),
+                                    rgb(this.theme.colors.text.dimmed),
+                                )
+                            } else {
+                                (
+                                    rgba((item_colors.background_selected << 8) | 0x80),
+                                    rgba((item_colors.background_selected << 8) | 0x40),
+                                    rgb(item_colors.text_primary),
+                                    rgb(item_colors.text_secondary),
+                                    rgb(item_colors.text_dimmed),
+                                )
+                            };
+
+                        let mut items = Vec::new();
+
+                        // Get border color for category separators
+                        let separator_color = if design_variant == DesignVariant::Default {
+                            rgba(hex_with_alpha(this.theme.colors.ui.border, 0x40))
                         } else {
-                            (
-                                rgba((item_colors.background_selected << 8) | 0x80),
-                                rgba((item_colors.background_selected << 8) | 0x40),
-                                rgb(item_colors.text_primary),
-                                rgb(item_colors.text_secondary),
-                                rgb(item_colors.text_dimmed),
-                            )
+                            rgba(hex_with_alpha(item_colors.border_subtle, 0x40))
                         };
-                    
-                    let mut items = Vec::new();
-                    
-                    // Get border color for category separators
-                    let separator_color = if design_variant == DesignVariant::Default {
-                        rgba(hex_with_alpha(this.theme.colors.ui.border, 0x40))
-                    } else {
-                        rgba(hex_with_alpha(item_colors.border_subtle, 0x40))
-                    };
-                    
-                    for idx in visible_range {
-                        if let Some(&action_idx) = this.filtered_actions.get(idx) {
-                            if let Some(action) = this.actions.get(action_idx) {
-                                let action: &Action = action; // Explicit type annotation
-                                let is_selected = idx == selected_index;
-                                
-                                // Check if this is the first item of a new category
-                                // (for adding a subtle separator line)
-                                let is_category_start = if idx > 0 {
-                                    if let Some(&prev_action_idx) = this.filtered_actions.get(idx - 1) {
-                                        if let Some(prev_action) = this.actions.get(prev_action_idx) {
-                                            let prev_action: &Action = prev_action;
-                                            prev_action.category != action.category
-                                        } else { false }
-                                    } else { false }
-                                } else { false };
-                                
-                                // Match main list styling: bright text when selected, secondary when not
-                                let title_color = if is_selected {
-                                    primary_text
-                                } else {
-                                    secondary_text
-                                };
 
-                                let shortcut_color = dimmed_text;
+                        for idx in visible_range {
+                            if let Some(&action_idx) = this.filtered_actions.get(idx) {
+                                if let Some(action) = this.actions.get(action_idx) {
+                                    let action: &Action = action; // Explicit type annotation
+                                    let is_selected = idx == selected_index;
 
-                                // Clone strings for SharedString conversion
-                                let title_str: String = action.title.clone();
-                                let shortcut_opt: Option<String> = action.shortcut.clone();
+                                    // Check if this is the first item of a new category
+                                    // (for adding a subtle separator line)
+                                    let is_category_start = if idx > 0 {
+                                        if let Some(&prev_action_idx) =
+                                            this.filtered_actions.get(idx - 1)
+                                        {
+                                            if let Some(prev_action) =
+                                                this.actions.get(prev_action_idx)
+                                            {
+                                                let prev_action: &Action = prev_action;
+                                                prev_action.category != action.category
+                                            } else {
+                                                false
+                                            }
+                                        } else {
+                                            false
+                                        }
+                                    } else {
+                                        false
+                                    };
 
-                                // Build the action item with left accent bar for selected state
-                                let mut action_item = div()
-                                    .id(idx)
-                                    .w_full()
-                                    .h(px(ACTION_ITEM_HEIGHT)) // Fixed height for uniform_list
-                                    // Match main list: subtle selection bg, transparent when not selected
-                                    .bg(if is_selected { selected_bg } else { rgba(0x00000000) })
-                                    // Add top border for category separator
-                                    .when(is_category_start, |d| d.border_t_1().border_color(separator_color))
-                                    .hover(|s| s.bg(hover_bg))
-                                    .cursor_pointer()
-                                    .flex()
-                                    .flex_row()
-                                    .items_center();
-                                
-                                // Left accent bar - only visible when selected
-                                // Get accent color for the left bar
-                                let accent_color = if design_variant == DesignVariant::Default {
-                                    rgb(this.theme.colors.accent.selected)
-                                } else {
-                                    rgb(item_colors.accent)
-                                };
-                                
-                                action_item = action_item.child(
-                                    div()
-                                        .w(px(ACCENT_BAR_WIDTH))
-                                        .h_full()
-                                        .bg(if is_selected { accent_color } else { rgba(0x00000000) })
-                                );
-                                
-                                // Content container with proper padding (after accent bar)
-                                let content = div()
-                                    .flex_1()
-                                    .px(px(item_spacing.item_padding_x))
-                                    .flex()
-                                    .flex_row()
-                                    .items_center()
-                                    .justify_between()
-                                    .child(
-                                        // Left side: title
-                                        div()
-                                            .text_color(title_color)
-                                            .text_sm()
-                                            .font_weight(if is_selected { gpui::FontWeight::MEDIUM } else { gpui::FontWeight::NORMAL })
-                                            .child(title_str),
+                                    // Match main list styling: bright text when selected, secondary when not
+                                    let title_color = if is_selected {
+                                        primary_text
+                                    } else {
+                                        secondary_text
+                                    };
+
+                                    let shortcut_color = dimmed_text;
+
+                                    // Clone strings for SharedString conversion
+                                    let title_str: String = action.title.clone();
+                                    let shortcut_opt: Option<String> = action.shortcut.clone();
+
+                                    // Build the action item with left accent bar for selected state
+                                    let mut action_item = div()
+                                        .id(idx)
+                                        .w_full()
+                                        .h(px(ACTION_ITEM_HEIGHT)) // Fixed height for uniform_list
+                                        // Match main list: subtle selection bg, transparent when not selected
+                                        .bg(if is_selected {
+                                            selected_bg
+                                        } else {
+                                            rgba(0x00000000)
+                                        })
+                                        // Add top border for category separator
+                                        .when(is_category_start, |d| {
+                                            d.border_t_1().border_color(separator_color)
+                                        })
+                                        .hover(|s| s.bg(hover_bg))
+                                        .cursor_pointer()
+                                        .flex()
+                                        .flex_row()
+                                        .items_center();
+
+                                    // Left accent bar - only visible when selected
+                                    // Get accent color for the left bar
+                                    let accent_color = if design_variant == DesignVariant::Default {
+                                        rgb(this.theme.colors.accent.selected)
+                                    } else {
+                                        rgb(item_colors.accent)
+                                    };
+
+                                    action_item = action_item.child(
+                                        div().w(px(ACCENT_BAR_WIDTH)).h_full().bg(if is_selected {
+                                            accent_color
+                                        } else {
+                                            rgba(0x00000000)
+                                        }),
                                     );
 
-                                // Right side: keyboard shortcut with pill background
-                                let content = if let Some(shortcut) = shortcut_opt {
-                                    // Get subtle background color for shortcut pill
-                                    let shortcut_bg = if design_variant == DesignVariant::Default {
-                                        rgba((this.theme.colors.background.search_box << 8) | 0x80)
-                                    } else {
-                                        rgba((item_colors.background_tertiary << 8) | 0x80)
-                                    };
-                                    
-                                    content.child(
-                                        div()
-                                            .px(px(6.))
-                                            .py(px(2.))
-                                            .bg(shortcut_bg)
-                                            .rounded(px(4.))
-                                            .text_color(shortcut_color)
-                                            .text_xs()
-                                            .child(shortcut),
-                                    )
-                                } else {
-                                    content
-                                };
-                                
-                                action_item = action_item.child(content);
+                                    // Content container with proper padding (after accent bar)
+                                    let content = div()
+                                        .flex_1()
+                                        .px(px(item_spacing.item_padding_x))
+                                        .flex()
+                                        .flex_row()
+                                        .items_center()
+                                        .justify_between()
+                                        .child(
+                                            // Left side: title
+                                            div()
+                                                .text_color(title_color)
+                                                .text_sm()
+                                                .font_weight(if is_selected {
+                                                    gpui::FontWeight::MEDIUM
+                                                } else {
+                                                    gpui::FontWeight::NORMAL
+                                                })
+                                                .child(title_str),
+                                        );
 
-                                items.push(action_item);
+                                    // Right side: keyboard shortcut with pill background
+                                    let content = if let Some(shortcut) = shortcut_opt {
+                                        // Get subtle background color for shortcut pill
+                                        let shortcut_bg =
+                                            if design_variant == DesignVariant::Default {
+                                                rgba(
+                                                    (this.theme.colors.background.search_box << 8)
+                                                        | 0x80,
+                                                )
+                                            } else {
+                                                rgba((item_colors.background_tertiary << 8) | 0x80)
+                                            };
+
+                                        content.child(
+                                            div()
+                                                .px(px(6.))
+                                                .py(px(2.))
+                                                .bg(shortcut_bg)
+                                                .rounded(px(4.))
+                                                .text_color(shortcut_color)
+                                                .text_xs()
+                                                .child(shortcut),
+                                        )
+                                    } else {
+                                        content
+                                    };
+
+                                    action_item = action_item.child(content);
+
+                                    items.push(action_item);
+                                }
                             }
                         }
-                    }
-                    items
-                }),
+                        items
+                    },
+                ),
             )
             .flex_1()
             .w_full()
             .track_scroll(&self.scroll_handle);
-            
+
             // Wrap uniform_list in a relative container with scrollbar overlay
             // NOTE: The wrapper needs flex + h_full for uniform_list to properly calculate visible range
             div()
@@ -913,24 +1028,24 @@ impl Render for ActionsDialog {
         };
 
         // Use helper method for container colors
-        let (main_bg, container_border, container_text) = 
-            self.get_container_colors(&colors);
-        
+        let (main_bg, container_border, container_text) = self.get_container_colors(&colors);
+
         // Calculate dynamic height based on number of items
         // Each item is ACTION_ITEM_HEIGHT, plus search box height (~44px), plus padding
         // When hide_search is true, we don't include the search box height
         let num_items = self.filtered_actions.len();
         let search_box_height = if self.hide_search { 0.0 } else { 60.0 };
-        let items_height = (num_items as f32 * ACTION_ITEM_HEIGHT).min(POPUP_MAX_HEIGHT - search_box_height);
+        let items_height =
+            (num_items as f32 * ACTION_ITEM_HEIGHT).min(POPUP_MAX_HEIGHT - search_box_height);
         let total_height = items_height + search_box_height; // search box height (if shown) + padding
-        
+
         // Main overlay popup container
         // Fixed width, dynamic height based on content, rounded corners, shadow, semi-transparent bg
         div()
             .flex()
             .flex_col()
             .w(px(POPUP_WIDTH))
-            .h(px(total_height))  // Use calculated height instead of max_h
+            .h(px(total_height)) // Use calculated height instead of max_h
             .bg(main_bg)
             .rounded(px(visual.radius_lg))
             .shadow(Self::create_popup_shadow())
@@ -951,12 +1066,12 @@ impl Render for ActionsDialog {
 // ============================================================================
 
 /// Validates a script name - only alphanumeric and hyphens allowed
-/// 
+///
 /// # Rules
 /// - Cannot be empty
 /// - Only letters, numbers, and hyphens allowed
 /// - Cannot start or end with a hyphen
-/// 
+///
 /// # Examples
 /// ```
 /// assert!(validate_script_name("hello-world").is_ok());
@@ -978,17 +1093,17 @@ pub fn validate_script_name(name: &str) -> Result<(), String> {
 }
 
 /// Generates a script template with the given name
-/// 
+///
 /// Converts kebab-case names to Title Case for the display name.
 /// Creates a basic TypeScript script with Name and Description metadata.
-/// 
+///
 /// # Example
 /// ```
 /// let template = generate_script_template("hello-world");
 /// // Returns:
 /// // // Name: Hello World
-/// // // Description: 
-/// // 
+/// // // Description:
+/// //
 /// // console.log("Hello from hello-world!")
 /// ```
 pub fn generate_script_template(name: &str) -> String {
@@ -1004,7 +1119,7 @@ pub fn generate_script_template(name: &str) -> String {
         })
         .collect::<Vec<_>>()
         .join(" ");
-    
+
     format!(
         r#"// Name: {}
 // Description: 
@@ -1016,46 +1131,48 @@ console.log("Hello from {}!")
 }
 
 /// Creates a new script file at ~/.kenv/scripts/{name}.ts
-/// 
+///
 /// # Arguments
 /// * `name` - The script name (will be validated)
-/// 
+///
 /// # Returns
 /// * `Ok(PathBuf)` - Path to the created script file
 /// * `Err(String)` - Error message if creation failed
-/// 
+///
 /// # Errors
 /// - Invalid script name (see `validate_script_name`)
 /// - Script already exists
 /// - Failed to create directory or write file
 pub fn create_script_file(name: &str) -> Result<std::path::PathBuf, String> {
-    use std::path::PathBuf;
     use std::fs;
-    
+    use std::path::PathBuf;
+
     validate_script_name(name)?;
-    
+
     let scripts_dir = PathBuf::from(shellexpand::tilde("~/.kenv/scripts").as_ref());
-    
+
     // Ensure directory exists
     if !scripts_dir.exists() {
         fs::create_dir_all(&scripts_dir)
             .map_err(|e| format!("Failed to create scripts directory: {}", e))?;
     }
-    
+
     let file_path = scripts_dir.join(format!("{}.ts", name));
-    
+
     // Check if file already exists
     if file_path.exists() {
         return Err(format!("Script '{}' already exists", name));
     }
-    
+
     // Write template
     let template = generate_script_template(name);
-    fs::write(&file_path, template)
-        .map_err(|e| format!("Failed to write script file: {}", e))?;
-    
-    logging::log("SCRIPT_CREATE", &format!("Created new script: {}", file_path.display()));
-    
+    fs::write(&file_path, template).map_err(|e| format!("Failed to write script file: {}", e))?;
+
+    logging::log(
+        "SCRIPT_CREATE",
+        &format!("Created new script: {}", file_path.display()),
+    );
+
     Ok(file_path)
 }
 
@@ -1085,8 +1202,8 @@ mod tests {
 
     #[test]
     fn test_action_with_shortcut() {
-        let action = Action::new("test", "Test Action", None, ActionCategory::GlobalOps)
-            .with_shortcut("⌘T");
+        let action =
+            Action::new("test", "Test Action", None, ActionCategory::GlobalOps).with_shortcut("⌘T");
         assert_eq!(action.shortcut, Some("⌘T".to_string()));
     }
 
@@ -1094,7 +1211,7 @@ mod tests {
     fn test_get_script_context_actions() {
         let script = ScriptInfo::new("my-script", "/path/to/my-script.ts");
         let actions = get_script_context_actions(&script);
-        
+
         assert!(!actions.is_empty());
         assert!(actions.iter().any(|a| a.id == "edit_script"));
         assert!(actions.iter().any(|a| a.id == "view_logs"));
@@ -1106,7 +1223,7 @@ mod tests {
     #[test]
     fn test_get_global_actions() {
         let actions = get_global_actions();
-        
+
         assert!(!actions.is_empty());
         assert!(actions.iter().any(|a| a.id == "create_script"));
         assert!(actions.iter().any(|a| a.id == "reload_scripts"));
@@ -1149,16 +1266,19 @@ mod tests {
         let script_actions = get_script_context_actions(&script);
         let global_actions = get_global_actions();
         let total_actions = script_actions.len() + global_actions.len();
-        
+
         let max_visible = (POPUP_MAX_HEIGHT / ACTION_ITEM_HEIGHT) as usize;
-        
+
         // With 5 script context actions + 4 global = 9 actions
         // At 42px height in 400px container, we can fit ~9 items
         // So we might not always overflow, but we're close
         assert!(total_actions >= 8, "Should have at least 8 total actions");
-        
+
         // Log for visibility
-        println!("Total actions: {}, Max visible: {}", total_actions, max_visible);
+        println!(
+            "Total actions: {}, Max visible: {}",
+            total_actions, max_visible
+        );
     }
 
     // ========================================================================
@@ -1241,12 +1361,12 @@ mod tests {
     #[test]
     fn test_generate_script_template_structure() {
         let template = generate_script_template("test");
-        
+
         // Should have proper structure
         assert!(template.starts_with("// Name:"));
         assert!(template.contains("// Description:"));
         assert!(template.contains("console.log"));
-        
+
         // Template should be valid TypeScript (basic check)
         assert!(template.contains("\"Hello from test!\""));
     }
@@ -1254,10 +1374,10 @@ mod tests {
     #[test]
     fn test_get_script_path() {
         let path = get_script_path("hello-world");
-        
+
         // Should end with the correct filename
         assert!(path.to_string_lossy().ends_with("hello-world.ts"));
-        
+
         // Should be in ~/.kenv/scripts/
         assert!(path.to_string_lossy().contains(".kenv/scripts"));
     }
@@ -1265,7 +1385,11 @@ mod tests {
     #[test]
     fn test_get_script_path_various_names() {
         assert!(get_script_path("a").to_string_lossy().ends_with("a.ts"));
-        assert!(get_script_path("my-script").to_string_lossy().ends_with("my-script.ts"));
-        assert!(get_script_path("Test123").to_string_lossy().ends_with("Test123.ts"));
+        assert!(get_script_path("my-script")
+            .to_string_lossy()
+            .ends_with("my-script.ts"));
+        assert!(get_script_path("Test123")
+            .to_string_lossy()
+            .ends_with("Test123.ts"));
     }
 }

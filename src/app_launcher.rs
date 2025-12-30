@@ -31,8 +31,6 @@ use std::sync::{Arc, OnceLock};
 use std::time::Instant;
 use tracing::{debug, info, warn};
 
-
-
 #[cfg(target_os = "macos")]
 use cocoa::base::{id, nil};
 #[cfg(target_os = "macos")]
@@ -82,7 +80,7 @@ const APP_DIRECTORIES: &[&str] = &[
     "~/Applications",
     // Chrome installed web apps (PWAs)
     "~/Applications/Chrome Apps.localized",
-    // Edge installed web apps (PWAs)  
+    // Edge installed web apps (PWAs)
     "~/Applications/Edge Apps.localized",
     // Arc browser installed web apps
     "~/Applications/Arc Apps",
@@ -531,7 +529,10 @@ mod tests {
                 "Calculator path should exist: {:?}",
                 calculator.path
             );
-            assert!(calculator.bundle_id.is_some(), "Calculator should have a bundle ID");
+            assert!(
+                calculator.bundle_id.is_some(),
+                "Calculator should have a bundle ID"
+            );
             assert_eq!(
                 calculator.bundle_id.as_deref(),
                 Some("com.apple.calculator"),
@@ -749,10 +750,7 @@ mod tests {
         // Both should have the same content
         let bytes1 = icon1.unwrap();
         let bytes2 = icon2.unwrap();
-        assert_eq!(
-            bytes1, bytes2,
-            "Cached icon should match extracted icon"
-        );
+        assert_eq!(bytes1, bytes2, "Cached icon should match extracted icon");
 
         // Verify cache file exists
         let cache_dir = get_icon_cache_dir().unwrap();
@@ -788,8 +786,9 @@ mod tests {
             .expect("Failed to encode PNG");
 
         // Use the decode function with BGRA conversion
-        let render_image = crate::list_item::decode_png_to_render_image_with_bgra_conversion(&original_png)
-            .expect("Should decode with BGRA conversion");
+        let render_image =
+            crate::list_item::decode_png_to_render_image_with_bgra_conversion(&original_png)
+                .expect("Should decode with BGRA conversion");
 
         // Verify we got a RenderImage (we can't easily inspect pixels in RenderImage,
         // but we can verify it was created successfully)

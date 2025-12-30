@@ -26,17 +26,11 @@ pub fn get_secret(key: &str) -> Option<String> {
     match entry {
         Ok(entry) => match entry.get_password() {
             Ok(value) => {
-                logging::log(
-                    "KEYRING",
-                    &format!("Retrieved secret for key: {}", key),
-                );
+                logging::log("KEYRING", &format!("Retrieved secret for key: {}", key));
                 Some(value)
             }
             Err(keyring::Error::NoEntry) => {
-                logging::log(
-                    "KEYRING",
-                    &format!("No entry found for key: {}", key),
-                );
+                logging::log("KEYRING", &format!("No entry found for key: {}", key));
                 None
             }
             Err(e) => {
@@ -61,15 +55,12 @@ pub fn get_secret(key: &str) -> Option<String> {
 pub fn set_secret(key: &str, value: &str) -> Result<(), String> {
     let entry = keyring::Entry::new(KEYRING_SERVICE, key)
         .map_err(|e| format!("Failed to create keyring entry: {}", e))?;
-    
+
     entry
         .set_password(value)
         .map_err(|e| format!("Failed to store secret: {}", e))?;
-    
-    logging::log(
-        "KEYRING",
-        &format!("Stored secret for key: {}", key),
-    );
+
+    logging::log("KEYRING", &format!("Stored secret for key: {}", key));
     Ok(())
 }
 
@@ -78,15 +69,12 @@ pub fn set_secret(key: &str, value: &str) -> Result<(), String> {
 pub fn delete_secret(key: &str) -> Result<(), String> {
     let entry = keyring::Entry::new(KEYRING_SERVICE, key)
         .map_err(|e| format!("Failed to create keyring entry: {}", e))?;
-    
+
     entry
         .delete_credential()
         .map_err(|e| format!("Failed to delete secret: {}", e))?;
-    
-    logging::log(
-        "KEYRING",
-        &format!("Deleted secret for key: {}", key),
-    );
+
+    logging::log("KEYRING", &format!("Deleted secret for key: {}", key));
     Ok(())
 }
 
@@ -302,7 +290,12 @@ impl Render for EnvPrompt {
                         div()
                             .flex()
                             .flex_col()
-                            .child(div().text_lg().font_weight(gpui::FontWeight::SEMIBOLD).child(prompt_text))
+                            .child(
+                                div()
+                                    .text_lg()
+                                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                                    .child(prompt_text),
+                            )
                             .child(
                                 div()
                                     .text_sm()

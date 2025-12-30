@@ -1,16 +1,16 @@
 #![allow(dead_code)]
 
-use std::path::PathBuf;
+use glob::glob;
+use std::cmp::Ordering;
 use std::env;
 use std::fs;
-use std::cmp::Ordering;
-use tracing::{debug, warn, instrument};
-use glob::glob;
+use std::path::PathBuf;
+use tracing::{debug, instrument, warn};
 
+use crate::app_launcher::AppInfo;
 pub use crate::builtins::BuiltInEntry;
 use crate::frecency::FrecencyStore;
 use crate::list_item::GroupedListItem;
-use crate::app_launcher::AppInfo;
 use crate::scriptlets as scriptlet_parser;
 
 #[derive(Clone, Debug)]
@@ -33,7 +33,7 @@ pub struct Scriptlet {
     pub name: String,
     pub description: Option<String>,
     pub code: String,
-    pub tool: String,  // "ts", "bash", "paste", etc.
+    pub tool: String, // "ts", "bash", "paste", etc.
     pub shortcut: Option<String>,
     pub expand: Option<String>,
     /// Group name from H1 header (e.g., "Productivity", "Development")
@@ -165,6 +165,16 @@ pub struct ScriptMetadata {
     pub alias: Option<String>,
 }
 
+/// Schedule metadata extracted from script file comments
+/// Used for cron-based script scheduling
+#[derive(Debug, Default, Clone)]
+pub struct ScheduleMetadata {
+    /// Raw cron expression from `// Cron: */5 * * * *`
+    pub cron: Option<String>,
+    /// Natural language schedule from `// Schedule: every tuesday at 2pm`
+    pub schedule: Option<String>,
+}
+
 /// Parse a single metadata line with lenient matching
 /// Supports patterns like:
 /// - "//Name:Value"
@@ -181,24 +191,24 @@ pub struct ScriptMetadata {
 pub fn parse_metadata_line(line: &str) -> Option<(String, String)> {
     // Must start with //
     let after_slashes = line.strip_prefix("//")?;
-    
+
     // Skip any whitespace (spaces or tabs) after the slashes
     let trimmed = after_slashes.trim_start();
-    
+
     // Find the colon that separates key from value
     let colon_pos = trimmed.find(':')?;
-    
+
     // Key is before the colon (no spaces in key names like "Name", "Description")
     let key = trimmed[..colon_pos].trim();
-    
+
     // Key must be a single word (no spaces)
     if key.is_empty() || key.contains(' ') {
         return None;
     }
-    
+
     // Value is after the colon, trimmed
     let value = trimmed[colon_pos + 1..].trim();
-    
+
     Some((key.to_string(), value.to_string()))
 }
 
@@ -207,7 +217,7 @@ pub fn parse_metadata_line(line: &str) -> Option<(String, String)> {
 /// Only checks the first 20 lines of the file
 pub fn extract_script_metadata(content: &str) -> ScriptMetadata {
     let mut metadata = ScriptMetadata::default();
-    
+
     for line in content.lines().take(20) {
         if let Some((key, value)) = parse_metadata_line(line) {
             match key.to_lowercase().as_str() {
@@ -235,7 +245,7 @@ pub fn extract_script_metadata(content: &str) -> ScriptMetadata {
             }
         }
     }
-    
+
     metadata
 }
 
@@ -255,12 +265,54 @@ fn extract_metadata(path: &PathBuf) -> ScriptMetadata {
     }
 }
 
+/// Extract schedule metadata from script content
+/// Parses lines looking for "// Cron:" and "// Schedule:" with lenient matching
+/// Only checks the first 30 lines of the file
+pub fn extract_schedule_metadata(content: &str) -> ScheduleMetadata {
+    let mut metadata = ScheduleMetadata::default();
+
+    for line in content.lines().take(30) {
+        if let Some((key, value)) = parse_metadata_line(line) {
+            match key.to_lowercase().as_str() {
+                "cron" => {
+                    if metadata.cron.is_none() && !value.is_empty() {
+                        metadata.cron = Some(value);
+                    }
+                }
+                "schedule" => {
+                    if metadata.schedule.is_none() && !value.is_empty() {
+                        metadata.schedule = Some(value);
+                    }
+                }
+                _ => {} // Ignore other metadata keys
+            }
+        }
+    }
+
+    metadata
+}
+
+/// Extract schedule metadata from a script file path
+pub fn extract_schedule_metadata_from_file(path: &PathBuf) -> ScheduleMetadata {
+    match fs::read_to_string(path) {
+        Ok(content) => extract_schedule_metadata(&content),
+        Err(e) => {
+            debug!(
+                error = %e,
+                path = %path.display(),
+                "Could not read script file for schedule metadata extraction"
+            );
+            ScheduleMetadata::default()
+        }
+    }
+}
+
 /// Extract metadata from HTML comments in scriptlet markdown
 /// Looks for <!-- key: value --> patterns
 fn extract_html_comment_metadata(text: &str) -> std::collections::HashMap<String, String> {
     use std::collections::HashMap;
     let mut metadata = HashMap::new();
-    
+
     // Find HTML comment blocks
     if let Some(start) = text.find("<!--") {
         if let Some(end) = text.find("-->") {
@@ -281,7 +333,7 @@ fn extract_html_comment_metadata(text: &str) -> std::collections::HashMap<String
             }
         }
     }
-    
+
     metadata
 }
 
@@ -295,7 +347,7 @@ fn extract_code_block(text: &str) -> Option<(String, String)> {
         if let Some(newline_pos) = after_fence.find('\n') {
             let language = after_fence[..newline_pos].trim().to_string();
             let code_start = start + 3 + newline_pos + 1;
-            
+
             // Find closing fence
             if let Some(end_pos) = text[code_start..].find("```") {
                 let code = text[code_start..code_start + end_pos].trim().to_string();
@@ -321,39 +373,42 @@ fn slugify_name(name: &str) -> String {
 /// Parse a single scriptlet section from markdown
 /// Input should be text from ## Name to the next ## or end of file
 /// `source_path` is the path to the .md file containing the scriptlet
-fn parse_scriptlet_section(section: &str, source_path: Option<&std::path::Path>) -> Option<Scriptlet> {
+fn parse_scriptlet_section(
+    section: &str,
+    source_path: Option<&std::path::Path>,
+) -> Option<Scriptlet> {
     let lines: Vec<&str> = section.lines().collect();
     if lines.is_empty() {
         return None;
     }
-    
+
     // First line should be ## Name
     let first_line = lines[0];
     if !first_line.starts_with("##") {
         return None;
     }
-    
+
     let name = first_line
         .strip_prefix("##")
         .map(|s| s.trim().to_string())
         .unwrap_or_default();
-    
+
     if name.is_empty() {
         return None;
     }
-    
+
     // Extract metadata from HTML comments
     let metadata = extract_html_comment_metadata(section);
-    
+
     // Extract code block
     let (tool, code) = extract_code_block(section)?;
-    
+
     // Generate command slug from name
     let command = slugify_name(&name);
-    
+
     // Build file_path with anchor if source_path is provided
     let file_path = source_path.map(|p| format!("{}#{}", p.display(), command));
-    
+
     Some(Scriptlet {
         name,
         description: metadata.get("description").cloned(),
@@ -396,19 +451,19 @@ pub fn read_scriptlets() -> Vec<Scriptlet> {
         Ok(entries) => {
             for entry in entries.flatten() {
                 let path = entry.path();
-                
+
                 // Only process .md files
                 if path.extension().and_then(|e| e.to_str()) != Some("md") {
                     continue;
                 }
-                
+
                 // Skip if not a file
                 if !path.is_file() {
                     continue;
                 }
-                
+
                 debug!(path = %path.display(), "Reading scriptlets file");
-                
+
                 match fs::read_to_string(&path) {
                     Ok(content) => {
                         // Split by ## headings
@@ -416,7 +471,9 @@ pub fn read_scriptlets() -> Vec<Scriptlet> {
                         for line in content.lines() {
                             if line.starts_with("##") && !current_section.is_empty() {
                                 // Parse previous section
-                                if let Some(scriptlet) = parse_scriptlet_section(&current_section, Some(&path)) {
+                                if let Some(scriptlet) =
+                                    parse_scriptlet_section(&current_section, Some(&path))
+                                {
                                     scriptlets.push(scriptlet);
                                 }
                                 current_section = line.to_string();
@@ -428,7 +485,9 @@ pub fn read_scriptlets() -> Vec<Scriptlet> {
 
                         // Parse the last section
                         if !current_section.is_empty() {
-                            if let Some(scriptlet) = parse_scriptlet_section(&current_section, Some(&path)) {
+                            if let Some(scriptlet) =
+                                parse_scriptlet_section(&current_section, Some(&path))
+                            {
                                 scriptlets.push(scriptlet);
                             }
                         }
@@ -456,16 +515,19 @@ pub fn read_scriptlets() -> Vec<Scriptlet> {
     // Sort by name
     scriptlets.sort_by(|a, b| a.name.cmp(&b.name));
 
-    debug!(count = scriptlets.len(), "Loaded scriptlets from all .md files");
+    debug!(
+        count = scriptlets.len(),
+        "Loaded scriptlets from all .md files"
+    );
     scriptlets
 }
 
 /// Load scriptlets from markdown files using the comprehensive parser
-/// 
+///
 /// Globs:
 /// - ~/.kenv/scriptlets/*.md (main scriptlets directory)
 /// - ~/.kenv/kenvs/*/scriptlets/*.md (nested kenvs)
-/// 
+///
 /// Uses `crate::scriptlets::parse_markdown_as_scriptlets` for parsing.
 /// Returns scriptlets sorted by group then by name.
 #[instrument(level = "debug", skip_all)]
@@ -496,10 +558,10 @@ pub fn load_scriptlets() -> Vec<Scriptlet> {
                     match entry {
                         Ok(path) => {
                             debug!(path = %path.display(), "Parsing scriptlet file");
-                            
+
                             // Determine kenv from path (for nested kenvs)
                             let kenv = extract_kenv_from_path(&path, &home);
-                            
+
                             match fs::read_to_string(&path) {
                                 Ok(content) => {
                                     let path_str = path.to_string_lossy().to_string();
@@ -507,11 +569,14 @@ pub fn load_scriptlets() -> Vec<Scriptlet> {
                                         &content,
                                         Some(&path_str),
                                     );
-                                    
+
                                     // Convert parsed scriptlets to our Scriptlet format
                                     for parsed_scriptlet in parsed {
-                                        let file_path = build_scriptlet_file_path(&path, &parsed_scriptlet.command);
-                                        
+                                        let file_path = build_scriptlet_file_path(
+                                            &path,
+                                            &parsed_scriptlet.command,
+                                        );
+
                                         scriptlets.push(Scriptlet {
                                             name: parsed_scriptlet.name,
                                             description: parsed_scriptlet.metadata.description,
@@ -556,18 +621,14 @@ pub fn load_scriptlets() -> Vec<Scriptlet> {
     }
 
     // Sort by group first (None last), then by name
-    scriptlets.sort_by(|a, b| {
-        match (&a.group, &b.group) {
-            (Some(g1), Some(g2)) => {
-                match g1.cmp(g2) {
-                    Ordering::Equal => a.name.cmp(&b.name),
-                    other => other,
-                }
-            }
-            (Some(_), None) => Ordering::Less,
-            (None, Some(_)) => Ordering::Greater,
-            (None, None) => a.name.cmp(&b.name),
-        }
+    scriptlets.sort_by(|a, b| match (&a.group, &b.group) {
+        (Some(g1), Some(g2)) => match g1.cmp(g2) {
+            Ordering::Equal => a.name.cmp(&b.name),
+            other => other,
+        },
+        (Some(_), None) => Ordering::Less,
+        (None, Some(_)) => Ordering::Greater,
+        (None, None) => a.name.cmp(&b.name),
     });
 
     debug!(count = scriptlets.len(), "Loaded scriptlets via parser");
@@ -580,7 +641,7 @@ fn extract_kenv_from_path(path: &std::path::Path, home: &std::path::Path) -> Opt
     let kenvs_prefix = home.join(".kenv/kenvs/");
     let kenvs_prefix_str = kenvs_prefix.to_string_lossy().to_string();
     let path_str = path.to_string_lossy().to_string();
-    
+
     if path_str.starts_with(&kenvs_prefix_str) {
         // Extract the kenv name from the path
         let relative = &path_str[kenvs_prefix_str.len()..];
@@ -629,7 +690,7 @@ pub fn read_scripts() -> Vec<Script> {
                 if let Ok(file_metadata) = entry.metadata() {
                     if file_metadata.is_file() {
                         let path = entry.path();
-                        
+
                         // Check extension
                         if let Some(ext) = path.extension() {
                             if let Some(ext_str) = ext.to_str() {
@@ -638,11 +699,12 @@ pub fn read_scripts() -> Vec<Script> {
                                     if let Some(file_name) = path.file_stem() {
                                         if let Some(filename_str) = file_name.to_str() {
                                             let script_metadata = extract_metadata(&path);
-                                            
+
                                             // Use metadata name if available, otherwise filename
-                                            let name = script_metadata.name
+                                            let name = script_metadata
+                                                .name
                                                 .unwrap_or_else(|| filename_str.to_string());
-                                            
+
                                             scripts.push(Script {
                                                 name,
                                                 path: path.clone(),
@@ -695,7 +757,7 @@ fn is_fuzzy_match(haystack: &str, pattern: &str) -> bool {
 fn fuzzy_match_with_indices(haystack: &str, pattern: &str) -> (bool, Vec<usize>) {
     let mut indices = Vec::new();
     let mut pattern_chars = pattern.chars().peekable();
-    
+
     for (idx, ch) in haystack.chars().enumerate() {
         if let Some(&p) = pattern_chars.peek() {
             if ch.eq_ignore_ascii_case(&p) {
@@ -704,7 +766,7 @@ fn fuzzy_match_with_indices(haystack: &str, pattern: &str) -> (bool, Vec<usize>)
             }
         }
     }
-    
+
     let matched = pattern_chars.peek().is_none();
     (matched, if matched { indices } else { Vec::new() })
 }
@@ -725,13 +787,13 @@ fn extract_scriptlet_display_path(file_path: &Option<String>) -> Option<String> 
         let parts: Vec<&str> = fp.splitn(2, '#').collect();
         let path_part = parts[0];
         let anchor = parts.get(1);
-        
+
         // Extract just the filename from the path
         let filename = std::path::Path::new(path_part)
             .file_name()
             .and_then(|n| n.to_str())
             .unwrap_or(path_part);
-        
+
         // Reconstruct with anchor if present
         match anchor {
             Some(a) => format!("{}#{}", filename, a),
@@ -747,15 +809,18 @@ fn extract_scriptlet_display_path(file_path: &Option<String>) -> Option<String> 
 pub fn fuzzy_search_scripts(scripts: &[Script], query: &str) -> Vec<ScriptMatch> {
     if query.is_empty() {
         // If no query, return all scripts with equal score, sorted by name
-        return scripts.iter().map(|s| {
-            let filename = extract_filename(&s.path);
-            ScriptMatch {
-                script: s.clone(),
-                score: 0,
-                filename,
-                match_indices: MatchIndices::default(),
-            }
-        }).collect();
+        return scripts
+            .iter()
+            .map(|s| {
+                let filename = extract_filename(&s.path);
+                ScriptMatch {
+                    script: s.clone(),
+                    score: 0,
+                    filename,
+                    match_indices: MatchIndices::default(),
+                }
+            })
+            .collect();
     }
 
     let query_lower = query.to_lowercase();
@@ -764,7 +829,7 @@ pub fn fuzzy_search_scripts(scripts: &[Script], query: &str) -> Vec<ScriptMatch>
     for script in scripts {
         let mut score = 0i32;
         let mut match_indices = MatchIndices::default();
-        
+
         let name_lower = script.name.to_lowercase();
         let filename = extract_filename(&script.path);
         let filename_lower = filename.to_lowercase();
@@ -776,7 +841,8 @@ pub fn fuzzy_search_scripts(scripts: &[Script], query: &str) -> Vec<ScriptMatch>
         }
 
         // Fuzzy character matching in name (characters in order)
-        let (name_fuzzy_matched, name_indices) = fuzzy_match_with_indices(&name_lower, &query_lower);
+        let (name_fuzzy_matched, name_indices) =
+            fuzzy_match_with_indices(&name_lower, &query_lower);
         if name_fuzzy_matched {
             score += 50;
             match_indices.name_indices = name_indices;
@@ -789,7 +855,8 @@ pub fn fuzzy_search_scripts(scripts: &[Script], query: &str) -> Vec<ScriptMatch>
         }
 
         // Fuzzy character matching in filename
-        let (filename_fuzzy_matched, filename_indices) = fuzzy_match_with_indices(&filename_lower, &query_lower);
+        let (filename_fuzzy_matched, filename_indices) =
+            fuzzy_match_with_indices(&filename_lower, &query_lower);
         if filename_fuzzy_matched {
             score += 35;
             // Only set filename indices if name didn't match (prefer name match for highlighting)
@@ -822,11 +889,9 @@ pub fn fuzzy_search_scripts(scripts: &[Script], query: &str) -> Vec<ScriptMatch>
     }
 
     // Sort by score (highest first), then by name for ties
-    matches.sort_by(|a, b| {
-        match b.score.cmp(&a.score) {
-            Ordering::Equal => a.script.name.cmp(&b.script.name),
-            other => other,
-        }
+    matches.sort_by(|a, b| match b.score.cmp(&a.score) {
+        Ordering::Equal => a.script.name.cmp(&b.script.name),
+        other => other,
     });
 
     matches
@@ -839,15 +904,18 @@ pub fn fuzzy_search_scripts(scripts: &[Script], query: &str) -> Vec<ScriptMatch>
 pub fn fuzzy_search_scriptlets(scriptlets: &[Scriptlet], query: &str) -> Vec<ScriptletMatch> {
     if query.is_empty() {
         // If no query, return all scriptlets with equal score, sorted by name
-        return scriptlets.iter().map(|s| {
-            let display_file_path = extract_scriptlet_display_path(&s.file_path);
-            ScriptletMatch {
-                scriptlet: s.clone(),
-                score: 0,
-                display_file_path,
-                match_indices: MatchIndices::default(),
-            }
-        }).collect();
+        return scriptlets
+            .iter()
+            .map(|s| {
+                let display_file_path = extract_scriptlet_display_path(&s.file_path);
+                ScriptletMatch {
+                    scriptlet: s.clone(),
+                    score: 0,
+                    display_file_path,
+                    match_indices: MatchIndices::default(),
+                }
+            })
+            .collect();
     }
 
     let query_lower = query.to_lowercase();
@@ -856,10 +924,11 @@ pub fn fuzzy_search_scriptlets(scriptlets: &[Scriptlet], query: &str) -> Vec<Scr
     for scriptlet in scriptlets {
         let mut score = 0i32;
         let mut match_indices = MatchIndices::default();
-        
+
         let name_lower = scriptlet.name.to_lowercase();
         let display_file_path = extract_scriptlet_display_path(&scriptlet.file_path);
-        let file_path_lower = display_file_path.as_ref()
+        let file_path_lower = display_file_path
+            .as_ref()
             .map(|fp| fp.to_lowercase())
             .unwrap_or_default();
 
@@ -870,7 +939,8 @@ pub fn fuzzy_search_scriptlets(scriptlets: &[Scriptlet], query: &str) -> Vec<Scr
         }
 
         // Fuzzy character matching in name (characters in order)
-        let (name_fuzzy_matched, name_indices) = fuzzy_match_with_indices(&name_lower, &query_lower);
+        let (name_fuzzy_matched, name_indices) =
+            fuzzy_match_with_indices(&name_lower, &query_lower);
         if name_fuzzy_matched {
             score += 50;
             match_indices.name_indices = name_indices;
@@ -884,7 +954,8 @@ pub fn fuzzy_search_scriptlets(scriptlets: &[Scriptlet], query: &str) -> Vec<Scr
             }
 
             // Fuzzy character matching in file_path
-            let (file_path_fuzzy_matched, file_path_indices) = fuzzy_match_with_indices(&file_path_lower, &query_lower);
+            let (file_path_fuzzy_matched, file_path_indices) =
+                fuzzy_match_with_indices(&file_path_lower, &query_lower);
             if file_path_fuzzy_matched {
                 score += 35;
                 // Only set file_path indices if name didn't match (prefer name match for highlighting)
@@ -922,11 +993,9 @@ pub fn fuzzy_search_scriptlets(scriptlets: &[Scriptlet], query: &str) -> Vec<Scr
     }
 
     // Sort by score (highest first), then by name for ties
-    matches.sort_by(|a, b| {
-        match b.score.cmp(&a.score) {
-            Ordering::Equal => a.scriptlet.name.cmp(&b.scriptlet.name),
-            other => other,
-        }
+    matches.sort_by(|a, b| match b.score.cmp(&a.score) {
+        Ordering::Equal => a.scriptlet.name.cmp(&b.scriptlet.name),
+        other => other,
     });
 
     matches
@@ -938,10 +1007,13 @@ pub fn fuzzy_search_scriptlets(scriptlets: &[Scriptlet], query: &str) -> Vec<Scr
 pub fn fuzzy_search_builtins(entries: &[BuiltInEntry], query: &str) -> Vec<BuiltInMatch> {
     if query.is_empty() {
         // If no query, return all entries with equal score, sorted by name
-        return entries.iter().map(|e| BuiltInMatch {
-            entry: e.clone(),
-            score: 0,
-        }).collect();
+        return entries
+            .iter()
+            .map(|e| BuiltInMatch {
+                entry: e.clone(),
+                score: 0,
+            })
+            .collect();
     }
 
     let query_lower = query.to_lowercase();
@@ -970,8 +1042,8 @@ pub fn fuzzy_search_builtins(entries: &[BuiltInEntry], query: &str) -> Vec<Built
         // Score by keyword match - high priority (keywords are designed for matching)
         for keyword in &entry.keywords {
             if keyword.to_lowercase().contains(&query_lower) {
-                score += 75;  // Keywords are specifically meant for matching
-                break;  // Only count once even if multiple keywords match
+                score += 75; // Keywords are specifically meant for matching
+                break; // Only count once even if multiple keywords match
             }
         }
 
@@ -979,7 +1051,7 @@ pub fn fuzzy_search_builtins(entries: &[BuiltInEntry], query: &str) -> Vec<Built
         for keyword in &entry.keywords {
             if is_fuzzy_match(&keyword.to_lowercase(), &query_lower) {
                 score += 30;
-                break;  // Only count once
+                break; // Only count once
             }
         }
 
@@ -992,11 +1064,9 @@ pub fn fuzzy_search_builtins(entries: &[BuiltInEntry], query: &str) -> Vec<Built
     }
 
     // Sort by score (highest first), then by name for ties
-    matches.sort_by(|a, b| {
-        match b.score.cmp(&a.score) {
-            Ordering::Equal => a.entry.name.cmp(&b.entry.name),
-            other => other,
-        }
+    matches.sort_by(|a, b| match b.score.cmp(&a.score) {
+        Ordering::Equal => a.entry.name.cmp(&b.entry.name),
+        other => other,
     });
 
     matches
@@ -1008,10 +1078,13 @@ pub fn fuzzy_search_builtins(entries: &[BuiltInEntry], query: &str) -> Vec<Built
 pub fn fuzzy_search_apps(apps: &[crate::app_launcher::AppInfo], query: &str) -> Vec<AppMatch> {
     if query.is_empty() {
         // If no query, return all apps with equal score, sorted by name
-        return apps.iter().map(|a| AppMatch {
-            app: a.clone(),
-            score: 0,
-        }).collect();
+        return apps
+            .iter()
+            .map(|a| AppMatch {
+                app: a.clone(),
+                score: 0,
+            })
+            .collect();
     }
 
     let query_lower = query.to_lowercase();
@@ -1054,11 +1127,9 @@ pub fn fuzzy_search_apps(apps: &[crate::app_launcher::AppInfo], query: &str) -> 
     }
 
     // Sort by score (highest first), then by name for ties
-    matches.sort_by(|a, b| {
-        match b.score.cmp(&a.score) {
-            Ordering::Equal => a.app.name.cmp(&b.app.name),
-            other => other,
-        }
+    matches.sort_by(|a, b| match b.score.cmp(&a.score) {
+        Ordering::Equal => a.app.name.cmp(&b.app.name),
+        other => other,
     });
 
     matches
@@ -1067,7 +1138,7 @@ pub fn fuzzy_search_apps(apps: &[crate::app_launcher::AppInfo], query: &str) -> 
 /// Fuzzy search windows by query string
 /// Searches across app name and window title
 /// Returns results sorted by relevance score (highest first)
-/// 
+///
 /// Scoring priorities:
 /// - App name match at start: 100 points
 /// - App name match elsewhere: 75 points
@@ -1075,18 +1146,22 @@ pub fn fuzzy_search_apps(apps: &[crate::app_launcher::AppInfo], query: &str) -> 
 /// - Window title match elsewhere: 65 points
 /// - Fuzzy match on app name: 50 points
 /// - Fuzzy match on window title: 40 points
-pub fn fuzzy_search_windows(windows: &[crate::window_control::WindowInfo], query: &str) -> Vec<WindowMatch> {
+pub fn fuzzy_search_windows(
+    windows: &[crate::window_control::WindowInfo],
+    query: &str,
+) -> Vec<WindowMatch> {
     if query.is_empty() {
         // If no query, return all windows with equal score, sorted by app name then title
-        let mut matches: Vec<WindowMatch> = windows.iter().map(|w| WindowMatch {
-            window: w.clone(),
-            score: 0,
-        }).collect();
-        matches.sort_by(|a, b| {
-            match a.window.app.cmp(&b.window.app) {
-                Ordering::Equal => a.window.title.cmp(&b.window.title),
-                other => other,
-            }
+        let mut matches: Vec<WindowMatch> = windows
+            .iter()
+            .map(|w| WindowMatch {
+                window: w.clone(),
+                score: 0,
+            })
+            .collect();
+        matches.sort_by(|a, b| match a.window.app.cmp(&b.window.app) {
+            Ordering::Equal => a.window.title.cmp(&b.window.title),
+            other => other,
         });
         return matches;
     }
@@ -1130,16 +1205,12 @@ pub fn fuzzy_search_windows(windows: &[crate::window_control::WindowInfo], query
     }
 
     // Sort by score (highest first), then by app name, then by title for ties
-    matches.sort_by(|a, b| {
-        match b.score.cmp(&a.score) {
-            Ordering::Equal => {
-                match a.window.app.cmp(&b.window.app) {
-                    Ordering::Equal => a.window.title.cmp(&b.window.title),
-                    other => other,
-                }
-            }
+    matches.sort_by(|a, b| match b.score.cmp(&a.score) {
+        Ordering::Equal => match a.window.app.cmp(&b.window.app) {
+            Ordering::Equal => a.window.title.cmp(&b.window.title),
             other => other,
-        }
+        },
+        other => other,
     });
 
     matches
@@ -1148,7 +1219,11 @@ pub fn fuzzy_search_windows(windows: &[crate::window_control::WindowInfo], query
 /// Perform unified fuzzy search across scripts, scriptlets, and built-ins
 /// Returns combined and ranked results sorted by relevance
 /// Built-ins appear at the TOP of results (before scripts) when scores are equal
-pub fn fuzzy_search_unified(scripts: &[Script], scriptlets: &[Scriptlet], query: &str) -> Vec<SearchResult> {
+pub fn fuzzy_search_unified(
+    scripts: &[Script],
+    scriptlets: &[Scriptlet],
+    query: &str,
+) -> Vec<SearchResult> {
     fuzzy_search_unified_with_builtins(scripts, scriptlets, &[], query)
 }
 
@@ -1209,9 +1284,9 @@ pub fn fuzzy_search_unified_all(
                 // Prefer builtins over apps over windows over scripts over scriptlets when scores are equal
                 let type_order = |r: &SearchResult| -> i32 {
                     match r {
-                        SearchResult::BuiltIn(_) => 0,  // Built-ins first
-                        SearchResult::App(_) => 1,      // Apps second
-                        SearchResult::Window(_) => 2,   // Windows third
+                        SearchResult::BuiltIn(_) => 0, // Built-ins first
+                        SearchResult::App(_) => 1,     // Apps second
+                        SearchResult::Window(_) => 2,  // Windows third
                         SearchResult::Script(_) => 3,
                         SearchResult::Scriptlet(_) => 4,
                     }
@@ -1280,9 +1355,9 @@ pub fn fuzzy_search_unified_with_windows(
                 // Prefer builtins over apps over windows over scripts over scriptlets when scores are equal
                 let type_order = |r: &SearchResult| -> i32 {
                     match r {
-                        SearchResult::BuiltIn(_) => 0,  // Built-ins first
-                        SearchResult::App(_) => 1,      // Apps second
-                        SearchResult::Window(_) => 2,   // Windows third
+                        SearchResult::BuiltIn(_) => 0, // Built-ins first
+                        SearchResult::App(_) => 1,     // Apps second
+                        SearchResult::Window(_) => 2,  // Windows third
                         SearchResult::Script(_) => 3,
                         SearchResult::Scriptlet(_) => 4,
                     }
@@ -1351,32 +1426,30 @@ pub fn get_grouped_results(
 ) -> (Vec<GroupedListItem>, Vec<SearchResult>) {
     // Get all unified search results
     let results = fuzzy_search_unified_all(scripts, scriptlets, builtins, apps, filter_text);
-    
+
     // Search mode: return flat list with no headers
     if !filter_text.is_empty() {
-        let grouped: Vec<GroupedListItem> = (0..results.len())
-            .map(GroupedListItem::Item)
-            .collect();
+        let grouped: Vec<GroupedListItem> = (0..results.len()).map(GroupedListItem::Item).collect();
         debug!(
             result_count = results.len(),
             "Search mode: returning flat list"
         );
         return (grouped, results);
     }
-    
+
     // Grouped view mode: create RECENT and MAIN sections
     let mut grouped = Vec::new();
-    
+
     // Get recent items from frecency store
     let recent_items = frecency_store.get_recent_items(MAX_RECENT_ITEMS);
-    
+
     // Build a set of paths that are "recent" (have frecency score > 0)
     let recent_paths: std::collections::HashSet<String> = recent_items
         .iter()
         .filter(|(_, score): &&(String, f64)| *score > 0.0)
         .map(|(path, _): &(String, f64)| path.clone())
         .collect();
-    
+
     // Map each result to its frecency score (if any)
     // We need to get the path for each result type
     let get_result_path = |result: &SearchResult| -> Option<String> {
@@ -1385,14 +1458,16 @@ pub fn get_grouped_results(
             SearchResult::App(am) => Some(am.app.path.to_string_lossy().to_string()),
             SearchResult::BuiltIn(bm) => Some(format!("builtin:{}", bm.entry.name)),
             SearchResult::Scriptlet(sm) => Some(format!("scriptlet:{}", sm.scriptlet.name)),
-            SearchResult::Window(wm) => Some(format!("window:{}:{}", wm.window.app, wm.window.title)),
+            SearchResult::Window(wm) => {
+                Some(format!("window:{}:{}", wm.window.app, wm.window.title))
+            }
         }
     };
-    
+
     // Find indices of results that are "recent"
     let mut recent_indices: Vec<(usize, f64)> = Vec::new();
     let mut main_indices: Vec<usize> = Vec::new();
-    
+
     for (idx, result) in results.iter().enumerate() {
         if let Some(path) = get_result_path(result) {
             let score = frecency_store.get_score(&path);
@@ -1405,18 +1480,21 @@ pub fn get_grouped_results(
             main_indices.push(idx);
         }
     }
-    
+
     // Sort recent items by frecency score (highest first)
     recent_indices.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(Ordering::Equal));
-    
+
     // Limit recent items to MAX_RECENT_ITEMS
     recent_indices.truncate(MAX_RECENT_ITEMS);
-    
+
     // Sort main items alphabetically by name (case-insensitive)
     main_indices.sort_by(|&a, &b| {
-        results[a].name().to_lowercase().cmp(&results[b].name().to_lowercase())
+        results[a]
+            .name()
+            .to_lowercase()
+            .cmp(&results[b].name().to_lowercase())
     });
-    
+
     // Build grouped list
     if !recent_indices.is_empty() {
         grouped.push(GroupedListItem::SectionHeader("RECENT".to_string()));
@@ -1424,7 +1502,7 @@ pub fn get_grouped_results(
             grouped.push(GroupedListItem::Item(*idx));
         }
     }
-    
+
     // Always add MAIN section if there are any items
     if !main_indices.is_empty() || !recent_indices.is_empty() {
         grouped.push(GroupedListItem::SectionHeader("MAIN".to_string()));
@@ -1432,15 +1510,115 @@ pub fn get_grouped_results(
             grouped.push(GroupedListItem::Item(idx));
         }
     }
-    
+
     debug!(
         recent_count = recent_indices.len(),
-        main_count = grouped.len().saturating_sub(recent_indices.len()).saturating_sub(if recent_indices.is_empty() { 1 } else { 2 }),
+        main_count = grouped
+            .len()
+            .saturating_sub(recent_indices.len())
+            .saturating_sub(if recent_indices.is_empty() { 1 } else { 2 }),
         total_grouped = grouped.len(),
         "Grouped view: created RECENT/MAIN sections"
     );
-    
+
     (grouped, results)
+}
+
+/// Scan scripts directory and register scripts with schedule metadata
+///
+/// Walks through ~/.kenv/scripts/ looking for .ts/.js files with
+/// `// Cron:` or `// Schedule:` metadata comments, and registers them
+/// with the provided scheduler.
+///
+/// Returns the count of scripts successfully registered.
+#[instrument(level = "debug", skip(scheduler))]
+pub fn register_scheduled_scripts(scheduler: &crate::scheduler::Scheduler) -> usize {
+    use tracing::info;
+
+    let home = match env::var("HOME") {
+        Ok(home_path) => PathBuf::from(home_path),
+        Err(e) => {
+            warn!(error = %e, "HOME environment variable not set, cannot scan for scheduled scripts");
+            return 0;
+        }
+    };
+
+    let scripts_dir = home.join(".kenv/scripts");
+
+    if !scripts_dir.exists() {
+        debug!(path = %scripts_dir.display(), "Scripts directory does not exist");
+        return 0;
+    }
+
+    let mut registered_count = 0;
+
+    match fs::read_dir(&scripts_dir) {
+        Ok(entries) => {
+            for entry in entries.flatten() {
+                if let Ok(file_metadata) = entry.metadata() {
+                    if file_metadata.is_file() {
+                        let path = entry.path();
+
+                        // Only process .ts and .js files
+                        let is_script = path
+                            .extension()
+                            .and_then(|e| e.to_str())
+                            .map(|ext| ext == "ts" || ext == "js")
+                            .unwrap_or(false);
+
+                        if !is_script {
+                            continue;
+                        }
+
+                        // Extract schedule metadata
+                        let schedule_meta = extract_schedule_metadata_from_file(&path);
+
+                        // Skip if no schedule metadata
+                        if schedule_meta.cron.is_none() && schedule_meta.schedule.is_none() {
+                            continue;
+                        }
+
+                        // Register with scheduler
+                        match scheduler.add_script(
+                            path.clone(),
+                            schedule_meta.cron.clone(),
+                            schedule_meta.schedule.clone(),
+                        ) {
+                            Ok(()) => {
+                                registered_count += 1;
+                                info!(
+                                    path = %path.display(),
+                                    cron = ?schedule_meta.cron,
+                                    schedule = ?schedule_meta.schedule,
+                                    "Registered scheduled script"
+                                );
+                            }
+                            Err(e) => {
+                                warn!(
+                                    error = %e,
+                                    path = %path.display(),
+                                    "Failed to register scheduled script"
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Err(e) => {
+            warn!(
+                error = %e,
+                path = %scripts_dir.display(),
+                "Failed to read scripts directory for scheduling"
+            );
+        }
+    }
+
+    if registered_count > 0 {
+        info!(count = registered_count, "Registered scheduled scripts");
+    }
+
+    registered_count
 }
 
 #[cfg(test)]
@@ -1495,7 +1673,7 @@ mod tests {
     fn test_extract_kenv_from_path_nested() {
         use std::path::Path;
         let home = Path::new("/Users/test");
-        
+
         // Nested kenv path
         let nested_path = Path::new("/Users/test/.kenv/kenvs/my-kenv/scriptlets/file.md");
         let kenv = extract_kenv_from_path(nested_path, home);
@@ -1506,7 +1684,7 @@ mod tests {
     fn test_extract_kenv_from_path_main_kenv() {
         use std::path::Path;
         let home = Path::new("/Users/test");
-        
+
         // Main kenv path (not nested)
         let main_path = Path::new("/Users/test/.kenv/scriptlets/file.md");
         let kenv = extract_kenv_from_path(main_path, home);
@@ -1536,9 +1714,12 @@ mod tests {
             command: Some("test".to_string()),
             alias: None,
         };
-        
+
         assert_eq!(scriptlet.group, Some("My Group".to_string()));
-        assert_eq!(scriptlet.file_path, Some("/path/to/file.md#test".to_string()));
+        assert_eq!(
+            scriptlet.file_path,
+            Some("/path/to/file.md#test".to_string())
+        );
         assert_eq!(scriptlet.command, Some("test".to_string()));
     }
 
@@ -1560,7 +1741,8 @@ mod tests {
 
     #[test]
     fn test_parse_scriptlet_with_metadata() {
-        let section = "## Open File\n\n<!-- \nshortcut: cmd o\n-->\n\n```ts\nawait exec('open')\n```";
+        let section =
+            "## Open File\n\n<!-- \nshortcut: cmd o\n-->\n\n```ts\nawait exec('open')\n```";
         let scriptlet = parse_scriptlet_section(section, None);
         assert!(scriptlet.is_some());
         let s = scriptlet.unwrap();
@@ -1571,7 +1753,8 @@ mod tests {
 
     #[test]
     fn test_parse_scriptlet_with_description() {
-        let section = "## Test\n\n<!-- \ndescription: Test description\n-->\n\n```bash\necho test\n```";
+        let section =
+            "## Test\n\n<!-- \ndescription: Test description\n-->\n\n```bash\necho test\n```";
         let scriptlet = parse_scriptlet_section(section, None);
         assert!(scriptlet.is_some());
         let s = scriptlet.unwrap();
@@ -1580,7 +1763,8 @@ mod tests {
 
     #[test]
     fn test_parse_scriptlet_with_expand() {
-        let section = "## Execute Plan\n\n<!-- \nexpand: plan,,\n-->\n\n```paste\nPlease execute\n```";
+        let section =
+            "## Execute Plan\n\n<!-- \nexpand: plan,,\n-->\n\n```paste\nPlease execute\n```";
         let scriptlet = parse_scriptlet_section(section, None);
         assert!(scriptlet.is_some());
         let s = scriptlet.unwrap();
@@ -1651,9 +1835,9 @@ mod tests {
             name: "test".to_string(),
             path: PathBuf::from("/test/path"),
             extension: "ts".to_string(),
-                icon: None,
+            icon: None,
             description: None,
-        alias: None,
+            alias: None,
         };
         assert_eq!(script.name, "test");
         assert_eq!(script.extension, "ts");
@@ -1668,7 +1852,7 @@ mod tests {
                 extension: "ts".to_string(),
                 icon: None,
                 description: Some("Open a file dialog".to_string()),
-            alias: None,
+                alias: None,
             },
             Script {
                 name: "savefile".to_string(),
@@ -1676,7 +1860,7 @@ mod tests {
                 extension: "ts".to_string(),
                 icon: None,
                 description: None,
-            alias: None,
+                alias: None,
             },
         ];
 
@@ -1688,16 +1872,14 @@ mod tests {
 
     #[test]
     fn test_fuzzy_search_empty_query() {
-        let scripts = vec![
-            Script {
-                name: "test1".to_string(),
-                path: PathBuf::from("/test/test1.ts"),
-                extension: "ts".to_string(),
-                icon: None,
-                description: None,
+        let scripts = vec![Script {
+            name: "test1".to_string(),
+            path: PathBuf::from("/test/test1.ts"),
+            extension: "ts".to_string(),
+            icon: None,
+            description: None,
             alias: None,
-            },
-        ];
+        }];
 
         let results = fuzzy_search_scripts(&scripts, "");
         assert_eq!(results.len(), 1);
@@ -1713,7 +1895,7 @@ mod tests {
                 extension: "ts".to_string(),
                 icon: None,
                 description: Some("Open a file dialog".to_string()),
-            alias: None,
+                alias: None,
             },
             Script {
                 name: "open".to_string(),
@@ -1721,7 +1903,7 @@ mod tests {
                 extension: "ts".to_string(),
                 icon: None,
                 description: Some("Basic open function".to_string()),
-            alias: None,
+                alias: None,
             },
             Script {
                 name: "reopen".to_string(),
@@ -1729,7 +1911,7 @@ mod tests {
                 extension: "ts".to_string(),
                 icon: None,
                 description: None,
-            alias: None,
+                alias: None,
             },
         ];
 
@@ -1759,30 +1941,31 @@ mod tests {
 
     #[test]
     fn test_fuzzy_search_unified() {
-        let scripts = vec![
-            Script {
-                name: "open".to_string(),
-                path: PathBuf::from("/test/open.ts"),
-                extension: "ts".to_string(),
-                icon: None,
-                description: Some("Open a file".to_string()),
+        let scripts = vec![Script {
+            name: "open".to_string(),
+            path: PathBuf::from("/test/open.ts"),
+            extension: "ts".to_string(),
+            icon: None,
+            description: Some("Open a file".to_string()),
             alias: None,
-            },
-        ];
+        }];
 
-        let scriptlets = vec![
-            test_scriptlet_with_desc("Open Browser", "ts", "open()", "Open in browser"),
-        ];
+        let scriptlets = vec![test_scriptlet_with_desc(
+            "Open Browser",
+            "ts",
+            "open()",
+            "Open in browser",
+        )];
 
         let results = fuzzy_search_unified(&scripts, &scriptlets, "open");
         assert_eq!(results.len(), 2);
-        
+
         // First result should be the script (same score but scripts come first)
         match &results[0] {
             SearchResult::Script(sm) => assert_eq!(sm.script.name, "open"),
             _ => panic!("Expected script"),
         }
-        
+
         // Second result should be the scriptlet
         match &results[1] {
             SearchResult::Scriptlet(sm) => assert_eq!(sm.scriptlet.name, "Open Browser"),
@@ -1799,7 +1982,7 @@ mod tests {
                 extension: "ts".to_string(),
                 icon: None,
                 description: None,
-            alias: None,
+                alias: None,
             },
             score: 100,
             filename: "test.ts".to_string(),
@@ -1961,16 +2144,14 @@ mod tests {
 
     #[test]
     fn test_fuzzy_search_no_results() {
-        let scripts = vec![
-            Script {
-                name: "test".to_string(),
-                path: PathBuf::from("/test.ts"),
-                extension: "ts".to_string(),
-                icon: None,
-                description: None,
+        let scripts = vec![Script {
+            name: "test".to_string(),
+            path: PathBuf::from("/test.ts"),
+            extension: "ts".to_string(),
+            icon: None,
+            description: None,
             alias: None,
-            },
-        ];
+        }];
 
         let results = fuzzy_search_scripts(&scripts, "nonexistent");
         assert_eq!(results.len(), 0);
@@ -1985,7 +2166,7 @@ mod tests {
                 extension: "ts".to_string(),
                 icon: None,
                 description: None,
-            alias: None,
+                alias: None,
             },
             Script {
                 name: "test2".to_string(),
@@ -1993,7 +2174,7 @@ mod tests {
                 extension: "ts".to_string(),
                 icon: None,
                 description: None,
-            alias: None,
+                alias: None,
             },
         ];
 
@@ -2010,7 +2191,7 @@ mod tests {
                 extension: "ts".to_string(),
                 icon: None,
                 description: Some("database connection helper".to_string()),
-            alias: None,
+                alias: None,
             },
             Script {
                 name: "bar".to_string(),
@@ -2018,7 +2199,7 @@ mod tests {
                 extension: "ts".to_string(),
                 icon: None,
                 description: Some("ui component".to_string()),
-            alias: None,
+                alias: None,
             },
         ];
 
@@ -2036,7 +2217,7 @@ mod tests {
                 extension: "ts".to_string(),
                 icon: None,
                 description: None,
-            alias: None,
+                alias: None,
             },
             Script {
                 name: "bar".to_string(),
@@ -2044,7 +2225,7 @@ mod tests {
                 extension: "ts".to_string(),
                 icon: None,
                 description: None,
-            alias: None,
+                alias: None,
             },
         ];
 
@@ -2062,7 +2243,7 @@ mod tests {
                 extension: "ts".to_string(),
                 icon: None,
                 description: None,
-            alias: None,
+                alias: None,
             },
             Script {
                 name: "other".to_string(),
@@ -2070,7 +2251,7 @@ mod tests {
                 extension: "ts".to_string(),
                 icon: None,
                 description: Some("exactmatch in description".to_string()),
-            alias: None,
+                alias: None,
             },
         ];
 
@@ -2094,9 +2275,12 @@ mod tests {
 
     #[test]
     fn test_fuzzy_search_scriptlets_no_results() {
-        let scriptlets = vec![
-            test_scriptlet_with_desc("Copy Text", "ts", "copy()", "Copy current selection"),
-        ];
+        let scriptlets = vec![test_scriptlet_with_desc(
+            "Copy Text",
+            "ts",
+            "copy()",
+            "Copy current selection",
+        )];
 
         let results = fuzzy_search_scriptlets(&scriptlets, "paste");
         assert_eq!(results.len(), 0);
@@ -2104,20 +2288,16 @@ mod tests {
 
     #[test]
     fn test_fuzzy_search_unified_empty_query() {
-        let scripts = vec![
-            Script {
-                name: "script1".to_string(),
-                path: PathBuf::from("/script1.ts"),
-                extension: "ts".to_string(),
-                icon: None,
-                description: None,
+        let scripts = vec![Script {
+            name: "script1".to_string(),
+            path: PathBuf::from("/script1.ts"),
+            extension: "ts".to_string(),
+            icon: None,
+            description: None,
             alias: None,
-            },
-        ];
+        }];
 
-        let scriptlets = vec![
-            test_scriptlet("Snippet1", "ts", "code"),
-        ];
+        let scriptlets = vec![test_scriptlet("Snippet1", "ts", "code")];
 
         let results = fuzzy_search_unified(&scripts, &scriptlets, "");
         assert_eq!(results.len(), 2);
@@ -2125,25 +2305,26 @@ mod tests {
 
     #[test]
     fn test_fuzzy_search_unified_scripts_first() {
-        let scripts = vec![
-            Script {
-                name: "test".to_string(),
-                path: PathBuf::from("/test.ts"),
-                extension: "ts".to_string(),
-                icon: None,
-                description: Some("test script".to_string()),
+        let scripts = vec![Script {
+            name: "test".to_string(),
+            path: PathBuf::from("/test.ts"),
+            extension: "ts".to_string(),
+            icon: None,
+            description: Some("test script".to_string()),
             alias: None,
-            },
-        ];
+        }];
 
-        let scriptlets = vec![
-            test_scriptlet_with_desc("test", "ts", "test()", "test snippet"),
-        ];
+        let scriptlets = vec![test_scriptlet_with_desc(
+            "test",
+            "ts",
+            "test()",
+            "test snippet",
+        )];
 
         let results = fuzzy_search_unified(&scripts, &scriptlets, "test");
         // When scores are equal, scripts should come first
         match &results[0] {
-            SearchResult::Script(_) => {}, // Correct
+            SearchResult::Script(_) => {} // Correct
             SearchResult::Scriptlet(_) => panic!("Script should be first"),
             SearchResult::BuiltIn(_) => panic!("Script should be first"),
             SearchResult::App(_) => panic!("Script should be first"),
@@ -2160,7 +2341,7 @@ mod tests {
                 extension: "ts".to_string(),
                 icon: None,
                 description: Some("A test script".to_string()),
-            alias: None,
+                alias: None,
             },
             score: 100,
             filename: "test.ts".to_string(),
@@ -2235,7 +2416,7 @@ mod tests {
     // ============================================
     // NAME METADATA PARSING TESTS
     // ============================================
-    
+
     #[test]
     fn test_parse_metadata_line_name_basic() {
         // Basic case: "// Name: Test"
@@ -2386,6 +2567,32 @@ const x = 1;
     }
 
     #[test]
+    fn test_extract_script_metadata_with_alias() {
+        let content = r#"// Name: Git Commit
+// Description: Commit changes to git
+// Alias: gc
+const x = 1;
+"#;
+        let metadata = extract_script_metadata(content);
+        assert_eq!(metadata.name, Some("Git Commit".to_string()));
+        assert_eq!(
+            metadata.description,
+            Some("Commit changes to git".to_string())
+        );
+        assert_eq!(metadata.alias, Some("gc".to_string()));
+    }
+
+    #[test]
+    fn test_extract_script_metadata_alias_only() {
+        let content = r#"// Alias: shortcut
+const x = 1;
+"#;
+        let metadata = extract_script_metadata(content);
+        assert_eq!(metadata.name, None);
+        assert_eq!(metadata.alias, Some("shortcut".to_string()));
+    }
+
+    #[test]
     fn test_extract_script_metadata_name_only() {
         let content = r#"// Name: My Script
 const x = 1;
@@ -2428,7 +2635,7 @@ console.log(x);
             "//\tName:Test",
             "//\tName: Test",
         ];
-        
+
         for content in variants {
             let full_content = format!("{}\nconst x = 1;", content);
             let metadata = extract_script_metadata(&full_content);
@@ -2525,9 +2732,9 @@ const x = 1;
             name: "myScript".to_string(),
             path: PathBuf::from("/home/user/.kenv/scripts/myScript.ts"),
             extension: "ts".to_string(),
-                icon: None,
+            icon: None,
             description: Some("My custom script".to_string()),
-        alias: None,
+            alias: None,
         };
 
         assert_eq!(script.name, "myScript");
@@ -2542,9 +2749,9 @@ const x = 1;
             name: "original".to_string(),
             path: PathBuf::from("/test.ts"),
             extension: "ts".to_string(),
-                icon: None,
+            icon: None,
             description: Some("desc".to_string()),
-        alias: None,
+            alias: None,
         };
 
         let cloned = original.clone();
@@ -2568,12 +2775,17 @@ const x = 1;
         let scriptlets = vec![
             test_scriptlet_with_desc("Copy", "ts", "copy()", "Copy to clipboard"),
             test_scriptlet_with_desc("Paste", "ts", "paste()", "Paste from clipboard"),
-            test_scriptlet_with_desc("Custom Paste", "ts", "pasteCustom()", "Custom paste with format"),
+            test_scriptlet_with_desc(
+                "Custom Paste",
+                "ts",
+                "pasteCustom()",
+                "Custom paste with format",
+            ),
         ];
 
         let results = fuzzy_search_scriptlets(&scriptlets, "paste");
         assert_eq!(results.len(), 2); // "Paste" and "Custom Paste"
-        // "Paste" should rank higher than "Custom Paste"
+                                      // "Paste" should rank higher than "Custom Paste"
         assert_eq!(results[0].scriptlet.name, "Paste");
     }
 
@@ -2586,7 +2798,7 @@ const x = 1;
                 extension: "ts".to_string(),
                 icon: None,
                 description: None,
-            alias: None,
+                alias: None,
             },
             Script {
                 name: "saveFile".to_string(),
@@ -2594,13 +2806,11 @@ const x = 1;
                 extension: "ts".to_string(),
                 icon: None,
                 description: None,
-            alias: None,
+                alias: None,
             },
         ];
 
-        let scriptlets = vec![
-            test_scriptlet("Open URL", "ts", "open(url)"),
-        ];
+        let scriptlets = vec![test_scriptlet("Open URL", "ts", "open(url)")];
 
         let results = fuzzy_search_unified(&scripts, &scriptlets, "open");
         assert_eq!(results.len(), 2); // "openFile" script and "Open URL" scriptlet
@@ -2615,7 +2825,7 @@ const x = 1;
                 extension: "ts".to_string(),
                 icon: None,
                 description: None,
-            alias: None,
+                alias: None,
             },
             score: 50,
             filename: "test.ts".to_string(),
@@ -2678,7 +2888,7 @@ third()
                 extension: "ts".to_string(),
                 icon: None,
                 description: None,
-            alias: None,
+                alias: None,
             },
             Script {
                 name: "beta".to_string(),
@@ -2686,7 +2896,7 @@ third()
                 extension: "ts".to_string(),
                 icon: None,
                 description: None,
-            alias: None,
+                alias: None,
             },
             Script {
                 name: "gamma".to_string(),
@@ -2694,7 +2904,7 @@ third()
                 extension: "ts".to_string(),
                 icon: None,
                 description: None,
-            alias: None,
+                alias: None,
             },
         ];
 
@@ -2744,7 +2954,7 @@ third()
                 extension: "ts".to_string(),
                 icon: None,
                 description: None,
-            alias: None,
+                alias: None,
             },
             Script {
                 name: "apple".to_string(),
@@ -2752,7 +2962,7 @@ third()
                 extension: "ts".to_string(),
                 icon: None,
                 description: None,
-            alias: None,
+                alias: None,
             },
             Script {
                 name: "monkey".to_string(),
@@ -2760,14 +2970,14 @@ third()
                 extension: "ts".to_string(),
                 icon: None,
                 description: None,
-            alias: None,
+                alias: None,
             },
         ];
 
         // Manual check of sorting (since read_scripts reads from filesystem)
         let mut sorted = scripts.clone();
         sorted.sort_by(|a, b| a.name.cmp(&b.name));
-        
+
         assert_eq!(sorted[0].name, "apple");
         assert_eq!(sorted[1].name, "monkey");
         assert_eq!(sorted[2].name, "zebra");
@@ -2811,16 +3021,14 @@ third()
 
     #[test]
     fn test_script_match_score_meaningful() {
-        let scripts = vec![
-            Script {
-                name: "openfile".to_string(),
-                path: PathBuf::from("/test.ts"),
-                extension: "ts".to_string(),
-                icon: None,
-                description: Some("Opens a file".to_string()),
+        let scripts = vec![Script {
+            name: "openfile".to_string(),
+            path: PathBuf::from("/test.ts"),
+            extension: "ts".to_string(),
+            icon: None,
+            description: Some("Opens a file".to_string()),
             alias: None,
-            },
-        ];
+        }];
 
         let results = fuzzy_search_scripts(&scripts, "open");
         assert!(results[0].score >= 50); // Should have at least fuzzy match score
@@ -2870,16 +3078,14 @@ open("https://example.com");
 
     #[test]
     fn test_search_consistency_across_calls() {
-        let scripts = vec![
-            Script {
-                name: "test".to_string(),
-                path: PathBuf::from("/test.ts"),
-                extension: "ts".to_string(),
-                icon: None,
-                description: None,
+        let scripts = vec![Script {
+            name: "test".to_string(),
+            path: PathBuf::from("/test.ts"),
+            extension: "ts".to_string(),
+            icon: None,
+            description: None,
             alias: None,
-            },
-        ];
+        }];
 
         let result1 = fuzzy_search_scripts(&scripts, "test");
         let result2 = fuzzy_search_scripts(&scripts, "test");
@@ -2892,16 +3098,14 @@ open("https://example.com");
 
     #[test]
     fn test_search_result_name_never_empty() {
-        let scripts = vec![
-            Script {
-                name: "test".to_string(),
-                path: PathBuf::from("/test.ts"),
-                extension: "ts".to_string(),
-                icon: None,
-                description: None,
+        let scripts = vec![Script {
+            name: "test".to_string(),
+            path: PathBuf::from("/test.ts"),
+            extension: "ts".to_string(),
+            icon: None,
+            description: None,
             alias: None,
-            },
-        ];
+        }];
 
         let results = fuzzy_search_scripts(&scripts, "test");
         for result in results {
@@ -2934,16 +3138,14 @@ const obj = { key: "value" };
 
     #[test]
     fn test_fuzzy_search_with_unicode() {
-        let scripts = vec![
-            Script {
-                name: "café".to_string(),
-                path: PathBuf::from("/cafe.ts"),
-                extension: "ts".to_string(),
-                icon: None,
-                description: None,
+        let scripts = vec![Script {
+            name: "café".to_string(),
+            path: PathBuf::from("/cafe.ts"),
+            extension: "ts".to_string(),
+            icon: None,
+            description: None,
             alias: None,
-            },
-        ];
+        }];
 
         // Should be able to search for the ASCII version
         let results = fuzzy_search_scripts(&scripts, "cafe");
@@ -2957,9 +3159,9 @@ const obj = { key: "value" };
             name: "test".to_string(),
             path: PathBuf::from("/test.ts"),
             extension: "ts".to_string(),
-                icon: None,
+            icon: None,
             description: None,
-        alias: None,
+            alias: None,
         };
 
         assert_eq!(script.extension, "ts");
@@ -2970,7 +3172,7 @@ const obj = { key: "value" };
             extension: "js".to_string(),
             description: None,
             icon: None,
-        alias: None,
+            alias: None,
         };
 
         assert_eq!(script_js.extension, "js");
@@ -2979,7 +3181,7 @@ const obj = { key: "value" };
     #[test]
     fn test_searchlet_tool_field_various_values() {
         let tools = vec!["ts", "bash", "paste", "sh", "zsh", "py"];
-        
+
         for tool in tools {
             let scriptlet = test_scriptlet(&format!("Test {}", tool), tool, "code");
             assert_eq!(scriptlet.tool, tool);
@@ -3011,9 +3213,12 @@ code here
 ```"#;
 
         let scriptlet = parse_scriptlet_section(section, None).unwrap();
-        
+
         assert_eq!(scriptlet.name, "Complete");
-        assert_eq!(scriptlet.description, Some("Full description here".to_string()));
+        assert_eq!(
+            scriptlet.description,
+            Some("Full description here".to_string())
+        );
         assert_eq!(scriptlet.shortcut, Some("ctrl shift k".to_string()));
         assert_eq!(scriptlet.expand, Some("choices,,".to_string()));
         // "custom" field won't be extracted as it's not a known field
@@ -3028,7 +3233,7 @@ code here
                 extension: "ts".to_string(),
                 icon: None,
                 description: None,
-            alias: None,
+                alias: None,
             },
             score: 0,
             filename: "test.ts".to_string(),
@@ -3037,7 +3242,7 @@ code here
 
         // Should always return "Script"
         assert_eq!(script.type_label(), "Script");
-        
+
         let scriptlet = SearchResult::Scriptlet(ScriptletMatch {
             scriptlet: test_scriptlet("test", "ts", "code"),
             score: 0,
@@ -3079,7 +3284,7 @@ code here
                 extension: "ts".to_string(),
                 icon: None,
                 description: None,
-            alias: None,
+                alias: None,
             },
             Script {
                 name: "reopen".to_string(),
@@ -3087,7 +3292,7 @@ code here
                 extension: "ts".to_string(),
                 icon: None,
                 description: None,
-            alias: None,
+                alias: None,
             },
         ];
 
@@ -3107,7 +3312,7 @@ code here
                 extension: "ts".to_string(),
                 icon: None,
                 description: None,
-            alias: None,
+                alias: None,
             },
             Script {
                 name: "other".to_string(),
@@ -3115,7 +3320,7 @@ code here
                 extension: "ts".to_string(),
                 icon: None,
                 description: Some("test description".to_string()),
-            alias: None,
+                alias: None,
             },
         ];
 
@@ -3133,7 +3338,7 @@ code here
                 extension: "ts".to_string(),
                 icon: None,
                 description: None,
-            alias: None,
+                alias: None,
             },
             Script {
                 name: "other".to_string(),
@@ -3141,7 +3346,7 @@ code here
                 extension: "ts".to_string(),
                 icon: None,
                 description: None,
-            alias: None,
+                alias: None,
             },
         ];
 
@@ -3154,9 +3359,9 @@ code here
     fn test_scriptlet_code_match_lower_than_description() {
         let mut snippet = test_scriptlet("Snippet", "ts", "paste()");
         snippet.description = Some("copy text".to_string());
-        
+
         let other = test_scriptlet("Other", "ts", "copy()");
-        
+
         let scriptlets = vec![snippet, other];
 
         let results = fuzzy_search_scriptlets(&scriptlets, "copy");
@@ -3186,7 +3391,7 @@ code here
                 extension: "ts".to_string(),
                 icon: None,
                 description: Some("Open a file".to_string()),
-            alias: None,
+                alias: None,
             },
             Script {
                 name: "openfile".to_string(),
@@ -3194,7 +3399,7 @@ code here
                 extension: "ts".to_string(),
                 icon: None,
                 description: None,
-            alias: None,
+                alias: None,
             },
         ];
 
@@ -3207,16 +3412,14 @@ code here
 
     #[test]
     fn test_case_insensitive_matching() {
-        let scripts = vec![
-            Script {
-                name: "OpenFile".to_string(),
-                path: PathBuf::from("/openfile.ts"),
-                extension: "ts".to_string(),
-                icon: None,
-                description: None,
+        let scripts = vec![Script {
+            name: "OpenFile".to_string(),
+            path: PathBuf::from("/openfile.ts"),
+            extension: "ts".to_string(),
+            icon: None,
+            description: None,
             alias: None,
-            },
-        ];
+        }];
 
         let results = fuzzy_search_scripts(&scripts, "OPEN");
         assert_eq!(results.len(), 1);
@@ -3232,7 +3435,7 @@ code here
                 extension: "ts".to_string(),
                 icon: None,
                 description: Some("test".to_string()),
-            alias: None,
+                alias: None,
             },
             Script {
                 name: "bbb".to_string(),
@@ -3240,7 +3443,7 @@ code here
                 extension: "ts".to_string(),
                 icon: None,
                 description: Some("test".to_string()),
-            alias: None,
+                alias: None,
             },
         ];
 
@@ -3265,26 +3468,27 @@ code here
 
     #[test]
     fn test_unified_search_ties_scripts_first() {
-        let scripts = vec![
-            Script {
-                name: "test".to_string(),
-                path: PathBuf::from("/test.ts"),
-                extension: "ts".to_string(),
-                icon: None,
-                description: Some("Test script".to_string()),
+        let scripts = vec![Script {
+            name: "test".to_string(),
+            path: PathBuf::from("/test.ts"),
+            extension: "ts".to_string(),
+            icon: None,
+            description: Some("Test script".to_string()),
             alias: None,
-            },
-        ];
+        }];
 
-        let scriptlets = vec![
-            test_scriptlet_with_desc("test", "ts", "test()", "Test snippet"),
-        ];
+        let scriptlets = vec![test_scriptlet_with_desc(
+            "test",
+            "ts",
+            "test()",
+            "Test snippet",
+        )];
 
         let results = fuzzy_search_unified(&scripts, &scriptlets, "test");
         // Same score, scripts should come before scriptlets
         assert_eq!(results.len(), 2);
         match &results[0] {
-            SearchResult::Script(_) => {},
+            SearchResult::Script(_) => {}
             SearchResult::Scriptlet(_) => panic!("Expected Script first"),
             SearchResult::BuiltIn(_) => panic!("Expected Script first"),
             SearchResult::App(_) => panic!("Expected Script first"),
@@ -3294,16 +3498,14 @@ code here
 
     #[test]
     fn test_partial_match_scores_appropriately() {
-        let scripts = vec![
-            Script {
-                name: "test".to_string(),
-                path: PathBuf::from("/test.ts"),
-                extension: "ts".to_string(),
-                icon: None,
-                description: None,
+        let scripts = vec![Script {
+            name: "test".to_string(),
+            path: PathBuf::from("/test.ts"),
+            extension: "ts".to_string(),
+            icon: None,
+            description: None,
             alias: None,
-            },
-        ];
+        }];
 
         let results = fuzzy_search_scripts(&scripts, "es");
         // "es" is fuzzy match in "test" but not a substring match
@@ -3320,7 +3522,7 @@ code here
                 extension: "ts".to_string(),
                 icon: None,
                 description: None,
-            alias: None,
+                alias: None,
             },
             Script {
                 name: "save".to_string(),
@@ -3328,7 +3530,7 @@ code here
                 extension: "ts".to_string(),
                 icon: None,
                 description: None,
-            alias: None,
+                alias: None,
             },
         ];
 
@@ -3340,16 +3542,14 @@ code here
     #[test]
     fn test_all_search_types_contribute_to_score() {
         // Test that all scoring categories work
-        let scripts = vec![
-            Script {
-                name: "database".to_string(),
-                path: PathBuf::from("/database.ts"),
-                extension: "ts".to_string(),
-                icon: None,
-                description: Some("database connection".to_string()),
+        let scripts = vec![Script {
+            name: "database".to_string(),
+            path: PathBuf::from("/database.ts"),
+            extension: "ts".to_string(),
+            icon: None,
+            description: Some("database connection".to_string()),
             alias: None,
-            },
-        ];
+        }];
 
         let results = fuzzy_search_scripts(&scripts, "database");
         // Should match on name (100 + 50 = 150) + description (25) = 175
@@ -3366,7 +3566,7 @@ code here
                 extension: "ts".to_string(),
                 icon: None,
                 description: Some("Opens a file dialog".to_string()),
-            alias: None,
+                alias: None,
             },
             Script {
                 name: "someScript".to_string(),
@@ -3374,7 +3574,7 @@ code here
                 extension: "ts".to_string(),
                 icon: None,
                 description: Some("Does something".to_string()),
-            alias: None,
+                alias: None,
             },
             Script {
                 name: "saveData".to_string(),
@@ -3382,7 +3582,7 @@ code here
                 extension: "ts".to_string(),
                 icon: None,
                 description: Some("Saves data to file".to_string()),
-            alias: None,
+                alias: None,
             },
         ];
 
@@ -3403,7 +3603,7 @@ code here
                 extension: "ts".to_string(),
                 icon: None,
                 description: Some("Search files with grep".to_string()),
-            alias: None,
+                alias: None,
             },
             Script {
                 name: "find".to_string(),
@@ -3411,7 +3611,7 @@ code here
                 extension: "ts".to_string(),
                 icon: None,
                 description: Some("Find files".to_string()),
-            alias: None,
+                alias: None,
             },
             Script {
                 name: "search".to_string(),
@@ -3419,7 +3619,7 @@ code here
                 extension: "ts".to_string(),
                 icon: None,
                 description: None,
-            alias: None,
+                alias: None,
             },
         ];
 
@@ -3433,18 +3633,17 @@ code here
     #[test]
     fn test_mixed_content_search() {
         // Combine scripts and scriptlets in unified search
-        let scripts = vec![
-            Script {
-                name: "copyClipboard".to_string(),
-                path: PathBuf::from("/copy.ts"),
-                extension: "ts".to_string(),
-                icon: None,
-                description: Some("Copy to clipboard".to_string()),
+        let scripts = vec![Script {
+            name: "copyClipboard".to_string(),
+            path: PathBuf::from("/copy.ts"),
+            extension: "ts".to_string(),
+            icon: None,
+            description: Some("Copy to clipboard".to_string()),
             alias: None,
-            },
-        ];
+        }];
 
-        let mut quick_copy = test_scriptlet_with_desc("Quick Copy", "ts", "copy()", "Copy selection");
+        let mut quick_copy =
+            test_scriptlet_with_desc("Quick Copy", "ts", "copy()", "Copy selection");
         quick_copy.shortcut = Some("cmd c".to_string());
         let scriptlets = vec![quick_copy];
 
@@ -3452,7 +3651,9 @@ code here
         assert_eq!(results.len(), 2);
         // Verify both types are present
         let has_script = results.iter().any(|r| matches!(r, SearchResult::Script(_)));
-        let has_scriptlet = results.iter().any(|r| matches!(r, SearchResult::Scriptlet(_)));
+        let has_scriptlet = results
+            .iter()
+            .any(|r| matches!(r, SearchResult::Scriptlet(_)));
         assert!(has_script);
         assert!(has_scriptlet);
     }
@@ -3468,7 +3669,12 @@ code here
                 id: "builtin-clipboard-history".to_string(),
                 name: "Clipboard History".to_string(),
                 description: "View and manage your clipboard history".to_string(),
-                keywords: vec!["clipboard".to_string(), "history".to_string(), "paste".to_string(), "copy".to_string()],
+                keywords: vec![
+                    "clipboard".to_string(),
+                    "history".to_string(),
+                    "paste".to_string(),
+                    "copy".to_string(),
+                ],
                 feature: BuiltInFeature::ClipboardHistory,
                 icon: Some("📋".to_string()),
             },
@@ -3476,7 +3682,12 @@ code here
                 id: "builtin-app-launcher".to_string(),
                 name: "App Launcher".to_string(),
                 description: "Search and launch installed applications".to_string(),
-                keywords: vec!["app".to_string(), "launch".to_string(), "open".to_string(), "application".to_string()],
+                keywords: vec![
+                    "app".to_string(),
+                    "launch".to_string(),
+                    "open".to_string(),
+                    "application".to_string(),
+                ],
                 feature: BuiltInFeature::AppLauncher,
                 icon: Some("🚀".to_string()),
             },
@@ -3487,7 +3698,7 @@ code here
     fn test_fuzzy_search_builtins_by_name() {
         let builtins = create_test_builtins();
         let results = fuzzy_search_builtins(&builtins, "clipboard");
-        
+
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].entry.name, "Clipboard History");
         assert!(results[0].score > 0);
@@ -3496,12 +3707,12 @@ code here
     #[test]
     fn test_fuzzy_search_builtins_by_keyword() {
         let builtins = create_test_builtins();
-        
+
         // "paste" is a keyword for clipboard history
         let results = fuzzy_search_builtins(&builtins, "paste");
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].entry.name, "Clipboard History");
-        
+
         // "launch" is a keyword for app launcher
         let results = fuzzy_search_builtins(&builtins, "launch");
         assert_eq!(results.len(), 1);
@@ -3511,12 +3722,12 @@ code here
     #[test]
     fn test_fuzzy_search_builtins_partial_keyword() {
         let builtins = create_test_builtins();
-        
+
         // "clip" should match "clipboard" keyword
         let results = fuzzy_search_builtins(&builtins, "clip");
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].entry.name, "Clipboard History");
-        
+
         // "app" should match "app" keyword in App Launcher
         let results = fuzzy_search_builtins(&builtins, "app");
         assert_eq!(results.len(), 1);
@@ -3526,12 +3737,12 @@ code here
     #[test]
     fn test_fuzzy_search_builtins_by_description() {
         let builtins = create_test_builtins();
-        
+
         // "manage" is in clipboard history description
         let results = fuzzy_search_builtins(&builtins, "manage");
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].entry.name, "Clipboard History");
-        
+
         // "installed" is in app launcher description
         let results = fuzzy_search_builtins(&builtins, "installed");
         assert_eq!(results.len(), 1);
@@ -3542,7 +3753,7 @@ code here
     fn test_fuzzy_search_builtins_empty_query() {
         let builtins = create_test_builtins();
         let results = fuzzy_search_builtins(&builtins, "");
-        
+
         assert_eq!(results.len(), 2);
         // Both should have score 0
         assert_eq!(results[0].score, 0);
@@ -3553,14 +3764,14 @@ code here
     fn test_fuzzy_search_builtins_no_match() {
         let builtins = create_test_builtins();
         let results = fuzzy_search_builtins(&builtins, "nonexistent");
-        
+
         assert!(results.is_empty());
     }
 
     #[test]
     fn test_builtin_match_struct() {
         use crate::builtins::BuiltInFeature;
-        
+
         let entry = BuiltInEntry {
             id: "test".to_string(),
             name: "Test Entry".to_string(),
@@ -3569,12 +3780,12 @@ code here
             feature: BuiltInFeature::ClipboardHistory,
             icon: None,
         };
-        
+
         let builtin_match = BuiltInMatch {
             entry: entry.clone(),
             score: 100,
         };
-        
+
         assert_eq!(builtin_match.entry.name, "Test Entry");
         assert_eq!(builtin_match.score, 100);
     }
@@ -3582,7 +3793,7 @@ code here
     #[test]
     fn test_search_result_builtin_variant() {
         use crate::builtins::BuiltInFeature;
-        
+
         let entry = BuiltInEntry {
             id: "test".to_string(),
             name: "Test Built-in".to_string(),
@@ -3591,12 +3802,9 @@ code here
             feature: BuiltInFeature::AppLauncher,
             icon: Some("🚀".to_string()),
         };
-        
-        let result = SearchResult::BuiltIn(BuiltInMatch {
-            entry,
-            score: 75,
-        });
-        
+
+        let result = SearchResult::BuiltIn(BuiltInMatch { entry, score: 75 });
+
         assert_eq!(result.name(), "Test Built-in");
         assert_eq!(result.description(), Some("Test built-in description"));
         assert_eq!(result.score(), 75);
@@ -3605,33 +3813,39 @@ code here
 
     #[test]
     fn test_unified_search_with_builtins() {
-        let scripts = vec![
-            Script {
-                name: "my-clipboard".to_string(),
-                path: PathBuf::from("/clipboard.ts"),
-                extension: "ts".to_string(),
-                icon: None,
-                description: Some("My clipboard script".to_string()),
+        let scripts = vec![Script {
+            name: "my-clipboard".to_string(),
+            path: PathBuf::from("/clipboard.ts"),
+            extension: "ts".to_string(),
+            icon: None,
+            description: Some("My clipboard script".to_string()),
             alias: None,
-            },
-        ];
+        }];
 
-        let scriptlets = vec![
-            test_scriptlet_with_desc("Clipboard Helper", "ts", "clipboard()", "Helper for clipboard"),
-        ];
+        let scriptlets = vec![test_scriptlet_with_desc(
+            "Clipboard Helper",
+            "ts",
+            "clipboard()",
+            "Helper for clipboard",
+        )];
 
         let builtins = create_test_builtins();
 
-        let results = fuzzy_search_unified_with_builtins(&scripts, &scriptlets, &builtins, "clipboard");
-        
+        let results =
+            fuzzy_search_unified_with_builtins(&scripts, &scriptlets, &builtins, "clipboard");
+
         // All three should match
         assert_eq!(results.len(), 3);
-        
+
         // Verify all types are present
-        let has_builtin = results.iter().any(|r| matches!(r, SearchResult::BuiltIn(_)));
+        let has_builtin = results
+            .iter()
+            .any(|r| matches!(r, SearchResult::BuiltIn(_)));
         let has_script = results.iter().any(|r| matches!(r, SearchResult::Script(_)));
-        let has_scriptlet = results.iter().any(|r| matches!(r, SearchResult::Scriptlet(_)));
-        
+        let has_scriptlet = results
+            .iter()
+            .any(|r| matches!(r, SearchResult::Scriptlet(_)));
+
         assert!(has_builtin);
         assert!(has_script);
         assert!(has_scriptlet);
@@ -3639,29 +3853,27 @@ code here
 
     #[test]
     fn test_unified_search_builtins_appear_at_top() {
-        let scripts = vec![
-            Script {
-                name: "history".to_string(),
-                path: PathBuf::from("/history.ts"),
-                extension: "ts".to_string(),
-                icon: None,
-                description: None,
+        let scripts = vec![Script {
+            name: "history".to_string(),
+            path: PathBuf::from("/history.ts"),
+            extension: "ts".to_string(),
+            icon: None,
+            description: None,
             alias: None,
-            },
-        ];
+        }];
 
         let builtins = create_test_builtins();
 
         let results = fuzzy_search_unified_with_builtins(&scripts, &[], &builtins, "history");
-        
+
         // Both should match (Clipboard History builtin and history script)
         assert!(results.len() >= 2);
-        
+
         // When scores are equal, built-ins should appear first
         // Check that the first result is a built-in if scores are equal
         if results.len() >= 2 && results[0].score() == results[1].score() {
             match &results[0] {
-                SearchResult::BuiltIn(_) => {}, // Expected
+                SearchResult::BuiltIn(_) => {} // Expected
                 _ => panic!("Built-in should appear before script when scores are equal"),
             }
         }
@@ -3670,23 +3882,19 @@ code here
     #[test]
     fn test_unified_search_backward_compatible() {
         // Ensure the original fuzzy_search_unified still works without builtins
-        let scripts = vec![
-            Script {
-                name: "test".to_string(),
-                path: PathBuf::from("/test.ts"),
-                extension: "ts".to_string(),
-                icon: None,
-                description: None,
+        let scripts = vec![Script {
+            name: "test".to_string(),
+            path: PathBuf::from("/test.ts"),
+            extension: "ts".to_string(),
+            icon: None,
+            description: None,
             alias: None,
-            },
-        ];
+        }];
 
-        let scriptlets = vec![
-            test_scriptlet("Test Snippet", "ts", "test()"),
-        ];
+        let scriptlets = vec![test_scriptlet("Test Snippet", "ts", "test()")];
 
         let results = fuzzy_search_unified(&scripts, &scriptlets, "test");
-        
+
         // Should still work without builtins
         assert_eq!(results.len(), 2);
     }
@@ -3694,7 +3902,7 @@ code here
     #[test]
     fn test_builtin_keyword_matching_priority() {
         let builtins = create_test_builtins();
-        
+
         // "copy" matches keyword in clipboard history
         let results = fuzzy_search_builtins(&builtins, "copy");
         assert_eq!(results.len(), 1);
@@ -3705,7 +3913,7 @@ code here
     #[test]
     fn test_builtin_fuzzy_keyword_matching() {
         let builtins = create_test_builtins();
-        
+
         // "hist" should fuzzy match "history" keyword
         let results = fuzzy_search_builtins(&builtins, "hist");
         assert!(!results.is_empty());
@@ -3715,7 +3923,7 @@ code here
     // ============================================
     // WINDOW SEARCH TESTS
     // ============================================
-    // 
+    //
     // Note: Most window search tests require WindowInfo to have a public constructor.
     // These tests verify the function signatures and empty input handling.
     // Integration tests with actual WindowInfo require window_control module changes.
@@ -3724,10 +3932,10 @@ code here
     fn test_fuzzy_search_windows_empty_list() {
         // Test with empty window list
         let windows: Vec<crate::window_control::WindowInfo> = vec![];
-        
+
         let results = fuzzy_search_windows(&windows, "test");
         assert!(results.is_empty());
-        
+
         let results_empty_query = fuzzy_search_windows(&windows, "");
         assert!(results_empty_query.is_empty());
     }
@@ -3764,7 +3972,7 @@ code here
         let builtins: Vec<BuiltInEntry> = vec![];
         let apps: Vec<crate::app_launcher::AppInfo> = vec![];
         let windows: Vec<crate::window_control::WindowInfo> = vec![];
-        
+
         let results = fuzzy_search_unified_with_windows(
             &scripts,
             &scriptlets,
@@ -3773,27 +3981,25 @@ code here
             &windows,
             "test",
         );
-        
+
         assert!(results.is_empty());
     }
 
     #[test]
     fn test_fuzzy_search_unified_with_windows_returns_scripts() {
-        let scripts = vec![
-            Script {
-                name: "test_script".to_string(),
-                path: PathBuf::from("/test.ts"),
-                extension: "ts".to_string(),
-                icon: None,
-                description: None,
+        let scripts = vec![Script {
+            name: "test_script".to_string(),
+            path: PathBuf::from("/test.ts"),
+            extension: "ts".to_string(),
+            icon: None,
+            description: None,
             alias: None,
-            },
-        ];
+        }];
         let scriptlets: Vec<Scriptlet> = vec![];
         let builtins: Vec<BuiltInEntry> = vec![];
         let apps: Vec<crate::app_launcher::AppInfo> = vec![];
         let windows: Vec<crate::window_control::WindowInfo> = vec![];
-        
+
         let results = fuzzy_search_unified_with_windows(
             &scripts,
             &scriptlets,
@@ -3802,7 +4008,7 @@ code here
             &windows,
             "test",
         );
-        
+
         assert_eq!(results.len(), 1);
         assert!(matches!(&results[0], SearchResult::Script(_)));
     }
@@ -3820,7 +4026,7 @@ code here
                 extension: "ts".to_string(),
                 icon: None,
                 description: None,
-            alias: None,
+                alias: None,
             },
             Script {
                 name: "save".to_string(),
@@ -3828,20 +4034,24 @@ code here
                 extension: "ts".to_string(),
                 icon: None,
                 description: None,
-            alias: None,
+                alias: None,
             },
         ];
         let scriptlets: Vec<Scriptlet> = vec![];
         let builtins: Vec<BuiltInEntry> = vec![];
         let apps: Vec<AppInfo> = vec![];
         let frecency_store = FrecencyStore::new();
-        
+
         // Search mode: non-empty filter should return flat list
         let (grouped, results) = get_grouped_results(
-            &scripts, &scriptlets, &builtins, &apps,
-            &frecency_store, "open"
+            &scripts,
+            &scriptlets,
+            &builtins,
+            &apps,
+            &frecency_store,
+            "open",
         );
-        
+
         // Should be a flat list with no headers
         assert!(!grouped.is_empty());
         for item in &grouped {
@@ -3859,7 +4069,7 @@ code here
                 extension: "ts".to_string(),
                 icon: None,
                 description: None,
-            alias: None,
+                alias: None,
             },
             Script {
                 name: "beta".to_string(),
@@ -3867,26 +4077,24 @@ code here
                 extension: "ts".to_string(),
                 icon: None,
                 description: None,
-            alias: None,
+                alias: None,
             },
         ];
         let scriptlets: Vec<Scriptlet> = vec![];
         let builtins: Vec<BuiltInEntry> = vec![];
         let apps: Vec<AppInfo> = vec![];
         let frecency_store = FrecencyStore::new();
-        
+
         // Empty filter should return grouped view
-        let (grouped, results) = get_grouped_results(
-            &scripts, &scriptlets, &builtins, &apps,
-            &frecency_store, ""
-        );
-        
+        let (grouped, results) =
+            get_grouped_results(&scripts, &scriptlets, &builtins, &apps, &frecency_store, "");
+
         // Results should contain all items
         assert_eq!(results.len(), 2);
-        
+
         // Grouped should have MAIN section (no RECENT since frecency is empty)
         assert!(!grouped.is_empty());
-        
+
         // First item should be MAIN section header
         assert!(matches!(&grouped[0], GroupedListItem::SectionHeader(s) if s == "MAIN"));
     }
@@ -3900,7 +4108,7 @@ code here
                 extension: "ts".to_string(),
                 icon: None,
                 description: None,
-            alias: None,
+                alias: None,
             },
             Script {
                 name: "beta".to_string(),
@@ -3908,7 +4116,7 @@ code here
                 extension: "ts".to_string(),
                 icon: None,
                 description: None,
-            alias: None,
+                alias: None,
             },
             Script {
                 name: "gamma".to_string(),
@@ -3916,34 +4124,33 @@ code here
                 extension: "ts".to_string(),
                 icon: None,
                 description: None,
-            alias: None,
+                alias: None,
             },
         ];
         let scriptlets: Vec<Scriptlet> = vec![];
         let builtins: Vec<BuiltInEntry> = vec![];
         let apps: Vec<AppInfo> = vec![];
-        
+
         // Create frecency store and record usage for one script
         let mut frecency_store = FrecencyStore::new();
         frecency_store.record_use("/beta.ts");
-        
+
         // Empty filter should return grouped view with RECENT section
-        let (grouped, results) = get_grouped_results(
-            &scripts, &scriptlets, &builtins, &apps,
-            &frecency_store, ""
-        );
-        
+        let (grouped, results) =
+            get_grouped_results(&scripts, &scriptlets, &builtins, &apps, &frecency_store, "");
+
         // Results should contain all items
         assert_eq!(results.len(), 3);
-        
+
         // Grouped should have both RECENT and MAIN sections
-        let section_headers: Vec<&str> = grouped.iter()
+        let section_headers: Vec<&str> = grouped
+            .iter()
             .filter_map(|item| match item {
                 GroupedListItem::SectionHeader(s) => Some(s.as_str()),
                 _ => None,
             })
             .collect();
-        
+
         assert!(section_headers.contains(&"RECENT"));
         assert!(section_headers.contains(&"MAIN"));
     }
@@ -3958,7 +4165,7 @@ code here
         //
         // Bug scenario: User frequently uses "test-script", but Clipboard History
         // still appears as the first choice when opening Script Kit.
-        
+
         let scripts = vec![
             Script {
                 name: "test-script".to_string(),
@@ -3966,7 +4173,7 @@ code here
                 extension: "ts".to_string(),
                 icon: None,
                 description: Some("A frequently used script".to_string()),
-            alias: None,
+                alias: None,
             },
             Script {
                 name: "another-script".to_string(),
@@ -3974,35 +4181,34 @@ code here
                 extension: "ts".to_string(),
                 icon: None,
                 description: None,
-            alias: None,
+                alias: None,
             },
         ];
         let scriptlets: Vec<Scriptlet> = vec![];
         let builtins = create_test_builtins(); // Includes Clipboard History and App Launcher
         let apps: Vec<AppInfo> = vec![];
-        
+
         // Record usage for test-script to give it frecency
         let mut frecency_store = FrecencyStore::new();
         frecency_store.record_use("/test-script.ts");
-        
+
         // Get grouped results with empty filter (default view)
-        let (grouped, results) = get_grouped_results(
-            &scripts, &scriptlets, &builtins, &apps,
-            &frecency_store, ""
-        );
-        
+        let (grouped, results) =
+            get_grouped_results(&scripts, &scriptlets, &builtins, &apps, &frecency_store, "");
+
         // Verify structure:
         // grouped[0] = SectionHeader("RECENT")
         // grouped[1] = Item(idx) where results[idx] is the frecency script
         // grouped[2] = SectionHeader("MAIN")
         // grouped[3+] = Items including builtins and other scripts
-        
+
         // First should be RECENT header
         assert!(
             matches!(&grouped[0], GroupedListItem::SectionHeader(s) if s == "RECENT"),
-            "First item should be RECENT section header, got {:?}", grouped[0]
+            "First item should be RECENT section header, got {:?}",
+            grouped[0]
         );
-        
+
         // Second should be the frecency script (test-script)
         assert!(
             matches!(&grouped[1], GroupedListItem::Item(idx) if {
@@ -4018,15 +4224,17 @@ code here
                 }
             })
         );
-        
+
         // Third should be MAIN header
         assert!(
             matches!(&grouped[2], GroupedListItem::SectionHeader(s) if s == "MAIN"),
-            "Third item should be MAIN section header, got {:?}", grouped[2]
+            "Third item should be MAIN section header, got {:?}",
+            grouped[2]
         );
-        
+
         // Find builtins in MAIN section (after grouped[2])
-        let main_items: Vec<&str> = grouped[3..].iter()
+        let main_items: Vec<&str> = grouped[3..]
+            .iter()
             .filter_map(|item| {
                 if let GroupedListItem::Item(idx) = item {
                     Some(results[*idx].name())
@@ -4035,7 +4243,7 @@ code here
                 }
             })
             .collect();
-        
+
         // Builtins should be in MAIN, not RECENT
         assert!(
             main_items.contains(&"Clipboard History"),
@@ -4047,7 +4255,7 @@ code here
             "App Launcher should be in MAIN section. MAIN items: {:?}",
             main_items
         );
-        
+
         // Verify the frecency script is NOT in MAIN (it's in RECENT)
         assert!(
             !main_items.contains(&"test-script"),
@@ -4064,42 +4272,38 @@ code here
         //
         // Bug: Clipboard History appears first even when user scripts have
         // higher/more recent frecency scores.
-        
-        let scripts = vec![
-            Script {
-                name: "my-frequent-script".to_string(),
-                path: PathBuf::from("/my-frequent-script.ts"),
-                extension: "ts".to_string(),
-                icon: None,
-                description: Some("User's frequently used script".to_string()),
+
+        let scripts = vec![Script {
+            name: "my-frequent-script".to_string(),
+            path: PathBuf::from("/my-frequent-script.ts"),
+            extension: "ts".to_string(),
+            icon: None,
+            description: Some("User's frequently used script".to_string()),
             alias: None,
-            },
-        ];
+        }];
         let scriptlets: Vec<Scriptlet> = vec![];
         let builtins = create_test_builtins(); // Clipboard History, App Launcher
         let apps: Vec<AppInfo> = vec![];
-        
+
         let mut frecency_store = FrecencyStore::new();
-        
+
         // Record builtin usage once (older)
         frecency_store.record_use("builtin:Clipboard History");
-        
+
         // Record script usage multiple times (more frequent, should have higher score)
         frecency_store.record_use("/my-frequent-script.ts");
         frecency_store.record_use("/my-frequent-script.ts");
         frecency_store.record_use("/my-frequent-script.ts");
-        
-        let (grouped, results) = get_grouped_results(
-            &scripts, &scriptlets, &builtins, &apps,
-            &frecency_store, ""
-        );
-        
+
+        let (grouped, results) =
+            get_grouped_results(&scripts, &scriptlets, &builtins, &apps, &frecency_store, "");
+
         // Both should be in RECENT, but script should come FIRST (higher frecency)
         assert!(
             matches!(&grouped[0], GroupedListItem::SectionHeader(s) if s == "RECENT"),
             "First item should be RECENT header"
         );
-        
+
         // The first ITEM in RECENT should be the user script (higher frecency)
         assert!(
             matches!(&grouped[1], GroupedListItem::Item(idx) if {
@@ -4113,7 +4317,7 @@ code here
                 format!("{:?}", grouped[1])
             }
         );
-        
+
         // Clipboard History should be second in RECENT (lower frecency)
         assert!(
             matches!(&grouped[2], GroupedListItem::Item(idx) if {
@@ -4131,7 +4335,7 @@ code here
     #[test]
     fn test_get_grouped_results_selection_priority_with_frecency() {
         // This test verifies the SELECTION behavior, not just grouping.
-        // 
+        //
         // Bug: When user opens Script Kit, the FIRST SELECTABLE item should be
         // the most recently used item (from RECENT), not the first item in MAIN.
         //
@@ -4139,7 +4343,7 @@ code here
         // With frecency, the first Item (not SectionHeader) should be the
         // frecency script, which means selected_index=0 should point to
         // the frecency script when we skip headers.
-        
+
         let scripts = vec![
             Script {
                 name: "alpha-script".to_string(),
@@ -4147,7 +4351,7 @@ code here
                 extension: "ts".to_string(),
                 icon: None,
                 description: None,
-            alias: None,
+                alias: None,
             },
             Script {
                 name: "zebra-script".to_string(),
@@ -4155,23 +4359,22 @@ code here
                 extension: "ts".to_string(),
                 icon: None,
                 description: None,
-            alias: None,
+                alias: None,
             },
         ];
         let scriptlets: Vec<Scriptlet> = vec![];
         let builtins = create_test_builtins(); // Clipboard History, App Launcher
         let apps: Vec<AppInfo> = vec![];
-        
+
         let mut frecency_store = FrecencyStore::new();
         frecency_store.record_use("/zebra-script.ts"); // Give frecency to zebra
-        
-        let (grouped, results) = get_grouped_results(
-            &scripts, &scriptlets, &builtins, &apps,
-            &frecency_store, ""
-        );
-        
+
+        let (grouped, results) =
+            get_grouped_results(&scripts, &scriptlets, &builtins, &apps, &frecency_store, "");
+
         // Find the first Item (not SectionHeader) - this is what gets selected
-        let first_selectable_idx = grouped.iter()
+        let first_selectable_idx = grouped
+            .iter()
             .find_map(|item| {
                 if let GroupedListItem::Item(idx) = item {
                     Some(*idx)
@@ -4180,32 +4383,33 @@ code here
                 }
             })
             .expect("Should have at least one selectable item");
-        
+
         let first_result = &results[first_selectable_idx];
-        
+
         // The first selectable item MUST be the frecency script
         // NOT Clipboard History (which would be first alphabetically in MAIN)
         assert_eq!(
-            first_result.name(), 
+            first_result.name(),
             "zebra-script",
             "First selectable item should be the frecency script 'zebra-script', got '{}'. \
              This bug causes Clipboard History to appear first regardless of user's frecency.",
             first_result.name()
         );
-        
+
         // Verify the structure explicitly
         // grouped[0] = SectionHeader("RECENT")
         // grouped[1] = Item(zebra-script) <- THIS should be first selection
         // grouped[2] = SectionHeader("MAIN")
         // grouped[3+] = Other items (builtins and scripts sorted together alphabetically)
-        
-        let grouped_names: Vec<String> = grouped.iter()
+
+        let grouped_names: Vec<String> = grouped
+            .iter()
             .map(|item| match item {
                 GroupedListItem::SectionHeader(s) => format!("[{}]", s),
                 GroupedListItem::Item(idx) => results[*idx].name().to_string(),
             })
             .collect();
-        
+
         // First 3 items should be: RECENT header, frecency item, MAIN header
         assert_eq!(
             &grouped_names[..3],
@@ -4218,7 +4422,7 @@ code here
     #[test]
     fn test_get_grouped_results_no_frecency_builtins_sorted_with_scripts() {
         // TDD FAILING TEST: This test documents the BUG and expected fix.
-        // 
+        //
         // BUG: When there's NO frecency data, builtins appear BEFORE scripts in MAIN,
         // regardless of alphabetical order. This causes "Clipboard History" to always
         // appear first.
@@ -4228,7 +4432,7 @@ code here
         //
         // Current broken behavior: ["App Launcher", "Clipboard History", "alpha-script", "zebra-script"]
         // Expected fixed behavior:  ["alpha-script", "App Launcher", "Clipboard History", "zebra-script"]
-        
+
         let scripts = vec![
             Script {
                 name: "alpha-script".to_string(),
@@ -4236,7 +4440,7 @@ code here
                 extension: "ts".to_string(),
                 icon: None,
                 description: None,
-            alias: None,
+                alias: None,
             },
             Script {
                 name: "zebra-script".to_string(),
@@ -4244,46 +4448,48 @@ code here
                 extension: "ts".to_string(),
                 icon: None,
                 description: None,
-            alias: None,
+                alias: None,
             },
         ];
         let scriptlets: Vec<Scriptlet> = vec![];
         let builtins = create_test_builtins(); // Clipboard History, App Launcher
         let apps: Vec<AppInfo> = vec![];
-        
+
         // No frecency - fresh start
         let frecency_store = FrecencyStore::new();
-        
-        let (grouped, results) = get_grouped_results(
-            &scripts, &scriptlets, &builtins, &apps,
-            &frecency_store, ""
-        );
-        
+
+        let (grouped, results) =
+            get_grouped_results(&scripts, &scriptlets, &builtins, &apps, &frecency_store, "");
+
         // With no frecency, should only have MAIN section
-        let grouped_names: Vec<String> = grouped.iter()
+        let grouped_names: Vec<String> = grouped
+            .iter()
             .map(|item| match item {
                 GroupedListItem::SectionHeader(s) => format!("[{}]", s),
                 GroupedListItem::Item(idx) => results[*idx].name().to_string(),
             })
             .collect();
-        
+
         // First should be MAIN header (no RECENT because no frecency)
         assert_eq!(
             grouped_names[0], "[MAIN]",
             "First item should be MAIN header when no frecency. Got: {:?}",
             grouped_names
         );
-        
+
         // Items should be sorted alphabetically - check the order
-        let item_names: Vec<&str> = grouped_names[1..].iter()
-            .map(|s| s.as_str())
-            .collect();
-        
+        let item_names: Vec<&str> = grouped_names[1..].iter().map(|s| s.as_str()).collect();
+
         // EXPECTED: Items sorted alphabetically, builtins mixed with scripts
         // "alpha-script" < "App Launcher" < "Clipboard History" < "zebra-script"
         assert_eq!(
             item_names,
-            vec!["alpha-script", "App Launcher", "Clipboard History", "zebra-script"],
+            vec![
+                "alpha-script",
+                "App Launcher",
+                "Clipboard History",
+                "zebra-script"
+            ],
             "BUG: Builtins appear before scripts instead of being sorted alphabetically. \
              This causes 'Clipboard History' to always be first choice. \
              Expected alphabetical order, got: {:?}",
@@ -4298,12 +4504,10 @@ code here
         let builtins: Vec<BuiltInEntry> = vec![];
         let apps: Vec<AppInfo> = vec![];
         let frecency_store = FrecencyStore::new();
-        
-        let (grouped, results) = get_grouped_results(
-            &scripts, &scriptlets, &builtins, &apps,
-            &frecency_store, ""
-        );
-        
+
+        let (grouped, results) =
+            get_grouped_results(&scripts, &scriptlets, &builtins, &apps, &frecency_store, "");
+
         // Both should be empty when no inputs
         assert!(results.is_empty());
         assert!(grouped.is_empty());
@@ -4318,7 +4522,7 @@ code here
                 extension: "ts".to_string(),
                 icon: None,
                 description: None,
-            alias: None,
+                alias: None,
             },
             Script {
                 name: "second".to_string(),
@@ -4326,23 +4530,26 @@ code here
                 extension: "ts".to_string(),
                 icon: None,
                 description: None,
-            alias: None,
+                alias: None,
             },
         ];
         let scriptlets: Vec<Scriptlet> = vec![];
         let builtins: Vec<BuiltInEntry> = vec![];
         let apps: Vec<AppInfo> = vec![];
         let frecency_store = FrecencyStore::new();
-        
-        let (grouped, results) = get_grouped_results(
-            &scripts, &scriptlets, &builtins, &apps,
-            &frecency_store, ""
-        );
-        
+
+        let (grouped, results) =
+            get_grouped_results(&scripts, &scriptlets, &builtins, &apps, &frecency_store, "");
+
         // All Item indices should be valid indices into results
         for item in &grouped {
             if let GroupedListItem::Item(idx) = item {
-                assert!(*idx < results.len(), "Index {} out of bounds for results len {}", idx, results.len());
+                assert!(
+                    *idx < results.len(),
+                    "Index {} out of bounds for results len {}",
+                    idx,
+                    results.len()
+                );
             }
         }
     }
@@ -4361,7 +4568,7 @@ code here
                 extension: "ts".to_string(),
                 icon: None,
                 description: None,
-            alias: None,
+                alias: None,
             },
             Script {
                 name: "Other Script".to_string(),
@@ -4369,7 +4576,7 @@ code here
                 extension: "js".to_string(),
                 icon: None,
                 description: None,
-            alias: None,
+                alias: None,
             },
         ];
 
@@ -4385,12 +4592,12 @@ code here
         // Users should be able to search by filename
         let scripts = vec![
             Script {
-                name: "Open File".to_string(),  // Name differs from filename
+                name: "Open File".to_string(), // Name differs from filename
                 path: PathBuf::from("/scripts/open-file-dialog.ts"),
                 extension: "ts".to_string(),
                 icon: None,
                 description: None,
-            alias: None,
+                alias: None,
             },
             Script {
                 name: "Save Data".to_string(),
@@ -4398,7 +4605,7 @@ code here
                 extension: "ts".to_string(),
                 icon: None,
                 description: None,
-            alias: None,
+                alias: None,
             },
         ];
 
@@ -4411,20 +4618,21 @@ code here
 
     #[test]
     fn test_fuzzy_search_scripts_filename_returns_correct_filename() {
-        let scripts = vec![
-            Script {
-                name: "Test".to_string(),
-                path: PathBuf::from("/path/to/my-test-script.ts"),
-                extension: "ts".to_string(),
-                icon: None,
-                description: None,
+        let scripts = vec![Script {
+            name: "Test".to_string(),
+            path: PathBuf::from("/path/to/my-test-script.ts"),
+            extension: "ts".to_string(),
+            icon: None,
+            description: None,
             alias: None,
-            },
-        ];
+        }];
 
         let results = fuzzy_search_scripts(&scripts, "test");
         assert_eq!(results.len(), 1);
-        assert_eq!(results[0].filename, "my-test-script.ts", "Should extract correct filename from path");
+        assert_eq!(
+            results[0].filename, "my-test-script.ts",
+            "Should extract correct filename from path"
+        );
     }
 
     #[test]
@@ -4432,68 +4640,73 @@ code here
         // Name match should score higher than filename-only match
         let scripts = vec![
             Script {
-                name: "open".to_string(),  // Name matches query
-                path: PathBuf::from("/scripts/foo.ts"),  // Filename doesn't match
+                name: "open".to_string(),               // Name matches query
+                path: PathBuf::from("/scripts/foo.ts"), // Filename doesn't match
                 extension: "ts".to_string(),
                 icon: None,
                 description: None,
-            alias: None,
+                alias: None,
             },
             Script {
-                name: "bar".to_string(),  // Name doesn't match
-                path: PathBuf::from("/scripts/open-something.ts"),  // Filename matches
+                name: "bar".to_string(),                           // Name doesn't match
+                path: PathBuf::from("/scripts/open-something.ts"), // Filename matches
                 extension: "ts".to_string(),
                 icon: None,
                 description: None,
-            alias: None,
+                alias: None,
             },
         ];
 
         let results = fuzzy_search_scripts(&scripts, "open");
         assert_eq!(results.len(), 2);
         // Name match should be first
-        assert_eq!(results[0].script.name, "open", "Name match should rank higher than filename match");
+        assert_eq!(
+            results[0].script.name, "open",
+            "Name match should rank higher than filename match"
+        );
         assert_eq!(results[1].script.name, "bar");
     }
 
     #[test]
     fn test_fuzzy_search_scripts_match_indices_for_name() {
-        let scripts = vec![
-            Script {
-                name: "openfile".to_string(),
-                path: PathBuf::from("/scripts/test.ts"),
-                extension: "ts".to_string(),
-                icon: None,
-                description: None,
+        let scripts = vec![Script {
+            name: "openfile".to_string(),
+            path: PathBuf::from("/scripts/test.ts"),
+            extension: "ts".to_string(),
+            icon: None,
+            description: None,
             alias: None,
-            },
-        ];
+        }];
 
         let results = fuzzy_search_scripts(&scripts, "opf");
         assert_eq!(results.len(), 1);
         // "opf" matches indices 0, 1, 4 in "openfile"
-        assert_eq!(results[0].match_indices.name_indices, vec![0, 1, 4], 
-            "Should return correct match indices for name");
+        assert_eq!(
+            results[0].match_indices.name_indices,
+            vec![0, 1, 4],
+            "Should return correct match indices for name"
+        );
     }
 
     #[test]
     fn test_fuzzy_search_scripts_match_indices_for_filename() {
-        let scripts = vec![
-            Script {
-                name: "Other Name".to_string(),  // Name doesn't match
-                path: PathBuf::from("/scripts/my-test.ts"),
-                extension: "ts".to_string(),
-                icon: None,
-                description: None,
+        let scripts = vec![Script {
+            name: "Other Name".to_string(), // Name doesn't match
+            path: PathBuf::from("/scripts/my-test.ts"),
+            extension: "ts".to_string(),
+            icon: None,
+            description: None,
             alias: None,
-            },
-        ];
+        }];
 
         let results = fuzzy_search_scripts(&scripts, "mts");
         assert_eq!(results.len(), 1);
         // "mts" matches indices in "my-test.ts": m=0, t=3, s=5
-        assert_eq!(results[0].match_indices.filename_indices, vec![0, 3, 5],
-            "Should return correct match indices for filename when name doesn't match");
+        assert_eq!(
+            results[0].match_indices.filename_indices,
+            vec![0, 3, 5],
+            "Should return correct match indices for filename when name doesn't match"
+        );
     }
 
     #[test]
@@ -4568,49 +4781,51 @@ code here
     #[test]
     fn test_fuzzy_search_scriptlets_display_file_path() {
         // display_file_path should be the filename#anchor format
-        let scriptlets = vec![
-            Scriptlet {
-                name: "Test".to_string(),
-                description: None,
-                code: "code".to_string(),
-                tool: "ts".to_string(),
-                shortcut: None,
-                expand: None,
-                group: None,
-                file_path: Some("/home/user/.kenv/scriptlets/urls.md#test-slug".to_string()),
-                command: Some("test-slug".to_string()),
-                alias: None,
-            },
-        ];
+        let scriptlets = vec![Scriptlet {
+            name: "Test".to_string(),
+            description: None,
+            code: "code".to_string(),
+            tool: "ts".to_string(),
+            shortcut: None,
+            expand: None,
+            group: None,
+            file_path: Some("/home/user/.kenv/scriptlets/urls.md#test-slug".to_string()),
+            command: Some("test-slug".to_string()),
+            alias: None,
+        }];
 
         let results = fuzzy_search_scriptlets(&scriptlets, "");
         assert_eq!(results.len(), 1);
-        assert_eq!(results[0].display_file_path, Some("urls.md#test-slug".to_string()),
-            "display_file_path should be filename#anchor format");
+        assert_eq!(
+            results[0].display_file_path,
+            Some("urls.md#test-slug".to_string()),
+            "display_file_path should be filename#anchor format"
+        );
     }
 
     #[test]
     fn test_fuzzy_search_scriptlets_match_indices() {
-        let scriptlets = vec![
-            Scriptlet {
-                name: "Other".to_string(),  // Name doesn't match
-                description: None,
-                code: "code".to_string(),
-                tool: "ts".to_string(),
-                shortcut: None,
-                expand: None,
-                group: None,
-                file_path: Some("/path/urls.md#test".to_string()),
-                command: None,
-                alias: None,
-            },
-        ];
+        let scriptlets = vec![Scriptlet {
+            name: "Other".to_string(), // Name doesn't match
+            description: None,
+            code: "code".to_string(),
+            tool: "ts".to_string(),
+            shortcut: None,
+            expand: None,
+            group: None,
+            file_path: Some("/path/urls.md#test".to_string()),
+            command: None,
+            alias: None,
+        }];
 
         let results = fuzzy_search_scriptlets(&scriptlets, "url");
         assert_eq!(results.len(), 1);
         // "url" matches in "urls.md#test" at indices 0, 1, 2
-        assert_eq!(results[0].match_indices.filename_indices, vec![0, 1, 2],
-            "Should return correct match indices for file_path");
+        assert_eq!(
+            results[0].match_indices.filename_indices,
+            vec![0, 1, 2],
+            "Should return correct match indices for file_path"
+        );
     }
 
     #[test]
@@ -4636,8 +4851,14 @@ code here
 
     #[test]
     fn test_extract_filename() {
-        assert_eq!(extract_filename(&PathBuf::from("/path/to/script.ts")), "script.ts");
-        assert_eq!(extract_filename(&PathBuf::from("relative/path.js")), "path.js");
+        assert_eq!(
+            extract_filename(&PathBuf::from("/path/to/script.ts")),
+            "script.ts"
+        );
+        assert_eq!(
+            extract_filename(&PathBuf::from("relative/path.js")),
+            "path.js"
+        );
         assert_eq!(extract_filename(&PathBuf::from("single.ts")), "single.ts");
     }
 
@@ -4648,13 +4869,13 @@ code here
             extract_scriptlet_display_path(&Some("/path/to/file.md#slug".to_string())),
             Some("file.md#slug".to_string())
         );
-        
+
         // Without anchor
         assert_eq!(
             extract_scriptlet_display_path(&Some("/path/to/file.md".to_string())),
             Some("file.md".to_string())
         );
-        
+
         // None input
         assert_eq!(extract_scriptlet_display_path(&None), None);
     }
@@ -4662,16 +4883,14 @@ code here
     #[test]
     fn test_fuzzy_search_scripts_empty_query_has_filename() {
         // Even with empty query, filename should be populated
-        let scripts = vec![
-            Script {
-                name: "Test".to_string(),
-                path: PathBuf::from("/path/my-script.ts"),
-                extension: "ts".to_string(),
-                icon: None,
-                description: None,
+        let scripts = vec![Script {
+            name: "Test".to_string(),
+            path: PathBuf::from("/path/my-script.ts"),
+            extension: "ts".to_string(),
+            icon: None,
+            description: None,
             alias: None,
-            },
-        ];
+        }];
 
         let results = fuzzy_search_scripts(&scripts, "");
         assert_eq!(results.len(), 1);

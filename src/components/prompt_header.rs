@@ -88,7 +88,7 @@ impl Default for PromptHeaderColors {
             text_primary: 0xffffff,
             text_muted: 0x808080,
             text_dimmed: 0x666666,
-            accent: 0xfbbf24,       // Script Kit yellow/gold
+            accent: 0xfbbf24, // Script Kit yellow/gold
             background: 0x1e1e1e,
             search_box_bg: 0x2d2d30,
             border: 0x464647,
@@ -292,14 +292,14 @@ impl PromptHeader {
             input = input.child(
                 div()
                     .text_color(rgb(colors.text_muted))
-                    .child(prefix.clone())
+                    .child(prefix.clone()),
             );
         }
 
         // Cursor position:
         // - When empty: cursor LEFT (before placeholder)
         // - When typing: cursor RIGHT (after text)
-        
+
         // Left cursor (when empty)
         // Use conditional background instead of .when() to avoid type inference issues
         if filter_is_empty {
@@ -314,7 +314,7 @@ impl PromptHeader {
                     .h(px(CURSOR_HEIGHT_LG))
                     .my(px(CURSOR_MARGIN_Y))
                     .mr(px(4.))
-                    .bg(cursor_bg)
+                    .bg(cursor_bg),
             );
         }
 
@@ -334,7 +334,7 @@ impl PromptHeader {
                     .h(px(CURSOR_HEIGHT_LG))
                     .my(px(CURSOR_MARGIN_Y))
                     .ml(px(2.))
-                    .bg(cursor_bg)
+                    .bg(cursor_bg),
             );
         }
 
@@ -356,12 +356,8 @@ impl PromptHeader {
         let on_primary = self.on_primary_click.clone();
         let on_actions = self.on_actions_click.clone();
 
-        let mut container = div()
-            .flex()
-            .flex_row()
-            .items_center()
-            .justify_end();
-        
+        let mut container = div().flex().flex_row().items_center().justify_end();
+
         // Primary button
         let mut primary_btn = Button::new(self.config.primary_button_label.clone(), button_colors)
             .variant(ButtonVariant::Ghost)
@@ -378,7 +374,7 @@ impl PromptHeader {
                 .mx(px(4.))
                 .text_color(rgba((colors.text_dimmed << 8) | 0x60))
                 .text_sm()
-                .child("|")
+                .child("|"),
         );
 
         // Actions button (if enabled)
@@ -399,7 +395,7 @@ impl PromptHeader {
                     .mx(px(4.))
                     .text_color(rgba((colors.text_dimmed << 8) | 0x60))
                     .text_sm()
-                    .child("|")
+                    .child("|"),
             );
         }
 
@@ -440,11 +436,19 @@ impl PromptHeader {
             .items_center()
             .px(px(8.))
             .rounded(px(4.))
-            .bg(rgba((colors.search_box_bg << 8) | if search_is_empty { 0x40 } else { 0x80 }))
+            .bg(rgba(
+                (colors.search_box_bg << 8) | if search_is_empty { 0x40 } else { 0x80 },
+            ))
             .border_1()
-            .border_color(rgba((colors.accent << 8) | if search_is_empty { 0x20 } else { 0x40 }))
+            .border_color(rgba(
+                (colors.accent << 8) | if search_is_empty { 0x20 } else { 0x40 },
+            ))
             .text_sm()
-            .text_color(if search_is_empty { rgb(colors.text_muted) } else { rgb(colors.text_primary) });
+            .text_color(if search_is_empty {
+                rgb(colors.text_muted)
+            } else {
+                rgb(colors.text_primary)
+            });
 
         // Cursor before placeholder when empty
         if search_is_empty {
@@ -454,7 +458,7 @@ impl PromptHeader {
                     .h(px(14.))
                     .mr(px(2.))
                     .rounded(px(1.))
-                    .bg(cursor_bg)
+                    .bg(cursor_bg),
             );
         }
 
@@ -468,7 +472,7 @@ impl PromptHeader {
                     .h(px(14.))
                     .ml(px(2.))
                     .rounded(px(1.))
-                    .bg(cursor_bg)
+                    .bg(cursor_bg),
             );
         }
 
@@ -483,7 +487,7 @@ impl PromptHeader {
                 div()
                     .text_color(rgb(colors.text_dimmed))
                     .text_xs()
-                    .child("⌘K")
+                    .child("⌘K"),
             )
             // Search input display
             .child(search_input)
@@ -492,7 +496,7 @@ impl PromptHeader {
                     .mx(px(4.))
                     .text_color(rgba((colors.text_dimmed << 8) | 0x60))
                     .text_sm()
-                    .child("|")
+                    .child("|"),
             )
     }
 
@@ -531,7 +535,7 @@ impl RenderOnce for PromptHeader {
             .items_center()
             .justify_end()
             .opacity(buttons_opacity);
-        
+
         if !buttons_visible {
             buttons_layer = buttons_layer.invisible();
         }
@@ -546,7 +550,7 @@ impl RenderOnce for PromptHeader {
             .items_center()
             .justify_end()
             .opacity(search_opacity);
-        
+
         if !search_visible {
             search_layer = search_layer.invisible();
         }
@@ -570,7 +574,7 @@ impl RenderOnce for PromptHeader {
                     .flex()
                     .items_center()
                     .child(buttons_layer)
-                    .child(search_layer)
+                    .child(search_layer),
             )
             // Script Kit logo
             .child(self.render_logo())

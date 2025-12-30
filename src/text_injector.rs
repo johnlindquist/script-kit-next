@@ -162,7 +162,10 @@ impl TextInjector {
 
         // Save original clipboard contents (text only for now)
         let original = clipboard.get_text().ok();
-        debug!(had_original = original.is_some(), "Saved original clipboard");
+        debug!(
+            had_original = original.is_some(),
+            "Saved original clipboard"
+        );
 
         // Set new text to clipboard
         clipboard

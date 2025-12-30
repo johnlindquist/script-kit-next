@@ -46,11 +46,11 @@ impl ButtonColors {
     /// Uses accent.selected (yellow/gold) to match logo and selected item highlights
     pub fn from_theme(theme: &crate::theme::Theme) -> Self {
         Self {
-            text_color: theme.colors.accent.selected,  // Yellow/gold - matches logo & highlights
+            text_color: theme.colors.accent.selected, // Yellow/gold - matches logo & highlights
             text_hover: theme.colors.text.primary,
             background: theme.colors.accent.selected_subtle,
             background_hover: theme.colors.accent.selected_subtle,
-            accent: theme.colors.accent.selected,      // Yellow/gold - matches logo & highlights
+            accent: theme.colors.accent.selected, // Yellow/gold - matches logo & highlights
             border: theme.colors.ui.border,
         }
     }
@@ -59,11 +59,11 @@ impl ButtonColors {
     /// Uses the primary accent color to match the design's brand
     pub fn from_design(colors: &crate::designs::DesignColors) -> Self {
         Self {
-            text_color: colors.accent,  // Primary accent (yellow/gold for default)
+            text_color: colors.accent, // Primary accent (yellow/gold for default)
             text_hover: colors.text_primary,
             background: colors.background_selected,
             background_hover: colors.background_hover,
-            accent: colors.accent,      // Primary accent (yellow/gold for default)
+            accent: colors.accent, // Primary accent (yellow/gold for default)
             border: colors.border,
         }
     }
@@ -72,12 +72,12 @@ impl ButtonColors {
 impl Default for ButtonColors {
     fn default() -> Self {
         Self {
-            text_color: 0xfbbf24,    // Yellow/gold (Script Kit brand color)
-            text_hover: 0xffffff,    // White
-            background: 0x2a2a2a,    // Dark gray
+            text_color: 0xfbbf24,       // Yellow/gold (Script Kit brand color)
+            text_hover: 0xffffff,       // White
+            background: 0x2a2a2a,       // Dark gray
             background_hover: 0x323232, // Slightly lighter
-            accent: 0xfbbf24,        // Yellow/gold (Script Kit brand color)
-            border: 0x464647,        // Border color
+            accent: 0xfbbf24,           // Yellow/gold (Script Kit brand color)
+            border: 0x464647,           // Border color
         }
     }
 }
@@ -172,12 +172,16 @@ impl RenderOnce for Button {
         // Calculate colors based on variant
         // Hover uses white at ~15% alpha - universal "lift" effect that works on any dark bg
         let hover_overlay = rgba(0xffffff26); // white at ~15% alpha (0x26 = 38/255 ≈ 15%)
-        
+
         let (text_color, bg_color, hover_bg) = match variant {
             ButtonVariant::Primary => {
                 // Primary: filled background with accent color
                 let bg = rgba((colors.background << 8) | 0x80);
-                (rgb(colors.accent), bg, rgba((colors.background_hover << 8) | 0xB0))
+                (
+                    rgb(colors.accent),
+                    bg,
+                    rgba((colors.background_hover << 8) | 0xB0),
+                )
             }
             ButtonVariant::Ghost => {
                 // Ghost: text only (accent color), white overlay on hover
@@ -193,10 +197,7 @@ impl RenderOnce for Button {
 
         // Build shortcut element if present - same accent color as label
         let shortcut_element = if let Some(sc) = self.shortcut {
-            div()
-                .text_xs()
-                .ml(px(4.))
-                .child(sc)
+            div().text_xs().ml(px(4.)).child(sc)
         } else {
             div()
         };
@@ -231,8 +232,7 @@ impl RenderOnce for Button {
         // Apply hover styles unless disabled
         // Keep text color the same, just add subtle background lift
         if !disabled {
-            button = button
-                .hover(move |s| s.bg(hover_bg));
+            button = button.hover(move |s| s.bg(hover_bg));
         } else {
             button = button.opacity(0.5).cursor_default();
         }

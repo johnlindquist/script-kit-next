@@ -10,8 +10,8 @@
 //! - Pill-shaped chips for metadata
 //! - M3 search bar style (rounded pill, filled)
 
-use gpui::*;
 use gpui::prelude::FluentBuilder;
+use gpui::*;
 
 use super::{DesignRenderer, DesignVariant};
 use crate::list_item::LIST_ITEM_HEIGHT;
@@ -89,50 +89,45 @@ impl Material3Renderer {
 
     /// Render a M3 search bar (pill-shaped, filled)
     fn render_search_bar(&self, filter: &str) -> impl IntoElement {
-        div()
-            .w_full()
-            .h(px(56.0))
-            .px(px(16.0))
-            .py(px(8.0))
-            .child(
-                div()
-                    .w_full()
-                    .h_full()
-                    .bg(rgb(colors::SURFACE_CONTAINER_HIGH))
-                    .rounded(px(corners::XL))
-                    .px(px(16.0))
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .gap(px(12.0))
-                    // Search icon placeholder
-                    .child(
-                        div()
-                            .w(px(24.0))
-                            .h(px(24.0))
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .text_color(rgb(colors::ON_SURFACE_VARIANT))
-                            .child("🔍")
-                    )
-                    // Search text or placeholder
-                    .child(
-                        div()
-                            .flex_1()
-                            .text_color(if filter.is_empty() {
-                                rgb(colors::ON_SURFACE_VARIANT)
-                            } else {
-                                rgb(colors::ON_SURFACE)
-                            })
-                            .text_size(px(16.0))
-                            .child(if filter.is_empty() {
-                                "Search scripts...".to_string()
-                            } else {
-                                filter.to_string()
-                            })
-                    )
-            )
+        div().w_full().h(px(56.0)).px(px(16.0)).py(px(8.0)).child(
+            div()
+                .w_full()
+                .h_full()
+                .bg(rgb(colors::SURFACE_CONTAINER_HIGH))
+                .rounded(px(corners::XL))
+                .px(px(16.0))
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap(px(12.0))
+                // Search icon placeholder
+                .child(
+                    div()
+                        .w(px(24.0))
+                        .h(px(24.0))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .text_color(rgb(colors::ON_SURFACE_VARIANT))
+                        .child("🔍"),
+                )
+                // Search text or placeholder
+                .child(
+                    div()
+                        .flex_1()
+                        .text_color(if filter.is_empty() {
+                            rgb(colors::ON_SURFACE_VARIANT)
+                        } else {
+                            rgb(colors::ON_SURFACE)
+                        })
+                        .text_size(px(16.0))
+                        .child(if filter.is_empty() {
+                            "Search scripts...".to_string()
+                        } else {
+                            filter.to_string()
+                        }),
+                ),
+        )
     }
 
     /// Render a M3 list item card
@@ -197,7 +192,7 @@ impl Material3Renderer {
                                     .text_size(px(16.0))
                                     .font_weight(FontWeight::MEDIUM)
                                     .overflow_hidden()
-                                    .child(name.to_string())
+                                    .child(name.to_string()),
                             )
                             // Description (if present)
                             .when_some(description, |d: Div, desc: &str| {
@@ -207,14 +202,14 @@ impl Material3Renderer {
                                         .text_size(px(14.0))
                                         .overflow_hidden()
                                         .max_h(px(20.0))
-                                        .child(desc.to_string())
+                                        .child(desc.to_string()),
                                 )
-                            })
+                            }),
                     )
                     // Right side: shortcut chip
                     .when_some(shortcut, |d: Div, sc: &str| {
                         d.child(self.render_chip(sc, is_selected))
-                    })
+                    }),
             )
     }
 
@@ -223,7 +218,10 @@ impl Material3Renderer {
         let (bg, fg) = if is_selected {
             (rgb(colors::TERTIARY_CONTAINER), rgb(colors::TERTIARY))
         } else {
-            (rgb(colors::SURFACE_CONTAINER), rgb(colors::ON_SURFACE_VARIANT))
+            (
+                rgb(colors::SURFACE_CONTAINER),
+                rgb(colors::ON_SURFACE_VARIANT),
+            )
         };
 
         div()
@@ -264,11 +262,7 @@ impl Default for Material3Renderer {
 }
 
 impl<App> DesignRenderer<App> for Material3Renderer {
-    fn render_script_list(
-        &self,
-        _app: &App,
-        _cx: &mut Context<App>,
-    ) -> AnyElement {
+    fn render_script_list(&self, _app: &App, _cx: &mut Context<App>) -> AnyElement {
         // Demo content for preview
         let demo_items = vec![
             ("Open Project", Some("Launch your favorite IDE"), Some("⌘O")),
@@ -299,9 +293,9 @@ impl<App> DesignRenderer<App> for Material3Renderer {
                             .text_color(rgb(colors::ON_SURFACE))
                             .text_size(px(22.0))
                             .font_weight(FontWeight::MEDIUM)
-                            .child("Scripts")
+                            .child("Scripts"),
                     )
-                    .child(self.render_design_label())
+                    .child(self.render_design_label()),
             )
             // Search bar
             .child(self.render_search_bar(""))
@@ -312,14 +306,11 @@ impl<App> DesignRenderer<App> for Material3Renderer {
                     .flex_1()
                     .overflow_hidden()
                     .py(px(8.0))
-                    .children(
-                        demo_items
-                            .into_iter()
-                            .enumerate()
-                            .map(|(i, (name, desc, shortcut))| {
-                                self.render_list_item(name, desc, shortcut, i == 0, i)
-                            })
-                    )
+                    .children(demo_items.into_iter().enumerate().map(
+                        |(i, (name, desc, shortcut))| {
+                            self.render_list_item(name, desc, shortcut, i == 0, i)
+                        },
+                    )),
             )
             .into_any_element()
     }
@@ -386,86 +377,77 @@ pub fn render_material3_preview_panel(content: Option<&str>) -> impl IntoElement
         rgb(colors::ON_SURFACE_VARIANT)
     };
 
-    div()
-        .w_full()
-        .h_full()
-        .p(px(16.))
-        .child(
-            div()
-                .w_full()
-                .h_full()
-                .p(px(20.))
-                .bg(rgb(colors::SURFACE_CONTAINER))
-                .rounded(px(corners::MD))
-                .shadow(vec![BoxShadow {
-                    color: hsla(0., 0., 0., 0.1),
-                    offset: point(px(0.), px(elevation::LEVEL1)),
-                    blur_radius: px(3.),
-                    spread_radius: px(0.),
-                }])
-                .flex()
-                .flex_col()
-                .child(
-                    div()
-                        .text_size(px(12.))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(rgb(colors::ON_SURFACE_VARIANT))
-                        .mb(px(16.))
-                        .child("Preview"),
-                )
-                .child(
-                    div()
-                        .flex_1()
-                        .text_size(px(14.))
-                        .text_color(text_color)
-                        .overflow_hidden()
-                        .child(display_content.to_string()),
-                ),
-        )
+    div().w_full().h_full().p(px(16.)).child(
+        div()
+            .w_full()
+            .h_full()
+            .p(px(20.))
+            .bg(rgb(colors::SURFACE_CONTAINER))
+            .rounded(px(corners::MD))
+            .shadow(vec![BoxShadow {
+                color: hsla(0., 0., 0., 0.1),
+                offset: point(px(0.), px(elevation::LEVEL1)),
+                blur_radius: px(3.),
+                spread_radius: px(0.),
+            }])
+            .flex()
+            .flex_col()
+            .child(
+                div()
+                    .text_size(px(12.))
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(rgb(colors::ON_SURFACE_VARIANT))
+                    .mb(px(16.))
+                    .child("Preview"),
+            )
+            .child(
+                div()
+                    .flex_1()
+                    .text_size(px(14.))
+                    .text_color(text_color)
+                    .overflow_hidden()
+                    .child(display_content.to_string()),
+            ),
+    )
 }
 
 /// Render Material 3-styled log panel
 ///
 /// Tonal surface container with M3 typography.
 pub fn render_material3_log_panel(logs: &[String]) -> impl IntoElement {
-    div()
-        .w_full()
-        .h(px(160.))
-        .px(px(16.))
-        .pb(px(16.))
-        .child(
-            div()
-                .w_full()
-                .h_full()
-                .p(px(16.))
-                .bg(rgb(colors::SURFACE_CONTAINER_HIGH))
-                .rounded(px(corners::MD))
-                .flex()
-                .flex_col()
-                .child(
-                    div()
-                        .text_size(px(12.))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(rgb(colors::ON_SURFACE_VARIANT))
-                        .mb(px(12.))
-                        .child("Console Output"),
-                )
-                .child(
-                    div()
-                        .flex_1()
-                        .overflow_hidden()
-                        .font_family("Roboto Mono")
-                        .flex()
-                        .flex_col()
-                        .gap(px(4.))
-                        .children(logs.iter().map(|log| {
-                            div()
-                                .text_size(px(12.))
-                                .text_color(rgb(colors::ON_SURFACE_VARIANT))
-                                .child(log.clone())
-                        })),
-                ),
-        )
+    div().w_full().h(px(160.)).px(px(16.)).pb(px(16.)).child(
+        div()
+            .w_full()
+            .h_full()
+            .p(px(16.))
+            .bg(rgb(colors::SURFACE_CONTAINER_HIGH))
+            .rounded(px(corners::MD))
+            .flex()
+            .flex_col()
+            .child(
+                div()
+                    .text_size(px(12.))
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(rgb(colors::ON_SURFACE_VARIANT))
+                    .mb(px(12.))
+                    .child("Console Output"),
+            )
+            .child(
+                div()
+                    .flex_1()
+                    .overflow_hidden()
+                    .font_family("Roboto Mono")
+                    .flex()
+                    .flex_col()
+                    .gap(px(4.))
+                    .children(logs.iter().map(|log| {
+                        div()
+                            .text_size(px(12.))
+                            .text_color(rgb(colors::ON_SURFACE_VARIANT))
+                            .child(log.clone())
+                    })),
+            ),
+    )
 }
 
 /// Render Material 3-styled window container

@@ -521,10 +521,10 @@ impl Choice {
             semantic_id: None,
         }
     }
-    
+
     /// Generate and set the semantic ID for this choice.
     /// Format: choice:{index}:{value_slug}
-    /// 
+    ///
     /// The value_slug is created by:
     /// - Converting to lowercase
     /// - Replacing spaces and underscores with hyphens
@@ -534,12 +534,12 @@ impl Choice {
         self.semantic_id = Some(generate_semantic_id("choice", index, &self.value));
         self
     }
-    
+
     /// Set the semantic ID directly (for custom IDs)
     pub fn set_semantic_id(&mut self, id: String) {
         self.semantic_id = Some(id);
     }
-    
+
     /// Generate the semantic ID without setting it (for external use)
     pub fn generate_id(&self, index: usize) -> String {
         generate_semantic_id("choice", index, &self.value)
@@ -547,14 +547,14 @@ impl Choice {
 }
 
 /// Generate a semantic ID for an element.
-/// 
+///
 /// Format: {type}:{index}:{value_slug}
-/// 
+///
 /// # Arguments
 /// * `element_type` - The element type (e.g., "choice", "button", "input")
 /// * `index` - The numeric index of the element
 /// * `value` - The value to convert to a slug
-/// 
+///
 /// # Returns
 /// A semantic ID string in the format: type:index:slug
 pub fn generate_semantic_id(element_type: &str, index: usize, value: &str) -> String {
@@ -563,13 +563,13 @@ pub fn generate_semantic_id(element_type: &str, index: usize, value: &str) -> St
 }
 
 /// Generate a semantic ID for named elements (no index).
-/// 
+///
 /// Format: {type}:{name}
-/// 
+///
 /// # Arguments
 /// * `element_type` - The element type (e.g., "input", "panel", "window")
 /// * `name` - The name of the element
-/// 
+///
 /// # Returns
 /// A semantic ID string in the format: type:name
 pub fn generate_semantic_id_named(element_type: &str, name: &str) -> String {
@@ -578,7 +578,7 @@ pub fn generate_semantic_id_named(element_type: &str, name: &str) -> String {
 }
 
 /// Convert a value string to a URL-safe slug suitable for semantic IDs.
-/// 
+///
 /// - Converts to lowercase
 /// - Replaces spaces and underscores with hyphens
 /// - Removes non-alphanumeric characters (except hyphens)
@@ -595,11 +595,11 @@ pub fn value_to_slug(value: &str) -> String {
             _ => '-',
         })
         .collect();
-    
+
     // Collapse multiple hyphens and trim
     let mut result = String::with_capacity(20);
     let mut prev_hyphen = false;
-    
+
     for c in slug.chars() {
         if c == '-' {
             if !prev_hyphen && !result.is_empty() {
@@ -610,22 +610,22 @@ pub fn value_to_slug(value: &str) -> String {
             result.push(c);
             prev_hyphen = false;
         }
-        
+
         if result.len() >= 20 {
             break;
         }
     }
-    
+
     // Remove trailing hyphen
     if result.ends_with('-') {
         result.pop();
     }
-    
+
     // Ensure non-empty
     if result.is_empty() {
         result.push_str("item");
     }
-    
+
     result
 }
 
@@ -640,7 +640,6 @@ pub enum Message {
     // ============================================================
     // CORE PROMPTS (existing)
     // ============================================================
-
     /// Script sends arg prompt with choices
     #[serde(rename = "arg")]
     Arg {
@@ -681,14 +680,11 @@ pub enum Message {
 
     /// Force submit the current prompt with a value (from SDK's submit() function)
     #[serde(rename = "forceSubmit")]
-    ForceSubmit {
-        value: serde_json::Value,
-    },
+    ForceSubmit { value: serde_json::Value },
 
     // ============================================================
     // TEXT INPUT PROMPTS
     // ============================================================
-
     /// Code/text editor with syntax highlighting
     #[serde(rename = "editor")]
     Editor {
@@ -722,7 +718,6 @@ pub enum Message {
     // ============================================================
     // SELECTION PROMPTS
     // ============================================================
-
     /// Select from choices with optional multiple selection
     #[serde(rename = "select")]
     Select {
@@ -736,25 +731,17 @@ pub enum Message {
     // ============================================================
     // FORM PROMPTS
     // ============================================================
-
     /// Multiple input fields
     #[serde(rename = "fields")]
-    Fields {
-        id: String,
-        fields: Vec<Field>,
-    },
+    Fields { id: String, fields: Vec<Field> },
 
     /// Custom HTML form
     #[serde(rename = "form")]
-    Form {
-        id: String,
-        html: String,
-    },
+    Form { id: String, html: String },
 
     // ============================================================
     // FILE/PATH PROMPTS
     // ============================================================
-
     /// File/folder path picker
     #[serde(rename = "path")]
     Path {
@@ -772,7 +759,6 @@ pub enum Message {
     // ============================================================
     // INPUT CAPTURE PROMPTS
     // ============================================================
-
     /// Hotkey capture
     #[serde(rename = "hotkey")]
     Hotkey {
@@ -784,13 +770,9 @@ pub enum Message {
     // ============================================================
     // TEMPLATE/TEXT PROMPTS
     // ============================================================
-
     /// Template string with placeholders
     #[serde(rename = "template")]
-    Template {
-        id: String,
-        template: String,
-    },
+    Template { id: String, template: String },
 
     /// Environment variable prompt
     #[serde(rename = "env")]
@@ -804,7 +786,6 @@ pub enum Message {
     // ============================================================
     // MEDIA PROMPTS
     // ============================================================
-
     /// Chat interface
     #[serde(rename = "chat")]
     Chat { id: String },
@@ -837,7 +818,6 @@ pub enum Message {
     // ============================================================
     // NOTIFICATION/FEEDBACK MESSAGES
     // ============================================================
-
     /// System notification
     #[serde(rename = "notify")]
     Notify {
@@ -870,7 +850,6 @@ pub enum Message {
     // ============================================================
     // SYSTEM CONTROL MESSAGES
     // ============================================================
-
     /// Menu bar icon/scripts
     #[serde(rename = "menu")]
     Menu {
@@ -931,7 +910,6 @@ pub enum Message {
     // ============================================================
     // UI UPDATE MESSAGES
     // ============================================================
-
     /// Set panel HTML content
     #[serde(rename = "setPanel")]
     SetPanel { html: String },
@@ -947,7 +925,6 @@ pub enum Message {
     // ============================================================
     // SELECTED TEXT OPERATIONS
     // ============================================================
-
     /// Get currently selected text from focused application
     #[serde(rename = "getSelectedText")]
     GetSelectedText {
@@ -980,7 +957,6 @@ pub enum Message {
     // ============================================================
     // WINDOW INFORMATION
     // ============================================================
-
     /// Get current window bounds (position and size)
     #[serde(rename = "getWindowBounds")]
     GetWindowBounds {
@@ -1002,7 +978,6 @@ pub enum Message {
     // ============================================================
     // SELECTED TEXT RESPONSES
     // ============================================================
-
     /// Response with selected text
     #[serde(rename = "selectedText")]
     SelectedText {
@@ -1032,7 +1007,6 @@ pub enum Message {
     // ============================================================
     // CLIPBOARD HISTORY
     // ============================================================
-
     /// Request clipboard history operation
     #[serde(rename = "clipboardHistory")]
     ClipboardHistory {
@@ -1079,7 +1053,6 @@ pub enum Message {
     // ============================================================
     // WINDOW MANAGEMENT (System Windows)
     // ============================================================
-
     /// Request list of all system windows
     #[serde(rename = "windowList")]
     WindowList {
@@ -1120,7 +1093,6 @@ pub enum Message {
     // ============================================================
     // FILE SEARCH
     // ============================================================
-
     /// Request file search
     #[serde(rename = "fileSearch")]
     FileSearch {
@@ -1142,7 +1114,6 @@ pub enum Message {
     // ============================================================
     // SCREENSHOT CAPTURE
     // ============================================================
-
     /// Request to capture app window screenshot
     #[serde(rename = "captureScreenshot")]
     CaptureScreenshot {
@@ -1164,7 +1135,6 @@ pub enum Message {
     // ============================================================
     // STATE QUERY
     // ============================================================
-
     /// Request current UI state without modifying it
     #[serde(rename = "getState")]
     GetState {
@@ -1212,7 +1182,6 @@ pub enum Message {
     // ============================================================
     // ELEMENT QUERY (AI-driven UX)
     // ============================================================
-
     /// Request visible UI elements with semantic IDs
     #[serde(rename = "getElements")]
     GetElements {
@@ -1238,7 +1207,6 @@ pub enum Message {
     // ============================================================
     // ERROR REPORTING
     // ============================================================
-
     /// Script error with structured error information
     #[serde(rename = "setError")]
     SetError {
@@ -1268,7 +1236,6 @@ pub enum Message {
     // ============================================================
     // SCRIPTLET OPERATIONS
     // ============================================================
-
     /// Run a scriptlet with variable substitution
     #[serde(rename = "runScriptlet")]
     RunScriptlet {
@@ -1836,7 +1803,10 @@ impl Message {
         request_id: String,
         entries: Vec<ClipboardHistoryEntryData>,
     ) -> Self {
-        Message::ClipboardHistoryList { request_id, entries }
+        Message::ClipboardHistoryList {
+            request_id,
+            entries,
+        }
     }
 
     /// Create a clipboard history result (success)
@@ -1883,7 +1853,10 @@ impl Message {
 
     /// Create a window list response
     pub fn window_list_result(request_id: String, windows: Vec<SystemWindowInfo>) -> Self {
-        Message::WindowListResult { request_id, windows }
+        Message::WindowListResult {
+            request_id,
+            windows,
+        }
     }
 
     /// Create a window action result (success)
@@ -2001,7 +1974,11 @@ impl Message {
     }
 
     /// Create an elements result response
-    pub fn elements_result(request_id: String, elements: Vec<ElementInfo>, total_count: usize) -> Self {
+    pub fn elements_result(
+        request_id: String,
+        elements: Vec<ElementInfo>,
+        total_count: usize,
+    ) -> Self {
         Message::ElementsResult {
             request_id,
             elements,
@@ -2378,11 +2355,7 @@ mod tests {
             Choice::new("Apple".to_string(), "apple".to_string()),
             Choice::new("Banana".to_string(), "banana".to_string()),
         ];
-        let msg = Message::arg(
-            "1".to_string(),
-            "Pick one".to_string(),
-            choices,
-        );
+        let msg = Message::arg("1".to_string(), "Pick one".to_string(), choices);
 
         let json = serialize_message(&msg).unwrap();
         assert!(json.contains("\"type\":\"arg\""));
@@ -2429,7 +2402,8 @@ mod tests {
 
     #[test]
     fn test_parse_div_with_tailwind() {
-        let json = r#"{"type":"div","id":"2","html":"<h1>Hello</h1>","tailwind":"text-2xl font-bold"}"#;
+        let json =
+            r#"{"type":"div","id":"2","html":"<h1>Hello</h1>","tailwind":"text-2xl font-bold"}"#;
         let msg = parse_message(json).unwrap();
 
         match msg {
@@ -2521,7 +2495,7 @@ mod tests {
             .with_label("Email Address".to_string())
             .with_type("email".to_string())
             .with_placeholder("Enter your email".to_string());
-        
+
         assert_eq!(field.name, "email");
         assert_eq!(field.label, Some("Email Address".to_string()));
         assert_eq!(field.field_type, Some("email".to_string()));
@@ -2547,7 +2521,12 @@ mod tests {
         let json = r#"{"type":"editor","id":"1","content":"hello","language":"javascript"}"#;
         let msg = parse_message(json).unwrap();
         match msg {
-            Message::Editor { id, content, language, .. } => {
+            Message::Editor {
+                id,
+                content,
+                language,
+                ..
+            } => {
                 assert_eq!(id, "1");
                 assert_eq!(content, Some("hello".to_string()));
                 assert_eq!(language, Some("javascript".to_string()));
@@ -2569,7 +2548,11 @@ mod tests {
         let json = r#"{"type":"mini","id":"1","placeholder":"Quick","choices":[]}"#;
         let msg = parse_message(json).unwrap();
         match msg {
-            Message::Mini { id, placeholder, choices } => {
+            Message::Mini {
+                id,
+                placeholder,
+                choices,
+            } => {
                 assert_eq!(id, "1");
                 assert_eq!(placeholder, "Quick");
                 assert!(choices.is_empty());
@@ -2590,7 +2573,9 @@ mod tests {
         let json = r#"{"type":"micro","id":"1","placeholder":"Tiny","choices":[]}"#;
         let msg = parse_message(json).unwrap();
         match msg {
-            Message::Micro { id, placeholder, .. } => {
+            Message::Micro {
+                id, placeholder, ..
+            } => {
                 assert_eq!(id, "1");
                 assert_eq!(placeholder, "Tiny");
             }
@@ -2613,7 +2598,8 @@ mod tests {
 
     #[test]
     fn test_parse_select_message() {
-        let json = r#"{"type":"select","id":"1","placeholder":"Pick","choices":[],"multiple":true}"#;
+        let json =
+            r#"{"type":"select","id":"1","placeholder":"Pick","choices":[],"multiple":true}"#;
         let msg = parse_message(json).unwrap();
         match msg {
             Message::Select { id, multiple, .. } => {
@@ -2642,7 +2628,8 @@ mod tests {
 
     #[test]
     fn test_parse_fields_message() {
-        let json = r#"{"type":"fields","id":"1","fields":[{"name":"username","label":"Username"}]}"#;
+        let json =
+            r#"{"type":"fields","id":"1","fields":[{"name":"username","label":"Username"}]}"#;
         let msg = parse_message(json).unwrap();
         match msg {
             Message::Fields { id, fields } => {
@@ -2692,7 +2679,11 @@ mod tests {
         let json = r#"{"type":"path","id":"1","startPath":"/home","hint":"Select folder"}"#;
         let msg = parse_message(json).unwrap();
         match msg {
-            Message::Path { id, start_path, hint } => {
+            Message::Path {
+                id,
+                start_path,
+                hint,
+            } => {
                 assert_eq!(id, "1");
                 assert_eq!(start_path, Some("/home".to_string()));
                 assert_eq!(hint, Some("Select folder".to_string()));
@@ -3026,7 +3017,12 @@ mod tests {
         let json = r#"{"type":"clipboard","action":"read","format":"image"}"#;
         let msg = parse_message(json).unwrap();
         match msg {
-            Message::Clipboard { action, format, content, .. } => {
+            Message::Clipboard {
+                action,
+                format,
+                content,
+                ..
+            } => {
                 assert_eq!(action, ClipboardAction::Read);
                 assert_eq!(format, Some(ClipboardFormat::Image));
                 assert_eq!(content, None);
@@ -3210,19 +3206,40 @@ mod tests {
     fn test_new_message_ids() {
         // Messages with IDs
         assert_eq!(Message::editor("1".to_string()).id(), Some("1"));
-        assert_eq!(Message::mini("2".to_string(), "".to_string(), vec![]).id(), Some("2"));
-        assert_eq!(Message::micro("3".to_string(), "".to_string(), vec![]).id(), Some("3"));
-        assert_eq!(Message::select("4".to_string(), "".to_string(), vec![], false).id(), Some("4"));
+        assert_eq!(
+            Message::mini("2".to_string(), "".to_string(), vec![]).id(),
+            Some("2")
+        );
+        assert_eq!(
+            Message::micro("3".to_string(), "".to_string(), vec![]).id(),
+            Some("3")
+        );
+        assert_eq!(
+            Message::select("4".to_string(), "".to_string(), vec![], false).id(),
+            Some("4")
+        );
         assert_eq!(Message::fields("5".to_string(), vec![]).id(), Some("5"));
-        assert_eq!(Message::form("6".to_string(), "".to_string()).id(), Some("6"));
+        assert_eq!(
+            Message::form("6".to_string(), "".to_string()).id(),
+            Some("6")
+        );
         assert_eq!(Message::path("7".to_string(), None).id(), Some("7"));
         assert_eq!(Message::drop("8".to_string()).id(), Some("8"));
         assert_eq!(Message::hotkey("9".to_string()).id(), Some("9"));
-        assert_eq!(Message::template("10".to_string(), "".to_string()).id(), Some("10"));
-        assert_eq!(Message::env("11".to_string(), "".to_string(), false).id(), Some("11"));
+        assert_eq!(
+            Message::template("10".to_string(), "".to_string()).id(),
+            Some("10")
+        );
+        assert_eq!(
+            Message::env("11".to_string(), "".to_string(), false).id(),
+            Some("11")
+        );
         assert_eq!(Message::chat("12".to_string()).id(), Some("12"));
         assert_eq!(Message::term("13".to_string(), None).id(), Some("13"));
-        assert_eq!(Message::widget("14".to_string(), "".to_string()).id(), Some("14"));
+        assert_eq!(
+            Message::widget("14".to_string(), "".to_string()).id(),
+            Some("14")
+        );
         assert_eq!(Message::webcam("15".to_string()).id(), Some("15"));
         assert_eq!(Message::mic("16".to_string()).id(), Some("16"));
 
@@ -3249,28 +3266,55 @@ mod tests {
 
     #[test]
     fn test_clipboard_action_serialization() {
-        assert_eq!(serde_json::to_string(&ClipboardAction::Read).unwrap(), "\"read\"");
-        assert_eq!(serde_json::to_string(&ClipboardAction::Write).unwrap(), "\"write\"");
+        assert_eq!(
+            serde_json::to_string(&ClipboardAction::Read).unwrap(),
+            "\"read\""
+        );
+        assert_eq!(
+            serde_json::to_string(&ClipboardAction::Write).unwrap(),
+            "\"write\""
+        );
     }
 
     #[test]
     fn test_clipboard_format_serialization() {
-        assert_eq!(serde_json::to_string(&ClipboardFormat::Text).unwrap(), "\"text\"");
-        assert_eq!(serde_json::to_string(&ClipboardFormat::Image).unwrap(), "\"image\"");
+        assert_eq!(
+            serde_json::to_string(&ClipboardFormat::Text).unwrap(),
+            "\"text\""
+        );
+        assert_eq!(
+            serde_json::to_string(&ClipboardFormat::Image).unwrap(),
+            "\"image\""
+        );
     }
 
     #[test]
     fn test_keyboard_action_serialization() {
-        assert_eq!(serde_json::to_string(&KeyboardAction::Type).unwrap(), "\"type\"");
-        assert_eq!(serde_json::to_string(&KeyboardAction::Tap).unwrap(), "\"tap\"");
+        assert_eq!(
+            serde_json::to_string(&KeyboardAction::Type).unwrap(),
+            "\"type\""
+        );
+        assert_eq!(
+            serde_json::to_string(&KeyboardAction::Tap).unwrap(),
+            "\"tap\""
+        );
     }
 
     #[test]
     fn test_mouse_action_serialization() {
         // camelCase applies to all variants
-        assert_eq!(serde_json::to_string(&MouseAction::Move).unwrap(), "\"move\"");
-        assert_eq!(serde_json::to_string(&MouseAction::Click).unwrap(), "\"click\"");
-        assert_eq!(serde_json::to_string(&MouseAction::SetPosition).unwrap(), "\"setPosition\"");
+        assert_eq!(
+            serde_json::to_string(&MouseAction::Move).unwrap(),
+            "\"move\""
+        );
+        assert_eq!(
+            serde_json::to_string(&MouseAction::Click).unwrap(),
+            "\"click\""
+        );
+        assert_eq!(
+            serde_json::to_string(&MouseAction::SetPosition).unwrap(),
+            "\"setPosition\""
+        );
     }
 
     // ============================================================
@@ -3321,19 +3365,19 @@ mod tests {
     #[test]
     fn test_jsonl_reader_skips_empty_lines() {
         use std::io::Cursor;
-        
+
         let jsonl = "\n{\"type\":\"beep\"}\n\n{\"type\":\"show\"}\n";
         let cursor = Cursor::new(jsonl);
         let mut reader = JsonlReader::new(cursor);
-        
+
         // First message should be beep (skipping initial empty line)
         let msg1 = reader.next_message().unwrap();
         assert!(matches!(msg1, Some(Message::Beep {})));
-        
+
         // Second message should be show (skipping intermediate empty lines)
         let msg2 = reader.next_message().unwrap();
         assert!(matches!(msg2, Some(Message::Show {})));
-        
+
         // Should be EOF
         let msg3 = reader.next_message().unwrap();
         assert!(msg3.is_none());
@@ -3342,7 +3386,7 @@ mod tests {
     #[test]
     fn test_jsonl_reader_graceful_skips_unknown() {
         use std::io::Cursor;
-        
+
         let jsonl = r#"{"type":"unknownType","id":"1"}
 {"type":"beep"}
 {"type":"anotherUnknown","data":"test"}
@@ -3350,15 +3394,15 @@ mod tests {
 "#;
         let cursor = Cursor::new(jsonl);
         let mut reader = JsonlReader::new(cursor);
-        
+
         // Should skip unknownType and return beep
         let msg1 = reader.next_message_graceful().unwrap();
         assert!(matches!(msg1, Some(Message::Beep {})));
-        
+
         // Should skip anotherUnknown and return show
         let msg2 = reader.next_message_graceful().unwrap();
         assert!(matches!(msg2, Some(Message::Show {})));
-        
+
         // Should be EOF
         let msg3 = reader.next_message_graceful().unwrap();
         assert!(msg3.is_none());
@@ -3452,7 +3496,8 @@ mod tests {
 
     #[test]
     fn test_serialize_selected_text_response() {
-        let msg = Message::selected_text_response("Selected content".to_string(), "req-111".to_string());
+        let msg =
+            Message::selected_text_response("Selected content".to_string(), "req-111".to_string());
         let json = serialize_message(&msg).unwrap();
         assert!(json.contains("\"type\":\"selectedText\""));
         assert!(json.contains("\"text\":\"Selected content\""));
@@ -3498,7 +3543,11 @@ mod tests {
         let json = r#"{"type":"textSet","success":true,"requestId":"req-555"}"#;
         let msg = parse_message(json).unwrap();
         match msg {
-            Message::TextSet { success, error, request_id } => {
+            Message::TextSet {
+                success,
+                error,
+                request_id,
+            } => {
                 assert!(success);
                 assert_eq!(error, None);
                 assert_eq!(request_id, "req-555");
@@ -3512,7 +3561,11 @@ mod tests {
         let json = r#"{"type":"textSet","success":false,"error":"Failed","requestId":"req-666"}"#;
         let msg = parse_message(json).unwrap();
         match msg {
-            Message::TextSet { success, error, request_id } => {
+            Message::TextSet {
+                success,
+                error,
+                request_id,
+            } => {
                 assert!(!success);
                 assert_eq!(error, Some("Failed".to_string()));
                 assert_eq!(request_id, "req-666");
@@ -3535,7 +3588,10 @@ mod tests {
         let json = r#"{"type":"accessibilityStatus","granted":false,"requestId":"req-888"}"#;
         let msg = parse_message(json).unwrap();
         match msg {
-            Message::AccessibilityStatus { granted, request_id } => {
+            Message::AccessibilityStatus {
+                granted,
+                request_id,
+            } => {
                 assert!(!granted);
                 assert_eq!(request_id, "req-888");
             }
@@ -3547,13 +3603,31 @@ mod tests {
     fn test_selected_text_message_ids() {
         // Messages with request_id
         assert_eq!(Message::get_selected_text("a".to_string()).id(), Some("a"));
-        assert_eq!(Message::set_selected_text_msg("".to_string(), "b".to_string()).id(), Some("b"));
-        assert_eq!(Message::check_accessibility("c".to_string()).id(), Some("c"));
-        assert_eq!(Message::request_accessibility("d".to_string()).id(), Some("d"));
-        assert_eq!(Message::selected_text_response("".to_string(), "e".to_string()).id(), Some("e"));
+        assert_eq!(
+            Message::set_selected_text_msg("".to_string(), "b".to_string()).id(),
+            Some("b")
+        );
+        assert_eq!(
+            Message::check_accessibility("c".to_string()).id(),
+            Some("c")
+        );
+        assert_eq!(
+            Message::request_accessibility("d".to_string()).id(),
+            Some("d")
+        );
+        assert_eq!(
+            Message::selected_text_response("".to_string(), "e".to_string()).id(),
+            Some("e")
+        );
         assert_eq!(Message::text_set_success("f".to_string()).id(), Some("f"));
-        assert_eq!(Message::text_set_error("".to_string(), "g".to_string()).id(), Some("g"));
-        assert_eq!(Message::accessibility_status(true, "h".to_string()).id(), Some("h"));
+        assert_eq!(
+            Message::text_set_error("".to_string(), "g".to_string()).id(),
+            Some("g")
+        );
+        assert_eq!(
+            Message::accessibility_status(true, "h".to_string()).id(),
+            Some("h")
+        );
     }
 
     // ============================================================
@@ -3597,7 +3671,13 @@ mod tests {
         let json = r#"{"type":"windowBounds","x":50.5,"y":100.5,"width":800.0,"height":600.0,"requestId":"req-wb-4"}"#;
         let msg = parse_message(json).unwrap();
         match msg {
-            Message::WindowBounds { x, y, width, height, request_id } => {
+            Message::WindowBounds {
+                x,
+                y,
+                width,
+                height,
+                request_id,
+            } => {
                 assert!((x - 50.5).abs() < 0.01);
                 assert!((y - 100.5).abs() < 0.01);
                 assert!((width - 800.0).abs() < 0.01);
@@ -3611,7 +3691,10 @@ mod tests {
     #[test]
     fn test_window_bounds_message_ids() {
         assert_eq!(Message::get_window_bounds("a".to_string()).id(), Some("a"));
-        assert_eq!(Message::window_bounds(0.0, 0.0, 0.0, 0.0, "b".to_string()).id(), Some("b"));
+        assert_eq!(
+            Message::window_bounds(0.0, 0.0, 0.0, 0.0, "b".to_string()).id(),
+            Some("b")
+        );
     }
 
     // ============================================================
@@ -3620,17 +3703,38 @@ mod tests {
 
     #[test]
     fn test_clipboard_entry_type_serialization() {
-        assert_eq!(serde_json::to_string(&ClipboardEntryType::Text).unwrap(), "\"text\"");
-        assert_eq!(serde_json::to_string(&ClipboardEntryType::Image).unwrap(), "\"image\"");
+        assert_eq!(
+            serde_json::to_string(&ClipboardEntryType::Text).unwrap(),
+            "\"text\""
+        );
+        assert_eq!(
+            serde_json::to_string(&ClipboardEntryType::Image).unwrap(),
+            "\"image\""
+        );
     }
 
     #[test]
     fn test_clipboard_history_action_serialization() {
-        assert_eq!(serde_json::to_string(&ClipboardHistoryAction::List).unwrap(), "\"list\"");
-        assert_eq!(serde_json::to_string(&ClipboardHistoryAction::Pin).unwrap(), "\"pin\"");
-        assert_eq!(serde_json::to_string(&ClipboardHistoryAction::Unpin).unwrap(), "\"unpin\"");
-        assert_eq!(serde_json::to_string(&ClipboardHistoryAction::Remove).unwrap(), "\"remove\"");
-        assert_eq!(serde_json::to_string(&ClipboardHistoryAction::Clear).unwrap(), "\"clear\"");
+        assert_eq!(
+            serde_json::to_string(&ClipboardHistoryAction::List).unwrap(),
+            "\"list\""
+        );
+        assert_eq!(
+            serde_json::to_string(&ClipboardHistoryAction::Pin).unwrap(),
+            "\"pin\""
+        );
+        assert_eq!(
+            serde_json::to_string(&ClipboardHistoryAction::Unpin).unwrap(),
+            "\"unpin\""
+        );
+        assert_eq!(
+            serde_json::to_string(&ClipboardHistoryAction::Remove).unwrap(),
+            "\"remove\""
+        );
+        assert_eq!(
+            serde_json::to_string(&ClipboardHistoryAction::Clear).unwrap(),
+            "\"clear\""
+        );
     }
 
     #[test]
@@ -3648,7 +3752,11 @@ mod tests {
         let json = r#"{"type":"clipboardHistory","requestId":"req-ch-2","action":"list"}"#;
         let msg = parse_message(json).unwrap();
         match msg {
-            Message::ClipboardHistory { request_id, action, entry_id } => {
+            Message::ClipboardHistory {
+                request_id,
+                action,
+                entry_id,
+            } => {
                 assert_eq!(request_id, "req-ch-2");
                 assert_eq!(action, ClipboardHistoryAction::List);
                 assert_eq!(entry_id, None);
@@ -3671,7 +3779,11 @@ mod tests {
         let json = r#"{"type":"clipboardHistory","requestId":"req-ch-4","action":"pin","entryId":"entry-2"}"#;
         let msg = parse_message(json).unwrap();
         match msg {
-            Message::ClipboardHistory { request_id, action, entry_id } => {
+            Message::ClipboardHistory {
+                request_id,
+                action,
+                entry_id,
+            } => {
                 assert_eq!(request_id, "req-ch-4");
                 assert_eq!(action, ClipboardHistoryAction::Pin);
                 assert_eq!(entry_id, Some("entry-2".to_string()));
@@ -3704,7 +3816,14 @@ mod tests {
         let json = r#"{"type":"clipboardHistoryEntry","requestId":"req-che-2","entryId":"entry-2","content":"Test","contentType":"image","timestamp":"2024-01-15","pinned":false}"#;
         let msg = parse_message(json).unwrap();
         match msg {
-            Message::ClipboardHistoryEntry { request_id, entry_id, content, content_type, timestamp, pinned } => {
+            Message::ClipboardHistoryEntry {
+                request_id,
+                entry_id,
+                content,
+                content_type,
+                timestamp,
+                pinned,
+            } => {
                 assert_eq!(request_id, "req-che-2");
                 assert_eq!(entry_id, "entry-2");
                 assert_eq!(content, "Test");
@@ -3718,15 +3837,13 @@ mod tests {
 
     #[test]
     fn test_serialize_clipboard_history_list_response() {
-        let entries = vec![
-            ClipboardHistoryEntryData {
-                entry_id: "e1".to_string(),
-                content: "Hello".to_string(),
-                content_type: ClipboardEntryType::Text,
-                timestamp: "2024-01-15".to_string(),
-                pinned: false,
-            }
-        ];
+        let entries = vec![ClipboardHistoryEntryData {
+            entry_id: "e1".to_string(),
+            content: "Hello".to_string(),
+            content_type: ClipboardEntryType::Text,
+            timestamp: "2024-01-15".to_string(),
+            pinned: false,
+        }];
         let msg = Message::clipboard_history_list_response("req-chl-1".to_string(), entries);
         let json = serialize_message(&msg).unwrap();
         assert!(json.contains("\"type\":\"clipboardHistoryList\""));
@@ -3744,14 +3861,34 @@ mod tests {
 
     #[test]
     fn test_clipboard_history_message_ids() {
-        assert_eq!(Message::clipboard_history_list("a".to_string()).id(), Some("a"));
-        assert_eq!(Message::clipboard_history_pin("b".to_string(), "x".to_string()).id(), Some("b"));
-        assert_eq!(Message::clipboard_history_entry(
-            "c".to_string(), "".to_string(), "".to_string(), 
-            ClipboardEntryType::Text, "".to_string(), false
-        ).id(), Some("c"));
-        assert_eq!(Message::clipboard_history_list_response("d".to_string(), vec![]).id(), Some("d"));
-        assert_eq!(Message::clipboard_history_success("e".to_string()).id(), Some("e"));
+        assert_eq!(
+            Message::clipboard_history_list("a".to_string()).id(),
+            Some("a")
+        );
+        assert_eq!(
+            Message::clipboard_history_pin("b".to_string(), "x".to_string()).id(),
+            Some("b")
+        );
+        assert_eq!(
+            Message::clipboard_history_entry(
+                "c".to_string(),
+                "".to_string(),
+                "".to_string(),
+                ClipboardEntryType::Text,
+                "".to_string(),
+                false
+            )
+            .id(),
+            Some("c")
+        );
+        assert_eq!(
+            Message::clipboard_history_list_response("d".to_string(), vec![]).id(),
+            Some("d")
+        );
+        assert_eq!(
+            Message::clipboard_history_success("e".to_string()).id(),
+            Some("e")
+        );
     }
 
     // ============================================================
@@ -3760,17 +3897,40 @@ mod tests {
 
     #[test]
     fn test_window_action_type_serialization() {
-        assert_eq!(serde_json::to_string(&WindowActionType::Focus).unwrap(), "\"focus\"");
-        assert_eq!(serde_json::to_string(&WindowActionType::Close).unwrap(), "\"close\"");
-        assert_eq!(serde_json::to_string(&WindowActionType::Minimize).unwrap(), "\"minimize\"");
-        assert_eq!(serde_json::to_string(&WindowActionType::Maximize).unwrap(), "\"maximize\"");
-        assert_eq!(serde_json::to_string(&WindowActionType::Resize).unwrap(), "\"resize\"");
-        assert_eq!(serde_json::to_string(&WindowActionType::Move).unwrap(), "\"move\"");
+        assert_eq!(
+            serde_json::to_string(&WindowActionType::Focus).unwrap(),
+            "\"focus\""
+        );
+        assert_eq!(
+            serde_json::to_string(&WindowActionType::Close).unwrap(),
+            "\"close\""
+        );
+        assert_eq!(
+            serde_json::to_string(&WindowActionType::Minimize).unwrap(),
+            "\"minimize\""
+        );
+        assert_eq!(
+            serde_json::to_string(&WindowActionType::Maximize).unwrap(),
+            "\"maximize\""
+        );
+        assert_eq!(
+            serde_json::to_string(&WindowActionType::Resize).unwrap(),
+            "\"resize\""
+        );
+        assert_eq!(
+            serde_json::to_string(&WindowActionType::Move).unwrap(),
+            "\"move\""
+        );
     }
 
     #[test]
     fn test_serialize_target_window_bounds() {
-        let bounds = TargetWindowBounds { x: 100, y: 200, width: 800, height: 600 };
+        let bounds = TargetWindowBounds {
+            x: 100,
+            y: 200,
+            width: 800,
+            height: 600,
+        };
         let json = serde_json::to_string(&bounds).unwrap();
         assert!(json.contains("\"x\":100"));
         assert!(json.contains("\"y\":200"));
@@ -3810,7 +3970,12 @@ mod tests {
 
     #[test]
     fn test_serialize_window_action() {
-        let bounds = TargetWindowBounds { x: 0, y: 0, width: 500, height: 400 };
+        let bounds = TargetWindowBounds {
+            x: 0,
+            y: 0,
+            width: 500,
+            height: 400,
+        };
         let msg = Message::window_action(
             "req-wa-1".to_string(),
             WindowActionType::Resize,
@@ -3826,10 +3991,16 @@ mod tests {
 
     #[test]
     fn test_parse_window_action() {
-        let json = r#"{"type":"windowAction","requestId":"req-wa-2","action":"focus","windowId":999}"#;
+        let json =
+            r#"{"type":"windowAction","requestId":"req-wa-2","action":"focus","windowId":999}"#;
         let msg = parse_message(json).unwrap();
         match msg {
-            Message::WindowAction { request_id, action, window_id, bounds } => {
+            Message::WindowAction {
+                request_id,
+                action,
+                window_id,
+                bounds,
+            } => {
                 assert_eq!(request_id, "req-wa-2");
                 assert_eq!(action, WindowActionType::Focus);
                 assert_eq!(window_id, Some(999));
@@ -3841,16 +4012,19 @@ mod tests {
 
     #[test]
     fn test_serialize_window_list_result() {
-        let windows = vec![
-            SystemWindowInfo {
-                window_id: 1,
-                title: "Terminal".to_string(),
-                app_name: "Terminal.app".to_string(),
-                bounds: Some(TargetWindowBounds { x: 0, y: 0, width: 800, height: 600 }),
-                is_minimized: Some(false),
-                is_active: Some(true),
-            }
-        ];
+        let windows = vec![SystemWindowInfo {
+            window_id: 1,
+            title: "Terminal".to_string(),
+            app_name: "Terminal.app".to_string(),
+            bounds: Some(TargetWindowBounds {
+                x: 0,
+                y: 0,
+                width: 800,
+                height: 600,
+            }),
+            is_minimized: Some(false),
+            is_active: Some(true),
+        }];
         let msg = Message::window_list_result("req-wlr-1".to_string(), windows);
         let json = serialize_message(&msg).unwrap();
         assert!(json.contains("\"type\":\"windowListResult\""));
@@ -3871,9 +4045,18 @@ mod tests {
     #[test]
     fn test_window_management_message_ids() {
         assert_eq!(Message::window_list("a".to_string()).id(), Some("a"));
-        assert_eq!(Message::window_action("b".to_string(), WindowActionType::Focus, None, None).id(), Some("b"));
-        assert_eq!(Message::window_list_result("c".to_string(), vec![]).id(), Some("c"));
-        assert_eq!(Message::window_action_success("d".to_string()).id(), Some("d"));
+        assert_eq!(
+            Message::window_action("b".to_string(), WindowActionType::Focus, None, None).id(),
+            Some("b")
+        );
+        assert_eq!(
+            Message::window_list_result("c".to_string(), vec![]).id(),
+            Some("c")
+        );
+        assert_eq!(
+            Message::window_action_success("d".to_string()).id(),
+            Some("d")
+        );
     }
 
     // ============================================================
@@ -3882,7 +4065,11 @@ mod tests {
 
     #[test]
     fn test_serialize_file_search() {
-        let msg = Message::file_search("req-fs-1".to_string(), "*.rs".to_string(), Some("/home/user".to_string()));
+        let msg = Message::file_search(
+            "req-fs-1".to_string(),
+            "*.rs".to_string(),
+            Some("/home/user".to_string()),
+        );
         let json = serialize_message(&msg).unwrap();
         assert!(json.contains("\"type\":\"fileSearch\""));
         assert!(json.contains("\"requestId\":\"req-fs-1\""));
@@ -3895,7 +4082,11 @@ mod tests {
         let json = r#"{"type":"fileSearch","requestId":"req-fs-2","query":"test","onlyin":"/tmp"}"#;
         let msg = parse_message(json).unwrap();
         match msg {
-            Message::FileSearch { request_id, query, only_in } => {
+            Message::FileSearch {
+                request_id,
+                query,
+                only_in,
+            } => {
                 assert_eq!(request_id, "req-fs-2");
                 assert_eq!(query, "test");
                 assert_eq!(only_in, Some("/tmp".to_string()));
@@ -3909,7 +4100,11 @@ mod tests {
         let json = r#"{"type":"fileSearch","requestId":"req-fs-3","query":"main.rs"}"#;
         let msg = parse_message(json).unwrap();
         match msg {
-            Message::FileSearch { request_id, query, only_in } => {
+            Message::FileSearch {
+                request_id,
+                query,
+                only_in,
+            } => {
                 assert_eq!(request_id, "req-fs-3");
                 assert_eq!(query, "main.rs");
                 assert_eq!(only_in, None);
@@ -3920,15 +4115,13 @@ mod tests {
 
     #[test]
     fn test_serialize_file_search_result() {
-        let files = vec![
-            FileSearchResultEntry {
-                path: "/home/user/test.rs".to_string(),
-                name: "test.rs".to_string(),
-                is_directory: false,
-                size: Some(1024),
-                modified_at: Some("2024-01-15T10:30:00Z".to_string()),
-            }
-        ];
+        let files = vec![FileSearchResultEntry {
+            path: "/home/user/test.rs".to_string(),
+            name: "test.rs".to_string(),
+            is_directory: false,
+            size: Some(1024),
+            modified_at: Some("2024-01-15T10:30:00Z".to_string()),
+        }];
         let msg = Message::file_search_result("req-fsr-1".to_string(), files);
         let json = serialize_message(&msg).unwrap();
         assert!(json.contains("\"type\":\"fileSearchResult\""));
@@ -3954,8 +4147,14 @@ mod tests {
 
     #[test]
     fn test_file_search_message_ids() {
-        assert_eq!(Message::file_search("a".to_string(), "".to_string(), None).id(), Some("a"));
-        assert_eq!(Message::file_search_result("b".to_string(), vec![]).id(), Some("b"));
+        assert_eq!(
+            Message::file_search("a".to_string(), "".to_string(), None).id(),
+            Some("a")
+        );
+        assert_eq!(
+            Message::file_search_result("b".to_string(), vec![]).id(),
+            Some("b")
+        );
     }
 
     // ============================================================
@@ -3987,7 +4186,10 @@ mod tests {
             .add_suggestion("Check your imports".to_string())
             .with_timestamp("2024-01-15T10:30:00Z".to_string());
 
-        assert_eq!(error.stderr_output, Some("Error: module not found".to_string()));
+        assert_eq!(
+            error.stderr_output,
+            Some("Error: module not found".to_string())
+        );
         assert_eq!(error.exit_code, Some(1));
         assert_eq!(error.stack_trace, Some("at line 10\nat line 5".to_string()));
         assert_eq!(error.suggestions.len(), 2);
@@ -4014,12 +4216,13 @@ mod tests {
 
     #[test]
     fn test_serialize_set_error_full() {
-        let error = ScriptErrorData::new("Import failed".to_string(), "/scripts/main.ts".to_string())
-            .with_stderr("Error: Cannot find module 'xyz'".to_string())
-            .with_exit_code(1)
-            .with_stack_trace("at import (/scripts/main.ts:1:1)".to_string())
-            .with_suggestions(vec!["Run: npm install xyz".to_string()])
-            .with_timestamp("2024-01-15T10:30:00Z".to_string());
+        let error =
+            ScriptErrorData::new("Import failed".to_string(), "/scripts/main.ts".to_string())
+                .with_stderr("Error: Cannot find module 'xyz'".to_string())
+                .with_exit_code(1)
+                .with_stack_trace("at import (/scripts/main.ts:1:1)".to_string())
+                .with_suggestions(vec!["Run: npm install xyz".to_string()])
+                .with_timestamp("2024-01-15T10:30:00Z".to_string());
 
         let msg = Message::set_error(error);
         let json = serialize_message(&msg).unwrap();
@@ -4053,7 +4256,13 @@ mod tests {
         let json = r#"{"type":"setError","errorMessage":"Failed","scriptPath":"/test.ts"}"#;
         let msg = parse_message(json).unwrap();
         match msg {
-            Message::SetError { error_message, script_path, stderr_output, exit_code, .. } => {
+            Message::SetError {
+                error_message,
+                script_path,
+                stderr_output,
+                exit_code,
+                ..
+            } => {
                 assert_eq!(error_message, "Failed");
                 assert_eq!(script_path, "/test.ts");
                 assert_eq!(stderr_output, None);
@@ -4077,14 +4286,14 @@ mod tests {
         }"#;
         let msg = parse_message(json).unwrap();
         match msg {
-            Message::SetError { 
-                error_message, 
-                stderr_output, 
-                exit_code, 
-                stack_trace, 
-                script_path, 
-                suggestions, 
-                timestamp 
+            Message::SetError {
+                error_message,
+                stderr_output,
+                exit_code,
+                stack_trace,
+                script_path,
+                suggestions,
+                timestamp,
             } => {
                 assert_eq!(error_message, "Module not found");
                 assert_eq!(stderr_output, Some("Error: xyz not found".to_string()));
@@ -4102,7 +4311,11 @@ mod tests {
     fn test_script_error_constructor() {
         let msg = Message::script_error("Error occurred".to_string(), "/test.ts".to_string());
         match msg {
-            Message::SetError { error_message, script_path, .. } => {
+            Message::SetError {
+                error_message,
+                script_path,
+                ..
+            } => {
                 assert_eq!(error_message, "Error occurred");
                 assert_eq!(script_path, "/test.ts");
             }
@@ -4131,7 +4344,8 @@ mod tests {
 
     #[test]
     fn test_script_error_data_deserialization() {
-        let json = r#"{"errorMessage":"Test","scriptPath":"/p.ts","exitCode":1,"suggestions":["a","b"]}"#;
+        let json =
+            r#"{"errorMessage":"Test","scriptPath":"/p.ts","exitCode":1,"suggestions":["a","b"]}"#;
         let error: ScriptErrorData = serde_json::from_str(json).unwrap();
         assert_eq!(error.error_message, "Test");
         assert_eq!(error.script_path, "/p.ts");
@@ -4151,14 +4365,14 @@ mod tests {
             Some("2024-01-15T10:30:00Z".to_string()),
         );
         match msg {
-            Message::SetError { 
-                error_message, 
-                stderr_output, 
-                exit_code, 
-                stack_trace, 
-                script_path, 
-                suggestions, 
-                timestamp 
+            Message::SetError {
+                error_message,
+                stderr_output,
+                exit_code,
+                stack_trace,
+                script_path,
+                suggestions,
+                timestamp,
             } => {
                 assert_eq!(error_message, "Error");
                 assert_eq!(stderr_output, Some("stderr output".to_string()));
@@ -4215,21 +4429,35 @@ mod tests {
     #[test]
     fn test_generate_semantic_id() {
         assert_eq!(generate_semantic_id("choice", 0, "apple"), "choice:0:apple");
-        assert_eq!(generate_semantic_id("choice", 5, "Red Apple"), "choice:5:red-apple");
-        assert_eq!(generate_semantic_id("button", 1, "Submit Form"), "button:1:submit-form");
+        assert_eq!(
+            generate_semantic_id("choice", 5, "Red Apple"),
+            "choice:5:red-apple"
+        );
+        assert_eq!(
+            generate_semantic_id("button", 1, "Submit Form"),
+            "button:1:submit-form"
+        );
     }
 
     #[test]
     fn test_generate_semantic_id_named() {
-        assert_eq!(generate_semantic_id_named("input", "filter"), "input:filter");
-        assert_eq!(generate_semantic_id_named("panel", "preview"), "panel:preview");
-        assert_eq!(generate_semantic_id_named("window", "Main Window"), "window:main-window");
+        assert_eq!(
+            generate_semantic_id_named("input", "filter"),
+            "input:filter"
+        );
+        assert_eq!(
+            generate_semantic_id_named("panel", "preview"),
+            "panel:preview"
+        );
+        assert_eq!(
+            generate_semantic_id_named("window", "Main Window"),
+            "window:main-window"
+        );
     }
 
     #[test]
     fn test_choice_with_semantic_id() {
-        let choice = Choice::new("Apple".to_string(), "apple".to_string())
-            .with_semantic_id(0);
+        let choice = Choice::new("Apple".to_string(), "apple".to_string()).with_semantic_id(0);
         assert_eq!(choice.semantic_id, Some("choice:0:apple".to_string()));
     }
 
@@ -4248,8 +4476,7 @@ mod tests {
 
     #[test]
     fn test_choice_serialization_with_semantic_id() {
-        let choice = Choice::new("Apple".to_string(), "apple".to_string())
-            .with_semantic_id(0);
+        let choice = Choice::new("Apple".to_string(), "apple".to_string()).with_semantic_id(0);
         let json = serde_json::to_string(&choice).unwrap();
         assert!(json.contains("\"semanticId\":\"choice:0:apple\""));
     }
@@ -4337,9 +4564,9 @@ mod tests {
         let json = r#"{"type":"stateResult","requestId":"req-003","promptType":"div","inputValue":"","choiceCount":0,"visibleChoiceCount":0,"selectedIndex":-1,"isFocused":true,"windowVisible":true}"#;
         let msg = parse_message(json).unwrap();
         match msg {
-            Message::StateResult { 
-                request_id, 
-                prompt_type, 
+            Message::StateResult {
+                request_id,
+                prompt_type,
                 prompt_id,
                 input_value,
                 choice_count,
@@ -4379,8 +4606,12 @@ mod tests {
             None,
             None,
             "".to_string(),
-            0, 0, -1, None,
-            false, false,
+            0,
+            0,
+            -1,
+            None,
+            false,
+            false,
         );
         assert_eq!(msg.id(), Some("req-id"));
     }
@@ -4391,11 +4622,26 @@ mod tests {
 
     #[test]
     fn test_element_type_serialization() {
-        assert_eq!(serde_json::to_string(&ElementType::Choice).unwrap(), "\"choice\"");
-        assert_eq!(serde_json::to_string(&ElementType::Input).unwrap(), "\"input\"");
-        assert_eq!(serde_json::to_string(&ElementType::Button).unwrap(), "\"button\"");
-        assert_eq!(serde_json::to_string(&ElementType::Panel).unwrap(), "\"panel\"");
-        assert_eq!(serde_json::to_string(&ElementType::List).unwrap(), "\"list\"");
+        assert_eq!(
+            serde_json::to_string(&ElementType::Choice).unwrap(),
+            "\"choice\""
+        );
+        assert_eq!(
+            serde_json::to_string(&ElementType::Input).unwrap(),
+            "\"input\""
+        );
+        assert_eq!(
+            serde_json::to_string(&ElementType::Button).unwrap(),
+            "\"button\""
+        );
+        assert_eq!(
+            serde_json::to_string(&ElementType::Panel).unwrap(),
+            "\"panel\""
+        );
+        assert_eq!(
+            serde_json::to_string(&ElementType::List).unwrap(),
+            "\"list\""
+        );
     }
 
     #[test]
@@ -4535,7 +4781,11 @@ mod tests {
         let json = r#"{"type":"elementsResult","requestId":"req-elem-6","elements":[{"semanticId":"choice:0:apple","type":"choice","text":"Apple","value":"apple","selected":true,"index":0}],"totalCount":15}"#;
         let msg = parse_message(json).unwrap();
         match msg {
-            Message::ElementsResult { request_id, elements, total_count } => {
+            Message::ElementsResult {
+                request_id,
+                elements,
+                total_count,
+            } => {
                 assert_eq!(request_id, "req-elem-6");
                 assert_eq!(elements.len(), 1);
                 assert_eq!(elements[0].semantic_id, "choice:0:apple");
@@ -4548,8 +4798,14 @@ mod tests {
     #[test]
     fn test_get_elements_message_ids() {
         assert_eq!(Message::get_elements("a".to_string()).id(), Some("a"));
-        assert_eq!(Message::get_elements_with_limit("b".to_string(), 10).id(), Some("b"));
-        assert_eq!(Message::elements_result("c".to_string(), vec![], 0).id(), Some("c"));
+        assert_eq!(
+            Message::get_elements_with_limit("b".to_string(), 10).id(),
+            Some("b")
+        );
+        assert_eq!(
+            Message::elements_result("c".to_string(), vec![], 0).id(),
+            Some("c")
+        );
     }
 
     #[test]
@@ -4642,9 +4898,15 @@ mod tests {
         assert_eq!(scriptlet.inputs, vec!["name"]);
         assert_eq!(scriptlet.group, Some("Utilities".to_string()));
         assert_eq!(scriptlet.kenv, Some("main".to_string()));
-        assert_eq!(scriptlet.source_path, Some("/path/to/scriptlets.md".to_string()));
+        assert_eq!(
+            scriptlet.source_path,
+            Some("/path/to/scriptlets.md".to_string())
+        );
         assert!(scriptlet.metadata.is_some());
-        assert_eq!(scriptlet.metadata.unwrap().shortcut, Some("cmd g".to_string()));
+        assert_eq!(
+            scriptlet.metadata.unwrap().shortcut,
+            Some("cmd g".to_string())
+        );
     }
 
     #[test]
@@ -4744,7 +5006,12 @@ mod tests {
         let json = r#"{"type":"runScriptlet","requestId":"req-rs-2","scriptlet":{"name":"Test","command":"test","tool":"bash","content":"pwd","isScriptlet":true},"args":["a","b"]}"#;
         let msg = parse_message(json).unwrap();
         match msg {
-            Message::RunScriptlet { request_id, scriptlet, inputs, args } => {
+            Message::RunScriptlet {
+                request_id,
+                scriptlet,
+                inputs,
+                args,
+            } => {
                 assert_eq!(request_id, "req-rs-2");
                 assert_eq!(scriptlet.name, "Test");
                 assert_eq!(scriptlet.tool, "bash");
@@ -4784,7 +5051,11 @@ mod tests {
         let json = r#"{"type":"getScriptlets","requestId":"req-gs-3","kenv":"dev"}"#;
         let msg = parse_message(json).unwrap();
         match msg {
-            Message::GetScriptlets { request_id, kenv, group } => {
+            Message::GetScriptlets {
+                request_id,
+                kenv,
+                group,
+            } => {
                 assert_eq!(request_id, "req-gs-3");
                 assert_eq!(kenv, Some("dev".to_string()));
                 assert_eq!(group, None);
@@ -4796,8 +5067,18 @@ mod tests {
     #[test]
     fn test_serialize_scriptlet_list() {
         let scriptlets = vec![
-            ScriptletData::new("A".to_string(), "a".to_string(), "bash".to_string(), "echo A".to_string()),
-            ScriptletData::new("B".to_string(), "b".to_string(), "ts".to_string(), "console.log('B')".to_string()),
+            ScriptletData::new(
+                "A".to_string(),
+                "a".to_string(),
+                "bash".to_string(),
+                "echo A".to_string(),
+            ),
+            ScriptletData::new(
+                "B".to_string(),
+                "b".to_string(),
+                "ts".to_string(),
+                "console.log('B')".to_string(),
+            ),
         ];
         let msg = Message::scriptlet_list("req-sl-1".to_string(), scriptlets);
         let json = serialize_message(&msg).unwrap();
@@ -4813,7 +5094,10 @@ mod tests {
         let json = r#"{"type":"scriptletList","requestId":"req-sl-2","scriptlets":[{"name":"X","command":"x","tool":"bash","content":"pwd","isScriptlet":true}]}"#;
         let msg = parse_message(json).unwrap();
         match msg {
-            Message::ScriptletList { request_id, scriptlets } => {
+            Message::ScriptletList {
+                request_id,
+                scriptlets,
+            } => {
                 assert_eq!(request_id, "req-sl-2");
                 assert_eq!(scriptlets.len(), 1);
                 assert_eq!(scriptlets[0].name, "X");
@@ -4858,7 +5142,13 @@ mod tests {
         let json = r#"{"type":"scriptletResult","requestId":"req-sr-3","success":true,"output":"Done","exitCode":0}"#;
         let msg = parse_message(json).unwrap();
         match msg {
-            Message::ScriptletResult { request_id, success, output, error, exit_code } => {
+            Message::ScriptletResult {
+                request_id,
+                success,
+                output,
+                error,
+                exit_code,
+            } => {
                 assert_eq!(request_id, "req-sr-3");
                 assert!(success);
                 assert_eq!(output, Some("Done".to_string()));
@@ -4871,10 +5161,17 @@ mod tests {
 
     #[test]
     fn test_parse_scriptlet_result_error() {
-        let json = r#"{"type":"scriptletResult","requestId":"req-sr-4","success":false,"error":"Failed"}"#;
+        let json =
+            r#"{"type":"scriptletResult","requestId":"req-sr-4","success":false,"error":"Failed"}"#;
         let msg = parse_message(json).unwrap();
         match msg {
-            Message::ScriptletResult { request_id, success, output, error, exit_code } => {
+            Message::ScriptletResult {
+                request_id,
+                success,
+                output,
+                error,
+                exit_code,
+            } => {
                 assert_eq!(request_id, "req-sr-4");
                 assert!(!success);
                 assert_eq!(output, None);
@@ -4887,13 +5184,33 @@ mod tests {
 
     #[test]
     fn test_scriptlet_message_ids() {
-        let scriptlet = ScriptletData::new("X".to_string(), "x".to_string(), "bash".to_string(), "pwd".to_string());
-        assert_eq!(Message::run_scriptlet("a".to_string(), scriptlet, None, vec![]).id(), Some("a"));
+        let scriptlet = ScriptletData::new(
+            "X".to_string(),
+            "x".to_string(),
+            "bash".to_string(),
+            "pwd".to_string(),
+        );
+        assert_eq!(
+            Message::run_scriptlet("a".to_string(), scriptlet, None, vec![]).id(),
+            Some("a")
+        );
         assert_eq!(Message::get_scriptlets("b".to_string()).id(), Some("b"));
-        assert_eq!(Message::get_scriptlets_filtered("c".to_string(), None, None).id(), Some("c"));
-        assert_eq!(Message::scriptlet_list("d".to_string(), vec![]).id(), Some("d"));
-        assert_eq!(Message::scriptlet_result_success("e".to_string(), None, None).id(), Some("e"));
-        assert_eq!(Message::scriptlet_result_error("f".to_string(), "err".to_string(), None).id(), Some("f"));
+        assert_eq!(
+            Message::get_scriptlets_filtered("c".to_string(), None, None).id(),
+            Some("c")
+        );
+        assert_eq!(
+            Message::scriptlet_list("d".to_string(), vec![]).id(),
+            Some("d")
+        );
+        assert_eq!(
+            Message::scriptlet_result_success("e".to_string(), None, None).id(),
+            Some("e")
+        );
+        assert_eq!(
+            Message::scriptlet_result_error("f".to_string(), "err".to_string(), None).id(),
+            Some("f")
+        );
     }
 
     // ============================================================
@@ -4960,7 +5277,7 @@ mod tests {
         // 1. SDK sends forceSubmit
         let sdk_json = r#"{"type":"forceSubmit","value":"auto-value"}"#;
         let msg = parse_message(sdk_json).unwrap();
-        
+
         // 2. GPUI extracts value and creates submit response
         match msg {
             Message::ForceSubmit { value } => {
@@ -4969,16 +5286,16 @@ mod tests {
                     serde_json::Value::Null => None,
                     other => Some(other.to_string()),
                 };
-                
+
                 let response = Message::Submit {
                     id: "1".to_string(),
                     value: value_str,
                 };
-                
+
                 // 3. Response is serialized and sent to script stdin
                 let response_json = serialize_message(&response).unwrap();
                 assert!(response_json.contains("\"value\":\"auto-value\""));
-                
+
                 // 4. Script parses the response
                 let parsed = parse_message(&response_json).unwrap();
                 match parsed {

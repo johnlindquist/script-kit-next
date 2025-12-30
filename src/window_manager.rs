@@ -313,7 +313,10 @@ pub fn find_and_register_main_window() -> bool {
             if width_matches && height_matches {
                 logging::log(
                     "WINDOW_MGR",
-                    &format!("Found main window at index {}: {:.0}x{:.0}", i, width, height),
+                    &format!(
+                        "Found main window at index {}: {:.0}x{:.0}",
+                        i, width, height
+                    ),
                 );
                 register_window(WindowRole::MainWindow, window);
                 return true;
@@ -341,10 +344,7 @@ pub fn unregister_window(role: WindowRole) -> Option<id> {
     if let Ok(mut manager) = get_manager().lock() {
         manager.unregister(role)
     } else {
-        logging::log(
-            "WINDOW_MGR",
-            "ERROR: Failed to acquire lock for unregister",
-        );
+        logging::log("WINDOW_MGR", "ERROR: Failed to acquire lock for unregister");
         None
     }
 }

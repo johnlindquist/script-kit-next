@@ -334,8 +334,13 @@ fn get_window_size(window: AXUIElementRef) -> Result<(u32, u32)> {
     let value = get_ax_attribute(window, "AXSize")?;
 
     let mut size = core_graphics::geometry::CGSize::new(0.0, 0.0);
-    let success =
-        unsafe { AXValueGetValue(value, kAXValueTypeCGSize, &mut size as *mut _ as *mut c_void) };
+    let success = unsafe {
+        AXValueGetValue(
+            value,
+            kAXValueTypeCGSize,
+            &mut size as *mut _ as *mut c_void,
+        )
+    };
 
     cf_release(value);
 
@@ -349,8 +354,7 @@ fn get_window_size(window: AXUIElementRef) -> Result<(u32, u32)> {
 /// Set the position of a window
 fn set_window_position(window: AXUIElementRef, x: i32, y: i32) -> Result<()> {
     let point = core_graphics::geometry::CGPoint::new(x as f64, y as f64);
-    let value =
-        unsafe { AXValueCreate(kAXValueTypeCGPoint, &point as *const _ as *const c_void) };
+    let value = unsafe { AXValueCreate(kAXValueTypeCGPoint, &point as *const _ as *const c_void) };
 
     if value.is_null() {
         bail!("Failed to create AXValue for position");
@@ -563,10 +567,9 @@ pub fn list_windows() -> Result<Vec<WindowInfo>> {
                     }
 
                     // Get window position and size
-                    let (x, y) = get_window_position(ax_window as AXUIElementRef)
-                        .unwrap_or((0, 0));
-                    let (width, height) = get_window_size(ax_window as AXUIElementRef)
-                        .unwrap_or((0, 0));
+                    let (x, y) = get_window_position(ax_window as AXUIElementRef).unwrap_or((0, 0));
+                    let (width, height) =
+                        get_window_size(ax_window as AXUIElementRef).unwrap_or((0, 0));
 
                     // Skip very small windows (likely invisible or popups)
                     if width < 50 || height < 50 {

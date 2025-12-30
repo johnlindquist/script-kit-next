@@ -31,7 +31,7 @@ impl GroupHeaderCategory {
             Self::Decorative => "Decorative",
         }
     }
-    
+
     pub fn all() -> &'static [GroupHeaderCategory] {
         &[
             Self::TextOnly,
@@ -41,7 +41,7 @@ impl GroupHeaderCategory {
             Self::Decorative,
         ]
     }
-    
+
     pub fn styles(&self) -> &[GroupHeaderStyle] {
         match self {
             Self::TextOnly => &[
@@ -96,7 +96,7 @@ pub enum GroupHeaderStyle {
     BoldLeft,
     LightLeft,
     MonospaceLeft,
-    
+
     // With Lines
     LineLeft,
     LineRight,
@@ -104,14 +104,14 @@ pub enum GroupHeaderStyle {
     LineBelow,
     LineAbove,
     DoubleLine,
-    
+
     // With Background
     PillBackground,
     FullWidthBackground,
     SubtleBackground,
     GradientFade,
     BorderedBox,
-    
+
     // Minimal
     DotPrefix,
     DashPrefix,
@@ -119,7 +119,7 @@ pub enum GroupHeaderStyle {
     ArrowPrefix,
     ChevronPrefix,
     Dimmed,
-    
+
     // Decorative
     Bracketed,
     Quoted,
@@ -167,12 +167,12 @@ impl GroupHeaderStyle {
             Self::IconPrefix,
         ]
     }
-    
+
     /// Get the total count of styles
     pub fn count() -> usize {
         Self::all().len()
     }
-    
+
     /// Get the display name
     pub fn name(&self) -> &'static str {
         match self {
@@ -206,7 +206,7 @@ impl GroupHeaderStyle {
             Self::IconPrefix => "Icon Prefix",
         }
     }
-    
+
     /// Get the description
     pub fn description(&self) -> &'static str {
         match self {
@@ -240,7 +240,7 @@ impl GroupHeaderStyle {
             Self::IconPrefix => "Icon before the text",
         }
     }
-    
+
     /// Get a sample rendering of this style (as formatted text)
     #[allow(dead_code)]
     pub fn sample(&self, label: &str) -> String {
@@ -275,25 +275,41 @@ impl GroupHeaderStyle {
             Self::IconPrefix => format!("\u{25A0} {}", label.to_uppercase()),
         }
     }
-    
+
     /// Get the category this style belongs to
     #[allow(dead_code)]
     pub fn category(&self) -> GroupHeaderCategory {
         match self {
-            Self::UppercaseLeft | Self::UppercaseCenter | Self::SmallCapsLeft |
-            Self::BoldLeft | Self::LightLeft | Self::MonospaceLeft => GroupHeaderCategory::TextOnly,
-            
-            Self::LineLeft | Self::LineRight | Self::LineBothSides |
-            Self::LineBelow | Self::LineAbove | Self::DoubleLine => GroupHeaderCategory::WithLines,
-            
-            Self::PillBackground | Self::FullWidthBackground | Self::SubtleBackground |
-            Self::GradientFade | Self::BorderedBox => GroupHeaderCategory::WithBackground,
-            
-            Self::DotPrefix | Self::DashPrefix | Self::BulletPrefix |
-            Self::ArrowPrefix | Self::ChevronPrefix | Self::Dimmed => GroupHeaderCategory::Minimal,
-            
-            Self::Bracketed | Self::Quoted | Self::Tagged |
-            Self::Numbered | Self::IconPrefix => GroupHeaderCategory::Decorative,
+            Self::UppercaseLeft
+            | Self::UppercaseCenter
+            | Self::SmallCapsLeft
+            | Self::BoldLeft
+            | Self::LightLeft
+            | Self::MonospaceLeft => GroupHeaderCategory::TextOnly,
+
+            Self::LineLeft
+            | Self::LineRight
+            | Self::LineBothSides
+            | Self::LineBelow
+            | Self::LineAbove
+            | Self::DoubleLine => GroupHeaderCategory::WithLines,
+
+            Self::PillBackground
+            | Self::FullWidthBackground
+            | Self::SubtleBackground
+            | Self::GradientFade
+            | Self::BorderedBox => GroupHeaderCategory::WithBackground,
+
+            Self::DotPrefix
+            | Self::DashPrefix
+            | Self::BulletPrefix
+            | Self::ArrowPrefix
+            | Self::ChevronPrefix
+            | Self::Dimmed => GroupHeaderCategory::Minimal,
+
+            Self::Bracketed | Self::Quoted | Self::Tagged | Self::Numbered | Self::IconPrefix => {
+                GroupHeaderCategory::Decorative
+            }
         }
     }
 }
@@ -301,12 +317,12 @@ impl GroupHeaderStyle {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_style_count() {
         assert_eq!(GroupHeaderStyle::count(), 28);
     }
-    
+
     #[test]
     fn test_all_styles_have_names() {
         for style in GroupHeaderStyle::all() {
@@ -314,7 +330,7 @@ mod tests {
             assert!(!style.description().is_empty());
         }
     }
-    
+
     #[test]
     fn test_category_contains_all_styles() {
         let mut total = 0;
@@ -323,7 +339,7 @@ mod tests {
         }
         assert_eq!(total, GroupHeaderStyle::count());
     }
-    
+
     #[test]
     fn test_sample_generation() {
         let sample = GroupHeaderStyle::LineBothSides.sample("MAIN");

@@ -35,7 +35,7 @@ pub mod colors {
     pub const BACKGROUND_SELECTED: u32 = 0x1a003a;
     /// Background on hover
     pub const BACKGROUND_HOVER: u32 = 0x150030;
-    
+
     /// Primary cyan neon color
     pub const CYAN: u32 = 0x00ffff;
     /// Secondary magenta neon color
@@ -46,7 +46,7 @@ pub mod colors {
     pub const CYAN_DIM: u32 = 0x00aaaa;
     /// Dimmed magenta for muted elements
     pub const MAGENTA_DIM: u32 = 0xaa00aa;
-    
+
     /// Border color (dim cyan)
     pub const BORDER: u32 = 0x0066aa;
     /// Active border (bright cyan)
@@ -90,42 +90,51 @@ impl NeonCyberpunkRenderer {
     pub fn new() -> Self {
         Self
     }
-    
+
     /// Get the neon list item colors
     pub fn list_item_colors() -> NeonListItemColors {
         NeonListItemColors::default()
     }
-    
+
     /// Create a glow effect box shadow (cyan glow)
     fn cyan_glow() -> BoxShadow {
         BoxShadow {
             color: hsla(180.0 / 360.0, 1.0, 0.5, 0.6),
-            offset: Point { x: px(0.), y: px(0.) },
+            offset: Point {
+                x: px(0.),
+                y: px(0.),
+            },
             blur_radius: px(12.),
             spread_radius: px(2.),
         }
     }
-    
+
     /// Create a glow effect box shadow (magenta glow)
     fn magenta_glow() -> BoxShadow {
         BoxShadow {
             color: hsla(300.0 / 360.0, 1.0, 0.5, 0.7),
-            offset: Point { x: px(0.), y: px(0.) },
+            offset: Point {
+                x: px(0.),
+                y: px(0.),
+            },
             blur_radius: px(16.),
             spread_radius: px(4.),
         }
     }
-    
+
     /// Create a subtle inner glow for text areas
     fn inner_glow() -> BoxShadow {
         BoxShadow {
             color: hsla(180.0 / 360.0, 1.0, 0.5, 0.3),
-            offset: Point { x: px(0.), y: px(0.) },
+            offset: Point {
+                x: px(0.),
+                y: px(0.),
+            },
             blur_radius: px(8.),
             spread_radius: px(0.),
         }
     }
-    
+
     /// Render the search input with cyan glow
     fn render_search_input(&self, filter_text: &str, filter_is_empty: bool) -> impl IntoElement {
         let display_text = if filter_is_empty {
@@ -133,7 +142,7 @@ impl NeonCyberpunkRenderer {
         } else {
             filter_text
         };
-        
+
         div()
             .w_full()
             .px(px(16.))
@@ -152,10 +161,10 @@ impl NeonCyberpunkRenderer {
                     })
                     .font_family("Menlo")
                     .text_sm()
-                    .child(display_text.to_string())
+                    .child(display_text.to_string()),
             )
     }
-    
+
     /// Render a single list item with neon styling
     fn render_list_item(
         &self,
@@ -166,27 +175,27 @@ impl NeonCyberpunkRenderer {
         index: usize,
     ) -> impl IntoElement {
         let colors = Self::list_item_colors();
-        
+
         // Background color based on selection state
         let bg_color = if is_selected {
             rgb(colors.background_selected)
         } else {
             rgba(0x00000000)
         };
-        
+
         // Text colors based on selection
         let name_color = if is_selected {
             rgb(colors::MAGENTA)
         } else {
             rgb(colors::CYAN)
         };
-        
+
         let desc_color = if is_selected {
             rgb(colors::YELLOW)
         } else {
             rgb(colors::CYAN_DIM)
         };
-        
+
         // Build description element
         let description_element = if let Some(desc) = description {
             div()
@@ -198,7 +207,7 @@ impl NeonCyberpunkRenderer {
         } else {
             div()
         };
-        
+
         // Build shortcut badge
         let shortcut_element = if let Some(sc) = shortcut {
             div()
@@ -212,7 +221,7 @@ impl NeonCyberpunkRenderer {
         } else {
             div()
         };
-        
+
         // Main item container
         let mut container = div()
             .id(ElementId::NamedInteger("neon-item".into(), index as u64))
@@ -221,7 +230,7 @@ impl NeonCyberpunkRenderer {
             .px(px(12.))
             .flex()
             .items_center();
-        
+
         // Inner content with styling
         let mut inner = div()
             .w_full()
@@ -235,7 +244,7 @@ impl NeonCyberpunkRenderer {
             .items_center()
             .justify_between()
             .gap_2();
-        
+
         // Apply glow effects based on selection
         if is_selected {
             inner = inner
@@ -243,16 +252,13 @@ impl NeonCyberpunkRenderer {
                 .border_color(rgb(colors::MAGENTA))
                 .shadow(vec![Self::magenta_glow()]);
         } else {
-            inner = inner
-                .border_1()
-                .border_color(rgba(0x00ffff20))
-                .hover(|s| s
-                    .bg(rgb(colors.background_hover))
+            inner = inner.border_1().border_color(rgba(0x00ffff20)).hover(|s| {
+                s.bg(rgb(colors.background_hover))
                     .border_color(rgb(colors::CYAN))
                     .shadow(vec![Self::cyan_glow()])
-                );
+            });
         }
-        
+
         // Text content
         let text_content = div()
             .flex_1()
@@ -268,26 +274,24 @@ impl NeonCyberpunkRenderer {
                     .font_family("Menlo")
                     .text_color(name_color)
                     .overflow_hidden()
-                    .child(name.to_string())
+                    .child(name.to_string()),
             )
             .child(description_element);
-        
-        inner = inner
-            .child(text_content)
-            .child(
-                div()
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .gap_2()
-                    .flex_shrink_0()
-                    .child(shortcut_element)
-            );
-        
+
+        inner = inner.child(text_content).child(
+            div()
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap_2()
+                .flex_shrink_0()
+                .child(shortcut_element),
+        );
+
         container = container.child(inner);
         container
     }
-    
+
     /// Render the header with design name
     fn render_header(&self) -> impl IntoElement {
         div()
@@ -303,17 +307,17 @@ impl NeonCyberpunkRenderer {
                     .text_xs()
                     .font_family("Menlo")
                     .text_color(rgb(colors::MAGENTA_DIM))
-                    .child("// NEON CYBERPUNK")
+                    .child("// NEON CYBERPUNK"),
             )
             .child(
                 div()
                     .text_xs()
                     .font_family("Menlo")
                     .text_color(rgb(colors::YELLOW))
-                    .child("CMD+6")
+                    .child("CMD+6"),
             )
     }
-    
+
     /// Render the status bar
     fn render_status_bar(&self, total_items: usize, filtered_items: usize) -> impl IntoElement {
         let status_text = if total_items == filtered_items {
@@ -321,7 +325,7 @@ impl NeonCyberpunkRenderer {
         } else {
             format!("{}/{} scripts", filtered_items, total_items)
         };
-        
+
         div()
             .w_full()
             .px(px(16.))
@@ -337,7 +341,7 @@ impl NeonCyberpunkRenderer {
                     .text_xs()
                     .font_family("Menlo")
                     .text_color(rgb(colors::CYAN_DIM))
-                    .child(status_text)
+                    .child(status_text),
             )
             .child(
                 div()
@@ -349,15 +353,15 @@ impl NeonCyberpunkRenderer {
                             .text_xs()
                             .font_family("Menlo")
                             .text_color(rgb(colors::MAGENTA_DIM))
-                            .child("↑↓ navigate")
+                            .child("↑↓ navigate"),
                     )
                     .child(
                         div()
                             .text_xs()
                             .font_family("Menlo")
                             .text_color(rgb(colors::CYAN_DIM))
-                            .child("⏎ select")
-                    )
+                            .child("⏎ select"),
+                    ),
             )
     }
 }
@@ -369,15 +373,11 @@ impl Default for NeonCyberpunkRenderer {
 }
 
 impl<App> DesignRenderer<App> for NeonCyberpunkRenderer {
-    fn render_script_list(
-        &self,
-        _app: &App,
-        _cx: &mut Context<App>,
-    ) -> AnyElement {
+    fn render_script_list(&self, _app: &App, _cx: &mut Context<App>) -> AnyElement {
         // This is a stub implementation - the actual integration with ScriptListApp
         // will be done when the design system is fully connected.
         // For now, return a placeholder that shows the design is available.
-        
+
         div()
             .w_full()
             .h_full()
@@ -385,11 +385,7 @@ impl<App> DesignRenderer<App> for NeonCyberpunkRenderer {
             .flex()
             .flex_col()
             .child(self.render_header())
-            .child(
-                div()
-                    .p(px(16.))
-                    .child(self.render_search_input("", true))
-            )
+            .child(div().p(px(16.)).child(self.render_search_input("", true)))
             .child(
                 div()
                     .flex_1()
@@ -402,7 +398,7 @@ impl<App> DesignRenderer<App> for NeonCyberpunkRenderer {
                         div()
                             .text_color(rgb(colors::CYAN))
                             .font_family("Menlo")
-                            .child("Neon Cyberpunk Design Active")
+                            .child("Neon Cyberpunk Design Active"),
                     )
                     .child(
                         div()
@@ -410,13 +406,13 @@ impl<App> DesignRenderer<App> for NeonCyberpunkRenderer {
                             .font_family("Menlo")
                             .text_xs()
                             .mt_2()
-                            .child("Integration pending with ScriptListApp")
-                    )
+                            .child("Integration pending with ScriptListApp"),
+                    ),
             )
             .child(self.render_status_bar(0, 0))
             .into_any_element()
     }
-    
+
     fn variant(&self) -> DesignVariant {
         DesignVariant::NeonCyberpunk
     }

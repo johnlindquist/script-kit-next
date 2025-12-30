@@ -65,11 +65,13 @@ pub use button::{Button, ButtonColors, ButtonVariant};
 #[allow(unused_imports)]
 pub use form_fields::{FormCheckbox, FormFieldColors, FormFieldState, FormTextArea, FormTextField};
 #[allow(unused_imports)]
-pub use scrollbar::{Scrollbar, ScrollbarColors, SCROLLBAR_WIDTH, MIN_THUMB_HEIGHT, SCROLLBAR_PADDING};
+pub use scrollbar::{
+    Scrollbar, ScrollbarColors, MIN_THUMB_HEIGHT, SCROLLBAR_PADDING, SCROLLBAR_WIDTH,
+};
 // These re-exports form the public API - allow unused since not all are used in every crate
 #[allow(unused_imports)]
-pub use toast::{Toast, ToastAction, ToastColors, ToastVariant};
+pub use prompt_container::{PromptContainer, PromptContainerColors, PromptContainerConfig};
 #[allow(unused_imports)]
 pub use prompt_header::{PromptHeader, PromptHeaderColors, PromptHeaderConfig};
 #[allow(unused_imports)]
-pub use prompt_container::{PromptContainer, PromptContainerColors, PromptContainerConfig};
+pub use toast::{Toast, ToastAction, ToastColors, ToastVariant};

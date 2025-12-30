@@ -36,9 +36,9 @@ pub use drop::DropPrompt;
 #[allow(unused_imports)]
 pub use env::EnvPrompt;
 #[allow(unused_imports)]
-pub use path::PathPrompt;
-#[allow(unused_imports)]
 pub use path::PathInfo;
+#[allow(unused_imports)]
+pub use path::PathPrompt;
 #[allow(unused_imports)]
 pub use path::ShowActionsCallback;
 #[allow(unused_imports)]

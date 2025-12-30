@@ -21,34 +21,34 @@ use crate::list_item::LIST_ITEM_HEIGHT;
 pub mod colors {
     /// Warm cream background (main window) - #faf8f0
     pub const BACKGROUND_MAIN: u32 = 0xfaf8f0;
-    
+
     /// Slightly warmer white for cards - #fffef8
     pub const CARD_BACKGROUND: u32 = 0xfffef8;
-    
+
     /// Light cream for search box - #f5f3eb
     pub const SEARCH_BACKGROUND: u32 = 0xf5f3eb;
-    
+
     /// Primary text (dark sepia) - #3d3d3d
     pub const TEXT_PRIMARY: u32 = 0x3d3d3d;
-    
+
     /// Secondary text (lighter sepia) - #5a5a5a
     pub const TEXT_SECONDARY: u32 = 0x5a5a5a;
-    
+
     /// Muted text - #8a8a7a
     pub const TEXT_MUTED: u32 = 0x8a8a7a;
-    
+
     /// Dimmed text (very light) - #b0b0a0
     pub const TEXT_DIMMED: u32 = 0xb0b0a0;
-    
+
     /// Accent color (warm tan/gold) - #d4a574
     pub const ACCENT: u32 = 0xd4a574;
-    
+
     /// Subtle accent for hover states - #e8d4be
     pub const ACCENT_SUBTLE: u32 = 0xe8d4be;
-    
+
     /// Border color (light sepia) - #e0dcd0
     pub const BORDER: u32 = 0xe0dcd0;
-    
+
     /// Selected item bookmark color - same as accent
     pub const BOOKMARK: u32 = ACCENT;
 }
@@ -68,7 +68,7 @@ impl PaperRenderer {
     pub fn new() -> Self {
         Self
     }
-    
+
     /// Create warm-tinted shadow for paper effect
     /// Uses sepia-tinted shadows offset down-right for realistic paper depth
     fn create_card_shadow() -> Vec<BoxShadow> {
@@ -89,7 +89,7 @@ impl PaperRenderer {
             },
         ]
     }
-    
+
     /// Create inset shadow for search box (paper indent effect)
     fn create_inset_shadow() -> Vec<BoxShadow> {
         vec![BoxShadow {
@@ -99,7 +99,7 @@ impl PaperRenderer {
             spread_radius: px(-1.),
         }]
     }
-    
+
     /// Render a paper-style card with realistic shadow
     fn render_paper_card(&self, content: impl IntoElement) -> impl IntoElement {
         // Outer container with shadow
@@ -109,7 +109,7 @@ impl PaperRenderer {
             .shadow(Self::create_card_shadow())
             .child(content)
     }
-    
+
     /// Render a list item in paper style
     fn render_paper_item(
         &self,
@@ -122,27 +122,27 @@ impl PaperRenderer {
         // Selected state uses bookmark-style left border
         let bookmark_width = if is_selected { px(4.) } else { px(0.) };
         let bookmark_color = rgb(colors::BOOKMARK);
-        
+
         // Background varies based on selection
         let bg_color = if is_selected {
             rgba((colors::ACCENT_SUBTLE << 8) | 0x60)
         } else {
             rgba(0x00000000)
         };
-        
+
         // Text colors
         let name_color = if is_selected {
             rgb(colors::TEXT_PRIMARY)
         } else {
             rgb(colors::TEXT_SECONDARY)
         };
-        
+
         let desc_color = if is_selected {
             rgb(colors::ACCENT)
         } else {
             rgb(colors::TEXT_MUTED)
         };
-        
+
         // Build content
         let mut content_col = div()
             .flex_1()
@@ -151,7 +151,7 @@ impl PaperRenderer {
             .flex()
             .flex_col()
             .gap(px(2.));
-        
+
         // Name with serif styling note (would use Georgia font family)
         content_col = content_col.child(
             div()
@@ -159,9 +159,9 @@ impl PaperRenderer {
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(name_color)
                 .overflow_hidden()
-                .child(name.to_string())
+                .child(name.to_string()),
         );
-        
+
         // Description
         if let Some(desc) = description {
             content_col = content_col.child(
@@ -170,10 +170,10 @@ impl PaperRenderer {
                     .text_color(desc_color)
                     .overflow_hidden()
                     .max_h(px(16.))
-                    .child(desc.to_string())
+                    .child(desc.to_string()),
             );
         }
-        
+
         // Shortcut badge (paper-style tag)
         let shortcut_el = if let Some(sc) = shortcut {
             div()
@@ -187,7 +187,7 @@ impl PaperRenderer {
         } else {
             div()
         };
-        
+
         // Main item container
         div()
             .id(ElementId::NamedInteger("paper-item".into(), index as u64))
@@ -210,7 +210,7 @@ impl PaperRenderer {
             .child(content_col)
             .child(shortcut_el)
     }
-    
+
     /// Render a search box in paper style
     fn render_search_box(&self, placeholder: &str) -> impl IntoElement {
         div()
@@ -230,7 +230,7 @@ impl PaperRenderer {
                 div()
                     .text_sm()
                     .text_color(rgb(colors::TEXT_MUTED))
-                    .child(placeholder.to_string())
+                    .child(placeholder.to_string()),
             )
     }
 }
@@ -242,22 +242,33 @@ impl Default for PaperRenderer {
 }
 
 impl<App: 'static> DesignRenderer<App> for PaperRenderer {
-    fn render_script_list(
-        &self,
-        _app: &App,
-        _cx: &mut Context<App>,
-    ) -> AnyElement {
+    fn render_script_list(&self, _app: &App, _cx: &mut Context<App>) -> AnyElement {
         // Create a sample paper-style layout
         let search = self.render_search_box("Search scripts...");
-        
+
         // Sample items demonstrating the paper style
         let items = vec![
-            ("Welcome Script", Some("Get started with Script Kit"), Some("⌘1"), false),
-            ("Open Project", Some("Quickly open projects in VS Code"), Some("⌘P"), true),
-            ("Clipboard History", Some("View and manage clipboard"), None, false),
+            (
+                "Welcome Script",
+                Some("Get started with Script Kit"),
+                Some("⌘1"),
+                false,
+            ),
+            (
+                "Open Project",
+                Some("Quickly open projects in VS Code"),
+                Some("⌘P"),
+                true,
+            ),
+            (
+                "Clipboard History",
+                Some("View and manage clipboard"),
+                None,
+                false,
+            ),
             ("Quick Notes", Some("Jot down ideas"), Some("⌘N"), false),
         ];
-        
+
         let list_items: Vec<_> = items
             .into_iter()
             .enumerate()
@@ -265,7 +276,7 @@ impl<App: 'static> DesignRenderer<App> for PaperRenderer {
                 self.render_paper_item(i, name, desc, shortcut, selected)
             })
             .collect();
-        
+
         let list_container = div()
             .flex_1()
             .overflow_hidden()
@@ -274,7 +285,7 @@ impl<App: 'static> DesignRenderer<App> for PaperRenderer {
             .gap(px(2.))
             .py(px(8.))
             .children(list_items);
-        
+
         // Wrap in paper card
         let card = self.render_paper_card(
             div()
@@ -282,9 +293,9 @@ impl<App: 'static> DesignRenderer<App> for PaperRenderer {
                 .flex_col()
                 .w_full()
                 .p(px(4.))
-                .child(list_container)
+                .child(list_container),
         );
-        
+
         // Main container with paper background
         div()
             .flex()
@@ -298,7 +309,7 @@ impl<App: 'static> DesignRenderer<App> for PaperRenderer {
             .child(card)
             .into_any_element()
     }
-    
+
     fn variant(&self) -> DesignVariant {
         DesignVariant::Paper
     }

@@ -69,33 +69,31 @@ impl BrutalistRenderer {
         let offset = ((index % 3) as f32) * 2.0;
 
         // Build name + description content
-        let mut name_content = div()
-            .flex_1()
-            .flex()
-            .flex_col()
-            .gap(px(4.))
-            .child(
-                div()
-                    .text_base()
-                    .font_weight(FontWeight::BOLD)
-                    .text_color(text_color)
-                    .text_decoration_1() // Underlined - clickable
-                    .child(result.name().to_uppercase())
-            );
-        
+        let mut name_content = div().flex_1().flex().flex_col().gap(px(4.)).child(
+            div()
+                .text_base()
+                .font_weight(FontWeight::BOLD)
+                .text_color(text_color)
+                .text_decoration_1() // Underlined - clickable
+                .child(result.name().to_uppercase()),
+        );
+
         // Add description if present
         if let Some(desc) = result.description() {
             name_content = name_content.child(
                 div()
                     .text_sm()
                     .text_color(text_color)
-                    .child(desc.to_string())
+                    .child(desc.to_string()),
             );
         }
 
         // Build the item container with thick black border
         div()
-            .id(ElementId::NamedInteger("brutalist-item".into(), index as u64))
+            .id(ElementId::NamedInteger(
+                "brutalist-item".into(),
+                index as u64,
+            ))
             .w_full()
             .h(px(LIST_ITEM_HEIGHT))
             .bg(bg_color)
@@ -118,7 +116,7 @@ impl BrutalistRenderer {
                     .text_color(rgb(colors::WHITE))
                     .text_xs()
                     .font_weight(FontWeight::BOLD)
-                    .child(result.type_label().to_uppercase())
+                    .child(result.type_label().to_uppercase()),
             )
     }
 }
@@ -130,15 +128,11 @@ impl Default for BrutalistRenderer {
 }
 
 impl<App: 'static> DesignRenderer<App> for BrutalistRenderer {
-    fn render_script_list(
-        &self,
-        _app: &App,
-        _cx: &mut Context<App>,
-    ) -> AnyElement {
+    fn render_script_list(&self, _app: &App, _cx: &mut Context<App>) -> AnyElement {
         // This is a placeholder implementation
         // The actual rendering requires access to the app's filtered_results and selected_index
         // which should be provided through the App generic parameter
-        
+
         div()
             .w_full()
             .h_full()
@@ -160,20 +154,16 @@ impl<App: 'static> DesignRenderer<App> for BrutalistRenderer {
                     .justify_center()
                     .font_weight(FontWeight::BOLD)
                     .text_lg()
-                    .child("SCRIPTS")
+                    .child("SCRIPTS"),
             )
             .child(
                 // Content area placeholder
-                div()
-                    .flex_1()
-                    .w_full()
-                    .p(px(BORDER_WIDTH))
-                    .child(
-                        div()
-                            .text_color(rgb(colors::BLACK))
-                            .font_family("Georgia")
-                            .child("Brutalist design active. Use with ScriptListApp.")
-                    )
+                div().flex_1().w_full().p(px(BORDER_WIDTH)).child(
+                    div()
+                        .text_color(rgb(colors::BLACK))
+                        .font_family("Georgia")
+                        .child("Brutalist design active. Use with ScriptListApp."),
+                ),
             )
             .into_any_element()
     }
@@ -184,7 +174,7 @@ impl<App: 'static> DesignRenderer<App> for BrutalistRenderer {
 }
 
 /// Render a list of items in brutalist style
-/// 
+///
 /// This is a helper function that can be used by ScriptListApp to render
 /// the filtered results in brutalist style.
 pub fn render_brutalist_list(
@@ -193,7 +183,7 @@ pub fn render_brutalist_list(
     hovered_index: Option<usize>,
 ) -> impl IntoElement {
     let renderer = BrutalistRenderer::new();
-    
+
     div()
         .w_full()
         .h_full()
@@ -217,7 +207,7 @@ pub fn render_brutalist_list(
                 .text_lg()
                 .border_b(px(BORDER_WIDTH))
                 .border_color(rgb(colors::BLACK))
-                .child("SCRIPTS")
+                .child("SCRIPTS"),
         )
         .child(
             // List container with grid lines (borders between items)
@@ -227,13 +217,11 @@ pub fn render_brutalist_list(
                 .overflow_hidden()
                 .flex()
                 .flex_col()
-                .children(
-                    results.iter().enumerate().map(|(index, result)| {
-                        let is_selected = index == selected_index;
-                        let is_hovered = hovered_index == Some(index);
-                        renderer.render_item(result, index, is_selected, is_hovered)
-                    })
-                )
+                .children(results.iter().enumerate().map(|(index, result)| {
+                    let is_selected = index == selected_index;
+                    let is_hovered = hovered_index == Some(index);
+                    renderer.render_item(result, index, is_selected, is_hovered)
+                })),
         )
 }
 

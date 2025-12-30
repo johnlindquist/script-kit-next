@@ -275,12 +275,7 @@ impl Render for TemplatePrompt {
 
         // Preview section with live template
         container = container
-            .child(
-                div()
-                    .text_sm()
-                    .text_color(muted_color)
-                    .child("Preview:"),
-            )
+            .child(div().text_sm().text_color(muted_color).child("Preview:"))
             .child(
                 div()
                     .mt(px(spacing.padding_sm))

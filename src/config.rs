@@ -149,7 +149,11 @@ pub struct Config {
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "builtIns")]
     pub built_ins: Option<BuiltInConfig>,
     /// Process resource limits and health monitoring configuration
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "processLimits")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "processLimits"
+    )]
     pub process_limits: Option<ProcessLimits>,
 }
 
@@ -1222,7 +1226,10 @@ mod tests {
         let limits = ProcessLimits::default();
         assert_eq!(limits.max_memory_mb, None);
         assert_eq!(limits.max_runtime_seconds, None);
-        assert_eq!(limits.health_check_interval_ms, DEFAULT_HEALTH_CHECK_INTERVAL_MS);
+        assert_eq!(
+            limits.health_check_interval_ms,
+            DEFAULT_HEALTH_CHECK_INTERVAL_MS
+        );
     }
 
     #[test]
@@ -1273,7 +1280,10 @@ mod tests {
 
         assert_eq!(limits.max_memory_mb, Some(256));
         assert_eq!(limits.max_runtime_seconds, None); // Default
-        assert_eq!(limits.health_check_interval_ms, DEFAULT_HEALTH_CHECK_INTERVAL_MS); // Default
+        assert_eq!(
+            limits.health_check_interval_ms,
+            DEFAULT_HEALTH_CHECK_INTERVAL_MS
+        ); // Default
     }
 
     #[test]
@@ -1284,7 +1294,10 @@ mod tests {
 
         assert_eq!(limits.max_memory_mb, None);
         assert_eq!(limits.max_runtime_seconds, None);
-        assert_eq!(limits.health_check_interval_ms, DEFAULT_HEALTH_CHECK_INTERVAL_MS);
+        assert_eq!(
+            limits.health_check_interval_ms,
+            DEFAULT_HEALTH_CHECK_INTERVAL_MS
+        );
     }
 
     #[test]
@@ -1334,7 +1347,10 @@ mod tests {
         // Should return defaults when process_limits is None
         assert_eq!(limits.max_memory_mb, None);
         assert_eq!(limits.max_runtime_seconds, None);
-        assert_eq!(limits.health_check_interval_ms, DEFAULT_HEALTH_CHECK_INTERVAL_MS);
+        assert_eq!(
+            limits.health_check_interval_ms,
+            DEFAULT_HEALTH_CHECK_INTERVAL_MS
+        );
     }
 
     #[test]
@@ -1378,7 +1394,10 @@ mod tests {
         let limits = config.get_process_limits();
         assert_eq!(limits.max_memory_mb, None);
         assert_eq!(limits.max_runtime_seconds, None);
-        assert_eq!(limits.health_check_interval_ms, DEFAULT_HEALTH_CHECK_INTERVAL_MS);
+        assert_eq!(
+            limits.health_check_interval_ms,
+            DEFAULT_HEALTH_CHECK_INTERVAL_MS
+        );
     }
 
     #[test]
@@ -1427,7 +1446,10 @@ mod tests {
 
         assert_eq!(original.max_memory_mb, restored.max_memory_mb);
         assert_eq!(original.max_runtime_seconds, restored.max_runtime_seconds);
-        assert_eq!(original.health_check_interval_ms, restored.health_check_interval_ms);
+        assert_eq!(
+            original.health_check_interval_ms,
+            restored.health_check_interval_ms
+        );
     }
 
     #[test]
@@ -1441,7 +1463,9 @@ mod tests {
 
         assert_eq!(original.max_memory_mb, cloned.max_memory_mb);
         assert_eq!(original.max_runtime_seconds, cloned.max_runtime_seconds);
-        assert_eq!(original.health_check_interval_ms, cloned.health_check_interval_ms);
+        assert_eq!(
+            original.health_check_interval_ms,
+            cloned.health_check_interval_ms
+        );
     }
-
 }

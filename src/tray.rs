@@ -102,14 +102,12 @@ impl TrayManager {
         let quit_id = quit_item.id().0.clone();
 
         // Add items to menu
-        menu.append(&open_item)
-            .context("Failed to add Open item")?;
+        menu.append(&open_item).context("Failed to add Open item")?;
         menu.append(&settings_item)
             .context("Failed to add Settings item")?;
         menu.append(&PredefinedMenuItem::separator())
             .context("Failed to add separator")?;
-        menu.append(&quit_item)
-            .context("Failed to add Quit item")?;
+        menu.append(&quit_item).context("Failed to add Quit item")?;
 
         Ok((menu, open_id, settings_id, quit_id))
     }

@@ -5,14 +5,12 @@
 //! - Display dropped file information
 //! - Submit file paths
 
-use gpui::{
-    div, prelude::*, px, rgb, Context, FocusHandle, Focusable, Render, Window,
-};
+use gpui::{div, prelude::*, px, rgb, Context, FocusHandle, Focusable, Render, Window};
 use std::sync::Arc;
 
+use crate::designs::{get_tokens, DesignVariant};
 use crate::logging;
 use crate::theme;
-use crate::designs::{DesignVariant, get_tokens};
 
 use super::SubmitCallback;
 
@@ -62,7 +60,7 @@ impl DropPrompt {
         theme: Arc<theme::Theme>,
     ) -> Self {
         logging::log("PROMPTS", &format!("DropPrompt::new id: {}", id));
-        
+
         DropPrompt {
             id,
             placeholder,
@@ -80,12 +78,16 @@ impl DropPrompt {
     fn submit(&mut self) {
         if !self.dropped_files.is_empty() {
             // Serialize dropped files to JSON
-            let files_json: Vec<serde_json::Value> = self.dropped_files.iter()
-                .map(|f| serde_json::json!({
-                    "path": f.path,
-                    "name": f.name,
-                    "size": f.size
-                }))
+            let files_json: Vec<serde_json::Value> = self
+                .dropped_files
+                .iter()
+                .map(|f| {
+                    serde_json::json!({
+                        "path": f.path,
+                        "name": f.name,
+                        "size": f.size
+                    })
+                })
                 .collect();
             let json_str = serde_json::to_string(&files_json).unwrap_or_else(|_| "[]".to_string());
             (self.on_submit)(self.id.clone(), Some(json_str));
@@ -118,36 +120,46 @@ impl Render for DropPrompt {
         let colors = tokens.colors();
         let spacing = tokens.spacing();
 
-        let handle_key = cx.listener(|this: &mut Self, event: &gpui::KeyDownEvent, _window: &mut Window, _cx: &mut Context<Self>| {
-            let key_str = event.keystroke.key.to_lowercase();
-            
-            match key_str.as_str() {
-                "enter" => this.submit(),
-                "escape" => this.submit_cancel(),
-                _ => {}
-            }
-        });
+        let handle_key = cx.listener(
+            |this: &mut Self,
+             event: &gpui::KeyDownEvent,
+             _window: &mut Window,
+             _cx: &mut Context<Self>| {
+                let key_str = event.keystroke.key.to_lowercase();
 
-        let (main_bg, text_color, muted_color, border_color) = if self.design_variant == DesignVariant::Default {
-            (
-                rgb(self.theme.colors.background.main),
-                rgb(self.theme.colors.text.secondary),
-                rgb(self.theme.colors.text.muted),
-                rgb(self.theme.colors.ui.border),
-            )
-        } else {
-            (
-                rgb(colors.background),
-                rgb(colors.text_secondary),
-                rgb(colors.text_muted),
-                rgb(colors.border),
-            )
-        };
+                match key_str.as_str() {
+                    "enter" => this.submit(),
+                    "escape" => this.submit_cancel(),
+                    _ => {}
+                }
+            },
+        );
 
-        let placeholder = self.placeholder.clone()
+        let (main_bg, text_color, muted_color, border_color) =
+            if self.design_variant == DesignVariant::Default {
+                (
+                    rgb(self.theme.colors.background.main),
+                    rgb(self.theme.colors.text.secondary),
+                    rgb(self.theme.colors.text.muted),
+                    rgb(self.theme.colors.ui.border),
+                )
+            } else {
+                (
+                    rgb(colors.background),
+                    rgb(colors.text_secondary),
+                    rgb(colors.text_muted),
+                    rgb(colors.border),
+                )
+            };
+
+        let placeholder = self
+            .placeholder
+            .clone()
             .unwrap_or_else(|| "Drop files here".to_string());
-        
-        let hint = self.hint.clone()
+
+        let hint = self
+            .hint
+            .clone()
             .unwrap_or_else(|| "Drag and drop files to upload".to_string());
 
         // Drop zone styling
@@ -182,31 +194,27 @@ impl Render for DropPrompt {
                     .border_2()
                     .border_color(border_color)
                     .rounded(px(8.))
-                    .child(
-                        div()
-                            .text_2xl()
-                            .child("📁")
-                    )
+                    .child(div().text_2xl().child("📁"))
                     .child(
                         div()
                             .mt(px(spacing.padding_md))
                             .text_lg()
-                            .child(placeholder)
-                    )
+                            .child(placeholder),
+                    ),
             )
             .child(
                 div()
                     .mt(px(spacing.padding_md))
                     .text_sm()
                     .text_color(muted_color)
-                    .child(hint)
+                    .child(hint),
             )
             .when(!self.dropped_files.is_empty(), |d| {
                 d.child(
                     div()
                         .mt(px(spacing.padding_lg))
                         .text_sm()
-                        .child(format!("{} file(s) dropped", self.dropped_files.len()))
+                        .child(format!("{} file(s) dropped", self.dropped_files.len())),
                 )
             })
     }

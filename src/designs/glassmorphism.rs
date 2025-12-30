@@ -51,15 +51,15 @@ impl Default for GlassColors {
             // Backgrounds with alpha encoded in lower 8 bits
             // Format: 0xRRGGBBAA
             background_main: 0xffffff40, // white @ 25% (~0.25 * 255 = 64 = 0x40)
-            card_bg: 0xffffff30,          // white @ 19% (~0.19 * 255 = 48 = 0x30)
-            selected_bg: 0xffffff50,      // white @ 31% (~0.31 * 255 = 80 = 0x50)
-            hover_bg: 0xffffff40,         // white @ 25%
-            border: 0xffffff33,           // white @ 20%
+            card_bg: 0xffffff30,         // white @ 19% (~0.19 * 255 = 48 = 0x30)
+            selected_bg: 0xffffff50,     // white @ 31% (~0.31 * 255 = 80 = 0x50)
+            hover_bg: 0xffffff40,        // white @ 25%
+            border: 0xffffff33,          // white @ 20%
             // Text colors (solid)
-            text_primary: 0xffffff,       // pure white
-            text_secondary: 0xffffffcc,   // white @ 80%
-            text_muted: 0xffffff99,       // white @ 60%
-            accent: 0xa8d8ff,             // soft blue-white
+            text_primary: 0xffffff,     // pure white
+            text_secondary: 0xffffffcc, // white @ 80%
+            text_muted: 0xffffff99,     // white @ 60%
+            accent: 0xa8d8ff,           // soft blue-white
         }
     }
 }
@@ -439,10 +439,7 @@ pub fn render_glassmorphism_preview_panel(
 /// Render glassmorphism-styled log panel
 ///
 /// A translucent panel for displaying logs with frosted glass effect.
-pub fn render_glassmorphism_log_panel(
-    logs: &[String],
-    colors: GlassColors,
-) -> impl IntoElement {
+pub fn render_glassmorphism_log_panel(logs: &[String], colors: GlassColors) -> impl IntoElement {
     div()
         .w_full()
         .h(px(150.))

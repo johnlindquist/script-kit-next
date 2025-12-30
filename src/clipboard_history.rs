@@ -160,8 +160,7 @@ pub fn classify_timestamp(timestamp: i64) -> TimeGroup {
     }
 
     // Check This Month
-    let this_month_start = NaiveDate::from_ymd_opt(today.year(), today.month(), 1)
-        .unwrap_or(today);
+    let this_month_start = NaiveDate::from_ymd_opt(today.year(), today.month(), 1).unwrap_or(today);
     if entry_date >= this_month_start {
         return TimeGroup::ThisMonth;
     }
@@ -175,7 +174,9 @@ pub fn classify_timestamp(timestamp: i64) -> TimeGroup {
 /// sorted by time group order (Today first, Older last).
 /// Entries within each group maintain their original order.
 #[allow(dead_code)] // Used by downstream subtasks (UI)
-pub fn group_entries_by_time(entries: Vec<ClipboardEntry>) -> Vec<(TimeGroup, Vec<ClipboardEntry>)> {
+pub fn group_entries_by_time(
+    entries: Vec<ClipboardEntry>,
+) -> Vec<(TimeGroup, Vec<ClipboardEntry>)> {
     use std::collections::HashMap;
 
     let mut groups: HashMap<TimeGroup, Vec<ClipboardEntry>> = HashMap::new();
@@ -269,7 +270,11 @@ pub fn get_cached_entries(limit: usize) -> Vec<ClipboardEntry> {
     if let Ok(cache) = get_entry_cache().lock() {
         if !cache.is_empty() {
             let result: Vec<_> = cache.iter().take(limit).cloned().collect();
-            debug!(count = result.len(), cached = true, "Retrieved clipboard entries from cache");
+            debug!(
+                count = result.len(),
+                cached = true,
+                "Retrieved clipboard entries from cache"
+            );
             return result;
         }
     }
@@ -402,7 +407,10 @@ fn get_connection() -> Result<Arc<Mutex<Connection>>> {
 /// # Errors
 /// Returns error if database creation fails.
 pub fn init_clipboard_history() -> Result<()> {
-    info!(retention_days = get_retention_days(), "Initializing clipboard history");
+    info!(
+        retention_days = get_retention_days(),
+        "Initializing clipboard history"
+    );
 
     // Initialize the database connection (enables WAL, runs migrations)
     let _conn = get_connection().context("Failed to initialize database")?;
@@ -482,7 +490,9 @@ fn background_prune_loop(stop_flag: Arc<Mutex<bool>>) {
 /// Returns the number of entries deleted.
 pub fn prune_old_entries() -> Result<usize> {
     let conn = get_connection()?;
-    let conn = conn.lock().map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
+    let conn = conn
+        .lock()
+        .map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
 
     let retention_days = get_retention_days();
     let cutoff_timestamp = chrono::Utc::now().timestamp() - (retention_days as i64 * 24 * 60 * 60);
@@ -497,9 +507,7 @@ pub fn prune_old_entries() -> Result<usize> {
     if deleted > 0 {
         debug!(
             deleted,
-            retention_days,
-            cutoff_timestamp,
-            "Pruned old clipboard entries"
+            retention_days, cutoff_timestamp, "Pruned old clipboard entries"
         );
     }
 
@@ -547,7 +555,10 @@ fn clipboard_monitor_loop(stop_flag: Arc<Mutex<bool>>) -> Result<()> {
     let mut last_image_hash: Option<u64> = None;
     let poll_interval = Duration::from_millis(POLL_INTERVAL_MS);
 
-    info!(poll_interval_ms = POLL_INTERVAL_MS, "Clipboard monitor started");
+    info!(
+        poll_interval_ms = POLL_INTERVAL_MS,
+        "Clipboard monitor started"
+    );
 
     loop {
         // Check if we should stop
@@ -651,13 +662,18 @@ fn encode_image_as_base64(image: &arboard::ImageData) -> Result<String> {
     // For now, just encode the raw RGBA bytes with metadata prefix
     // Format: "rgba:{width}:{height}:{base64_data}"
     let base64_data = BASE64.encode(&image.bytes);
-    Ok(format!("rgba:{}:{}:{}", image.width, image.height, base64_data))
+    Ok(format!(
+        "rgba:{}:{}:{}",
+        image.width, image.height, base64_data
+    ))
 }
 
 /// Add a new entry to clipboard history
 fn add_entry(content: &str, content_type: ContentType) -> Result<()> {
     let conn = get_connection()?;
-    let conn = conn.lock().map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
+    let conn = conn
+        .lock()
+        .map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
 
     let id = Uuid::new_v4().to_string();
     let timestamp = chrono::Utc::now().timestamp();
@@ -763,7 +779,10 @@ pub fn get_clipboard_history_page(limit: usize, offset: usize) -> Vec<ClipboardE
             Vec::new()
         });
 
-    debug!(count = entries.len(), limit, offset, "Retrieved clipboard history page");
+    debug!(
+        count = entries.len(),
+        limit, offset, "Retrieved clipboard history page"
+    );
     entries
 }
 
@@ -788,12 +807,14 @@ pub fn get_total_entry_count() -> usize {
         }
     };
 
-    conn.query_row("SELECT COUNT(*) FROM history", [], |row| row.get::<_, i64>(0))
-        .map(|c| c as usize)
-        .unwrap_or_else(|e| {
-            error!(error = %e, "Failed to count clipboard entries");
-            0
-        })
+    conn.query_row("SELECT COUNT(*) FROM history", [], |row| {
+        row.get::<_, i64>(0)
+    })
+    .map(|c| c as usize)
+    .unwrap_or_else(|e| {
+        error!(error = %e, "Failed to count clipboard entries");
+        0
+    })
 }
 
 /// Get clipboard history entries (convenience wrapper)
@@ -819,7 +840,9 @@ pub fn get_clipboard_history(limit: usize) -> Vec<ClipboardEntry> {
 /// Returns error if the entry doesn't exist or database operation fails.
 pub fn pin_entry(id: &str) -> Result<()> {
     let conn = get_connection()?;
-    let conn = conn.lock().map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
+    let conn = conn
+        .lock()
+        .map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
 
     let affected = conn
         .execute("UPDATE history SET pinned = 1 WHERE id = ?", params![id])
@@ -842,7 +865,9 @@ pub fn pin_entry(id: &str) -> Result<()> {
 /// Returns error if the entry doesn't exist or database operation fails.
 pub fn unpin_entry(id: &str) -> Result<()> {
     let conn = get_connection()?;
-    let conn = conn.lock().map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
+    let conn = conn
+        .lock()
+        .map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
 
     let affected = conn
         .execute("UPDATE history SET pinned = 0 WHERE id = ?", params![id])
@@ -865,7 +890,9 @@ pub fn unpin_entry(id: &str) -> Result<()> {
 /// Returns error if the entry doesn't exist or database operation fails.
 pub fn remove_entry(id: &str) -> Result<()> {
     let conn = get_connection()?;
-    let conn = conn.lock().map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
+    let conn = conn
+        .lock()
+        .map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
 
     let affected = conn
         .execute("DELETE FROM history WHERE id = ?", params![id])
@@ -887,7 +914,9 @@ pub fn remove_entry(id: &str) -> Result<()> {
 /// Returns error if database operation fails.
 pub fn clear_history() -> Result<()> {
     let conn = get_connection()?;
-    let conn = conn.lock().map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
+    let conn = conn
+        .lock()
+        .map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
 
     conn.execute("DELETE FROM history", [])
         .context("Failed to clear history")?;
@@ -909,7 +938,9 @@ pub fn clear_history() -> Result<()> {
 #[allow(dead_code)] // Used by downstream subtasks (OCR)
 pub fn update_ocr_text(id: &str, text: &str) -> Result<()> {
     let conn = get_connection()?;
-    let conn = conn.lock().map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
+    let conn = conn
+        .lock()
+        .map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
 
     let affected = conn
         .execute(
@@ -972,7 +1003,9 @@ pub fn get_entry_by_id(id: &str) -> Option<ClipboardEntry> {
 #[allow(dead_code)]
 pub fn copy_entry_to_clipboard(id: &str) -> Result<()> {
     let conn = get_connection()?;
-    let conn = conn.lock().map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
+    let conn = conn
+        .lock()
+        .map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
 
     let (content, content_type): (String, String) = conn
         .query_row(
@@ -1007,7 +1040,9 @@ pub fn copy_entry_to_clipboard(id: &str) -> Result<()> {
 
     // Update timestamp to move entry to top
     let conn = get_connection()?;
-    let conn = conn.lock().map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
+    let conn = conn
+        .lock()
+        .map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
     let timestamp = chrono::Utc::now().timestamp();
     conn.execute(
         "UPDATE history SET timestamp = ? WHERE id = ?",
@@ -1133,7 +1168,10 @@ mod tests {
         let original = arboard::ImageData {
             width: 2,
             height: 2,
-            bytes: vec![255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 255, 255].into(),
+            bytes: vec![
+                255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 255, 255,
+            ]
+            .into(),
         };
 
         let encoded = encode_image_as_base64(&original).expect("Should encode");

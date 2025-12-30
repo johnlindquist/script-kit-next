@@ -96,7 +96,7 @@ impl Default for DesignColors {
             text_on_accent: 0x000000,
 
             accent: 0xfbbf24,           // Script Kit yellow/gold
-            accent_secondary: 0xfbbf24,  // Same as primary for consistency
+            accent_secondary: 0xfbbf24, // Same as primary for consistency
             success: 0x00ff00,
             warning: 0xf59e0b,
             error: 0xef4444,
@@ -254,13 +254,13 @@ impl Copy for DesignTypography {}
 
 impl DesignTypography {
     /// Calculate the cursor height for text input fields.
-    /// 
+    ///
     /// The cursor should be slightly shorter than the line height for visual balance.
     /// This follows the pattern from editor.rs where cursor_height = line_height - 4.0
-    /// 
+    ///
     /// # Arguments
     /// * `font_size` - The font size in pixels (e.g., font_size_lg for .text_lg())
-    /// 
+    ///
     /// # Returns
     /// The cursor height in pixels, slightly shorter than the line height.
     #[inline]
@@ -269,11 +269,11 @@ impl DesignTypography {
         let line_height = font_size * self.line_height_normal;
         // Subtract 4px for visual balance (matches editor.rs pattern)
         // This leaves 2px margin on top and bottom for vertical centering
-        (line_height - 4.0).max(12.0)  // Minimum 12px for visibility
+        (line_height - 4.0).max(12.0) // Minimum 12px for visibility
     }
-    
+
     /// Calculate cursor height for large text (used with .text_lg())
-    /// 
+    ///
     /// GPUI's .text_lg() is approximately 18px font with ~1.55 line height.
     /// Returns a cursor height that aligns properly with GPUI's text rendering.
     #[inline]
@@ -282,13 +282,13 @@ impl DesignTypography {
         // - GPUI text_lg is ~18px font size
         // - Natural line height ~28px (1.55 multiplier)
         // - Cursor should be ~20px with 4px margin for centering
-        // 
+        //
         // We use 18px as a good middle ground that works with various line heights
         18.0
     }
-    
+
     /// Calculate vertical margin for cursor centering within text line
-    /// 
+    ///
     /// Returns the top/bottom margin needed to vertically center the cursor.
     #[inline]
     pub fn cursor_margin_y(&self) -> f32 {
@@ -478,7 +478,7 @@ impl DesignTokens for MinimalDesignTokens {
             text_on_accent: 0x000000,
 
             accent: 0xfbbf24,           // Gold accent for selected text
-            accent_secondary: 0xfbbf24,  // Same as primary for consistency
+            accent_secondary: 0xfbbf24, // Same as primary for consistency
             success: 0x00ff00,
             warning: 0xf59e0b,
             error: 0xef4444,
@@ -724,11 +724,11 @@ impl DesignTokens for GlassmorphismDesignTokens {
             text_dimmed: 0xffffff66,
             text_on_accent: 0x000000,
 
-            accent: 0x007aff, // iOS blue
+            accent: 0x007aff,           // iOS blue
             accent_secondary: 0x5856d6, // iOS purple
-            success: 0x34c759, // iOS green
-            warning: 0xff9500, // iOS orange
-            error: 0xff3b30, // iOS red
+            success: 0x34c759,          // iOS green
+            warning: 0xff9500,          // iOS orange
+            error: 0xff3b30,            // iOS red
 
             border: 0xffffff30,
             border_subtle: 0xffffff20,
@@ -1051,7 +1051,7 @@ impl DesignTokens for NeonCyberpunkDesignTokens {
             text_dimmed: 0x606080,
             text_on_accent: 0x000000,
 
-            accent: 0x00ffff, // Cyan neon
+            accent: 0x00ffff,           // Cyan neon
             accent_secondary: 0xff00ff, // Magenta neon
             success: 0x00ff88,
             warning: 0xffaa00,
@@ -1132,7 +1132,7 @@ impl DesignTokens for PaperDesignTokens {
             text_dimmed: 0xa09a95,
             text_on_accent: 0xffffff,
 
-            accent: 0xc04030, // Warm red
+            accent: 0xc04030,           // Warm red
             accent_secondary: 0x2060a0, // Ink blue
             success: 0x408040,
             warning: 0xc08020,
@@ -1248,15 +1248,15 @@ impl DesignTokens for AppleHIGDesignTokens {
 
             text_primary: 0xffffff,
             text_secondary: 0xebebf5, // iOS secondary label
-            text_muted: 0x8e8e93, // iOS tertiary label
-            text_dimmed: 0x636366, // iOS quaternary label
+            text_muted: 0x8e8e93,     // iOS tertiary label
+            text_dimmed: 0x636366,    // iOS quaternary label
             text_on_accent: 0xffffff,
 
-            accent: 0x0a84ff, // iOS blue
+            accent: 0x0a84ff,           // iOS blue
             accent_secondary: 0x5e5ce6, // iOS indigo
-            success: 0x30d158, // iOS green
-            warning: 0xff9f0a, // iOS orange
-            error: 0xff453a, // iOS red
+            success: 0x30d158,          // iOS green
+            warning: 0xff9f0a,          // iOS orange
+            error: 0xff453a,            // iOS red
 
             border: 0x38383a,
             border_subtle: 0x2c2c2e,
@@ -1365,13 +1365,13 @@ impl DesignTokens for Material3DesignTokens {
             background_selected: 0x4f378b, // M3 primary container
             background_hover: 0x36343b,
 
-            text_primary: 0xe6e1e5, // M3 on-surface
+            text_primary: 0xe6e1e5,   // M3 on-surface
             text_secondary: 0xcac4d0, // M3 on-surface-variant
             text_muted: 0x938f99,
             text_dimmed: 0x79747e,
             text_on_accent: 0xeaddff, // M3 on-primary-container
 
-            accent: 0xd0bcff, // M3 primary
+            accent: 0xd0bcff,           // M3 primary
             accent_secondary: 0xccc2dc, // M3 secondary
             success: 0xa5d6a7,
             warning: 0xffcc80,
@@ -1449,7 +1449,7 @@ impl DesignTokens for Material3DesignTokens {
             shadow_opacity: 0.3,
 
             opacity_disabled: 0.38, // M3 standard
-            opacity_hover: 0.08, // M3 state layer
+            opacity_hover: 0.08,    // M3 state layer
             opacity_pressed: 0.12,
             opacity_overlay: 0.5,
 
@@ -1491,7 +1491,7 @@ impl DesignTokens for PlayfulDesignTokens {
             text_dimmed: 0xa09ac0,
             text_on_accent: 0xffffff,
 
-            accent: 0xff6b6b, // Coral
+            accent: 0xff6b6b,           // Coral
             accent_secondary: 0x4ecdc4, // Teal
             success: 0x2ecc71,
             warning: 0xf39c12,
@@ -1631,11 +1631,7 @@ pub trait DesignRenderer<App>: Send + Sync {
     /// # Returns
     ///
     /// An `AnyElement` containing the rendered script list.
-    fn render_script_list(
-        &self,
-        app: &App,
-        cx: &mut Context<App>,
-    ) -> AnyElement;
+    fn render_script_list(&self, app: &App, cx: &mut Context<App>) -> AnyElement;
 
     /// Get the variant this renderer implements
     fn variant(&self) -> DesignVariant;

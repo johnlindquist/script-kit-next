@@ -11,10 +11,10 @@ use gpui::{
 };
 use std::sync::Arc;
 
+use crate::designs::{get_tokens, DesignVariant};
 use crate::logging;
-use crate::protocol::{Choice, generate_semantic_id};
+use crate::protocol::{generate_semantic_id, Choice};
 use crate::theme;
-use crate::designs::{DesignVariant, get_tokens};
 
 use super::SubmitCallback;
 
@@ -59,10 +59,17 @@ impl SelectPrompt {
         on_submit: SubmitCallback,
         theme: Arc<theme::Theme>,
     ) -> Self {
-        logging::log("PROMPTS", &format!("SelectPrompt::new with {} choices (multiple: {})", choices.len(), multiple));
-        
+        logging::log(
+            "PROMPTS",
+            &format!(
+                "SelectPrompt::new with {} choices (multiple: {})",
+                choices.len(),
+                multiple
+            ),
+        );
+
         let filtered_choices: Vec<usize> = (0..choices.len()).collect();
-        
+
         SelectPrompt {
             id,
             placeholder,
@@ -82,7 +89,9 @@ impl SelectPrompt {
     /// Refilter choices based on current filter_text
     fn refilter(&mut self) {
         let filter_lower = self.filter_text.to_lowercase();
-        self.filtered_choices = self.choices.iter()
+        self.filtered_choices = self
+            .choices
+            .iter()
             .enumerate()
             .filter(|(_, choice)| choice.name.to_lowercase().contains(&filter_lower))
             .map(|(idx, _)| idx)
@@ -109,11 +118,13 @@ impl SelectPrompt {
 
     /// Submit selected items as JSON array
     fn submit(&mut self) {
-        let selected_values: Vec<String> = self.selected.iter()
+        let selected_values: Vec<String> = self
+            .selected
+            .iter()
             .filter_map(|&idx| self.choices.get(idx))
             .map(|c| c.value.clone())
             .collect();
-        
+
         let json_str = serde_json::to_string(&selected_values).unwrap_or_else(|_| "[]".to_string());
         (self.on_submit)(self.id.clone(), Some(json_str));
     }
@@ -184,57 +195,65 @@ impl Render for SelectPrompt {
         let spacing = tokens.spacing();
         let visual = tokens.visual();
 
-        let handle_key = cx.listener(|this: &mut Self, event: &gpui::KeyDownEvent, _window: &mut Window, cx: &mut Context<Self>| {
-            let key_str = event.keystroke.key.to_lowercase();
-            let has_ctrl = event.keystroke.modifiers.platform; // Cmd on macOS, Ctrl on others
-            
-            // Handle Ctrl/Cmd+A for select all
-            if has_ctrl && key_str == "a" {
-                if this.selected.len() == this.filtered_choices.len() {
-                    // All selected, so deselect all
-                    this.deselect_all(cx);
-                } else {
-                    this.select_all(cx);
+        let handle_key = cx.listener(
+            |this: &mut Self,
+             event: &gpui::KeyDownEvent,
+             _window: &mut Window,
+             cx: &mut Context<Self>| {
+                let key_str = event.keystroke.key.to_lowercase();
+                let has_ctrl = event.keystroke.modifiers.platform; // Cmd on macOS, Ctrl on others
+
+                // Handle Ctrl/Cmd+A for select all
+                if has_ctrl && key_str == "a" {
+                    if this.selected.len() == this.filtered_choices.len() {
+                        // All selected, so deselect all
+                        this.deselect_all(cx);
+                    } else {
+                        this.select_all(cx);
+                    }
+                    return;
                 }
-                return;
-            }
-            
-            match key_str.as_str() {
-                "up" | "arrowup" => this.move_up(cx),
-                "down" | "arrowdown" => this.move_down(cx),
-                "space" | " " => this.toggle_selection(cx),
-                "enter" => this.submit(),
-                "escape" => this.submit_cancel(),
-                "backspace" => this.handle_backspace(cx),
-                _ => {
-                    if let Some(ref key_char) = event.keystroke.key_char {
-                        if let Some(ch) = key_char.chars().next() {
-                            if !ch.is_control() && ch != ' ' {
-                                this.handle_char(ch, cx);
+
+                match key_str.as_str() {
+                    "up" | "arrowup" => this.move_up(cx),
+                    "down" | "arrowdown" => this.move_down(cx),
+                    "space" | " " => this.toggle_selection(cx),
+                    "enter" => this.submit(),
+                    "escape" => this.submit_cancel(),
+                    "backspace" => this.handle_backspace(cx),
+                    _ => {
+                        if let Some(ref key_char) = event.keystroke.key_char {
+                            if let Some(ch) = key_char.chars().next() {
+                                if !ch.is_control() && ch != ' ' {
+                                    this.handle_char(ch, cx);
+                                }
                             }
                         }
                     }
                 }
-            }
-        });
+            },
+        );
 
-        let (main_bg, text_color, muted_color, border_color) = if self.design_variant == DesignVariant::Default {
-            (
-                rgb(self.theme.colors.background.main),
-                rgb(self.theme.colors.text.secondary),
-                rgb(self.theme.colors.text.muted),
-                rgb(self.theme.colors.ui.border),
-            )
-        } else {
-            (
-                rgb(colors.background),
-                rgb(colors.text_secondary),
-                rgb(colors.text_muted),
-                rgb(colors.border),
-            )
-        };
+        let (main_bg, text_color, muted_color, border_color) =
+            if self.design_variant == DesignVariant::Default {
+                (
+                    rgb(self.theme.colors.background.main),
+                    rgb(self.theme.colors.text.secondary),
+                    rgb(self.theme.colors.text.muted),
+                    rgb(self.theme.colors.ui.border),
+                )
+            } else {
+                (
+                    rgb(colors.background),
+                    rgb(colors.text_secondary),
+                    rgb(colors.text_muted),
+                    rgb(colors.border),
+                )
+            };
 
-        let placeholder = self.placeholder.clone()
+        let placeholder = self
+            .placeholder
+            .clone()
             .unwrap_or_else(|| "Search...".to_string());
 
         let input_display = if self.filter_text.is_empty() {
@@ -260,14 +279,18 @@ impl Render for SelectPrompt {
             .child(
                 div()
                     .flex_1()
-                    .text_color(if self.filter_text.is_empty() { muted_color } else { text_color })
-                    .child(input_display)
+                    .text_color(if self.filter_text.is_empty() {
+                        muted_color
+                    } else {
+                        text_color
+                    })
+                    .child(input_display),
             )
             .child(
                 div()
                     .text_sm()
                     .text_color(muted_color)
-                    .child(format!("{} selected", self.selected.len()))
+                    .child(format!("{} selected", self.selected.len())),
             );
 
         // Choices list
@@ -286,17 +309,18 @@ impl Render for SelectPrompt {
                     .py(px(spacing.padding_xl))
                     .px(px(spacing.item_padding_x))
                     .text_color(muted_color)
-                    .child("No choices match your filter")
+                    .child("No choices match your filter"),
             );
         } else {
             for (display_idx, &choice_idx) in self.filtered_choices.iter().enumerate() {
                 if let Some(choice) = self.choices.get(choice_idx) {
                     let is_focused = display_idx == self.focused_index;
                     let is_selected = self.selected.contains(&choice_idx);
-                    
-                    let semantic_id = choice.semantic_id.clone()
-                        .unwrap_or_else(|| generate_semantic_id("select", display_idx, &choice.value));
-                    
+
+                    let semantic_id = choice.semantic_id.clone().unwrap_or_else(|| {
+                        generate_semantic_id("select", display_idx, &choice.value)
+                    });
+
                     let bg = if is_focused {
                         rgb(self.theme.colors.accent.selected)
                     } else {
@@ -320,23 +344,23 @@ impl Render for SelectPrompt {
                         .items_center()
                         .child(
                             div()
-                                .text_color(if is_selected { rgb(self.theme.colors.accent.selected) } else { muted_color })
-                                .child(checkbox)
+                                .text_color(if is_selected {
+                                    rgb(self.theme.colors.accent.selected)
+                                } else {
+                                    muted_color
+                                })
+                                .child(checkbox),
                         )
                         .child(
                             div()
                                 .flex_1()
                                 .text_color(text_color)
-                                .child(choice.name.clone())
+                                .child(choice.name.clone()),
                         );
 
                     if let Some(desc) = &choice.description {
-                        choice_item = choice_item.child(
-                            div()
-                                .text_sm()
-                                .text_color(muted_color)
-                                .child(desc.clone())
-                        );
+                        choice_item = choice_item
+                            .child(div().text_sm().text_color(muted_color).child(desc.clone()));
                     }
 
                     choices_container = choices_container.child(choice_item);

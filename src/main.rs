@@ -1,60 +1,63 @@
 #![allow(unexpected_cfgs)]
 
-use gpui::{
-    div, svg, prelude::*, px, point, rgb, rgba, size, App, Application, Bounds, Context, Render,
-    Window, WindowBounds, WindowOptions, SharedString, FocusHandle, Focusable, Entity,
-    WindowHandle, Timer, Pixels, WindowBackgroundAppearance, AnyElement, BoxShadow, hsla,
-    uniform_list, UniformListScrollHandle, ScrollStrategy, ElementId,
+use global_hotkey::{
+    hotkey::{Code, HotKey, Modifiers},
+    GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState,
 };
-use global_hotkey::{GlobalHotKeyManager, GlobalHotKeyEvent, HotKeyState, hotkey::{HotKey, Modifiers, Code}};
+use gpui::{
+    div, hsla, point, prelude::*, px, rgb, rgba, size, svg, uniform_list, AnyElement, App,
+    Application, Bounds, BoxShadow, Context, ElementId, Entity, FocusHandle, Focusable, Pixels,
+    Render, ScrollStrategy, SharedString, Timer, UniformListScrollHandle, Window,
+    WindowBackgroundAppearance, WindowBounds, WindowHandle, WindowOptions,
+};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::OnceLock;
 
 mod process_manager;
-use process_manager::PROCESS_MANAGER;
-use core_graphics::event::CGEvent;
-use core_graphics::event_source::{CGEventSource, CGEventSourceStateID};
 use cocoa::appkit::NSApp;
 use cocoa::base::{id, nil};
 use cocoa::foundation::{NSPoint, NSRect, NSSize};
+use core_graphics::event::CGEvent;
+use core_graphics::event_source::{CGEventSource, CGEventSourceStateID};
+use process_manager::PROCESS_MANAGER;
 #[macro_use]
 extern crate objc;
 
-mod scripts;
-mod executor;
-mod logging;
-mod theme;
-mod watcher;
-mod protocol;
-mod prompts;
-mod config;
-mod panel;
 mod actions;
-mod list_item;
-mod syntax;
-mod utils;
-mod perf;
-mod error;
-mod designs;
-mod term_prompt;
-mod terminal;
 mod components;
+mod config;
+mod designs;
+mod editor;
+mod error;
+mod executor;
+mod list_item;
+mod logging;
+mod panel;
+mod perf;
+mod prompts;
+mod protocol;
+mod scripts;
 #[cfg(target_os = "macos")]
 mod selected_text;
+mod syntax;
+mod term_prompt;
+mod terminal;
+mod theme;
 mod tray;
-mod editor;
-mod window_resize;
+mod utils;
+mod watcher;
 mod window_manager;
+mod window_resize;
 
 // Phase 1 system API modules
 mod clipboard_history;
-mod window_control;
 mod file_search;
 mod toast_manager;
+mod window_control;
 
 // Built-in features registry
-mod builtins;
 mod app_launcher;
+mod builtins;
 
 // Frecency tracking for script usage
 mod frecency;
@@ -69,35 +72,46 @@ mod form_parser;
 mod template_variables;
 
 // Text expansion system components (macOS only)
+mod expand_matcher;
 #[cfg(target_os = "macos")]
 mod keyboard_monitor;
-mod expand_matcher;
 mod text_injector;
 
 // Expand manager - text expansion system integration
 #[cfg(target_os = "macos")]
 mod expand_manager;
 
-use tray::{TrayManager, TrayMenuAction};
-use editor::EditorPrompt;
-use prompts::{SelectPrompt, PathPrompt, PathInfo, EnvPrompt, DropPrompt, TemplatePrompt};
-use window_resize::{ViewType, height_for_view, resize_first_window_to_height, initial_window_height, reset_resize_debounce, defer_resize_to_view};
+// Script scheduling with cron expressions and natural language
+mod scheduler;
+
+use crate::components::toast::{Toast, ToastAction, ToastColors};
 use crate::toast_manager::ToastManager;
-use crate::components::toast::{Toast, ToastColors, ToastAction};
+use editor::EditorPrompt;
+use prompts::{DropPrompt, EnvPrompt, PathInfo, PathPrompt, SelectPrompt, TemplatePrompt};
+use tray::{TrayManager, TrayMenuAction};
+use window_resize::{
+    defer_resize_to_view, height_for_view, initial_window_height, reset_resize_debounce,
+    resize_first_window_to_height, ViewType,
+};
 
-use list_item::{ListItem, ListItemColors, LIST_ITEM_HEIGHT, GroupedListItem, render_section_header};
-use utils::strip_html_tags;
-use frecency::FrecencyStore;
-use scripts::get_grouped_results;
+use components::{
+    Button, ButtonColors, ButtonVariant, FormCheckbox, FormFieldColors, FormTextArea,
+    FormTextField, Scrollbar, ScrollbarColors,
+};
+use designs::{get_tokens, render_design_item, DesignVariant};
 use error::ErrorSeverity;
-use designs::{DesignVariant, render_design_item, get_tokens};
-use components::{Button, ButtonColors, ButtonVariant, Scrollbar, ScrollbarColors, FormTextField, FormTextArea, FormCheckbox, FormFieldColors};
+use frecency::FrecencyStore;
+use list_item::{
+    render_section_header, GroupedListItem, ListItem, ListItemColors, LIST_ITEM_HEIGHT,
+};
+use scripts::get_grouped_results;
+use utils::strip_html_tags;
 
-use std::sync::{Arc, Mutex, mpsc};
-use protocol::{Message, Choice};
 use actions::{ActionsDialog, ScriptInfo};
+use panel::{CURSOR_HEIGHT_LG, CURSOR_MARGIN_Y, DEFAULT_PLACEHOLDER};
+use protocol::{Choice, Message};
+use std::sync::{mpsc, Arc, Mutex};
 use syntax::highlight_code_lines;
-use panel::{DEFAULT_PLACEHOLDER, CURSOR_HEIGHT_LG, CURSOR_MARGIN_Y};
 
 /// Channel for sending prompt messages from script thread to UI
 #[allow(dead_code)]
@@ -116,26 +130,23 @@ fn get_global_mouse_position() -> Option<(f64, f64)> {
 /// On macOS: uses `open` command
 /// On Linux: uses `xdg-open` command
 /// On Windows: uses `cmd /C start` command
-/// 
-/// This can be used to open files, folders, URLs, or any path that the 
+///
+/// This can be used to open files, folders, URLs, or any path that the
 /// system knows how to handle.
 #[allow(dead_code)]
 fn open_path_with_system_default(path: &str) {
     logging::log("UI", &format!("Opening path with system default: {}", path));
     let path_owned = path.to_string();
-    
+
     std::thread::spawn(move || {
         #[cfg(target_os = "macos")]
         {
-            match std::process::Command::new("open")
-                .arg(&path_owned)
-                .spawn()
-            {
+            match std::process::Command::new("open").arg(&path_owned).spawn() {
                 Ok(_) => logging::log("UI", &format!("Successfully opened: {}", path_owned)),
                 Err(e) => logging::log("ERROR", &format!("Failed to open '{}': {}", path_owned, e)),
             }
         }
-        
+
         #[cfg(target_os = "linux")]
         {
             match std::process::Command::new("xdg-open")
@@ -146,7 +157,7 @@ fn open_path_with_system_default(path: &str) {
                 Err(e) => logging::log("ERROR", &format!("Failed to open '{}': {}", path_owned, e)),
             }
         }
-        
+
         #[cfg(target_os = "windows")]
         {
             match std::process::Command::new("cmd")
@@ -176,24 +187,24 @@ fn get_macos_displays() -> Vec<DisplayBounds> {
     unsafe {
         let screens: id = msg_send![class!(NSScreen), screens];
         let count: usize = msg_send![screens, count];
-        
+
         // Get primary screen height for coordinate flipping
         // macOS coordinates: Y=0 at bottom of primary screen
         let main_screen: id = msg_send![screens, firstObject];
         let main_frame: NSRect = msg_send![main_screen, frame];
         let primary_height = main_frame.size.height;
-        
+
         let mut displays = Vec::with_capacity(count);
-        
+
         for i in 0..count {
             let screen: id = msg_send![screens, objectAtIndex:i];
             let frame: NSRect = msg_send![screen, frame];
-            
+
             // Convert from macOS bottom-left origin to top-left origin
             // macOS: y=0 at bottom, increasing upward
             // We want: y=0 at top, increasing downward
             let flipped_y = primary_height - frame.origin.y - frame.size.height;
-            
+
             displays.push(DisplayBounds {
                 origin_x: frame.origin.x,
                 origin_y: flipped_y,
@@ -201,7 +212,7 @@ fn get_macos_displays() -> Vec<DisplayBounds> {
                 height: frame.size.height,
             });
         }
-        
+
         displays
     }
 }
@@ -222,52 +233,65 @@ fn move_first_window_to(x: f64, y: f64, width: f64, height: f64) {
         let window = match window_manager::get_main_window() {
             Some(w) => w,
             None => {
-                logging::log("POSITION", "WARNING: Main window not registered in WindowManager, cannot move");
+                logging::log(
+                    "POSITION",
+                    "WARNING: Main window not registered in WindowManager, cannot move",
+                );
                 return;
             }
         };
-        
+
         // Get the PRIMARY screen's height for coordinate conversion
         let screens: id = msg_send![class!(NSScreen), screens];
         let main_screen: id = msg_send![screens, firstObject];
         let main_screen_frame: NSRect = msg_send![main_screen, frame];
         let primary_screen_height = main_screen_frame.size.height;
-        
+
         // Log current window position before move
         let current_frame: NSRect = msg_send![window, frame];
-        logging::log("POSITION", &format!(
-            "Current window frame: origin=({:.0}, {:.0}) size={:.0}x{:.0}",
-            current_frame.origin.x, current_frame.origin.y,
-            current_frame.size.width, current_frame.size.height
-        ));
-        
+        logging::log(
+            "POSITION",
+            &format!(
+                "Current window frame: origin=({:.0}, {:.0}) size={:.0}x{:.0}",
+                current_frame.origin.x,
+                current_frame.origin.y,
+                current_frame.size.width,
+                current_frame.size.height
+            ),
+        );
+
         // Convert from top-left origin (y down) to bottom-left origin (y up)
         let flipped_y = primary_screen_height - y - height;
-        
-        logging::log("POSITION", &format!(
-            "Moving window: target=({:.0}, {:.0}) flipped_y={:.0}",
-            x, y, flipped_y
-        ));
-        
-        let new_frame = NSRect::new(
-            NSPoint::new(x, flipped_y),
-            NSSize::new(width, height),
+
+        logging::log(
+            "POSITION",
+            &format!(
+                "Moving window: target=({:.0}, {:.0}) flipped_y={:.0}",
+                x, y, flipped_y
+            ),
         );
-        
+
+        let new_frame = NSRect::new(NSPoint::new(x, flipped_y), NSSize::new(width, height));
+
         // Move the window
         let _: () = msg_send![window, setFrame:new_frame display:true animate:false];
-        
+
         // NOTE: We no longer call makeKeyAndOrderFront here.
         // Window ordering/activation is handled by GPUI's cx.activate() and win.activate_window()
         // which is called AFTER ensure_move_to_active_space() sets the collection behavior.
-        
+
         // Verify the move worked
         let after_frame: NSRect = msg_send![window, frame];
-        logging::log("POSITION", &format!(
-            "Window moved: actual=({:.0}, {:.0}) size={:.0}x{:.0}",
-            after_frame.origin.x, after_frame.origin.y,
-            after_frame.size.width, after_frame.size.height
-        ));
+        logging::log(
+            "POSITION",
+            &format!(
+                "Window moved: actual=({:.0}, {:.0}) size={:.0}x{:.0}",
+                after_frame.origin.x,
+                after_frame.origin.y,
+                after_frame.size.width,
+                after_frame.size.height
+            ),
+        );
     }
 }
 
@@ -281,7 +305,7 @@ fn move_first_window_to_bounds(bounds: &Bounds<Pixels>) {
 }
 
 /// Capture a screenshot of the app window using macOS screencapture command.
-/// 
+///
 /// Returns a tuple of (png_data, width, height) on success.
 /// The function:
 /// 1. Gets the window ID using AppleScript
@@ -289,26 +313,29 @@ fn move_first_window_to_bounds(bounds: &Bounds<Pixels>) {
 /// 3. Reads the PNG file and extracts dimensions from the header
 /// 4. Cleans up the temp file
 #[cfg(target_os = "macos")]
-fn capture_app_screenshot() -> Result<(Vec<u8>, u32, u32), Box<dyn std::error::Error + Send + Sync>> {
-    use std::process::Command;
+fn capture_app_screenshot() -> Result<(Vec<u8>, u32, u32), Box<dyn std::error::Error + Send + Sync>>
+{
     use std::fs;
-    
+    use std::process::Command;
+
     // Create temp file path with timestamp
     let timestamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)?
         .as_millis();
     let screenshot_path = format!("/tmp/script-kit-screenshot-{}.png", timestamp);
-    
+
     // Try to get window ID via AppleScript
     // This looks for the first window of any process whose name contains "script-kit-gpui"
     let window_id_output = Command::new("osascript")
         .args(["-e", "tell application \"System Events\" to get id of first window of (first process whose name contains \"script-kit-gpui\")"])
         .output()?;
-    
-    let window_id = String::from_utf8_lossy(&window_id_output.stdout).trim().to_string();
-    
+
+    let window_id = String::from_utf8_lossy(&window_id_output.stdout)
+        .trim()
+        .to_string();
+
     tracing::debug!(window_id = %window_id, "Got window ID for screenshot");
-    
+
     // Capture screenshot
     let capture_result = if !window_id.is_empty() && window_id.parse::<i64>().is_ok() {
         // Use -l flag to capture specific window by ID
@@ -325,14 +352,13 @@ fn capture_app_screenshot() -> Result<(Vec<u8>, u32, u32), Box<dyn std::error::E
             .args(["-m", "-x", &screenshot_path])
             .output()
     };
-    
+
     capture_result?;
-    
+
     // Read the PNG file
-    let png_data = fs::read(&screenshot_path).map_err(|e| {
-        format!("Failed to read screenshot file: {}", e)
-    })?;
-    
+    let png_data =
+        fs::read(&screenshot_path).map_err(|e| format!("Failed to read screenshot file: {}", e))?;
+
     // Verify PNG signature and extract dimensions from IHDR chunk
     // PNG structure: 8-byte signature + chunks
     // IHDR chunk: 4 bytes length + "IHDR" + 4 bytes width + 4 bytes height + ...
@@ -340,33 +366,39 @@ fn capture_app_screenshot() -> Result<(Vec<u8>, u32, u32), Box<dyn std::error::E
         let _ = fs::remove_file(&screenshot_path);
         return Err("Screenshot file too small to be valid PNG".into());
     }
-    
+
     // Check PNG signature (first 8 bytes)
     let png_signature: [u8; 8] = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
     if png_data[0..8] != png_signature {
         let _ = fs::remove_file(&screenshot_path);
         return Err("Invalid PNG signature".into());
     }
-    
+
     // Width is at bytes 16-19, height at bytes 20-23 (big-endian)
     let width = u32::from_be_bytes([png_data[16], png_data[17], png_data[18], png_data[19]]);
     let height = u32::from_be_bytes([png_data[20], png_data[21], png_data[22], png_data[23]]);
-    
-    tracing::debug!(width = width, height = height, file_size = png_data.len(), "Screenshot captured");
-    
+
+    tracing::debug!(
+        width = width,
+        height = height,
+        file_size = png_data.len(),
+        "Screenshot captured"
+    );
+
     // Clean up temp file
     let _ = fs::remove_file(&screenshot_path);
-    
+
     Ok((png_data, width, height))
 }
 
 #[cfg(not(target_os = "macos"))]
-fn capture_app_screenshot() -> Result<(Vec<u8>, u32, u32), Box<dyn std::error::Error + Send + Sync>> {
+fn capture_app_screenshot() -> Result<(Vec<u8>, u32, u32), Box<dyn std::error::Error + Send + Sync>>
+{
     Err("Screenshot capture is only supported on macOS".into())
 }
 
 /// Render a path string with highlighted matched characters.
-/// 
+///
 /// Takes the display path, the filename that was matched against, and the indices
 /// of matched characters in the filename. Returns a vector of (text, is_highlighted)
 /// tuples for rendering.
@@ -378,7 +410,7 @@ fn render_path_with_highlights(
     if filename_indices.is_empty() {
         return vec![(display_path.to_string(), false)];
     }
-    
+
     // Find where the filename starts in the display path
     let filename_start = if let Some(pos) = display_path.rfind(filename) {
         pos
@@ -387,39 +419,43 @@ fn render_path_with_highlights(
     } else {
         0
     };
-    
+
     let mut result = Vec::new();
     let chars: Vec<char> = display_path.chars().collect();
     let mut current_text = String::new();
     let mut current_highlighted = false;
-    
+
     for (i, ch) in chars.iter().enumerate() {
         let is_in_filename = i >= filename_start;
-        let filename_char_idx = if is_in_filename { i - filename_start } else { usize::MAX };
+        let filename_char_idx = if is_in_filename {
+            i - filename_start
+        } else {
+            usize::MAX
+        };
         let is_highlighted = is_in_filename && filename_indices.contains(&filename_char_idx);
-        
+
         if is_highlighted != current_highlighted && !current_text.is_empty() {
             result.push((current_text.clone(), current_highlighted));
             current_text.clear();
         }
-        
+
         current_text.push(*ch);
         current_highlighted = is_highlighted;
     }
-    
+
     if !current_text.is_empty() {
         result.push((current_text, current_highlighted));
     }
-    
+
     result
 }
 
 /// Calculate window bounds positioned at eye-line height on the display containing the mouse cursor.
-/// 
+///
 /// - Finds the display where the mouse cursor is located
 /// - Centers the window horizontally on that display
 /// - Positions the window at "eye-line" height (upper 14% of the screen)
-/// 
+///
 /// This matches the behavior of Raycast/Alfred where the prompt appears on the active display.
 fn calculate_eye_line_bounds_on_mouse_display(
     window_size: gpui::Size<Pixels>,
@@ -428,13 +464,25 @@ fn calculate_eye_line_bounds_on_mouse_display(
     // Use native macOS API to get actual display bounds with correct origins
     // GPUI's cx.displays() returns incorrect origins for secondary displays
     let displays = get_macos_displays();
-    
+
     logging::log("POSITION", "");
-    logging::log("POSITION", "╔════════════════════════════════════════════════════════════╗");
-    logging::log("POSITION", "║  CALCULATING WINDOW POSITION FOR MOUSE DISPLAY             ║");
-    logging::log("POSITION", "╚════════════════════════════════════════════════════════════╝");
-    logging::log("POSITION", &format!("Available displays: {}", displays.len()));
-    
+    logging::log(
+        "POSITION",
+        "╔════════════════════════════════════════════════════════════╗",
+    );
+    logging::log(
+        "POSITION",
+        "║  CALCULATING WINDOW POSITION FOR MOUSE DISPLAY             ║",
+    );
+    logging::log(
+        "POSITION",
+        "╚════════════════════════════════════════════════════════════╝",
+    );
+    logging::log(
+        "POSITION",
+        &format!("Available displays: {}", displays.len()),
+    );
+
     // Log all available displays for debugging
     for (idx, display) in displays.iter().enumerate() {
         let right = display.origin_x + display.width;
@@ -445,62 +493,83 @@ fn calculate_eye_line_bounds_on_mouse_display(
             display.origin_x, right, display.origin_y, bottom
         ));
     }
-    
+
     // Try to get mouse position and find which display contains it
     let target_display = if let Some((mouse_x, mouse_y)) = get_global_mouse_position() {
-        logging::log("POSITION", &format!("Mouse cursor at ({:.0}, {:.0})", mouse_x, mouse_y));
-        
+        logging::log(
+            "POSITION",
+            &format!("Mouse cursor at ({:.0}, {:.0})", mouse_x, mouse_y),
+        );
+
         // Find the display that contains the mouse cursor
         let found = displays.iter().enumerate().find(|(idx, display)| {
-            let contains = mouse_x >= display.origin_x && mouse_x < display.origin_x + display.width &&
-                           mouse_y >= display.origin_y && mouse_y < display.origin_y + display.height;
-            
+            let contains = mouse_x >= display.origin_x
+                && mouse_x < display.origin_x + display.width
+                && mouse_y >= display.origin_y
+                && mouse_y < display.origin_y + display.height;
+
             if contains {
                 logging::log("POSITION", &format!("  -> Mouse is on display {}", idx));
             }
             contains
         });
-        
+
         found.map(|(_, d)| d.clone())
     } else {
-        logging::log("POSITION", "Could not get mouse position, using primary display");
+        logging::log(
+            "POSITION",
+            "Could not get mouse position, using primary display",
+        );
         None
     };
-    
+
     // Use the found display, or fall back to first display (primary)
-    let display = target_display
-        .or_else(|| {
-            logging::log("POSITION", "No display contains mouse, falling back to primary");
-            displays.first().cloned()
-        });
-    
+    let display = target_display.or_else(|| {
+        logging::log(
+            "POSITION",
+            "No display contains mouse, falling back to primary",
+        );
+        displays.first().cloned()
+    });
+
     if let Some(display) = display {
-        logging::log("POSITION", &format!(
-            "Selected display: origin=({:.0}, {:.0}) size={:.0}x{:.0}",
-            display.origin_x, display.origin_y, display.width, display.height
-        ));
-        
+        logging::log(
+            "POSITION",
+            &format!(
+                "Selected display: origin=({:.0}, {:.0}) size={:.0}x{:.0}",
+                display.origin_x, display.origin_y, display.width, display.height
+            ),
+        );
+
         // Eye-line: position window top at ~14% from screen top (input bar at eye level)
         let eye_line_y = display.origin_y + display.height * 0.14;
-        
+
         // Center horizontally on the display
         let window_width: f64 = window_size.width.into();
         let center_x = display.origin_x + (display.width - window_width) / 2.0;
-        
+
         let final_bounds = Bounds {
             origin: point(px(center_x as f32), px(eye_line_y as f32)),
             size: window_size,
         };
-        
-        logging::log("POSITION", &format!(
-            "Final window bounds: origin=({:.0}, {:.0}) size={:.0}x{:.0}",
-            center_x, eye_line_y,
-            f64::from(window_size.width), f64::from(window_size.height)
-        ));
-        
+
+        logging::log(
+            "POSITION",
+            &format!(
+                "Final window bounds: origin=({:.0}, {:.0}) size={:.0}x{:.0}",
+                center_x,
+                eye_line_y,
+                f64::from(window_size.width),
+                f64::from(window_size.height)
+            ),
+        );
+
         final_bounds
     } else {
-        logging::log("POSITION", "No displays found, using default centered bounds");
+        logging::log(
+            "POSITION",
+            "No displays found, using default centered bounds",
+        );
         // Fallback: just center on screen using 1512x982 as default (common MacBook)
         Bounds {
             origin: point(px(381.0), px(246.0)),
@@ -511,7 +580,8 @@ fn calculate_eye_line_bounds_on_mouse_display(
 
 // Global state for hotkey signaling between threads
 // HOTKEY_CHANNEL: Event-driven async_channel for hotkey events (replaces AtomicBool polling)
-static HOTKEY_CHANNEL: OnceLock<(async_channel::Sender<()>, async_channel::Receiver<()>)> = OnceLock::new();
+static HOTKEY_CHANNEL: OnceLock<(async_channel::Sender<()>, async_channel::Receiver<()>)> =
+    OnceLock::new();
 
 /// Get the hotkey channel, initializing it on first access
 fn hotkey_channel() -> &'static (async_channel::Sender<()>, async_channel::Receiver<()>) {
@@ -561,15 +631,24 @@ impl FormPromptState {
     /// Create a new form prompt state from HTML
     pub fn new(id: String, html: String, colors: FormFieldColors, cx: &mut App) -> Self {
         let parsed_fields = form_parser::parse_form_html(&html);
-        
-        logging::log("FORM", &format!("Parsed {} form fields from HTML", parsed_fields.len()));
-        
+
+        logging::log(
+            "FORM",
+            &format!("Parsed {} form fields from HTML", parsed_fields.len()),
+        );
+
         let fields: Vec<(protocol::Field, FormFieldEntity)> = parsed_fields
             .into_iter()
             .map(|field| {
-                let field_type = field.field_type.clone().unwrap_or_else(|| "text".to_string());
-                logging::log("FORM", &format!("Creating field: {} (type: {})", field.name, field_type));
-                
+                let field_type = field
+                    .field_type
+                    .clone()
+                    .unwrap_or_else(|| "text".to_string());
+                logging::log(
+                    "FORM",
+                    &format!("Creating field: {} (type: {})", field.name, field_type),
+                );
+
                 let entity = match field_type.as_str() {
                     "checkbox" => {
                         let checkbox = FormCheckbox::new(field.clone(), colors, cx);
@@ -585,11 +664,11 @@ impl FormPromptState {
                         FormFieldEntity::TextField(cx.new(|_| textfield))
                     }
                 };
-                
+
                 (field, entity)
             })
             .collect();
-        
+
         Self {
             id,
             html,
@@ -604,15 +683,11 @@ impl FormPromptState {
     /// Get all field values as a JSON object string
     pub fn collect_values(&self, cx: &App) -> String {
         let mut values = serde_json::Map::new();
-        
+
         for (field_def, entity) in &self.fields {
             let value = match entity {
-                FormFieldEntity::TextField(e) => {
-                    e.read(cx).value().to_string()
-                }
-                FormFieldEntity::TextArea(e) => {
-                    e.read(cx).value().to_string()
-                }
+                FormFieldEntity::TextField(e) => e.read(cx).value().to_string(),
+                FormFieldEntity::TextArea(e) => e.read(cx).value().to_string(),
                 FormFieldEntity::Checkbox(e) => {
                     if e.read(cx).is_checked() {
                         "true".to_string()
@@ -623,7 +698,7 @@ impl FormPromptState {
             };
             values.insert(field_def.name.clone(), serde_json::Value::String(value));
         }
-        
+
         serde_json::to_string(&values).unwrap_or_else(|_| "{}".to_string())
     }
 
@@ -651,20 +726,20 @@ impl FormPromptState {
 
     /// Get the focus handle for the currently focused field
     pub fn current_focus_handle(&self, cx: &App) -> Option<FocusHandle> {
-        self.fields.get(self.focused_index).map(|(_, entity)| {
-            match entity {
+        self.fields
+            .get(self.focused_index)
+            .map(|(_, entity)| match entity {
                 FormFieldEntity::TextField(e) => e.read(cx).focus_handle(cx),
                 FormFieldEntity::TextArea(e) => e.read(cx).focus_handle(cx),
                 FormFieldEntity::Checkbox(e) => e.read(cx).focus_handle(cx),
-            }
-        })
+            })
     }
-    
+
     /// Handle keyboard input by forwarding to the currently focused field
     pub fn handle_key_input(&mut self, event: &gpui::KeyDownEvent, cx: &mut Context<Self>) {
         if let Some((_, entity)) = self.fields.get(self.focused_index) {
             let key = event.keystroke.key.as_str();
-            
+
             match entity {
                 FormFieldEntity::TextField(e) => {
                     e.update(cx, |field, cx| {
@@ -792,24 +867,26 @@ impl FormPromptState {
 impl Render for FormPromptState {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let colors = self.colors;
-        
+
         // Focus the first field on initial render
         if !self.did_initial_focus && !self.fields.is_empty() {
             self.did_initial_focus = true;
             if let Some(focus_handle) = self.current_focus_handle(cx) {
                 focus_handle.focus(window, cx);
                 let is_focused = focus_handle.is_focused(window);
-                logging::log("FORM", &format!("Initial focus set on first field (is_focused={})", is_focused));
+                logging::log(
+                    "FORM",
+                    &format!(
+                        "Initial focus set on first field (is_focused={})",
+                        is_focused
+                    ),
+                );
             }
         }
-        
+
         // Build the form fields container
-        let mut container = div()
-            .flex()
-            .flex_col()
-            .gap(px(16.))
-            .w_full();
-        
+        let mut container = div().flex().flex_col().gap(px(16.)).w_full();
+
         for (_field_def, entity) in &self.fields {
             container = match entity {
                 FormFieldEntity::TextField(e) => container.child(e.clone()),
@@ -817,17 +894,17 @@ impl Render for FormPromptState {
                 FormFieldEntity::Checkbox(e) => container.child(e.clone()),
             };
         }
-        
+
         // If no fields, show an error message
         if self.fields.is_empty() {
             container = container.child(
                 div()
                     .p(px(16.))
                     .text_color(rgb(colors.label))
-                    .child("No form fields found in HTML")
+                    .child("No form fields found in HTML"),
             );
         }
-        
+
         container
     }
 }
@@ -972,26 +1049,69 @@ enum FocusedInput {
 /// Messages sent from the prompt poller back to the main app
 #[derive(Debug, Clone)]
 enum PromptMessage {
-    ShowArg { id: String, placeholder: String, choices: Vec<Choice> },
-    ShowDiv { id: String, html: String, tailwind: Option<String> },
-    ShowForm { id: String, html: String },
-    ShowTerm { id: String, command: Option<String> },
-    ShowEditor { id: String, content: Option<String>, language: Option<String> },
+    ShowArg {
+        id: String,
+        placeholder: String,
+        choices: Vec<Choice>,
+    },
+    ShowDiv {
+        id: String,
+        html: String,
+        tailwind: Option<String>,
+    },
+    ShowForm {
+        id: String,
+        html: String,
+    },
+    ShowTerm {
+        id: String,
+        command: Option<String>,
+    },
+    ShowEditor {
+        id: String,
+        content: Option<String>,
+        language: Option<String>,
+    },
     /// Path picker prompt for file/folder selection
-    ShowPath { id: String, start_path: Option<String>, hint: Option<String> },
+    ShowPath {
+        id: String,
+        start_path: Option<String>,
+        hint: Option<String>,
+    },
     /// Environment variable prompt with optional secret handling
-    ShowEnv { id: String, key: String, prompt: Option<String>, secret: bool },
+    ShowEnv {
+        id: String,
+        key: String,
+        prompt: Option<String>,
+        secret: bool,
+    },
     /// Drag and drop prompt for file uploads
-    ShowDrop { id: String, placeholder: Option<String>, hint: Option<String> },
+    ShowDrop {
+        id: String,
+        placeholder: Option<String>,
+        hint: Option<String>,
+    },
     /// Template prompt for tab-through string templates
-    ShowTemplate { id: String, template: String },
+    ShowTemplate {
+        id: String,
+        template: String,
+    },
     /// Multi-select prompt from choices
-    ShowSelect { id: String, placeholder: Option<String>, choices: Vec<Choice>, multiple: bool },
+    ShowSelect {
+        id: String,
+        placeholder: Option<String>,
+        choices: Vec<Choice>,
+        multiple: bool,
+    },
     HideWindow,
-    OpenBrowser { url: String },
+    OpenBrowser {
+        url: String,
+    },
     ScriptExit,
     /// External command to run a script by path
-    RunScript { path: String },
+    RunScript {
+        path: String,
+    },
     /// Script error with detailed information for toast display
     ScriptError {
         error_message: String,
@@ -1002,11 +1122,17 @@ enum PromptMessage {
         suggestions: Vec<String>,
     },
     /// Unhandled message type from script - shows warning toast
-    UnhandledMessage { message_type: String },
+    UnhandledMessage {
+        message_type: String,
+    },
     /// Request to get current UI state - triggers StateResult response
-    GetState { request_id: String },
+    GetState {
+        request_id: String,
+    },
     /// Force submit the current prompt with a value (from SDK's submit() function)
-    ForceSubmit { value: serde_json::Value },
+    ForceSubmit {
+        value: serde_json::Value,
+    },
 }
 
 /// External commands that can be sent to the app via stdin
@@ -1017,7 +1143,7 @@ enum ExternalCommand {
     Run { path: String },
     /// Show the window
     Show,
-    /// Hide the window  
+    /// Hide the window
     Hide,
     /// Set the filter text (for testing)
     SetFilter { text: String },
@@ -1026,7 +1152,7 @@ enum ExternalCommand {
     /// Simulate a key press (for testing)
     /// key: Key name like "enter", "escape", "up", "down", "k", etc.
     /// modifiers: Optional array of modifiers ["cmd", "shift", "alt", "ctrl"]
-    SimulateKey { 
+    SimulateKey {
         key: String,
         #[serde(default)]
         modifiers: Vec<String>,
@@ -1037,16 +1163,16 @@ enum ExternalCommand {
 /// Returns an async_channel::Receiver that can be awaited without polling.
 fn start_stdin_listener() -> async_channel::Receiver<ExternalCommand> {
     use std::io::BufRead;
-    
+
     // P1-6: Use bounded channel to prevent unbounded memory growth
     // Capacity of 100 is generous for stdin commands (typically < 10/sec)
     let (tx, rx) = async_channel::bounded(100);
-    
+
     std::thread::spawn(move || {
         logging::log("STDIN", "External command listener started");
         let stdin = std::io::stdin();
         let reader = stdin.lock();
-        
+
         for line in reader.lines() {
             match line {
                 Ok(line) if !line.trim().is_empty() => {
@@ -1074,7 +1200,7 @@ fn start_stdin_listener() -> async_channel::Receiver<ExternalCommand> {
         }
         logging::log("STDIN", "External command listener exiting");
     });
-    
+
     rx
 }
 
@@ -1087,35 +1213,35 @@ impl HotkeyPoller {
     fn new(window: WindowHandle<ScriptListApp>) -> Self {
         Self { window }
     }
-    
+
     fn start_listening(&self, cx: &mut Context<Self>) {
         let window = self.window;
         // Event-driven: recv().await yields immediately when hotkey is pressed
         // No polling - replaces 100ms Timer::after loop
         cx.spawn(async move |_this, cx: &mut gpui::AsyncApp| {
             logging::log("HOTKEY", "Hotkey listener started (event-driven via async_channel)");
-            
+
             while let Ok(()) = hotkey_channel().1.recv().await {
                 logging::log("VISIBILITY", "");
                 logging::log("VISIBILITY", "╔════════════════════════════════════════════════════════════╗");
                 logging::log("VISIBILITY", "║  HOTKEY TRIGGERED - TOGGLE WINDOW                          ║");
                 logging::log("VISIBILITY", "╚════════════════════════════════════════════════════════════╝");
-                
+
                 // Check current visibility state for toggle behavior
                 let is_visible = WINDOW_VISIBLE.load(Ordering::SeqCst);
                 let needs_reset = NEEDS_RESET.load(Ordering::SeqCst);
                 logging::log("VISIBILITY", &format!("State check: WINDOW_VISIBLE={}, NEEDS_RESET={}", is_visible, needs_reset));
-                
+
                 if is_visible {
                     logging::log("VISIBILITY", "Decision: HIDE (window is currently visible)");
                     // Update visibility state FIRST to prevent race conditions
                     // Even though the hide is async, we mark it as hidden immediately
                     WINDOW_VISIBLE.store(false, Ordering::SeqCst);
                     logging::log("VISIBILITY", "WINDOW_VISIBLE set to: false");
-                    
+
                     // Window is visible - check if in prompt mode
                     let window_clone = window;
-                    
+
                     // First check if we're in a prompt - if so, cancel and hide
                     let _ = cx.update(move |cx: &mut App| {
                         let _ = window_clone.update(cx, |view: &mut ScriptListApp, _win: &mut Window, ctx: &mut Context<ScriptListApp>| {
@@ -1127,7 +1253,7 @@ impl HotkeyPoller {
                             logging::log("HOTKEY", "Resetting to script list before hiding");
                             view.reset_to_script_list(ctx);
                         });
-                        
+
                         // Always hide the window when hotkey pressed while visible
                         logging::log("HOTKEY", "Hiding window (toggle: visible -> hidden)");
                         // PERF: Measure window hide latency
@@ -1145,18 +1271,18 @@ impl HotkeyPoller {
                     // Update visibility state FIRST to prevent race conditions
                     WINDOW_VISIBLE.store(true, Ordering::SeqCst);
                     logging::log("VISIBILITY", "WINDOW_VISIBLE set to: true");
-                    
+
                     let window_clone = window;
                     let _ = cx.update(move |cx: &mut App| {
                         // Step 0: CRITICAL - Set MoveToActiveSpace BEFORE any activation
-                        // This MUST happen before move_first_window_to_bounds, cx.activate(), 
+                        // This MUST happen before move_first_window_to_bounds, cx.activate(),
                         // or win.activate_window() to prevent macOS from switching spaces
                         ensure_move_to_active_space();
-                        
+
                         // Step 1: Calculate new bounds on display with mouse, at eye-line height
                         let window_size = size(px(750.), initial_window_height());
                         let new_bounds = calculate_eye_line_bounds_on_mouse_display(window_size, cx);
-                        
+
                         logging::log("HOTKEY", &format!(
                             "Calculated bounds: origin=({:.0}, {:.0}) size={:.0}x{:.0}",
                             f64::from(new_bounds.origin.x),
@@ -1164,33 +1290,33 @@ impl HotkeyPoller {
                             f64::from(new_bounds.size.width),
                             f64::from(new_bounds.size.height)
                         ));
-                        
+
                         // Step 2: Move window (position only, no activation)
                         // Note: makeKeyAndOrderFront was removed - ordering happens via GPUI below
                         move_first_window_to_bounds(&new_bounds);
                         logging::log("HOTKEY", "Window repositioned to mouse display");
-                        
+
                         // Step 3: NOW activate the app (makes window visible at new position)
                         cx.activate(true);
                         logging::log("HOTKEY", "App activated (window now visible)");
-                        
+
                         // Step 3.5: Configure as floating panel on first show only
                         if !PANEL_CONFIGURED.swap(true, Ordering::SeqCst) {
                             configure_as_floating_panel();
                             logging::log("HOTKEY", "Configured window as floating panel (first show)");
                         }
-                        
+
                         // Step 4: Activate the specific window and focus it
                         let _ = window_clone.update(cx, |view: &mut ScriptListApp, win: &mut Window, cx: &mut Context<ScriptListApp>| {
                             win.activate_window();
                             let focus_handle = view.focus_handle(cx);
                             win.focus(&focus_handle, cx);
                             logging::log("HOTKEY", "Window activated and focused");
-                            
+
                             // Step 5: Check if we need to reset to script list (after script completion)
                             // Reset debounce timer to allow immediate resize after window move
                             reset_resize_debounce();
-                            
+
                             if NEEDS_RESET.compare_exchange(true, false, Ordering::SeqCst, Ordering::SeqCst).is_ok() {
                                 logging::log("VISIBILITY", "NEEDS_RESET was true - clearing and resetting to script list");
                                 view.reset_to_script_list(cx);
@@ -1199,17 +1325,17 @@ impl HotkeyPoller {
                                 view.update_window_size();
                             }
                         });
-                        
+
                         logging::log("VISIBILITY", "Window show sequence complete");
                     });
                 }
-                
+
                 let final_visible = WINDOW_VISIBLE.load(Ordering::SeqCst);
                 let final_reset = NEEDS_RESET.load(Ordering::SeqCst);
                 logging::log("VISIBILITY", &format!("Final state: WINDOW_VISIBLE={}, NEEDS_RESET={}", final_visible, final_reset));
                 logging::log("VISIBILITY", "═══════════════════════════════════════════════════════════════");
             }
-            
+
             logging::log("HOTKEY", "Hotkey listener exiting (channel closed)");
         }).detach();
     }
@@ -1328,25 +1454,25 @@ impl ScriptListApp {
         let load_start = std::time::Instant::now();
         let scripts = scripts::read_scripts();
         let scripts_elapsed = load_start.elapsed();
-        
+
         let scriptlets_start = std::time::Instant::now();
         let scriptlets = scripts::read_scriptlets();
         let scriptlets_elapsed = scriptlets_start.elapsed();
-        
+
         let theme = theme::load_theme();
         // Config is now passed in from main() to avoid duplicate load (~100-300ms savings)
-        
+
         // Load frecency data for recently-used script tracking
         let mut frecency_store = FrecencyStore::new();
         frecency_store.load().ok(); // Ignore errors - starts fresh if file doesn't exist
-        
+
         // Load built-in entries based on config
         let builtin_entries = builtins::get_builtin_entries(&config.get_builtins());
-        
+
         // Apps are loaded in the background to avoid blocking startup
         // Start with empty list, will be populated asynchronously
         let apps = Vec::new();
-        
+
         let total_elapsed = load_start.elapsed();
         logging::log("PERF", &format!(
             "Startup loading: {:.2}ms total ({} scripts in {:.2}ms, {} scriptlets in {:.2}ms, apps loading in background)",
@@ -1356,20 +1482,38 @@ impl ScriptListApp {
             scriptlets.len(),
             scriptlets_elapsed.as_secs_f64() * 1000.0
         ));
-        logging::log("APP", &format!("Loaded {} scripts from ~/.kenv/scripts", scripts.len()));
-        logging::log("APP", &format!("Loaded {} scriptlets from ~/.kenv/scriptlets/scriptlets.md", scriptlets.len()));
-        logging::log("APP", &format!("Loaded {} built-in features", builtin_entries.len()));
+        logging::log(
+            "APP",
+            &format!("Loaded {} scripts from ~/.kenv/scripts", scripts.len()),
+        );
+        logging::log(
+            "APP",
+            &format!(
+                "Loaded {} scriptlets from ~/.kenv/scriptlets/scriptlets.md",
+                scriptlets.len()
+            ),
+        );
+        logging::log(
+            "APP",
+            &format!("Loaded {} built-in features", builtin_entries.len()),
+        );
         logging::log("APP", "Applications loading in background...");
         logging::log("APP", "Loaded theme with system appearance detection");
-        logging::log("APP", &format!("Loaded config: hotkey={:?}+{}, bun_path={:?}", 
-            config.hotkey.modifiers, config.hotkey.key, config.bun_path));
-        
+        logging::log(
+            "APP",
+            &format!(
+                "Loaded config: hotkey={:?}+{}, bun_path={:?}",
+                config.hotkey.modifiers, config.hotkey.key, config.bun_path
+            ),
+        );
+
         // Load apps in background thread to avoid blocking startup
         let app_launcher_enabled = config.get_builtins().app_launcher;
         if app_launcher_enabled {
             // Use a channel to send loaded apps back to main thread
-            let (tx, rx) = std::sync::mpsc::channel::<(Vec<app_launcher::AppInfo>, std::time::Duration)>();
-            
+            let (tx, rx) =
+                std::sync::mpsc::channel::<(Vec<app_launcher::AppInfo>, std::time::Duration)>();
+
             // Spawn background thread for app scanning
             std::thread::spawn(move || {
                 let start = std::time::Instant::now();
@@ -1377,7 +1521,7 @@ impl ScriptListApp {
                 let elapsed = start.elapsed();
                 let _ = tx.send((apps, elapsed));
             });
-            
+
             // Poll for results using a spawned task
             cx.spawn(async move |this, cx| {
                 // Poll the channel periodically
@@ -1391,11 +1535,14 @@ impl ScriptListApp {
                                     app.apps = apps;
                                     // Invalidate filter cache since apps changed
                                     app.filter_cache_key = String::from("\0_APPS_LOADED_\0");
-                                    logging::log("APP", &format!(
-                                        "Background app loading complete: {} apps in {:.2}ms",
-                                        app_count,
-                                        elapsed.as_secs_f64() * 1000.0
-                                    ));
+                                    logging::log(
+                                        "APP",
+                                        &format!(
+                                            "Background app loading complete: {} apps in {:.2}ms",
+                                            app_count,
+                                            elapsed.as_secs_f64() * 1000.0
+                                        ),
+                                    );
                                     cx.notify();
                                 })
                             });
@@ -1405,10 +1552,11 @@ impl ScriptListApp {
                         Err(std::sync::mpsc::TryRecvError::Disconnected) => break,
                     }
                 }
-            }).detach();
+            })
+            .detach();
         }
         logging::log("UI", "Script Kit logo SVG loaded for header rendering");
-        
+
         // Start cursor blink timer - updates all inputs that track cursor visibility
         cx.spawn(async move |this, cx| {
             loop {
@@ -1416,10 +1564,12 @@ impl ScriptListApp {
                 let _ = cx.update(|cx| {
                     this.update(cx, |app, cx| {
                         // Skip cursor blink when window is hidden or no input is focused
-                        if !WINDOW_VISIBLE.load(Ordering::SeqCst) || app.focused_input == FocusedInput::None {
+                        if !WINDOW_VISIBLE.load(Ordering::SeqCst)
+                            || app.focused_input == FocusedInput::None
+                        {
                             return;
                         }
-                        
+
                         app.cursor_visible = !app.cursor_visible;
                         // Also update ActionsDialog cursor if it exists
                         if let Some(ref dialog) = app.actions_dialog {
@@ -1431,8 +1581,9 @@ impl ScriptListApp {
                     })
                 });
             }
-        }).detach();
-        
+        })
+        .detach();
+
         ScriptListApp {
             scripts,
             scriptlets,
@@ -1498,56 +1649,74 @@ impl ScriptListApp {
             pending_path_action_result: Arc::new(Mutex::new(None)),
         }
     }
-    
+
     /// Switch to a different design variant
-    /// 
+    ///
     /// Cycle to the next design variant.
     /// Use Cmd+1 to cycle through all designs.
     fn cycle_design(&mut self, cx: &mut Context<Self>) {
         let old_design = self.current_design;
         let new_design = old_design.next();
         let all_designs = DesignVariant::all();
-        let old_idx = all_designs.iter().position(|&v| v == old_design).unwrap_or(0);
-        let new_idx = all_designs.iter().position(|&v| v == new_design).unwrap_or(0);
-        
-        logging::log("DESIGN", &format!(
-            "Cycling design: {} ({}) -> {} ({}) [total: {}]",
-            old_design.name(),
-            old_idx,
-            new_design.name(),
-            new_idx,
-            all_designs.len()
-        ));
-        logging::log("DESIGN", &format!(
-            "Design '{}': {}",
-            new_design.name(),
-            new_design.description()
-        ));
-        
+        let old_idx = all_designs
+            .iter()
+            .position(|&v| v == old_design)
+            .unwrap_or(0);
+        let new_idx = all_designs
+            .iter()
+            .position(|&v| v == new_design)
+            .unwrap_or(0);
+
+        logging::log(
+            "DESIGN",
+            &format!(
+                "Cycling design: {} ({}) -> {} ({}) [total: {}]",
+                old_design.name(),
+                old_idx,
+                new_design.name(),
+                new_idx,
+                all_designs.len()
+            ),
+        );
+        logging::log(
+            "DESIGN",
+            &format!(
+                "Design '{}': {}",
+                new_design.name(),
+                new_design.description()
+            ),
+        );
+
         self.current_design = new_design;
-        logging::log("DESIGN", &format!(
-            "self.current_design is now: {:?}",
-            self.current_design
-        ));
+        logging::log(
+            "DESIGN",
+            &format!("self.current_design is now: {:?}", self.current_design),
+        );
         cx.notify();
     }
-    
+
     /// Show an error notification to the user
-    /// 
+    ///
     /// The notification will auto-dismiss after 5 seconds.
     /// Call this when an operation fails and you want to inform the user.
     #[allow(dead_code)]
     fn show_error(&mut self, message: String, severity: ErrorSeverity, cx: &mut Context<Self>) {
-        logging::log("ERROR", &format!("Showing error notification: {} (severity: {:?})", message, severity));
-        
+        logging::log(
+            "ERROR",
+            &format!(
+                "Showing error notification: {} (severity: {:?})",
+                message, severity
+            ),
+        );
+
         self.error_notification = Some(ErrorNotification {
             message,
             severity,
             created_at: std::time::Instant::now(),
         });
-        
+
         cx.notify();
-        
+
         // Set up auto-dismiss timer (5 seconds)
         cx.spawn(async move |this, cx| {
             Timer::after(std::time::Duration::from_secs(5)).await;
@@ -1556,9 +1725,10 @@ impl ScriptListApp {
                     app.clear_error(cx);
                 })
             });
-        }).detach();
+        })
+        .detach();
     }
-    
+
     /// Clear the current error notification
     fn clear_error(&mut self, cx: &mut Context<Self>) {
         if self.error_notification.is_some() {
@@ -1567,28 +1737,39 @@ impl ScriptListApp {
             cx.notify();
         }
     }
-    
+
     fn update_theme(&mut self, cx: &mut Context<Self>) {
         self.theme = theme::load_theme();
         logging::log("APP", "Theme reloaded based on system appearance");
         cx.notify();
     }
-    
+
     fn update_config(&mut self, cx: &mut Context<Self>) {
         self.config = config::load_config();
-        logging::log("APP", &format!("Config reloaded: padding={:?}", self.config.get_padding()));
+        logging::log(
+            "APP",
+            &format!("Config reloaded: padding={:?}", self.config.get_padding()),
+        );
         cx.notify();
     }
-    
+
     fn refresh_scripts(&mut self, cx: &mut Context<Self>) {
         self.scripts = scripts::read_scripts();
         self.scriptlets = scripts::read_scriptlets();
         self.selected_index = 0;
         self.last_scrolled_index = None;
-        self.list_scroll_handle.scroll_to_item(0, ScrollStrategy::Top);
+        self.list_scroll_handle
+            .scroll_to_item(0, ScrollStrategy::Top);
         self.last_scrolled_index = Some(0);
         self.invalidate_filter_cache();
-        logging::log("APP", &format!("Scripts refreshed: {} scripts, {} scriptlets loaded", self.scripts.len(), self.scriptlets.len()));
+        logging::log(
+            "APP",
+            &format!(
+                "Scripts refreshed: {} scripts, {} scriptlets loaded",
+                self.scripts.len(),
+                self.scriptlets.len()
+            ),
+        );
         cx.notify();
     }
 
@@ -1597,92 +1778,121 @@ impl ScriptListApp {
     fn filtered_results(&self) -> Vec<scripts::SearchResult> {
         // P1: Return cached results if filter hasn't changed
         if self.filter_text == self.filter_cache_key {
-            logging::log_debug("CACHE", &format!("Filter cache HIT for '{}'", self.filter_text));
+            logging::log_debug(
+                "CACHE",
+                &format!("Filter cache HIT for '{}'", self.filter_text),
+            );
             return self.cached_filtered_results.clone();
         }
-        
+
         // P1: Cache miss - need to recompute (will be done by get_filtered_results_mut)
-        logging::log_debug("CACHE", &format!("Filter cache MISS - need recompute for '{}' (cached key: '{}')", 
-            self.filter_text, self.filter_cache_key));
-        
+        logging::log_debug(
+            "CACHE",
+            &format!(
+                "Filter cache MISS - need recompute for '{}' (cached key: '{}')",
+                self.filter_text, self.filter_cache_key
+            ),
+        );
+
         // PERF: Measure search time (only log when actually filtering)
         let search_start = std::time::Instant::now();
-        let results = scripts::fuzzy_search_unified(&self.scripts, &self.scriptlets, &self.filter_text);
+        let results =
+            scripts::fuzzy_search_unified(&self.scripts, &self.scriptlets, &self.filter_text);
         let search_elapsed = search_start.elapsed();
-        
+
         // Only log search performance when there's an active filter
         if !self.filter_text.is_empty() {
-            logging::log("PERF", &format!(
-                "Search '{}' took {:.2}ms ({} results from {} total)",
-                self.filter_text,
-                search_elapsed.as_secs_f64() * 1000.0,
-                results.len(),
-                self.scripts.len() + self.scriptlets.len()
-            ));
+            logging::log(
+                "PERF",
+                &format!(
+                    "Search '{}' took {:.2}ms ({} results from {} total)",
+                    self.filter_text,
+                    search_elapsed.as_secs_f64() * 1000.0,
+                    results.len(),
+                    self.scripts.len() + self.scriptlets.len()
+                ),
+            );
         }
         results
     }
-    
+
     /// P1: Get filtered results with cache update (mutable version)
     /// Call this when you need to ensure cache is updated
     fn get_filtered_results_cached(&mut self) -> &Vec<scripts::SearchResult> {
         if self.filter_text != self.filter_cache_key {
-            logging::log_debug("CACHE", &format!("Filter cache MISS - recomputing for '{}'", self.filter_text));
+            logging::log_debug(
+                "CACHE",
+                &format!("Filter cache MISS - recomputing for '{}'", self.filter_text),
+            );
             let search_start = std::time::Instant::now();
             self.cached_filtered_results = scripts::fuzzy_search_unified_all(
-                &self.scripts, 
-                &self.scriptlets, 
+                &self.scripts,
+                &self.scriptlets,
                 &self.builtin_entries,
                 &self.apps,
-                &self.filter_text
+                &self.filter_text,
             );
             self.filter_cache_key = self.filter_text.clone();
             let search_elapsed = search_start.elapsed();
-            
+
             if !self.filter_text.is_empty() {
-                logging::log("PERF", &format!(
-                    "Search '{}' took {:.2}ms ({} results from {} total)",
-                    self.filter_text,
-                    search_elapsed.as_secs_f64() * 1000.0,
-                    self.cached_filtered_results.len(),
-                    self.scripts.len() + self.scriptlets.len() + self.builtin_entries.len() + self.apps.len()
-                ));
+                logging::log(
+                    "PERF",
+                    &format!(
+                        "Search '{}' took {:.2}ms ({} results from {} total)",
+                        self.filter_text,
+                        search_elapsed.as_secs_f64() * 1000.0,
+                        self.cached_filtered_results.len(),
+                        self.scripts.len()
+                            + self.scriptlets.len()
+                            + self.builtin_entries.len()
+                            + self.apps.len()
+                    ),
+                );
             }
         } else {
-            logging::log_debug("CACHE", &format!("Filter cache HIT for '{}'", self.filter_text));
+            logging::log_debug(
+                "CACHE",
+                &format!("Filter cache HIT for '{}'", self.filter_text),
+            );
         }
         &self.cached_filtered_results
     }
-    
+
     /// P1: Invalidate filter cache (call when scripts/scriptlets change)
     #[allow(dead_code)]
     fn invalidate_filter_cache(&mut self) {
         logging::log_debug("CACHE", "Filter cache INVALIDATED");
         self.filter_cache_key = String::from("\0_INVALIDATED_\0");
     }
-    
+
     /// Get or update the preview cache for syntax-highlighted code lines.
     /// Only re-reads and re-highlights when the script path actually changes.
     /// Returns cached lines if path matches, otherwise updates cache and returns new lines.
-    fn get_or_update_preview_cache(&mut self, script_path: &str, lang: &str) -> &[syntax::HighlightedLine] {
+    fn get_or_update_preview_cache(
+        &mut self,
+        script_path: &str,
+        lang: &str,
+    ) -> &[syntax::HighlightedLine] {
         // Check if cache is valid for this path
-        if self.preview_cache_path.as_deref() == Some(script_path) && !self.preview_cache_lines.is_empty() {
+        if self.preview_cache_path.as_deref() == Some(script_path)
+            && !self.preview_cache_lines.is_empty()
+        {
             logging::log_debug("CACHE", &format!("Preview cache HIT for '{}'", script_path));
             return &self.preview_cache_lines;
         }
-        
+
         // Cache miss - need to re-read and re-highlight
-        logging::log_debug("CACHE", &format!("Preview cache MISS - loading '{}'", script_path));
-        
+        logging::log_debug(
+            "CACHE",
+            &format!("Preview cache MISS - loading '{}'", script_path),
+        );
+
         self.preview_cache_path = Some(script_path.to_string());
         self.preview_cache_lines = match std::fs::read_to_string(script_path) {
             Ok(content) => {
                 // Only take first 15 lines for preview
-                let preview: String = content
-                    .lines()
-                    .take(15)
-                    .collect::<Vec<_>>()
-                    .join("\n");
+                let preview: String = content.lines().take(15).collect::<Vec<_>>().join("\n");
                 syntax::highlight_code_lines(&preview, lang)
             }
             Err(e) => {
@@ -1690,10 +1900,10 @@ impl ScriptListApp {
                 Vec::new()
             }
         };
-        
+
         &self.preview_cache_lines
     }
-    
+
     /// Invalidate the preview cache (call when selection might change to different script)
     #[allow(dead_code)]
     fn invalidate_preview_cache(&mut self) {
@@ -1707,7 +1917,8 @@ impl ScriptListApp {
             self.scripts.clone()
         } else {
             let filter_lower = self.filter_text.to_lowercase();
-            self.scripts.iter()
+            self.scripts
+                .iter()
                 .filter(|s| s.name.to_lowercase().contains(&filter_lower))
                 .cloned()
                 .collect()
@@ -1718,27 +1929,33 @@ impl ScriptListApp {
     /// Returns the first match found (scripts are searched before scriptlets)
     fn find_alias_match(&self, alias: &str) -> Option<AliasMatch> {
         let alias_lower = alias.to_lowercase();
-        
+
         // Search scripts first
         for script in &self.scripts {
             if let Some(ref script_alias) = script.alias {
                 if script_alias.to_lowercase() == alias_lower {
-                    logging::log("ALIAS", &format!("Found script match: '{}' -> '{}'", alias, script.name));
+                    logging::log(
+                        "ALIAS",
+                        &format!("Found script match: '{}' -> '{}'", alias, script.name),
+                    );
                     return Some(AliasMatch::Script(script.clone()));
                 }
             }
         }
-        
+
         // Then search scriptlets
         for scriptlet in &self.scriptlets {
             if let Some(ref scriptlet_alias) = scriptlet.alias {
                 if scriptlet_alias.to_lowercase() == alias_lower {
-                    logging::log("ALIAS", &format!("Found scriptlet match: '{}' -> '{}'", alias, scriptlet.name));
+                    logging::log(
+                        "ALIAS",
+                        &format!("Found scriptlet match: '{}' -> '{}'", alias, scriptlet.name),
+                    );
                     return Some(AliasMatch::Scriptlet(scriptlet.clone()));
                 }
             }
         }
-        
+
         None
     }
 
@@ -1752,10 +1969,10 @@ impl ScriptListApp {
             &self.frecency_store,
             &self.filter_text,
         );
-        
+
         if self.selected_index > 0 {
             let mut new_index = self.selected_index - 1;
-            
+
             // Skip section headers when moving up
             while new_index > 0 {
                 if let Some(GroupedListItem::SectionHeader(_)) = grouped_items.get(new_index) {
@@ -1764,13 +1981,13 @@ impl ScriptListApp {
                     break;
                 }
             }
-            
+
             // Make sure we didn't land on a section header at index 0
             if let Some(GroupedListItem::SectionHeader(_)) = grouped_items.get(new_index) {
                 // Stay at current position if we can't find a valid item
                 return;
             }
-            
+
             self.selected_index = new_index;
             self.scroll_to_selected_if_needed("keyboard_up");
             self.trigger_scroll_activity(cx);
@@ -1788,11 +2005,11 @@ impl ScriptListApp {
             &self.frecency_store,
             &self.filter_text,
         );
-        
+
         let item_count = grouped_items.len();
         if self.selected_index < item_count.saturating_sub(1) {
             let mut new_index = self.selected_index + 1;
-            
+
             // Skip section headers when moving down
             while new_index < item_count.saturating_sub(1) {
                 if let Some(GroupedListItem::SectionHeader(_)) = grouped_items.get(new_index) {
@@ -1801,37 +2018,38 @@ impl ScriptListApp {
                     break;
                 }
             }
-            
+
             // Make sure we didn't land on a section header at the end
             if let Some(GroupedListItem::SectionHeader(_)) = grouped_items.get(new_index) {
                 // Stay at current position if we can't find a valid item
                 return;
             }
-            
+
             self.selected_index = new_index;
             self.scroll_to_selected_if_needed("keyboard_down");
             self.trigger_scroll_activity(cx);
             cx.notify();
         }
     }
-    
+
     /// Scroll stabilization helper: only call scroll_to_item if we haven't already scrolled to this index.
     /// This prevents scroll jitter from redundant scroll_to_item calls.
     fn scroll_to_selected_if_needed(&mut self, _reason: &str) {
         let target = self.selected_index;
-        
+
         // Check if we've already scrolled to this index
         if self.last_scrolled_index == Some(target) {
             return;
         }
-        
+
         // Perform the scroll (logging removed for performance)
-        self.list_scroll_handle.scroll_to_item(target, ScrollStrategy::Nearest);
+        self.list_scroll_handle
+            .scroll_to_item(target, ScrollStrategy::Nearest);
         self.last_scrolled_index = Some(target);
     }
-    
+
     /// Trigger scroll activity - shows the scrollbar and schedules fade-out
-    /// 
+    ///
     /// This should be called whenever scroll-related activity occurs:
     /// - Keyboard up/down navigation
     /// - scroll_to_item calls
@@ -1839,7 +2057,7 @@ impl ScriptListApp {
     fn trigger_scroll_activity(&mut self, cx: &mut Context<Self>) {
         self.is_scrolling = true;
         self.last_scroll_time = Some(std::time::Instant::now());
-        
+
         // Schedule fade-out after 1000ms of inactivity
         cx.spawn(async move |this, cx| {
             Timer::after(std::time::Duration::from_millis(1000)).await;
@@ -1854,11 +2072,12 @@ impl ScriptListApp {
                     }
                 })
             });
-        }).detach();
-        
+        })
+        .detach();
+
         cx.notify();
     }
-    
+
     fn execute_selected(&mut self, cx: &mut Context<Self>) {
         // Get grouped results to map from selected_index to actual result
         let (grouped_items, flat_results) = get_grouped_results(
@@ -1869,38 +2088,53 @@ impl ScriptListApp {
             &self.frecency_store,
             &self.filter_text,
         );
-        
+
         // Get the grouped item at selected_index and extract the result index
         let result_idx = match grouped_items.get(self.selected_index) {
             Some(GroupedListItem::Item(idx)) => Some(*idx),
             Some(GroupedListItem::SectionHeader(_)) => None, // Section headers are not selectable
             None => None,
         };
-        
+
         if let Some(idx) = result_idx {
             if let Some(result) = flat_results.get(idx).cloned() {
                 // Record frecency usage before executing
                 let frecency_path = match &result {
-                    scripts::SearchResult::Script(sm) => sm.script.path.to_string_lossy().to_string(),
+                    scripts::SearchResult::Script(sm) => {
+                        sm.script.path.to_string_lossy().to_string()
+                    }
                     scripts::SearchResult::App(am) => am.app.path.to_string_lossy().to_string(),
                     scripts::SearchResult::BuiltIn(bm) => format!("builtin:{}", bm.entry.name),
-                    scripts::SearchResult::Scriptlet(sm) => format!("scriptlet:{}", sm.scriptlet.name),
-                    scripts::SearchResult::Window(wm) => format!("window:{}:{}", wm.window.app, wm.window.title),
+                    scripts::SearchResult::Scriptlet(sm) => {
+                        format!("scriptlet:{}", sm.scriptlet.name)
+                    }
+                    scripts::SearchResult::Window(wm) => {
+                        format!("window:{}:{}", wm.window.app, wm.window.title)
+                    }
                 };
                 self.frecency_store.record_use(&frecency_path);
                 self.frecency_store.save().ok(); // Best-effort save
-                
+
                 match result {
                     scripts::SearchResult::Script(script_match) => {
-                        logging::log("EXEC", &format!("Executing script: {}", script_match.script.name));
+                        logging::log(
+                            "EXEC",
+                            &format!("Executing script: {}", script_match.script.name),
+                        );
                         self.execute_interactive(&script_match.script, cx);
                     }
                     scripts::SearchResult::Scriptlet(scriptlet_match) => {
-                        logging::log("EXEC", &format!("Executing scriptlet: {}", scriptlet_match.scriptlet.name));
+                        logging::log(
+                            "EXEC",
+                            &format!("Executing scriptlet: {}", scriptlet_match.scriptlet.name),
+                        );
                         self.execute_scriptlet(&scriptlet_match.scriptlet, cx);
                     }
                     scripts::SearchResult::BuiltIn(builtin_match) => {
-                        logging::log("EXEC", &format!("Executing built-in: {}", builtin_match.entry.name));
+                        logging::log(
+                            "EXEC",
+                            &format!("Executing built-in: {}", builtin_match.entry.name),
+                        );
                         self.execute_builtin(&builtin_match.entry, cx);
                     }
                     scripts::SearchResult::App(app_match) => {
@@ -1908,7 +2142,10 @@ impl ScriptListApp {
                         self.execute_app(&app_match.app, cx);
                     }
                     scripts::SearchResult::Window(window_match) => {
-                        logging::log("EXEC", &format!("Focusing window: {}", window_match.window.title));
+                        logging::log(
+                            "EXEC",
+                            &format!("Focusing window: {}", window_match.window.title),
+                        );
                         self.execute_window_focus(&window_match.window, cx);
                     }
                 }
@@ -1916,38 +2153,47 @@ impl ScriptListApp {
         }
     }
 
-    fn update_filter(&mut self, new_char: Option<char>, backspace: bool, clear: bool, cx: &mut Context<Self>) {
+    fn update_filter(
+        &mut self,
+        new_char: Option<char>,
+        backspace: bool,
+        clear: bool,
+        cx: &mut Context<Self>,
+    ) {
         if clear {
             self.filter_text.clear();
             self.selected_index = 0;
             self.last_scrolled_index = None;
-            self.list_scroll_handle.scroll_to_item(0, ScrollStrategy::Top);
+            self.list_scroll_handle
+                .scroll_to_item(0, ScrollStrategy::Top);
             self.last_scrolled_index = Some(0);
         } else if backspace && !self.filter_text.is_empty() {
             self.filter_text.pop();
             self.selected_index = 0;
             self.last_scrolled_index = None;
-            self.list_scroll_handle.scroll_to_item(0, ScrollStrategy::Top);
+            self.list_scroll_handle
+                .scroll_to_item(0, ScrollStrategy::Top);
             self.last_scrolled_index = Some(0);
         } else if let Some(ch) = new_char {
             self.filter_text.push(ch);
             self.selected_index = 0;
             self.last_scrolled_index = None;
-            self.list_scroll_handle.scroll_to_item(0, ScrollStrategy::Top);
+            self.list_scroll_handle
+                .scroll_to_item(0, ScrollStrategy::Top);
             self.last_scrolled_index = Some(0);
         }
-        
+
         // Trigger window resize based on new filter results
         self.update_window_size();
-        
+
         cx.notify();
     }
-    
+
     fn toggle_logs(&mut self, cx: &mut Context<Self>) {
         self.show_logs = !self.show_logs;
         cx.notify();
     }
-    
+
     /// Update window size based on current view and item count.
     /// This implements dynamic window resizing:
     /// - Script list: resize based on filtered results (including section headers)
@@ -1990,12 +2236,17 @@ impl ScriptListApp {
                 return;
             }
             // Clipboard history and app launcher use standard height (same as script list)
-            AppView::ClipboardHistoryView { entries, filter, .. } => {
+            AppView::ClipboardHistoryView {
+                entries, filter, ..
+            } => {
                 let filtered_count = if filter.is_empty() {
                     entries.len()
                 } else {
                     let filter_lower = filter.to_lowercase();
-                    entries.iter().filter(|e| e.content.to_lowercase().contains(&filter_lower)).count()
+                    entries
+                        .iter()
+                        .filter(|e| e.content.to_lowercase().contains(&filter_lower))
+                        .count()
                 };
                 (ViewType::ScriptList, filtered_count)
             }
@@ -2004,19 +2255,26 @@ impl ScriptListApp {
                     apps.len()
                 } else {
                     let filter_lower = filter.to_lowercase();
-                    apps.iter().filter(|a| a.name.to_lowercase().contains(&filter_lower)).count()
+                    apps.iter()
+                        .filter(|a| a.name.to_lowercase().contains(&filter_lower))
+                        .count()
                 };
                 (ViewType::ScriptList, filtered_count)
             }
-            AppView::WindowSwitcherView { windows, filter, .. } => {
+            AppView::WindowSwitcherView {
+                windows, filter, ..
+            } => {
                 let filtered_count = if filter.is_empty() {
                     windows.len()
                 } else {
                     let filter_lower = filter.to_lowercase();
-                    windows.iter().filter(|w| {
-                        w.title.to_lowercase().contains(&filter_lower) || 
-                        w.app.to_lowercase().contains(&filter_lower)
-                    }).count()
+                    windows
+                        .iter()
+                        .filter(|w| {
+                            w.title.to_lowercase().contains(&filter_lower)
+                                || w.app.to_lowercase().contains(&filter_lower)
+                        })
+                        .count()
                 };
                 (ViewType::ScriptList, filtered_count)
             }
@@ -2033,11 +2291,11 @@ impl ScriptListApp {
                 (ViewType::ScriptList, filtered_count)
             }
         };
-        
+
         let target_height = height_for_view(view_type, item_count);
         resize_first_window_to_height(target_height);
     }
-    
+
     /// Helper to get filtered arg choices without cloning
     fn get_filtered_arg_choices<'a>(&self, choices: &'a [Choice]) -> Vec<&'a Choice> {
         if self.arg_input_text.is_empty() {
@@ -2050,7 +2308,7 @@ impl ScriptListApp {
                 .collect()
         }
     }
-    
+
     fn toggle_actions(&mut self, cx: &mut Context<Self>, window: &mut Window) {
         logging::log("KEY", "Toggling actions popup");
         if self.show_actions_popup {
@@ -2065,7 +2323,7 @@ impl ScriptListApp {
             self.show_actions_popup = true;
             self.focused_input = FocusedInput::ActionsSearch;
             let script_info = self.get_focused_script_info();
-            
+
             let theme_arc = std::sync::Arc::new(self.theme.clone());
             let dialog = cx.new(|cx| {
                 let focus_handle = cx.focus_handle();
@@ -2076,10 +2334,10 @@ impl ScriptListApp {
                     theme_arc,
                 )
             });
-            
+
             // Hide the dialog's built-in search input since header already has search
             dialog.update(cx, |d, _| d.set_hide_search(true));
-            
+
             // Focus the dialog's internal focus handle
             let dialog_focus_handle = dialog.read(cx).focus_handle.clone();
             self.actions_dialog = Some(dialog.clone());
@@ -2088,14 +2346,14 @@ impl ScriptListApp {
         }
         cx.notify();
     }
-    
+
     /// Handle action selection from the actions dialog
     fn handle_action(&mut self, action_id: String, cx: &mut Context<Self>) {
         logging::log("UI", &format!("Action selected: {}", action_id));
-        
+
         // Close the dialog and return to script list
         self.current_view = AppView::ScriptList;
-        
+
         match action_id.as_str() {
             "create_script" => {
                 logging::log("UI", "Create script action - opening scripts folder");
@@ -2104,8 +2362,12 @@ impl ScriptListApp {
                 std::thread::spawn(move || {
                     use std::process::Command;
                     match Command::new("open").arg(&scripts_dir).spawn() {
-                        Ok(_) => logging::log("UI", &format!("Opened scripts folder: {}", scripts_dir)),
-                        Err(e) => logging::log("ERROR", &format!("Failed to open scripts folder: {}", e)),
+                        Ok(_) => {
+                            logging::log("UI", &format!("Opened scripts folder: {}", scripts_dir))
+                        }
+                        Err(e) => {
+                            logging::log("ERROR", &format!("Failed to open scripts folder: {}", e))
+                        }
                     }
                 });
                 self.last_output = Some(SharedString::from("Opened scripts folder"));
@@ -2128,31 +2390,46 @@ impl ScriptListApp {
                             std::thread::spawn(move || {
                                 use std::process::Command;
                                 match Command::new("open").arg("-R").arg(&path_str).spawn() {
-                                    Ok(_) => logging::log("UI", &format!("Revealed in Finder: {}", path_str)),
-                                    Err(e) => logging::log("ERROR", &format!("Failed to reveal in Finder: {}", e)),
+                                    Ok(_) => logging::log(
+                                        "UI",
+                                        &format!("Revealed in Finder: {}", path_str),
+                                    ),
+                                    Err(e) => logging::log(
+                                        "ERROR",
+                                        &format!("Failed to reveal in Finder: {}", e),
+                                    ),
                                 }
                             });
                             self.last_output = Some(SharedString::from("Revealed in Finder"));
                         }
                         scripts::SearchResult::Scriptlet(_) => {
-                            self.last_output = Some(SharedString::from("Cannot reveal scriptlets in Finder"));
+                            self.last_output =
+                                Some(SharedString::from("Cannot reveal scriptlets in Finder"));
                         }
                         scripts::SearchResult::BuiltIn(_) => {
-                            self.last_output = Some(SharedString::from("Cannot reveal built-in features"));
+                            self.last_output =
+                                Some(SharedString::from("Cannot reveal built-in features"));
                         }
                         scripts::SearchResult::App(app_match) => {
                             let path_str = app_match.app.path.to_string_lossy().to_string();
                             std::thread::spawn(move || {
                                 use std::process::Command;
                                 match Command::new("open").arg("-R").arg(&path_str).spawn() {
-                                    Ok(_) => logging::log("UI", &format!("Revealed app in Finder: {}", path_str)),
-                                    Err(e) => logging::log("ERROR", &format!("Failed to reveal app in Finder: {}", e)),
+                                    Ok(_) => logging::log(
+                                        "UI",
+                                        &format!("Revealed app in Finder: {}", path_str),
+                                    ),
+                                    Err(e) => logging::log(
+                                        "ERROR",
+                                        &format!("Failed to reveal app in Finder: {}", e),
+                                    ),
                                 }
                             });
                             self.last_output = Some(SharedString::from("Revealed app in Finder"));
                         }
                         scripts::SearchResult::Window(_) => {
-                            self.last_output = Some(SharedString::from("Cannot reveal windows in Finder"));
+                            self.last_output =
+                                Some(SharedString::from("Cannot reveal windows in Finder"));
                         }
                     }
                 } else {
@@ -2171,11 +2448,13 @@ impl ScriptListApp {
                             Some(app_match.app.path.to_string_lossy().to_string())
                         }
                         scripts::SearchResult::Scriptlet(_) => {
-                            self.last_output = Some(SharedString::from("Cannot copy scriptlet path"));
+                            self.last_output =
+                                Some(SharedString::from("Cannot copy scriptlet path"));
                             None
                         }
                         scripts::SearchResult::BuiltIn(_) => {
-                            self.last_output = Some(SharedString::from("Cannot copy built-in path"));
+                            self.last_output =
+                                Some(SharedString::from("Cannot copy built-in path"));
                             None
                         }
                         scripts::SearchResult::Window(_) => {
@@ -2183,57 +2462,80 @@ impl ScriptListApp {
                             None
                         }
                     };
-                    
+
                     if let Some(path_str) = path_opt {
                         // Use pbcopy on macOS for reliable clipboard access
                         #[cfg(target_os = "macos")]
                         {
-                            use std::process::{Command, Stdio};
                             use std::io::Write;
-                            
-                            match Command::new("pbcopy")
-                                .stdin(Stdio::piped())
-                                .spawn()
-                            {
+                            use std::process::{Command, Stdio};
+
+                            match Command::new("pbcopy").stdin(Stdio::piped()).spawn() {
                                 Ok(mut child) => {
                                     if let Some(ref mut stdin) = child.stdin {
                                         if stdin.write_all(path_str.as_bytes()).is_ok() {
                                             let _ = child.wait();
-                                            logging::log("UI", &format!("Copied path to clipboard: {}", path_str));
-                                            self.last_output = Some(SharedString::from(format!("Copied: {}", path_str)));
+                                            logging::log(
+                                                "UI",
+                                                &format!("Copied path to clipboard: {}", path_str),
+                                            );
+                                            self.last_output = Some(SharedString::from(format!(
+                                                "Copied: {}",
+                                                path_str
+                                            )));
                                         } else {
-                                            logging::log("ERROR", "Failed to write to pbcopy stdin");
-                                            self.last_output = Some(SharedString::from("Failed to copy path"));
+                                            logging::log(
+                                                "ERROR",
+                                                "Failed to write to pbcopy stdin",
+                                            );
+                                            self.last_output =
+                                                Some(SharedString::from("Failed to copy path"));
                                         }
                                     }
                                 }
                                 Err(e) => {
-                                    logging::log("ERROR", &format!("Failed to spawn pbcopy: {}", e));
-                                    self.last_output = Some(SharedString::from("Failed to copy path"));
+                                    logging::log(
+                                        "ERROR",
+                                        &format!("Failed to spawn pbcopy: {}", e),
+                                    );
+                                    self.last_output =
+                                        Some(SharedString::from("Failed to copy path"));
                                 }
                             }
                         }
-                        
+
                         // Fallback for non-macOS platforms
                         #[cfg(not(target_os = "macos"))]
                         {
                             use arboard::Clipboard;
                             match Clipboard::new() {
-                                Ok(mut clipboard) => {
-                                    match clipboard.set_text(&path_str) {
-                                        Ok(_) => {
-                                            logging::log("UI", &format!("Copied path to clipboard: {}", path_str));
-                                            self.last_output = Some(SharedString::from(format!("Copied: {}", path_str)));
-                                        }
-                                        Err(e) => {
-                                            logging::log("ERROR", &format!("Failed to copy path: {}", e));
-                                            self.last_output = Some(SharedString::from("Failed to copy path"));
-                                        }
+                                Ok(mut clipboard) => match clipboard.set_text(&path_str) {
+                                    Ok(_) => {
+                                        logging::log(
+                                            "UI",
+                                            &format!("Copied path to clipboard: {}", path_str),
+                                        );
+                                        self.last_output = Some(SharedString::from(format!(
+                                            "Copied: {}",
+                                            path_str
+                                        )));
                                     }
-                                }
+                                    Err(e) => {
+                                        logging::log(
+                                            "ERROR",
+                                            &format!("Failed to copy path: {}", e),
+                                        );
+                                        self.last_output =
+                                            Some(SharedString::from("Failed to copy path"));
+                                    }
+                                },
                                 Err(e) => {
-                                    logging::log("ERROR", &format!("Failed to access clipboard: {}", e));
-                                    self.last_output = Some(SharedString::from("Failed to access clipboard"));
+                                    logging::log(
+                                        "ERROR",
+                                        &format!("Failed to access clipboard: {}", e),
+                                    );
+                                    self.last_output =
+                                        Some(SharedString::from("Failed to access clipboard"));
                                 }
                             }
                         }
@@ -2254,7 +2556,8 @@ impl ScriptListApp {
                             self.last_output = Some(SharedString::from("Cannot edit scriptlets"));
                         }
                         scripts::SearchResult::BuiltIn(_) => {
-                            self.last_output = Some(SharedString::from("Cannot edit built-in features"));
+                            self.last_output =
+                                Some(SharedString::from("Cannot edit built-in features"));
                         }
                         scripts::SearchResult::App(_) => {
                             self.last_output = Some(SharedString::from("Cannot edit applications"));
@@ -2290,50 +2593,60 @@ impl ScriptListApp {
                 logging::log("UI", &format!("Unknown action: {}", action_id));
             }
         }
-        
+
         cx.notify();
     }
-    
+
     /// Edit a script in configured editor (config.editor > $EDITOR > "code")
     #[allow(dead_code)]
     fn edit_script(&mut self, path: &std::path::Path) {
         let editor = self.config.get_editor();
-        logging::log("UI", &format!("Opening script in editor '{}': {}", editor, path.display()));
+        logging::log(
+            "UI",
+            &format!("Opening script in editor '{}': {}", editor, path.display()),
+        );
         let path_str = path.to_string_lossy().to_string();
-        
+
         std::thread::spawn(move || {
             use std::process::Command;
-            match Command::new(&editor)
-                .arg(&path_str)
-                .spawn()
-            {
+            match Command::new(&editor).arg(&path_str).spawn() {
                 Ok(_) => logging::log("UI", &format!("Successfully spawned editor: {}", editor)),
-                Err(e) => logging::log("ERROR", &format!("Failed to spawn editor '{}': {}", editor, e)),
+                Err(e) => logging::log(
+                    "ERROR",
+                    &format!("Failed to spawn editor '{}': {}", editor, e),
+                ),
             }
         });
     }
-    
+
     /// Execute a path action from the actions dialog
     /// Handles actions like copy_path, open_in_finder, open_in_editor, etc.
     fn execute_path_action(
-        &mut self, 
-        action_id: &str, 
-        path_info: &PathInfo, 
+        &mut self,
+        action_id: &str,
+        path_info: &PathInfo,
         path_prompt_entity: &Entity<PathPrompt>,
-        cx: &mut Context<Self>
+        cx: &mut Context<Self>,
     ) {
-        logging::log("UI", &format!(
-            "Executing path action '{}' for: {} (is_dir={})", 
-            action_id, path_info.path, path_info.is_dir
-        ));
-        
+        logging::log(
+            "UI",
+            &format!(
+                "Executing path action '{}' for: {} (is_dir={})",
+                action_id, path_info.path, path_info.is_dir
+            ),
+        );
+
         match action_id {
             "select_file" | "open_directory" => {
                 // For select/open, trigger submission through the path prompt
                 // We need to trigger the submit callback with this path
                 path_prompt_entity.update(cx, |prompt, cx| {
                     // Find the index of this path in filtered_entries and submit it
-                    if let Some(idx) = prompt.filtered_entries.iter().position(|e| e.path == path_info.path) {
+                    if let Some(idx) = prompt
+                        .filtered_entries
+                        .iter()
+                        .position(|e| e.path == path_info.path)
+                    {
                         prompt.selected_index = idx;
                     }
                     // For directories, navigate into them; for files, submit
@@ -2351,22 +2664,26 @@ impl ScriptListApp {
                 // Copy full path to clipboard
                 #[cfg(target_os = "macos")]
                 {
-                    use std::process::{Command, Stdio};
                     use std::io::Write;
-                    
-                    match Command::new("pbcopy")
-                        .stdin(Stdio::piped())
-                        .spawn()
-                    {
+                    use std::process::{Command, Stdio};
+
+                    match Command::new("pbcopy").stdin(Stdio::piped()).spawn() {
                         Ok(mut child) => {
                             if let Some(ref mut stdin) = child.stdin {
                                 if stdin.write_all(path_info.path.as_bytes()).is_ok() {
                                     let _ = child.wait();
-                                    logging::log("UI", &format!("Copied path to clipboard: {}", path_info.path));
-                                    self.last_output = Some(SharedString::from(format!("Copied: {}", path_info.path)));
+                                    logging::log(
+                                        "UI",
+                                        &format!("Copied path to clipboard: {}", path_info.path),
+                                    );
+                                    self.last_output = Some(SharedString::from(format!(
+                                        "Copied: {}",
+                                        path_info.path
+                                    )));
                                 } else {
                                     logging::log("ERROR", "Failed to write to pbcopy stdin");
-                                    self.last_output = Some(SharedString::from("Failed to copy path"));
+                                    self.last_output =
+                                        Some(SharedString::from("Failed to copy path"));
                                 }
                             }
                         }
@@ -2376,26 +2693,29 @@ impl ScriptListApp {
                         }
                     }
                 }
-                
+
                 #[cfg(not(target_os = "macos"))]
                 {
                     use arboard::Clipboard;
                     match Clipboard::new() {
-                        Ok(mut clipboard) => {
-                            match clipboard.set_text(&path_info.path) {
-                                Ok(_) => {
-                                    logging::log("UI", &format!("Copied path to clipboard: {}", path_info.path));
-                                    self.last_output = Some(SharedString::from(format!("Copied: {}", path_info.path)));
-                                }
-                                Err(e) => {
-                                    logging::log("ERROR", &format!("Failed to copy path: {}", e));
-                                    self.last_output = Some(SharedString::from("Failed to copy path"));
-                                }
+                        Ok(mut clipboard) => match clipboard.set_text(&path_info.path) {
+                            Ok(_) => {
+                                logging::log(
+                                    "UI",
+                                    &format!("Copied path to clipboard: {}", path_info.path),
+                                );
+                                self.last_output =
+                                    Some(SharedString::from(format!("Copied: {}", path_info.path)));
                             }
-                        }
+                            Err(e) => {
+                                logging::log("ERROR", &format!("Failed to copy path: {}", e));
+                                self.last_output = Some(SharedString::from("Failed to copy path"));
+                            }
+                        },
                         Err(e) => {
                             logging::log("ERROR", &format!("Failed to access clipboard: {}", e));
-                            self.last_output = Some(SharedString::from("Failed to access clipboard"));
+                            self.last_output =
+                                Some(SharedString::from("Failed to access clipboard"));
                         }
                     }
                 }
@@ -2404,19 +2724,25 @@ impl ScriptListApp {
                 // Copy just the filename to clipboard
                 #[cfg(target_os = "macos")]
                 {
-                    use std::process::{Command, Stdio};
                     use std::io::Write;
-                    
-                    match Command::new("pbcopy")
-                        .stdin(Stdio::piped())
-                        .spawn()
-                    {
+                    use std::process::{Command, Stdio};
+
+                    match Command::new("pbcopy").stdin(Stdio::piped()).spawn() {
                         Ok(mut child) => {
                             if let Some(ref mut stdin) = child.stdin {
                                 if stdin.write_all(path_info.name.as_bytes()).is_ok() {
                                     let _ = child.wait();
-                                    logging::log("UI", &format!("Copied filename to clipboard: {}", path_info.name));
-                                    self.last_output = Some(SharedString::from(format!("Copied: {}", path_info.name)));
+                                    logging::log(
+                                        "UI",
+                                        &format!(
+                                            "Copied filename to clipboard: {}",
+                                            path_info.name
+                                        ),
+                                    );
+                                    self.last_output = Some(SharedString::from(format!(
+                                        "Copied: {}",
+                                        path_info.name
+                                    )));
                                 }
                             }
                         }
@@ -2437,17 +2763,15 @@ impl ScriptListApp {
                         // For files, reveal the containing folder with the file selected
                         path_info.path.clone()
                     };
-                    
-                    match Command::new("open")
-                        .args(["-R", &path_to_reveal])
-                        .spawn()
-                    {
+
+                    match Command::new("open").args(["-R", &path_to_reveal]).spawn() {
                         Ok(_) => {
                             logging::log("UI", &format!("Revealed in Finder: {}", path_info.path));
                         }
                         Err(e) => {
                             logging::log("ERROR", &format!("Failed to reveal in Finder: {}", e));
-                            self.last_output = Some(SharedString::from("Failed to reveal in Finder"));
+                            self.last_output =
+                                Some(SharedString::from("Failed to reveal in Finder"));
                         }
                     }
                 }
@@ -2456,16 +2780,18 @@ impl ScriptListApp {
                 // Open in configured editor
                 let editor = self.config.get_editor();
                 let path_str = path_info.path.clone();
-                logging::log("UI", &format!("Opening in editor '{}': {}", editor, path_str));
-                
+                logging::log(
+                    "UI",
+                    &format!("Opening in editor '{}': {}", editor, path_str),
+                );
+
                 std::thread::spawn(move || {
                     use std::process::Command;
-                    match Command::new(&editor)
-                        .arg(&path_str)
-                        .spawn()
-                    {
+                    match Command::new(&editor).arg(&path_str).spawn() {
                         Ok(_) => logging::log("UI", &format!("Opened in editor: {}", path_str)),
-                        Err(e) => logging::log("ERROR", &format!("Failed to open in editor: {}", e)),
+                        Err(e) => {
+                            logging::log("ERROR", &format!("Failed to open in editor: {}", e))
+                        }
                     }
                 });
             }
@@ -2483,7 +2809,7 @@ impl ScriptListApp {
                             .map(|p| p.to_string_lossy().to_string())
                             .unwrap_or_else(|| path_info.path.clone())
                     };
-                    
+
                     // Try iTerm first, fall back to Terminal.app
                     let script = format!(
                         r#"tell application "Terminal"
@@ -2492,11 +2818,8 @@ impl ScriptListApp {
                         end tell"#,
                         dir_path
                     );
-                    
-                    match Command::new("osascript")
-                        .args(["-e", &script])
-                        .spawn()
-                    {
+
+                    match Command::new("osascript").args(["-e", &script]).spawn() {
                         Ok(_) => {
                             logging::log("UI", &format!("Opened terminal at: {}", dir_path));
                         }
@@ -2514,7 +2837,7 @@ impl ScriptListApp {
                     use std::process::Command;
                     let path_str = path_info.path.clone();
                     let name = path_info.name.clone();
-                    
+
                     // Use AppleScript to move to trash (preserves undo capability)
                     let script = format!(
                         r#"tell application "Finder"
@@ -2522,17 +2845,17 @@ impl ScriptListApp {
                         end tell"#,
                         path_str
                     );
-                    
-                    match Command::new("osascript")
-                        .args(["-e", &script])
-                        .spawn()
-                    {
+
+                    match Command::new("osascript").args(["-e", &script]).spawn() {
                         Ok(mut child) => {
                             // Wait for completion and check result
                             match child.wait() {
                                 Ok(status) if status.success() => {
                                     logging::log("UI", &format!("Moved to trash: {}", path_str));
-                                    self.last_output = Some(SharedString::from(format!("Moved to Trash: {}", name)));
+                                    self.last_output = Some(SharedString::from(format!(
+                                        "Moved to Trash: {}",
+                                        name
+                                    )));
                                     // Refresh the path prompt to show the file is gone
                                     path_prompt_entity.update(cx, |prompt, cx| {
                                         let current = prompt.current_path.clone();
@@ -2540,8 +2863,12 @@ impl ScriptListApp {
                                     });
                                 }
                                 _ => {
-                                    logging::log("ERROR", &format!("Failed to move to trash: {}", path_str));
-                                    self.last_output = Some(SharedString::from("Failed to move to Trash"));
+                                    logging::log(
+                                        "ERROR",
+                                        &format!("Failed to move to trash: {}", path_str),
+                                    );
+                                    self.last_output =
+                                        Some(SharedString::from("Failed to move to Trash"));
                                 }
                             }
                         }
@@ -2556,39 +2883,42 @@ impl ScriptListApp {
                 logging::log("UI", &format!("Unknown path action: {}", action_id));
             }
         }
-        
+
         cx.notify();
     }
-    
+
     /// Execute a script interactively (for scripts that use arg/div prompts)
     fn execute_interactive(&mut self, script: &scripts::Script, cx: &mut Context<Self>) {
-        logging::log("EXEC", &format!("Starting interactive execution: {}", script.name));
-        
+        logging::log(
+            "EXEC",
+            &format!("Starting interactive execution: {}", script.name),
+        );
+
         // Store script path for error reporting in reader thread
         let script_path_for_errors = script.path.to_string_lossy().to_string();
-        
+
         match executor::execute_script_interactive(&script.path) {
             Ok(session) => {
                 logging::log("EXEC", "Interactive session started successfully");
-                
+
                 // Store PID for explicit cleanup (belt-and-suspenders approach)
                 let pid = session.pid();
                 self.current_script_pid = Some(pid);
                 logging::log("EXEC", &format!("Stored script PID {} for cleanup", pid));
-                
+
                 *self.script_session.lock().unwrap() = Some(session);
-                
+
                 // Create async_channel for script thread to send prompt messages to UI (event-driven)
                 // P1-6: Use bounded channel to prevent unbounded memory growth from slow UI
                 // Capacity of 100 is generous (scripts rarely send > 10 messages/sec)
                 let (tx, rx) = async_channel::bounded(100);
                 let rx_for_listener = rx.clone();
                 self.prompt_receiver = Some(rx);
-                
+
                 // Spawn event-driven listener for prompt messages (replaces 50ms polling)
                 cx.spawn(async move |this, cx| {
                     logging::log("EXEC", "Prompt message listener started (event-driven)");
-                    
+
                     // Event-driven: recv().await yields until a message arrives
                     while let Ok(msg) = rx_for_listener.recv().await {
                         logging::log("EXEC", &format!("Prompt message received: {:?}", msg));
@@ -2598,17 +2928,18 @@ impl ScriptListApp {
                             })
                         });
                     }
-                    
+
                     logging::log("EXEC", "Prompt message listener exiting (channel closed)");
-                }).detach();
-                
+                })
+                .detach();
+
                 // We need separate threads for reading and writing to avoid deadlock
                 // The read thread blocks on receive_message(), so we can't check for responses in the same loop
-                
+
                 // Take ownership of the session and split it
                 let session = self.script_session.lock().unwrap().take().unwrap();
                 let split = session.split();
-                
+
                 let mut stdin = split.stdin;
                 let mut stdout_reader = split.stdout_reader;
                 // Capture stderr for error reporting - we'll read it in real-time for debugging
@@ -2617,7 +2948,7 @@ impl ScriptListApp {
                 // We move them into the reader thread so they live until the script exits.
                 let _process_handle = split.process_handle;
                 let mut _child = split.child;
-                
+
                 // Stderr reader thread - forwards script stderr to logs in real-time
                 if let Some(stderr) = stderr_handle {
                     std::thread::spawn(move || {
@@ -2635,26 +2966,26 @@ impl ScriptListApp {
                         logging::log("SCRIPT", "stderr reader exiting");
                     });
                 }
-                
+
                 // Now stderr_handle is consumed, we pass None to reader thread
                 let stderr_handle: Option<std::process::ChildStderr> = None;
-                
+
                 // Channel for sending responses from UI to writer thread
                 let (response_tx, response_rx) = mpsc::channel::<Message>();
-                
+
                 // Clone response_tx for the reader thread to handle direct responses
                 // (e.g., getSelectedText, setSelectedText, checkAccessibility)
                 let reader_response_tx = response_tx.clone();
-                
+
                 // Writer thread - handles sending responses to script
                 std::thread::spawn(move || {
                     use std::io::Write;
                     use std::os::unix::io::AsRawFd;
-                    
+
                     // Log the stdin file descriptor for debugging
                     let fd = stdin.as_raw_fd();
                     logging::log("EXEC", &format!("Writer thread started, stdin fd={}", fd));
-                    
+
                     // Check if fd is a valid pipe
                     #[cfg(unix)]
                     {
@@ -2665,39 +2996,75 @@ impl ScriptListApp {
                         if stat_result == 0 {
                             logging::log("EXEC", &format!("fd={} fstat succeeded", fd));
                         } else {
-                            logging::log("EXEC", &format!("fd={} fstat FAILED: errno={}", fd, std::io::Error::last_os_error()));
+                            logging::log(
+                                "EXEC",
+                                &format!(
+                                    "fd={} fstat FAILED: errno={}",
+                                    fd,
+                                    std::io::Error::last_os_error()
+                                ),
+                            );
                         }
                     }
-                    
+
                     loop {
                         match response_rx.recv() {
                             Ok(response) => {
                                 let json = match protocol::serialize_message(&response) {
                                     Ok(j) => j,
                                     Err(e) => {
-                                        logging::log("EXEC", &format!("Failed to serialize: {}", e));
+                                        logging::log(
+                                            "EXEC",
+                                            &format!("Failed to serialize: {}", e),
+                                        );
                                         continue;
                                     }
                                 };
-                                logging::log("EXEC", &format!("Writing to stdin fd={}: {}", fd, json));
+                                logging::log(
+                                    "EXEC",
+                                    &format!("Writing to stdin fd={}: {}", fd, json),
+                                );
                                 let bytes = format!("{}\n", json);
                                 let bytes_len = bytes.len();
-                                
+
                                 // Check fd validity before write
                                 let fcntl_result = unsafe { libc::fcntl(fd, libc::F_GETFD) };
-                                logging::log("EXEC", &format!("Pre-write fcntl(F_GETFD) on fd={}: {}", fd, fcntl_result));
-                                
+                                logging::log(
+                                    "EXEC",
+                                    &format!(
+                                        "Pre-write fcntl(F_GETFD) on fd={}: {}",
+                                        fd, fcntl_result
+                                    ),
+                                );
+
                                 match stdin.write_all(bytes.as_bytes()) {
                                     Ok(()) => {
-                                        logging::log("EXEC", &format!("Write succeeded: {} bytes to fd={}", bytes_len, fd));
+                                        logging::log(
+                                            "EXEC",
+                                            &format!(
+                                                "Write succeeded: {} bytes to fd={}",
+                                                bytes_len, fd
+                                            ),
+                                        );
                                     }
                                     Err(e) => {
-                                        logging::log("EXEC", &format!("Failed to write {} bytes: {} (kind={:?})", bytes_len, e, e.kind()));
+                                        logging::log(
+                                            "EXEC",
+                                            &format!(
+                                                "Failed to write {} bytes: {} (kind={:?})",
+                                                bytes_len,
+                                                e,
+                                                e.kind()
+                                            ),
+                                        );
                                         break;
                                     }
                                 }
                                 if let Err(e) = stdin.flush() {
-                                    logging::log("EXEC", &format!("Failed to flush fd={}: {}", fd, e));
+                                    logging::log(
+                                        "EXEC",
+                                        &format!("Failed to flush fd={}: {}", fd, e),
+                                    );
                                     break;
                                 }
                                 logging::log("EXEC", &format!("Flush succeeded for fd={}", fd));
@@ -2710,7 +3077,7 @@ impl ScriptListApp {
                     }
                     logging::log("EXEC", "Writer thread exiting");
                 });
-                
+
                 // Reader thread - handles receiving messages from script (blocking is OK here)
                 // CRITICAL: Move _process_handle and _child into this thread to keep them alive!
                 // When the reader thread exits, they'll be dropped and the process killed.
@@ -2721,19 +3088,25 @@ impl ScriptListApp {
                     let mut keep_alive_child = _child;
                     let mut stderr_for_errors = stderr_handle;
                     let script_path = script_path_clone;
-                    
+
                     loop {
                         // Use next_message_graceful to skip non-JSON lines (e.g., console.log output)
                         match stdout_reader.next_message_graceful() {
                             Ok(Some(msg)) => {
                                 logging::log("EXEC", &format!("Received message: {:?}", msg));
-                                
+
                                 // First, try to handle selected text messages directly (no UI needed)
                                 match executor::handle_selected_text_message(&msg) {
                                     executor::SelectedTextHandleResult::Handled(response) => {
                                         logging::log("EXEC", &format!("Handled selected text message, sending response: {:?}", response));
                                         if let Err(e) = reader_response_tx.send(response) {
-                                            logging::log("EXEC", &format!("Failed to send selected text response: {}", e));
+                                            logging::log(
+                                                "EXEC",
+                                                &format!(
+                                                    "Failed to send selected text response: {}",
+                                                    e
+                                                ),
+                                            );
                                         }
                                         continue;
                                     }
@@ -2741,14 +3114,23 @@ impl ScriptListApp {
                                         // Fall through to other message handling
                                     }
                                 }
-                                
+
                                 // Handle ClipboardHistory directly (no UI needed)
-                                if let Message::ClipboardHistory { request_id, action, entry_id } = &msg {
-                                    logging::log("EXEC", &format!("ClipboardHistory request: {:?}", action));
-                                    
+                                if let Message::ClipboardHistory {
+                                    request_id,
+                                    action,
+                                    entry_id,
+                                } = &msg
+                                {
+                                    logging::log(
+                                        "EXEC",
+                                        &format!("ClipboardHistory request: {:?}", action),
+                                    );
+
                                     let response = match action {
                                         protocol::ClipboardHistoryAction::List => {
-                                            let entries = clipboard_history::get_clipboard_history(100);
+                                            let entries =
+                                                clipboard_history::get_clipboard_history(100);
                                             let entry_data: Vec<protocol::ClipboardHistoryEntryData> = entries
                                                 .into_iter()
                                                 .map(|e| {
@@ -2782,56 +3164,106 @@ impl ScriptListApp {
                                                     }
                                                 })
                                                 .collect();
-                                            Message::clipboard_history_list_response(request_id.clone(), entry_data)
+                                            Message::clipboard_history_list_response(
+                                                request_id.clone(),
+                                                entry_data,
+                                            )
                                         }
                                         protocol::ClipboardHistoryAction::Pin => {
                                             if let Some(id) = entry_id {
                                                 match clipboard_history::pin_entry(id) {
-                                                    Ok(()) => Message::clipboard_history_success(request_id.clone()),
-                                                    Err(e) => Message::clipboard_history_error(request_id.clone(), e.to_string()),
+                                                    Ok(()) => Message::clipboard_history_success(
+                                                        request_id.clone(),
+                                                    ),
+                                                    Err(e) => Message::clipboard_history_error(
+                                                        request_id.clone(),
+                                                        e.to_string(),
+                                                    ),
                                                 }
                                             } else {
-                                                Message::clipboard_history_error(request_id.clone(), "Missing entry_id".to_string())
+                                                Message::clipboard_history_error(
+                                                    request_id.clone(),
+                                                    "Missing entry_id".to_string(),
+                                                )
                                             }
                                         }
                                         protocol::ClipboardHistoryAction::Unpin => {
                                             if let Some(id) = entry_id {
                                                 match clipboard_history::unpin_entry(id) {
-                                                    Ok(()) => Message::clipboard_history_success(request_id.clone()),
-                                                    Err(e) => Message::clipboard_history_error(request_id.clone(), e.to_string()),
+                                                    Ok(()) => Message::clipboard_history_success(
+                                                        request_id.clone(),
+                                                    ),
+                                                    Err(e) => Message::clipboard_history_error(
+                                                        request_id.clone(),
+                                                        e.to_string(),
+                                                    ),
                                                 }
                                             } else {
-                                                Message::clipboard_history_error(request_id.clone(), "Missing entry_id".to_string())
+                                                Message::clipboard_history_error(
+                                                    request_id.clone(),
+                                                    "Missing entry_id".to_string(),
+                                                )
                                             }
                                         }
                                         protocol::ClipboardHistoryAction::Remove => {
                                             if let Some(id) = entry_id {
                                                 match clipboard_history::remove_entry(id) {
-                                                    Ok(()) => Message::clipboard_history_success(request_id.clone()),
-                                                    Err(e) => Message::clipboard_history_error(request_id.clone(), e.to_string()),
+                                                    Ok(()) => Message::clipboard_history_success(
+                                                        request_id.clone(),
+                                                    ),
+                                                    Err(e) => Message::clipboard_history_error(
+                                                        request_id.clone(),
+                                                        e.to_string(),
+                                                    ),
                                                 }
                                             } else {
-                                                Message::clipboard_history_error(request_id.clone(), "Missing entry_id".to_string())
+                                                Message::clipboard_history_error(
+                                                    request_id.clone(),
+                                                    "Missing entry_id".to_string(),
+                                                )
                                             }
                                         }
                                         protocol::ClipboardHistoryAction::Clear => {
                                             match clipboard_history::clear_history() {
-                                                Ok(()) => Message::clipboard_history_success(request_id.clone()),
-                                                Err(e) => Message::clipboard_history_error(request_id.clone(), e.to_string()),
+                                                Ok(()) => Message::clipboard_history_success(
+                                                    request_id.clone(),
+                                                ),
+                                                Err(e) => Message::clipboard_history_error(
+                                                    request_id.clone(),
+                                                    e.to_string(),
+                                                ),
                                             }
                                         }
                                     };
-                                    
+
                                     if let Err(e) = reader_response_tx.send(response) {
-                                        logging::log("EXEC", &format!("Failed to send clipboard history response: {}", e));
+                                        logging::log(
+                                            "EXEC",
+                                            &format!(
+                                                "Failed to send clipboard history response: {}",
+                                                e
+                                            ),
+                                        );
                                     }
                                     continue;
                                 }
-                                
+
                                 // Handle Clipboard read/write directly (no UI needed)
-                                if let Message::Clipboard { id, action, format, content } = &msg {
-                                    logging::log("EXEC", &format!("Clipboard request: {:?} format: {:?}", action, format));
-                                    
+                                if let Message::Clipboard {
+                                    id,
+                                    action,
+                                    format,
+                                    content,
+                                } = &msg
+                                {
+                                    logging::log(
+                                        "EXEC",
+                                        &format!(
+                                            "Clipboard request: {:?} format: {:?}",
+                                            action, format
+                                        ),
+                                    );
+
                                     // If no request ID, we can't send a response, so just handle and continue
                                     let req_id = match id {
                                         Some(rid) => rid.clone(),
@@ -2848,7 +3280,7 @@ impl ScriptListApp {
                                             continue;
                                         }
                                     };
-                                    
+
                                     let response = match action {
                                         protocol::ClipboardAction::Read => {
                                             // Read from clipboard
@@ -2858,18 +3290,31 @@ impl ScriptListApp {
                                                     match Clipboard::new() {
                                                         Ok(mut clipboard) => {
                                                             match clipboard.get_text() {
-                                                                Ok(text) => {
-                                                                    Message::Submit { id: req_id, value: Some(text) }
-                                                                }
+                                                                Ok(text) => Message::Submit {
+                                                                    id: req_id,
+                                                                    value: Some(text),
+                                                                },
                                                                 Err(e) => {
                                                                     logging::log("EXEC", &format!("Clipboard read error: {}", e));
-                                                                    Message::Submit { id: req_id, value: Some(String::new()) }
+                                                                    Message::Submit {
+                                                                        id: req_id,
+                                                                        value: Some(String::new()),
+                                                                    }
                                                                 }
                                                             }
                                                         }
                                                         Err(e) => {
-                                                            logging::log("EXEC", &format!("Clipboard init error: {}", e));
-                                                            Message::Submit { id: req_id, value: Some(String::new()) }
+                                                            logging::log(
+                                                                "EXEC",
+                                                                &format!(
+                                                                    "Clipboard init error: {}",
+                                                                    e
+                                                                ),
+                                                            );
+                                                            Message::Submit {
+                                                                id: req_id,
+                                                                value: Some(String::new()),
+                                                            }
                                                         }
                                                     }
                                                 }
@@ -2883,17 +3328,32 @@ impl ScriptListApp {
                                                                     use base64::Engine;
                                                                     let bytes = img.bytes.to_vec();
                                                                     let base64_str = base64::engine::general_purpose::STANDARD.encode(&bytes);
-                                                                    Message::Submit { id: req_id, value: Some(base64_str) }
+                                                                    Message::Submit {
+                                                                        id: req_id,
+                                                                        value: Some(base64_str),
+                                                                    }
                                                                 }
                                                                 Err(e) => {
                                                                     logging::log("EXEC", &format!("Clipboard read image error: {}", e));
-                                                                    Message::Submit { id: req_id, value: Some(String::new()) }
+                                                                    Message::Submit {
+                                                                        id: req_id,
+                                                                        value: Some(String::new()),
+                                                                    }
                                                                 }
                                                             }
                                                         }
                                                         Err(e) => {
-                                                            logging::log("EXEC", &format!("Clipboard init error: {}", e));
-                                                            Message::Submit { id: req_id, value: Some(String::new()) }
+                                                            logging::log(
+                                                                "EXEC",
+                                                                &format!(
+                                                                    "Clipboard init error: {}",
+                                                                    e
+                                                                ),
+                                                            );
+                                                            Message::Submit {
+                                                                id: req_id,
+                                                                value: Some(String::new()),
+                                                            }
                                                         }
                                                     }
                                                 }
@@ -2908,73 +3368,127 @@ impl ScriptListApp {
                                                         match clipboard.set_text(text.clone()) {
                                                             Ok(()) => {
                                                                 logging::log("EXEC", &format!("Clipboard write success: {} bytes", text.len()));
-                                                                Message::Submit { id: req_id, value: Some("ok".to_string()) }
+                                                                Message::Submit {
+                                                                    id: req_id,
+                                                                    value: Some("ok".to_string()),
+                                                                }
                                                             }
                                                             Err(e) => {
-                                                                logging::log("EXEC", &format!("Clipboard write error: {}", e));
-                                                                Message::Submit { id: req_id, value: Some(String::new()) }
+                                                                logging::log(
+                                                                    "EXEC",
+                                                                    &format!(
+                                                                        "Clipboard write error: {}",
+                                                                        e
+                                                                    ),
+                                                                );
+                                                                Message::Submit {
+                                                                    id: req_id,
+                                                                    value: Some(String::new()),
+                                                                }
                                                             }
                                                         }
                                                     } else {
-                                                        logging::log("EXEC", "Clipboard write: no content provided");
-                                                        Message::Submit { id: req_id, value: Some(String::new()) }
+                                                        logging::log(
+                                                            "EXEC",
+                                                            "Clipboard write: no content provided",
+                                                        );
+                                                        Message::Submit {
+                                                            id: req_id,
+                                                            value: Some(String::new()),
+                                                        }
                                                     }
                                                 }
                                                 Err(e) => {
-                                                    logging::log("EXEC", &format!("Clipboard init error: {}", e));
-                                                    Message::Submit { id: req_id, value: Some(String::new()) }
+                                                    logging::log(
+                                                        "EXEC",
+                                                        &format!("Clipboard init error: {}", e),
+                                                    );
+                                                    Message::Submit {
+                                                        id: req_id,
+                                                        value: Some(String::new()),
+                                                    }
                                                 }
                                             }
                                         }
                                     };
-                                    
+
                                     if let Err(e) = reader_response_tx.send(response) {
-                                        logging::log("EXEC", &format!("Failed to send clipboard response: {}", e));
+                                        logging::log(
+                                            "EXEC",
+                                            &format!("Failed to send clipboard response: {}", e),
+                                        );
                                     }
                                     continue;
                                 }
-                                
+
                                 // Handle WindowList directly (no UI needed)
                                 if let Message::WindowList { request_id } = &msg {
-                                    logging::log("EXEC", &format!("WindowList request: {}", request_id));
-                                    
+                                    logging::log(
+                                        "EXEC",
+                                        &format!("WindowList request: {}", request_id),
+                                    );
+
                                     let response = match window_control::list_windows() {
                                         Ok(windows) => {
-                                            let window_infos: Vec<protocol::SystemWindowInfo> = windows
-                                                .into_iter()
-                                                .map(|w| protocol::SystemWindowInfo {
-                                                    window_id: w.id,
-                                                    title: w.title,
-                                                    app_name: w.app,
-                                                    bounds: Some(protocol::TargetWindowBounds {
-                                                        x: w.bounds.x,
-                                                        y: w.bounds.y,
-                                                        width: w.bounds.width,
-                                                        height: w.bounds.height,
-                                                    }),
-                                                    is_minimized: None,
-                                                    is_active: None,
-                                                })
-                                                .collect();
-                                            Message::window_list_result(request_id.clone(), window_infos)
+                                            let window_infos: Vec<protocol::SystemWindowInfo> =
+                                                windows
+                                                    .into_iter()
+                                                    .map(|w| protocol::SystemWindowInfo {
+                                                        window_id: w.id,
+                                                        title: w.title,
+                                                        app_name: w.app,
+                                                        bounds: Some(
+                                                            protocol::TargetWindowBounds {
+                                                                x: w.bounds.x,
+                                                                y: w.bounds.y,
+                                                                width: w.bounds.width,
+                                                                height: w.bounds.height,
+                                                            },
+                                                        ),
+                                                        is_minimized: None,
+                                                        is_active: None,
+                                                    })
+                                                    .collect();
+                                            Message::window_list_result(
+                                                request_id.clone(),
+                                                window_infos,
+                                            )
                                         }
                                         Err(e) => {
-                                            logging::log("EXEC", &format!("WindowList error: {}", e));
+                                            logging::log(
+                                                "EXEC",
+                                                &format!("WindowList error: {}", e),
+                                            );
                                             // Return empty list on error
                                             Message::window_list_result(request_id.clone(), vec![])
                                         }
                                     };
-                                    
+
                                     if let Err(e) = reader_response_tx.send(response) {
-                                        logging::log("EXEC", &format!("Failed to send window list response: {}", e));
+                                        logging::log(
+                                            "EXEC",
+                                            &format!("Failed to send window list response: {}", e),
+                                        );
                                     }
                                     continue;
                                 }
-                                
+
                                 // Handle WindowAction directly (no UI needed)
-                                if let Message::WindowAction { request_id, action, window_id, bounds } = &msg {
-                                    logging::log("EXEC", &format!("WindowAction request: {:?} for window {:?}", action, window_id));
-                                    
+                                if let Message::WindowAction {
+                                    request_id,
+                                    action,
+                                    window_id,
+                                    bounds,
+                                } = &msg
+                                {
+                                    logging::log(
+                                        "EXEC",
+                                        &format!(
+                                            "WindowAction request: {:?} for window {:?}",
+                                            action, window_id
+                                        ),
+                                    );
+
                                     let result = match action {
                                         protocol::WindowActionType::Focus => {
                                             if let Some(id) = window_id {
@@ -3006,7 +3520,9 @@ impl ScriptListApp {
                                         }
                                         protocol::WindowActionType::Resize => {
                                             if let (Some(id), Some(b)) = (window_id, bounds) {
-                                                window_control::resize_window(*id, b.width, b.height)
+                                                window_control::resize_window(
+                                                    *id, b.width, b.height,
+                                                )
                                             } else {
                                                 Err(anyhow::anyhow!("Missing window_id or bounds"))
                                             }
@@ -3019,69 +3535,115 @@ impl ScriptListApp {
                                             }
                                         }
                                     };
-                                    
+
                                     let response = match result {
-                                        Ok(()) => Message::window_action_success(request_id.clone()),
-                                        Err(e) => Message::window_action_error(request_id.clone(), e.to_string()),
+                                        Ok(()) => {
+                                            Message::window_action_success(request_id.clone())
+                                        }
+                                        Err(e) => Message::window_action_error(
+                                            request_id.clone(),
+                                            e.to_string(),
+                                        ),
                                     };
-                                    
+
                                     if let Err(e) = reader_response_tx.send(response) {
-                                        logging::log("EXEC", &format!("Failed to send window action response: {}", e));
+                                        logging::log(
+                                            "EXEC",
+                                            &format!(
+                                                "Failed to send window action response: {}",
+                                                e
+                                            ),
+                                        );
                                     }
                                     continue;
                                 }
-                                
+
                                 // Handle FileSearch directly (no UI needed)
-                                if let Message::FileSearch { request_id, query, only_in } = &msg {
-                                    logging::log("EXEC", &format!("FileSearch request: query='{}', only_in={:?}", query, only_in));
-                                    
-                                    let results = file_search::search_files(query, only_in.as_deref(), file_search::DEFAULT_LIMIT);
-                                    let file_entries: Vec<protocol::FileSearchResultEntry> = results
-                                        .into_iter()
-                                        .map(|f| protocol::FileSearchResultEntry {
-                                            path: f.path,
-                                            name: f.name,
-                                            is_directory: f.file_type == file_search::FileType::Directory,
-                                            size: Some(f.size),
-                                            modified_at: chrono::DateTime::from_timestamp(f.modified as i64, 0)
+                                if let Message::FileSearch {
+                                    request_id,
+                                    query,
+                                    only_in,
+                                } = &msg
+                                {
+                                    logging::log(
+                                        "EXEC",
+                                        &format!(
+                                            "FileSearch request: query='{}', only_in={:?}",
+                                            query, only_in
+                                        ),
+                                    );
+
+                                    let results = file_search::search_files(
+                                        query,
+                                        only_in.as_deref(),
+                                        file_search::DEFAULT_LIMIT,
+                                    );
+                                    let file_entries: Vec<protocol::FileSearchResultEntry> =
+                                        results
+                                            .into_iter()
+                                            .map(|f| protocol::FileSearchResultEntry {
+                                                path: f.path,
+                                                name: f.name,
+                                                is_directory: f.file_type
+                                                    == file_search::FileType::Directory,
+                                                size: Some(f.size),
+                                                modified_at: chrono::DateTime::from_timestamp(
+                                                    f.modified as i64,
+                                                    0,
+                                                )
                                                 .map(|dt| dt.to_rfc3339()),
-                                        })
-                                        .collect();
-                                    
-                                    let response = Message::file_search_result(request_id.clone(), file_entries);
-                                    
+                                            })
+                                            .collect();
+
+                                    let response = Message::file_search_result(
+                                        request_id.clone(),
+                                        file_entries,
+                                    );
+
                                     if let Err(e) = reader_response_tx.send(response) {
-                                        logging::log("EXEC", &format!("Failed to send file search response: {}", e));
+                                        logging::log(
+                                            "EXEC",
+                                            &format!("Failed to send file search response: {}", e),
+                                        );
                                     }
                                     continue;
                                 }
-                                
+
                                 // Handle GetWindowBounds directly (no UI needed)
                                 if let Message::GetWindowBounds { request_id } = &msg {
-                                    logging::log("EXEC", &format!("GetWindowBounds request: {}", request_id));
-                                    
+                                    logging::log(
+                                        "EXEC",
+                                        &format!("GetWindowBounds request: {}", request_id),
+                                    );
+
                                     #[cfg(target_os = "macos")]
                                     let bounds_json = {
                                         if let Some(window) = window_manager::get_main_window() {
                                             unsafe {
                                                 // Get the window frame
                                                 let frame: NSRect = msg_send![window, frame];
-                                                
+
                                                 // Get the PRIMARY screen's height for coordinate conversion
                                                 // macOS uses bottom-left origin, we convert to top-left
-                                                let screens: id = msg_send![class!(NSScreen), screens];
-                                                let main_screen: id = msg_send![screens, firstObject];
-                                                let main_screen_frame: NSRect = msg_send![main_screen, frame];
-                                                let primary_screen_height = main_screen_frame.size.height;
-                                                
+                                                let screens: id =
+                                                    msg_send![class!(NSScreen), screens];
+                                                let main_screen: id =
+                                                    msg_send![screens, firstObject];
+                                                let main_screen_frame: NSRect =
+                                                    msg_send![main_screen, frame];
+                                                let primary_screen_height =
+                                                    main_screen_frame.size.height;
+
                                                 // Convert from bottom-left origin (macOS) to top-left origin
-                                                let flipped_y = primary_screen_height - frame.origin.y - frame.size.height;
-                                                
+                                                let flipped_y = primary_screen_height
+                                                    - frame.origin.y
+                                                    - frame.size.height;
+
                                                 logging::log("EXEC", &format!(
                                                     "Window bounds: x={:.0}, y={:.0}, width={:.0}, height={:.0}",
                                                     frame.origin.x, flipped_y, frame.size.width, frame.size.height
                                                 ));
-                                                
+
                                                 // Create JSON string with bounds
                                                 format!(
                                                     r#"{{"x":{},"y":{},"width":{},"height":{}}}"#,
@@ -3092,44 +3654,67 @@ impl ScriptListApp {
                                                 )
                                             }
                                         } else {
-                                            logging::log("EXEC", "GetWindowBounds: Main window not registered");
+                                            logging::log(
+                                                "EXEC",
+                                                "GetWindowBounds: Main window not registered",
+                                            );
                                             r#"{"error":"Main window not found"}"#.to_string()
                                         }
                                     };
-                                    
+
                                     #[cfg(not(target_os = "macos"))]
-                                    let bounds_json = r#"{"error":"Not supported on this platform"}"#.to_string();
-                                    
-                                    let response = Message::Submit { 
-                                        id: request_id.clone(), 
-                                        value: Some(bounds_json) 
+                                    let bounds_json =
+                                        r#"{"error":"Not supported on this platform"}"#.to_string();
+
+                                    let response = Message::Submit {
+                                        id: request_id.clone(),
+                                        value: Some(bounds_json),
                                     };
-                                    logging::log("EXEC", &format!("Sending window bounds response: {:?}", response));
+                                    logging::log(
+                                        "EXEC",
+                                        &format!("Sending window bounds response: {:?}", response),
+                                    );
                                     if let Err(e) = reader_response_tx.send(response) {
-                                        logging::log("EXEC", &format!("Failed to send window bounds response: {}", e));
+                                        logging::log(
+                                            "EXEC",
+                                            &format!(
+                                                "Failed to send window bounds response: {}",
+                                                e
+                                            ),
+                                        );
                                     }
                                     continue;
                                 }
-                                
+
                                 // Handle GetState - needs UI state, forward to UI thread
                                 if let Message::GetState { request_id } = &msg {
-                                    logging::log("EXEC", &format!("GetState request: {}", request_id));
-                                    let prompt_msg = PromptMessage::GetState { request_id: request_id.clone() };
+                                    logging::log(
+                                        "EXEC",
+                                        &format!("GetState request: {}", request_id),
+                                    );
+                                    let prompt_msg = PromptMessage::GetState {
+                                        request_id: request_id.clone(),
+                                    };
                                     if tx.send_blocking(prompt_msg).is_err() {
-                                        logging::log("EXEC", "Prompt channel closed, reader exiting");
+                                        logging::log(
+                                            "EXEC",
+                                            "Prompt channel closed, reader exiting",
+                                        );
                                         break;
                                     }
                                     continue;
                                 }
-                                
+
                                 // Handle CaptureScreenshot directly (no UI needed)
                                 if let Message::CaptureScreenshot { request_id } = &msg {
                                     tracing::info!(request_id = %request_id, "Capturing screenshot");
-                                    
+
                                     let response = match capture_app_screenshot() {
                                         Ok((png_data, width, height)) => {
                                             use base64::Engine;
-                                            let base64_data = base64::engine::general_purpose::STANDARD.encode(&png_data);
+                                            let base64_data =
+                                                base64::engine::general_purpose::STANDARD
+                                                    .encode(&png_data);
                                             tracing::info!(
                                                 request_id = %request_id,
                                                 width = width,
@@ -3159,54 +3744,84 @@ impl ScriptListApp {
                                             )
                                         }
                                     };
-                                    
+
                                     if let Err(e) = reader_response_tx.send(response) {
                                         tracing::error!(error = %e, "Failed to send screenshot response");
                                     }
                                     continue;
                                 }
-                                
+
                                 let prompt_msg = match msg {
-                                    Message::Arg { id, placeholder, choices } => {
-                                        Some(PromptMessage::ShowArg { id, placeholder, choices })
-                                    }
+                                    Message::Arg {
+                                        id,
+                                        placeholder,
+                                        choices,
+                                    } => Some(PromptMessage::ShowArg {
+                                        id,
+                                        placeholder,
+                                        choices,
+                                    }),
                                     Message::Div { id, html, tailwind } => {
                                         Some(PromptMessage::ShowDiv { id, html, tailwind })
                                     }
                                     Message::Form { id, html } => {
                                         Some(PromptMessage::ShowForm { id, html })
                                     }
-                                                Message::Term { id, command } => {
-                                                    Some(PromptMessage::ShowTerm { id, command })
-                                                }
-                                                Message::Editor { id, content, language, .. } => {
-                                                    Some(PromptMessage::ShowEditor { id, content, language })
-                                                }
-                                                // New prompt types (scaffolding)
-                                                Message::Path { id, start_path, hint } => {
-                                                    Some(PromptMessage::ShowPath { id, start_path, hint })
-                                                }
-                                                Message::Env { id, key, secret } => {
-                                                    Some(PromptMessage::ShowEnv { id, key, prompt: None, secret: secret.unwrap_or(false) })
-                                                }
-                                                Message::Drop { id } => {
-                                                    Some(PromptMessage::ShowDrop { id, placeholder: None, hint: None })
-                                                }
-                                                Message::Template { id, template } => {
-                                                    Some(PromptMessage::ShowTemplate { id, template })
-                                                }
-                                                Message::Select { id, placeholder, choices, multiple } => {
-                                                    Some(PromptMessage::ShowSelect { id, placeholder: Some(placeholder), choices, multiple: multiple.unwrap_or(false) })
-                                                }
-                                                Message::Exit { .. } => {
-                                                    Some(PromptMessage::ScriptExit)
-                                                }
-                                                Message::ForceSubmit { value } => {
-                                                    Some(PromptMessage::ForceSubmit { value })
-                                                }
-                                    Message::Hide {} => {
-                                        Some(PromptMessage::HideWindow)
+                                    Message::Term { id, command } => {
+                                        Some(PromptMessage::ShowTerm { id, command })
                                     }
+                                    Message::Editor {
+                                        id,
+                                        content,
+                                        language,
+                                        ..
+                                    } => Some(PromptMessage::ShowEditor {
+                                        id,
+                                        content,
+                                        language,
+                                    }),
+                                    // New prompt types (scaffolding)
+                                    Message::Path {
+                                        id,
+                                        start_path,
+                                        hint,
+                                    } => Some(PromptMessage::ShowPath {
+                                        id,
+                                        start_path,
+                                        hint,
+                                    }),
+                                    Message::Env { id, key, secret } => {
+                                        Some(PromptMessage::ShowEnv {
+                                            id,
+                                            key,
+                                            prompt: None,
+                                            secret: secret.unwrap_or(false),
+                                        })
+                                    }
+                                    Message::Drop { id } => Some(PromptMessage::ShowDrop {
+                                        id,
+                                        placeholder: None,
+                                        hint: None,
+                                    }),
+                                    Message::Template { id, template } => {
+                                        Some(PromptMessage::ShowTemplate { id, template })
+                                    }
+                                    Message::Select {
+                                        id,
+                                        placeholder,
+                                        choices,
+                                        multiple,
+                                    } => Some(PromptMessage::ShowSelect {
+                                        id,
+                                        placeholder: Some(placeholder),
+                                        choices,
+                                        multiple: multiple.unwrap_or(false),
+                                    }),
+                                    Message::Exit { .. } => Some(PromptMessage::ScriptExit),
+                                    Message::ForceSubmit { value } => {
+                                        Some(PromptMessage::ForceSubmit { value })
+                                    }
+                                    Message::Hide {} => Some(PromptMessage::HideWindow),
                                     Message::Browse { url } => {
                                         Some(PromptMessage::OpenBrowser { url })
                                     }
@@ -3214,25 +3829,35 @@ impl ScriptListApp {
                                         // Get the message type name for user feedback
                                         let msg_type = format!("{:?}", other);
                                         // Extract just the variant name (before any {})
-                                        let type_name = msg_type.split('{').next()
+                                        let type_name = msg_type
+                                            .split('{')
+                                            .next()
                                             .unwrap_or(&msg_type)
                                             .trim()
                                             .to_string();
-                                        logging::log("WARN", &format!("Unhandled message type: {}", type_name));
-                                        Some(PromptMessage::UnhandledMessage { message_type: type_name })
+                                        logging::log(
+                                            "WARN",
+                                            &format!("Unhandled message type: {}", type_name),
+                                        );
+                                        Some(PromptMessage::UnhandledMessage {
+                                            message_type: type_name,
+                                        })
                                     }
                                 };
-                                
+
                                 if let Some(prompt_msg) = prompt_msg {
                                     if tx.send_blocking(prompt_msg).is_err() {
-                                        logging::log("EXEC", "Prompt channel closed, reader exiting");
+                                        logging::log(
+                                            "EXEC",
+                                            "Prompt channel closed, reader exiting",
+                                        );
                                         break;
                                     }
                                 }
                             }
                             Ok(None) => {
                                 logging::log("EXEC", "Script stdout closed (EOF)");
-                                
+
                                 // Check if process exited with error
                                 let exit_code = match keep_alive_child.try_wait() {
                                     Ok(Some(status)) => status.code(),
@@ -3245,33 +3870,47 @@ impl ScriptListApp {
                                     }
                                     Err(_) => None,
                                 };
-                                
+
                                 logging::log("EXEC", &format!("Script exit code: {:?}", exit_code));
-                                
+
                                 // If non-zero exit code, capture stderr and send error
                                 if let Some(code) = exit_code {
                                     if code != 0 {
                                         // Read stderr if available
-                                        let stderr_output = if let Some(mut stderr) = stderr_for_errors.take() {
-                                            use std::io::Read;
-                                            let mut stderr_str = String::new();
-                                            if stderr.read_to_string(&mut stderr_str).is_ok() && !stderr_str.is_empty() {
-                                                Some(stderr_str)
+                                        let stderr_output =
+                                            if let Some(mut stderr) = stderr_for_errors.take() {
+                                                use std::io::Read;
+                                                let mut stderr_str = String::new();
+                                                if stderr.read_to_string(&mut stderr_str).is_ok()
+                                                    && !stderr_str.is_empty()
+                                                {
+                                                    Some(stderr_str)
+                                                } else {
+                                                    None
+                                                }
                                             } else {
                                                 None
-                                            }
-                                        } else {
-                                            None
-                                        };
-                                        
+                                            };
+
                                         if let Some(ref stderr_text) = stderr_output {
-                                            logging::log("EXEC", &format!("Captured stderr ({} bytes)", stderr_text.len()));
-                                            
+                                            logging::log(
+                                                "EXEC",
+                                                &format!(
+                                                    "Captured stderr ({} bytes)",
+                                                    stderr_text.len()
+                                                ),
+                                            );
+
                                             // Parse error info and generate suggestions
-                                            let error_message = executor::extract_error_message(stderr_text);
-                                            let stack_trace = executor::parse_stack_trace(stderr_text);
-                                            let suggestions = executor::generate_suggestions(stderr_text, Some(code));
-                                            
+                                            let error_message =
+                                                executor::extract_error_message(stderr_text);
+                                            let stack_trace =
+                                                executor::parse_stack_trace(stderr_text);
+                                            let suggestions = executor::generate_suggestions(
+                                                stderr_text,
+                                                Some(code),
+                                            );
+
                                             // Send script error message
                                             let _ = tx.send_blocking(PromptMessage::ScriptError {
                                                 error_message,
@@ -3284,41 +3923,51 @@ impl ScriptListApp {
                                         } else {
                                             // No stderr, send generic error
                                             let _ = tx.send_blocking(PromptMessage::ScriptError {
-                                                error_message: format!("Script exited with code {}", code),
+                                                error_message: format!(
+                                                    "Script exited with code {}",
+                                                    code
+                                                ),
                                                 stderr_output: None,
                                                 exit_code: Some(code),
                                                 stack_trace: None,
                                                 script_path: script_path.clone(),
-                                                suggestions: vec!["Check the script for errors".to_string()],
+                                                suggestions: vec![
+                                                    "Check the script for errors".to_string()
+                                                ],
                                             });
                                         }
                                     }
                                 }
-                                
+
                                 let _ = tx.send_blocking(PromptMessage::ScriptExit);
                                 break;
                             }
                             Err(e) => {
                                 logging::log("EXEC", &format!("Error reading from script: {}", e));
-                                
+
                                 // Try to read stderr for error details
-                                let stderr_output = if let Some(mut stderr) = stderr_for_errors.take() {
-                                    use std::io::Read;
-                                    let mut stderr_str = String::new();
-                                    if stderr.read_to_string(&mut stderr_str).is_ok() && !stderr_str.is_empty() {
-                                        Some(stderr_str)
+                                let stderr_output =
+                                    if let Some(mut stderr) = stderr_for_errors.take() {
+                                        use std::io::Read;
+                                        let mut stderr_str = String::new();
+                                        if stderr.read_to_string(&mut stderr_str).is_ok()
+                                            && !stderr_str.is_empty()
+                                        {
+                                            Some(stderr_str)
+                                        } else {
+                                            None
+                                        }
                                     } else {
                                         None
-                                    }
-                                } else {
-                                    None
-                                };
-                                
+                                    };
+
                                 if let Some(ref stderr_text) = stderr_output {
-                                    let error_message = executor::extract_error_message(stderr_text);
+                                    let error_message =
+                                        executor::extract_error_message(stderr_text);
                                     let stack_trace = executor::parse_stack_trace(stderr_text);
-                                    let suggestions = executor::generate_suggestions(stderr_text, None);
-                                    
+                                    let suggestions =
+                                        executor::generate_suggestions(stderr_text, None);
+
                                     let _ = tx.send_blocking(PromptMessage::ScriptError {
                                         error_message,
                                         stderr_output: Some(stderr_text.clone()),
@@ -3328,56 +3977,79 @@ impl ScriptListApp {
                                         suggestions,
                                     });
                                 }
-                                
+
                                 let _ = tx.send_blocking(PromptMessage::ScriptExit);
                                 break;
                             }
                         }
                     }
-                    logging::log("EXEC", "Reader thread exited, process handle will now be dropped");
+                    logging::log(
+                        "EXEC",
+                        "Reader thread exited, process handle will now be dropped",
+                    );
                 });
-                
+
                 // Store the response sender for the UI to use
                 self.response_sender = Some(response_tx);
             }
             Err(e) => {
-                logging::log("EXEC", &format!("Failed to start interactive session: {}", e));
+                logging::log(
+                    "EXEC",
+                    &format!("Failed to start interactive session: {}", e),
+                );
                 self.last_output = Some(SharedString::from(format!("✗ Error: {}", e)));
                 cx.notify();
             }
         }
     }
-    
+
     /// Execute a scriptlet (simple code snippet from .md file)
     fn execute_scriptlet(&mut self, scriptlet: &scripts::Scriptlet, cx: &mut Context<Self>) {
-        logging::log("EXEC", &format!("Executing scriptlet: {} (tool: {})", scriptlet.name, scriptlet.tool));
-        
+        logging::log(
+            "EXEC",
+            &format!(
+                "Executing scriptlet: {} (tool: {})",
+                scriptlet.name, scriptlet.tool
+            ),
+        );
+
         let tool = scriptlet.tool.to_lowercase();
-        
+
         // TypeScript/Kit scriptlets need to run interactively (they may use SDK prompts)
         // These should be spawned like regular scripts, not run synchronously
         if matches!(tool.as_str(), "kit" | "ts" | "bun" | "deno" | "js") {
-            logging::log("EXEC", &format!("TypeScript scriptlet '{}' - running interactively", scriptlet.name));
-            
+            logging::log(
+                "EXEC",
+                &format!(
+                    "TypeScript scriptlet '{}' - running interactively",
+                    scriptlet.name
+                ),
+            );
+
             // Write scriptlet content to a temp file
             let temp_dir = std::env::temp_dir();
-            let temp_file = temp_dir.join(format!("scriptlet-{}-{}.ts", 
+            let temp_file = temp_dir.join(format!(
+                "scriptlet-{}-{}.ts",
                 scriptlet.name.to_lowercase().replace(' ', "-"),
                 std::process::id()
             ));
-            
+
             if let Err(e) = std::fs::write(&temp_file, &scriptlet.code) {
-                logging::log("ERROR", &format!("Failed to write temp scriptlet file: {}", e));
+                logging::log(
+                    "ERROR",
+                    &format!("Failed to write temp scriptlet file: {}", e),
+                );
                 self.toast_manager.push(
                     components::toast::Toast::error(
                         format!("Failed to write scriptlet: {}", e),
-                        &self.theme
-                    ).duration_ms(Some(5000))
+                        &self.theme,
+                    )
+                    .duration_ms(Some(5000)),
                 );
                 cx.notify();
                 return;
             }
-            
+
             // Create a Script struct and run it interactively
             let script = scripts::Script {
                 name: scriptlet.name.clone(),
@@ -3387,14 +4059,14 @@ impl ScriptListApp {
                 icon: None,
                 alias: None,
             };
-            
+
             self.execute_interactive(&script, cx);
             return;
         }
-        
+
         // For non-TypeScript tools (bash, python, etc.), run synchronously
         // These don't use the SDK and won't block waiting for input
-        
+
         // Convert scripts::Scriptlet to scriptlets::Scriptlet for executor
         let exec_scriptlet = scriptlets::Scriptlet {
             name: scriptlet.name.clone(),
@@ -3416,23 +4088,26 @@ impl ScriptListApp {
             kenv: None,
             source_path: scriptlet.file_path.clone(),
         };
-        
+
         // Execute with default options (no inputs for now)
         let options = executor::ScriptletExecOptions::default();
-        
+
         match executor::run_scriptlet(&exec_scriptlet, options) {
             Ok(result) => {
                 if result.success {
-                    logging::log("EXEC", &format!(
-                        "Scriptlet '{}' succeeded: exit={}", 
-                        scriptlet.name, result.exit_code
-                    ));
-                    
+                    logging::log(
+                        "EXEC",
+                        &format!(
+                            "Scriptlet '{}' succeeded: exit={}",
+                            scriptlet.name, result.exit_code
+                        ),
+                    );
+
                     // Store output if any
                     if !result.stdout.is_empty() {
                         self.last_output = Some(SharedString::from(result.stdout.clone()));
                     }
-                    
+
                     // Hide window after successful execution
                     WINDOW_VISIBLE.store(false, Ordering::SeqCst);
                     cx.hide();
@@ -3443,48 +4118,56 @@ impl ScriptListApp {
                     } else {
                         format!("Exit code: {}", result.exit_code)
                     };
-                    
-                    logging::log("ERROR", &format!(
-                        "Scriptlet '{}' failed: {}", 
-                        scriptlet.name, error_msg
-                    ));
-                    
+
+                    logging::log(
+                        "ERROR",
+                        &format!("Scriptlet '{}' failed: {}", scriptlet.name, error_msg),
+                    );
+
                     self.toast_manager.push(
                         components::toast::Toast::error(
                             format!("Scriptlet failed: {}", error_msg),
-                            &self.theme
-                        ).duration_ms(Some(5000))
+                            &self.theme,
+                        )
+                        .duration_ms(Some(5000)),
                     );
                     cx.notify();
                 }
             }
             Err(e) => {
-                logging::log("ERROR", &format!(
-                    "Failed to execute scriptlet '{}': {}", 
-                    scriptlet.name, e
-                ));
-                
+                logging::log(
+                    "ERROR",
+                    &format!("Failed to execute scriptlet '{}': {}", scriptlet.name, e),
+                );
+
                 self.toast_manager.push(
                     components::toast::Toast::error(
                         format!("Failed to execute: {}", e),
-                        &self.theme
-                    ).duration_ms(Some(5000))
+                        &self.theme,
+                    )
+                    .duration_ms(Some(5000)),
                 );
                 cx.notify();
             }
         }
     }
-    
+
     /// Execute a built-in feature
     fn execute_builtin(&mut self, entry: &builtins::BuiltInEntry, cx: &mut Context<Self>) {
-        logging::log("EXEC", &format!("Executing built-in: {} (id: {})", entry.name, entry.id));
-        
+        logging::log(
+            "EXEC",
+            &format!("Executing built-in: {} (id: {})", entry.name, entry.id),
+        );
+
         match &entry.feature {
             builtins::BuiltInFeature::ClipboardHistory => {
                 logging::log("EXEC", "Opening Clipboard History");
                 // Use cached entries for faster loading
                 let entries = clipboard_history::get_cached_entries(100);
-                logging::log("EXEC", &format!("Loaded {} clipboard entries (cached)", entries.len()));
+                logging::log(
+                    "EXEC",
+                    &format!("Loaded {} clipboard entries (cached)", entries.len()),
+                );
                 // Initial selected_index should be 1 (first entry after "Today" header)
                 // Index 0 is the time group header which is not selectable
                 let initial_selected = if entries.is_empty() { 0 } else { 1 };
@@ -3517,7 +4200,10 @@ impl ScriptListApp {
                 if let Some(app) = apps.iter().find(|a| a.name == *app_name) {
                     if let Err(e) = app_launcher::launch_application(app) {
                         logging::log("ERROR", &format!("Failed to launch {}: {}", app_name, e));
-                        self.last_output = Some(SharedString::from(format!("Failed to launch: {}", app_name)));
+                        self.last_output = Some(SharedString::from(format!(
+                            "Failed to launch: {}",
+                            app_name
+                        )));
                     } else {
                         logging::log("EXEC", &format!("Launched app: {}", app_name));
                         // Hide window after launching app and set reset flag
@@ -3528,7 +4214,8 @@ impl ScriptListApp {
                     }
                 } else {
                     logging::log("ERROR", &format!("App not found: {}", app_name));
-                    self.last_output = Some(SharedString::from(format!("App not found: {}", app_name)));
+                    self.last_output =
+                        Some(SharedString::from(format!("App not found: {}", app_name)));
                 }
                 cx.notify();
             }
@@ -3551,8 +4238,9 @@ impl ScriptListApp {
                         self.toast_manager.push(
                             components::toast::Toast::error(
                                 format!("Failed to list windows: {}", e),
-                                &self.theme
-                            ).duration_ms(Some(5000))
+                                &self.theme,
+                            )
+                            .duration_ms(Some(5000)),
                         );
                     }
                 }
@@ -3570,14 +4258,17 @@ impl ScriptListApp {
             }
         }
     }
-    
+
     /// Execute an application directly from the main search results
     fn execute_app(&mut self, app: &app_launcher::AppInfo, cx: &mut Context<Self>) {
         logging::log("EXEC", &format!("Launching app from search: {}", app.name));
-        
+
         if let Err(e) = app_launcher::launch_application(app) {
             logging::log("ERROR", &format!("Failed to launch {}: {}", app.name, e));
-            self.last_output = Some(SharedString::from(format!("Failed to launch: {}", app.name)));
+            self.last_output = Some(SharedString::from(format!(
+                "Failed to launch: {}",
+                app.name
+            )));
             cx.notify();
         } else {
             logging::log("EXEC", &format!("Launched app: {}", app.name));
@@ -3588,18 +4279,26 @@ impl ScriptListApp {
             cx.hide();
         }
     }
-    
+
     /// Focus a window from the main search results
-    fn execute_window_focus(&mut self, window: &window_control::WindowInfo, cx: &mut Context<Self>) {
-        logging::log("EXEC", &format!("Focusing window: {} - {}", window.app, window.title));
-        
+    fn execute_window_focus(
+        &mut self,
+        window: &window_control::WindowInfo,
+        cx: &mut Context<Self>,
+    ) {
+        logging::log(
+            "EXEC",
+            &format!("Focusing window: {} - {}", window.app, window.title),
+        );
+
         if let Err(e) = window_control::focus_window(window.id) {
             logging::log("ERROR", &format!("Failed to focus window: {}", e));
             self.toast_manager.push(
                 components::toast::Toast::error(
                     format!("Failed to focus window: {}", e),
-                    &self.theme
-                ).duration_ms(Some(5000))
+                    &self.theme,
+                )
+                .duration_ms(Some(5000)),
             );
             cx.notify();
         } else {
@@ -3611,14 +4310,25 @@ impl ScriptListApp {
             cx.hide();
         }
     }
-    
+
     /// Handle a prompt message from the script
     fn handle_prompt_message(&mut self, msg: PromptMessage, cx: &mut Context<Self>) {
         match msg {
-            PromptMessage::ShowArg { id, placeholder, choices } => {
-                logging::log("UI", &format!("Showing arg prompt: {} with {} choices", id, choices.len()));
+            PromptMessage::ShowArg {
+                id,
+                placeholder,
+                choices,
+            } => {
+                logging::log(
+                    "UI",
+                    &format!("Showing arg prompt: {} with {} choices", id, choices.len()),
+                );
                 let choice_count = choices.len();
-                self.current_view = AppView::ArgPrompt { id, placeholder, choices };
+                self.current_view = AppView::ArgPrompt {
+                    id,
+                    placeholder,
+                    choices,
+                };
                 self.arg_input_text.clear();
                 self.arg_selected_index = 0;
                 self.focused_input = FocusedInput::ArgPrompt;
@@ -3640,18 +4350,18 @@ impl ScriptListApp {
             }
             PromptMessage::ShowForm { id, html } => {
                 logging::log("UI", &format!("Showing form prompt: {}", id));
-                
+
                 // Create form field colors from theme
                 let colors = FormFieldColors::from_theme(&self.theme);
-                
+
                 // Create FormPromptState entity with parsed fields
                 let form_state = FormPromptState::new(id.clone(), html, colors, cx);
                 let field_count = form_state.fields.len();
                 let entity = cx.new(|_| form_state);
-                
+
                 self.current_view = AppView::FormPrompt { id, entity };
                 self.focused_input = FocusedInput::None; // FormPrompt has its own focus handling
-                
+
                 // Resize based on field count (more fields = taller window)
                 let view_type = if field_count > 0 {
                     ViewType::ArgPromptWithChoices
@@ -3662,23 +4372,29 @@ impl ScriptListApp {
                 cx.notify();
             }
             PromptMessage::ShowTerm { id, command } => {
-                logging::log("UI", &format!("Showing term prompt: {} (command: {:?})", id, command));
-                
+                logging::log(
+                    "UI",
+                    &format!("Showing term prompt: {} (command: {:?})", id, command),
+                );
+
                 // Create submit callback for terminal
                 let response_sender = self.response_sender.clone();
-                let submit_callback: std::sync::Arc<dyn Fn(String, Option<String>) + Send + Sync> = 
+                let submit_callback: std::sync::Arc<dyn Fn(String, Option<String>) + Send + Sync> =
                     std::sync::Arc::new(move |id, value| {
                         if let Some(ref sender) = response_sender {
                             let response = Message::Submit { id, value };
                             if let Err(e) = sender.send(response) {
-                                logging::log("UI", &format!("Failed to send terminal response: {}", e));
+                                logging::log(
+                                    "UI",
+                                    &format!("Failed to send terminal response: {}", e),
+                                );
                             }
                         }
                     });
-                
+
                 // Get the target height for terminal view
                 let term_height = window_resize::layout::MAX_HEIGHT;
-                
+
                 // Create terminal with explicit height - GPUI entities don't inherit parent flex sizing
                 match term_prompt::TermPrompt::with_height(
                     id.clone(),
@@ -3702,30 +4418,40 @@ impl ScriptListApp {
                     }
                 }
             }
-            PromptMessage::ShowEditor { id, content, language } => {
-                logging::log("UI", &format!("Showing editor prompt: {} (language: {:?})", id, language));
-                
+            PromptMessage::ShowEditor {
+                id,
+                content,
+                language,
+            } => {
+                logging::log(
+                    "UI",
+                    &format!("Showing editor prompt: {} (language: {:?})", id, language),
+                );
+
                 // Create submit callback for editor
                 let response_sender = self.response_sender.clone();
-                let submit_callback: std::sync::Arc<dyn Fn(String, Option<String>) + Send + Sync> = 
+                let submit_callback: std::sync::Arc<dyn Fn(String, Option<String>) + Send + Sync> =
                     std::sync::Arc::new(move |id, value| {
                         if let Some(ref sender) = response_sender {
                             let response = Message::Submit { id, value };
                             if let Err(e) = sender.send(response) {
-                                logging::log("UI", &format!("Failed to send editor response: {}", e));
+                                logging::log(
+                                    "UI",
+                                    &format!("Failed to send editor response: {}", e),
+                                );
                             }
                         }
                     });
-                
+
                 // CRITICAL: Create a SEPARATE focus handle for the editor.
                 // Using the parent's focus handle causes keyboard event routing issues
                 // because the parent checks is_focused() in its render and both parent
                 // and child would be tracking the same handle.
                 let editor_focus_handle = cx.focus_handle();
-                
+
                 // Get the target height for editor view
                 let editor_height = window_resize::layout::MAX_HEIGHT;
-                
+
                 // Create editor with explicit height - GPUI entities don't inherit parent flex sizing
                 let editor_prompt = EditorPrompt::with_height(
                     id.clone(),
@@ -3737,70 +4463,90 @@ impl ScriptListApp {
                     std::sync::Arc::new(self.config.clone()),
                     Some(editor_height),
                 );
-                
+
                 let entity = cx.new(|_| editor_prompt);
-                self.current_view = AppView::EditorPrompt { id, entity, focus_handle: editor_focus_handle };
+                self.current_view = AppView::EditorPrompt {
+                    id,
+                    entity,
+                    focus_handle: editor_focus_handle,
+                };
                 self.focused_input = FocusedInput::None; // Editor handles its own focus
-                
+
                 defer_resize_to_view(ViewType::EditorPrompt, 0, cx);
                 cx.notify();
             }
             PromptMessage::ScriptExit => {
                 logging::log("VISIBILITY", "=== ScriptExit message received ===");
                 let was_visible = WINDOW_VISIBLE.load(Ordering::SeqCst);
-                logging::log("VISIBILITY", &format!("WINDOW_VISIBLE was: {}", was_visible));
-                
+                logging::log(
+                    "VISIBILITY",
+                    &format!("WINDOW_VISIBLE was: {}", was_visible),
+                );
+
                 // CRITICAL: Update visibility state so hotkey toggle works correctly
                 WINDOW_VISIBLE.store(false, Ordering::SeqCst);
                 logging::log("VISIBILITY", "WINDOW_VISIBLE set to: false");
-                
+
                 // Set flag so next hotkey show will reset to script list
                 NEEDS_RESET.store(true, Ordering::SeqCst);
                 logging::log("VISIBILITY", "NEEDS_RESET set to: true");
-                
+
                 self.reset_to_script_list(cx);
                 logging::log("VISIBILITY", "reset_to_script_list() called");
-                
+
                 // Hide window when script completes - scripts only stay active while code is running
                 cx.hide();
-                logging::log("VISIBILITY", "cx.hide() called - window hidden on script completion");
+                logging::log(
+                    "VISIBILITY",
+                    "cx.hide() called - window hidden on script completion",
+                );
             }
             PromptMessage::HideWindow => {
                 logging::log("VISIBILITY", "=== HideWindow message received ===");
                 let was_visible = WINDOW_VISIBLE.load(Ordering::SeqCst);
-                logging::log("VISIBILITY", &format!("WINDOW_VISIBLE was: {}", was_visible));
-                
+                logging::log(
+                    "VISIBILITY",
+                    &format!("WINDOW_VISIBLE was: {}", was_visible),
+                );
+
                 // CRITICAL: Update visibility state so hotkey toggle works correctly
                 WINDOW_VISIBLE.store(false, Ordering::SeqCst);
                 logging::log("VISIBILITY", "WINDOW_VISIBLE set to: false");
-                
+
                 // Set flag so next hotkey show will reset to script list
                 NEEDS_RESET.store(true, Ordering::SeqCst);
                 logging::log("VISIBILITY", "NEEDS_RESET set to: true");
-                
+
                 cx.hide();
-                logging::log("VISIBILITY", "cx.hide() called - window should now be hidden");
+                logging::log(
+                    "VISIBILITY",
+                    "cx.hide() called - window should now be hidden",
+                );
             }
             PromptMessage::OpenBrowser { url } => {
                 logging::log("UI", &format!("Opening browser: {}", url));
                 #[cfg(target_os = "macos")]
                 {
-                    match std::process::Command::new("open")
-                        .arg(&url)
-                        .spawn()
-                    {
-                        Ok(_) => logging::log("UI", &format!("Successfully opened URL in browser: {}", url)),
-                        Err(e) => logging::log("ERROR", &format!("Failed to open URL '{}': {}", url, e)),
+                    match std::process::Command::new("open").arg(&url).spawn() {
+                        Ok(_) => logging::log(
+                            "UI",
+                            &format!("Successfully opened URL in browser: {}", url),
+                        ),
+                        Err(e) => {
+                            logging::log("ERROR", &format!("Failed to open URL '{}': {}", url, e))
+                        }
                     }
                 }
                 #[cfg(target_os = "linux")]
                 {
-                    match std::process::Command::new("xdg-open")
-                        .arg(&url)
-                        .spawn()
-                    {
-                        Ok(_) => logging::log("UI", &format!("Successfully opened URL in browser: {}", url)),
-                        Err(e) => logging::log("ERROR", &format!("Failed to open URL '{}': {}", url, e)),
+                    match std::process::Command::new("xdg-open").arg(&url).spawn() {
+                        Ok(_) => logging::log(
+                            "UI",
+                            &format!("Successfully opened URL in browser: {}", url),
+                        ),
+                        Err(e) => {
+                            logging::log("ERROR", &format!("Failed to open URL '{}': {}", url, e))
+                        }
                     }
                 }
                 #[cfg(target_os = "windows")]
@@ -3809,14 +4555,19 @@ impl ScriptListApp {
                         .args(["/C", "start", &url])
                         .spawn()
                     {
-                        Ok(_) => logging::log("UI", &format!("Successfully opened URL in browser: {}", url)),
-                        Err(e) => logging::log("ERROR", &format!("Failed to open URL '{}': {}", url, e)),
+                        Ok(_) => logging::log(
+                            "UI",
+                            &format!("Successfully opened URL in browser: {}", url),
+                        ),
+                        Err(e) => {
+                            logging::log("ERROR", &format!("Failed to open URL '{}': {}", url, e))
+                        }
                     }
                 }
             }
             PromptMessage::RunScript { path } => {
                 logging::log("EXEC", &format!("RunScript command received: {}", path));
-                
+
                 // Create a Script struct from the path
                 let script_path = std::path::PathBuf::from(&path);
                 let script_name = script_path
@@ -3829,7 +4580,7 @@ impl ScriptListApp {
                     .and_then(|e| e.to_str())
                     .unwrap_or("ts")
                     .to_string();
-                
+
                 let script = scripts::Script {
                     name: script_name.clone(),
                     description: Some(format!("External script: {}", path)),
@@ -3838,27 +4589,33 @@ impl ScriptListApp {
                     icon: None,
                     alias: None,
                 };
-                
+
                 logging::log("EXEC", &format!("Executing script: {}", script_name));
                 self.execute_interactive(&script, cx);
             }
-            PromptMessage::ScriptError { 
-                error_message, 
-                stderr_output, 
-                exit_code, 
-                stack_trace, 
-                script_path, 
-                suggestions 
+            PromptMessage::ScriptError {
+                error_message,
+                stderr_output,
+                exit_code,
+                stack_trace,
+                script_path,
+                suggestions,
             } => {
-                logging::log("ERROR", &format!("Script error received: {} (exit code: {:?})", error_message, exit_code));
-                
+                logging::log(
+                    "ERROR",
+                    &format!(
+                        "Script error received: {} (exit code: {:?})",
+                        error_message, exit_code
+                    ),
+                );
+
                 // Create error toast with expandable details
                 // Use stderr_output if available, otherwise use stack_trace
                 let details_text = stderr_output.clone().or_else(|| stack_trace.clone());
                 let toast = Toast::error(error_message.clone(), &self.theme)
                     .details_opt(details_text.clone())
                     .duration_ms(Some(10000)); // 10 seconds for errors
-                
+
                 // Add copy button action if we have stderr/stack trace
                 let toast = if let Some(ref trace) = details_text {
                     let trace_clone = trace.clone();
@@ -3876,278 +4633,312 @@ impl ScriptListApp {
                 } else {
                     toast
                 };
-                
+
                 // Log suggestions if present
                 if !suggestions.is_empty() {
                     logging::log("ERROR", &format!("Suggestions: {:?}", suggestions));
                 }
-                
+
                 // Push toast to manager
                 let toast_id = self.toast_manager.push(toast);
-                logging::log("UI", &format!("Toast created for script error: {} (id: {})", script_path, toast_id));
-                
+                logging::log(
+                    "UI",
+                    &format!(
+                        "Toast created for script error: {} (id: {})",
+                        script_path, toast_id
+                    ),
+                );
+
                 cx.notify();
             }
             PromptMessage::UnhandledMessage { message_type } => {
-                logging::log("WARN", &format!("Displaying unhandled message warning: {}", message_type));
-                
+                logging::log(
+                    "WARN",
+                    &format!("Displaying unhandled message warning: {}", message_type),
+                );
+
                 let toast = Toast::warning(
                     format!("'{}' is not yet implemented", message_type),
-                    &self.theme
-                ).duration_ms(Some(5000));
-                
+                    &self.theme,
+                )
+                .duration_ms(Some(5000));
+
                 self.toast_manager.push(toast);
                 cx.notify();
             }
             PromptMessage::GetState { request_id } => {
-                logging::log("UI", &format!("Collecting state for request: {}", request_id));
-                
+                logging::log(
+                    "UI",
+                    &format!("Collecting state for request: {}", request_id),
+                );
+
                 // Collect current UI state
-                let (prompt_type, prompt_id, placeholder, input_value, choice_count, visible_choice_count, selected_index, selected_value) = 
-                    match &self.current_view {
-                        AppView::ScriptList => {
-                            let filtered_len = self.filtered_results().len();
-                            let selected_value = if self.selected_index < filtered_len {
-                                self.filtered_results().get(self.selected_index).map(|r| {
-                                    match r {
-                                        scripts::SearchResult::Script(m) => m.script.name.clone(),
-                                        scripts::SearchResult::Scriptlet(m) => m.scriptlet.name.clone(),
-                                        scripts::SearchResult::BuiltIn(m) => m.entry.name.clone(),
-                                        scripts::SearchResult::App(m) => m.app.name.clone(),
-                                        scripts::SearchResult::Window(m) => m.window.title.clone(),
-                                    }
+                let (
+                    prompt_type,
+                    prompt_id,
+                    placeholder,
+                    input_value,
+                    choice_count,
+                    visible_choice_count,
+                    selected_index,
+                    selected_value,
+                ) = match &self.current_view {
+                    AppView::ScriptList => {
+                        let filtered_len = self.filtered_results().len();
+                        let selected_value = if self.selected_index < filtered_len {
+                            self.filtered_results()
+                                .get(self.selected_index)
+                                .map(|r| match r {
+                                    scripts::SearchResult::Script(m) => m.script.name.clone(),
+                                    scripts::SearchResult::Scriptlet(m) => m.scriptlet.name.clone(),
+                                    scripts::SearchResult::BuiltIn(m) => m.entry.name.clone(),
+                                    scripts::SearchResult::App(m) => m.app.name.clone(),
+                                    scripts::SearchResult::Window(m) => m.window.title.clone(),
                                 })
-                            } else {
-                                None
-                            };
-                            (
-                                "none".to_string(),
-                                None,
-                                None,
-                                self.filter_text.clone(),
-                                self.scripts.len() + self.scriptlets.len() + self.builtin_entries.len() + self.apps.len(),
-                                filtered_len,
-                                self.selected_index as i32,
-                                selected_value,
-                            )
-                        }
-                        AppView::ArgPrompt { id, placeholder, choices } => {
-                            let filtered = self.get_filtered_arg_choices(choices);
-                            let selected_value = if self.arg_selected_index < filtered.len() {
-                                filtered.get(self.arg_selected_index).map(|c| c.value.clone())
-                            } else {
-                                None
-                            };
-                            (
-                                "arg".to_string(),
-                                Some(id.clone()),
-                                Some(placeholder.clone()),
-                                self.arg_input_text.clone(),
-                                choices.len(),
-                                filtered.len(),
-                                self.arg_selected_index as i32,
-                                selected_value,
-                            )
-                        }
-                        AppView::DivPrompt { id, .. } => {
-                            (
-                                "div".to_string(),
-                                Some(id.clone()),
-                                None,
-                                String::new(),
-                                0,
-                                0,
-                                -1,
-                                None,
-                            )
-                        }
-                        AppView::FormPrompt { id, .. } => {
-                            (
-                                "form".to_string(),
-                                Some(id.clone()),
-                                None,
-                                String::new(),
-                                0,
-                                0,
-                                -1,
-                                None,
-                            )
-                        }
-                        AppView::TermPrompt { id, .. } => {
-                            (
-                                "term".to_string(),
-                                Some(id.clone()),
-                                None,
-                                String::new(),
-                                0,
-                                0,
-                                -1,
-                                None,
-                            )
-                        }
-                        AppView::EditorPrompt { id, .. } => {
-                            (
-                                "editor".to_string(),
-                                Some(id.clone()),
-                                None,
-                                String::new(),
-                                0,
-                                0,
-                                -1,
-                                None,
-                            )
-                        }
-                        AppView::SelectPrompt { id, .. } => {
-                            (
-                                "select".to_string(),
-                                Some(id.clone()),
-                                None,
-                                String::new(),
-                                0,
-                                0,
-                                -1,
-                                None,
-                            )
-                        }
-                        AppView::PathPrompt { id, .. } => {
-                            (
-                                "path".to_string(),
-                                Some(id.clone()),
-                                None,
-                                String::new(),
-                                0,
-                                0,
-                                -1,
-                                None,
-                            )
-                        }
-                        AppView::EnvPrompt { id, .. } => {
-                            (
-                                "env".to_string(),
-                                Some(id.clone()),
-                                None,
-                                String::new(),
-                                0,
-                                0,
-                                -1,
-                                None,
-                            )
-                        }
-                        AppView::DropPrompt { id, .. } => {
-                            (
-                                "drop".to_string(),
-                                Some(id.clone()),
-                                None,
-                                String::new(),
-                                0,
-                                0,
-                                -1,
-                                None,
-                            )
-                        }
-                        AppView::TemplatePrompt { id, .. } => {
-                            (
-                                "template".to_string(),
-                                Some(id.clone()),
-                                None,
-                                String::new(),
-                                0,
-                                0,
-                                -1,
-                                None,
-                            )
-                        }
-                        AppView::ActionsDialog => {
-                            (
-                                "actions".to_string(),
-                                None,
-                                None,
-                                String::new(),
-                                0,
-                                0,
-                                -1,
-                                None,
-                            )
-                        }
-                        AppView::ClipboardHistoryView { entries, filter, selected_index } => {
-                            let filtered_count = if filter.is_empty() {
-                                entries.len()
-                            } else {
-                                let filter_lower = filter.to_lowercase();
-                                entries.iter().filter(|e| e.content.to_lowercase().contains(&filter_lower)).count()
-                            };
-                            (
-                                "clipboardHistory".to_string(),
-                                None,
-                                None,
-                                filter.clone(),
-                                entries.len(),
-                                filtered_count,
-                                *selected_index as i32,
-                                None,
-                            )
-                        }
-                        AppView::AppLauncherView { apps, filter, selected_index } => {
-                            let filtered_count = if filter.is_empty() {
-                                apps.len()
-                            } else {
-                                let filter_lower = filter.to_lowercase();
-                                apps.iter().filter(|a| a.name.to_lowercase().contains(&filter_lower)).count()
-                            };
-                            (
-                                "appLauncher".to_string(),
-                                None,
-                                None,
-                                filter.clone(),
-                                apps.len(),
-                                filtered_count,
-                                *selected_index as i32,
-                                None,
-                            )
-                        }
-                        AppView::WindowSwitcherView { windows, filter, selected_index } => {
-                            let filtered_count = if filter.is_empty() {
-                                windows.len()
-                            } else {
-                                let filter_lower = filter.to_lowercase();
-                                windows.iter().filter(|w| {
-                                    w.title.to_lowercase().contains(&filter_lower) ||
-                                    w.app.to_lowercase().contains(&filter_lower)
-                                }).count()
-                            };
-                            (
-                                "windowSwitcher".to_string(),
-                                None,
-                                None,
-                                filter.clone(),
-                                windows.len(),
-                                filtered_count,
-                                *selected_index as i32,
-                                None,
-                            )
-                        }
-                        AppView::DesignGalleryView { filter, selected_index } => {
-                            let total_items = designs::separator_variations::SeparatorStyle::count()
-                                + designs::icon_variations::total_icon_count()
-                                + 8 + 6; // headers
-                            (
-                                "designGallery".to_string(),
-                                None,
-                                None,
-                                filter.clone(),
-                                total_items,
-                                total_items,
-                                *selected_index as i32,
-                                None,
-                            )
-                        }
-                    };
-                
+                        } else {
+                            None
+                        };
+                        (
+                            "none".to_string(),
+                            None,
+                            None,
+                            self.filter_text.clone(),
+                            self.scripts.len()
+                                + self.scriptlets.len()
+                                + self.builtin_entries.len()
+                                + self.apps.len(),
+                            filtered_len,
+                            self.selected_index as i32,
+                            selected_value,
+                        )
+                    }
+                    AppView::ArgPrompt {
+                        id,
+                        placeholder,
+                        choices,
+                    } => {
+                        let filtered = self.get_filtered_arg_choices(choices);
+                        let selected_value = if self.arg_selected_index < filtered.len() {
+                            filtered
+                                .get(self.arg_selected_index)
+                                .map(|c| c.value.clone())
+                        } else {
+                            None
+                        };
+                        (
+                            "arg".to_string(),
+                            Some(id.clone()),
+                            Some(placeholder.clone()),
+                            self.arg_input_text.clone(),
+                            choices.len(),
+                            filtered.len(),
+                            self.arg_selected_index as i32,
+                            selected_value,
+                        )
+                    }
+                    AppView::DivPrompt { id, .. } => (
+                        "div".to_string(),
+                        Some(id.clone()),
+                        None,
+                        String::new(),
+                        0,
+                        0,
+                        -1,
+                        None,
+                    ),
+                    AppView::FormPrompt { id, .. } => (
+                        "form".to_string(),
+                        Some(id.clone()),
+                        None,
+                        String::new(),
+                        0,
+                        0,
+                        -1,
+                        None,
+                    ),
+                    AppView::TermPrompt { id, .. } => (
+                        "term".to_string(),
+                        Some(id.clone()),
+                        None,
+                        String::new(),
+                        0,
+                        0,
+                        -1,
+                        None,
+                    ),
+                    AppView::EditorPrompt { id, .. } => (
+                        "editor".to_string(),
+                        Some(id.clone()),
+                        None,
+                        String::new(),
+                        0,
+                        0,
+                        -1,
+                        None,
+                    ),
+                    AppView::SelectPrompt { id, .. } => (
+                        "select".to_string(),
+                        Some(id.clone()),
+                        None,
+                        String::new(),
+                        0,
+                        0,
+                        -1,
+                        None,
+                    ),
+                    AppView::PathPrompt { id, .. } => (
+                        "path".to_string(),
+                        Some(id.clone()),
+                        None,
+                        String::new(),
+                        0,
+                        0,
+                        -1,
+                        None,
+                    ),
+                    AppView::EnvPrompt { id, .. } => (
+                        "env".to_string(),
+                        Some(id.clone()),
+                        None,
+                        String::new(),
+                        0,
+                        0,
+                        -1,
+                        None,
+                    ),
+                    AppView::DropPrompt { id, .. } => (
+                        "drop".to_string(),
+                        Some(id.clone()),
+                        None,
+                        String::new(),
+                        0,
+                        0,
+                        -1,
+                        None,
+                    ),
+                    AppView::TemplatePrompt { id, .. } => (
+                        "template".to_string(),
+                        Some(id.clone()),
+                        None,
+                        String::new(),
+                        0,
+                        0,
+                        -1,
+                        None,
+                    ),
+                    AppView::ActionsDialog => (
+                        "actions".to_string(),
+                        None,
+                        None,
+                        String::new(),
+                        0,
+                        0,
+                        -1,
+                        None,
+                    ),
+                    AppView::ClipboardHistoryView {
+                        entries,
+                        filter,
+                        selected_index,
+                    } => {
+                        let filtered_count = if filter.is_empty() {
+                            entries.len()
+                        } else {
+                            let filter_lower = filter.to_lowercase();
+                            entries
+                                .iter()
+                                .filter(|e| e.content.to_lowercase().contains(&filter_lower))
+                                .count()
+                        };
+                        (
+                            "clipboardHistory".to_string(),
+                            None,
+                            None,
+                            filter.clone(),
+                            entries.len(),
+                            filtered_count,
+                            *selected_index as i32,
+                            None,
+                        )
+                    }
+                    AppView::AppLauncherView {
+                        apps,
+                        filter,
+                        selected_index,
+                    } => {
+                        let filtered_count = if filter.is_empty() {
+                            apps.len()
+                        } else {
+                            let filter_lower = filter.to_lowercase();
+                            apps.iter()
+                                .filter(|a| a.name.to_lowercase().contains(&filter_lower))
+                                .count()
+                        };
+                        (
+                            "appLauncher".to_string(),
+                            None,
+                            None,
+                            filter.clone(),
+                            apps.len(),
+                            filtered_count,
+                            *selected_index as i32,
+                            None,
+                        )
+                    }
+                    AppView::WindowSwitcherView {
+                        windows,
+                        filter,
+                        selected_index,
+                    } => {
+                        let filtered_count = if filter.is_empty() {
+                            windows.len()
+                        } else {
+                            let filter_lower = filter.to_lowercase();
+                            windows
+                                .iter()
+                                .filter(|w| {
+                                    w.title.to_lowercase().contains(&filter_lower)
+                                        || w.app.to_lowercase().contains(&filter_lower)
+                                })
+                                .count()
+                        };
+                        (
+                            "windowSwitcher".to_string(),
+                            None,
+                            None,
+                            filter.clone(),
+                            windows.len(),
+                            filtered_count,
+                            *selected_index as i32,
+                            None,
+                        )
+                    }
+                    AppView::DesignGalleryView {
+                        filter,
+                        selected_index,
+                    } => {
+                        let total_items = designs::separator_variations::SeparatorStyle::count()
+                            + designs::icon_variations::total_icon_count()
+                            + 8
+                            + 6; // headers
+                        (
+                            "designGallery".to_string(),
+                            None,
+                            None,
+                            filter.clone(),
+                            total_items,
+                            total_items,
+                            *selected_index as i32,
+                            None,
+                        )
+                    }
+                };
+
                 // Focus state: we use focused_input as a proxy since we don't have Window access here.
                 // When window is visible and we're tracking an input, we're focused.
                 let window_visible = WINDOW_VISIBLE.load(Ordering::SeqCst);
                 let is_focused = window_visible && self.focused_input != FocusedInput::None;
-                
+
                 // Create the response
                 let response = Message::state_result(
                     request_id.clone(),
@@ -4162,9 +4953,12 @@ impl ScriptListApp {
                     is_focused,
                     window_visible,
                 );
-                
-                logging::log("UI", &format!("Sending state result for request: {}", request_id));
-                
+
+                logging::log(
+                    "UI",
+                    &format!("Sending state result for request: {}", request_id),
+                );
+
                 // Send the response
                 if let Some(ref sender) = self.response_sender {
                     if let Err(e) = sender.send(response) {
@@ -4175,8 +4969,11 @@ impl ScriptListApp {
                 }
             }
             PromptMessage::ForceSubmit { value } => {
-                logging::log("UI", &format!("ForceSubmit received with value: {:?}", value));
-                
+                logging::log(
+                    "UI",
+                    &format!("ForceSubmit received with value: {:?}", value),
+                );
+
                 // Get the current prompt ID and submit the value
                 let prompt_id = match &self.current_view {
                     AppView::ArgPrompt { id, .. } => Some(id.clone()),
@@ -4186,7 +4983,7 @@ impl ScriptListApp {
                     AppView::EditorPrompt { id, .. } => Some(id.clone()),
                     _ => None,
                 };
-                
+
                 if let Some(id) = prompt_id {
                     // Convert serde_json::Value to String for submission
                     let value_str = match &value {
@@ -4194,23 +4991,48 @@ impl ScriptListApp {
                         serde_json::Value::Null => String::new(),
                         other => other.to_string(),
                     };
-                    
-                    logging::log("UI", &format!("ForceSubmit: submitting '{}' for prompt '{}'", value_str, id));
+
+                    logging::log(
+                        "UI",
+                        &format!(
+                            "ForceSubmit: submitting '{}' for prompt '{}'",
+                            value_str, id
+                        ),
+                    );
                     self.submit_prompt_response(id, Some(value_str), cx);
                 } else {
-                    logging::log("WARN", "ForceSubmit received but no active prompt to submit to");
+                    logging::log(
+                        "WARN",
+                        "ForceSubmit received but no active prompt to submit to",
+                    );
                 }
             }
             // ============================================================
             // NEW PROMPT TYPES (scaffolding - TODO: implement full UI)
             // ============================================================
-            PromptMessage::ShowPath { id, start_path, hint } => {
-                logging::log("UI", &format!("Showing path prompt: {} (start: {:?}, hint: {:?})", id, start_path, hint));
-                
+            PromptMessage::ShowPath {
+                id,
+                start_path,
+                hint,
+            } => {
+                logging::log(
+                    "UI",
+                    &format!(
+                        "Showing path prompt: {} (start: {:?}, hint: {:?})",
+                        id, start_path, hint
+                    ),
+                );
+
                 let response_sender = self.response_sender.clone();
-                let submit_callback: std::sync::Arc<dyn Fn(String, Option<String>) + Send + Sync> = 
+                let submit_callback: std::sync::Arc<dyn Fn(String, Option<String>) + Send + Sync> =
                     std::sync::Arc::new(move |id, value| {
-                        logging::log("UI", &format!("PathPrompt submit_callback called: id={}, value={:?}", id, value));
+                        logging::log(
+                            "UI",
+                            &format!(
+                                "PathPrompt submit_callback called: id={}, value={:?}",
+                                id, value
+                            ),
+                        );
                         if let Some(ref sender) = response_sender {
                             let response = Message::Submit { id, value };
                             if let Err(e) = sender.send(response) {
@@ -4218,33 +5040,36 @@ impl ScriptListApp {
                             }
                         }
                     });
-                
+
                 // Clone the pending_path_action Arc for the callback
                 let pending_path_action_clone = self.pending_path_action.clone();
-                
-                let show_actions_callback: std::sync::Arc<dyn Fn(PathInfo) + Send + Sync> = 
+
+                let show_actions_callback: std::sync::Arc<dyn Fn(PathInfo) + Send + Sync> =
                     std::sync::Arc::new(move |path_info| {
-                        logging::log("UI", &format!("Path actions requested for: {}", path_info.path));
+                        logging::log(
+                            "UI",
+                            &format!("Path actions requested for: {}", path_info.path),
+                        );
                         if let Ok(mut guard) = pending_path_action_clone.lock() {
                             *guard = Some(path_info);
                         }
                     });
-                
+
                 // Clone the close_path_actions Arc for the close callback
                 let close_path_actions_clone = self.close_path_actions.clone();
-                
-                let close_actions_callback: std::sync::Arc<dyn Fn() + Send + Sync> = 
+
+                let close_actions_callback: std::sync::Arc<dyn Fn() + Send + Sync> =
                     std::sync::Arc::new(move || {
                         logging::log("UI", "Path close actions callback triggered");
                         if let Ok(mut guard) = close_path_actions_clone.lock() {
                             *guard = true;
                         }
                     });
-                
+
                 // Clone the path_actions_showing and search_text Arcs for header display
                 let path_actions_showing = self.path_actions_showing.clone();
                 let path_actions_search_text = self.path_actions_search_text.clone();
-                
+
                 let focus_handle = cx.focus_handle();
                 let path_prompt = PathPrompt::new(
                     id.clone(),
@@ -4258,11 +5083,15 @@ impl ScriptListApp {
                 .with_close_actions(close_actions_callback)
                 .with_actions_showing(path_actions_showing)
                 .with_actions_search_text(path_actions_search_text);
-                
+
                 let entity = cx.new(|_| path_prompt);
-                self.current_view = AppView::PathPrompt { id, entity, focus_handle };
+                self.current_view = AppView::PathPrompt {
+                    id,
+                    entity,
+                    focus_handle,
+                };
                 self.focused_input = FocusedInput::None;
-                
+
                 // Clear any previous pending action and reset showing state
                 if let Ok(mut guard) = self.pending_path_action.lock() {
                     *guard = None;
@@ -4270,17 +5099,28 @@ impl ScriptListApp {
                 if let Ok(mut guard) = self.path_actions_showing.lock() {
                     *guard = false;
                 }
-                
+
                 defer_resize_to_view(ViewType::ScriptList, 20, cx);
                 cx.notify();
             }
-            PromptMessage::ShowEnv { id, key, prompt, secret } => {
+            PromptMessage::ShowEnv {
+                id,
+                key,
+                prompt,
+                secret,
+            } => {
                 tracing::info!(id, key, ?prompt, secret, "ShowEnv received");
-                logging::log("UI", &format!("ShowEnv prompt received: {} (key: {}, secret: {})", id, key, secret));
-                
+                logging::log(
+                    "UI",
+                    &format!(
+                        "ShowEnv prompt received: {} (key: {}, secret: {})",
+                        id, key, secret
+                    ),
+                );
+
                 // Create submit callback for env prompt
                 let response_sender = self.response_sender.clone();
-                let submit_callback: std::sync::Arc<dyn Fn(String, Option<String>) + Send + Sync> = 
+                let submit_callback: std::sync::Arc<dyn Fn(String, Option<String>) + Send + Sync> =
                     std::sync::Arc::new(move |id, value| {
                         if let Some(ref sender) = response_sender {
                             let response = Message::Submit { id, value };
@@ -4289,7 +5129,7 @@ impl ScriptListApp {
                             }
                         }
                     });
-                
+
                 // Create EnvPrompt entity
                 let focus_handle = self.focus_handle.clone();
                 let mut env_prompt = prompts::EnvPrompt::new(
@@ -4301,7 +5141,7 @@ impl ScriptListApp {
                     submit_callback,
                     std::sync::Arc::new(self.theme.clone()),
                 );
-                
+
                 // Check keyring first - if value exists, auto-submit without showing UI
                 if env_prompt.check_keyring_and_auto_submit() {
                     logging::log("UI", "EnvPrompt: value found in keyring, auto-submitted");
@@ -4309,21 +5149,31 @@ impl ScriptListApp {
                     cx.notify();
                     return;
                 }
-                
+
                 let entity = cx.new(|_| env_prompt);
                 self.current_view = AppView::EnvPrompt { id, entity };
                 self.focused_input = FocusedInput::None; // EnvPrompt has its own focus handling
-                
+
                 defer_resize_to_view(ViewType::ArgPromptNoChoices, 0, cx);
                 cx.notify();
             }
-            PromptMessage::ShowDrop { id, placeholder, hint } => {
+            PromptMessage::ShowDrop {
+                id,
+                placeholder,
+                hint,
+            } => {
                 tracing::info!(id, ?placeholder, ?hint, "ShowDrop received");
-                logging::log("UI", &format!("ShowDrop prompt received: {} (placeholder: {:?})", id, placeholder));
-                
+                logging::log(
+                    "UI",
+                    &format!(
+                        "ShowDrop prompt received: {} (placeholder: {:?})",
+                        id, placeholder
+                    ),
+                );
+
                 // Create submit callback for drop prompt
                 let response_sender = self.response_sender.clone();
-                let submit_callback: std::sync::Arc<dyn Fn(String, Option<String>) + Send + Sync> = 
+                let submit_callback: std::sync::Arc<dyn Fn(String, Option<String>) + Send + Sync> =
                     std::sync::Arc::new(move |id, value| {
                         if let Some(ref sender) = response_sender {
                             let response = Message::Submit { id, value };
@@ -4332,7 +5182,7 @@ impl ScriptListApp {
                             }
                         }
                     });
-                
+
                 // Create DropPrompt entity
                 let focus_handle = self.focus_handle.clone();
                 let drop_prompt = prompts::DropPrompt::new(
@@ -4343,30 +5193,39 @@ impl ScriptListApp {
                     submit_callback,
                     std::sync::Arc::new(self.theme.clone()),
                 );
-                
+
                 let entity = cx.new(|_| drop_prompt);
                 self.current_view = AppView::DropPrompt { id, entity };
                 self.focused_input = FocusedInput::None;
-                
+
                 defer_resize_to_view(ViewType::DivPrompt, 0, cx);
                 cx.notify();
             }
             PromptMessage::ShowTemplate { id, template } => {
                 tracing::info!(id, template, "ShowTemplate received");
-                logging::log("UI", &format!("ShowTemplate prompt received: {} (template: {})", id, template));
-                
+                logging::log(
+                    "UI",
+                    &format!(
+                        "ShowTemplate prompt received: {} (template: {})",
+                        id, template
+                    ),
+                );
+
                 // Create submit callback for template prompt
                 let response_sender = self.response_sender.clone();
-                let submit_callback: std::sync::Arc<dyn Fn(String, Option<String>) + Send + Sync> = 
+                let submit_callback: std::sync::Arc<dyn Fn(String, Option<String>) + Send + Sync> =
                     std::sync::Arc::new(move |id, value| {
                         if let Some(ref sender) = response_sender {
                             let response = Message::Submit { id, value };
                             if let Err(e) = sender.send(response) {
-                                logging::log("UI", &format!("Failed to send template response: {}", e));
+                                logging::log(
+                                    "UI",
+                                    &format!("Failed to send template response: {}", e),
+                                );
                             }
                         }
                     });
-                
+
                 // Create TemplatePrompt entity
                 let focus_handle = self.focus_handle.clone();
                 let template_prompt = prompts::TemplatePrompt::new(
@@ -4376,30 +5235,52 @@ impl ScriptListApp {
                     submit_callback,
                     std::sync::Arc::new(self.theme.clone()),
                 );
-                
+
                 let entity = cx.new(|_| template_prompt);
                 self.current_view = AppView::TemplatePrompt { id, entity };
                 self.focused_input = FocusedInput::None;
-                
+
                 defer_resize_to_view(ViewType::DivPrompt, 0, cx);
                 cx.notify();
             }
-            PromptMessage::ShowSelect { id, placeholder, choices, multiple } => {
-                tracing::info!(id, ?placeholder, choice_count = choices.len(), multiple, "ShowSelect received");
-                logging::log("UI", &format!("ShowSelect prompt received: {} ({} choices, multiple: {})", id, choices.len(), multiple));
-                
+            PromptMessage::ShowSelect {
+                id,
+                placeholder,
+                choices,
+                multiple,
+            } => {
+                tracing::info!(
+                    id,
+                    ?placeholder,
+                    choice_count = choices.len(),
+                    multiple,
+                    "ShowSelect received"
+                );
+                logging::log(
+                    "UI",
+                    &format!(
+                        "ShowSelect prompt received: {} ({} choices, multiple: {})",
+                        id,
+                        choices.len(),
+                        multiple
+                    ),
+                );
+
                 // Create submit callback for select prompt
                 let response_sender = self.response_sender.clone();
-                let submit_callback: std::sync::Arc<dyn Fn(String, Option<String>) + Send + Sync> = 
+                let submit_callback: std::sync::Arc<dyn Fn(String, Option<String>) + Send + Sync> =
                     std::sync::Arc::new(move |id, value| {
                         if let Some(ref sender) = response_sender {
                             let response = Message::Submit { id, value };
                             if let Err(e) = sender.send(response) {
-                                logging::log("UI", &format!("Failed to send select response: {}", e));
+                                logging::log(
+                                    "UI",
+                                    &format!("Failed to send select response: {}", e),
+                                );
                             }
                         }
                     });
-                
+
                 // Create SelectPrompt entity
                 let choice_count = choices.len();
                 let select_prompt = prompts::SelectPrompt::new(
@@ -4414,7 +5295,7 @@ impl ScriptListApp {
                 let entity = cx.new(|_| select_prompt);
                 self.current_view = AppView::SelectPrompt { id, entity };
                 self.focused_input = FocusedInput::None; // SelectPrompt has its own focus handling
-                
+
                 // Resize window based on number of choices
                 let view_type = if choice_count == 0 {
                     ViewType::ArgPromptNoChoices
@@ -4424,32 +5305,38 @@ impl ScriptListApp {
                 defer_resize_to_view(view_type, choice_count, cx);
                 cx.notify();
             }
-         }
-      }
-      
+        }
+    }
+
     /// Cancel the currently running script and clean up all state
     fn cancel_script_execution(&mut self, cx: &mut Context<Self>) {
         logging::log("EXEC", "=== Canceling script execution ===");
-        
+
         // Send cancel message to script (Exit with cancel code)
         if let Some(ref sender) = self.response_sender {
             // Try to send Exit message to terminate the script cleanly
-            let exit_msg = Message::Exit { 
-                code: Some(1),  // Non-zero code indicates cancellation
+            let exit_msg = Message::Exit {
+                code: Some(1), // Non-zero code indicates cancellation
                 message: Some("Cancelled by user".to_string()),
             };
             match sender.send(exit_msg) {
                 Ok(()) => logging::log("EXEC", "Sent Exit message to script"),
-                Err(e) => logging::log("EXEC", &format!("Failed to send Exit: {} (script may have exited)", e)),
+                Err(e) => logging::log(
+                    "EXEC",
+                    &format!("Failed to send Exit: {} (script may have exited)", e),
+                ),
             }
         } else {
             logging::log("EXEC", "No response_sender - script may not be running");
         }
-        
+
         // Belt-and-suspenders: Force-kill the process group using stored PID
         // This ensures cleanup even if Drop doesn't fire properly
         if let Some(pid) = self.current_script_pid.take() {
-            logging::log("CLEANUP", &format!("Force-killing script process group {}", pid));
+            logging::log(
+                "CLEANUP",
+                &format!("Force-killing script process group {}", pid),
+            );
             #[cfg(unix)]
             {
                 let _ = std::process::Command::new("kill")
@@ -4457,19 +5344,19 @@ impl ScriptListApp {
                     .output();
             }
         }
-        
+
         // Abort script session if it exists
         if let Ok(mut session_guard) = self.script_session.lock() {
             if let Some(_session) = session_guard.take() {
                 logging::log("EXEC", "Cleared script session");
             }
         }
-        
+
         // Reset to script list view
         self.reset_to_script_list(cx);
         logging::log("EXEC", "=== Script cancellation complete ===");
     }
-    
+
     /// Reset all state and return to the script list view.
     /// This clears all prompt state and resizes the window appropriately.
     fn reset_to_script_list(&mut self, cx: &mut Context<Self>) {
@@ -4491,14 +5378,23 @@ impl ScriptListApp {
             AppView::WindowSwitcherView { .. } => "WindowSwitcherView",
             AppView::DesignGalleryView { .. } => "DesignGalleryView",
         };
-        
+
         let old_focused_input = self.focused_input;
-        logging::log("UI", &format!("Resetting to script list (was: {}, focused_input: {:?})", old_view, old_focused_input));
-        
+        logging::log(
+            "UI",
+            &format!(
+                "Resetting to script list (was: {}, focused_input: {:?})",
+                old_view, old_focused_input
+            ),
+        );
+
         // Belt-and-suspenders: Force-kill the process group using stored PID
         // This runs BEFORE clearing channels to ensure cleanup even if Drop doesn't fire
         if let Some(pid) = self.current_script_pid.take() {
-            logging::log("CLEANUP", &format!("Force-killing script process group {} during reset", pid));
+            logging::log(
+                "CLEANUP",
+                &format!("Force-killing script process group {} during reset", pid),
+            );
             #[cfg(unix)]
             {
                 let _ = std::process::Command::new("kill")
@@ -4506,49 +5402,54 @@ impl ScriptListApp {
                     .output();
             }
         }
-        
+
         // Reset view
         self.current_view = AppView::ScriptList;
-        
+
         // CRITICAL: Reset focused_input to MainFilter so the cursor appears
         // This was a bug where focused_input could remain as ArgPrompt/None after
         // script exit, causing the cursor to not show in the main filter.
         self.focused_input = FocusedInput::MainFilter;
-        logging::log("FOCUS", "Reset focused_input to MainFilter for cursor display");
-        
+        logging::log(
+            "FOCUS",
+            "Reset focused_input to MainFilter for cursor display",
+        );
+
         // Clear arg prompt state
         self.arg_input_text.clear();
         self.arg_selected_index = 0;
         // P0: Reset arg scroll handle
-        self.arg_list_scroll_handle.scroll_to_item(0, ScrollStrategy::Top);
-        
+        self.arg_list_scroll_handle
+            .scroll_to_item(0, ScrollStrategy::Top);
+
         // Clear filter and selection state for fresh menu
         self.filter_text.clear();
         self.selected_index = 0;
         self.last_scrolled_index = None;
-        self.list_scroll_handle.scroll_to_item(0, ScrollStrategy::Top);
+        self.list_scroll_handle
+            .scroll_to_item(0, ScrollStrategy::Top);
         self.last_scrolled_index = Some(0);
-        
+
         // Resize window for script list content
         let count = self.scripts.len() + self.scriptlets.len();
         resize_first_window_to_height(height_for_view(ViewType::ScriptList, count));
-        
+
         // Clear output
         self.last_output = None;
-        
+
         // Clear channels (they will be dropped, closing the connections)
         self.prompt_receiver = None;
         self.response_sender = None;
-        
+
         // Clear script session
         if let Ok(mut session_guard) = self.script_session.lock() {
             *session_guard = None;
         }
-        
+
         // Clear actions popup state (prevents stale actions dialog from persisting)
         self.show_actions_popup = false;
         self.actions_dialog = None;
-        
+
         // Clear pending path action and close signal
         if let Ok(mut guard) = self.pending_path_action.lock() {
             *guard = None;
@@ -4556,32 +5457,44 @@ impl ScriptListApp {
         if let Ok(mut guard) = self.close_path_actions.lock() {
             *guard = false;
         }
-        
-        logging::log("UI", "State reset complete - view is now ScriptList (filter, selection, scroll cleared)");
+
+        logging::log(
+            "UI",
+            "State reset complete - view is now ScriptList (filter, selection, scroll cleared)",
+        );
         cx.notify();
     }
-    
+
     /// Check if we're currently in a prompt view (script is running)
     fn is_in_prompt(&self) -> bool {
-        matches!(self.current_view, 
-            AppView::ArgPrompt { .. } | 
-            AppView::DivPrompt { .. } | 
-            AppView::FormPrompt { .. } |
-            AppView::TermPrompt { .. } | 
-            AppView::EditorPrompt { .. } |
-            AppView::ClipboardHistoryView { .. } |
-            AppView::AppLauncherView { .. } |
-            AppView::WindowSwitcherView { .. } |
-            AppView::DesignGalleryView { .. }
+        matches!(
+            self.current_view,
+            AppView::ArgPrompt { .. }
+                | AppView::DivPrompt { .. }
+                | AppView::FormPrompt { .. }
+                | AppView::TermPrompt { .. }
+                | AppView::EditorPrompt { .. }
+                | AppView::ClipboardHistoryView { .. }
+                | AppView::AppLauncherView { .. }
+                | AppView::WindowSwitcherView { .. }
+                | AppView::DesignGalleryView { .. }
         )
     }
-      
-      /// Submit a response to the current prompt
-     fn submit_prompt_response(&mut self, id: String, value: Option<String>, _cx: &mut Context<Self>) {
-        logging::log("UI", &format!("Submitting response for {}: {:?}", id, value));
-        
+
+    /// Submit a response to the current prompt
+    fn submit_prompt_response(
+        &mut self,
+        id: String,
+        value: Option<String>,
+        _cx: &mut Context<Self>,
+    ) {
+        logging::log(
+            "UI",
+            &format!("Submitting response for {}: {:?}", id, value),
+        );
+
         let response = Message::Submit { id, value };
-        
+
         if let Some(ref sender) = self.response_sender {
             match sender.send(response) {
                 Ok(()) => {
@@ -4594,11 +5507,11 @@ impl ScriptListApp {
         } else {
             logging::log("UI", "No response sender available");
         }
-        
+
         // Return to waiting state (script will send next prompt or exit)
         // Don't change view here - wait for next message from script
     }
-    
+
     /// Get filtered choices for arg prompt
     fn filtered_arg_choices(&self) -> Vec<(usize, &Choice)> {
         if let AppView::ArgPrompt { choices, .. } = &self.current_view {
@@ -4606,7 +5519,8 @@ impl ScriptListApp {
                 choices.iter().enumerate().collect()
             } else {
                 let filter = self.arg_input_text.to_lowercase();
-                choices.iter()
+                choices
+                    .iter()
                     .enumerate()
                     .filter(|(_, c)| c.name.to_lowercase().contains(&filter))
                     .collect()
@@ -4615,15 +5529,20 @@ impl ScriptListApp {
             vec![]
         }
     }
-    
+
     /// P0: Get filtered choices as owned data for uniform_list closure
     fn get_filtered_arg_choices_owned(&self) -> Vec<(usize, Choice)> {
         if let AppView::ArgPrompt { choices, .. } = &self.current_view {
             if self.arg_input_text.is_empty() {
-                choices.iter().enumerate().map(|(i, c)| (i, c.clone())).collect()
+                choices
+                    .iter()
+                    .enumerate()
+                    .map(|(i, c)| (i, c.clone()))
+                    .collect()
             } else {
                 let filter = self.arg_input_text.to_lowercase();
-                choices.iter()
+                choices
+                    .iter()
                     .enumerate()
                     .filter(|(_, c)| c.name.to_lowercase().contains(&filter))
                     .map(|(i, c)| (i, c.clone()))
@@ -4633,38 +5552,42 @@ impl ScriptListApp {
             vec![]
         }
     }
-    
+
     /// Convert hex color to rgba with opacity from theme
     fn hex_to_rgba_with_opacity(&self, hex: u32, opacity: f32) -> u32 {
         // Convert opacity (0.0-1.0) to alpha byte (0-255)
         let alpha = (opacity.clamp(0.0, 1.0) * 255.0) as u32;
         (hex << 8) | alpha
     }
-    
+
     /// Create box shadows from theme configuration
     fn create_box_shadows(&self) -> Vec<BoxShadow> {
         let shadow_config = self.theme.get_drop_shadow();
-        
+
         if !shadow_config.enabled {
             return vec![];
         }
-        
+
         // Convert hex color to HSLA
         // For black (0x000000), we use h=0, s=0, l=0
         let r = ((shadow_config.color >> 16) & 0xFF) as f32 / 255.0;
         let g = ((shadow_config.color >> 8) & 0xFF) as f32 / 255.0;
         let b = (shadow_config.color & 0xFF) as f32 / 255.0;
-        
+
         // Simple RGB to HSL conversion for shadow color
         let max = r.max(g).max(b);
         let min = r.min(g).min(b);
         let l = (max + min) / 2.0;
-        
+
         let (h, s) = if max == min {
             (0.0, 0.0) // achromatic
         } else {
             let d = max - min;
-            let s = if l > 0.5 { d / (2.0 - max - min) } else { d / (max + min) };
+            let s = if l > 0.5 {
+                d / (2.0 - max - min)
+            } else {
+                d / (max + min)
+            };
             let h = if max == r {
                 (g - b) / d + if g < b { 6.0 } else { 0.0 }
             } else if max == g {
@@ -4674,15 +5597,13 @@ impl ScriptListApp {
             };
             (h / 6.0, s)
         };
-        
-        vec![
-            BoxShadow {
-                color: hsla(h, s, l, shadow_config.opacity),
-                offset: point(px(shadow_config.offset_x), px(shadow_config.offset_y)),
-                blur_radius: px(shadow_config.blur_radius),
-                spread_radius: px(shadow_config.spread_radius),
-            }
-        ]
+
+        vec![BoxShadow {
+            color: hsla(h, s, l, shadow_config.opacity),
+            offset: point(px(shadow_config.offset_x), px(shadow_config.offset_y)),
+            blur_radius: px(shadow_config.blur_radius),
+            spread_radius: px(shadow_config.spread_radius),
+        }]
     }
 }
 
@@ -4744,10 +5665,10 @@ impl Render for ScriptListApp {
                 }
             }
         }
-        
+
         // NOTE: Prompt messages are now handled via event-driven async_channel listener
         // spawned in execute_interactive() - no polling needed in render()
-        
+
         // P0-4: Clone current_view only for dispatch (needed to call &mut self methods)
         // The clone is unavoidable due to borrow checker: we need &mut self for render methods
         // but also need to match on self.current_view. Future optimization: refactor render
@@ -4756,8 +5677,14 @@ impl Render for ScriptListApp {
         match current_view {
             AppView::ScriptList => self.render_script_list(cx),
             AppView::ActionsDialog => self.render_actions_dialog(cx),
-            AppView::ArgPrompt { id, placeholder, choices } => self.render_arg_prompt(id, placeholder, choices, cx),
-            AppView::DivPrompt { id, html, tailwind } => self.render_div_prompt(id, html, tailwind, cx),
+            AppView::ArgPrompt {
+                id,
+                placeholder,
+                choices,
+            } => self.render_arg_prompt(id, placeholder, choices, cx),
+            AppView::DivPrompt { id, html, tailwind } => {
+                self.render_div_prompt(id, html, tailwind, cx)
+            }
             AppView::FormPrompt { entity, .. } => self.render_form_prompt(entity, cx),
             AppView::TermPrompt { entity, .. } => self.render_term_prompt(entity, cx),
             AppView::EditorPrompt { entity, .. } => self.render_editor_prompt(entity, cx),
@@ -4766,18 +5693,25 @@ impl Render for ScriptListApp {
             AppView::EnvPrompt { entity, .. } => self.render_env_prompt(entity, cx),
             AppView::DropPrompt { entity, .. } => self.render_drop_prompt(entity, cx),
             AppView::TemplatePrompt { entity, .. } => self.render_template_prompt(entity, cx),
-            AppView::ClipboardHistoryView { entries, filter, selected_index } => {
-                self.render_clipboard_history(entries, filter, selected_index, cx)
-            }
-            AppView::AppLauncherView { apps, filter, selected_index } => {
-                self.render_app_launcher(apps, filter, selected_index, cx)
-            }
-            AppView::WindowSwitcherView { windows, filter, selected_index } => {
-                self.render_window_switcher(windows, filter, selected_index, cx)
-            }
-            AppView::DesignGalleryView { filter, selected_index } => {
-                self.render_design_gallery(filter, selected_index, cx)
-            }
+            AppView::ClipboardHistoryView {
+                entries,
+                filter,
+                selected_index,
+            } => self.render_clipboard_history(entries, filter, selected_index, cx),
+            AppView::AppLauncherView {
+                apps,
+                filter,
+                selected_index,
+            } => self.render_app_launcher(apps, filter, selected_index, cx),
+            AppView::WindowSwitcherView {
+                windows,
+                filter,
+                selected_index,
+            } => self.render_window_switcher(windows, filter, selected_index, cx),
+            AppView::DesignGalleryView {
+                filter,
+                selected_index,
+            } => self.render_design_gallery(filter, selected_index, cx),
         }
     }
 }
@@ -4793,49 +5727,48 @@ impl ScriptListApp {
                     .take(max_lines)
                     .collect::<Vec<_>>()
                     .join("\n");
-                logging::log("UI", &format!(
-                    "Preview loaded: {} ({} lines read)",
-                    path.file_name().unwrap_or_default().to_string_lossy(),
-                    content.lines().count().min(max_lines)
-                ));
+                logging::log(
+                    "UI",
+                    &format!(
+                        "Preview loaded: {} ({} lines read)",
+                        path.file_name().unwrap_or_default().to_string_lossy(),
+                        content.lines().count().min(max_lines)
+                    ),
+                );
                 preview
             }
             Err(e) => {
-                logging::log("UI", &format!(
-                    "Preview error: {} - {}",
-                    path.display(),
-                    e
-                ));
+                logging::log("UI", &format!("Preview error: {} - {}", path.display(), e));
                 format!("Error reading file: {}", e)
             }
         }
     }
-    
+
     /// Render toast notifications from the toast manager
-    /// 
+    ///
     /// Toasts are positioned in the top-right corner and stack vertically.
     /// Each toast has its own dismiss callback that removes it from the manager.
     fn render_toasts(&mut self, _cx: &mut Context<Self>) -> Option<impl IntoElement> {
         // Tick the manager to handle auto-dismiss
         self.toast_manager.tick();
-        
+
         // Clean up dismissed toasts
         self.toast_manager.cleanup();
-        
+
         // Check if toasts need update (consume the flag to prevent repeated checks)
         // Note: We don't call cx.notify() here as it's an anti-pattern during render.
         // Toast updates are handled by timer-based refresh mechanisms.
         let _ = self.toast_manager.take_needs_notify();
-        
+
         let visible = self.toast_manager.visible_toasts();
         if visible.is_empty() {
             return None;
         }
-        
+
         // Use design tokens for consistent spacing
         let tokens = get_tokens(self.current_design);
         let spacing = tokens.spacing();
-        
+
         // Build toast container (positioned in top-right via absolute positioning)
         let mut toast_container = div()
             .absolute()
@@ -4844,51 +5777,52 @@ impl ScriptListApp {
             .flex()
             .flex_col()
             .gap(px(spacing.gap_sm))
-            .w(px(380.0));  // Fixed width for toasts
-        
+            .w(px(380.0)); // Fixed width for toasts
+
         // Add each visible toast
         for notification in visible {
             // Clone the toast for rendering - unfortunately we need to recreate it
             // since Toast::render consumes self
-            let toast_colors = ToastColors::from_theme(&self.theme, notification.toast.get_variant());
+            let toast_colors =
+                ToastColors::from_theme(&self.theme, notification.toast.get_variant());
             let toast = Toast::new(notification.toast.get_message().clone(), toast_colors)
                 .variant(notification.toast.get_variant())
                 .duration_ms(notification.toast.get_duration_ms())
                 .dismissible(true);
-            
+
             // Add details if the toast has them
             let toast = toast.details_opt(notification.toast.get_details().cloned());
-            
+
             toast_container = toast_container.child(toast);
         }
-        
+
         Some(toast_container)
     }
-    
+
     /// Render the error notification if one exists
-    /// 
+    ///
     /// Returns None if no notification is present.
     /// Uses theme colors (colors.ui.error, colors.ui.warning, colors.ui.info)
     /// styled with bg, rounded corners, padding.
     fn render_error_notification(&self) -> Option<impl IntoElement> {
         let notification = self.error_notification.as_ref()?;
-        
+
         // Use design tokens for consistent spacing
         let tokens = get_tokens(self.current_design);
         let spacing = tokens.spacing();
         let visual = tokens.visual();
         let typography = tokens.typography();
-        
+
         // Get the appropriate color based on severity
         let bg_color = match notification.severity {
             ErrorSeverity::Error | ErrorSeverity::Critical => self.theme.colors.ui.error,
             ErrorSeverity::Warning => self.theme.colors.ui.warning,
             ErrorSeverity::Info => self.theme.colors.ui.info,
         };
-        
+
         // Use contrasting text color (white for all severities works well)
         let text_color = 0xffffff;
-        
+
         // Icon based on severity
         let icon = match notification.severity {
             ErrorSeverity::Critical => "⛔",
@@ -4896,7 +5830,7 @@ impl ScriptListApp {
             ErrorSeverity::Warning => "⚠",
             ErrorSeverity::Info => "ℹ",
         };
-        
+
         Some(
             div()
                 .w_full()
@@ -4912,23 +5846,18 @@ impl ScriptListApp {
                 .gap_2()
                 .font_family(typography.font_family)
                 // Icon
-                .child(
-                    div()
-                        .text_color(rgb(text_color))
-                        .text_sm()
-                        .child(icon)
-                )
+                .child(div().text_color(rgb(text_color)).text_sm().child(icon))
                 // Message text
                 .child(
                     div()
                         .flex_1()
                         .text_color(rgb(text_color))
                         .text_sm()
-                        .child(notification.message.clone())
-                )
+                        .child(notification.message.clone()),
+                ),
         )
     }
-    
+
     /// Render the preview panel showing details of the selected script/scriptlet
     fn render_preview_panel(&mut self, _cx: &mut Context<Self>) -> impl IntoElement {
         // Get grouped results to map from selected_index to actual result
@@ -4940,20 +5869,20 @@ impl ScriptListApp {
             &self.frecency_store,
             &self.filter_text,
         );
-        
+
         // Get the result index from the grouped item
         let selected_result = match grouped_items.get(self.selected_index) {
             Some(GroupedListItem::Item(idx)) => flat_results.get(*idx).cloned(),
             _ => None,
         };
-        
+
         // Use design tokens for GLOBAL theming - design applies to ALL components
         let tokens = get_tokens(self.current_design);
         let colors = tokens.colors();
         let spacing = tokens.spacing();
         let typography = tokens.typography();
         let visual = tokens.visual();
-        
+
         // Map design tokens to local variables (all designs use tokens now)
         let bg_main = colors.background;
         let ui_border = colors.border;
@@ -4963,7 +5892,7 @@ impl ScriptListApp {
         let bg_search_box = colors.background_tertiary;
         let border_radius = visual.radius_md;
         let font_family = typography.font_family;
-        
+
         // Preview panel container with left border separator
         let mut panel = div()
             .w_full()
@@ -4976,21 +5905,22 @@ impl ScriptListApp {
             .flex_col()
             .overflow_y_hidden()
             .font_family(font_family);
-        
+
         match selected_result {
             Some(ref result) => {
                 match result {
                     scripts::SearchResult::Script(script_match) => {
                         let script = &script_match.script;
-                        
+
                         // Source indicator with match highlighting (e.g., "script: foo.ts")
                         let filename = &script_match.filename;
                         let filename_indices = &script_match.match_indices.filename_indices;
-                        
+
                         // Render filename with highlighted matched characters
-                        let path_segments = render_path_with_highlights(filename, filename, filename_indices);
+                        let path_segments =
+                            render_path_with_highlights(filename, filename, filename_indices);
                         let accent_color = colors.accent;
-                        
+
                         let mut path_div = div()
                             .flex()
                             .flex_row()
@@ -5001,22 +5931,20 @@ impl ScriptListApp {
                             .child(
                                 div()
                                     .text_color(rgba((text_muted << 8) | 0x99))
-                                    .child("script: ")
+                                    .child("script: "),
                             );
-                        
+
                         for (text, is_highlighted) in path_segments {
                             let color = if is_highlighted {
                                 rgb(accent_color)
                             } else {
                                 rgba((text_muted << 8) | 0x99)
                             };
-                            path_div = path_div.child(
-                                div().text_color(color).child(text)
-                            );
+                            path_div = path_div.child(div().text_color(color).child(text));
                         }
-                        
+
                         panel = panel.child(path_div);
-                        
+
                         // Script name header
                         panel = panel.child(
                             div()
@@ -5024,9 +5952,9 @@ impl ScriptListApp {
                                 .font_weight(gpui::FontWeight::SEMIBOLD)
                                 .text_color(rgb(text_primary))
                                 .pb(px(spacing.padding_sm))
-                                .child(format!("{}.{}", script.name, script.extension))
+                                .child(format!("{}.{}", script.name, script.extension)),
                         );
-                        
+
                         // Description (if present)
                         if let Some(desc) = &script.description {
                             panel = panel.child(
@@ -5039,40 +5967,42 @@ impl ScriptListApp {
                                             .text_xs()
                                             .text_color(rgb(text_muted))
                                             .pb(px(spacing.padding_xs / 2.0))
-                                            .child("Description")
+                                            .child("Description"),
                                     )
                                     .child(
                                         div()
                                             .text_sm()
                                             .text_color(rgb(text_secondary))
-                                            .child(desc.clone())
-                                    )
+                                            .child(desc.clone()),
+                                    ),
                             );
                         }
-                        
+
                         // Divider
                         panel = panel.child(
                             div()
                                 .w_full()
                                 .h(px(visual.border_thin))
                                 .bg(rgba((ui_border << 8) | 0x60))
-                                .my(px(spacing.padding_sm))
+                                .my(px(spacing.padding_sm)),
                         );
-                        
+
                         // Code preview header
                         panel = panel.child(
                             div()
                                 .text_xs()
                                 .text_color(rgb(text_muted))
                                 .pb(px(spacing.padding_sm))
-                                .child("Code Preview")
+                                .child("Code Preview"),
                         );
-                        
+
                         // Use cached syntax-highlighted lines (avoids file I/O and highlighting on every render)
                         let script_path = script.path.to_string_lossy().to_string();
                         let lang = script.extension.clone();
-                        let lines = self.get_or_update_preview_cache(&script_path, &lang).to_vec();
-                        
+                        let lines = self
+                            .get_or_update_preview_cache(&script_path, &lang)
+                            .to_vec();
+
                         // Build code container - render line by line with monospace font
                         let mut code_container = div()
                             .w_full()
@@ -5083,7 +6013,7 @@ impl ScriptListApp {
                             .overflow_hidden()
                             .flex()
                             .flex_col();
-                        
+
                         // Render each line as a row of spans with monospace font
                         for line in lines {
                             let mut line_div = div()
@@ -5093,36 +6023,37 @@ impl ScriptListApp {
                                 .font_family(typography.font_family_mono)
                                 .text_xs()
                                 .min_h(px(spacing.padding_lg)); // Line height
-                            
+
                             if line.spans.is_empty() {
                                 // Empty line - add a space to preserve height
                                 line_div = line_div.child(" ");
                             } else {
                                 for span in line.spans {
-                                    line_div = line_div.child(
-                                        div()
-                                            .text_color(rgb(span.color))
-                                            .child(span.text)
-                                    );
+                                    line_div = line_div
+                                        .child(div().text_color(rgb(span.color)).child(span.text));
                                 }
                             }
-                            
+
                             code_container = code_container.child(line_div);
                         }
-                        
+
                         panel = panel.child(code_container);
                     }
                     scripts::SearchResult::Scriptlet(scriptlet_match) => {
                         let scriptlet = &scriptlet_match.scriptlet;
-                        
+
                         // Source indicator with match highlighting (e.g., "scriptlet: foo.md")
                         if let Some(ref display_file_path) = scriptlet_match.display_file_path {
                             let filename_indices = &scriptlet_match.match_indices.filename_indices;
-                            
+
                             // Render filename with highlighted matched characters
-                            let path_segments = render_path_with_highlights(display_file_path, display_file_path, filename_indices);
+                            let path_segments = render_path_with_highlights(
+                                display_file_path,
+                                display_file_path,
+                                filename_indices,
+                            );
                             let accent_color = colors.accent;
-                            
+
                             let mut path_div = div()
                                 .flex()
                                 .flex_row()
@@ -5133,23 +6064,21 @@ impl ScriptListApp {
                                 .child(
                                     div()
                                         .text_color(rgba((text_muted << 8) | 0x99))
-                                        .child("scriptlet: ")
+                                        .child("scriptlet: "),
                                 );
-                            
+
                             for (text, is_highlighted) in path_segments {
                                 let color = if is_highlighted {
                                     rgb(accent_color)
                                 } else {
                                     rgba((text_muted << 8) | 0x99)
                                 };
-                                path_div = path_div.child(
-                                    div().text_color(color).child(text)
-                                );
+                                path_div = path_div.child(div().text_color(color).child(text));
                             }
-                            
+
                             panel = panel.child(path_div);
                         }
-                        
+
                         // Scriptlet name header
                         panel = panel.child(
                             div()
@@ -5157,11 +6086,9 @@ impl ScriptListApp {
                                 .font_weight(gpui::FontWeight::SEMIBOLD)
                                 .text_color(rgb(text_primary))
                                 .pb(px(spacing.padding_sm))
-                                .child(scriptlet.name.clone())
+                                .child(scriptlet.name.clone()),
                         );
-                        
 
-                        
                         // Description (if present)
                         if let Some(desc) = &scriptlet.description {
                             panel = panel.child(
@@ -5174,17 +6101,17 @@ impl ScriptListApp {
                                             .text_xs()
                                             .text_color(rgb(text_muted))
                                             .pb(px(spacing.padding_xs / 2.0))
-                                            .child("Description")
+                                            .child("Description"),
                                     )
                                     .child(
                                         div()
                                             .text_sm()
                                             .text_color(rgb(text_secondary))
-                                            .child(desc.clone())
-                                    )
+                                            .child(desc.clone()),
+                                    ),
                             );
                         }
-                        
+
                         // Shortcut (if present)
                         if let Some(shortcut) = &scriptlet.shortcut {
                             panel = panel.child(
@@ -5197,43 +6124,44 @@ impl ScriptListApp {
                                             .text_xs()
                                             .text_color(rgb(text_muted))
                                             .pb(px(spacing.padding_xs / 2.0))
-                                            .child("Hotkey")
+                                            .child("Hotkey"),
                                     )
                                     .child(
                                         div()
                                             .text_sm()
                                             .text_color(rgb(text_secondary))
-                                            .child(shortcut.clone())
-                                    )
+                                            .child(shortcut.clone()),
+                                    ),
                             );
                         }
-                        
+
                         // Divider
                         panel = panel.child(
                             div()
                                 .w_full()
                                 .h(px(visual.border_thin))
                                 .bg(rgba((ui_border << 8) | 0x60))
-                                .my(px(spacing.padding_sm))
+                                .my(px(spacing.padding_sm)),
                         );
-                        
+
                         // Content preview header
                         panel = panel.child(
                             div()
                                 .text_xs()
                                 .text_color(rgb(text_muted))
                                 .pb(px(spacing.padding_sm))
-                                .child("Content Preview")
+                                .child("Content Preview"),
                         );
-                        
+
                         // Display scriptlet code with syntax highlighting (first 15 lines)
                         // Note: Scriptlets store code in memory, no file I/O needed (no cache benefit)
-                        let code_preview: String = scriptlet.code
+                        let code_preview: String = scriptlet
+                            .code
                             .lines()
                             .take(15)
                             .collect::<Vec<_>>()
                             .join("\n");
-                        
+
                         // Determine language from tool (bash, js, etc.)
                         let lang = match scriptlet.tool.as_str() {
                             "bash" | "zsh" | "sh" => "bash",
@@ -5241,7 +6169,7 @@ impl ScriptListApp {
                             _ => &scriptlet.tool,
                         };
                         let lines = highlight_code_lines(&code_preview, lang);
-                        
+
                         // Build code container - render line by line with monospace font
                         let mut code_container = div()
                             .w_full()
@@ -5252,7 +6180,7 @@ impl ScriptListApp {
                             .overflow_hidden()
                             .flex()
                             .flex_col();
-                        
+
                         // Render each line as a row of spans with monospace font
                         for line in lines {
                             let mut line_div = div()
@@ -5262,28 +6190,25 @@ impl ScriptListApp {
                                 .font_family(typography.font_family_mono)
                                 .text_xs()
                                 .min_h(px(spacing.padding_lg)); // Line height
-                            
+
                             if line.spans.is_empty() {
                                 // Empty line - add a space to preserve height
                                 line_div = line_div.child(" ");
                             } else {
                                 for span in line.spans {
-                                    line_div = line_div.child(
-                                        div()
-                                            .text_color(rgb(span.color))
-                                            .child(span.text)
-                                    );
+                                    line_div = line_div
+                                        .child(div().text_color(rgb(span.color)).child(span.text));
                                 }
                             }
-                            
+
                             code_container = code_container.child(line_div);
                         }
-                        
+
                         panel = panel.child(code_container);
                     }
                     scripts::SearchResult::BuiltIn(builtin_match) => {
                         let builtin = &builtin_match.entry;
-                        
+
                         // Built-in name header
                         panel = panel.child(
                             div()
@@ -5291,9 +6216,9 @@ impl ScriptListApp {
                                 .font_weight(gpui::FontWeight::SEMIBOLD)
                                 .text_color(rgb(text_primary))
                                 .pb(px(spacing.padding_sm))
-                                .child(builtin.name.clone())
+                                .child(builtin.name.clone()),
                         );
-                        
+
                         // Description
                         panel = panel.child(
                             div()
@@ -5305,16 +6230,16 @@ impl ScriptListApp {
                                         .text_xs()
                                         .text_color(rgb(text_muted))
                                         .pb(px(spacing.padding_xs / 2.0))
-                                        .child("Description")
+                                        .child("Description"),
                                 )
                                 .child(
                                     div()
                                         .text_sm()
                                         .text_color(rgb(text_secondary))
-                                        .child(builtin.description.clone())
-                                )
+                                        .child(builtin.description.clone()),
+                                ),
                         );
-                        
+
                         // Keywords
                         if !builtin.keywords.is_empty() {
                             panel = panel.child(
@@ -5327,32 +6252,38 @@ impl ScriptListApp {
                                             .text_xs()
                                             .text_color(rgb(text_muted))
                                             .pb(px(spacing.padding_xs / 2.0))
-                                            .child("Keywords")
+                                            .child("Keywords"),
                                     )
                                     .child(
                                         div()
                                             .text_sm()
                                             .text_color(rgb(text_secondary))
-                                            .child(builtin.keywords.join(", "))
-                                    )
+                                            .child(builtin.keywords.join(", ")),
+                                    ),
                             );
                         }
-                        
+
                         // Divider
                         panel = panel.child(
                             div()
                                 .w_full()
                                 .h(px(visual.border_thin))
                                 .bg(rgba((ui_border << 8) | 0x60))
-                                .my(px(spacing.padding_sm))
+                                .my(px(spacing.padding_sm)),
                         );
-                        
+
                         // Feature type indicator
                         let feature_type: String = match &builtin.feature {
-                            builtins::BuiltInFeature::ClipboardHistory => "Clipboard History Manager".to_string(),
-                            builtins::BuiltInFeature::AppLauncher => "Application Launcher".to_string(),
+                            builtins::BuiltInFeature::ClipboardHistory => {
+                                "Clipboard History Manager".to_string()
+                            }
+                            builtins::BuiltInFeature::AppLauncher => {
+                                "Application Launcher".to_string()
+                            }
                             builtins::BuiltInFeature::App(name) => name.clone(),
-                            builtins::BuiltInFeature::WindowSwitcher => "Window Manager".to_string(),
+                            builtins::BuiltInFeature::WindowSwitcher => {
+                                "Window Manager".to_string()
+                            }
                             builtins::BuiltInFeature::DesignGallery => "Design Gallery".to_string(),
                         };
                         panel = panel.child(
@@ -5364,19 +6295,19 @@ impl ScriptListApp {
                                         .text_xs()
                                         .text_color(rgb(text_muted))
                                         .pb(px(spacing.padding_xs / 2.0))
-                                        .child("Feature Type")
+                                        .child("Feature Type"),
                                 )
                                 .child(
                                     div()
                                         .text_sm()
                                         .text_color(rgb(text_secondary))
-                                        .child(feature_type)
-                                )
+                                        .child(feature_type),
+                                ),
                         );
                     }
                     scripts::SearchResult::App(app_match) => {
                         let app = &app_match.app;
-                        
+
                         // App name header
                         panel = panel.child(
                             div()
@@ -5384,9 +6315,9 @@ impl ScriptListApp {
                                 .font_weight(gpui::FontWeight::SEMIBOLD)
                                 .text_color(rgb(text_primary))
                                 .pb(px(spacing.padding_sm))
-                                .child(app.name.clone())
+                                .child(app.name.clone()),
                         );
-                        
+
                         // Path
                         panel = panel.child(
                             div()
@@ -5398,16 +6329,16 @@ impl ScriptListApp {
                                         .text_xs()
                                         .text_color(rgb(text_muted))
                                         .pb(px(spacing.padding_xs / 2.0))
-                                        .child("Path")
+                                        .child("Path"),
                                 )
                                 .child(
                                     div()
                                         .text_sm()
                                         .text_color(rgb(text_secondary))
-                                        .child(app.path.to_string_lossy().to_string())
-                                )
+                                        .child(app.path.to_string_lossy().to_string()),
+                                ),
                         );
-                        
+
                         // Bundle ID (if available)
                         if let Some(bundle_id) = &app.bundle_id {
                             panel = panel.child(
@@ -5420,26 +6351,26 @@ impl ScriptListApp {
                                             .text_xs()
                                             .text_color(rgb(text_muted))
                                             .pb(px(spacing.padding_xs / 2.0))
-                                            .child("Bundle ID")
+                                            .child("Bundle ID"),
                                     )
                                     .child(
                                         div()
                                             .text_sm()
                                             .text_color(rgb(text_secondary))
-                                            .child(bundle_id.clone())
-                                    )
+                                            .child(bundle_id.clone()),
+                                    ),
                             );
                         }
-                        
+
                         // Divider
                         panel = panel.child(
                             div()
                                 .w_full()
                                 .h(px(visual.border_thin))
                                 .bg(rgba((ui_border << 8) | 0x60))
-                                .my(px(spacing.padding_sm))
+                                .my(px(spacing.padding_sm)),
                         );
-                        
+
                         // Type indicator
                         panel = panel.child(
                             div()
@@ -5450,19 +6381,19 @@ impl ScriptListApp {
                                         .text_xs()
                                         .text_color(rgb(text_muted))
                                         .pb(px(spacing.padding_xs / 2.0))
-                                        .child("Type")
+                                        .child("Type"),
                                 )
                                 .child(
                                     div()
                                         .text_sm()
                                         .text_color(rgb(text_secondary))
-                                        .child("Application")
-                                )
+                                        .child("Application"),
+                                ),
                         );
                     }
                     scripts::SearchResult::Window(window_match) => {
                         let window = &window_match.window;
-                        
+
                         // Window title header
                         panel = panel.child(
                             div()
@@ -5470,9 +6401,9 @@ impl ScriptListApp {
                                 .font_weight(gpui::FontWeight::SEMIBOLD)
                                 .text_color(rgb(text_primary))
                                 .pb(px(spacing.padding_sm))
-                                .child(window.title.clone())
+                                .child(window.title.clone()),
                         );
-                        
+
                         // App name
                         panel = panel.child(
                             div()
@@ -5484,16 +6415,16 @@ impl ScriptListApp {
                                         .text_xs()
                                         .text_color(rgb(text_muted))
                                         .pb(px(spacing.padding_xs / 2.0))
-                                        .child("Application")
+                                        .child("Application"),
                                 )
                                 .child(
                                     div()
                                         .text_sm()
                                         .text_color(rgb(text_secondary))
-                                        .child(window.app.clone())
-                                )
+                                        .child(window.app.clone()),
+                                ),
                         );
-                        
+
                         // Bounds
                         panel = panel.child(
                             div()
@@ -5505,27 +6436,28 @@ impl ScriptListApp {
                                         .text_xs()
                                         .text_color(rgb(text_muted))
                                         .pb(px(spacing.padding_xs / 2.0))
-                                        .child("Position & Size")
+                                        .child("Position & Size"),
                                 )
-                                .child(
-                                    div()
-                                        .text_sm()
-                                        .text_color(rgb(text_secondary))
-                                        .child(format!("{}×{} at ({}, {})", 
-                                            window.bounds.width, window.bounds.height,
-                                            window.bounds.x, window.bounds.y))
-                                )
+                                .child(div().text_sm().text_color(rgb(text_secondary)).child(
+                                    format!(
+                                        "{}×{} at ({}, {})",
+                                        window.bounds.width,
+                                        window.bounds.height,
+                                        window.bounds.x,
+                                        window.bounds.y
+                                    ),
+                                )),
                         );
-                        
+
                         // Divider
                         panel = panel.child(
                             div()
                                 .w_full()
                                 .h(px(visual.border_thin))
                                 .bg(rgba((ui_border << 8) | 0x60))
-                                .my(px(spacing.padding_sm))
+                                .my(px(spacing.padding_sm)),
                         );
-                        
+
                         // Type indicator
                         panel = panel.child(
                             div()
@@ -5536,14 +6468,14 @@ impl ScriptListApp {
                                         .text_xs()
                                         .text_color(rgb(text_muted))
                                         .pb(px(spacing.padding_xs / 2.0))
-                                        .child("Type")
+                                        .child("Type"),
                                 )
                                 .child(
                                     div()
                                         .text_sm()
                                         .text_color(rgb(text_secondary))
-                                        .child("Window")
-                                )
+                                        .child("Window"),
+                                ),
                         );
                     }
                 }
@@ -5560,21 +6492,24 @@ impl ScriptListApp {
                         .justify_center()
                         .text_color(rgb(text_muted))
                         .child(
-                            if self.filter_text.is_empty() && self.scripts.is_empty() && self.scriptlets.is_empty() {
+                            if self.filter_text.is_empty()
+                                && self.scripts.is_empty()
+                                && self.scriptlets.is_empty()
+                            {
                                 "No scripts or snippets found"
                             } else if !self.filter_text.is_empty() {
                                 "No matching scripts"
                             } else {
                                 "Select a script to preview"
-                            }
-                        )
+                            },
+                        ),
                 );
             }
         }
-        
+
         panel
     }
-    
+
     /// Get the ScriptInfo for the currently focused/selected script
     fn get_focused_script_info(&self) -> Option<ScriptInfo> {
         // Get grouped results to map from selected_index to actual result
@@ -5586,34 +6521,47 @@ impl ScriptListApp {
             &self.frecency_store,
             &self.filter_text,
         );
-        
+
         // Get the result index from the grouped item
         let result_idx = match grouped_items.get(self.selected_index) {
             Some(GroupedListItem::Item(idx)) => Some(*idx),
             _ => None,
         };
-        
+
         if let Some(idx) = result_idx {
             if let Some(result) = flat_results.get(idx) {
                 match result {
-                    scripts::SearchResult::Script(m) => {
-                        Some(ScriptInfo::new(&m.script.name, m.script.path.to_string_lossy()))
-                    }
+                    scripts::SearchResult::Script(m) => Some(ScriptInfo::new(
+                        &m.script.name,
+                        m.script.path.to_string_lossy(),
+                    )),
                     scripts::SearchResult::Scriptlet(m) => {
                         // Scriptlets don't have a path, use name as identifier
-                        Some(ScriptInfo::new(&m.scriptlet.name, format!("scriptlet:{}", &m.scriptlet.name)))
+                        Some(ScriptInfo::new(
+                            &m.scriptlet.name,
+                            format!("scriptlet:{}", &m.scriptlet.name),
+                        ))
                     }
                     scripts::SearchResult::BuiltIn(m) => {
                         // Built-ins use their id as identifier
-                        Some(ScriptInfo::new(&m.entry.name, format!("builtin:{}", &m.entry.id)))
+                        Some(ScriptInfo::new(
+                            &m.entry.name,
+                            format!("builtin:{}", &m.entry.id),
+                        ))
                     }
                     scripts::SearchResult::App(m) => {
                         // Apps use their path as identifier
-                        Some(ScriptInfo::new(&m.app.name, m.app.path.to_string_lossy().to_string()))
+                        Some(ScriptInfo::new(
+                            &m.app.name,
+                            m.app.path.to_string_lossy().to_string(),
+                        ))
                     }
                     scripts::SearchResult::Window(m) => {
                         // Windows use their id as identifier
-                        Some(ScriptInfo::new(&m.window.title, format!("window:{}", m.window.id)))
+                        Some(ScriptInfo::new(
+                            &m.window.title,
+                            format!("window:{}", m.window.id),
+                        ))
                     }
                 }
             } else {
@@ -5623,7 +6571,7 @@ impl ScriptListApp {
             None
         }
     }
-    
+
     fn render_script_list(&mut self, cx: &mut Context<Self>) -> AnyElement {
         // Get design tokens for current design variant
         let tokens = get_tokens(self.current_design);
@@ -5632,11 +6580,11 @@ impl ScriptListApp {
         let design_visual = tokens.visual();
         let design_typography = tokens.typography();
         let theme = &self.theme;
-        
+
         // For Default design, use theme.colors for backward compatibility
         // For other designs, use design tokens
         let is_default_design = self.current_design == DesignVariant::Default;
-        
+
         // P4: Pre-compute theme values using ListItemColors
         let _list_colors = ListItemColors::from_theme(theme);
         logging::log_debug("PERF", "P4: Using ListItemColors for render closure");
@@ -5652,10 +6600,10 @@ impl ScriptListApp {
             &self.frecency_store,
             &self.filter_text,
         );
-        
+
         let item_count = grouped_items.len();
         let _total_len = self.scripts.len() + self.scriptlets.len();
-        
+
         // Handle edge cases - keep selected_index in valid bounds
         // Also skip section headers when adjusting bounds
         if item_count > 0 {
@@ -5663,7 +6611,8 @@ impl ScriptListApp {
                 self.selected_index = item_count.saturating_sub(1);
             }
             // If we land on a section header, move to first valid item
-            if let Some(GroupedListItem::SectionHeader(_)) = grouped_items.get(self.selected_index) {
+            if let Some(GroupedListItem::SectionHeader(_)) = grouped_items.get(self.selected_index)
+            {
                 // Move down to find first Item
                 for (i, item) in grouped_items.iter().enumerate().skip(self.selected_index) {
                     if matches!(item, GroupedListItem::Item(_)) {
@@ -5676,9 +6625,17 @@ impl ScriptListApp {
 
         // Build script list using uniform_list for proper virtualized scrolling
         // Use design tokens for empty state styling
-        let empty_text_color = if is_default_design { theme.colors.text.muted } else { design_colors.text_muted };
-        let empty_font_family = if is_default_design { ".AppleSystemUIFont" } else { design_typography.font_family };
-        
+        let empty_text_color = if is_default_design {
+            theme.colors.text.muted
+        } else {
+            design_colors.text_muted
+        };
+        let empty_font_family = if is_default_design {
+            ".AppleSystemUIFont"
+        } else {
+            design_typography.font_family
+        };
+
         let list_element: AnyElement = if item_count == 0 {
             div()
                 .w_full()
@@ -5699,17 +6656,17 @@ impl ScriptListApp {
             // Note: Hover-to-select is implemented via on_mouse_down on each item wrapper
             // to update selected_index when the user clicks (selecting on hover alone would
             // be too aggressive - we update on hover enter instead for visual highlight)
-            
+
             // Clone grouped_items and flat_results for the closure
             let grouped_items_clone = grouped_items.clone();
             let flat_results_clone = flat_results.clone();
-            
+
             // Calculate scrollbar parameters
             // Estimate visible items based on typical container height
             // The actual container height varies, but we use a reasonable estimate
             let estimated_container_height = 400.0_f32; // Typical visible height
             let visible_items = (estimated_container_height / LIST_ITEM_HEIGHT) as usize;
-            
+
             // Use selected_index as approximate scroll offset
             // When scrolling, the selected item should be visible, so this gives a reasonable estimate
             let scroll_offset = if self.selected_index > visible_items.saturating_sub(1) {
@@ -5717,23 +6674,20 @@ impl ScriptListApp {
             } else {
                 0
             };
-            
+
             // Get scrollbar colors from theme or design
             let scrollbar_colors = if is_default_design {
                 ScrollbarColors::from_theme(theme)
             } else {
                 ScrollbarColors::from_design(&design_colors)
             };
-            
+
             // Create scrollbar (only visible if content overflows and scrolling is active)
-            let scrollbar = Scrollbar::new(
-                item_count,
-                visible_items,
-                scroll_offset,
-                scrollbar_colors,
-            ).container_height(estimated_container_height)
-             .visible(self.is_scrolling);
-            
+            let scrollbar =
+                Scrollbar::new(item_count, visible_items, scroll_offset, scrollbar_colors)
+                    .container_height(estimated_container_height)
+                    .visible(self.is_scrolling);
+
             let list = uniform_list(
                 "script-list",
                 item_count,
@@ -5747,7 +6701,7 @@ impl ScriptListApp {
                     let design = this.current_design;
                     // Pre-compute colors for section headers
                     let colors = ListItemColors::from_theme(&this.theme);
-                    
+
                     for ix in visible_range.clone() {
                         if let Some(grouped_item) = grouped_items_clone.get(ix) {
                             match grouped_item {
@@ -5766,14 +6720,14 @@ impl ScriptListApp {
                                     if let Some(result) = flat_results_clone.get(*result_idx) {
                                         let is_selected = ix == current_selected;
                                         let is_hovered = current_hovered == Some(ix);
-                                        
+
                                         // Create hover handler that updates hovered_index (subtle visual)
                                         // This is SEPARATE from selected_index (full focus styling)
                                         // P0-2: Uses 16ms debounce to reduce ~50% unnecessary re-renders
                                         let hover_handler = cx.listener(move |this: &mut ScriptListApp, hovered: &bool, _window, cx| {
                                             let now = std::time::Instant::now();
                                             const HOVER_DEBOUNCE_MS: u64 = 16; // ~1 frame at 60fps
-                                            
+
                                             if *hovered {
                                                 // Mouse entered - set hovered_index with debounce
                                                 if this.hovered_index != Some(ix) {
@@ -5793,7 +6747,7 @@ impl ScriptListApp {
                                                 }
                                             }
                                         });
-                                        
+
                                         // Create click handler that sets selected_index to clicked item
                                         // This gives full focus styling (dark bg + accent bar)
                                         // NOTE: Click only focuses - Enter key executes
@@ -5803,7 +6757,7 @@ impl ScriptListApp {
                                                 cx.notify();
                                             }
                                         });
-                                        
+
                                         // Dispatch to design-specific item renderer
                                         // is_hovered provides subtle visual feedback (25% opacity bg)
                                         // is_selected provides full focus styling (50% opacity bg + accent bar)
@@ -5815,7 +6769,7 @@ impl ScriptListApp {
                                             is_hovered,
                                             colors,
                                         );
-                                        
+
                                         // Wrap in div with hover and click handlers
                                         // - hover: updates hovered_index for subtle visual feedback
                                         // - click: sets selected_index (focus only, Enter to execute)
@@ -5836,7 +6790,7 @@ impl ScriptListApp {
             )
             .h_full()
             .track_scroll(&self.list_scroll_handle);
-            
+
             // Wrap uniform_list in a relative container with scrollbar overlay
             // NOTE: The wrapper needs flex + h_full for uniform_list to properly calculate visible range
             div()
@@ -5864,10 +6818,13 @@ impl ScriptListApp {
                 .p(px(design_spacing.padding_md))
                 .max_h(px(120.))
                 .font_family("SF Mono");
-            
+
             for log_line in logs.iter().rev() {
                 log_container = log_container.child(
-                    div().text_color(rgb(theme.colors.ui.success)).text_xs().child(log_line.clone())
+                    div()
+                        .text_color(rgb(theme.colors.ui.success))
+                        .text_xs()
+                        .child(log_line.clone()),
                 );
             }
             Some(log_container)
@@ -5882,185 +6839,199 @@ impl ScriptListApp {
         };
         let filter_is_empty = self.filter_text.is_empty();
 
-        let handle_key = cx.listener(move |this: &mut Self, event: &gpui::KeyDownEvent, window: &mut Window, cx: &mut Context<Self>| {
-            let key_str = event.keystroke.key.to_lowercase();
-            let has_cmd = event.keystroke.modifiers.platform;
-            
-            if has_cmd {
-                let has_shift = event.keystroke.modifiers.shift;
-                
-                match key_str.as_str() {
-                    "l" => { 
-                        this.toggle_logs(cx); 
-                        return; 
-                    }
-                    "k" => { 
-                        this.toggle_actions(cx, window); 
-                        return; 
-                    }
-                    // Cmd+1 cycles through all designs
-                    "1" => {
-                        this.cycle_design(cx);
-                        return;
-                    }
-                    // Script context shortcuts (require a selected script)
-                    "e" => {
-                        // Cmd+E - Edit Script
-                        this.handle_action("edit_script".to_string(), cx);
-                        return;
-                    }
-                    "f" if has_shift => {
-                        // Cmd+Shift+F - Reveal in Finder
-                        this.handle_action("reveal_in_finder".to_string(), cx);
-                        return;
-                    }
-                    "c" if has_shift => {
-                        // Cmd+Shift+C - Copy Path
-                        this.handle_action("copy_path".to_string(), cx);
-                        return;
-                    }
-                    // Global shortcuts
-                    "n" => {
-                        // Cmd+N - Create Script
-                        this.handle_action("create_script".to_string(), cx);
-                        return;
-                    }
-                    "r" => {
-                        // Cmd+R - Reload Scripts
-                        this.handle_action("reload_scripts".to_string(), cx);
-                        return;
-                    }
-                    "," => {
-                        // Cmd+, - Settings
-                        this.handle_action("settings".to_string(), cx);
-                        return;
-                    }
-                    "q" => {
-                        // Cmd+Q - Quit
-                        this.handle_action("quit".to_string(), cx);
-                        return;
-                    }
-                    _ => {}
-                }
-            }
-            
-            // If actions popup is open, route keyboard events to it
-            if this.show_actions_popup {
-                if let Some(ref dialog) = this.actions_dialog {
+        let handle_key = cx.listener(
+            move |this: &mut Self,
+                  event: &gpui::KeyDownEvent,
+                  window: &mut Window,
+                  cx: &mut Context<Self>| {
+                let key_str = event.keystroke.key.to_lowercase();
+                let has_cmd = event.keystroke.modifiers.platform;
+
+                if has_cmd {
+                    let has_shift = event.keystroke.modifiers.shift;
+
                     match key_str.as_str() {
-                        "up" | "arrowup" => {
-                            dialog.update(cx, |d, cx| d.move_up(cx));
+                        "l" => {
+                            this.toggle_logs(cx);
                             return;
                         }
-                        "down" | "arrowdown" => {
-                            dialog.update(cx, |d, cx| d.move_down(cx));
+                        "k" => {
+                            this.toggle_actions(cx, window);
                             return;
                         }
-                        "enter" => {
-                            // Get the selected action and execute it
-                            let action_id = dialog.read(cx).get_selected_action_id();
-                            if let Some(action_id) = action_id {
-                                logging::log("ACTIONS", &format!("Executing action: {}", action_id));
+                        // Cmd+1 cycles through all designs
+                        "1" => {
+                            this.cycle_design(cx);
+                            return;
+                        }
+                        // Script context shortcuts (require a selected script)
+                        "e" => {
+                            // Cmd+E - Edit Script
+                            this.handle_action("edit_script".to_string(), cx);
+                            return;
+                        }
+                        "f" if has_shift => {
+                            // Cmd+Shift+F - Reveal in Finder
+                            this.handle_action("reveal_in_finder".to_string(), cx);
+                            return;
+                        }
+                        "c" if has_shift => {
+                            // Cmd+Shift+C - Copy Path
+                            this.handle_action("copy_path".to_string(), cx);
+                            return;
+                        }
+                        // Global shortcuts
+                        "n" => {
+                            // Cmd+N - Create Script
+                            this.handle_action("create_script".to_string(), cx);
+                            return;
+                        }
+                        "r" => {
+                            // Cmd+R - Reload Scripts
+                            this.handle_action("reload_scripts".to_string(), cx);
+                            return;
+                        }
+                        "," => {
+                            // Cmd+, - Settings
+                            this.handle_action("settings".to_string(), cx);
+                            return;
+                        }
+                        "q" => {
+                            // Cmd+Q - Quit
+                            this.handle_action("quit".to_string(), cx);
+                            return;
+                        }
+                        _ => {}
+                    }
+                }
+
+                // If actions popup is open, route keyboard events to it
+                if this.show_actions_popup {
+                    if let Some(ref dialog) = this.actions_dialog {
+                        match key_str.as_str() {
+                            "up" | "arrowup" => {
+                                dialog.update(cx, |d, cx| d.move_up(cx));
+                                return;
+                            }
+                            "down" | "arrowdown" => {
+                                dialog.update(cx, |d, cx| d.move_down(cx));
+                                return;
+                            }
+                            "enter" => {
+                                // Get the selected action and execute it
+                                let action_id = dialog.read(cx).get_selected_action_id();
+                                if let Some(action_id) = action_id {
+                                    logging::log(
+                                        "ACTIONS",
+                                        &format!("Executing action: {}", action_id),
+                                    );
+                                    this.show_actions_popup = false;
+                                    this.actions_dialog = None;
+                                    this.focused_input = FocusedInput::MainFilter;
+                                    window.focus(&this.focus_handle, cx);
+                                    this.handle_action(action_id, cx);
+                                }
+                                return;
+                            }
+                            "escape" => {
                                 this.show_actions_popup = false;
                                 this.actions_dialog = None;
                                 this.focused_input = FocusedInput::MainFilter;
                                 window.focus(&this.focus_handle, cx);
-                                this.handle_action(action_id, cx);
+                                cx.notify();
+                                return;
                             }
-                            return;
-                        }
-                        "escape" => {
-                            this.show_actions_popup = false;
-                            this.actions_dialog = None;
-                            this.focused_input = FocusedInput::MainFilter;
-                            window.focus(&this.focus_handle, cx);
-                            cx.notify();
-                            return;
-                        }
-                        "backspace" => {
-                            dialog.update(cx, |d, cx| d.handle_backspace(cx));
-                            return;
-                        }
-                        _ => {
-                            // Route character input to the dialog for search
-                            if let Some(ref key_char) = event.keystroke.key_char {
-                                if let Some(ch) = key_char.chars().next() {
-                                    if !ch.is_control() {
-                                        dialog.update(cx, |d, cx| d.handle_char(ch, cx));
+                            "backspace" => {
+                                dialog.update(cx, |d, cx| d.handle_backspace(cx));
+                                return;
+                            }
+                            _ => {
+                                // Route character input to the dialog for search
+                                if let Some(ref key_char) = event.keystroke.key_char {
+                                    if let Some(ch) = key_char.chars().next() {
+                                        if !ch.is_control() {
+                                            dialog.update(cx, |d, cx| d.handle_char(ch, cx));
+                                        }
                                     }
                                 }
+                                return;
                             }
-                            return;
                         }
                     }
                 }
-            }
-            
-            match key_str.as_str() {
-                "up" | "arrowup" => this.move_selection_up(cx),
-                "down" | "arrowdown" => this.move_selection_down(cx),
-                "enter" => this.execute_selected(cx),
-                "escape" => {
-                    if !this.filter_text.is_empty() {
-                        this.update_filter(None, false, true, cx);
-                    } else {
-                        // Update visibility state for hotkey toggle
-                        WINDOW_VISIBLE.store(false, Ordering::SeqCst);
-                        // Reset UI state before hiding (clears selection, scroll position, filter)
-                        logging::log("UI", "Resetting to script list before hiding via Escape");
-                        this.reset_to_script_list(cx);
-                        logging::log("HOTKEY", "Window hidden via Escape key");
-                        // PERF: Measure window hide latency
-                        let hide_start = std::time::Instant::now();
-                        cx.hide();
-                        let hide_elapsed = hide_start.elapsed();
-                        logging::log("PERF", &format!(
-                            "Window hide (Escape) took {:.2}ms",
-                            hide_elapsed.as_secs_f64() * 1000.0
-                        ));
-                    }
-                }
-                "backspace" => this.update_filter(None, true, false, cx),
-                "space" | " " => {
-                    // Check if current filter text matches an alias
-                    // If so, execute the matching script/scriptlet immediately
-                    if !this.filter_text.is_empty() {
-                        if let Some(alias_match) = this.find_alias_match(&this.filter_text) {
-                            logging::log("ALIAS", &format!("Alias '{}' triggered execution", this.filter_text));
-                            match alias_match {
-                                AliasMatch::Script(script) => {
-                                    this.execute_interactive(&script, cx);
-                                }
-                                AliasMatch::Scriptlet(scriptlet) => {
-                                    this.execute_scriptlet(&scriptlet, cx);
-                                }
-                            }
-                            // Clear filter after alias execution
+
+                match key_str.as_str() {
+                    "up" | "arrowup" => this.move_selection_up(cx),
+                    "down" | "arrowdown" => this.move_selection_down(cx),
+                    "enter" => this.execute_selected(cx),
+                    "escape" => {
+                        if !this.filter_text.is_empty() {
                             this.update_filter(None, false, true, cx);
-                            return;
+                        } else {
+                            // Update visibility state for hotkey toggle
+                            WINDOW_VISIBLE.store(false, Ordering::SeqCst);
+                            // Reset UI state before hiding (clears selection, scroll position, filter)
+                            logging::log("UI", "Resetting to script list before hiding via Escape");
+                            this.reset_to_script_list(cx);
+                            logging::log("HOTKEY", "Window hidden via Escape key");
+                            // PERF: Measure window hide latency
+                            let hide_start = std::time::Instant::now();
+                            cx.hide();
+                            let hide_elapsed = hide_start.elapsed();
+                            logging::log(
+                                "PERF",
+                                &format!(
+                                    "Window hide (Escape) took {:.2}ms",
+                                    hide_elapsed.as_secs_f64() * 1000.0
+                                ),
+                            );
                         }
                     }
-                    // No alias match - add space to filter as normal character
-                    this.update_filter(Some(' '), false, false, cx);
-                }
-                _ => {
-                    // Allow all printable characters (not control chars like Tab, Escape)
-                    // This enables searching for filenames with special chars like ".ts", ".md"
-                    if let Some(ref key_char) = event.keystroke.key_char {
-                        if let Some(ch) = key_char.chars().next() {
-                            if !ch.is_control() {
-                                this.update_filter(Some(ch), false, false, cx);
+                    "backspace" => this.update_filter(None, true, false, cx),
+                    "space" | " " => {
+                        // Check if current filter text matches an alias
+                        // If so, execute the matching script/scriptlet immediately
+                        if !this.filter_text.is_empty() {
+                            if let Some(alias_match) = this.find_alias_match(&this.filter_text) {
+                                logging::log(
+                                    "ALIAS",
+                                    &format!("Alias '{}' triggered execution", this.filter_text),
+                                );
+                                match alias_match {
+                                    AliasMatch::Script(script) => {
+                                        this.execute_interactive(&script, cx);
+                                    }
+                                    AliasMatch::Scriptlet(scriptlet) => {
+                                        this.execute_scriptlet(&scriptlet, cx);
+                                    }
+                                }
+                                // Clear filter after alias execution
+                                this.update_filter(None, false, true, cx);
+                                return;
+                            }
+                        }
+                        // No alias match - add space to filter as normal character
+                        this.update_filter(Some(' '), false, false, cx);
+                    }
+                    _ => {
+                        // Allow all printable characters (not control chars like Tab, Escape)
+                        // This enables searching for filenames with special chars like ".ts", ".md"
+                        if let Some(ref key_char) = event.keystroke.key_char {
+                            if let Some(ch) = key_char.chars().next() {
+                                if !ch.is_control() {
+                                    this.update_filter(Some(ch), false, false, cx);
+                                }
                             }
                         }
                     }
                 }
-            }
-        });
+            },
+        );
 
         // Main container with system font and transparency
         // Use theme opacity settings for background transparency
         let opacity = self.theme.get_opacity();
-        
+
         // Use design tokens for background color (or theme for Default design)
         let bg_hex = if is_default_design {
             theme.colors.background.main
@@ -6068,31 +7039,31 @@ impl ScriptListApp {
             design_colors.background
         };
         let bg_with_alpha = self.hex_to_rgba_with_opacity(bg_hex, opacity.main);
-        
+
         // Create box shadows from theme
         let box_shadows = self.create_box_shadows();
-        
+
         // Use design tokens for border radius
         let border_radius = if is_default_design {
             12.0 // Default radius
         } else {
             design_visual.radius_lg
         };
-        
+
         // Use design tokens for text color
         let text_primary = if is_default_design {
             theme.colors.text.primary
         } else {
             design_colors.text_primary
         };
-        
+
         // Use design tokens for font family
         let font_family = if is_default_design {
             ".AppleSystemUIFont"
         } else {
             design_typography.font_family
         };
-        
+
         let mut main_div = div()
             .flex()
             .flex_col()
@@ -6110,13 +7081,37 @@ impl ScriptListApp {
             // Use design tokens for spacing and colors
             .child({
                 // Design token values for header
-                let header_padding_x = if is_default_design { 16.0 } else { design_spacing.padding_lg };
-                let header_padding_y = if is_default_design { 8.0 } else { design_spacing.padding_sm };
-                let header_gap = if is_default_design { 12.0 } else { design_spacing.gap_md };
-                let text_muted = if is_default_design { theme.colors.text.muted } else { design_colors.text_muted };
-                let text_dimmed = if is_default_design { theme.colors.text.dimmed } else { design_colors.text_dimmed };
-                let accent_color = if is_default_design { theme.colors.accent.selected } else { design_colors.accent };
-                
+                let header_padding_x = if is_default_design {
+                    16.0
+                } else {
+                    design_spacing.padding_lg
+                };
+                let header_padding_y = if is_default_design {
+                    8.0
+                } else {
+                    design_spacing.padding_sm
+                };
+                let header_gap = if is_default_design {
+                    12.0
+                } else {
+                    design_spacing.gap_md
+                };
+                let text_muted = if is_default_design {
+                    theme.colors.text.muted
+                } else {
+                    design_colors.text_muted
+                };
+                let text_dimmed = if is_default_design {
+                    theme.colors.text.dimmed
+                } else {
+                    design_colors.text_dimmed
+                };
+                let accent_color = if is_default_design {
+                    theme.colors.accent.selected
+                } else {
+                    design_colors.accent
+                };
+
                 div()
                     .w_full()
                     .px(px(header_padding_x))
@@ -6134,27 +7129,43 @@ impl ScriptListApp {
                             .flex_row()
                             .items_center()
                             .text_lg()
-                            .text_color(if filter_is_empty { rgb(text_muted) } else { rgb(text_primary) })
+                            .text_color(if filter_is_empty {
+                                rgb(text_muted)
+                            } else {
+                                rgb(text_primary)
+                            })
                             // When empty: cursor FIRST (at left), then placeholder
                             // When typing: text, then cursor at end
                             // ALWAYS render cursor div to prevent layout shift, but only show bg when focused + visible
-                            .when(filter_is_empty, |d| d.child(
-                                div()
-                                    .w(px(design_visual.border_normal))
-                                    .h(px(CURSOR_HEIGHT_LG))
-                                    .my(px(CURSOR_MARGIN_Y))
-                                    .mr(px(design_spacing.padding_xs))
-                                    .when(self.focused_input == FocusedInput::MainFilter && self.cursor_visible, |d| d.bg(rgb(text_primary)))
-                            ))
+                            .when(filter_is_empty, |d| {
+                                d.child(
+                                    div()
+                                        .w(px(design_visual.border_normal))
+                                        .h(px(CURSOR_HEIGHT_LG))
+                                        .my(px(CURSOR_MARGIN_Y))
+                                        .mr(px(design_spacing.padding_xs))
+                                        .when(
+                                            self.focused_input == FocusedInput::MainFilter
+                                                && self.cursor_visible,
+                                            |d| d.bg(rgb(text_primary)),
+                                        ),
+                                )
+                            })
                             .child(filter_display)
-                            .when(!filter_is_empty, |d| d.child(
-                                div()
-                                    .w(px(design_visual.border_normal))
-                                    .h(px(CURSOR_HEIGHT_LG))
-                                    .my(px(CURSOR_MARGIN_Y))
-                                    .ml(px(design_visual.border_normal))
-                                    .when(self.focused_input == FocusedInput::MainFilter && self.cursor_visible, |d| d.bg(rgb(text_primary)))
-                            ))
+                            .when(!filter_is_empty, |d| {
+                                d.child(
+                                    div()
+                                        .w(px(design_visual.border_normal))
+                                        .h(px(CURSOR_HEIGHT_LG))
+                                        .my(px(CURSOR_MARGIN_Y))
+                                        .ml(px(design_visual.border_normal))
+                                        .when(
+                                            self.focused_input == FocusedInput::MainFilter
+                                                && self.cursor_visible,
+                                            |d| d.bg(rgb(text_primary)),
+                                        ),
+                                )
+                            }),
                     )
                     // CLS-FREE ACTIONS AREA: Fixed-size relative container with stacked children
                     // Both states are always rendered at the same position, visibility toggled via opacity
@@ -6164,9 +7175,11 @@ impl ScriptListApp {
                         let handle_run = cx.entity().downgrade();
                         let handle_actions = cx.entity().downgrade();
                         let show_actions = self.show_actions_popup;
-                        
+
                         // Get actions search text from the dialog
-                        let search_text = self.actions_dialog.as_ref()
+                        let search_text = self
+                            .actions_dialog
+                            .as_ref()
                             .map(|dialog| dialog.read(cx).search_text.clone())
                             .unwrap_or_default();
                         let search_is_empty = search_text.is_empty();
@@ -6175,11 +7188,11 @@ impl ScriptListApp {
                         } else {
                             SharedString::from(search_text.clone())
                         };
-                        
+
                         // Outer container: relative positioned, fixed height to match header
                         div()
                             .relative()
-                            .h(px(28.))  // Fixed height to prevent vertical CLS
+                            .h(px(28.)) // Fixed height to prevent vertical CLS
                             .flex()
                             .items_center()
                             // Run + Actions buttons - absolute positioned, hidden when actions shown
@@ -6204,14 +7217,14 @@ impl ScriptListApp {
                                                         this.execute_selected(cx);
                                                     });
                                                 }
-                                            }))
+                                            })),
                                     )
                                     .child(
                                         div()
-                                            .mx(px(4.))  // Horizontal margin for spacing
-                                            .text_color(rgba((text_dimmed << 8) | 0x60))  // Reduced opacity (60%)
-                                            .text_sm()  // Slightly smaller text
-                                            .child("|")
+                                            .mx(px(4.)) // Horizontal margin for spacing
+                                            .text_color(rgba((text_dimmed << 8) | 0x60)) // Reduced opacity (60%)
+                                            .text_sm() // Slightly smaller text
+                                            .child("|"),
                                     )
                                     // Actions button with click handler
                                     .child(
@@ -6224,15 +7237,15 @@ impl ScriptListApp {
                                                         this.toggle_actions(cx, window);
                                                     });
                                                 }
-                                            }))
+                                            })),
                                     )
                                     .child(
                                         div()
-                                            .mx(px(4.))  // Horizontal margin for spacing
-                                            .text_color(rgba((text_dimmed << 8) | 0x60))  // Reduced opacity (60%)
-                                            .text_sm()  // Slightly smaller text
-                                            .child("|")
-                                    )
+                                            .mx(px(4.)) // Horizontal margin for spacing
+                                            .text_color(rgba((text_dimmed << 8) | 0x60)) // Reduced opacity (60%)
+                                            .text_sm() // Slightly smaller text
+                                            .child("|"),
+                                    ),
                             )
                             // Actions search input - absolute positioned, visible when actions shown
                             .child(
@@ -6247,63 +7260,82 @@ impl ScriptListApp {
                                     // Visibility: hidden when actions popup is NOT shown
                                     .when(!show_actions, |d| d.opacity(0.).invisible())
                                     // ⌘K indicator
-                                    .child(
-                                        div()
-                                            .text_color(rgb(text_dimmed))
-                                            .text_xs()
-                                            .child("⌘K")
-                                    )
+                                    .child(div().text_color(rgb(text_dimmed)).text_xs().child("⌘K"))
                                     // Search input display - compact style matching buttons
                                     // CRITICAL: Fixed width prevents resize when typing
                                     .child(
                                         div()
-                                            .flex_shrink_0()  // PREVENT flexbox from shrinking this
-                                            .w(px(130.0))     // Compact width
+                                            .flex_shrink_0() // PREVENT flexbox from shrinking this
+                                            .w(px(130.0)) // Compact width
                                             .min_w(px(130.0))
                                             .max_w(px(130.0))
-                                            .h(px(24.0))      // Comfortable height with padding
+                                            .h(px(24.0)) // Comfortable height with padding
                                             .min_h(px(24.0))
                                             .max_h(px(24.0))
                                             .overflow_hidden()
                                             .flex()
                                             .flex_row()
                                             .items_center()
-                                            .px(px(8.))       // Comfortable horizontal padding
-                                            .rounded(px(4.))  // Match button border radius
+                                            .px(px(8.)) // Comfortable horizontal padding
+                                            .rounded(px(4.)) // Match button border radius
                                             // ALWAYS show background - just vary intensity
-                                            .bg(rgba((theme.colors.background.search_box << 8) | if search_is_empty { 0x40 } else { 0x80 }))
+                                            .bg(rgba(
+                                                (theme.colors.background.search_box << 8)
+                                                    | if search_is_empty { 0x40 } else { 0x80 },
+                                            ))
                                             .border_1()
                                             // ALWAYS show border - just vary intensity
-                                            .border_color(rgba((accent_color << 8) | if search_is_empty { 0x20 } else { 0x40 }))
-                                            .text_sm()
-                                            .text_color(if search_is_empty { rgb(text_muted) } else { rgb(text_primary) })
-                                            // Cursor before placeholder when empty
-                                            .when(search_is_empty, |d| d.child(
-                                                div()
-                                                    .w(px(2.))
-                                                    .h(px(14.))  // Cursor height for comfortable input
-                                                    .mr(px(2.))
-                                                    .rounded(px(1.))
-                                                    .when(self.focused_input == FocusedInput::ActionsSearch && self.cursor_visible, |d| d.bg(rgb(accent_color)))
+                                            .border_color(rgba(
+                                                (accent_color << 8)
+                                                    | if search_is_empty { 0x20 } else { 0x40 },
                                             ))
+                                            .text_sm()
+                                            .text_color(if search_is_empty {
+                                                rgb(text_muted)
+                                            } else {
+                                                rgb(text_primary)
+                                            })
+                                            // Cursor before placeholder when empty
+                                            .when(search_is_empty, |d| {
+                                                d.child(
+                                                    div()
+                                                        .w(px(2.))
+                                                        .h(px(14.)) // Cursor height for comfortable input
+                                                        .mr(px(2.))
+                                                        .rounded(px(1.))
+                                                        .when(
+                                                            self.focused_input
+                                                                == FocusedInput::ActionsSearch
+                                                                && self.cursor_visible,
+                                                            |d| d.bg(rgb(accent_color)),
+                                                        ),
+                                                )
+                                            })
                                             .child(search_display)
                                             // Cursor after text when not empty
-                                            .when(!search_is_empty, |d| d.child(
-                                                div()
-                                                    .w(px(2.))
-                                                    .h(px(14.))  // Cursor height for comfortable input
-                                                    .ml(px(2.))
-                                                    .rounded(px(1.))
-                                                    .when(self.focused_input == FocusedInput::ActionsSearch && self.cursor_visible, |d| d.bg(rgb(accent_color)))
-                                            ))
+                                            .when(!search_is_empty, |d| {
+                                                d.child(
+                                                    div()
+                                                        .w(px(2.))
+                                                        .h(px(14.)) // Cursor height for comfortable input
+                                                        .ml(px(2.))
+                                                        .rounded(px(1.))
+                                                        .when(
+                                                            self.focused_input
+                                                                == FocusedInput::ActionsSearch
+                                                                && self.cursor_visible,
+                                                            |d| d.bg(rgb(accent_color)),
+                                                        ),
+                                                )
+                                            }),
                                     )
                                     .child(
                                         div()
-                                            .mx(px(4.))  // Horizontal margin for spacing
-                                            .text_color(rgba((text_dimmed << 8) | 0x60))  // Reduced opacity (60%)
-                                            .text_sm()  // Slightly smaller text
-                                            .child("|")
-                                    )
+                                            .mx(px(4.)) // Horizontal margin for spacing
+                                            .text_color(rgba((text_dimmed << 8) | 0x60)) // Reduced opacity (60%)
+                                            .text_sm() // Slightly smaller text
+                                            .child("|"),
+                                    ),
                             )
                     })
                     // Script Kit Logo - ALWAYS visible
@@ -6311,28 +7343,40 @@ impl ScriptListApp {
                     .child(
                         svg()
                             .external_path(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/logo.svg"))
-                            .size(px(16.))  // Slightly larger than text_sm for visual presence
-                            .text_color(rgb(accent_color))
+                            .size(px(16.)) // Slightly larger than text_sm for visual presence
+                            .text_color(rgb(accent_color)),
                     )
             })
             // Subtle divider - semi-transparent
             // Use design tokens for border color and spacing
             .child({
-                let divider_margin = if is_default_design { 16.0 } else { design_spacing.margin_lg };
-                let border_color = if is_default_design { theme.colors.ui.border } else { design_colors.border };
-                let border_width = if is_default_design { 1.0 } else { design_visual.border_thin };
-                
+                let divider_margin = if is_default_design {
+                    16.0
+                } else {
+                    design_spacing.margin_lg
+                };
+                let border_color = if is_default_design {
+                    theme.colors.ui.border
+                } else {
+                    design_colors.border
+                };
+                let border_width = if is_default_design {
+                    1.0
+                } else {
+                    design_visual.border_thin
+                };
+
                 div()
                     .mx(px(divider_margin))
                     .h(px(border_width))
                     .bg(rgba((border_color << 8) | 0x60))
             });
-        
+
         // Add error notification if present (at the top of the content area)
         if let Some(notification) = self.render_error_notification() {
             main_div = main_div.child(notification);
         }
-        
+
         // Main content area - 50/50 split: List on left, Preview on right
         main_div = main_div
             // Uses min_h(px(0.)) to prevent flex children from overflowing
@@ -6341,161 +7385,191 @@ impl ScriptListApp {
                     .flex()
                     .flex_row()
                     .flex_1()
-                    .min_h(px(0.))  // Critical: allows flex container to shrink properly
+                    .min_h(px(0.)) // Critical: allows flex container to shrink properly
                     .w_full()
                     .overflow_hidden()
                     // Left side: Script list (50% width) - uses uniform_list for auto-scrolling
                     .child(
                         div()
-                            .w_1_2()      // 50% width
-                            .h_full()     // Take full height
-                            .min_h(px(0.))  // Allow shrinking
-                            .child(list_element)
+                            .w_1_2() // 50% width
+                            .h_full() // Take full height
+                            .min_h(px(0.)) // Allow shrinking
+                            .child(list_element),
                     )
                     // Right side: Preview panel (50% width) with actions overlay
                     // Preview ALWAYS renders, actions panel overlays on top when visible
                     .child(
                         div()
-                            .relative()   // Enable absolute positioning for overlay
-                            .w_1_2()      // 50% width
-                            .h_full()     // Take full height
-                            .min_h(px(0.))  // Allow shrinking
+                            .relative() // Enable absolute positioning for overlay
+                            .w_1_2() // 50% width
+                            .h_full() // Take full height
+                            .min_h(px(0.)) // Allow shrinking
                             .overflow_hidden()
                             // Preview panel ALWAYS renders (visible behind actions overlay)
                             .child(self.render_preview_panel(cx))
                             // Actions dialog overlays on top using absolute positioning
                             .when_some(
-                                if self.show_actions_popup { self.actions_dialog.clone() } else { None },
-                                |d, dialog| d.child(
-                                    div()
-                                        .absolute()
-                                        .inset_0()    // Cover entire preview area
-                                        .flex()
-                                        .justify_end()
-                                        .pr(px(8.))   // Small padding from right edge
-                                        .pt(px(8.))   // Small padding from top
-                                        .child(dialog)
-                                )
-                            )
+                                if self.show_actions_popup {
+                                    self.actions_dialog.clone()
+                                } else {
+                                    None
+                                },
+                                |d, dialog| {
+                                    d.child(
+                                        div()
+                                            .absolute()
+                                            .inset_0() // Cover entire preview area
+                                            .flex()
+                                            .justify_end()
+                                            .pr(px(8.)) // Small padding from right edge
+                                            .pt(px(8.)) // Small padding from top
+                                            .child(dialog),
+                                    )
+                                },
+                            ),
                     ),
             );
-        
+
         if let Some(panel) = log_panel {
             main_div = main_div.child(panel);
         }
-        
+
         // Wrap in relative container for toast overlay positioning
-        let mut container = div()
-            .relative()
-            .w_full()
-            .h_full()
-            .child(main_div);
-        
+        let mut container = div().relative().w_full().h_full().child(main_div);
+
         // Add toast notifications overlay (top-right)
         if let Some(toasts) = self.render_toasts(cx) {
             container = container.child(toasts);
         }
-        
+
         container.into_any_element()
     }
-    
-    fn render_arg_prompt(&mut self, id: String, placeholder: String, choices: Vec<Choice>, cx: &mut Context<Self>) -> AnyElement {
+
+    fn render_arg_prompt(
+        &mut self,
+        id: String,
+        placeholder: String,
+        choices: Vec<Choice>,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let _theme = &self.theme;
         let _filtered = self.filtered_arg_choices();
-        
+
         // Use design tokens for GLOBAL theming - all prompts use current design
         let tokens = get_tokens(self.current_design);
         let design_colors = tokens.colors();
         let design_spacing = tokens.spacing();
         let design_typography = tokens.typography();
         let design_visual = tokens.visual();
-        
+
         // Key handler for arg prompt
         let prompt_id = id.clone();
-        let handle_key = cx.listener(move |this: &mut Self, event: &gpui::KeyDownEvent, _window: &mut Window, cx: &mut Context<Self>| {
-            let key_str = event.keystroke.key.to_lowercase();
-            logging::log("KEY", &format!("ArgPrompt key: '{}'", key_str));
-            
-            match key_str.as_str() {
-                "up" | "arrowup" => {
-                    if this.arg_selected_index > 0 {
-                        this.arg_selected_index -= 1;
-                        // P0: Scroll to keep selection visible
-                        this.arg_list_scroll_handle.scroll_to_item(this.arg_selected_index, ScrollStrategy::Nearest);
-                        logging::log_debug("SCROLL", &format!("P0: Arg up: selected_index={}", this.arg_selected_index));
-                        cx.notify();
+        let handle_key = cx.listener(
+            move |this: &mut Self,
+                  event: &gpui::KeyDownEvent,
+                  _window: &mut Window,
+                  cx: &mut Context<Self>| {
+                let key_str = event.keystroke.key.to_lowercase();
+                logging::log("KEY", &format!("ArgPrompt key: '{}'", key_str));
+
+                match key_str.as_str() {
+                    "up" | "arrowup" => {
+                        if this.arg_selected_index > 0 {
+                            this.arg_selected_index -= 1;
+                            // P0: Scroll to keep selection visible
+                            this.arg_list_scroll_handle
+                                .scroll_to_item(this.arg_selected_index, ScrollStrategy::Nearest);
+                            logging::log_debug(
+                                "SCROLL",
+                                &format!("P0: Arg up: selected_index={}", this.arg_selected_index),
+                            );
+                            cx.notify();
+                        }
                     }
-                }
-                "down" | "arrowdown" => {
-                    let filtered = this.filtered_arg_choices();
-                    if this.arg_selected_index < filtered.len().saturating_sub(1) {
-                        this.arg_selected_index += 1;
-                        // P0: Scroll to keep selection visible
-                        this.arg_list_scroll_handle.scroll_to_item(this.arg_selected_index, ScrollStrategy::Nearest);
-                        logging::log_debug("SCROLL", &format!("P0: Arg down: selected_index={}", this.arg_selected_index));
-                        cx.notify();
+                    "down" | "arrowdown" => {
+                        let filtered = this.filtered_arg_choices();
+                        if this.arg_selected_index < filtered.len().saturating_sub(1) {
+                            this.arg_selected_index += 1;
+                            // P0: Scroll to keep selection visible
+                            this.arg_list_scroll_handle
+                                .scroll_to_item(this.arg_selected_index, ScrollStrategy::Nearest);
+                            logging::log_debug(
+                                "SCROLL",
+                                &format!(
+                                    "P0: Arg down: selected_index={}",
+                                    this.arg_selected_index
+                                ),
+                            );
+                            cx.notify();
+                        }
                     }
-                }
-                "enter" => {
-                    let filtered = this.filtered_arg_choices();
-                    if let Some((_, choice)) = filtered.get(this.arg_selected_index) {
-                        // Case 1: There are filtered choices - submit the selected one
-                        let value = choice.value.clone();
-                        this.submit_prompt_response(prompt_id.clone(), Some(value), cx);
-                    } else if !this.arg_input_text.is_empty() {
-                        // Case 2: No choices but user typed something - submit input_text
-                        let value = this.arg_input_text.clone();
-                        this.submit_prompt_response(prompt_id.clone(), Some(value), cx);
+                    "enter" => {
+                        let filtered = this.filtered_arg_choices();
+                        if let Some((_, choice)) = filtered.get(this.arg_selected_index) {
+                            // Case 1: There are filtered choices - submit the selected one
+                            let value = choice.value.clone();
+                            this.submit_prompt_response(prompt_id.clone(), Some(value), cx);
+                        } else if !this.arg_input_text.is_empty() {
+                            // Case 2: No choices but user typed something - submit input_text
+                            let value = this.arg_input_text.clone();
+                            this.submit_prompt_response(prompt_id.clone(), Some(value), cx);
+                        }
+                        // Case 3: No choices and no input - do nothing (prevent empty submissions)
                     }
-                    // Case 3: No choices and no input - do nothing (prevent empty submissions)
-                }
-                "escape" => {
-                    logging::log("KEY", "ESC in ArgPrompt - canceling script");
-                    // Send cancel response and clean up fully
-                    this.submit_prompt_response(prompt_id.clone(), None, cx);
-                    this.cancel_script_execution(cx);
-                }
-                "backspace" => {
-                    if !this.arg_input_text.is_empty() {
-                        this.arg_input_text.pop();
-                        this.arg_selected_index = 0;
-                        this.update_window_size();
-                        cx.notify();
+                    "escape" => {
+                        logging::log("KEY", "ESC in ArgPrompt - canceling script");
+                        // Send cancel response and clean up fully
+                        this.submit_prompt_response(prompt_id.clone(), None, cx);
+                        this.cancel_script_execution(cx);
                     }
-                }
-                _ => {
-                    if let Some(ref key_char) = event.keystroke.key_char {
-                        if let Some(ch) = key_char.chars().next() {
-                            if !ch.is_control() {
-                                this.arg_input_text.push(ch);
-                                this.arg_selected_index = 0;
-                                this.update_window_size();
-                                cx.notify();
+                    "backspace" => {
+                        if !this.arg_input_text.is_empty() {
+                            this.arg_input_text.pop();
+                            this.arg_selected_index = 0;
+                            this.update_window_size();
+                            cx.notify();
+                        }
+                    }
+                    _ => {
+                        if let Some(ref key_char) = event.keystroke.key_char {
+                            if let Some(ch) = key_char.chars().next() {
+                                if !ch.is_control() {
+                                    this.arg_input_text.push(ch);
+                                    this.arg_selected_index = 0;
+                                    this.update_window_size();
+                                    cx.notify();
+                                }
                             }
                         }
                     }
                 }
-            }
-        });
-        
+            },
+        );
+
         let input_display = if self.arg_input_text.is_empty() {
             SharedString::from(placeholder.clone())
         } else {
             SharedString::from(self.arg_input_text.clone())
         };
         let input_is_empty = self.arg_input_text.is_empty();
-        
+
         // P4: Pre-compute theme values for arg prompt using design tokens for GLOBAL theming
         let arg_list_colors = ListItemColors::from_design(&design_colors);
         let text_primary = design_colors.text_primary;
         let text_muted = design_colors.text_muted;
-        
+
         // P0: Clone data needed for uniform_list closure
         let arg_selected_index = self.arg_selected_index;
         let filtered_choices = self.get_filtered_arg_choices_owned();
         let filtered_choices_len = filtered_choices.len();
-        logging::log_debug("UI", &format!("P0: Arg prompt has {} filtered choices", filtered_choices_len));
-        
+        logging::log_debug(
+            "UI",
+            &format!(
+                "P0: Arg prompt has {} filtered choices",
+                filtered_choices_len
+            ),
+        );
+
         // P0: Build virtualized choice list using uniform_list
         let list_element: AnyElement = if filtered_choices_len == 0 {
             div()
@@ -6513,42 +7587,45 @@ impl ScriptListApp {
                 "arg-choices",
                 filtered_choices_len,
                 move |visible_range, _window, _cx| {
-                    logging::log_debug("SCROLL", &format!("P0: Arg choices visible range: {:?}", visible_range.clone()));
-                    visible_range.map(|ix| {
-                        if let Some((_, choice)) = filtered_choices.get(ix) {
-                            let is_selected = ix == arg_selected_index;
-                            
-                            // Use shared ListItem component for consistent design
-                            div()
-                                .id(ix)
-                                .child(
+                    logging::log_debug(
+                        "SCROLL",
+                        &format!("P0: Arg choices visible range: {:?}", visible_range.clone()),
+                    );
+                    visible_range
+                        .map(|ix| {
+                            if let Some((_, choice)) = filtered_choices.get(ix) {
+                                let is_selected = ix == arg_selected_index;
+
+                                // Use shared ListItem component for consistent design
+                                div().id(ix).child(
                                     ListItem::new(choice.name.clone(), arg_list_colors)
                                         .description_opt(choice.description.clone())
                                         .selected(is_selected)
                                         .with_accent_bar(true)
-                                        .index(ix)
+                                        .index(ix),
                                 )
-                        } else {
-                            div().id(ix).h(px(LIST_ITEM_HEIGHT))
-                        }
-                    }).collect()
+                            } else {
+                                div().id(ix).h(px(LIST_ITEM_HEIGHT))
+                            }
+                        })
+                        .collect()
                 },
             )
             .h_full()
             .track_scroll(&self.arg_list_scroll_handle)
             .into_any_element()
         };
-        
+
         // Use design tokens for global theming
         let opacity = self.theme.get_opacity();
         let bg_hex = design_colors.background;
         let bg_with_alpha = self.hex_to_rgba_with_opacity(bg_hex, opacity.main);
         let box_shadows = self.create_box_shadows();
-        
+
         // P4: Pre-compute more theme values for the main container using design tokens
         let ui_border = design_colors.border;
         let text_dimmed = design_colors.text_dimmed;
-        
+
         div()
             .flex()
             .flex_col()
@@ -6581,33 +7658,49 @@ impl ScriptListApp {
                             .flex_row()
                             .items_center()
                             .text_lg()
-                            .text_color(if input_is_empty { rgb(text_muted) } else { rgb(text_primary) })
+                            .text_color(if input_is_empty {
+                                rgb(text_muted)
+                            } else {
+                                rgb(text_primary)
+                            })
                             // When empty: cursor FIRST (at left), then placeholder
                             // When typing: text, then cursor at end
                             // ALWAYS render cursor div to prevent layout shift, but only show bg when focused + visible
-                            .when(input_is_empty, |d| d.child(
-                                div()
-                                    .w(px(design_visual.border_normal))
-                                    .h(px(CURSOR_HEIGHT_LG))
-                                    .my(px(CURSOR_MARGIN_Y))
-                                    .mr(px(design_spacing.padding_xs))
-                                    .when(self.focused_input == FocusedInput::ArgPrompt && self.cursor_visible, |d| d.bg(rgb(text_primary)))
-                            ))
+                            .when(input_is_empty, |d| {
+                                d.child(
+                                    div()
+                                        .w(px(design_visual.border_normal))
+                                        .h(px(CURSOR_HEIGHT_LG))
+                                        .my(px(CURSOR_MARGIN_Y))
+                                        .mr(px(design_spacing.padding_xs))
+                                        .when(
+                                            self.focused_input == FocusedInput::ArgPrompt
+                                                && self.cursor_visible,
+                                            |d| d.bg(rgb(text_primary)),
+                                        ),
+                                )
+                            })
                             .child(input_display)
-                            .when(!input_is_empty, |d| d.child(
-                                div()
-                                    .w(px(design_visual.border_normal))
-                                    .h(px(CURSOR_HEIGHT_LG))
-                                    .my(px(CURSOR_MARGIN_Y))
-                                    .ml(px(design_visual.border_normal))
-                                    .when(self.focused_input == FocusedInput::ArgPrompt && self.cursor_visible, |d| d.bg(rgb(text_primary)))
-                            ))
+                            .when(!input_is_empty, |d| {
+                                d.child(
+                                    div()
+                                        .w(px(design_visual.border_normal))
+                                        .h(px(CURSOR_HEIGHT_LG))
+                                        .my(px(CURSOR_MARGIN_Y))
+                                        .ml(px(design_visual.border_normal))
+                                        .when(
+                                            self.focused_input == FocusedInput::ArgPrompt
+                                                && self.cursor_visible,
+                                            |d| d.bg(rgb(text_primary)),
+                                        ),
+                                )
+                            }),
                     )
                     .child(
                         div()
                             .text_sm()
                             .text_color(rgb(text_dimmed))
-                            .child(format!("{} choices", choices.len()))
+                            .child(format!("{} choices", choices.len())),
                     ),
             )
             // Divider
@@ -6615,7 +7708,7 @@ impl ScriptListApp {
                 div()
                     .mx(px(design_spacing.padding_lg))
                     .h(px(design_visual.border_thin))
-                    .bg(rgba((ui_border << 8) | 0x60))
+                    .bg(rgba((ui_border << 8) | 0x60)),
             )
             // P0: Choice list using virtualized uniform_list
             .child(
@@ -6623,68 +7716,79 @@ impl ScriptListApp {
                     .flex()
                     .flex_col()
                     .flex_1()
-                    .min_h(px(0.))  // P0: Allow flex container to shrink
+                    .min_h(px(0.)) // P0: Allow flex container to shrink
                     .w_full()
                     .py(px(design_spacing.padding_xs))
-                    .child(list_element)
+                    .child(list_element),
             )
             // Footer
             .child(
                 div()
                     .w_full()
                     .px(px(design_spacing.padding_lg))
-                    .py(px(design_spacing.padding_sm + design_visual.border_normal))  // 8 + 2 = 10px
+                    .py(px(design_spacing.padding_sm + design_visual.border_normal)) // 8 + 2 = 10px
                     .border_t_1()
                     .border_color(rgba((ui_border << 8) | 0x60))
                     .text_xs()
                     .text_color(rgb(text_muted))
-                    .child("↑↓ navigate • ⏎ select • Esc cancel")
+                    .child("↑↓ navigate • ⏎ select • Esc cancel"),
             )
             .into_any_element()
     }
-    
-    fn render_div_prompt(&mut self, id: String, html: String, _tailwind: Option<String>, cx: &mut Context<Self>) -> AnyElement {
+
+    fn render_div_prompt(
+        &mut self,
+        id: String,
+        html: String,
+        _tailwind: Option<String>,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         // Use design tokens for GLOBAL theming
         let tokens = get_tokens(self.current_design);
         let design_colors = tokens.colors();
         let design_spacing = tokens.spacing();
         let design_typography = tokens.typography();
         let design_visual = tokens.visual();
-        
+
         // Strip HTML tags for plain text display
         let display_text = strip_html_tags(&html);
-        
+
         let prompt_id = id.clone();
-        let handle_key = cx.listener(move |this: &mut Self, event: &gpui::KeyDownEvent, _window: &mut Window, cx: &mut Context<Self>| {
-            let key_str = event.keystroke.key.to_lowercase();
-            logging::log("KEY", &format!("DivPrompt key: '{}'", key_str));
-            
-            match key_str.as_str() {
-                "enter" => {
-                    // Enter continues the script (sends response)
-                    logging::log("KEY", "Enter in DivPrompt - continuing script");
-                    this.submit_prompt_response(prompt_id.clone(), None, cx);
+        let handle_key = cx.listener(
+            move |this: &mut Self,
+                  event: &gpui::KeyDownEvent,
+                  _window: &mut Window,
+                  cx: &mut Context<Self>| {
+                let key_str = event.keystroke.key.to_lowercase();
+                logging::log("KEY", &format!("DivPrompt key: '{}'", key_str));
+
+                match key_str.as_str() {
+                    "enter" => {
+                        // Enter continues the script (sends response)
+                        logging::log("KEY", "Enter in DivPrompt - continuing script");
+                        this.submit_prompt_response(prompt_id.clone(), None, cx);
+                    }
+                    "escape" => {
+                        // ESC cancels the script completely
+                        logging::log("KEY", "ESC in DivPrompt - canceling script");
+                        this.submit_prompt_response(prompt_id.clone(), None, cx);
+                        this.cancel_script_execution(cx);
+                    }
+                    _ => {}
                 }
-                "escape" => {
-                    // ESC cancels the script completely
-                    logging::log("KEY", "ESC in DivPrompt - canceling script");
-                    this.submit_prompt_response(prompt_id.clone(), None, cx);
-                    this.cancel_script_execution(cx);
-                }
-                _ => {}
-            }
-        });
-        
+            },
+        );
+
         // Use design tokens for global theming
         let opacity = self.theme.get_opacity();
         let bg_hex = design_colors.background;
         let bg_with_alpha = self.hex_to_rgba_with_opacity(bg_hex, opacity.main);
         let box_shadows = self.create_box_shadows();
-        
+
         // Use explicit height from layout constants instead of h_full()
         // DivPrompt uses STANDARD_HEIGHT (500px) to match main window
         let content_height = window_resize::layout::STANDARD_HEIGHT;
-        
+
         div()
             .flex()
             .flex_col()
@@ -6704,11 +7808,11 @@ impl ScriptListApp {
                 div()
                     .flex_1()
                     .w_full()
-                    .min_h(px(0.))  // Critical: allows flex children to size properly
+                    .min_h(px(0.)) // Critical: allows flex children to size properly
                     .overflow_hidden()
                     .p(px(design_spacing.padding_xl))
                     .text_lg()
-                    .child(display_text)
+                    .child(display_text),
             )
             // Footer
             .child(
@@ -6720,85 +7824,100 @@ impl ScriptListApp {
                     .border_color(rgba((design_colors.border << 8) | 0x60))
                     .text_xs()
                     .text_color(rgb(design_colors.text_muted))
-                    .child("Press Enter or Escape to continue")
+                    .child("Press Enter or Escape to continue"),
             )
             .into_any_element()
     }
-    
-    fn render_form_prompt(&mut self, entity: Entity<FormPromptState>, cx: &mut Context<Self>) -> AnyElement {
+
+    fn render_form_prompt(
+        &mut self,
+        entity: Entity<FormPromptState>,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         // Use design tokens for GLOBAL theming
         let tokens = get_tokens(self.current_design);
         let design_colors = tokens.colors();
         let design_spacing = tokens.spacing();
         let design_typography = tokens.typography();
         let design_visual = tokens.visual();
-        
+
         // Get prompt ID and field count from entity
         let prompt_id = entity.read(cx).id.clone();
         let field_count = entity.read(cx).fields.len();
-        
+
         // Clone entity for closures
         let entity_for_submit = entity.clone();
         let entity_for_tab = entity.clone();
         let entity_for_shift_tab = entity.clone();
         let entity_for_input = entity.clone();
-        
+
         let prompt_id_for_key = prompt_id.clone();
         // Key handler for form navigation (Enter/Tab/Escape)
         // NOTE: Currently unused because form fields handle their own focus via delegated Focusable
         // Keeping for reference in case we need to re-enable parent-level key handling
-        let _handle_key = cx.listener(move |this: &mut Self, event: &gpui::KeyDownEvent, _window: &mut Window, cx: &mut Context<Self>| {
-            let key_str = event.keystroke.key.to_lowercase();
-            let has_shift = event.keystroke.modifiers.shift;
-            
-            logging::log("KEY", &format!("FormPrompt key: '{}' (shift: {}, key_char: {:?})", key_str, has_shift, event.keystroke.key_char));
-            
-            // Handle form-level keys (Enter, Escape, Tab) at this level
-            // Forward all other keys to the focused form field for text input
-            match key_str.as_str() {
-                "enter" => {
-                    // Enter submits the form - collect all field values
-                    logging::log("KEY", "Enter in FormPrompt - submitting form");
-                    let values = entity_for_submit.read(cx).collect_values(cx);
-                    logging::log("FORM", &format!("Form values: {}", values));
-                    this.submit_prompt_response(prompt_id_for_key.clone(), Some(values), cx);
-                }
-                "escape" => {
-                    // ESC cancels the script completely
-                    logging::log("KEY", "ESC in FormPrompt - canceling script");
-                    this.submit_prompt_response(prompt_id_for_key.clone(), None, cx);
-                    this.cancel_script_execution(cx);
-                }
-                "tab" => {
-                    // Tab navigation between fields
-                    if has_shift {
-                        entity_for_shift_tab.update(cx, |form, cx| {
-                            form.focus_previous(cx);
-                        });
-                    } else {
-                        entity_for_tab.update(cx, |form, cx| {
-                            form.focus_next(cx);
+        let _handle_key = cx.listener(
+            move |this: &mut Self,
+                  event: &gpui::KeyDownEvent,
+                  _window: &mut Window,
+                  cx: &mut Context<Self>| {
+                let key_str = event.keystroke.key.to_lowercase();
+                let has_shift = event.keystroke.modifiers.shift;
+
+                logging::log(
+                    "KEY",
+                    &format!(
+                        "FormPrompt key: '{}' (shift: {}, key_char: {:?})",
+                        key_str, has_shift, event.keystroke.key_char
+                    ),
+                );
+
+                // Handle form-level keys (Enter, Escape, Tab) at this level
+                // Forward all other keys to the focused form field for text input
+                match key_str.as_str() {
+                    "enter" => {
+                        // Enter submits the form - collect all field values
+                        logging::log("KEY", "Enter in FormPrompt - submitting form");
+                        let values = entity_for_submit.read(cx).collect_values(cx);
+                        logging::log("FORM", &format!("Form values: {}", values));
+                        this.submit_prompt_response(prompt_id_for_key.clone(), Some(values), cx);
+                    }
+                    "escape" => {
+                        // ESC cancels the script completely
+                        logging::log("KEY", "ESC in FormPrompt - canceling script");
+                        this.submit_prompt_response(prompt_id_for_key.clone(), None, cx);
+                        this.cancel_script_execution(cx);
+                    }
+                    "tab" => {
+                        // Tab navigation between fields
+                        if has_shift {
+                            entity_for_shift_tab.update(cx, |form, cx| {
+                                form.focus_previous(cx);
+                            });
+                        } else {
+                            entity_for_tab.update(cx, |form, cx| {
+                                form.focus_next(cx);
+                            });
+                        }
+                    }
+                    _ => {
+                        // Forward all other keys (characters, backspace, arrows, etc.) to the focused field
+                        // This is necessary because GPUI requires track_focus() to receive key events,
+                        // and we need the parent to have focus to handle Enter/Escape/Tab.
+                        // The form fields' individual on_key_down handlers don't fire when parent has focus.
+                        entity_for_input.update(cx, |form, cx| {
+                            form.handle_key_input(event, cx);
                         });
                     }
                 }
-                _ => {
-                    // Forward all other keys (characters, backspace, arrows, etc.) to the focused field
-                    // This is necessary because GPUI requires track_focus() to receive key events,
-                    // and we need the parent to have focus to handle Enter/Escape/Tab.
-                    // The form fields' individual on_key_down handlers don't fire when parent has focus.
-                    entity_for_input.update(cx, |form, cx| {
-                        form.handle_key_input(event, cx);
-                    });
-                }
-            }
-        });
-        
+            },
+        );
+
         // Use design tokens for global theming
         let opacity = self.theme.get_opacity();
         let bg_hex = design_colors.background;
         let bg_with_alpha = self.hex_to_rgba_with_opacity(bg_hex, opacity.main);
         let box_shadows = self.create_box_shadows();
-        
+
         // Dynamic height based on field count
         // Base height (150px) + per-field height (60px per field)
         // Minimum of calculated height and MAX_HEIGHT (700px)
@@ -6807,10 +7926,10 @@ impl ScriptListApp {
         let calculated_height = base_height + (field_count as f32 * field_height);
         let max_height = 700.0; // Same as window_resize::layout::MAX_HEIGHT
         let content_height = px(calculated_height.min(max_height));
-        
+
         // Button colors from theme
         let button_colors = ButtonColors::from_theme(&self.theme);
-        
+
         // Form fields have their own focus handles and on_key_down handlers.
         // We DO NOT track_focus on the container - the fields handle their own focus.
         // Enter/Escape/Tab are handled by a window-level key handler (see handle_form_navigation_keys).
@@ -6832,10 +7951,10 @@ impl ScriptListApp {
                     .flex_1()
                     .w_full()
                     .min_h(px(0.))
-                    .overflow_y_hidden()  // Clip content at container boundary
+                    .overflow_y_hidden() // Clip content at container boundary
                     .p(px(design_spacing.padding_xl))
                     // Render the form entity (contains all fields)
-                    .child(entity.clone())
+                    .child(entity.clone()),
             )
             // Footer with Submit button
             .child(
@@ -6854,33 +7973,37 @@ impl ScriptListApp {
                         div()
                             .text_xs()
                             .text_color(rgb(design_colors.text_muted))
-                            .child("Tab navigate • ⏎ submit • Esc cancel")
+                            .child("Tab navigate • ⏎ submit • Esc cancel"),
                     )
                     // Submit button (visual only - use Enter key to submit)
                     .child(
                         Button::new("Submit", button_colors)
                             .variant(ButtonVariant::Primary)
-                            .shortcut("↵")
-                    )
+                            .shortcut("↵"),
+                    ),
             )
             .into_any_element()
     }
-    
-    fn render_term_prompt(&mut self, entity: Entity<term_prompt::TermPrompt>, _cx: &mut Context<Self>) -> AnyElement {
+
+    fn render_term_prompt(
+        &mut self,
+        entity: Entity<term_prompt::TermPrompt>,
+        _cx: &mut Context<Self>,
+    ) -> AnyElement {
         // Use design tokens for GLOBAL theming
         let tokens = get_tokens(self.current_design);
         let design_colors = tokens.colors();
-        
+
         // Use design tokens for global theming
         let opacity = self.theme.get_opacity();
         let bg_hex = design_colors.background;
         let bg_with_alpha = self.hex_to_rgba_with_opacity(bg_hex, opacity.main);
         let box_shadows = self.create_box_shadows();
-        
+
         // Use explicit height from layout constants instead of h_full()
         // h_full() doesn't work at the root level because there's no parent to fill
         let content_height = window_resize::layout::MAX_HEIGHT;
-        
+
         // Container with explicit height. We wrap the entity in a sized div because
         // GPUI entities don't automatically inherit parent flex sizing.
         // NOTE: No rounded corners for terminal - it should fill edge-to-edge
@@ -6892,33 +8015,33 @@ impl ScriptListApp {
             .w_full()
             .h(content_height)
             .overflow_hidden()
-            .child(
-                div()
-                    .size_full()
-                    .child(entity)
-            )
+            .child(div().size_full().child(entity))
             .into_any_element()
     }
-    
-    fn render_editor_prompt(&mut self, entity: Entity<EditorPrompt>, _cx: &mut Context<Self>) -> AnyElement {
+
+    fn render_editor_prompt(
+        &mut self,
+        entity: Entity<EditorPrompt>,
+        _cx: &mut Context<Self>,
+    ) -> AnyElement {
         // Use design tokens for GLOBAL theming
         let tokens = get_tokens(self.current_design);
         let design_colors = tokens.colors();
         let design_visual = tokens.visual();
-        
+
         // Use design tokens for global theming
         let opacity = self.theme.get_opacity();
         let bg_hex = design_colors.background;
         let bg_with_alpha = self.hex_to_rgba_with_opacity(bg_hex, opacity.main);
         let box_shadows = self.create_box_shadows();
-        
+
         // Use explicit height from layout constants instead of h_full()
         // h_full() doesn't work at the root level because there's no parent to fill
         let content_height = window_resize::layout::MAX_HEIGHT;
-        
+
         // NOTE: The EditorPrompt entity has its own track_focus and on_key_down in its render method.
         // We do NOT add track_focus here to avoid duplicate focus tracking on the same handle.
-        // 
+        //
         // Container with explicit height. We wrap the entity in a sized div because
         // GPUI entities don't automatically inherit parent flex sizing.
         div()
@@ -6930,26 +8053,26 @@ impl ScriptListApp {
             .h(content_height)
             .overflow_hidden()
             .rounded(px(design_visual.radius_lg))
-            .child(
-                div()
-                    .size_full()
-                    .child(entity)
-            )
+            .child(div().size_full().child(entity))
             .into_any_element()
     }
-    
-    fn render_select_prompt(&mut self, entity: Entity<SelectPrompt>, _cx: &mut Context<Self>) -> AnyElement {
+
+    fn render_select_prompt(
+        &mut self,
+        entity: Entity<SelectPrompt>,
+        _cx: &mut Context<Self>,
+    ) -> AnyElement {
         // Use design tokens for GLOBAL theming
         let tokens = get_tokens(self.current_design);
         let design_colors = tokens.colors();
         let design_visual = tokens.visual();
-        
+
         // Use design tokens for global theming
         let opacity = self.theme.get_opacity();
         let bg_hex = design_colors.background;
         let bg_with_alpha = self.hex_to_rgba_with_opacity(bg_hex, opacity.main);
         let box_shadows = self.create_box_shadows();
-        
+
         // SelectPrompt entity has its own track_focus and on_key_down in its render method.
         div()
             .flex()
@@ -6964,18 +8087,22 @@ impl ScriptListApp {
             .into_any_element()
     }
 
-    fn render_path_prompt(&mut self, entity: Entity<PathPrompt>, cx: &mut Context<Self>) -> AnyElement {
+    fn render_path_prompt(
+        &mut self,
+        entity: Entity<PathPrompt>,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         // Use design tokens for GLOBAL theming
         let tokens = get_tokens(self.current_design);
         let design_colors = tokens.colors();
         let design_visual = tokens.visual();
-        
+
         // Use design tokens for global theming
         let opacity = self.theme.get_opacity();
         let bg_hex = design_colors.background;
         let bg_with_alpha = self.hex_to_rgba_with_opacity(bg_hex, opacity.main);
         let box_shadows = self.create_box_shadows();
-        
+
         // Check if we should close the actions dialog
         if let Ok(mut close_guard) = self.close_path_actions.lock() {
             if *close_guard {
@@ -6989,17 +8116,19 @@ impl ScriptListApp {
                 logging::log("UI", "Closed path actions dialog");
             }
         }
-        
+
         // Check for pending path action result and execute it
         // Extract data first, then drop the lock, then execute
-        let pending_action = self.pending_path_action_result.lock()
+        let pending_action = self
+            .pending_path_action_result
+            .lock()
             .ok()
             .and_then(|mut guard| guard.take());
-        
+
         if let Some((action_id, path_info)) = pending_action {
             self.execute_path_action(&action_id, &path_info, &entity, cx);
         }
-        
+
         // Check for pending path action and create ActionsDialog if needed
         let actions_dialog = if let Ok(mut guard) = self.pending_path_action.lock() {
             if let Some(path_info) = guard.take() {
@@ -7008,9 +8137,15 @@ impl ScriptListApp {
                 let close_signal = self.close_path_actions.clone();
                 let action_result_signal = self.pending_path_action_result.clone();
                 let path_info_for_callback = path_info.clone();
-                let action_callback: std::sync::Arc<dyn Fn(String) + Send + Sync> = 
+                let action_callback: std::sync::Arc<dyn Fn(String) + Send + Sync> =
                     std::sync::Arc::new(move |action_id| {
-                        logging::log("UI", &format!("Path action selected: {} for path: {}", action_id, path_info_for_callback.path));
+                        logging::log(
+                            "UI",
+                            &format!(
+                                "Path action selected: {} for path: {}",
+                                action_id, path_info_for_callback.path
+                            ),
+                        );
                         // Store the action result for execution
                         if action_id != "__cancel__" {
                             if let Ok(mut guard) = action_result_signal.lock() {
@@ -7049,7 +8184,7 @@ impl ScriptListApp {
         } else {
             None
         };
-        
+
         // Sync the actions search text from the dialog to the shared state
         // This allows PathPrompt to display the search text in its header
         if let Some(ref dialog) = actions_dialog {
@@ -7063,104 +8198,126 @@ impl ScriptListApp {
                 guard.clear();
             }
         }
-        
+
         // Key handler for when actions dialog is showing
         // This intercepts keys and routes them to the dialog (like main menu does)
         let path_entity = entity.clone();
-        let handle_key = cx.listener(move |this: &mut Self, event: &gpui::KeyDownEvent, window: &mut Window, cx: &mut Context<Self>| {
-            let key_str = event.keystroke.key.to_lowercase();
-            let has_cmd = event.keystroke.modifiers.platform;
-            
-            logging::log("KEY", &format!("PathPrompt OUTER handler: key='{}', show_actions_popup={}", key_str, this.show_actions_popup));
-            
-            // Cmd+K toggles actions from anywhere
-            if has_cmd && key_str == "k" {
-                // Toggle the actions dialog
-                if this.show_actions_popup {
-                    // Close actions
-                    this.show_actions_popup = false;
-                    this.actions_dialog = None;
-                    if let Ok(mut guard) = this.path_actions_showing.lock() {
-                        *guard = false;
+        let handle_key = cx.listener(
+            move |this: &mut Self,
+                  event: &gpui::KeyDownEvent,
+                  window: &mut Window,
+                  cx: &mut Context<Self>| {
+                let key_str = event.keystroke.key.to_lowercase();
+                let has_cmd = event.keystroke.modifiers.platform;
+
+                logging::log(
+                    "KEY",
+                    &format!(
+                        "PathPrompt OUTER handler: key='{}', show_actions_popup={}",
+                        key_str, this.show_actions_popup
+                    ),
+                );
+
+                // Cmd+K toggles actions from anywhere
+                if has_cmd && key_str == "k" {
+                    // Toggle the actions dialog
+                    if this.show_actions_popup {
+                        // Close actions
+                        this.show_actions_popup = false;
+                        this.actions_dialog = None;
+                        if let Ok(mut guard) = this.path_actions_showing.lock() {
+                            *guard = false;
+                        }
+                        cx.notify();
+                    } else {
+                        // Open actions - trigger the callback in PathPrompt
+                        path_entity.update(cx, |prompt, cx| {
+                            prompt.toggle_actions(cx);
+                        });
                     }
-                    cx.notify();
-                } else {
-                    // Open actions - trigger the callback in PathPrompt
-                    path_entity.update(cx, |prompt, cx| {
-                        prompt.toggle_actions(cx);
-                    });
+                    return;
                 }
-                return;
-            }
-            
-            // If actions popup is open, route keyboard events to it
-            if this.show_actions_popup {
-                if let Some(ref dialog) = this.actions_dialog {
-                    match key_str.as_str() {
-                        "up" | "arrowup" => {
-                            dialog.update(cx, |d, cx| d.move_up(cx));
-                        }
-                        "down" | "arrowdown" => {
-                            dialog.update(cx, |d, cx| d.move_down(cx));
-                        }
-                        "enter" => {
-                            // Get the selected action and execute it
-                            let action_id = dialog.read(cx).get_selected_action_id();
-                            if let Some(action_id) = action_id {
-                                logging::log("ACTIONS", &format!("Path action selected via Enter: {}", action_id));
-                                
-                                // Get path info from PathPrompt
-                                let path_info = path_entity.read(cx).get_selected_path_info();
-                                
-                                // Close dialog
+
+                // If actions popup is open, route keyboard events to it
+                if this.show_actions_popup {
+                    if let Some(ref dialog) = this.actions_dialog {
+                        match key_str.as_str() {
+                            "up" | "arrowup" => {
+                                dialog.update(cx, |d, cx| d.move_up(cx));
+                            }
+                            "down" | "arrowdown" => {
+                                dialog.update(cx, |d, cx| d.move_down(cx));
+                            }
+                            "enter" => {
+                                // Get the selected action and execute it
+                                let action_id = dialog.read(cx).get_selected_action_id();
+                                if let Some(action_id) = action_id {
+                                    logging::log(
+                                        "ACTIONS",
+                                        &format!("Path action selected via Enter: {}", action_id),
+                                    );
+
+                                    // Get path info from PathPrompt
+                                    let path_info = path_entity.read(cx).get_selected_path_info();
+
+                                    // Close dialog
+                                    this.show_actions_popup = false;
+                                    this.actions_dialog = None;
+                                    if let Ok(mut guard) = this.path_actions_showing.lock() {
+                                        *guard = false;
+                                    }
+
+                                    // Focus back to PathPrompt
+                                    if let AppView::PathPrompt { focus_handle, .. } =
+                                        &this.current_view
+                                    {
+                                        window.focus(focus_handle, cx);
+                                    }
+
+                                    // Execute the action if we have path info
+                                    if let Some(info) = path_info {
+                                        this.execute_path_action(
+                                            &action_id,
+                                            &info,
+                                            &path_entity,
+                                            cx,
+                                        );
+                                    }
+                                }
+                            }
+                            "escape" => {
                                 this.show_actions_popup = false;
                                 this.actions_dialog = None;
                                 if let Ok(mut guard) = this.path_actions_showing.lock() {
                                     *guard = false;
                                 }
-                                
                                 // Focus back to PathPrompt
-                                if let AppView::PathPrompt { focus_handle, .. } = &this.current_view {
+                                if let AppView::PathPrompt { focus_handle, .. } = &this.current_view
+                                {
                                     window.focus(focus_handle, cx);
                                 }
-                                
-                                // Execute the action if we have path info
-                                if let Some(info) = path_info {
-                                    this.execute_path_action(&action_id, &info, &path_entity, cx);
-                                }
+                                cx.notify();
                             }
-                        }
-                        "escape" => {
-                            this.show_actions_popup = false;
-                            this.actions_dialog = None;
-                            if let Ok(mut guard) = this.path_actions_showing.lock() {
-                                *guard = false;
+                            "backspace" => {
+                                dialog.update(cx, |d, cx| d.handle_backspace(cx));
                             }
-                            // Focus back to PathPrompt
-                            if let AppView::PathPrompt { focus_handle, .. } = &this.current_view {
-                                window.focus(focus_handle, cx);
-                            }
-                            cx.notify();
-                        }
-                        "backspace" => {
-                            dialog.update(cx, |d, cx| d.handle_backspace(cx));
-                        }
-                        _ => {
-                            // Route character input to the dialog for search
-                            if let Some(ref key_char) = event.keystroke.key_char {
-                                if let Some(ch) = key_char.chars().next() {
-                                    if !ch.is_control() {
-                                        dialog.update(cx, |d, cx| d.handle_char(ch, cx));
+                            _ => {
+                                // Route character input to the dialog for search
+                                if let Some(ref key_char) = event.keystroke.key_char {
+                                    if let Some(ch) = key_char.chars().next() {
+                                        if !ch.is_control() {
+                                            dialog.update(cx, |d, cx| d.handle_char(ch, cx));
+                                        }
                                     }
                                 }
                             }
                         }
                     }
                 }
-            }
-            // If actions not showing, let PathPrompt handle the keys via its own handler
-        });
-        
+                // If actions not showing, let PathPrompt handle the keys via its own handler
+            },
+        );
+
         // PathPrompt entity has its own track_focus and on_key_down in its render method.
         // We add an outer key handler to intercept events when actions are showing.
         div()
@@ -7184,26 +8341,30 @@ impl ScriptListApp {
                         .inset_0()
                         .flex()
                         .justify_end()
-                        .pt(px(52.))  // Clear the header bar (~44px header + 8px margin)
+                        .pt(px(52.)) // Clear the header bar (~44px header + 8px margin)
                         .pr(px(8.))
-                        .child(dialog)
+                        .child(dialog),
                 )
             })
             .into_any_element()
     }
 
-    fn render_env_prompt(&mut self, entity: Entity<EnvPrompt>, _cx: &mut Context<Self>) -> AnyElement {
+    fn render_env_prompt(
+        &mut self,
+        entity: Entity<EnvPrompt>,
+        _cx: &mut Context<Self>,
+    ) -> AnyElement {
         // Use design tokens for GLOBAL theming
         let tokens = get_tokens(self.current_design);
         let design_colors = tokens.colors();
         let design_visual = tokens.visual();
-        
+
         // Use design tokens for global theming
         let opacity = self.theme.get_opacity();
         let bg_hex = design_colors.background;
         let bg_with_alpha = self.hex_to_rgba_with_opacity(bg_hex, opacity.main);
         let box_shadows = self.create_box_shadows();
-        
+
         // EnvPrompt entity has its own track_focus and on_key_down in its render method.
         div()
             .flex()
@@ -7218,18 +8379,22 @@ impl ScriptListApp {
             .into_any_element()
     }
 
-    fn render_drop_prompt(&mut self, entity: Entity<DropPrompt>, _cx: &mut Context<Self>) -> AnyElement {
+    fn render_drop_prompt(
+        &mut self,
+        entity: Entity<DropPrompt>,
+        _cx: &mut Context<Self>,
+    ) -> AnyElement {
         // Use design tokens for GLOBAL theming
         let tokens = get_tokens(self.current_design);
         let design_colors = tokens.colors();
         let design_visual = tokens.visual();
-        
+
         // Use design tokens for global theming
         let opacity = self.theme.get_opacity();
         let bg_hex = design_colors.background;
         let bg_with_alpha = self.hex_to_rgba_with_opacity(bg_hex, opacity.main);
         let box_shadows = self.create_box_shadows();
-        
+
         // DropPrompt entity has its own track_focus and on_key_down in its render method.
         div()
             .flex()
@@ -7244,18 +8409,22 @@ impl ScriptListApp {
             .into_any_element()
     }
 
-    fn render_template_prompt(&mut self, entity: Entity<TemplatePrompt>, _cx: &mut Context<Self>) -> AnyElement {
+    fn render_template_prompt(
+        &mut self,
+        entity: Entity<TemplatePrompt>,
+        _cx: &mut Context<Self>,
+    ) -> AnyElement {
         // Use design tokens for GLOBAL theming
         let tokens = get_tokens(self.current_design);
         let design_colors = tokens.colors();
         let design_visual = tokens.visual();
-        
+
         // Use design tokens for global theming
         let opacity = self.theme.get_opacity();
         let bg_hex = design_colors.background;
         let bg_with_alpha = self.hex_to_rgba_with_opacity(bg_hex, opacity.main);
         let box_shadows = self.create_box_shadows();
-        
+
         // TemplatePrompt entity has its own track_focus and on_key_down in its render method.
         div()
             .flex()
@@ -7270,7 +8439,6 @@ impl ScriptListApp {
             .into_any_element()
     }
 
-    
     fn render_actions_dialog(&mut self, cx: &mut Context<Self>) -> AnyElement {
         // Use design tokens for GLOBAL theming
         let tokens = get_tokens(self.current_design);
@@ -7278,25 +8446,30 @@ impl ScriptListApp {
         let design_spacing = tokens.spacing();
         let design_typography = tokens.typography();
         let design_visual = tokens.visual();
-        
+
         // Use design tokens for global theming
         let opacity = self.theme.get_opacity();
         let bg_hex = design_colors.background;
         let bg_with_alpha = self.hex_to_rgba_with_opacity(bg_hex, opacity.main);
         let box_shadows = self.create_box_shadows();
-        
+
         // Key handler for actions dialog
-        let handle_key = cx.listener(move |this: &mut Self, event: &gpui::KeyDownEvent, _window: &mut Window, cx: &mut Context<Self>| {
-            let key_str = event.keystroke.key.to_lowercase();
-            logging::log("KEY", &format!("ActionsDialog key: '{}'", key_str));
-            
-            if key_str.as_str() == "escape" {
-                logging::log("KEY", "ESC in ActionsDialog - returning to script list");
-                this.current_view = AppView::ScriptList;
-                cx.notify();
-            }
-        });
-        
+        let handle_key = cx.listener(
+            move |this: &mut Self,
+                  event: &gpui::KeyDownEvent,
+                  _window: &mut Window,
+                  cx: &mut Context<Self>| {
+                let key_str = event.keystroke.key.to_lowercase();
+                logging::log("KEY", &format!("ActionsDialog key: '{}'", key_str));
+
+                if key_str.as_str() == "escape" {
+                    logging::log("KEY", "ESC in ActionsDialog - returning to script list");
+                    this.current_view = AppView::ScriptList;
+                    cx.notify();
+                }
+            },
+        );
+
         // Simple actions dialog stub with design tokens
         div()
             .flex()
@@ -7312,28 +8485,24 @@ impl ScriptListApp {
             .key_context("actions_dialog")
             .track_focus(&self.focus_handle)
             .on_key_down(handle_key)
-            .child(
-                div()
-                    .text_lg()
-                    .child("Actions (Cmd+K)")
-            )
+            .child(div().text_lg().child("Actions (Cmd+K)"))
             .child(
                 div()
                     .text_sm()
                     .text_color(rgb(design_colors.text_muted))
                     .mt(px(design_spacing.margin_md))
-                    .child("• Create script\n• Edit script\n• Reload\n• Settings\n• Quit")
+                    .child("• Create script\n• Edit script\n• Reload\n• Settings\n• Quit"),
             )
             .child(
                 div()
                     .mt(px(design_spacing.margin_lg))
                     .text_xs()
                     .text_color(rgb(design_colors.text_dimmed))
-                    .child("Press Esc to close")
+                    .child("Press Esc to close"),
             )
             .into_any_element()
     }
-    
+
     /// Render clipboard history view
     fn render_clipboard_history(
         &mut self,
@@ -7348,13 +8517,13 @@ impl ScriptListApp {
         let design_spacing = tokens.spacing();
         let design_typography = tokens.typography();
         let design_visual = tokens.visual();
-        
+
         // Use design tokens for global theming
         let opacity = self.theme.get_opacity();
         let bg_hex = design_colors.background;
         let bg_with_alpha = self.hex_to_rgba_with_opacity(bg_hex, opacity.main);
         let box_shadows = self.create_box_shadows();
-        
+
         // Use global image cache from clipboard_history module
         // Images are pre-decoded in the background monitor thread, so this is fast
         // Only decode if not already in the global cache (fallback)
@@ -7362,12 +8531,16 @@ impl ScriptListApp {
             if entry.content_type == clipboard_history::ContentType::Image {
                 // Check global cache first, then local cache
                 if clipboard_history::get_cached_image(&entry.id).is_none()
-                   && !self.clipboard_image_cache.contains_key(&entry.id) {
+                    && !self.clipboard_image_cache.contains_key(&entry.id)
+                {
                     // Fallback: decode now if not pre-cached
-                    if let Some(render_image) = clipboard_history::decode_to_render_image(&entry.content) {
+                    if let Some(render_image) =
+                        clipboard_history::decode_to_render_image(&entry.content)
+                    {
                         // Store in global cache for future use
                         clipboard_history::cache_image(&entry.id, render_image.clone());
-                        self.clipboard_image_cache.insert(entry.id.clone(), render_image);
+                        self.clipboard_image_cache
+                            .insert(entry.id.clone(), render_image);
                     }
                 } else if let Some(cached) = clipboard_history::get_cached_image(&entry.id) {
                     // Copy from global cache to local cache for this render
@@ -7377,10 +8550,10 @@ impl ScriptListApp {
                 }
             }
         }
-        
+
         // Clone the cache for use in closures
         let image_cache = self.clipboard_image_cache.clone();
-        
+
         // Filter entries based on current filter
         let filtered_entries: Vec<_> = if filter.is_empty() {
             entries.iter().enumerate().collect()
@@ -7389,118 +8562,141 @@ impl ScriptListApp {
             entries
                 .iter()
                 .enumerate()
-                .filter(|(_, e)| {
-                    e.content.to_lowercase().contains(&filter_lower)
-                })
+                .filter(|(_, e)| e.content.to_lowercase().contains(&filter_lower))
                 .collect()
         };
         let filtered_len = filtered_entries.len();
-        
+
         // Key handler for clipboard history
-        let handle_key = cx.listener(move |this: &mut Self, event: &gpui::KeyDownEvent, _window: &mut Window, cx: &mut Context<Self>| {
-            let key_str = event.keystroke.key.to_lowercase();
-            logging::log("KEY", &format!("ClipboardHistory key: '{}'", key_str));
-            
-            if let AppView::ClipboardHistoryView { entries, filter, selected_index } = &mut this.current_view {
-                // Apply filter to get current filtered list
-                let filtered_entries: Vec<_> = if filter.is_empty() {
-                    entries.iter().enumerate().collect()
-                } else {
-                    let filter_lower = filter.to_lowercase();
-                    entries
-                        .iter()
-                        .enumerate()
-                        .filter(|(_, e)| e.content.to_lowercase().contains(&filter_lower))
-                        .collect()
-                };
-                let filtered_len = filtered_entries.len();
-                
-                match key_str.as_str() {
-                    "up" | "arrowup" => {
-                        if *selected_index > 0 {
-                            *selected_index -= 1;
-                            // Scroll to keep selection visible
-                            this.clipboard_list_scroll_handle.scroll_to_item(*selected_index, ScrollStrategy::Nearest);
-                            cx.notify();
-                        }
-                    }
-                    "down" | "arrowdown" => {
-                        if *selected_index < filtered_len.saturating_sub(1) {
-                            *selected_index += 1;
-                            // Scroll to keep selection visible
-                            this.clipboard_list_scroll_handle.scroll_to_item(*selected_index, ScrollStrategy::Nearest);
-                            cx.notify();
-                        }
-                    }
-                    "enter" => {
-                        // Copy selected entry to clipboard, hide window, then paste
-                        if let Some((_, entry)) = filtered_entries.get(*selected_index) {
-                            logging::log("EXEC", &format!("Copying clipboard entry: {}", entry.id));
-                            if let Err(e) = clipboard_history::copy_entry_to_clipboard(&entry.id) {
-                                logging::log("ERROR", &format!("Failed to copy entry: {}", e));
-                            } else {
-                                logging::log("EXEC", "Entry copied to clipboard");
-                                // Hide window first
-                                WINDOW_VISIBLE.store(false, Ordering::SeqCst);
-                                cx.hide();
-                                NEEDS_RESET.store(true, Ordering::SeqCst);
-                                
-                                // Simulate Cmd+V paste after a brief delay to let focus return
-                                std::thread::spawn(|| {
-                                    std::thread::sleep(std::time::Duration::from_millis(100));
-                                    if let Err(e) = selected_text::simulate_paste_with_cg() {
-                                        logging::log("ERROR", &format!("Failed to simulate paste: {}", e));
-                                    } else {
-                                        logging::log("EXEC", "Simulated Cmd+V paste");
-                                    }
-                                });
+        let handle_key = cx.listener(
+            move |this: &mut Self,
+                  event: &gpui::KeyDownEvent,
+                  _window: &mut Window,
+                  cx: &mut Context<Self>| {
+                let key_str = event.keystroke.key.to_lowercase();
+                logging::log("KEY", &format!("ClipboardHistory key: '{}'", key_str));
+
+                if let AppView::ClipboardHistoryView {
+                    entries,
+                    filter,
+                    selected_index,
+                } = &mut this.current_view
+                {
+                    // Apply filter to get current filtered list
+                    let filtered_entries: Vec<_> = if filter.is_empty() {
+                        entries.iter().enumerate().collect()
+                    } else {
+                        let filter_lower = filter.to_lowercase();
+                        entries
+                            .iter()
+                            .enumerate()
+                            .filter(|(_, e)| e.content.to_lowercase().contains(&filter_lower))
+                            .collect()
+                    };
+                    let filtered_len = filtered_entries.len();
+
+                    match key_str.as_str() {
+                        "up" | "arrowup" => {
+                            if *selected_index > 0 {
+                                *selected_index -= 1;
+                                // Scroll to keep selection visible
+                                this.clipboard_list_scroll_handle
+                                    .scroll_to_item(*selected_index, ScrollStrategy::Nearest);
+                                cx.notify();
                             }
                         }
-                    }
-                    "escape" => {
-                        logging::log("KEY", "ESC in ClipboardHistory - returning to script list");
-                        this.reset_to_script_list(cx);
-                    }
-                    "backspace" => {
-                        if !filter.is_empty() {
-                            filter.pop();
-                            *selected_index = 0;
-                            // Reset scroll to top when filter changes
-                            this.clipboard_list_scroll_handle.scroll_to_item(0, ScrollStrategy::Top);
-                            cx.notify();
+                        "down" | "arrowdown" => {
+                            if *selected_index < filtered_len.saturating_sub(1) {
+                                *selected_index += 1;
+                                // Scroll to keep selection visible
+                                this.clipboard_list_scroll_handle
+                                    .scroll_to_item(*selected_index, ScrollStrategy::Nearest);
+                                cx.notify();
+                            }
                         }
-                    }
-                    _ => {
-                        if let Some(ref key_char) = event.keystroke.key_char {
-                            if let Some(ch) = key_char.chars().next() {
-                                if !ch.is_control() {
-                                    filter.push(ch);
-                                    *selected_index = 0;
-                                    // Reset scroll to top when filter changes
-                                    this.clipboard_list_scroll_handle.scroll_to_item(0, ScrollStrategy::Top);
-                                    cx.notify();
+                        "enter" => {
+                            // Copy selected entry to clipboard, hide window, then paste
+                            if let Some((_, entry)) = filtered_entries.get(*selected_index) {
+                                logging::log(
+                                    "EXEC",
+                                    &format!("Copying clipboard entry: {}", entry.id),
+                                );
+                                if let Err(e) =
+                                    clipboard_history::copy_entry_to_clipboard(&entry.id)
+                                {
+                                    logging::log("ERROR", &format!("Failed to copy entry: {}", e));
+                                } else {
+                                    logging::log("EXEC", "Entry copied to clipboard");
+                                    // Hide window first
+                                    WINDOW_VISIBLE.store(false, Ordering::SeqCst);
+                                    cx.hide();
+                                    NEEDS_RESET.store(true, Ordering::SeqCst);
+
+                                    // Simulate Cmd+V paste after a brief delay to let focus return
+                                    std::thread::spawn(|| {
+                                        std::thread::sleep(std::time::Duration::from_millis(100));
+                                        if let Err(e) = selected_text::simulate_paste_with_cg() {
+                                            logging::log(
+                                                "ERROR",
+                                                &format!("Failed to simulate paste: {}", e),
+                                            );
+                                        } else {
+                                            logging::log("EXEC", "Simulated Cmd+V paste");
+                                        }
+                                    });
+                                }
+                            }
+                        }
+                        "escape" => {
+                            logging::log(
+                                "KEY",
+                                "ESC in ClipboardHistory - returning to script list",
+                            );
+                            this.reset_to_script_list(cx);
+                        }
+                        "backspace" => {
+                            if !filter.is_empty() {
+                                filter.pop();
+                                *selected_index = 0;
+                                // Reset scroll to top when filter changes
+                                this.clipboard_list_scroll_handle
+                                    .scroll_to_item(0, ScrollStrategy::Top);
+                                cx.notify();
+                            }
+                        }
+                        _ => {
+                            if let Some(ref key_char) = event.keystroke.key_char {
+                                if let Some(ch) = key_char.chars().next() {
+                                    if !ch.is_control() {
+                                        filter.push(ch);
+                                        *selected_index = 0;
+                                        // Reset scroll to top when filter changes
+                                        this.clipboard_list_scroll_handle
+                                            .scroll_to_item(0, ScrollStrategy::Top);
+                                        cx.notify();
+                                    }
                                 }
                             }
                         }
                     }
                 }
-            }
-        });
-        
+            },
+        );
+
         let input_display = if filter.is_empty() {
             SharedString::from("Search clipboard history...")
         } else {
             SharedString::from(filter.clone())
         };
         let input_is_empty = filter.is_empty();
-        
+
         // Pre-compute colors
         let list_colors = ListItemColors::from_design(&design_colors);
         let text_primary = design_colors.text_primary;
         let text_muted = design_colors.text_muted;
         let text_dimmed = design_colors.text_dimmed;
         let ui_border = design_colors.border;
-        
+
         // Build virtualized list
         let list_element: AnyElement = if filtered_len == 0 {
             div()
@@ -7509,104 +8705,122 @@ impl ScriptListApp {
                 .text_center()
                 .text_color(rgb(design_colors.text_muted))
                 .font_family(design_typography.font_family)
-                .child(if filter.is_empty() { 
-                    "No clipboard history" 
-                } else { 
-                    "No entries match your filter" 
+                .child(if filter.is_empty() {
+                    "No clipboard history"
+                } else {
+                    "No entries match your filter"
                 })
                 .into_any_element()
         } else {
             // Clone data for the closure
-            let entries_for_closure: Vec<_> = filtered_entries.iter().map(|(i, e)| (*i, (*e).clone())).collect();
+            let entries_for_closure: Vec<_> = filtered_entries
+                .iter()
+                .map(|(i, e)| (*i, (*e).clone()))
+                .collect();
             let selected = selected_index;
             let image_cache_for_list = image_cache.clone();
-            
+
             uniform_list(
                 "clipboard-history",
                 filtered_len,
                 move |visible_range, _window, _cx| {
-                    visible_range.map(|ix| {
-                        if let Some((_, entry)) = entries_for_closure.get(ix) {
-                            let is_selected = ix == selected;
-                            
-                            // Get cached thumbnail for images
-                            let cached_image = if entry.content_type == clipboard_history::ContentType::Image {
-                                image_cache_for_list.get(&entry.id).cloned()
-                            } else {
-                                None
-                            };
-                            
-                            // Truncate content for display (show dimensions for images)
-                            let display_content = match entry.content_type {
-                                clipboard_history::ContentType::Image => {
-                                    // Show image dimensions instead of "[Image]"
-                                    if let Some((w, h)) = clipboard_history::get_image_dimensions(&entry.content) {
-                                        format!("{}×{} image", w, h)
-                                    } else {
-                                        "Image".to_string()
+                    visible_range
+                        .map(|ix| {
+                            if let Some((_, entry)) = entries_for_closure.get(ix) {
+                                let is_selected = ix == selected;
+
+                                // Get cached thumbnail for images
+                                let cached_image = if entry.content_type
+                                    == clipboard_history::ContentType::Image
+                                {
+                                    image_cache_for_list.get(&entry.id).cloned()
+                                } else {
+                                    None
+                                };
+
+                                // Truncate content for display (show dimensions for images)
+                                let display_content = match entry.content_type {
+                                    clipboard_history::ContentType::Image => {
+                                        // Show image dimensions instead of "[Image]"
+                                        if let Some((w, h)) =
+                                            clipboard_history::get_image_dimensions(&entry.content)
+                                        {
+                                            format!("{}×{} image", w, h)
+                                        } else {
+                                            "Image".to_string()
+                                        }
                                     }
-                                }
-                                clipboard_history::ContentType::Text => {
-                                    let truncated: String = entry.content.chars().take(50).collect();
-                                    if entry.content.len() > 50 {
-                                        format!("{}...", truncated)
-                                    } else {
-                                        truncated
+                                    clipboard_history::ContentType::Text => {
+                                        let truncated: String =
+                                            entry.content.chars().take(50).collect();
+                                        if entry.content.len() > 50 {
+                                            format!("{}...", truncated)
+                                        } else {
+                                            truncated
+                                        }
                                     }
+                                };
+
+                                // Format relative time
+                                let now = chrono::Utc::now().timestamp();
+                                let age_secs = now - entry.timestamp;
+                                let relative_time = if age_secs < 60 {
+                                    "just now".to_string()
+                                } else if age_secs < 3600 {
+                                    format!("{}m ago", age_secs / 60)
+                                } else if age_secs < 86400 {
+                                    format!("{}h ago", age_secs / 3600)
+                                } else {
+                                    format!("{}d ago", age_secs / 86400)
+                                };
+
+                                // Add pin indicator
+                                let name = if entry.pinned {
+                                    format!("📌 {}", display_content)
+                                } else {
+                                    display_content
+                                };
+
+                                // Build list item with optional thumbnail
+                                let mut item = ListItem::new(name, list_colors)
+                                    .description_opt(Some(relative_time))
+                                    .selected(is_selected)
+                                    .with_accent_bar(true);
+
+                                // Add thumbnail for images, text icon for text entries
+                                if let Some(render_image) = cached_image {
+                                    item = item.icon_image(render_image);
+                                } else if entry.content_type == clipboard_history::ContentType::Text
+                                {
+                                    item = item.icon("📄");
                                 }
-                            };
-                            
-                            // Format relative time
-                            let now = chrono::Utc::now().timestamp();
-                            let age_secs = now - entry.timestamp;
-                            let relative_time = if age_secs < 60 {
-                                "just now".to_string()
-                            } else if age_secs < 3600 {
-                                format!("{}m ago", age_secs / 60)
-                            } else if age_secs < 86400 {
-                                format!("{}h ago", age_secs / 3600)
+
+                                div().id(ix).child(item)
                             } else {
-                                format!("{}d ago", age_secs / 86400)
-                            };
-                            
-                            // Add pin indicator
-                            let name = if entry.pinned {
-                                format!("📌 {}", display_content)
-                            } else {
-                                display_content
-                            };
-                            
-                            // Build list item with optional thumbnail
-                            let mut item = ListItem::new(name, list_colors)
-                                .description_opt(Some(relative_time))
-                                .selected(is_selected)
-                                .with_accent_bar(true);
-                            
-                            // Add thumbnail for images, text icon for text entries
-                            if let Some(render_image) = cached_image {
-                                item = item.icon_image(render_image);
-                            } else if entry.content_type == clipboard_history::ContentType::Text {
-                                item = item.icon("📄");
+                                div().id(ix).h(px(LIST_ITEM_HEIGHT))
                             }
-                            
-                            div()
-                                .id(ix)
-                                .child(item)
-                        } else {
-                            div().id(ix).h(px(LIST_ITEM_HEIGHT))
-                        }
-                    }).collect()
+                        })
+                        .collect()
                 },
             )
             .h_full()
             .track_scroll(&self.clipboard_list_scroll_handle)
             .into_any_element()
         };
-        
+
         // Build preview panel for selected entry
-        let selected_entry = filtered_entries.get(selected_index).map(|(_, e)| (*e).clone());
-        let preview_panel = self.render_clipboard_preview_panel(&selected_entry, &image_cache, &design_colors, &design_spacing, &design_typography, &design_visual);
-        
+        let selected_entry = filtered_entries
+            .get(selected_index)
+            .map(|(_, e)| (*e).clone());
+        let preview_panel = self.render_clipboard_preview_panel(
+            &selected_entry,
+            &image_cache,
+            &design_colors,
+            &design_spacing,
+            &design_typography,
+            &design_visual,
+        );
+
         div()
             .flex()
             .flex_col()
@@ -7638,30 +8852,38 @@ impl ScriptListApp {
                             .flex_row()
                             .items_center()
                             .text_lg()
-                            .text_color(if input_is_empty { rgb(text_muted) } else { rgb(text_primary) })
-                            .when(input_is_empty, |d| d.child(
-                                div()
-                                    .w(px(design_visual.border_normal))
-                                    .h(px(CURSOR_HEIGHT_LG))
-                                    .my(px(CURSOR_MARGIN_Y))
-                                    .mr(px(design_spacing.padding_xs))
-                                    .when(self.cursor_visible, |d| d.bg(rgb(text_primary)))
-                            ))
+                            .text_color(if input_is_empty {
+                                rgb(text_muted)
+                            } else {
+                                rgb(text_primary)
+                            })
+                            .when(input_is_empty, |d| {
+                                d.child(
+                                    div()
+                                        .w(px(design_visual.border_normal))
+                                        .h(px(CURSOR_HEIGHT_LG))
+                                        .my(px(CURSOR_MARGIN_Y))
+                                        .mr(px(design_spacing.padding_xs))
+                                        .when(self.cursor_visible, |d| d.bg(rgb(text_primary))),
+                                )
+                            })
                             .child(input_display)
-                            .when(!input_is_empty, |d| d.child(
-                                div()
-                                    .w(px(design_visual.border_normal))
-                                    .h(px(CURSOR_HEIGHT_LG))
-                                    .my(px(CURSOR_MARGIN_Y))
-                                    .ml(px(design_visual.border_normal))
-                                    .when(self.cursor_visible, |d| d.bg(rgb(text_primary)))
-                            ))
+                            .when(!input_is_empty, |d| {
+                                d.child(
+                                    div()
+                                        .w(px(design_visual.border_normal))
+                                        .h(px(CURSOR_HEIGHT_LG))
+                                        .my(px(CURSOR_MARGIN_Y))
+                                        .ml(px(design_visual.border_normal))
+                                        .when(self.cursor_visible, |d| d.bg(rgb(text_primary))),
+                                )
+                            }),
                     )
                     .child(
                         div()
                             .text_sm()
                             .text_color(rgb(text_dimmed))
-                            .child(format!("{} entries", entries.len()))
+                            .child(format!("{} entries", entries.len())),
                     ),
             )
             // Divider
@@ -7669,7 +8891,7 @@ impl ScriptListApp {
                 div()
                     .mx(px(design_spacing.padding_lg))
                     .h(px(design_visual.border_thin))
-                    .bg(rgba((ui_border << 8) | 0x60))
+                    .bg(rgba((ui_border << 8) | 0x60)),
             )
             // Main content area - 50/50 split: List on left, Preview on right
             .child(
@@ -7687,7 +8909,7 @@ impl ScriptListApp {
                             .h_full()
                             .min_h(px(0.))
                             .py(px(design_spacing.padding_xs))
-                            .child(list_element)
+                            .child(list_element),
                     )
                     // Right side: Preview panel (50% width)
                     .child(
@@ -7696,12 +8918,12 @@ impl ScriptListApp {
                             .h_full()
                             .min_h(px(0.))
                             .overflow_hidden()
-                            .child(preview_panel)
-                    )
+                            .child(preview_panel),
+                    ),
             )
             .into_any_element()
     }
-    
+
     /// Render the preview panel for clipboard history
     fn render_clipboard_preview_panel(
         &self,
@@ -7718,7 +8940,7 @@ impl ScriptListApp {
         let text_muted = colors.text_muted;
         let text_secondary = colors.text_secondary;
         let bg_search_box = colors.background_tertiary;
-        
+
         let mut panel = div()
             .w_full()
             .h_full()
@@ -7730,7 +8952,7 @@ impl ScriptListApp {
             .flex_col()
             .overflow_y_hidden()
             .font_family(typography.font_family);
-        
+
         match selected_entry {
             Some(entry) => {
                 // Header with content type
@@ -7738,7 +8960,7 @@ impl ScriptListApp {
                     clipboard_history::ContentType::Text => "Text",
                     clipboard_history::ContentType::Image => "Image",
                 };
-                
+
                 panel = panel.child(
                     div()
                         .flex()
@@ -7755,21 +8977,23 @@ impl ScriptListApp {
                                 .bg(rgba((colors.accent << 8) | 0x30))
                                 .text_xs()
                                 .text_color(rgb(colors.accent))
-                                .child(content_type_label)
+                                .child(content_type_label),
                         )
                         // Pin indicator
-                        .when(entry.pinned, |d| d.child(
-                            div()
-                                .px(px(spacing.padding_sm))
-                                .py(px(spacing.padding_xs / 2.0))
-                                .rounded(px(visual.radius_sm))
-                                .bg(rgba((colors.accent << 8) | 0x20))
-                                .text_xs()
-                                .text_color(rgb(colors.accent))
-                                .child("📌 Pinned")
-                        ))
+                        .when(entry.pinned, |d| {
+                            d.child(
+                                div()
+                                    .px(px(spacing.padding_sm))
+                                    .py(px(spacing.padding_xs / 2.0))
+                                    .rounded(px(visual.radius_sm))
+                                    .bg(rgba((colors.accent << 8) | 0x20))
+                                    .text_xs()
+                                    .text_color(rgb(colors.accent))
+                                    .child("📌 Pinned"),
+                            )
+                        }),
                 );
-                
+
                 // Timestamp
                 let now = chrono::Utc::now().timestamp();
                 let age_secs = now - entry.timestamp;
@@ -7782,40 +9006,40 @@ impl ScriptListApp {
                 } else {
                     format!("{} days ago", age_secs / 86400)
                 };
-                
+
                 panel = panel.child(
                     div()
                         .text_xs()
                         .text_color(rgb(text_muted))
                         .pb(px(spacing.padding_md))
-                        .child(relative_time)
+                        .child(relative_time),
                 );
-                
+
                 // Divider
                 panel = panel.child(
                     div()
                         .w_full()
                         .h(px(visual.border_thin))
                         .bg(rgba((ui_border << 8) | 0x60))
-                        .my(px(spacing.padding_sm))
+                        .my(px(spacing.padding_sm)),
                 );
-                
+
                 // Content preview
                 panel = panel.child(
                     div()
                         .text_xs()
                         .text_color(rgb(text_muted))
                         .pb(px(spacing.padding_sm))
-                        .child("Content Preview")
+                        .child("Content Preview"),
                 );
-                
+
                 match entry.content_type {
                     clipboard_history::ContentType::Text => {
                         // Show full text content in a code-like container
                         let content = entry.content.clone();
                         let char_count = content.chars().count();
                         let line_count = content.lines().count();
-                        
+
                         panel = panel
                             .child(
                                 div()
@@ -7828,7 +9052,7 @@ impl ScriptListApp {
                                     .font_family(typography.font_family_mono)
                                     .text_sm()
                                     .text_color(rgb(text_primary))
-                                    .child(content)
+                                    .child(content),
                             )
                             // Stats footer
                             .child(
@@ -7836,17 +9060,21 @@ impl ScriptListApp {
                                     .pt(px(spacing.padding_sm))
                                     .text_xs()
                                     .text_color(rgb(text_secondary))
-                                    .child(format!("{} characters • {} lines", char_count, line_count))
+                                    .child(format!(
+                                        "{} characters • {} lines",
+                                        char_count, line_count
+                                    )),
                             );
                     }
                     clipboard_history::ContentType::Image => {
                         // Get image dimensions
-                        let (width, height) = clipboard_history::get_image_dimensions(&entry.content)
-                            .unwrap_or((0, 0));
-                        
+                        let (width, height) =
+                            clipboard_history::get_image_dimensions(&entry.content)
+                                .unwrap_or((0, 0));
+
                         // Try to get cached render image
                         let cached_image = image_cache.get(&entry.id).cloned();
-                        
+
                         let image_container = if let Some(render_image) = cached_image {
                             // Calculate display size that fits in the preview panel
                             // Max size is 300x300, maintain aspect ratio
@@ -7859,7 +9087,7 @@ impl ScriptListApp {
                             } else {
                                 (max_size, max_size)
                             };
-                            
+
                             div()
                                 .flex()
                                 .flex_col()
@@ -7873,14 +9101,14 @@ impl ScriptListApp {
                                     .w(px(display_w))
                                     .h(px(display_h))
                                     .object_fit(gpui::ObjectFit::Contain)
-                                    .rounded(px(visual.radius_sm))
+                                    .rounded(px(visual.radius_sm)),
                                 )
                                 // Dimensions label below image
                                 .child(
                                     div()
                                         .text_sm()
                                         .text_color(rgb(text_secondary))
-                                        .child(format!("{}×{} pixels", width, height))
+                                        .child(format!("{}×{} pixels", width, height)),
                                 )
                         } else {
                             // Fallback if image not in cache (shouldn't happen)
@@ -7889,26 +9117,22 @@ impl ScriptListApp {
                                 .flex_col()
                                 .items_center()
                                 .gap_2()
-                                .child(
-                                    div()
-                                        .text_2xl()
-                                        .child("🖼️")
-                                )
+                                .child(div().text_2xl().child("🖼️"))
                                 .child(
                                     div()
                                         .text_lg()
                                         .font_weight(gpui::FontWeight::SEMIBOLD)
                                         .text_color(rgb(text_primary))
-                                        .child(format!("{}×{}", width, height))
+                                        .child(format!("{}×{}", width, height)),
                                 )
                                 .child(
                                     div()
                                         .text_sm()
                                         .text_color(rgb(text_muted))
-                                        .child("Loading image...")
+                                        .child("Loading image..."),
                                 )
                         };
-                        
+
                         panel = panel.child(
                             div()
                                 .w_full()
@@ -7920,7 +9144,7 @@ impl ScriptListApp {
                                 .items_center()
                                 .justify_center()
                                 .overflow_hidden()
-                                .child(image_container)
+                                .child(image_container),
                         );
                     }
                 }
@@ -7935,14 +9159,14 @@ impl ScriptListApp {
                         .items_center()
                         .justify_center()
                         .text_color(rgb(text_muted))
-                        .child("No entry selected")
+                        .child("No entry selected"),
                 );
             }
         }
-        
+
         panel
     }
-    
+
     /// Render app launcher view
     fn render_app_launcher(
         &mut self,
@@ -7957,113 +9181,121 @@ impl ScriptListApp {
         let design_spacing = tokens.spacing();
         let design_typography = tokens.typography();
         let design_visual = tokens.visual();
-        
+
         // Use design tokens for global theming
         let opacity = self.theme.get_opacity();
         let bg_hex = design_colors.background;
         let bg_with_alpha = self.hex_to_rgba_with_opacity(bg_hex, opacity.main);
         let box_shadows = self.create_box_shadows();
-        
+
         // Filter apps based on current filter
         let filtered_apps: Vec<_> = if filter.is_empty() {
             apps.iter().enumerate().collect()
         } else {
             let filter_lower = filter.to_lowercase();
-            apps
-                .iter()
+            apps.iter()
                 .enumerate()
                 .filter(|(_, a)| a.name.to_lowercase().contains(&filter_lower))
                 .collect()
         };
         let filtered_len = filtered_apps.len();
-        
+
         // Key handler for app launcher
-        let handle_key = cx.listener(move |this: &mut Self, event: &gpui::KeyDownEvent, _window: &mut Window, cx: &mut Context<Self>| {
-            let key_str = event.keystroke.key.to_lowercase();
-            logging::log("KEY", &format!("AppLauncher key: '{}'", key_str));
-            
-            if let AppView::AppLauncherView { apps, filter, selected_index } = &mut this.current_view {
-                // Apply filter to get current filtered list
-                let filtered_apps: Vec<_> = if filter.is_empty() {
-                    apps.iter().enumerate().collect()
-                } else {
-                    let filter_lower = filter.to_lowercase();
-                    apps
-                        .iter()
-                        .enumerate()
-                        .filter(|(_, a)| a.name.to_lowercase().contains(&filter_lower))
-                        .collect()
-                };
-                let filtered_len = filtered_apps.len();
-                
-                match key_str.as_str() {
-                    "up" | "arrowup" => {
-                        if *selected_index > 0 {
-                            *selected_index -= 1;
-                            cx.notify();
-                        }
-                    }
-                    "down" | "arrowdown" => {
-                        if *selected_index < filtered_len.saturating_sub(1) {
-                            *selected_index += 1;
-                            cx.notify();
-                        }
-                    }
-                    "enter" => {
-                        // Launch selected app and hide window
-                        if let Some((_, app)) = filtered_apps.get(*selected_index) {
-                            logging::log("EXEC", &format!("Launching app: {}", app.name));
-                            if let Err(e) = app_launcher::launch_application(app) {
-                                logging::log("ERROR", &format!("Failed to launch app: {}", e));
-                            } else {
-                                logging::log("EXEC", &format!("Launched: {}", app.name));
-                                // Hide window after launching
-                                WINDOW_VISIBLE.store(false, Ordering::SeqCst);
-                                cx.hide();
-                                NEEDS_RESET.store(true, Ordering::SeqCst);
+        let handle_key = cx.listener(
+            move |this: &mut Self,
+                  event: &gpui::KeyDownEvent,
+                  _window: &mut Window,
+                  cx: &mut Context<Self>| {
+                let key_str = event.keystroke.key.to_lowercase();
+                logging::log("KEY", &format!("AppLauncher key: '{}'", key_str));
+
+                if let AppView::AppLauncherView {
+                    apps,
+                    filter,
+                    selected_index,
+                } = &mut this.current_view
+                {
+                    // Apply filter to get current filtered list
+                    let filtered_apps: Vec<_> = if filter.is_empty() {
+                        apps.iter().enumerate().collect()
+                    } else {
+                        let filter_lower = filter.to_lowercase();
+                        apps.iter()
+                            .enumerate()
+                            .filter(|(_, a)| a.name.to_lowercase().contains(&filter_lower))
+                            .collect()
+                    };
+                    let filtered_len = filtered_apps.len();
+
+                    match key_str.as_str() {
+                        "up" | "arrowup" => {
+                            if *selected_index > 0 {
+                                *selected_index -= 1;
+                                cx.notify();
                             }
                         }
-                    }
-                    "escape" => {
-                        logging::log("KEY", "ESC in AppLauncher - returning to script list");
-                        this.reset_to_script_list(cx);
-                    }
-                    "backspace" => {
-                        if !filter.is_empty() {
-                            filter.pop();
-                            *selected_index = 0;
-                            cx.notify();
+                        "down" | "arrowdown" => {
+                            if *selected_index < filtered_len.saturating_sub(1) {
+                                *selected_index += 1;
+                                cx.notify();
+                            }
                         }
-                    }
-                    _ => {
-                        if let Some(ref key_char) = event.keystroke.key_char {
-                            if let Some(ch) = key_char.chars().next() {
-                                if !ch.is_control() {
-                                    filter.push(ch);
-                                    *selected_index = 0;
-                                    cx.notify();
+                        "enter" => {
+                            // Launch selected app and hide window
+                            if let Some((_, app)) = filtered_apps.get(*selected_index) {
+                                logging::log("EXEC", &format!("Launching app: {}", app.name));
+                                if let Err(e) = app_launcher::launch_application(app) {
+                                    logging::log("ERROR", &format!("Failed to launch app: {}", e));
+                                } else {
+                                    logging::log("EXEC", &format!("Launched: {}", app.name));
+                                    // Hide window after launching
+                                    WINDOW_VISIBLE.store(false, Ordering::SeqCst);
+                                    cx.hide();
+                                    NEEDS_RESET.store(true, Ordering::SeqCst);
+                                }
+                            }
+                        }
+                        "escape" => {
+                            logging::log("KEY", "ESC in AppLauncher - returning to script list");
+                            this.reset_to_script_list(cx);
+                        }
+                        "backspace" => {
+                            if !filter.is_empty() {
+                                filter.pop();
+                                *selected_index = 0;
+                                cx.notify();
+                            }
+                        }
+                        _ => {
+                            if let Some(ref key_char) = event.keystroke.key_char {
+                                if let Some(ch) = key_char.chars().next() {
+                                    if !ch.is_control() {
+                                        filter.push(ch);
+                                        *selected_index = 0;
+                                        cx.notify();
+                                    }
                                 }
                             }
                         }
                     }
                 }
-            }
-        });
-        
+            },
+        );
+
         let input_display = if filter.is_empty() {
             SharedString::from("Search applications...")
         } else {
             SharedString::from(filter.clone())
         };
         let input_is_empty = filter.is_empty();
-        
+
         // Pre-compute colors
         let list_colors = ListItemColors::from_design(&design_colors);
         let text_primary = design_colors.text_primary;
         let text_muted = design_colors.text_muted;
         let text_dimmed = design_colors.text_dimmed;
         let ui_border = design_colors.border;
-        
+
         // Build virtualized list
         let list_element: AnyElement = if filtered_len == 0 {
             div()
@@ -8072,59 +9304,62 @@ impl ScriptListApp {
                 .text_center()
                 .text_color(rgb(design_colors.text_muted))
                 .font_family(design_typography.font_family)
-                .child(if filter.is_empty() { 
-                    "No applications found" 
-                } else { 
-                    "No apps match your filter" 
+                .child(if filter.is_empty() {
+                    "No applications found"
+                } else {
+                    "No apps match your filter"
                 })
                 .into_any_element()
         } else {
             // Clone data for the closure
-            let apps_for_closure: Vec<_> = filtered_apps.iter().map(|(i, a)| (*i, (*a).clone())).collect();
+            let apps_for_closure: Vec<_> = filtered_apps
+                .iter()
+                .map(|(i, a)| (*i, (*a).clone()))
+                .collect();
             let selected = selected_index;
-            
+
             uniform_list(
                 "app-launcher",
                 filtered_len,
                 move |visible_range, _window, _cx| {
-                    visible_range.map(|ix| {
-                        if let Some((_, app)) = apps_for_closure.get(ix) {
-                            let is_selected = ix == selected;
-                            
-                            // Format app path for description
-                            let path_str = app.path.to_string_lossy();
-                            let description = if path_str.starts_with("/Applications") {
-                                None // No need to show path for standard apps
-                            } else {
-                                Some(path_str.to_string())
-                            };
-                            
-                            // Use pre-decoded icon if available, fallback to emoji
-                            let icon = match &app.icon {
-                                Some(img) => list_item::IconKind::Image(img.clone()),
-                                None => list_item::IconKind::Emoji("📱".to_string()),
-                            };
-                            
-                            div()
-                                .id(ix)
-                                .child(
+                    visible_range
+                        .map(|ix| {
+                            if let Some((_, app)) = apps_for_closure.get(ix) {
+                                let is_selected = ix == selected;
+
+                                // Format app path for description
+                                let path_str = app.path.to_string_lossy();
+                                let description = if path_str.starts_with("/Applications") {
+                                    None // No need to show path for standard apps
+                                } else {
+                                    Some(path_str.to_string())
+                                };
+
+                                // Use pre-decoded icon if available, fallback to emoji
+                                let icon = match &app.icon {
+                                    Some(img) => list_item::IconKind::Image(img.clone()),
+                                    None => list_item::IconKind::Emoji("📱".to_string()),
+                                };
+
+                                div().id(ix).child(
                                     ListItem::new(app.name.clone(), list_colors)
                                         .icon_kind(icon)
                                         .description_opt(description)
                                         .selected(is_selected)
-                                        .with_accent_bar(true)
+                                        .with_accent_bar(true),
                                 )
-                        } else {
-                            div().id(ix).h(px(LIST_ITEM_HEIGHT))
-                        }
-                    }).collect()
+                            } else {
+                                div().id(ix).h(px(LIST_ITEM_HEIGHT))
+                            }
+                        })
+                        .collect()
                 },
             )
             .h_full()
             .track_scroll(&self.list_scroll_handle)
             .into_any_element()
         };
-        
+
         div()
             .flex()
             .flex_col()
@@ -8153,7 +9388,7 @@ impl ScriptListApp {
                         div()
                             .text_sm()
                             .text_color(rgb(text_dimmed))
-                            .child("🚀 Apps")
+                            .child("🚀 Apps"),
                     )
                     // Search input with blinking cursor
                     .child(
@@ -8163,30 +9398,38 @@ impl ScriptListApp {
                             .flex_row()
                             .items_center()
                             .text_lg()
-                            .text_color(if input_is_empty { rgb(text_muted) } else { rgb(text_primary) })
-                            .when(input_is_empty, |d| d.child(
-                                div()
-                                    .w(px(design_visual.border_normal))
-                                    .h(px(CURSOR_HEIGHT_LG))
-                                    .my(px(CURSOR_MARGIN_Y))
-                                    .mr(px(design_spacing.padding_xs))
-                                    .when(self.cursor_visible, |d| d.bg(rgb(text_primary)))
-                            ))
+                            .text_color(if input_is_empty {
+                                rgb(text_muted)
+                            } else {
+                                rgb(text_primary)
+                            })
+                            .when(input_is_empty, |d| {
+                                d.child(
+                                    div()
+                                        .w(px(design_visual.border_normal))
+                                        .h(px(CURSOR_HEIGHT_LG))
+                                        .my(px(CURSOR_MARGIN_Y))
+                                        .mr(px(design_spacing.padding_xs))
+                                        .when(self.cursor_visible, |d| d.bg(rgb(text_primary))),
+                                )
+                            })
                             .child(input_display)
-                            .when(!input_is_empty, |d| d.child(
-                                div()
-                                    .w(px(design_visual.border_normal))
-                                    .h(px(CURSOR_HEIGHT_LG))
-                                    .my(px(CURSOR_MARGIN_Y))
-                                    .ml(px(design_visual.border_normal))
-                                    .when(self.cursor_visible, |d| d.bg(rgb(text_primary)))
-                            ))
+                            .when(!input_is_empty, |d| {
+                                d.child(
+                                    div()
+                                        .w(px(design_visual.border_normal))
+                                        .h(px(CURSOR_HEIGHT_LG))
+                                        .my(px(CURSOR_MARGIN_Y))
+                                        .ml(px(design_visual.border_normal))
+                                        .when(self.cursor_visible, |d| d.bg(rgb(text_primary))),
+                                )
+                            }),
                     )
                     .child(
                         div()
                             .text_sm()
                             .text_color(rgb(text_dimmed))
-                            .child(format!("{} apps", apps.len()))
+                            .child(format!("{} apps", apps.len())),
                     ),
             )
             // Divider
@@ -8194,7 +9437,7 @@ impl ScriptListApp {
                 div()
                     .mx(px(design_spacing.padding_lg))
                     .h(px(design_visual.border_thin))
-                    .bg(rgba((ui_border << 8) | 0x60))
+                    .bg(rgba((ui_border << 8) | 0x60)),
             )
             // App list
             .child(
@@ -8205,7 +9448,7 @@ impl ScriptListApp {
                     .min_h(px(0.))
                     .w_full()
                     .py(px(design_spacing.padding_xs))
-                    .child(list_element)
+                    .child(list_element),
             )
             // Footer
             .child(
@@ -8217,11 +9460,11 @@ impl ScriptListApp {
                     .border_color(rgba((ui_border << 8) | 0x60))
                     .text_xs()
                     .text_color(rgb(text_muted))
-                    .child("↑↓ navigate • ⏎ launch • Esc back")
+                    .child("↑↓ navigate • ⏎ launch • Esc back"),
             )
             .into_any_element()
     }
-    
+
     /// Render window switcher view with 50/50 split layout
     fn render_window_switcher(
         &mut self,
@@ -8236,13 +9479,13 @@ impl ScriptListApp {
         let design_spacing = tokens.spacing();
         let design_typography = tokens.typography();
         let design_visual = tokens.visual();
-        
+
         // Use design tokens for global theming
         let opacity = self.theme.get_opacity();
         let bg_hex = design_colors.background;
         let bg_with_alpha = self.hex_to_rgba_with_opacity(bg_hex, opacity.main);
         let box_shadows = self.create_box_shadows();
-        
+
         // Filter windows based on current filter
         let filtered_windows: Vec<_> = if filter.is_empty() {
             windows.iter().enumerate().collect()
@@ -8252,133 +9495,157 @@ impl ScriptListApp {
                 .iter()
                 .enumerate()
                 .filter(|(_, w)| {
-                    w.title.to_lowercase().contains(&filter_lower) ||
-                    w.app.to_lowercase().contains(&filter_lower)
+                    w.title.to_lowercase().contains(&filter_lower)
+                        || w.app.to_lowercase().contains(&filter_lower)
                 })
                 .collect()
         };
         let filtered_len = filtered_windows.len();
-        
+
         // Key handler for window switcher
-        let handle_key = cx.listener(move |this: &mut Self, event: &gpui::KeyDownEvent, _window: &mut Window, cx: &mut Context<Self>| {
-            let key_str = event.keystroke.key.to_lowercase();
-            logging::log("KEY", &format!("WindowSwitcher key: '{}'", key_str));
-            
-            if let AppView::WindowSwitcherView { windows, filter, selected_index } = &mut this.current_view {
-                // Apply filter to get current filtered list
-                let filtered_windows: Vec<_> = if filter.is_empty() {
-                    windows.iter().enumerate().collect()
-                } else {
-                    let filter_lower = filter.to_lowercase();
-                    windows
-                        .iter()
-                        .enumerate()
-                        .filter(|(_, w)| {
-                            w.title.to_lowercase().contains(&filter_lower) ||
-                            w.app.to_lowercase().contains(&filter_lower)
-                        })
-                        .collect()
-                };
-                let filtered_len = filtered_windows.len();
-                
-                match key_str.as_str() {
-                    "up" | "arrowup" => {
-                        if *selected_index > 0 {
-                            *selected_index -= 1;
-                            this.window_list_scroll_handle.scroll_to_item(*selected_index, ScrollStrategy::Nearest);
-                            cx.notify();
-                        }
-                    }
-                    "down" | "arrowdown" => {
-                        if *selected_index < filtered_len.saturating_sub(1) {
-                            *selected_index += 1;
-                            this.window_list_scroll_handle.scroll_to_item(*selected_index, ScrollStrategy::Nearest);
-                            cx.notify();
-                        }
-                    }
-                    "enter" => {
-                        // Focus selected window and hide Script Kit
-                        if let Some((_, window_info)) = filtered_windows.get(*selected_index) {
-                            logging::log("EXEC", &format!("Focusing window: {}", window_info.title));
-                            if let Err(e) = window_control::focus_window(window_info.id) {
-                                logging::log("ERROR", &format!("Failed to focus window: {}", e));
-                                this.toast_manager.push(
-                                    components::toast::Toast::error(
-                                        format!("Failed to focus window: {}", e),
-                                        &this.theme
-                                    ).duration_ms(Some(5000))
-                                );
+        let handle_key = cx.listener(
+            move |this: &mut Self,
+                  event: &gpui::KeyDownEvent,
+                  _window: &mut Window,
+                  cx: &mut Context<Self>| {
+                let key_str = event.keystroke.key.to_lowercase();
+                logging::log("KEY", &format!("WindowSwitcher key: '{}'", key_str));
+
+                if let AppView::WindowSwitcherView {
+                    windows,
+                    filter,
+                    selected_index,
+                } = &mut this.current_view
+                {
+                    // Apply filter to get current filtered list
+                    let filtered_windows: Vec<_> = if filter.is_empty() {
+                        windows.iter().enumerate().collect()
+                    } else {
+                        let filter_lower = filter.to_lowercase();
+                        windows
+                            .iter()
+                            .enumerate()
+                            .filter(|(_, w)| {
+                                w.title.to_lowercase().contains(&filter_lower)
+                                    || w.app.to_lowercase().contains(&filter_lower)
+                            })
+                            .collect()
+                    };
+                    let filtered_len = filtered_windows.len();
+
+                    match key_str.as_str() {
+                        "up" | "arrowup" => {
+                            if *selected_index > 0 {
+                                *selected_index -= 1;
+                                this.window_list_scroll_handle
+                                    .scroll_to_item(*selected_index, ScrollStrategy::Nearest);
                                 cx.notify();
-                            } else {
-                                logging::log("EXEC", &format!("Focused window: {}", window_info.title));
-                                WINDOW_VISIBLE.store(false, Ordering::SeqCst);
-                                cx.hide();
-                                NEEDS_RESET.store(true, Ordering::SeqCst);
                             }
                         }
-                    }
-                    "escape" => {
-                        logging::log("KEY", "ESC in WindowSwitcher - returning to script list");
-                        this.reset_to_script_list(cx);
-                    }
-                    "backspace" => {
-                        if !filter.is_empty() {
-                            filter.pop();
-                            *selected_index = 0;
-                            this.window_list_scroll_handle.scroll_to_item(0, ScrollStrategy::Top);
-                            cx.notify();
+                        "down" | "arrowdown" => {
+                            if *selected_index < filtered_len.saturating_sub(1) {
+                                *selected_index += 1;
+                                this.window_list_scroll_handle
+                                    .scroll_to_item(*selected_index, ScrollStrategy::Nearest);
+                                cx.notify();
+                            }
                         }
-                    }
-                    // Number keys for quick window actions - extract window_id to avoid borrow issues
-                    "1" | "2" | "3" | "4" | "m" | "n" | "c" => {
-                        if let Some((_, window_info)) = filtered_windows.get(*selected_index) {
-                            let window_id = window_info.id;
-                            let action = match key_str.as_str() {
-                                "1" => "tile_left",
-                                "2" => "tile_right",
-                                "3" => "tile_top",
-                                "4" => "tile_bottom",
-                                "m" => "maximize",
-                                "n" => "minimize",
-                                "c" => "close",
-                                _ => unreachable!(),
-                            };
-                            // Drop the borrow before calling execute_window_action
-                            drop(filtered_windows);
-                            this.execute_window_action(window_id, action, cx);
-                        }
-                    }
-                    _ => {
-                        // Allow all printable characters for window search
-                        if let Some(ref key_char) = event.keystroke.key_char {
-                            if let Some(ch) = key_char.chars().next() {
-                                if !ch.is_control() {
-                                    filter.push(ch);
-                                    *selected_index = 0;
-                                    this.window_list_scroll_handle.scroll_to_item(0, ScrollStrategy::Top);
+                        "enter" => {
+                            // Focus selected window and hide Script Kit
+                            if let Some((_, window_info)) = filtered_windows.get(*selected_index) {
+                                logging::log(
+                                    "EXEC",
+                                    &format!("Focusing window: {}", window_info.title),
+                                );
+                                if let Err(e) = window_control::focus_window(window_info.id) {
+                                    logging::log(
+                                        "ERROR",
+                                        &format!("Failed to focus window: {}", e),
+                                    );
+                                    this.toast_manager.push(
+                                        components::toast::Toast::error(
+                                            format!("Failed to focus window: {}", e),
+                                            &this.theme,
+                                        )
+                                        .duration_ms(Some(5000)),
+                                    );
                                     cx.notify();
+                                } else {
+                                    logging::log(
+                                        "EXEC",
+                                        &format!("Focused window: {}", window_info.title),
+                                    );
+                                    WINDOW_VISIBLE.store(false, Ordering::SeqCst);
+                                    cx.hide();
+                                    NEEDS_RESET.store(true, Ordering::SeqCst);
+                                }
+                            }
+                        }
+                        "escape" => {
+                            logging::log("KEY", "ESC in WindowSwitcher - returning to script list");
+                            this.reset_to_script_list(cx);
+                        }
+                        "backspace" => {
+                            if !filter.is_empty() {
+                                filter.pop();
+                                *selected_index = 0;
+                                this.window_list_scroll_handle
+                                    .scroll_to_item(0, ScrollStrategy::Top);
+                                cx.notify();
+                            }
+                        }
+                        // Number keys for quick window actions - extract window_id to avoid borrow issues
+                        "1" | "2" | "3" | "4" | "m" | "n" | "c" => {
+                            if let Some((_, window_info)) = filtered_windows.get(*selected_index) {
+                                let window_id = window_info.id;
+                                let action = match key_str.as_str() {
+                                    "1" => "tile_left",
+                                    "2" => "tile_right",
+                                    "3" => "tile_top",
+                                    "4" => "tile_bottom",
+                                    "m" => "maximize",
+                                    "n" => "minimize",
+                                    "c" => "close",
+                                    _ => unreachable!(),
+                                };
+                                // Drop the borrow before calling execute_window_action
+                                drop(filtered_windows);
+                                this.execute_window_action(window_id, action, cx);
+                            }
+                        }
+                        _ => {
+                            // Allow all printable characters for window search
+                            if let Some(ref key_char) = event.keystroke.key_char {
+                                if let Some(ch) = key_char.chars().next() {
+                                    if !ch.is_control() {
+                                        filter.push(ch);
+                                        *selected_index = 0;
+                                        this.window_list_scroll_handle
+                                            .scroll_to_item(0, ScrollStrategy::Top);
+                                        cx.notify();
+                                    }
                                 }
                             }
                         }
                     }
                 }
-            }
-        });
-        
+            },
+        );
+
         let input_display = if filter.is_empty() {
             SharedString::from("Search windows...")
         } else {
             SharedString::from(filter.clone())
         };
         let input_is_empty = filter.is_empty();
-        
+
         // Pre-compute colors
         let list_colors = ListItemColors::from_design(&design_colors);
         let text_primary = design_colors.text_primary;
         let text_muted = design_colors.text_muted;
         let text_dimmed = design_colors.text_dimmed;
         let ui_border = design_colors.border;
-        
+
         // Build virtualized list
         let list_element: AnyElement = if filtered_len == 0 {
             div()
@@ -8387,60 +9654,72 @@ impl ScriptListApp {
                 .text_center()
                 .text_color(rgb(design_colors.text_muted))
                 .font_family(design_typography.font_family)
-                .child(if filter.is_empty() { 
-                    "No windows found" 
-                } else { 
-                    "No windows match your filter" 
+                .child(if filter.is_empty() {
+                    "No windows found"
+                } else {
+                    "No windows match your filter"
                 })
                 .into_any_element()
         } else {
             // Clone data for the closure
-            let windows_for_closure: Vec<_> = filtered_windows.iter().map(|(i, w)| (*i, (*w).clone())).collect();
+            let windows_for_closure: Vec<_> = filtered_windows
+                .iter()
+                .map(|(i, w)| (*i, (*w).clone()))
+                .collect();
             let selected = selected_index;
-            
+
             uniform_list(
                 "window-switcher",
                 filtered_len,
                 move |visible_range, _window, _cx| {
-                    visible_range.map(|ix| {
-                        if let Some((_, window_info)) = windows_for_closure.get(ix) {
-                            let is_selected = ix == selected;
-                            
-                            // Format: "AppName: Window Title"
-                            let name = format!("{}: {}", window_info.app, window_info.title);
-                            
-                            // Format bounds as description
-                            let description = format!(
-                                "{}×{} at ({}, {})",
-                                window_info.bounds.width,
-                                window_info.bounds.height,
-                                window_info.bounds.x,
-                                window_info.bounds.y
-                            );
-                            
-                            div()
-                                .id(ix)
-                                .child(
+                    visible_range
+                        .map(|ix| {
+                            if let Some((_, window_info)) = windows_for_closure.get(ix) {
+                                let is_selected = ix == selected;
+
+                                // Format: "AppName: Window Title"
+                                let name = format!("{}: {}", window_info.app, window_info.title);
+
+                                // Format bounds as description
+                                let description = format!(
+                                    "{}×{} at ({}, {})",
+                                    window_info.bounds.width,
+                                    window_info.bounds.height,
+                                    window_info.bounds.x,
+                                    window_info.bounds.y
+                                );
+
+                                div().id(ix).child(
                                     ListItem::new(name, list_colors)
                                         .description_opt(Some(description))
                                         .selected(is_selected)
-                                        .with_accent_bar(true)
+                                        .with_accent_bar(true),
                                 )
-                        } else {
-                            div().id(ix).h(px(LIST_ITEM_HEIGHT))
-                        }
-                    }).collect()
+                            } else {
+                                div().id(ix).h(px(LIST_ITEM_HEIGHT))
+                            }
+                        })
+                        .collect()
                 },
             )
             .h_full()
             .track_scroll(&self.window_list_scroll_handle)
             .into_any_element()
         };
-        
+
         // Build actions panel for selected window
-        let selected_window = filtered_windows.get(selected_index).map(|(_, w)| (*w).clone());
-        let actions_panel = self.render_window_actions_panel(&selected_window, &design_colors, &design_spacing, &design_typography, &design_visual, cx);
-        
+        let selected_window = filtered_windows
+            .get(selected_index)
+            .map(|(_, w)| (*w).clone());
+        let actions_panel = self.render_window_actions_panel(
+            &selected_window,
+            &design_colors,
+            &design_spacing,
+            &design_typography,
+            &design_visual,
+            cx,
+        );
+
         div()
             .flex()
             .flex_col()
@@ -8469,7 +9748,7 @@ impl ScriptListApp {
                         div()
                             .text_sm()
                             .text_color(rgb(text_dimmed))
-                            .child("🪟 Windows")
+                            .child("🪟 Windows"),
                     )
                     // Search input with blinking cursor
                     .child(
@@ -8479,30 +9758,38 @@ impl ScriptListApp {
                             .flex_row()
                             .items_center()
                             .text_lg()
-                            .text_color(if input_is_empty { rgb(text_muted) } else { rgb(text_primary) })
-                            .when(input_is_empty, |d| d.child(
-                                div()
-                                    .w(px(design_visual.border_normal))
-                                    .h(px(CURSOR_HEIGHT_LG))
-                                    .my(px(CURSOR_MARGIN_Y))
-                                    .mr(px(design_spacing.padding_xs))
-                                    .when(self.cursor_visible, |d| d.bg(rgb(text_primary)))
-                            ))
+                            .text_color(if input_is_empty {
+                                rgb(text_muted)
+                            } else {
+                                rgb(text_primary)
+                            })
+                            .when(input_is_empty, |d| {
+                                d.child(
+                                    div()
+                                        .w(px(design_visual.border_normal))
+                                        .h(px(CURSOR_HEIGHT_LG))
+                                        .my(px(CURSOR_MARGIN_Y))
+                                        .mr(px(design_spacing.padding_xs))
+                                        .when(self.cursor_visible, |d| d.bg(rgb(text_primary))),
+                                )
+                            })
                             .child(input_display)
-                            .when(!input_is_empty, |d| d.child(
-                                div()
-                                    .w(px(design_visual.border_normal))
-                                    .h(px(CURSOR_HEIGHT_LG))
-                                    .my(px(CURSOR_MARGIN_Y))
-                                    .ml(px(design_visual.border_normal))
-                                    .when(self.cursor_visible, |d| d.bg(rgb(text_primary)))
-                            ))
+                            .when(!input_is_empty, |d| {
+                                d.child(
+                                    div()
+                                        .w(px(design_visual.border_normal))
+                                        .h(px(CURSOR_HEIGHT_LG))
+                                        .my(px(CURSOR_MARGIN_Y))
+                                        .ml(px(design_visual.border_normal))
+                                        .when(self.cursor_visible, |d| d.bg(rgb(text_primary))),
+                                )
+                            }),
                     )
                     .child(
                         div()
                             .text_sm()
                             .text_color(rgb(text_dimmed))
-                            .child(format!("{} windows", windows.len()))
+                            .child(format!("{} windows", windows.len())),
                     ),
             )
             // Divider
@@ -8510,7 +9797,7 @@ impl ScriptListApp {
                 div()
                     .mx(px(design_spacing.padding_lg))
                     .h(px(design_visual.border_thin))
-                    .bg(rgba((ui_border << 8) | 0x60))
+                    .bg(rgba((ui_border << 8) | 0x60)),
             )
             // Main content area - 50/50 split: Window list on left, Actions on right
             .child(
@@ -8528,7 +9815,7 @@ impl ScriptListApp {
                             .h_full()
                             .min_h(px(0.))
                             .py(px(design_spacing.padding_xs))
-                            .child(list_element)
+                            .child(list_element),
                     )
                     // Right side: Actions panel (50% width)
                     .child(
@@ -8537,8 +9824,8 @@ impl ScriptListApp {
                             .h_full()
                             .min_h(px(0.))
                             .overflow_hidden()
-                            .child(actions_panel)
-                    )
+                            .child(actions_panel),
+                    ),
             )
             // Footer
             .child(
@@ -8550,11 +9837,11 @@ impl ScriptListApp {
                     .border_color(rgba((ui_border << 8) | 0x60))
                     .text_xs()
                     .text_color(rgb(text_muted))
-                    .child("↑↓ navigate • ⏎ focus • 1-4 tile • M max • N min • C close • Esc back")
+                    .child("↑↓ navigate • ⏎ focus • 1-4 tile • M max • N min • C close • Esc back"),
             )
             .into_any_element()
     }
-    
+
     /// Render the actions panel for window switcher
     fn render_window_actions_panel(
         &self,
@@ -8570,7 +9857,7 @@ impl ScriptListApp {
         let text_primary = colors.text_primary;
         let text_muted = colors.text_muted;
         let text_secondary = colors.text_secondary;
-        
+
         let mut panel = div()
             .w_full()
             .h_full()
@@ -8582,7 +9869,7 @@ impl ScriptListApp {
             .flex_col()
             .overflow_y_hidden()
             .font_family(typography.font_family);
-        
+
         match selected_window {
             Some(window) => {
                 // Window info header
@@ -8592,18 +9879,18 @@ impl ScriptListApp {
                         .font_weight(gpui::FontWeight::SEMIBOLD)
                         .text_color(rgb(text_primary))
                         .pb(px(spacing.padding_sm))
-                        .child(window.title.clone())
+                        .child(window.title.clone()),
                 );
-                
+
                 // App name
                 panel = panel.child(
                     div()
                         .text_sm()
                         .text_color(rgb(text_secondary))
                         .pb(px(spacing.padding_md))
-                        .child(window.app.clone())
+                        .child(window.app.clone()),
                 );
-                
+
                 // Bounds info
                 panel = panel.child(
                     div()
@@ -8616,27 +9903,27 @@ impl ScriptListApp {
                             window.bounds.height,
                             window.bounds.x,
                             window.bounds.y
-                        ))
+                        )),
                 );
-                
+
                 // Divider
                 panel = panel.child(
                     div()
                         .w_full()
                         .h(px(visual.border_thin))
                         .bg(rgba((ui_border << 8) | 0x60))
-                        .mb(px(spacing.padding_lg))
+                        .mb(px(spacing.padding_lg)),
                 );
-                
+
                 // Actions header
                 panel = panel.child(
                     div()
                         .text_xs()
                         .text_color(rgb(text_muted))
                         .pb(px(spacing.padding_md))
-                        .child("Actions (keyboard shortcuts)")
+                        .child("Actions (keyboard shortcuts)"),
                 );
-                
+
                 // Action buttons grid - using text labels with shortcuts
                 let action_items = [
                     ("1", "← Tile Left Half"),
@@ -8648,7 +9935,7 @@ impl ScriptListApp {
                     ("⏎", "◉ Focus"),
                     ("C", "✕ Close"),
                 ];
-                
+
                 for (key, label) in action_items {
                     panel = panel.child(
                         div()
@@ -8669,15 +9956,10 @@ impl ScriptListApp {
                                     .bg(rgba((colors.background_tertiary << 8) | 0x80))
                                     .text_xs()
                                     .text_color(rgb(text_secondary))
-                                    .child(key)
+                                    .child(key),
                             )
                             // Label
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .text_color(rgb(text_primary))
-                                    .child(label)
-                            )
+                            .child(div().text_sm().text_color(rgb(text_primary)).child(label)),
                     );
                 }
             }
@@ -8691,23 +9973,34 @@ impl ScriptListApp {
                         .items_center()
                         .justify_center()
                         .text_color(rgb(text_muted))
-                        .child("No window selected")
+                        .child("No window selected"),
                 );
             }
         }
-        
+
         panel
     }
-    
+
     /// Execute a window action (tile, maximize, minimize, close)
     fn execute_window_action(&mut self, window_id: u32, action: &str, cx: &mut Context<Self>) {
-        logging::log("EXEC", &format!("Window action: {} on window {}", action, window_id));
-        
+        logging::log(
+            "EXEC",
+            &format!("Window action: {} on window {}", action, window_id),
+        );
+
         let result = match action {
-            "tile_left" => window_control::tile_window(window_id, window_control::TilePosition::LeftHalf),
-            "tile_right" => window_control::tile_window(window_id, window_control::TilePosition::RightHalf),
-            "tile_top" => window_control::tile_window(window_id, window_control::TilePosition::TopHalf),
-            "tile_bottom" => window_control::tile_window(window_id, window_control::TilePosition::BottomHalf),
+            "tile_left" => {
+                window_control::tile_window(window_id, window_control::TilePosition::LeftHalf)
+            }
+            "tile_right" => {
+                window_control::tile_window(window_id, window_control::TilePosition::RightHalf)
+            }
+            "tile_top" => {
+                window_control::tile_window(window_id, window_control::TilePosition::TopHalf)
+            }
+            "tile_bottom" => {
+                window_control::tile_window(window_id, window_control::TilePosition::BottomHalf)
+            }
             "maximize" => window_control::maximize_window(window_id),
             "minimize" => window_control::minimize_window(window_id),
             "close" => window_control::close_window(window_id),
@@ -8717,21 +10010,27 @@ impl ScriptListApp {
                 return;
             }
         };
-        
+
         match result {
             Ok(()) => {
                 logging::log("EXEC", &format!("Window action {} succeeded", action));
-                
+
                 // Show success toast
                 self.toast_manager.push(
                     components::toast::Toast::success(
                         format!("Window {}", action.replace("_", " ")),
-                        &self.theme
-                    ).duration_ms(Some(2000))
+                        &self.theme,
+                    )
+                    .duration_ms(Some(2000)),
                 );
-                
+
                 // Refresh window list after action
-                if let AppView::WindowSwitcherView { windows, selected_index, .. } = &mut self.current_view {
+                if let AppView::WindowSwitcherView {
+                    windows,
+                    selected_index,
+                    ..
+                } = &mut self.current_view
+                {
                     match window_control::list_windows() {
                         Ok(new_windows) => {
                             *windows = new_windows;
@@ -8748,20 +10047,21 @@ impl ScriptListApp {
             }
             Err(e) => {
                 logging::log("ERROR", &format!("Window action {} failed: {}", action, e));
-                
+
                 // Show error toast
                 self.toast_manager.push(
                     components::toast::Toast::error(
                         format!("Failed to {}: {}", action.replace("_", " "), e),
-                        &self.theme
-                    ).duration_ms(Some(5000))
+                        &self.theme,
+                    )
+                    .duration_ms(Some(5000)),
                 );
             }
         }
-        
+
         cx.notify();
     }
-    
+
     /// Render design gallery view with group header and icon variations
     fn render_design_gallery(
         &mut self,
@@ -8769,22 +10069,22 @@ impl ScriptListApp {
         selected_index: usize,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        use designs::group_header_variations::{GroupHeaderStyle, GroupHeaderCategory};
-        use designs::icon_variations::{IconName, IconCategory, IconStyle};
-        
+        use designs::group_header_variations::{GroupHeaderCategory, GroupHeaderStyle};
+        use designs::icon_variations::{IconCategory, IconName, IconStyle};
+
         // Use design tokens for GLOBAL theming
         let tokens = get_tokens(self.current_design);
         let design_colors = tokens.colors();
         let design_spacing = tokens.spacing();
         let design_typography = tokens.typography();
         let design_visual = tokens.visual();
-        
+
         // Use design tokens for global theming
         let opacity = self.theme.get_opacity();
         let bg_hex = design_colors.background;
         let bg_with_alpha = self.hex_to_rgba_with_opacity(bg_hex, opacity.main);
         let box_shadows = self.create_box_shadows();
-        
+
         // Build gallery items: group headers grouped by category, then icons grouped by category
         #[derive(Clone)]
         enum GalleryItem {
@@ -8793,9 +10093,9 @@ impl ScriptListApp {
             IconCategoryHeader(IconCategory),
             Icon(IconName, IconStyle),
         }
-        
+
         let mut gallery_items: Vec<GalleryItem> = Vec::new();
-        
+
         // Add group headers by category
         for category in GroupHeaderCategory::all() {
             gallery_items.push(GalleryItem::GroupHeaderCategory(*category));
@@ -8803,7 +10103,7 @@ impl ScriptListApp {
                 gallery_items.push(GalleryItem::GroupHeader(*style));
             }
         }
-        
+
         // Add icons by category, showing each icon with default style
         for category in IconCategory::all() {
             gallery_items.push(GalleryItem::IconCategoryHeader(*category));
@@ -8811,96 +10111,116 @@ impl ScriptListApp {
                 gallery_items.push(GalleryItem::Icon(icon, IconStyle::Default));
             }
         }
-        
+
         // Filter items based on current filter
         let filtered_items: Vec<(usize, GalleryItem)> = if filter.is_empty() {
-            gallery_items.iter().enumerate().map(|(i, item)| (i, item.clone())).collect()
+            gallery_items
+                .iter()
+                .enumerate()
+                .map(|(i, item)| (i, item.clone()))
+                .collect()
         } else {
             let filter_lower = filter.to_lowercase();
-            gallery_items.iter()
+            gallery_items
+                .iter()
                 .enumerate()
-                .filter(|(_, item)| {
-                    match item {
-                        GalleryItem::GroupHeaderCategory(cat) => cat.name().to_lowercase().contains(&filter_lower),
-                        GalleryItem::GroupHeader(style) => {
-                            style.name().to_lowercase().contains(&filter_lower) ||
-                            style.description().to_lowercase().contains(&filter_lower)
-                        }
-                        GalleryItem::IconCategoryHeader(cat) => cat.name().to_lowercase().contains(&filter_lower),
-                        GalleryItem::Icon(icon, _) => {
-                            icon.name().to_lowercase().contains(&filter_lower) ||
-                            icon.description().to_lowercase().contains(&filter_lower)
-                        }
+                .filter(|(_, item)| match item {
+                    GalleryItem::GroupHeaderCategory(cat) => {
+                        cat.name().to_lowercase().contains(&filter_lower)
+                    }
+                    GalleryItem::GroupHeader(style) => {
+                        style.name().to_lowercase().contains(&filter_lower)
+                            || style.description().to_lowercase().contains(&filter_lower)
+                    }
+                    GalleryItem::IconCategoryHeader(cat) => {
+                        cat.name().to_lowercase().contains(&filter_lower)
+                    }
+                    GalleryItem::Icon(icon, _) => {
+                        icon.name().to_lowercase().contains(&filter_lower)
+                            || icon.description().to_lowercase().contains(&filter_lower)
                     }
                 })
                 .map(|(i, item)| (i, item.clone()))
                 .collect()
         };
         let filtered_len = filtered_items.len();
-        
+
         // Key handler for design gallery
-        let handle_key = cx.listener(move |this: &mut Self, event: &gpui::KeyDownEvent, _window: &mut Window, cx: &mut Context<Self>| {
-            let key_str = event.keystroke.key.to_lowercase();
-            logging::log("KEY", &format!("DesignGallery key: '{}'", key_str));
-            
-            if let AppView::DesignGalleryView { filter, selected_index } = &mut this.current_view {
-                // Re-compute filtered_len for this scope
-                let total_items = GroupHeaderStyle::count()
-                    + IconName::count()
-                    + GroupHeaderCategory::all().len()
-                    + IconCategory::all().len();
-                let current_filtered_len = total_items;
-                
-                match key_str.as_str() {
-                    "up" | "arrowup" => {
-                        if *selected_index > 0 {
-                            *selected_index -= 1;
-                            this.design_gallery_scroll_handle.scroll_to_item(*selected_index, ScrollStrategy::Nearest);
-                            cx.notify();
+        let handle_key = cx.listener(
+            move |this: &mut Self,
+                  event: &gpui::KeyDownEvent,
+                  _window: &mut Window,
+                  cx: &mut Context<Self>| {
+                let key_str = event.keystroke.key.to_lowercase();
+                logging::log("KEY", &format!("DesignGallery key: '{}'", key_str));
+
+                if let AppView::DesignGalleryView {
+                    filter,
+                    selected_index,
+                } = &mut this.current_view
+                {
+                    // Re-compute filtered_len for this scope
+                    let total_items = GroupHeaderStyle::count()
+                        + IconName::count()
+                        + GroupHeaderCategory::all().len()
+                        + IconCategory::all().len();
+                    let current_filtered_len = total_items;
+
+                    match key_str.as_str() {
+                        "up" | "arrowup" => {
+                            if *selected_index > 0 {
+                                *selected_index -= 1;
+                                this.design_gallery_scroll_handle
+                                    .scroll_to_item(*selected_index, ScrollStrategy::Nearest);
+                                cx.notify();
+                            }
                         }
-                    }
-                    "down" | "arrowdown" => {
-                        if *selected_index < current_filtered_len.saturating_sub(1) {
-                            *selected_index += 1;
-                            this.design_gallery_scroll_handle.scroll_to_item(*selected_index, ScrollStrategy::Nearest);
-                            cx.notify();
+                        "down" | "arrowdown" => {
+                            if *selected_index < current_filtered_len.saturating_sub(1) {
+                                *selected_index += 1;
+                                this.design_gallery_scroll_handle
+                                    .scroll_to_item(*selected_index, ScrollStrategy::Nearest);
+                                cx.notify();
+                            }
                         }
-                    }
-                    "escape" => {
-                        logging::log("KEY", "ESC in DesignGallery - returning to script list");
-                        this.reset_to_script_list(cx);
-                    }
-                    "backspace" => {
-                        if !filter.is_empty() {
-                            filter.pop();
-                            *selected_index = 0;
-                            this.design_gallery_scroll_handle.scroll_to_item(0, ScrollStrategy::Top);
-                            cx.notify();
+                        "escape" => {
+                            logging::log("KEY", "ESC in DesignGallery - returning to script list");
+                            this.reset_to_script_list(cx);
                         }
-                    }
-                    _ => {
-                        if let Some(ref key_char) = event.keystroke.key_char {
-                            if let Some(ch) = key_char.chars().next() {
-                                if !ch.is_control() {
-                                    filter.push(ch);
-                                    *selected_index = 0;
-                                    this.design_gallery_scroll_handle.scroll_to_item(0, ScrollStrategy::Top);
-                                    cx.notify();
+                        "backspace" => {
+                            if !filter.is_empty() {
+                                filter.pop();
+                                *selected_index = 0;
+                                this.design_gallery_scroll_handle
+                                    .scroll_to_item(0, ScrollStrategy::Top);
+                                cx.notify();
+                            }
+                        }
+                        _ => {
+                            if let Some(ref key_char) = event.keystroke.key_char {
+                                if let Some(ch) = key_char.chars().next() {
+                                    if !ch.is_control() {
+                                        filter.push(ch);
+                                        *selected_index = 0;
+                                        this.design_gallery_scroll_handle
+                                            .scroll_to_item(0, ScrollStrategy::Top);
+                                        cx.notify();
+                                    }
                                 }
                             }
                         }
                     }
                 }
-            }
-        });
-        
+            },
+        );
+
         let input_display = if filter.is_empty() {
             SharedString::from("Search design variations...")
         } else {
             SharedString::from(filter.clone())
         };
         let input_is_empty = filter.is_empty();
-        
+
         // Pre-compute colors
         let list_colors = ListItemColors::from_design(&design_colors);
         let text_primary = design_colors.text_primary;
@@ -8908,7 +10228,7 @@ impl ScriptListApp {
         let text_dimmed = design_colors.text_dimmed;
         let ui_border = design_colors.border;
         let _accent = design_colors.accent;
-        
+
         // Build virtualized list
         let list_element: AnyElement = if filtered_len == 0 {
             div()
@@ -8928,125 +10248,168 @@ impl ScriptListApp {
             let design_typography_clone = design_typography;
             let design_visual_clone = design_visual;
             let design_colors_clone = design_colors;
-            
+
             uniform_list(
                 "design-gallery",
                 filtered_len,
                 move |visible_range, _window, _cx| {
-                    visible_range.map(|ix| {
-                        if let Some((_, item)) = items_for_closure.get(ix) {
-                            let is_selected = ix == selected;
-                            
-                            let element: AnyElement = match item {
-                                GalleryItem::GroupHeaderCategory(category) => {
-                                    // Category header - styled as section header
-                                    div()
-                                        .id(ElementId::NamedInteger("gallery-header-cat".into(), ix as u64))
-                                        .w_full()
-                                        .h(px(32.0))
-                                        .px(px(design_spacing_clone.padding_lg))
-                                        .flex()
-                                        .items_center()
-                                        .bg(rgba((design_colors_clone.background_secondary << 8) | 0x80))
-                                        .child(
-                                            div()
-                                                .text_sm()
-                                                .font_weight(gpui::FontWeight::BOLD)
-                                                .text_color(rgb(design_colors_clone.accent))
-                                                .child(format!("── Group Headers: {} ──", category.name()))
-                                        )
-                                        .into_any_element()
-                                }
-                                GalleryItem::GroupHeader(style) => {
-                                    render_group_header_item(ix, is_selected, style, &design_spacing_clone, &design_typography_clone, &design_visual_clone, &design_colors_clone)
-                                }
-                                GalleryItem::IconCategoryHeader(category) => {
-                                    // Icon category header
-                                    div()
-                                        .id(ElementId::NamedInteger("gallery-icon-cat".into(), ix as u64))
-                                        .w_full()
-                                        .h(px(32.0))
-                                        .px(px(design_spacing_clone.padding_lg))
-                                        .flex()
-                                        .items_center()
-                                        .bg(rgba((design_colors_clone.background_secondary << 8) | 0x80))
-                                        .child(
-                                            div()
-                                                .text_sm()
-                                                .font_weight(gpui::FontWeight::BOLD)
-                                                .text_color(rgb(design_colors_clone.accent))
-                                                .child(format!("── Icons: {} ──", category.name()))
-                                        )
-                                        .into_any_element()
-                                }
-                                GalleryItem::Icon(icon, _style) => {
-                                    // Render icon item with SVG
-                                    let icon_path = icon.external_path();
-                                    let name_owned = icon.name().to_string();
-                                    let desc_owned = icon.description().to_string();
-                                    
-                                    let mut item_div = div()
-                                        .id(ElementId::NamedInteger("gallery-icon".into(), ix as u64))
-                                        .w_full()
-                                        .h(px(LIST_ITEM_HEIGHT))
-                                        .px(px(design_spacing_clone.padding_lg))
-                                        .flex()
-                                        .flex_row()
-                                        .items_center()
-                                        .gap(px(design_spacing_clone.gap_md));
-                                    
-                                    if is_selected {
-                                        item_div = item_div.bg(rgb(design_colors_clone.background_selected));
+                    visible_range
+                        .map(|ix| {
+                            if let Some((_, item)) = items_for_closure.get(ix) {
+                                let is_selected = ix == selected;
+
+                                let element: AnyElement = match item {
+                                    GalleryItem::GroupHeaderCategory(category) => {
+                                        // Category header - styled as section header
+                                        div()
+                                            .id(ElementId::NamedInteger(
+                                                "gallery-header-cat".into(),
+                                                ix as u64,
+                                            ))
+                                            .w_full()
+                                            .h(px(32.0))
+                                            .px(px(design_spacing_clone.padding_lg))
+                                            .flex()
+                                            .items_center()
+                                            .bg(rgba(
+                                                (design_colors_clone.background_secondary << 8)
+                                                    | 0x80,
+                                            ))
+                                            .child(
+                                                div()
+                                                    .text_sm()
+                                                    .font_weight(gpui::FontWeight::BOLD)
+                                                    .text_color(rgb(design_colors_clone.accent))
+                                                    .child(format!(
+                                                        "── Group Headers: {} ──",
+                                                        category.name()
+                                                    )),
+                                            )
+                                            .into_any_element()
                                     }
-                                    
-                                    item_div
-                                        // Icon preview with SVG
-                                        .child(
-                                            div()
-                                                .w(px(32.0))
-                                                .h(px(32.0))
-                                                .rounded(px(4.0))
-                                                .bg(rgba((design_colors_clone.background_secondary << 8) | 0x60))
-                                                .flex()
-                                                .items_center()
-                                                .justify_center()
-                                                .child(
-                                                    svg()
-                                                        .external_path(icon_path)
-                                                        .size(px(16.0))
-                                                        .text_color(rgb(design_colors_clone.text_primary))
-                                                )
-                                        )
-                                        // Name and description
-                                        .child(
-                                            div()
-                                                .flex_1()
-                                                .flex()
-                                                .flex_col()
-                                                .gap(px(2.0))
-                                                .child(
-                                                    div()
-                                                        .text_sm()
-                                                        .font_weight(gpui::FontWeight::MEDIUM)
-                                                        .text_color(rgb(design_colors_clone.text_primary))
-                                                        .child(name_owned)
-                                                )
-                                                .child(
-                                                    div()
-                                                        .text_xs()
-                                                        .text_color(rgb(design_colors_clone.text_muted))
-                                                        .overflow_x_hidden()
-                                                        .child(desc_owned)
-                                                )
-                                        )
-                                        .into_any_element()
-                                }
-                            };
-                            element
-                        } else {
-                            div().id(ElementId::NamedInteger("gallery-empty".into(), ix as u64)).h(px(LIST_ITEM_HEIGHT)).into_any_element()
-                        }
-                    }).collect()
+                                    GalleryItem::GroupHeader(style) => render_group_header_item(
+                                        ix,
+                                        is_selected,
+                                        style,
+                                        &design_spacing_clone,
+                                        &design_typography_clone,
+                                        &design_visual_clone,
+                                        &design_colors_clone,
+                                    ),
+                                    GalleryItem::IconCategoryHeader(category) => {
+                                        // Icon category header
+                                        div()
+                                            .id(ElementId::NamedInteger(
+                                                "gallery-icon-cat".into(),
+                                                ix as u64,
+                                            ))
+                                            .w_full()
+                                            .h(px(32.0))
+                                            .px(px(design_spacing_clone.padding_lg))
+                                            .flex()
+                                            .items_center()
+                                            .bg(rgba(
+                                                (design_colors_clone.background_secondary << 8)
+                                                    | 0x80,
+                                            ))
+                                            .child(
+                                                div()
+                                                    .text_sm()
+                                                    .font_weight(gpui::FontWeight::BOLD)
+                                                    .text_color(rgb(design_colors_clone.accent))
+                                                    .child(format!(
+                                                        "── Icons: {} ──",
+                                                        category.name()
+                                                    )),
+                                            )
+                                            .into_any_element()
+                                    }
+                                    GalleryItem::Icon(icon, _style) => {
+                                        // Render icon item with SVG
+                                        let icon_path = icon.external_path();
+                                        let name_owned = icon.name().to_string();
+                                        let desc_owned = icon.description().to_string();
+
+                                        let mut item_div = div()
+                                            .id(ElementId::NamedInteger(
+                                                "gallery-icon".into(),
+                                                ix as u64,
+                                            ))
+                                            .w_full()
+                                            .h(px(LIST_ITEM_HEIGHT))
+                                            .px(px(design_spacing_clone.padding_lg))
+                                            .flex()
+                                            .flex_row()
+                                            .items_center()
+                                            .gap(px(design_spacing_clone.gap_md));
+
+                                        if is_selected {
+                                            item_div = item_div
+                                                .bg(rgb(design_colors_clone.background_selected));
+                                        }
+
+                                        item_div
+                                            // Icon preview with SVG
+                                            .child(
+                                                div()
+                                                    .w(px(32.0))
+                                                    .h(px(32.0))
+                                                    .rounded(px(4.0))
+                                                    .bg(rgba(
+                                                        (design_colors_clone.background_secondary
+                                                            << 8)
+                                                            | 0x60,
+                                                    ))
+                                                    .flex()
+                                                    .items_center()
+                                                    .justify_center()
+                                                    .child(
+                                                        svg()
+                                                            .external_path(icon_path)
+                                                            .size(px(16.0))
+                                                            .text_color(rgb(
+                                                                design_colors_clone.text_primary
+                                                            )),
+                                                    ),
+                                            )
+                                            // Name and description
+                                            .child(
+                                                div()
+                                                    .flex_1()
+                                                    .flex()
+                                                    .flex_col()
+                                                    .gap(px(2.0))
+                                                    .child(
+                                                        div()
+                                                            .text_sm()
+                                                            .font_weight(gpui::FontWeight::MEDIUM)
+                                                            .text_color(rgb(
+                                                                design_colors_clone.text_primary
+                                                            ))
+                                                            .child(name_owned),
+                                                    )
+                                                    .child(
+                                                        div()
+                                                            .text_xs()
+                                                            .text_color(rgb(
+                                                                design_colors_clone.text_muted
+                                                            ))
+                                                            .overflow_x_hidden()
+                                                            .child(desc_owned),
+                                                    ),
+                                            )
+                                            .into_any_element()
+                                    }
+                                };
+                                element
+                            } else {
+                                div()
+                                    .id(ElementId::NamedInteger("gallery-empty".into(), ix as u64))
+                                    .h(px(LIST_ITEM_HEIGHT))
+                                    .into_any_element()
+                            }
+                        })
+                        .collect()
                 },
             )
             .w_full()
@@ -9054,7 +10417,7 @@ impl ScriptListApp {
             .track_scroll(&self.design_gallery_scroll_handle)
             .into_any_element()
         };
-        
+
         // Build the full view
         div()
             .flex()
@@ -9080,11 +10443,7 @@ impl ScriptListApp {
                     .items_center()
                     .gap_3()
                     // Gallery icon
-                    .child(
-                        div()
-                            .text_xl()
-                            .child("🎨")
-                    )
+                    .child(div().text_xl().child("🎨"))
                     // Search input with blinking cursor
                     .child(
                         div()
@@ -9093,30 +10452,38 @@ impl ScriptListApp {
                             .flex_row()
                             .items_center()
                             .text_lg()
-                            .text_color(if input_is_empty { rgb(text_muted) } else { rgb(text_primary) })
-                            .when(input_is_empty, |d| d.child(
-                                div()
-                                    .w(px(design_visual.border_normal))
-                                    .h(px(CURSOR_HEIGHT_LG))
-                                    .my(px(CURSOR_MARGIN_Y))
-                                    .mr(px(design_spacing.padding_xs))
-                                    .when(self.cursor_visible, |d| d.bg(rgb(text_primary)))
-                            ))
+                            .text_color(if input_is_empty {
+                                rgb(text_muted)
+                            } else {
+                                rgb(text_primary)
+                            })
+                            .when(input_is_empty, |d| {
+                                d.child(
+                                    div()
+                                        .w(px(design_visual.border_normal))
+                                        .h(px(CURSOR_HEIGHT_LG))
+                                        .my(px(CURSOR_MARGIN_Y))
+                                        .mr(px(design_spacing.padding_xs))
+                                        .when(self.cursor_visible, |d| d.bg(rgb(text_primary))),
+                                )
+                            })
                             .child(input_display)
-                            .when(!input_is_empty, |d| d.child(
-                                div()
-                                    .w(px(design_visual.border_normal))
-                                    .h(px(CURSOR_HEIGHT_LG))
-                                    .my(px(CURSOR_MARGIN_Y))
-                                    .ml(px(design_visual.border_normal))
-                                    .when(self.cursor_visible, |d| d.bg(rgb(text_primary)))
-                            ))
+                            .when(!input_is_empty, |d| {
+                                d.child(
+                                    div()
+                                        .w(px(design_visual.border_normal))
+                                        .h(px(CURSOR_HEIGHT_LG))
+                                        .my(px(CURSOR_MARGIN_Y))
+                                        .ml(px(design_visual.border_normal))
+                                        .when(self.cursor_visible, |d| d.bg(rgb(text_primary))),
+                                )
+                            }),
                     )
                     .child(
                         div()
                             .text_sm()
                             .text_color(rgb(text_dimmed))
-                            .child(format!("{} items", filtered_len))
+                            .child(format!("{} items", filtered_len)),
                     ),
             )
             // Divider
@@ -9124,7 +10491,7 @@ impl ScriptListApp {
                 div()
                     .mx(px(design_spacing.padding_lg))
                     .h(px(design_visual.border_thin))
-                    .bg(rgba((ui_border << 8) | 0x60))
+                    .bg(rgba((ui_border << 8) | 0x60)),
             )
             // Main content area - just the list (no preview panel for gallery)
             .child(
@@ -9135,7 +10502,7 @@ impl ScriptListApp {
                     .min_h(px(0.))
                     .overflow_hidden()
                     .py(px(design_spacing.padding_xs))
-                    .child(list_element)
+                    .child(list_element),
             )
             // Footer with hint
             .child(
@@ -9147,7 +10514,7 @@ impl ScriptListApp {
                     .border_color(rgba((ui_border << 8) | 0x40))
                     .text_xs()
                     .text_color(rgb(text_dimmed))
-                    .child("↑↓ navigate • Esc back")
+                    .child("↑↓ navigate • Esc back"),
             )
             .into_any_element()
     }
@@ -9164,10 +10531,10 @@ fn render_group_header_item(
     colors: &designs::DesignColors,
 ) -> AnyElement {
     use designs::group_header_variations::GroupHeaderStyle;
-    
+
     let name_owned = style.name().to_string();
     let desc_owned = style.description().to_string();
-    
+
     let mut item_div = div()
         .id(ElementId::NamedInteger("gallery-header".into(), ix as u64))
         .w_full()
@@ -9177,42 +10544,38 @@ fn render_group_header_item(
         .flex_row()
         .items_center()
         .gap(px(spacing.gap_md));
-    
+
     if is_selected {
         item_div = item_div.bg(rgb(colors.background_selected));
     }
-    
+
     // Create the preview element based on the style
     let preview = match style {
         // Text Only styles - vary font weight and style
-        GroupHeaderStyle::UppercaseLeft => {
-            div()
-                .w(px(140.0))
-                .h(px(28.0))
-                .rounded(px(visual.radius_sm))
-                .bg(rgba((colors.background_secondary << 8) | 0x60))
-                .flex()
-                .items_center()
-                .px(px(8.0))
-                .text_xs()
-                .font_weight(gpui::FontWeight::SEMIBOLD)
-                .text_color(rgb(colors.text_secondary))
-                .child("MAIN")
-        }
-        GroupHeaderStyle::UppercaseCenter => {
-            div()
-                .w(px(140.0))
-                .h(px(28.0))
-                .rounded(px(visual.radius_sm))
-                .bg(rgba((colors.background_secondary << 8) | 0x60))
-                .flex()
-                .items_center()
-                .justify_center()
-                .text_xs()
-                .font_weight(gpui::FontWeight::SEMIBOLD)
-                .text_color(rgb(colors.text_secondary))
-                .child("MAIN")
-        }
+        GroupHeaderStyle::UppercaseLeft => div()
+            .w(px(140.0))
+            .h(px(28.0))
+            .rounded(px(visual.radius_sm))
+            .bg(rgba((colors.background_secondary << 8) | 0x60))
+            .flex()
+            .items_center()
+            .px(px(8.0))
+            .text_xs()
+            .font_weight(gpui::FontWeight::SEMIBOLD)
+            .text_color(rgb(colors.text_secondary))
+            .child("MAIN"),
+        GroupHeaderStyle::UppercaseCenter => div()
+            .w(px(140.0))
+            .h(px(28.0))
+            .rounded(px(visual.radius_sm))
+            .bg(rgba((colors.background_secondary << 8) | 0x60))
+            .flex()
+            .items_center()
+            .justify_center()
+            .text_xs()
+            .font_weight(gpui::FontWeight::SEMIBOLD)
+            .text_color(rgb(colors.text_secondary))
+            .child("MAIN"),
         GroupHeaderStyle::SmallCapsLeft => {
             div()
                 .w(px(140.0))
@@ -9225,255 +10588,201 @@ fn render_group_header_item(
                 .text_xs()
                 .font_weight(gpui::FontWeight::MEDIUM)
                 .text_color(rgb(colors.text_secondary))
-                .child("MAIN")  // Would use font-variant: small-caps if available
+                .child("MAIN") // Would use font-variant: small-caps if available
         }
-        GroupHeaderStyle::BoldLeft => {
-            div()
-                .w(px(140.0))
-                .h(px(28.0))
-                .rounded(px(visual.radius_sm))
-                .bg(rgba((colors.background_secondary << 8) | 0x60))
-                .flex()
-                .items_center()
-                .px(px(8.0))
-                .text_xs()
-                .font_weight(gpui::FontWeight::BOLD)
-                .text_color(rgb(colors.text_primary))
-                .child("MAIN")
-        }
-        GroupHeaderStyle::LightLeft => {
-            div()
-                .w(px(140.0))
-                .h(px(28.0))
-                .rounded(px(visual.radius_sm))
-                .bg(rgba((colors.background_secondary << 8) | 0x60))
-                .flex()
-                .items_center()
-                .px(px(8.0))
-                .text_xs()
-                .font_weight(gpui::FontWeight::LIGHT)
-                .text_color(rgb(colors.text_muted))
-                .child("MAIN")
-        }
-        GroupHeaderStyle::MonospaceLeft => {
-            div()
-                .w(px(140.0))
-                .h(px(28.0))
-                .rounded(px(visual.radius_sm))
-                .bg(rgba((colors.background_secondary << 8) | 0x60))
-                .flex()
-                .items_center()
-                .px(px(8.0))
-                .text_xs()
-                .font_family(typography.font_family_mono)
-                .text_color(rgb(colors.text_secondary))
-                .child("MAIN")
-        }
-        
+        GroupHeaderStyle::BoldLeft => div()
+            .w(px(140.0))
+            .h(px(28.0))
+            .rounded(px(visual.radius_sm))
+            .bg(rgba((colors.background_secondary << 8) | 0x60))
+            .flex()
+            .items_center()
+            .px(px(8.0))
+            .text_xs()
+            .font_weight(gpui::FontWeight::BOLD)
+            .text_color(rgb(colors.text_primary))
+            .child("MAIN"),
+        GroupHeaderStyle::LightLeft => div()
+            .w(px(140.0))
+            .h(px(28.0))
+            .rounded(px(visual.radius_sm))
+            .bg(rgba((colors.background_secondary << 8) | 0x60))
+            .flex()
+            .items_center()
+            .px(px(8.0))
+            .text_xs()
+            .font_weight(gpui::FontWeight::LIGHT)
+            .text_color(rgb(colors.text_muted))
+            .child("MAIN"),
+        GroupHeaderStyle::MonospaceLeft => div()
+            .w(px(140.0))
+            .h(px(28.0))
+            .rounded(px(visual.radius_sm))
+            .bg(rgba((colors.background_secondary << 8) | 0x60))
+            .flex()
+            .items_center()
+            .px(px(8.0))
+            .text_xs()
+            .font_family(typography.font_family_mono)
+            .text_color(rgb(colors.text_secondary))
+            .child("MAIN"),
+
         // With Lines styles
-        GroupHeaderStyle::LineLeft => {
-            div()
-                .w(px(140.0))
-                .h(px(28.0))
-                .rounded(px(visual.radius_sm))
-                .bg(rgba((colors.background_secondary << 8) | 0x60))
-                .flex()
-                .flex_row()
-                .items_center()
-                .gap(px(6.0))
-                .px(px(8.0))
-                .child(
-                    div()
-                        .w(px(24.0))
-                        .h(px(1.0))
-                        .bg(rgb(colors.border))
-                )
-                .child(
-                    div()
-                        .text_xs()
-                        .font_weight(gpui::FontWeight::MEDIUM)
-                        .text_color(rgb(colors.text_secondary))
-                        .child("MAIN")
-                )
-        }
-        GroupHeaderStyle::LineRight => {
-            div()
-                .w(px(140.0))
-                .h(px(28.0))
-                .rounded(px(visual.radius_sm))
-                .bg(rgba((colors.background_secondary << 8) | 0x60))
-                .flex()
-                .flex_row()
-                .items_center()
-                .gap(px(6.0))
-                .px(px(8.0))
-                .child(
-                    div()
-                        .text_xs()
-                        .font_weight(gpui::FontWeight::MEDIUM)
-                        .text_color(rgb(colors.text_secondary))
-                        .child("MAIN")
-                )
-                .child(
-                    div()
-                        .flex_1()
-                        .h(px(1.0))
-                        .bg(rgb(colors.border))
-                )
-        }
-        GroupHeaderStyle::LineBothSides => {
-            div()
-                .w(px(140.0))
-                .h(px(28.0))
-                .rounded(px(visual.radius_sm))
-                .bg(rgba((colors.background_secondary << 8) | 0x60))
-                .flex()
-                .flex_row()
-                .items_center()
-                .gap(px(6.0))
-                .px(px(8.0))
-                .child(
-                    div()
-                        .flex_1()
-                        .h(px(1.0))
-                        .bg(rgb(colors.border))
-                )
-                .child(
-                    div()
-                        .text_xs()
-                        .font_weight(gpui::FontWeight::MEDIUM)
-                        .text_color(rgb(colors.text_secondary))
-                        .child("MAIN")
-                )
-                .child(
-                    div()
-                        .flex_1()
-                        .h(px(1.0))
-                        .bg(rgb(colors.border))
-                )
-        }
-        GroupHeaderStyle::LineBelow => {
-            div()
-                .w(px(140.0))
-                .h(px(28.0))
-                .rounded(px(visual.radius_sm))
-                .bg(rgba((colors.background_secondary << 8) | 0x60))
-                .flex()
-                .flex_col()
-                .justify_center()
-                .px(px(8.0))
-                .gap(px(2.0))
-                .child(
-                    div()
-                        .text_xs()
-                        .font_weight(gpui::FontWeight::MEDIUM)
-                        .text_color(rgb(colors.text_secondary))
-                        .child("MAIN")
-                )
-                .child(
-                    div()
-                        .w(px(40.0))
-                        .h(px(1.0))
-                        .bg(rgb(colors.border))
-                )
-        }
-        GroupHeaderStyle::LineAbove => {
-            div()
-                .w(px(140.0))
-                .h(px(28.0))
-                .rounded(px(visual.radius_sm))
-                .bg(rgba((colors.background_secondary << 8) | 0x60))
-                .flex()
-                .flex_col()
-                .justify_center()
-                .px(px(8.0))
-                .gap(px(2.0))
-                .child(
-                    div()
-                        .w(px(40.0))
-                        .h(px(1.0))
-                        .bg(rgb(colors.border))
-                )
-                .child(
-                    div()
-                        .text_xs()
-                        .font_weight(gpui::FontWeight::MEDIUM)
-                        .text_color(rgb(colors.text_secondary))
-                        .child("MAIN")
-                )
-        }
-        GroupHeaderStyle::DoubleLine => {
-            div()
-                .w(px(140.0))
-                .h(px(28.0))
-                .rounded(px(visual.radius_sm))
-                .bg(rgba((colors.background_secondary << 8) | 0x60))
-                .flex()
-                .flex_col()
-                .justify_center()
-                .items_center()
-                .gap(px(1.0))
-                .child(div().w(px(100.0)).h(px(1.0)).bg(rgb(colors.border)))
-                .child(
-                    div()
-                        .text_xs()
-                        .font_weight(gpui::FontWeight::MEDIUM)
-                        .text_color(rgb(colors.text_secondary))
-                        .child("MAIN")
-                )
-                .child(div().w(px(100.0)).h(px(1.0)).bg(rgb(colors.border)))
-        }
-        
+        GroupHeaderStyle::LineLeft => div()
+            .w(px(140.0))
+            .h(px(28.0))
+            .rounded(px(visual.radius_sm))
+            .bg(rgba((colors.background_secondary << 8) | 0x60))
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap(px(6.0))
+            .px(px(8.0))
+            .child(div().w(px(24.0)).h(px(1.0)).bg(rgb(colors.border)))
+            .child(
+                div()
+                    .text_xs()
+                    .font_weight(gpui::FontWeight::MEDIUM)
+                    .text_color(rgb(colors.text_secondary))
+                    .child("MAIN"),
+            ),
+        GroupHeaderStyle::LineRight => div()
+            .w(px(140.0))
+            .h(px(28.0))
+            .rounded(px(visual.radius_sm))
+            .bg(rgba((colors.background_secondary << 8) | 0x60))
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap(px(6.0))
+            .px(px(8.0))
+            .child(
+                div()
+                    .text_xs()
+                    .font_weight(gpui::FontWeight::MEDIUM)
+                    .text_color(rgb(colors.text_secondary))
+                    .child("MAIN"),
+            )
+            .child(div().flex_1().h(px(1.0)).bg(rgb(colors.border))),
+        GroupHeaderStyle::LineBothSides => div()
+            .w(px(140.0))
+            .h(px(28.0))
+            .rounded(px(visual.radius_sm))
+            .bg(rgba((colors.background_secondary << 8) | 0x60))
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap(px(6.0))
+            .px(px(8.0))
+            .child(div().flex_1().h(px(1.0)).bg(rgb(colors.border)))
+            .child(
+                div()
+                    .text_xs()
+                    .font_weight(gpui::FontWeight::MEDIUM)
+                    .text_color(rgb(colors.text_secondary))
+                    .child("MAIN"),
+            )
+            .child(div().flex_1().h(px(1.0)).bg(rgb(colors.border))),
+        GroupHeaderStyle::LineBelow => div()
+            .w(px(140.0))
+            .h(px(28.0))
+            .rounded(px(visual.radius_sm))
+            .bg(rgba((colors.background_secondary << 8) | 0x60))
+            .flex()
+            .flex_col()
+            .justify_center()
+            .px(px(8.0))
+            .gap(px(2.0))
+            .child(
+                div()
+                    .text_xs()
+                    .font_weight(gpui::FontWeight::MEDIUM)
+                    .text_color(rgb(colors.text_secondary))
+                    .child("MAIN"),
+            )
+            .child(div().w(px(40.0)).h(px(1.0)).bg(rgb(colors.border))),
+        GroupHeaderStyle::LineAbove => div()
+            .w(px(140.0))
+            .h(px(28.0))
+            .rounded(px(visual.radius_sm))
+            .bg(rgba((colors.background_secondary << 8) | 0x60))
+            .flex()
+            .flex_col()
+            .justify_center()
+            .px(px(8.0))
+            .gap(px(2.0))
+            .child(div().w(px(40.0)).h(px(1.0)).bg(rgb(colors.border)))
+            .child(
+                div()
+                    .text_xs()
+                    .font_weight(gpui::FontWeight::MEDIUM)
+                    .text_color(rgb(colors.text_secondary))
+                    .child("MAIN"),
+            ),
+        GroupHeaderStyle::DoubleLine => div()
+            .w(px(140.0))
+            .h(px(28.0))
+            .rounded(px(visual.radius_sm))
+            .bg(rgba((colors.background_secondary << 8) | 0x60))
+            .flex()
+            .flex_col()
+            .justify_center()
+            .items_center()
+            .gap(px(1.0))
+            .child(div().w(px(100.0)).h(px(1.0)).bg(rgb(colors.border)))
+            .child(
+                div()
+                    .text_xs()
+                    .font_weight(gpui::FontWeight::MEDIUM)
+                    .text_color(rgb(colors.text_secondary))
+                    .child("MAIN"),
+            )
+            .child(div().w(px(100.0)).h(px(1.0)).bg(rgb(colors.border))),
+
         // With Background styles
-        GroupHeaderStyle::PillBackground => {
-            div()
-                .w(px(140.0))
-                .h(px(28.0))
-                .rounded(px(visual.radius_sm))
-                .bg(rgba((colors.background_secondary << 8) | 0x60))
-                .flex()
-                .items_center()
-                .px(px(8.0))
-                .child(
-                    div()
-                        .px(px(8.0))
-                        .py(px(2.0))
-                        .rounded(px(10.0))
-                        .bg(rgba((colors.accent << 8) | 0x30))
-                        .text_xs()
-                        .font_weight(gpui::FontWeight::MEDIUM)
-                        .text_color(rgb(colors.accent))
-                        .child("MAIN")
-                )
-        }
-        GroupHeaderStyle::FullWidthBackground => {
-            div()
-                .w(px(140.0))
-                .h(px(28.0))
-                .rounded(px(visual.radius_sm))
-                .bg(rgba((colors.accent << 8) | 0x20))
-                .flex()
-                .items_center()
-                .px(px(8.0))
-                .text_xs()
-                .font_weight(gpui::FontWeight::SEMIBOLD)
-                .text_color(rgb(colors.text_primary))
-                .child("MAIN")
-        }
-        GroupHeaderStyle::SubtleBackground => {
-            div()
-                .w(px(140.0))
-                .h(px(28.0))
-                .rounded(px(visual.radius_sm))
-                .bg(rgba((colors.background_secondary << 8) | 0x90))
-                .flex()
-                .items_center()
-                .px(px(8.0))
-                .text_xs()
-                .font_weight(gpui::FontWeight::MEDIUM)
-                .text_color(rgb(colors.text_secondary))
-                .child("MAIN")
-        }
+        GroupHeaderStyle::PillBackground => div()
+            .w(px(140.0))
+            .h(px(28.0))
+            .rounded(px(visual.radius_sm))
+            .bg(rgba((colors.background_secondary << 8) | 0x60))
+            .flex()
+            .items_center()
+            .px(px(8.0))
+            .child(
+                div()
+                    .px(px(8.0))
+                    .py(px(2.0))
+                    .rounded(px(10.0))
+                    .bg(rgba((colors.accent << 8) | 0x30))
+                    .text_xs()
+                    .font_weight(gpui::FontWeight::MEDIUM)
+                    .text_color(rgb(colors.accent))
+                    .child("MAIN"),
+            ),
+        GroupHeaderStyle::FullWidthBackground => div()
+            .w(px(140.0))
+            .h(px(28.0))
+            .rounded(px(visual.radius_sm))
+            .bg(rgba((colors.accent << 8) | 0x20))
+            .flex()
+            .items_center()
+            .px(px(8.0))
+            .text_xs()
+            .font_weight(gpui::FontWeight::SEMIBOLD)
+            .text_color(rgb(colors.text_primary))
+            .child("MAIN"),
+        GroupHeaderStyle::SubtleBackground => div()
+            .w(px(140.0))
+            .h(px(28.0))
+            .rounded(px(visual.radius_sm))
+            .bg(rgba((colors.background_secondary << 8) | 0x90))
+            .flex()
+            .items_center()
+            .px(px(8.0))
+            .text_xs()
+            .font_weight(gpui::FontWeight::MEDIUM)
+            .text_color(rgb(colors.text_secondary))
+            .child("MAIN"),
         GroupHeaderStyle::GradientFade => {
             // Simulated with opacity fade
             div()
@@ -9490,237 +10799,213 @@ fn render_group_header_item(
                         .text_xs()
                         .font_weight(gpui::FontWeight::MEDIUM)
                         .text_color(rgb(colors.text_secondary))
-                        .child("~  MAIN  ~")
+                        .child("~  MAIN  ~"),
                 )
         }
-        GroupHeaderStyle::BorderedBox => {
-            div()
-                .w(px(140.0))
-                .h(px(28.0))
-                .rounded(px(visual.radius_sm))
-                .bg(rgba((colors.background_secondary << 8) | 0x60))
-                .flex()
-                .items_center()
-                .px(px(8.0))
-                .child(
-                    div()
-                        .px(px(8.0))
-                        .py(px(2.0))
-                        .border_1()
-                        .border_color(rgb(colors.border))
-                        .rounded(px(2.0))
-                        .text_xs()
-                        .font_weight(gpui::FontWeight::MEDIUM)
-                        .text_color(rgb(colors.text_secondary))
-                        .child("MAIN")
-                )
-        }
-        
+        GroupHeaderStyle::BorderedBox => div()
+            .w(px(140.0))
+            .h(px(28.0))
+            .rounded(px(visual.radius_sm))
+            .bg(rgba((colors.background_secondary << 8) | 0x60))
+            .flex()
+            .items_center()
+            .px(px(8.0))
+            .child(
+                div()
+                    .px(px(8.0))
+                    .py(px(2.0))
+                    .border_1()
+                    .border_color(rgb(colors.border))
+                    .rounded(px(2.0))
+                    .text_xs()
+                    .font_weight(gpui::FontWeight::MEDIUM)
+                    .text_color(rgb(colors.text_secondary))
+                    .child("MAIN"),
+            ),
+
         // Minimal styles
-        GroupHeaderStyle::DotPrefix => {
-            div()
-                .w(px(140.0))
-                .h(px(28.0))
-                .rounded(px(visual.radius_sm))
-                .bg(rgba((colors.background_secondary << 8) | 0x60))
-                .flex()
-                .flex_row()
-                .items_center()
-                .gap(px(6.0))
-                .px(px(8.0))
-                .child(
-                    div()
-                        .w(px(4.0))
-                        .h(px(4.0))
-                        .rounded(px(2.0))
-                        .bg(rgb(colors.text_muted))
-                )
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(rgb(colors.text_secondary))
-                        .child("MAIN")
-                )
-        }
-        GroupHeaderStyle::DashPrefix => {
-            div()
-                .w(px(140.0))
-                .h(px(28.0))
-                .rounded(px(visual.radius_sm))
-                .bg(rgba((colors.background_secondary << 8) | 0x60))
-                .flex()
-                .items_center()
-                .px(px(8.0))
-                .text_xs()
-                .text_color(rgb(colors.text_secondary))
-                .child("- MAIN")
-        }
-        GroupHeaderStyle::BulletPrefix => {
-            div()
-                .w(px(140.0))
-                .h(px(28.0))
-                .rounded(px(visual.radius_sm))
-                .bg(rgba((colors.background_secondary << 8) | 0x60))
-                .flex()
-                .flex_row()
-                .items_center()
-                .gap(px(6.0))
-                .px(px(8.0))
-                .child(
-                    div()
-                        .w(px(6.0))
-                        .h(px(6.0))
-                        .rounded(px(3.0))
-                        .bg(rgb(colors.accent))
-                )
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(rgb(colors.text_secondary))
-                        .child("MAIN")
-                )
-        }
-        GroupHeaderStyle::ArrowPrefix => {
-            div()
-                .w(px(140.0))
-                .h(px(28.0))
-                .rounded(px(visual.radius_sm))
-                .bg(rgba((colors.background_secondary << 8) | 0x60))
-                .flex()
-                .items_center()
-                .px(px(8.0))
-                .text_xs()
-                .text_color(rgb(colors.text_secondary))
-                .child("\u{25B8} MAIN")
-        }
-        GroupHeaderStyle::ChevronPrefix => {
-            div()
-                .w(px(140.0))
-                .h(px(28.0))
-                .rounded(px(visual.radius_sm))
-                .bg(rgba((colors.background_secondary << 8) | 0x60))
-                .flex()
-                .items_center()
-                .px(px(8.0))
-                .text_xs()
-                .text_color(rgb(colors.text_secondary))
-                .child("\u{203A} MAIN")
-        }
-        GroupHeaderStyle::Dimmed => {
-            div()
-                .w(px(140.0))
-                .h(px(28.0))
-                .rounded(px(visual.radius_sm))
-                .bg(rgba((colors.background_secondary << 8) | 0x60))
-                .flex()
-                .items_center()
-                .px(px(8.0))
-                .text_xs()
-                .opacity(0.5)
-                .text_color(rgb(colors.text_muted))
-                .child("MAIN")
-        }
-        
+        GroupHeaderStyle::DotPrefix => div()
+            .w(px(140.0))
+            .h(px(28.0))
+            .rounded(px(visual.radius_sm))
+            .bg(rgba((colors.background_secondary << 8) | 0x60))
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap(px(6.0))
+            .px(px(8.0))
+            .child(
+                div()
+                    .w(px(4.0))
+                    .h(px(4.0))
+                    .rounded(px(2.0))
+                    .bg(rgb(colors.text_muted)),
+            )
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(rgb(colors.text_secondary))
+                    .child("MAIN"),
+            ),
+        GroupHeaderStyle::DashPrefix => div()
+            .w(px(140.0))
+            .h(px(28.0))
+            .rounded(px(visual.radius_sm))
+            .bg(rgba((colors.background_secondary << 8) | 0x60))
+            .flex()
+            .items_center()
+            .px(px(8.0))
+            .text_xs()
+            .text_color(rgb(colors.text_secondary))
+            .child("- MAIN"),
+        GroupHeaderStyle::BulletPrefix => div()
+            .w(px(140.0))
+            .h(px(28.0))
+            .rounded(px(visual.radius_sm))
+            .bg(rgba((colors.background_secondary << 8) | 0x60))
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap(px(6.0))
+            .px(px(8.0))
+            .child(
+                div()
+                    .w(px(6.0))
+                    .h(px(6.0))
+                    .rounded(px(3.0))
+                    .bg(rgb(colors.accent)),
+            )
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(rgb(colors.text_secondary))
+                    .child("MAIN"),
+            ),
+        GroupHeaderStyle::ArrowPrefix => div()
+            .w(px(140.0))
+            .h(px(28.0))
+            .rounded(px(visual.radius_sm))
+            .bg(rgba((colors.background_secondary << 8) | 0x60))
+            .flex()
+            .items_center()
+            .px(px(8.0))
+            .text_xs()
+            .text_color(rgb(colors.text_secondary))
+            .child("\u{25B8} MAIN"),
+        GroupHeaderStyle::ChevronPrefix => div()
+            .w(px(140.0))
+            .h(px(28.0))
+            .rounded(px(visual.radius_sm))
+            .bg(rgba((colors.background_secondary << 8) | 0x60))
+            .flex()
+            .items_center()
+            .px(px(8.0))
+            .text_xs()
+            .text_color(rgb(colors.text_secondary))
+            .child("\u{203A} MAIN"),
+        GroupHeaderStyle::Dimmed => div()
+            .w(px(140.0))
+            .h(px(28.0))
+            .rounded(px(visual.radius_sm))
+            .bg(rgba((colors.background_secondary << 8) | 0x60))
+            .flex()
+            .items_center()
+            .px(px(8.0))
+            .text_xs()
+            .opacity(0.5)
+            .text_color(rgb(colors.text_muted))
+            .child("MAIN"),
+
         // Decorative styles
-        GroupHeaderStyle::Bracketed => {
-            div()
-                .w(px(140.0))
-                .h(px(28.0))
-                .rounded(px(visual.radius_sm))
-                .bg(rgba((colors.background_secondary << 8) | 0x60))
-                .flex()
-                .items_center()
-                .px(px(8.0))
-                .text_xs()
-                .text_color(rgb(colors.text_secondary))
-                .child("[MAIN]")
-        }
-        GroupHeaderStyle::Quoted => {
-            div()
-                .w(px(140.0))
-                .h(px(28.0))
-                .rounded(px(visual.radius_sm))
-                .bg(rgba((colors.background_secondary << 8) | 0x60))
-                .flex()
-                .items_center()
-                .px(px(8.0))
-                .text_xs()
-                .text_color(rgb(colors.text_secondary))
-                .child("\"MAIN\"")
-        }
-        GroupHeaderStyle::Tagged => {
-            div()
-                .w(px(140.0))
-                .h(px(28.0))
-                .rounded(px(visual.radius_sm))
-                .bg(rgba((colors.background_secondary << 8) | 0x60))
-                .flex()
-                .items_center()
-                .px(px(8.0))
-                .child(
-                    div()
-                        .px(px(6.0))
-                        .py(px(1.0))
-                        .bg(rgba((colors.accent << 8) | 0x40))
-                        .rounded(px(2.0))
-                        .text_xs()
-                        .font_weight(gpui::FontWeight::MEDIUM)
-                        .text_color(rgb(colors.accent))
-                        .child("MAIN")
-                )
-        }
-        GroupHeaderStyle::Numbered => {
-            div()
-                .w(px(140.0))
-                .h(px(28.0))
-                .rounded(px(visual.radius_sm))
-                .bg(rgba((colors.background_secondary << 8) | 0x60))
-                .flex()
-                .flex_row()
-                .items_center()
-                .gap(px(6.0))
-                .px(px(8.0))
-                .child(
-                    div()
-                        .text_xs()
-                        .font_weight(gpui::FontWeight::BOLD)
-                        .text_color(rgb(colors.accent))
-                        .child("01.")
-                )
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(rgb(colors.text_secondary))
-                        .child("MAIN")
-                )
-        }
-        GroupHeaderStyle::IconPrefix => {
-            div()
-                .w(px(140.0))
-                .h(px(28.0))
-                .rounded(px(visual.radius_sm))
-                .bg(rgba((colors.background_secondary << 8) | 0x60))
-                .flex()
-                .flex_row()
-                .items_center()
-                .gap(px(6.0))
-                .px(px(8.0))
-                .child(
-                    div()
-                        .w(px(8.0))
-                        .h(px(8.0))
-                        .bg(rgb(colors.accent))
-                        .rounded(px(1.0))
-                )
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(rgb(colors.text_secondary))
-                        .child("MAIN")
-                )
-        }
+        GroupHeaderStyle::Bracketed => div()
+            .w(px(140.0))
+            .h(px(28.0))
+            .rounded(px(visual.radius_sm))
+            .bg(rgba((colors.background_secondary << 8) | 0x60))
+            .flex()
+            .items_center()
+            .px(px(8.0))
+            .text_xs()
+            .text_color(rgb(colors.text_secondary))
+            .child("[MAIN]"),
+        GroupHeaderStyle::Quoted => div()
+            .w(px(140.0))
+            .h(px(28.0))
+            .rounded(px(visual.radius_sm))
+            .bg(rgba((colors.background_secondary << 8) | 0x60))
+            .flex()
+            .items_center()
+            .px(px(8.0))
+            .text_xs()
+            .text_color(rgb(colors.text_secondary))
+            .child("\"MAIN\""),
+        GroupHeaderStyle::Tagged => div()
+            .w(px(140.0))
+            .h(px(28.0))
+            .rounded(px(visual.radius_sm))
+            .bg(rgba((colors.background_secondary << 8) | 0x60))
+            .flex()
+            .items_center()
+            .px(px(8.0))
+            .child(
+                div()
+                    .px(px(6.0))
+                    .py(px(1.0))
+                    .bg(rgba((colors.accent << 8) | 0x40))
+                    .rounded(px(2.0))
+                    .text_xs()
+                    .font_weight(gpui::FontWeight::MEDIUM)
+                    .text_color(rgb(colors.accent))
+                    .child("MAIN"),
+            ),
+        GroupHeaderStyle::Numbered => div()
+            .w(px(140.0))
+            .h(px(28.0))
+            .rounded(px(visual.radius_sm))
+            .bg(rgba((colors.background_secondary << 8) | 0x60))
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap(px(6.0))
+            .px(px(8.0))
+            .child(
+                div()
+                    .text_xs()
+                    .font_weight(gpui::FontWeight::BOLD)
+                    .text_color(rgb(colors.accent))
+                    .child("01."),
+            )
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(rgb(colors.text_secondary))
+                    .child("MAIN"),
+            ),
+        GroupHeaderStyle::IconPrefix => div()
+            .w(px(140.0))
+            .h(px(28.0))
+            .rounded(px(visual.radius_sm))
+            .bg(rgba((colors.background_secondary << 8) | 0x60))
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap(px(6.0))
+            .px(px(8.0))
+            .child(
+                div()
+                    .w(px(8.0))
+                    .h(px(8.0))
+                    .bg(rgb(colors.accent))
+                    .rounded(px(1.0)),
+            )
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(rgb(colors.text_secondary))
+                    .child("MAIN"),
+            ),
     };
-    
+
     item_div
         // Preview element
         .child(preview)
@@ -9736,14 +11021,14 @@ fn render_group_header_item(
                         .text_sm()
                         .font_weight(gpui::FontWeight::MEDIUM)
                         .text_color(rgb(colors.text_primary))
-                        .child(name_owned)
+                        .child(name_owned),
                 )
                 .child(
                     div()
                         .text_xs()
                         .text_color(rgb(colors.text_muted))
-                        .child(desc_owned)
-                )
+                        .child(desc_owned),
+                ),
         )
         .into_any_element()
 }
@@ -9757,7 +11042,7 @@ fn start_hotkey_listener(config: config::Config) {
                 return;
             }
         };
-        
+
         // Convert config hotkey to global_hotkey::Code
         let code = match config.hotkey.key.as_str() {
             "Semicolon" => Code::Semicolon,
@@ -9820,7 +11105,7 @@ fn start_hotkey_listener(config: config::Config) {
                 Code::Semicolon
             }
         };
-        
+
         // Convert modifiers from config strings to Modifiers flags
         let mut modifiers = Modifiers::empty();
         for modifier in &config.hotkey.modifiers {
@@ -9834,25 +11119,38 @@ fn start_hotkey_listener(config: config::Config) {
                 }
             }
         }
-        
+
         let hotkey = HotKey::new(Some(modifiers), code);
         let hotkey_id = hotkey.id();
-        
+
         let hotkey_display = format!(
             "{}{}",
             config.hotkey.modifiers.join("+"),
-            if config.hotkey.modifiers.is_empty() { String::new() } else { "+".to_string() }
+            if config.hotkey.modifiers.is_empty() {
+                String::new()
+            } else {
+                "+".to_string()
+            }
         ) + &config.hotkey.key;
-        
+
         if let Err(e) = manager.register(hotkey) {
-            logging::log("HOTKEY", &format!("Failed to register {}: {}", hotkey_display, e));
+            logging::log(
+                "HOTKEY",
+                &format!("Failed to register {}: {}", hotkey_display, e),
+            );
             return;
         }
-        
-        logging::log("HOTKEY", &format!("Registered global hotkey {} (id: {})", hotkey_display, hotkey_id));
-        
+
+        logging::log(
+            "HOTKEY",
+            &format!(
+                "Registered global hotkey {} (id: {})",
+                hotkey_display, hotkey_id
+            ),
+        );
+
         let receiver = GlobalHotKeyEvent::receiver();
-        
+
         loop {
             if let Ok(event) = receiver.recv() {
                 // Only respond to key PRESS, not release
@@ -9863,7 +11161,10 @@ fn start_hotkey_listener(config: config::Config) {
                     if hotkey_channel().0.send_blocking(()).is_err() {
                         logging::log("HOTKEY", "Hotkey channel closed, cannot send");
                     }
-                    logging::log("HOTKEY", &format!("{} pressed (trigger #{})", hotkey_display, count + 1));
+                    logging::log(
+                        "HOTKEY",
+                        &format!("{} pressed (trigger #{})", hotkey_display, count + 1),
+                    );
                 } else if event.id == hotkey_id && event.state == HotKeyState::Released {
                     // Ignore key release events - just log for debugging
                     logging::log("HOTKEY", &format!("{} released (ignored)", hotkey_display));
@@ -9926,12 +11227,12 @@ fn configure_as_floating_panel() {
             // (instead of forcing user back to the space where window was last visible)
             let collection_behavior: u64 = 2;
             let _: () = msg_send![window, setCollectionBehavior:collection_behavior];
-            
+
             // CRITICAL: Disable macOS window state restoration
             // This prevents macOS from remembering and restoring the window position
             // when the app is relaunched or the window is shown again
             let _: () = msg_send![window, setRestorable:false];
-            
+
             // Also disable the window's autosave frame name which can cause position caching
             let empty_string: id = msg_send![class!(NSString), string];
             let _: () = msg_send![window, setFrameAutosaveName:empty_string];
@@ -9941,7 +11242,10 @@ fn configure_as_floating_panel() {
                 "Configured window as floating panel (level=3, MoveToActiveSpace, restorable=false, no autosave)",
             );
         } else {
-            logging::log("PANEL", "Warning: No key window found to configure as panel");
+            logging::log(
+                "PANEL",
+                "Warning: No key window found to configure as panel",
+            );
         }
     }
 }
@@ -9958,79 +11262,97 @@ fn start_hotkey_event_handler(cx: &mut App, window: WindowHandle<ScriptListApp>)
 
 fn main() {
     logging::init();
-    
+
     // Write main PID file for orphan detection on crash
     if let Err(e) = PROCESS_MANAGER.write_main_pid() {
         logging::log("APP", &format!("Failed to write main PID file: {}", e));
     } else {
         logging::log("APP", "Main PID file written");
     }
-    
+
     // Clean up any orphaned processes from a previous crash
     let orphans_killed = PROCESS_MANAGER.cleanup_orphans();
     if orphans_killed > 0 {
-        logging::log("APP", &format!("Cleaned up {} orphaned process(es) from previous session", orphans_killed));
+        logging::log(
+            "APP",
+            &format!(
+                "Cleaned up {} orphaned process(es) from previous session",
+                orphans_killed
+            ),
+        );
     }
-    
+
     // Register signal handlers for graceful shutdown
     // Using libc directly since ctrlc crate is not available
     #[cfg(unix)]
     {
         extern "C" fn handle_signal(sig: libc::c_int) {
             logging::log("SIGNAL", &format!("Received signal {}", sig));
-            
+
             // Set shutdown flag to prevent new script spawns
             SHUTDOWN_REQUESTED.store(true, Ordering::SeqCst);
-            
+
             // Kill all tracked child processes
             logging::log("SIGNAL", "Killing all child processes");
             PROCESS_MANAGER.kill_all_processes();
-            
+
             // Remove main PID file
             PROCESS_MANAGER.remove_main_pid();
-            
+
             // For SIGINT/SIGTERM, exit gracefully
             // Note: We can't call cx.quit() from here since we're in a signal handler
             // The process will terminate after killing children
             logging::log("SIGNAL", "Exiting after signal cleanup");
             std::process::exit(0);
         }
-        
+
         unsafe {
             // Register handlers for common termination signals
             libc::signal(libc::SIGINT, handle_signal as libc::sighandler_t);
             libc::signal(libc::SIGTERM, handle_signal as libc::sighandler_t);
             libc::signal(libc::SIGHUP, handle_signal as libc::sighandler_t);
-            logging::log("APP", "Signal handlers registered (SIGINT, SIGTERM, SIGHUP)");
+            logging::log(
+                "APP",
+                "Signal handlers registered (SIGINT, SIGTERM, SIGHUP)",
+            );
         }
     }
-    
+
     // Initialize clipboard history monitoring (background thread)
     if let Err(e) = clipboard_history::init_clipboard_history() {
-        logging::log("APP", &format!("Failed to initialize clipboard history: {}", e));
+        logging::log(
+            "APP",
+            &format!("Failed to initialize clipboard history: {}", e),
+        );
     } else {
         logging::log("APP", "Clipboard history monitoring initialized");
     }
-    
+
     // Initialize text expansion system (background thread with keyboard monitoring)
     // This must be done early, before the GPUI run loop starts
     #[cfg(target_os = "macos")]
     {
         use expand_manager::ExpandManager;
-        
+
         // Spawn initialization in a thread to not block startup
         std::thread::spawn(move || {
             logging::log("EXPAND", "Initializing text expansion system");
-            
+
             // Check accessibility permissions first
             if !ExpandManager::has_accessibility_permission() {
-                logging::log("EXPAND", "Accessibility permissions not granted - text expansion disabled");
-                logging::log("EXPAND", "Enable in System Preferences > Privacy & Security > Accessibility");
+                logging::log(
+                    "EXPAND",
+                    "Accessibility permissions not granted - text expansion disabled",
+                );
+                logging::log(
+                    "EXPAND",
+                    "Enable in System Preferences > Privacy & Security > Accessibility",
+                );
                 return;
             }
-            
+
             let mut manager = ExpandManager::new();
-            
+
             // Load scriptlets with expand triggers
             match manager.load_scriptlets() {
                 Ok(count) => {
@@ -10045,56 +11367,88 @@ fn main() {
                     return;
                 }
             }
-            
+
             // Enable keyboard monitoring
             match manager.enable() {
                 Ok(()) => {
                     logging::log("EXPAND", "Text expansion system enabled");
-                    
+
                     // List registered triggers
                     for (trigger, name) in manager.list_triggers() {
                         logging::log("EXPAND", &format!("  Trigger '{}' -> {}", trigger, name));
                     }
-                    
+
                     // Keep the manager alive - it will run until the process exits
                     // The keyboard monitor thread is managed by the KeyboardMonitor
                     std::mem::forget(manager);
                 }
                 Err(e) => {
-                    logging::log("EXPAND", &format!("Failed to enable text expansion: {:?}", e));
+                    logging::log(
+                        "EXPAND",
+                        &format!("Failed to enable text expansion: {:?}", e),
+                    );
                 }
             }
         });
     }
-    
+
     // Load config early so we can use it for hotkey registration AND pass to ScriptListApp
     // This avoids duplicate config::load_config() calls (~100-300ms startup savings)
     let loaded_config = config::load_config();
-    logging::log("APP", &format!("Loaded config: hotkey={:?}+{}, bun_path={:?}", 
-        loaded_config.hotkey.modifiers, loaded_config.hotkey.key, loaded_config.bun_path));
-    
+    logging::log(
+        "APP",
+        &format!(
+            "Loaded config: hotkey={:?}+{}, bun_path={:?}",
+            loaded_config.hotkey.modifiers, loaded_config.hotkey.key, loaded_config.bun_path
+        ),
+    );
+
     // Clone before start_hotkey_listener consumes original
     let config_for_app = loaded_config.clone();
-    
+
     start_hotkey_listener(loaded_config);
-    
+
     let (mut appearance_watcher, appearance_rx) = watcher::AppearanceWatcher::new();
     if let Err(e) = appearance_watcher.start() {
         logging::log("APP", &format!("Failed to start appearance watcher: {}", e));
     }
-    
+
     let (mut config_watcher, config_rx) = watcher::ConfigWatcher::new();
     if let Err(e) = config_watcher.start() {
         logging::log("APP", &format!("Failed to start config watcher: {}", e));
     }
-    
+
     let (mut script_watcher, script_rx) = watcher::ScriptWatcher::new();
     if let Err(e) = script_watcher.start() {
         logging::log("APP", &format!("Failed to start script watcher: {}", e));
     }
+
+    // Initialize script scheduler
+    // Creates the scheduler and scans for scripts with // Cron: or // Schedule: metadata
+    let (mut scheduler, scheduler_rx) = scheduler::Scheduler::new();
+    let scheduled_count = scripts::register_scheduled_scripts(&scheduler);
+    logging::log(
+        "APP",
+        &format!("Registered {} scheduled scripts", scheduled_count),
+    );
+
+    // Start the scheduler background thread (checks every 30 seconds for due scripts)
+    if scheduled_count > 0 {
+        if let Err(e) = scheduler.start() {
+            logging::log("APP", &format!("Failed to start scheduler: {}", e));
+        } else {
+            logging::log("APP", "Scheduler started successfully");
+        }
+    } else {
+        logging::log("APP", "No scheduled scripts found, scheduler not started");
+    }
+
+    // Wrap scheduler in Arc<Mutex<>> for thread-safe access (needed for re-scanning on file changes)
+    let scheduler = Arc::new(Mutex::new(scheduler));
+
     Application::new().run(move |cx: &mut App| {
         logging::log("APP", "GPUI Application starting");
-        
+
         // Initialize tray icon and menu
         // MUST be done after Application::new() creates the NSApplication
         let tray_manager = match TrayManager::new() {
@@ -10107,11 +11461,11 @@ fn main() {
                 None
             }
         };
-        
+
         // Calculate window bounds: centered on display with mouse, at eye-line height
         let window_size = size(px(750.), initial_window_height());
         let bounds = calculate_eye_line_bounds_on_mouse_display(window_size, cx);
-        
+
         let window: WindowHandle<ScriptListApp> = cx.open_window(
             WindowOptions {
                 window_bounds: Some(WindowBounds::Windowed(bounds)),
@@ -10126,7 +11480,7 @@ fn main() {
             },
         )
         .unwrap();
-        
+
         window
             .update(cx, |view: &mut ScriptListApp, window: &mut Window, cx: &mut Context<ScriptListApp>| {
                 let focus_handle = view.focus_handle(cx);
@@ -10134,19 +11488,19 @@ fn main() {
                 logging::log("APP", "Focus set on ScriptListApp");
             })
             .unwrap();
-        
+
         // Register the main window with WindowManager before tray init
         // This must happen after GPUI creates the window but before tray creates its windows
         // so we can reliably find our main window by its expected size (~750x500)
         window_manager::find_and_register_main_window();
-        
+
         // Window starts hidden - no activation, no panel configuration yet
         // Panel will be configured on first show via hotkey
         // WINDOW_VISIBLE is already false by default (static initializer)
         logging::log("HOTKEY", "Window created but not shown (use hotkey to show)");
-        
+
         start_hotkey_event_handler(cx, window);
-        
+
         // Appearance change watcher - event-driven with async_channel
         let window_for_appearance = window;
         cx.spawn(async move |cx: &mut gpui::AsyncApp| {
@@ -10161,13 +11515,13 @@ fn main() {
             }
             logging::log("APP", "Appearance watcher channel closed");
         }).detach();
-        
+
         // Config reload watcher - watches ~/.kenv/config.ts for changes
         let window_for_config = window;
         cx.spawn(async move |cx: &mut gpui::AsyncApp| {
             loop {
                 Timer::after(std::time::Duration::from_millis(200)).await;
-                
+
                 if config_rx.try_recv().is_ok() {
                     logging::log("APP", "Config file changed, reloading");
                     let _ = cx.update(|cx| {
@@ -10178,15 +11532,26 @@ fn main() {
                 }
             }
         }).detach();
-        
+
         // Script/scriptlets reload watcher - watches ~/.kenv/scripts/ and ~/.kenv/scriptlets/
+        // Also re-scans for scheduled scripts to pick up new/modified schedules
         let window_for_scripts = window;
+        let scheduler_for_scripts = scheduler.clone();
         cx.spawn(async move |cx: &mut gpui::AsyncApp| {
             loop {
                 Timer::after(std::time::Duration::from_millis(200)).await;
-                
+
                 if script_rx.try_recv().is_ok() {
                     logging::log("APP", "Scripts or scriptlets changed, reloading");
+
+                    // Re-scan for scheduled scripts when files change
+                    if let Ok(scheduler_guard) = scheduler_for_scripts.lock() {
+                        let new_count = scripts::register_scheduled_scripts(&scheduler_guard);
+                        if new_count > 0 {
+                            logging::log("APP", &format!("Re-registered {} scheduled scripts after file change", new_count));
+                        }
+                    }
+
                     let _ = cx.update(|cx| {
                         let _ = window_for_scripts.update(cx, |view: &mut ScriptListApp, _window: &mut Window, ctx: &mut Context<ScriptListApp>| {
                             view.refresh_scripts(ctx);
@@ -10195,26 +11560,123 @@ fn main() {
                 }
             }
         }).detach();
-        
+
         // NOTE: Prompt message listener is now spawned per-script in execute_interactive()
         // using event-driven async_channel instead of 50ms polling
-        
+
+        // Scheduler event handler - runs scripts when their cron schedule triggers
+        // Uses std::sync::mpsc::Receiver which requires a polling approach
+        let _window_for_scheduler = window;
+        std::thread::spawn(move || {
+            logging::log("APP", "Scheduler event handler started");
+
+            loop {
+                // Use recv_timeout to periodically check for events without blocking forever
+                match scheduler_rx.recv_timeout(std::time::Duration::from_secs(1)) {
+                    Ok(event) => {
+                        match event {
+                            scheduler::SchedulerEvent::RunScript(path) => {
+                                logging::log("SCHEDULER", &format!("Executing scheduled script: {}", path.display()));
+
+                                // Execute the script using the existing executor infrastructure
+                                // This spawns it in the background without blocking the scheduler
+                                let path_str = path.to_string_lossy().to_string();
+
+                                // Use bun to run the script directly (non-interactive for scheduled scripts)
+                                // Find bun path (same logic as executor)
+                                let bun_path = std::env::var("BUN_PATH")
+                                    .ok()
+                                    .or_else(|| {
+                                        // Check common locations
+                                        for candidate in &[
+                                            "/opt/homebrew/bin/bun",
+                                            "/usr/local/bin/bun",
+                                            std::env::var("HOME").ok().map(|h| format!("{}/.bun/bin/bun", h)).unwrap_or_default().as_str(),
+                                        ] {
+                                            if std::path::Path::new(candidate).exists() {
+                                                return Some(candidate.to_string());
+                                            }
+                                        }
+                                        None
+                                    })
+                                    .unwrap_or_else(|| "bun".to_string());
+
+                                // Spawn bun process to run the script
+                                match std::process::Command::new(&bun_path)
+                                    .arg("run")
+                                    .arg("--preload")
+                                    .arg(format!("{}/.kenv/sdk/kit-sdk.ts", std::env::var("HOME").unwrap_or_default()))
+                                    .arg(&path_str)
+                                    .stdout(std::process::Stdio::piped())
+                                    .stderr(std::process::Stdio::piped())
+                                    .spawn()
+                                {
+                                    Ok(child) => {
+                                        let pid = child.id();
+                                        // Track the process
+                                        PROCESS_MANAGER.register_process(pid, &path_str);
+                                        logging::log("SCHEDULER", &format!("Spawned scheduled script PID {}: {}", pid, path_str));
+
+                                        // Wait for completion in a separate thread to not block scheduler
+                                        let path_for_log = path_str.clone();
+                                        std::thread::spawn(move || {
+                                            match child.wait_with_output() {
+                                                Ok(output) => {
+                                                    // Unregister the process now that it's done
+                                                    PROCESS_MANAGER.unregister_process(pid);
+
+                                                    if output.status.success() {
+                                                        logging::log("SCHEDULER", &format!("Scheduled script completed: {}", path_for_log));
+                                                    } else {
+                                                        let stderr = String::from_utf8_lossy(&output.stderr);
+                                                        logging::log("SCHEDULER", &format!("Scheduled script failed: {} - {}", path_for_log, stderr));
+                                                    }
+                                                }
+                                                Err(e) => {
+                                                    // Unregister on error too
+                                                    PROCESS_MANAGER.unregister_process(pid);
+                                                    logging::log("SCHEDULER", &format!("Scheduled script error: {} - {}", path_for_log, e));
+                                                }
+                                            }
+                                        });
+                                    }
+                                    Err(e) => {
+                                        logging::log("SCHEDULER", &format!("Failed to spawn scheduled script: {} - {}", path_str, e));
+                                    }
+                                }
+                            }
+                            scheduler::SchedulerEvent::Error(msg) => {
+                                logging::log("SCHEDULER", &format!("Scheduler error: {}", msg));
+                            }
+                        }
+                    }
+                    Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                        // Normal timeout, continue loop
+                    }
+                    Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                        logging::log("APP", "Scheduler event channel disconnected, exiting handler");
+                        break;
+                    }
+                }
+            }
+        });
+
         // Test command file watcher - allows smoke tests to trigger script execution
         let window_for_test = window;
         cx.spawn(async move |cx: &mut gpui::AsyncApp| {
             let cmd_file = std::path::PathBuf::from("/tmp/script-kit-gpui-cmd.txt");
             loop {
                 Timer::after(std::time::Duration::from_millis(500)).await;
-                
+
                 if cmd_file.exists() {
                     if let Ok(content) = std::fs::read_to_string(&cmd_file) {
                         let _ = std::fs::remove_file(&cmd_file); // Remove immediately to prevent re-processing
-                        
+
                         for line in content.lines() {
                             if line.starts_with("run:") {
                                 let script_name = line.strip_prefix("run:").unwrap_or("").trim();
                                 logging::log("TEST", &format!("Test command: run script '{}'", script_name));
-                                
+
                                 let script_name_owned = script_name.to_string();
                                 let _ = cx.update(|cx| {
                                     let _ = window_for_test.update(cx, |view: &mut ScriptListApp, _window: &mut Window, ctx: &mut Context<ScriptListApp>| {
@@ -10233,14 +11695,14 @@ fn main() {
                 }
             }
         }).detach();
-        
+
         // External command listener - receives commands via stdin (event-driven, no polling)
         let stdin_rx = start_stdin_listener();
         let window_for_stdin = window;
-        
+
         // Track if we've received any stdin commands (for timeout warning)
         static STDIN_RECEIVED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-        
+
         // Spawn a timeout warning task - helps AI agents detect when they forgot to use stdin protocol
         cx.spawn(async move |_cx: &mut gpui::AsyncApp| {
             Timer::after(std::time::Duration::from_secs(2)).await;
@@ -10258,16 +11720,16 @@ fn main() {
                 logging::log("STDIN", "");
             }
         }).detach();
-        
+
         cx.spawn(async move |cx: &mut gpui::AsyncApp| {
             logging::log("STDIN", "Async stdin command handler started");
-            
+
             // Event-driven: recv().await yields until a command arrives
             while let Ok(cmd) = stdin_rx.recv().await {
                 // Mark that we've received stdin (clears the timeout warning)
                 STDIN_RECEIVED.store(true, std::sync::atomic::Ordering::SeqCst);
                 logging::log("STDIN", &format!("Processing external command: {:?}", cmd));
-                
+
                 let _ = cx.update(|cx| {
                     let _ = window_for_stdin.update(cx, |view: &mut ScriptListApp, window: &mut Window, ctx: &mut Context<ScriptListApp>| {
                         match cmd {
@@ -10279,7 +11741,7 @@ fn main() {
                                 window.activate_window();
                                 let focus_handle = view.focus_handle(ctx);
                                 window.focus(&focus_handle, ctx);
-                                
+
                                 // Send RunScript message to be handled
                                 view.handle_prompt_message(PromptMessage::RunScript { path: path.clone() }, ctx);
                             }
@@ -10339,16 +11801,16 @@ fn main() {
                             }
                             ExternalCommand::SimulateKey { ref key, ref modifiers } => {
                                 logging::log("STDIN", &format!("Simulating key: '{}' with modifiers: {:?}", key, modifiers));
-                                
+
                                 // Parse modifiers
                                 let has_cmd = modifiers.iter().any(|m| m == "cmd" || m == "meta" || m == "command");
                                 let _has_shift = modifiers.iter().any(|m| m == "shift");
                                 let _has_alt = modifiers.iter().any(|m| m == "alt" || m == "option");
                                 let _has_ctrl = modifiers.iter().any(|m| m == "ctrl" || m == "control");
-                                
+
                                 // Handle key based on current view
                                 let key_lower = key.to_lowercase();
-                                
+
                                 match &view.current_view {
                                     AppView::ScriptList => {
                                         // Main script list key handling
@@ -10423,10 +11885,10 @@ fn main() {
                     });
                 });
             }
-            
+
             logging::log("STDIN", "Async stdin command handler exiting");
         }).detach();
-        
+
         // Tray menu event handler - polls for menu events
         // Clone config for use in tray handler
         let config_for_tray = config::load_config();
@@ -10434,11 +11896,11 @@ fn main() {
             let window_for_tray = window;
             cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                 logging::log("TRAY", "Tray menu event handler started");
-                
+
                 loop {
                     // Poll for tray menu events every 100ms
                     Timer::after(std::time::Duration::from_millis(100)).await;
-                    
+
                     // Check for menu events
                     if let Ok(event) = tray_mgr.menu_event_receiver().try_recv() {
                         match tray_mgr.match_menu_event(&event) {
@@ -10447,31 +11909,31 @@ fn main() {
                                 let _ = cx.update(|cx| {
                                     // Show and focus window (same logic as hotkey handler)
                                     WINDOW_VISIBLE.store(true, Ordering::SeqCst);
-                                    
+
                                     // Calculate new bounds on display with mouse
                                     let window_size = size(px(750.), initial_window_height());
                                     let new_bounds = calculate_eye_line_bounds_on_mouse_display(window_size, cx);
-                                    
+
                                     // Move window first
                                     move_first_window_to_bounds(&new_bounds);
-                                    
+
                                     // Activate the app
                                     cx.activate(true);
-                                    
+
                                     // Configure as floating panel on first show
                                     if !PANEL_CONFIGURED.swap(true, Ordering::SeqCst) {
                                         configure_as_floating_panel();
                                     }
-                                    
+
                                     // Focus the window
                                     let _ = window_for_tray.update(cx, |view: &mut ScriptListApp, win: &mut Window, ctx: &mut Context<ScriptListApp>| {
                                         win.activate_window();
                                         let focus_handle = view.focus_handle(ctx);
                                         win.focus(&focus_handle, ctx);
-                                        
+
                                         // Reset if needed and ensure proper sizing
                                         reset_resize_debounce();
-                                        
+
                                         if NEEDS_RESET.compare_exchange(true, false, Ordering::SeqCst, Ordering::SeqCst).is_ok() {
                                             view.reset_to_script_list(ctx);
                                         } else {
@@ -10485,7 +11947,7 @@ fn main() {
                                 // Open config file in editor
                                 let editor = config_for_tray.get_editor();
                                 let config_path = shellexpand::tilde("~/.kenv/config.ts").to_string();
-                                
+
                                 logging::log("TRAY", &format!("Opening {} in editor '{}'", config_path, editor));
                                 match std::process::Command::new(&editor)
                                     .arg(&config_path)
@@ -10511,11 +11973,11 @@ fn main() {
                         }
                     }
                 }
-                
+
                 logging::log("TRAY", "Tray menu event handler exiting");
             }).detach();
         }
-        
+
         logging::log("APP", "Application ready - Cmd+; to show, Esc to hide, Cmd+K for actions");
     });
 }

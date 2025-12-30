@@ -10,10 +10,10 @@
 //! # Usage
 //! ```ignore
 //! use designs::icon_variations::{IconName, IconStyle};
-//! 
+//!
 //! // Get the SVG path for an icon
 //! let path = IconName::File.path();
-//! 
+//!
 //! // Render with GPUI
 //! svg().path(path).size(px(16.)).color(rgb(0xffffff))
 //! ```
@@ -46,7 +46,7 @@ impl IconCategory {
             Self::Media => "Media",
         }
     }
-    
+
     /// Get all categories
     pub fn all() -> &'static [IconCategory] {
         &[
@@ -57,7 +57,7 @@ impl IconCategory {
             Self::Media,
         ]
     }
-    
+
     /// Get icons belonging to this category
     pub fn icons(&self) -> Vec<IconName> {
         IconName::all()
@@ -69,7 +69,7 @@ impl IconCategory {
 }
 
 /// Available SVG icons from assets/icons/
-/// 
+///
 /// These map to actual .svg files that can be rendered with GPUI's svg() element.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IconName {
@@ -78,7 +78,7 @@ pub enum IconName {
     FileCode,
     Folder,
     FolderOpen,
-    
+
     // Actions
     Plus,
     Trash,
@@ -87,20 +87,20 @@ pub enum IconName {
     MagnifyingGlass,
     Terminal,
     Code,
-    
+
     // Status
     Check,
     Star,
     StarFilled,
     BoltFilled,
     BoltOutlined,
-    
+
     // Arrows
     ArrowRight,
     ArrowDown,
     ChevronRight,
     ChevronDown,
-    
+
     // Media
     PlayFilled,
     PlayOutlined,
@@ -139,12 +139,12 @@ impl IconName {
             Self::PlayOutlined,
         ]
     }
-    
+
     /// Get total count of icons
     pub fn count() -> usize {
         Self::all().len()
     }
-    
+
     /// Get the display name
     pub fn name(&self) -> &'static str {
         match self {
@@ -172,7 +172,7 @@ impl IconName {
             Self::PlayOutlined => "Play Outlined",
         }
     }
-    
+
     /// Get the description
     pub fn description(&self) -> &'static str {
         match self {
@@ -200,7 +200,7 @@ impl IconName {
             Self::PlayOutlined => "Run/execute (outline)",
         }
     }
-    
+
     /// Get the SVG file path (relative to assets/)
     #[allow(dead_code)]
     pub fn path(&self) -> Arc<str> {
@@ -230,7 +230,7 @@ impl IconName {
         };
         format!("icons/{}.svg", file_name).into()
     }
-    
+
     /// Get the full external path for GPUI svg().external_path()
     /// Returns a &'static str for GPUI compatibility
     pub fn external_path(&self) -> &'static str {
@@ -238,38 +238,69 @@ impl IconName {
             Self::File => concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/file.svg"),
             Self::FileCode => concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/file_code.svg"),
             Self::Folder => concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/folder.svg"),
-            Self::FolderOpen => concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/folder_open.svg"),
+            Self::FolderOpen => {
+                concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/folder_open.svg")
+            }
             Self::Plus => concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/plus.svg"),
             Self::Trash => concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/trash.svg"),
             Self::Copy => concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/copy.svg"),
             Self::Settings => concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/settings.svg"),
-            Self::MagnifyingGlass => concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/magnifying_glass.svg"),
+            Self::MagnifyingGlass => concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/assets/icons/magnifying_glass.svg"
+            ),
             Self::Terminal => concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/terminal.svg"),
             Self::Code => concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/code.svg"),
             Self::Check => concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/check.svg"),
             Self::Star => concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/star.svg"),
-            Self::StarFilled => concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/star_filled.svg"),
-            Self::BoltFilled => concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/bolt_filled.svg"),
-            Self::BoltOutlined => concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/bolt_outlined.svg"),
-            Self::ArrowRight => concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/arrow_right.svg"),
+            Self::StarFilled => {
+                concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/star_filled.svg")
+            }
+            Self::BoltFilled => {
+                concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/bolt_filled.svg")
+            }
+            Self::BoltOutlined => concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/assets/icons/bolt_outlined.svg"
+            ),
+            Self::ArrowRight => {
+                concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/arrow_right.svg")
+            }
             Self::ArrowDown => concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/arrow_down.svg"),
-            Self::ChevronRight => concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/chevron_right.svg"),
-            Self::ChevronDown => concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/chevron_down.svg"),
-            Self::PlayFilled => concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/play_filled.svg"),
-            Self::PlayOutlined => concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/play_outlined.svg"),
+            Self::ChevronRight => concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/assets/icons/chevron_right.svg"
+            ),
+            Self::ChevronDown => {
+                concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/chevron_down.svg")
+            }
+            Self::PlayFilled => {
+                concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/play_filled.svg")
+            }
+            Self::PlayOutlined => concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/assets/icons/play_outlined.svg"
+            ),
         }
     }
-    
+
     /// Get the category this icon belongs to
     pub fn category(&self) -> IconCategory {
         match self {
             Self::File | Self::FileCode | Self::Folder | Self::FolderOpen => IconCategory::Files,
-            Self::Plus | Self::Trash | Self::Copy | Self::Settings | 
-            Self::MagnifyingGlass | Self::Terminal | Self::Code => IconCategory::Actions,
-            Self::Check | Self::Star | Self::StarFilled | 
-            Self::BoltFilled | Self::BoltOutlined => IconCategory::Status,
-            Self::ArrowRight | Self::ArrowDown | 
-            Self::ChevronRight | Self::ChevronDown => IconCategory::Arrows,
+            Self::Plus
+            | Self::Trash
+            | Self::Copy
+            | Self::Settings
+            | Self::MagnifyingGlass
+            | Self::Terminal
+            | Self::Code => IconCategory::Actions,
+            Self::Check | Self::Star | Self::StarFilled | Self::BoltFilled | Self::BoltOutlined => {
+                IconCategory::Status
+            }
+            Self::ArrowRight | Self::ArrowDown | Self::ChevronRight | Self::ChevronDown => {
+                IconCategory::Arrows
+            }
             Self::PlayFilled | Self::PlayOutlined => IconCategory::Media,
         }
     }
@@ -309,12 +340,12 @@ impl IconStyle {
             Self::SquareBackground,
         ]
     }
-    
+
     /// Get style count
     pub fn count() -> usize {
         Self::all().len()
     }
-    
+
     /// Get the display name
     pub fn name(&self) -> &'static str {
         match self {
@@ -327,7 +358,7 @@ impl IconStyle {
             Self::SquareBackground => "Square BG",
         }
     }
-    
+
     /// Get the description
     pub fn description(&self) -> &'static str {
         match self {
@@ -340,7 +371,7 @@ impl IconStyle {
             Self::SquareBackground => "Rounded square background",
         }
     }
-    
+
     /// Get the icon size in pixels
     pub fn size(&self) -> f32 {
         match self {
@@ -349,7 +380,7 @@ impl IconStyle {
             _ => 16.0,
         }
     }
-    
+
     /// Get the opacity (0.0-1.0)
     pub fn opacity(&self) -> f32 {
         match self {
@@ -401,24 +432,26 @@ impl IconConfig {
     pub fn from_style(style: IconStyle, base_color: u32, accent_color: u32) -> Self {
         let size = style.size();
         let opacity = style.opacity();
-        
+
         let (color, background) = match style {
             IconStyle::Accent => (accent_color, None),
-            IconStyle::CircleBackground => {
-                (base_color, Some(IconBackground::Circle {
+            IconStyle::CircleBackground => (
+                base_color,
+                Some(IconBackground::Circle {
                     color: 0x333333,
                     radius: size + 8.0,
-                }))
-            }
-            IconStyle::SquareBackground => {
-                (base_color, Some(IconBackground::RoundedSquare {
+                }),
+            ),
+            IconStyle::SquareBackground => (
+                base_color,
+                Some(IconBackground::RoundedSquare {
                     color: 0x333333,
                     radius: 4.0,
-                }))
-            }
+                }),
+            ),
             _ => (base_color, None),
         };
-        
+
         Self {
             size,
             color,
@@ -442,26 +475,26 @@ pub fn total_icon_count() -> usize {
 }
 
 /// Convert a string icon name to IconName enum
-/// 
+///
 /// Supports various formats:
 /// - Exact match: "File", "FileCode", "Terminal"
 /// - Lowercase: "file", "terminal", "code"  
 /// - With spaces: "file code", "folder open"
 /// - Kebab case: "file-code", "folder-open"
 /// - Snake case: "file_code", "folder_open"
-/// 
+///
 /// Returns None if the name doesn't match any known icon.
 pub fn icon_name_from_str(name: &str) -> Option<IconName> {
     // Normalize: lowercase, replace separators with nothing
     let normalized = name.to_lowercase().replace(['-', '_', ' '], "");
-    
+
     match normalized.as_str() {
         // Files
         "file" => Some(IconName::File),
         "filecode" => Some(IconName::FileCode),
         "folder" => Some(IconName::Folder),
         "folderopen" => Some(IconName::FolderOpen),
-        
+
         // Actions
         "plus" | "add" => Some(IconName::Plus),
         "trash" | "delete" | "remove" => Some(IconName::Trash),
@@ -470,24 +503,24 @@ pub fn icon_name_from_str(name: &str) -> Option<IconName> {
         "magnifyingglass" | "search" | "find" => Some(IconName::MagnifyingGlass),
         "terminal" | "console" | "shell" | "cli" => Some(IconName::Terminal),
         "code" | "script" | "dev" => Some(IconName::Code),
-        
-        // Status  
+
+        // Status
         "check" | "checkmark" | "done" | "complete" => Some(IconName::Check),
         "star" | "favorite" => Some(IconName::Star),
         "starfilled" => Some(IconName::StarFilled),
         "boltfilled" | "bolt" | "lightning" | "flash" => Some(IconName::BoltFilled),
         "boltoutlined" => Some(IconName::BoltOutlined),
-        
+
         // Arrows
         "arrowright" | "right" => Some(IconName::ArrowRight),
         "arrowdown" | "down" => Some(IconName::ArrowDown),
         "chevronright" => Some(IconName::ChevronRight),
         "chevrondown" => Some(IconName::ChevronDown),
-        
+
         // Media
         "playfilled" | "play" | "run" | "execute" => Some(IconName::PlayFilled),
         "playoutlined" => Some(IconName::PlayOutlined),
-        
+
         _ => None,
     }
 }
@@ -495,70 +528,94 @@ pub fn icon_name_from_str(name: &str) -> Option<IconName> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_icon_count() {
         assert_eq!(IconName::count(), 22);
     }
-    
+
     #[test]
     fn test_style_count() {
         assert_eq!(IconStyle::count(), 7);
     }
-    
+
     #[test]
     fn test_all_icons_have_paths() {
         for icon in IconName::all() {
             let path = icon.path();
-            assert!(path.ends_with(".svg"), "Icon {:?} path doesn't end with .svg", icon);
-            assert!(path.starts_with("icons/"), "Icon {:?} path doesn't start with icons/", icon);
+            assert!(
+                path.ends_with(".svg"),
+                "Icon {:?} path doesn't end with .svg",
+                icon
+            );
+            assert!(
+                path.starts_with("icons/"),
+                "Icon {:?} path doesn't start with icons/",
+                icon
+            );
         }
     }
-    
+
     #[test]
     fn test_category_coverage() {
         let mut covered = 0;
         for cat in IconCategory::all() {
             covered += cat.icons().len();
         }
-        assert_eq!(covered, IconName::count(), "Categories don't cover all icons");
+        assert_eq!(
+            covered,
+            IconName::count(),
+            "Categories don't cover all icons"
+        );
     }
-    
+
     #[test]
     fn test_icon_name_from_str() {
         // Exact match
         assert_eq!(icon_name_from_str("File"), Some(IconName::File));
         assert_eq!(icon_name_from_str("Terminal"), Some(IconName::Terminal));
-        
+
         // Lowercase
         assert_eq!(icon_name_from_str("file"), Some(IconName::File));
         assert_eq!(icon_name_from_str("code"), Some(IconName::Code));
-        
+
         // With spaces
         assert_eq!(icon_name_from_str("file code"), Some(IconName::FileCode));
-        assert_eq!(icon_name_from_str("folder open"), Some(IconName::FolderOpen));
-        
+        assert_eq!(
+            icon_name_from_str("folder open"),
+            Some(IconName::FolderOpen)
+        );
+
         // Kebab case
         assert_eq!(icon_name_from_str("file-code"), Some(IconName::FileCode));
-        assert_eq!(icon_name_from_str("bolt-filled"), Some(IconName::BoltFilled));
-        
+        assert_eq!(
+            icon_name_from_str("bolt-filled"),
+            Some(IconName::BoltFilled)
+        );
+
         // Snake case
         assert_eq!(icon_name_from_str("file_code"), Some(IconName::FileCode));
-        assert_eq!(icon_name_from_str("magnifying_glass"), Some(IconName::MagnifyingGlass));
-        
+        assert_eq!(
+            icon_name_from_str("magnifying_glass"),
+            Some(IconName::MagnifyingGlass)
+        );
+
         // Aliases
-        assert_eq!(icon_name_from_str("search"), Some(IconName::MagnifyingGlass));
+        assert_eq!(
+            icon_name_from_str("search"),
+            Some(IconName::MagnifyingGlass)
+        );
         assert_eq!(icon_name_from_str("add"), Some(IconName::Plus));
         assert_eq!(icon_name_from_str("delete"), Some(IconName::Trash));
         assert_eq!(icon_name_from_str("gear"), Some(IconName::Settings));
         assert_eq!(icon_name_from_str("lightning"), Some(IconName::BoltFilled));
         assert_eq!(icon_name_from_str("run"), Some(IconName::PlayFilled));
-        
+
         // Unknown
         assert_eq!(icon_name_from_str("unknown"), None);
         assert_eq!(icon_name_from_str(""), None);
     }
-    
+
     #[test]
     fn test_style_sizes() {
         assert_eq!(IconStyle::Small.size(), 12.0);

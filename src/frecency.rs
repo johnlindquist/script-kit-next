@@ -140,11 +140,12 @@ impl FrecencyStore {
             return Ok(());
         }
 
-        let content = std::fs::read_to_string(&self.file_path)
-            .with_context(|| format!("Failed to read frecency file: {}", self.file_path.display()))?;
+        let content = std::fs::read_to_string(&self.file_path).with_context(|| {
+            format!("Failed to read frecency file: {}", self.file_path.display())
+        })?;
 
-        let data: FrecencyData = serde_json::from_str(&content)
-            .with_context(|| "Failed to parse frecency JSON")?;
+        let data: FrecencyData =
+            serde_json::from_str(&content).with_context(|| "Failed to parse frecency JSON")?;
 
         self.entries = data.entries;
 
@@ -181,11 +182,15 @@ impl FrecencyStore {
             entries: self.entries.clone(),
         };
 
-        let json = serde_json::to_string_pretty(&data)
-            .context("Failed to serialize frecency data")?;
+        let json =
+            serde_json::to_string_pretty(&data).context("Failed to serialize frecency data")?;
 
-        std::fs::write(&self.file_path, json)
-            .with_context(|| format!("Failed to write frecency file: {}", self.file_path.display()))?;
+        std::fs::write(&self.file_path, json).with_context(|| {
+            format!(
+                "Failed to write frecency file: {}",
+                self.file_path.display()
+            )
+        })?;
 
         info!(
             path = %self.file_path.display(),
@@ -205,7 +210,12 @@ impl FrecencyStore {
     pub fn record_use(&mut self, path: &str) {
         if let Some(entry) = self.entries.get_mut(path) {
             entry.record_use();
-            debug!(path = path, count = entry.count, score = entry.score, "Updated frecency entry");
+            debug!(
+                path = path,
+                count = entry.count,
+                score = entry.score,
+                "Updated frecency entry"
+            );
         } else {
             let entry = FrecencyEntry::new();
             debug!(path = path, "Created new frecency entry");
@@ -218,17 +228,15 @@ impl FrecencyStore {
     ///
     /// Returns 0.0 if the script has never been used.
     pub fn get_score(&self, path: &str) -> f64 {
-        self.entries
-            .get(path)
-            .map(|e| e.score)
-            .unwrap_or(0.0)
+        self.entries.get(path).map(|e| e.score).unwrap_or(0.0)
     }
 
     /// Get the top N items by frecency score
     ///
     /// Returns a vector of (path, score) tuples sorted by score descending.
     pub fn get_recent_items(&self, limit: usize) -> Vec<(String, f64)> {
-        let mut items: Vec<_> = self.entries
+        let mut items: Vec<_> = self
+            .entries
             .iter()
             .map(|(path, entry)| (path.clone(), entry.score))
             .collect();
@@ -331,7 +339,7 @@ mod tests {
         // Score right now should be close to count
         let now = current_timestamp();
         let score = calculate_score(5, now);
-        
+
         // Should be approximately 5 (allowing for tiny time difference)
         assert!((score - 5.0).abs() < 0.01);
     }
@@ -555,7 +563,8 @@ mod tests {
         let (_, path) = create_test_store();
 
         // Write data with stale scores
-        let old_data = r#"{"entries": {"/script.ts": {"count": 10, "last_used": 0, "score": 100.0}}}"#;
+        let old_data =
+            r#"{"entries": {"/script.ts": {"count": 10, "last_used": 0, "score": 100.0}}}"#;
         fs::write(&path, old_data).unwrap();
 
         let mut store = FrecencyStore::with_path(path.clone());

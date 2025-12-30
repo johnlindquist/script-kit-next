@@ -42,7 +42,7 @@ use tracing::{debug, error, info, instrument, warn};
 
 // Import from crate (these are declared in main.rs)
 use crate::expand_matcher::ExpandMatcher;
-use crate::keyboard_monitor::{KeyboardMonitor, KeyboardMonitorError, KeyEvent};
+use crate::keyboard_monitor::{KeyEvent, KeyboardMonitor, KeyboardMonitorError};
 use crate::scripts::read_scriptlets;
 use crate::template_variables::substitute_variables;
 use crate::text_injector::{TextInjector, TextInjectorConfig};
@@ -120,7 +120,7 @@ impl ExpandManager {
     /// Create a new ExpandManager with custom configuration
     pub fn with_config(config: ExpandManagerConfig) -> Self {
         let injector = TextInjector::with_config(config.injector_config.clone());
-        
+
         Self {
             config,
             scriptlets: Arc::new(Mutex::new(HashMap::new())),
@@ -138,10 +138,10 @@ impl ExpandManager {
     #[instrument(skip(self))]
     pub fn load_scriptlets(&mut self) -> Result<usize> {
         info!("Loading scriptlets with expand triggers");
-        
+
         let scriptlets = read_scriptlets();
         let mut loaded_count = 0;
-        
+
         for scriptlet in scriptlets {
             // Only process scriptlets with expand metadata
             if let Some(ref expand_trigger) = scriptlet.expand {
@@ -152,14 +152,14 @@ impl ExpandManager {
                     );
                     continue;
                 }
-                
+
                 info!(
                     trigger = %expand_trigger,
                     name = %scriptlet.name,
                     tool = %scriptlet.tool,
                     "Registering expand trigger"
                 );
-                
+
                 // Store the scriptlet info
                 let expand_scriptlet = ExpandScriptlet {
                     trigger: expand_trigger.clone(),
@@ -168,25 +168,28 @@ impl ExpandManager {
                     tool: scriptlet.tool.clone(),
                     source_path: scriptlet.file_path.clone(),
                 };
-                
+
                 // Register with matcher and scriptlets store
                 {
                     let mut scriptlets_guard = self.scriptlets.lock().unwrap();
                     scriptlets_guard.insert(expand_trigger.clone(), expand_scriptlet);
                 }
-                
+
                 {
                     let mut matcher_guard = self.matcher.lock().unwrap();
                     // Use a dummy path since we store scriptlet data separately
                     let dummy_path = PathBuf::from(format!("scriptlet:{}", scriptlet.name));
                     matcher_guard.register_trigger(expand_trigger, dummy_path);
                 }
-                
+
                 loaded_count += 1;
             }
         }
-        
-        info!(count = loaded_count, "Loaded expand triggers from scriptlets");
+
+        info!(
+            count = loaded_count,
+            "Loaded expand triggers from scriptlets"
+        );
         Ok(loaded_count)
     }
 
@@ -199,13 +202,13 @@ impl ExpandManager {
             debug!("Attempted to register empty trigger, ignoring");
             return;
         }
-        
+
         info!(
             trigger = %trigger,
             name = %name,
             "Manually registering expand trigger"
         );
-        
+
         let expand_scriptlet = ExpandScriptlet {
             trigger: trigger.to_string(),
             name: name.to_string(),
@@ -213,12 +216,12 @@ impl ExpandManager {
             tool: tool.to_string(),
             source_path: None,
         };
-        
+
         {
             let mut scriptlets_guard = self.scriptlets.lock().unwrap();
             scriptlets_guard.insert(trigger.to_string(), expand_scriptlet);
         }
-        
+
         {
             let mut matcher_guard = self.matcher.lock().unwrap();
             let dummy_path = PathBuf::from(format!("manual:{}", name));
@@ -237,25 +240,25 @@ impl ExpandManager {
             debug!("Expand system already enabled");
             return Ok(());
         }
-        
+
         info!("Enabling expand system");
-        
+
         // Check trigger count
         let trigger_count = {
             let matcher_guard = self.matcher.lock().unwrap();
             matcher_guard.trigger_count()
         };
-        
+
         if trigger_count == 0 {
             warn!("No expand triggers registered, keyboard monitoring will be ineffective");
         }
-        
+
         // Clone Arc references for the closure
         let matcher = Arc::clone(&self.matcher);
         let scriptlets = Arc::clone(&self.scriptlets);
         let config = self.config.clone();
         let injector_config = self.config.injector_config.clone();
-        
+
         // Create keyboard monitor with callback
         let mut monitor = KeyboardMonitor::new(move |event: KeyEvent| {
             // Log every keystroke for debugging
@@ -267,7 +270,7 @@ impl ExpandManager {
                 option = event.option,
                 "Keyboard event received"
             );
-            
+
             // Only process printable characters (ignore modifier keys, etc.)
             if let Some(ref character) = event.character {
                 // Skip if any modifier is held (except shift for capitals)
@@ -275,7 +278,7 @@ impl ExpandManager {
                     debug!(character = %character, "Skipping due to modifier key");
                     return;
                 }
-                
+
                 // Process each character in the string (usually just 1)
                 for c in character.chars() {
                     debug!(char = ?c, "Processing character");
@@ -284,7 +287,7 @@ impl ExpandManager {
                         let mut matcher_guard = matcher.lock().unwrap();
                         matcher_guard.process_keystroke(c)
                     };
-                    
+
                     // Handle match if found
                     if let Some(result) = match_result {
                         debug!(
@@ -292,13 +295,13 @@ impl ExpandManager {
                             chars_to_delete = result.chars_to_delete,
                             "Trigger matched, performing expansion"
                         );
-                        
+
                         // Get the scriptlet content
                         let scriptlet_opt = {
                             let scriptlets_guard = scriptlets.lock().unwrap();
                             scriptlets_guard.get(&result.trigger).cloned()
                         };
-                        
+
                         if let Some(scriptlet) = scriptlet_opt {
                             // Perform expansion in a separate thread to not block the callback
                             let chars_to_delete = result.chars_to_delete;
@@ -307,16 +310,14 @@ impl ExpandManager {
                             let name = scriptlet.name.clone();
                             let config_clone = config.clone();
                             let injector_config_clone = injector_config.clone();
-                            
+
                             thread::spawn(move || {
                                 // Small delay to let the keyboard event complete
                                 thread::sleep(Duration::from_millis(config_clone.stop_delay_ms));
-                                
+
                                 // Get raw content based on tool type
                                 let raw_content = match tool.as_str() {
-                                    "paste" | "type" | "template" => {
-                                        content.clone()
-                                    }
+                                    "paste" | "type" | "template" => content.clone(),
                                     _ => {
                                         // For other tools, use the content as-is for now
                                         // Future: execute the scriptlet and capture output
@@ -328,21 +329,21 @@ impl ExpandManager {
                                         content.clone()
                                     }
                                 };
-                                
+
                                 // Substitute template variables (${clipboard}, ${date}, etc.)
                                 // Uses the centralized template_variables module
                                 let replacement = substitute_variables(&raw_content);
-                                
+
                                 debug!(
                                     original_len = raw_content.len(),
                                     substituted_len = replacement.len(),
                                     had_substitutions = raw_content != replacement,
                                     "Variable substitution completed"
                                 );
-                                
+
                                 // Create injector and perform expansion
                                 let injector = TextInjector::with_config(injector_config_clone);
-                                
+
                                 // Delete trigger characters
                                 if let Err(e) = injector.delete_chars(chars_to_delete) {
                                     error!(
@@ -352,10 +353,10 @@ impl ExpandManager {
                                     );
                                     return;
                                 }
-                                
+
                                 // Small delay between delete and paste
                                 thread::sleep(Duration::from_millis(50));
-                                
+
                                 // Paste replacement text
                                 if let Err(e) = injector.paste_text(&replacement) {
                                     error!(
@@ -364,14 +365,14 @@ impl ExpandManager {
                                     );
                                     return;
                                 }
-                                
+
                                 info!(
                                     trigger = %name,
                                     replacement_len = replacement.len(),
                                     "Expansion completed successfully"
                                 );
                             });
-                            
+
                             // Clear the buffer after a match to prevent re-triggering
                             let mut matcher_guard = matcher.lock().unwrap();
                             matcher_guard.clear_buffer();
@@ -385,13 +386,13 @@ impl ExpandManager {
                 }
             }
         });
-        
+
         // Start the monitor
         monitor.start()?;
-        
+
         self.monitor = Some(monitor);
         self.enabled = true;
-        
+
         info!("Expand system enabled, keyboard monitoring active");
         Ok(())
     }
@@ -403,15 +404,15 @@ impl ExpandManager {
             debug!("Expand system already disabled");
             return;
         }
-        
+
         info!("Disabling expand system");
-        
+
         if let Some(ref mut monitor) = self.monitor {
             monitor.stop();
         }
         self.monitor = None;
         self.enabled = false;
-        
+
         info!("Expand system disabled");
     }
 
@@ -455,7 +456,7 @@ impl ExpandManager {
             let mut matcher_guard = self.matcher.lock().unwrap();
             matcher_guard.clear_triggers();
         }
-        
+
         debug!("All expand triggers cleared");
     }
 
@@ -464,7 +465,7 @@ impl ExpandManager {
     #[instrument(skip(self))]
     pub fn reload(&mut self) -> Result<usize> {
         info!("Reloading expand scriptlets");
-        
+
         self.clear_triggers();
         self.load_scriptlets()
     }
@@ -528,11 +529,11 @@ mod tests {
     #[test]
     fn test_register_trigger_manually() {
         let mut manager = ExpandManager::new();
-        
+
         manager.register_trigger(":test", "Test Snippet", "Hello, World!", "paste");
-        
+
         assert_eq!(manager.trigger_count(), 1);
-        
+
         let triggers = manager.list_triggers();
         assert_eq!(triggers.len(), 1);
         assert_eq!(triggers[0].0, ":test");
@@ -542,36 +543,36 @@ mod tests {
     #[test]
     fn test_register_empty_trigger_ignored() {
         let mut manager = ExpandManager::new();
-        
+
         manager.register_trigger("", "Empty", "Content", "paste");
-        
+
         assert_eq!(manager.trigger_count(), 0);
     }
 
     #[test]
     fn test_clear_triggers() {
         let mut manager = ExpandManager::new();
-        
+
         manager.register_trigger(":a", "A", "Content A", "paste");
         manager.register_trigger(":b", "B", "Content B", "paste");
-        
+
         assert_eq!(manager.trigger_count(), 2);
-        
+
         manager.clear_triggers();
-        
+
         assert_eq!(manager.trigger_count(), 0);
     }
 
     #[test]
     fn test_list_triggers() {
         let mut manager = ExpandManager::new();
-        
+
         manager.register_trigger(":sig", "Signature", "Best regards", "paste");
         manager.register_trigger(":addr", "Address", "123 Main St", "type");
-        
+
         let triggers = manager.list_triggers();
         assert_eq!(triggers.len(), 2);
-        
+
         // Check both triggers exist (order not guaranteed due to HashMap)
         let trigger_names: Vec<_> = triggers.iter().map(|(t, _)| t.as_str()).collect();
         assert!(trigger_names.contains(&":sig"));
@@ -590,10 +591,10 @@ mod tests {
     fn test_enable_disable_cycle() {
         let mut manager = ExpandManager::new();
         manager.register_trigger(":test", "Test", "Content", "paste");
-        
+
         assert!(manager.enable().is_ok());
         assert!(manager.is_enabled());
-        
+
         manager.disable();
         assert!(!manager.is_enabled());
     }

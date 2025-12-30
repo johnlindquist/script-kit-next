@@ -200,14 +200,14 @@ unsafe fn extract_text_vision(width: u32, height: u32, rgba_data: &[u8]) -> Resu
     let cg_image = CGImageCreate(
         width_usize,
         height_usize,
-        8,            // bits per component
-        32,           // bits per pixel (RGBA)
+        8,  // bits per component
+        32, // bits per pixel (RGBA)
         bytes_per_row,
         color_space,
         bitmap_info,
         data_provider,
-        std::ptr::null(),  // decode array
-        false,             // should interpolate
+        std::ptr::null(), // decode array
+        false,            // should interpolate
         K_CG_RENDERING_INTENT_DEFAULT,
     );
 
@@ -445,7 +445,7 @@ mod tests {
 
         // Small test image (10x1 pixels)
         let rgba_data: Vec<u8> = vec![255u8; 40];
-        
+
         extract_text_async(10, 1, rgba_data, move |_result| {
             callback_called_clone.store(true, Ordering::SeqCst);
         });

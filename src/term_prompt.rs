@@ -4,16 +4,17 @@
 //! cursor rendering, per-cell colors, and control character handling.
 
 use gpui::{
-    div, prelude::*, px, rgb, Context, FocusHandle, Focusable, Pixels, Render, SharedString, Timer, Window,
+    div, prelude::*, px, rgb, Context, FocusHandle, Focusable, Pixels, Render, SharedString, Timer,
+    Window,
 };
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tracing::{debug, info, trace, warn};
 
 use crate::config::Config;
+use crate::prompts::SubmitCallback;
 use crate::terminal::{CellAttributes, TerminalContent, TerminalEvent, TerminalHandle};
 use crate::theme::Theme;
-use crate::prompts::SubmitCallback;
 
 const SLOW_RENDER_THRESHOLD_MS: u128 = 16; // 60fps threshold
 
@@ -27,9 +28,9 @@ const LINE_HEIGHT_MULTIPLIER: f32 = 1.3;
 /// Cell width for Menlo 14pt is 8.4287px (measured). We use a slightly larger value
 /// to be conservative and prevent the last character from wrapping to the next line.
 /// Using 8.5px ensures we never tell the PTY we have more columns than can render.
-const BASE_CELL_WIDTH: f32 = 8.5;  // Conservative value for Menlo 14pt (actual: 8.4287px)
+const BASE_CELL_WIDTH: f32 = 8.5; // Conservative value for Menlo 14pt (actual: 8.4287px)
 /// Default cell height at base font size (used for tests and static calculations)
-const BASE_CELL_HEIGHT: f32 = BASE_FONT_SIZE * LINE_HEIGHT_MULTIPLIER;  // 18.2px for 14pt
+const BASE_CELL_HEIGHT: f32 = BASE_FONT_SIZE * LINE_HEIGHT_MULTIPLIER; // 18.2px for 14pt
 
 // Aliases for backwards compatibility with tests
 #[allow(dead_code)]
@@ -75,9 +76,9 @@ impl TermPrompt {
     ) -> anyhow::Result<Self> {
         Self::with_height(id, command, focus_handle, on_submit, theme, config, None)
     }
-    
+
     /// Create new terminal prompt with explicit height
-    /// 
+    ///
     /// This is necessary because GPUI entities don't inherit parent flex sizing.
     /// When rendered as a child of a sized container, h_full() doesn't resolve
     /// to the parent's height. We must pass an explicit height.
@@ -93,7 +94,7 @@ impl TermPrompt {
         // Start with a reasonable default size; will be resized dynamically
         let initial_cols = 80;
         let initial_rows = 24;
-        
+
         let terminal = match command {
             Some(cmd) => TerminalHandle::with_command(&cmd, initial_cols, initial_rows)?,
             None => TerminalHandle::new(initial_cols, initial_rows)?,
@@ -119,64 +120,98 @@ impl TermPrompt {
             content_height,
         })
     }
-    
+
     /// Set the content height (for dynamic resizing)
     #[allow(dead_code)]
     pub fn set_height(&mut self, height: Pixels) {
         self.content_height = Some(height);
     }
-    
+
     /// Get the configured font size
     fn font_size(&self) -> f32 {
         self.config.get_terminal_font_size()
     }
-    
+
     /// Get cell width scaled to configured font size
     fn cell_width(&self) -> f32 {
         BASE_CELL_WIDTH * (self.font_size() / BASE_FONT_SIZE)
     }
-    
+
     /// Get cell height scaled to configured font size
     fn cell_height(&self) -> f32 {
         self.font_size() * LINE_HEIGHT_MULTIPLIER
     }
-    
+
     /// Calculate terminal dimensions from pixel size with padding (uses default cell dimensions)
     /// This version uses the base font size dimensions, suitable for tests and static calculations.
     #[cfg(test)]
-    fn calculate_terminal_size(width: Pixels, height: Pixels, padding_left: f32, padding_right: f32, padding_top: f32, padding_bottom: f32) -> (u16, u16) {
-        Self::calculate_terminal_size_with_cells(width, height, padding_left, padding_right, padding_top, padding_bottom, CELL_WIDTH, CELL_HEIGHT)
+    fn calculate_terminal_size(
+        width: Pixels,
+        height: Pixels,
+        padding_left: f32,
+        padding_right: f32,
+        padding_top: f32,
+        padding_bottom: f32,
+    ) -> (u16, u16) {
+        Self::calculate_terminal_size_with_cells(
+            width,
+            height,
+            padding_left,
+            padding_right,
+            padding_top,
+            padding_bottom,
+            CELL_WIDTH,
+            CELL_HEIGHT,
+        )
     }
-    
+
     /// Calculate terminal dimensions from pixel size with padding and custom cell dimensions
     #[allow(clippy::too_many_arguments)]
-    fn calculate_terminal_size_with_cells(width: Pixels, height: Pixels, padding_left: f32, padding_right: f32, padding_top: f32, padding_bottom: f32, cell_width: f32, cell_height: f32) -> (u16, u16) {
+    fn calculate_terminal_size_with_cells(
+        width: Pixels,
+        height: Pixels,
+        padding_left: f32,
+        padding_right: f32,
+        padding_top: f32,
+        padding_bottom: f32,
+        cell_width: f32,
+        cell_height: f32,
+    ) -> (u16, u16) {
         // Subtract padding from available space
         let available_width = f32::from(width) - padding_left - padding_right;
         let available_height = f32::from(height) - padding_top - padding_bottom;
-        
+
         // Calculate columns and rows
         // Use floor() for cols to ensure we never tell the PTY we have more columns
         // than can actually be rendered. Combined with a conservative cell_width,
         // this prevents the last character from wrapping.
         let cols = (available_width / cell_width).floor() as u16;
         let rows = (available_height / cell_height).floor() as u16;
-        
+
         // Apply minimum bounds
         let cols = cols.max(MIN_COLS);
         let rows = rows.max(MIN_ROWS);
-        
+
         (cols, rows)
     }
-    
+
     /// Resize terminal if needed based on new dimensions
     fn resize_if_needed(&mut self, width: Pixels, height: Pixels) {
         let padding = self.config.get_padding();
         let cell_width = self.cell_width();
         let cell_height = self.cell_height();
         // Note: We use padding.top for bottom padding as well (see render() which uses pb(px(padding.top)))
-        let (new_cols, new_rows) = Self::calculate_terminal_size_with_cells(width, height, padding.left, padding.right, padding.top, padding.top, cell_width, cell_height);
-        
+        let (new_cols, new_rows) = Self::calculate_terminal_size_with_cells(
+            width,
+            height,
+            padding.left,
+            padding.right,
+            padding.top,
+            padding.top,
+            cell_width,
+            cell_height,
+        );
+
         if (new_cols, new_rows) != self.last_size {
             debug!(
                 old_cols = self.last_size.0,
@@ -185,7 +220,7 @@ impl TermPrompt {
                 new_rows,
                 "Resizing terminal"
             );
-            
+
             if let Err(e) = self.terminal.resize(new_cols, new_rows) {
                 warn!(error = %e, "Failed to resize terminal");
             } else {
@@ -226,7 +261,7 @@ impl TermPrompt {
                                 term_prompt.refresh_timer_active = false;
                                 return true; // Stop polling
                             }
-                            
+
                             // Process terminal output - 2 iterations catches bursts without excessive overhead
                             for _ in 0..2 {
                                 let events = term_prompt.terminal.process();
@@ -237,7 +272,7 @@ impl TermPrompt {
                                     }
                                 }
                             }
-                            
+
                             cx.notify(); // Trigger re-render
                             false
                         })
@@ -291,8 +326,8 @@ impl TermPrompt {
             "w" => Some(0x17), // kill word
             "x" => Some(0x18),
             "y" => Some(0x19),
-            "z" => Some(0x1A), // SIGTSTP
-            "[" => Some(0x1B), // ESC
+            "z" => Some(0x1A),  // SIGTSTP
+            "[" => Some(0x1B),  // ESC
             "\\" => Some(0x1C), // SIGQUIT
             "]" => Some(0x1D),
             "^" => Some(0x1E),
@@ -310,17 +345,17 @@ impl TermPrompt {
         let default_bg = rgb(colors.background.main);
         let cursor_bg = rgb(colors.accent.selected);
         let default_fg = rgb(colors.text.primary);
-        
+
         // Get dynamic font sizing
         let font_size = self.font_size();
         let cell_height = self.cell_height();
         let cell_width = self.cell_width();
-        
+
         let mut lines_container = div()
             .flex()
             .flex_col()
             .flex_1()
-            .size_full()  // Both w_full and h_full
+            .size_full() // Both w_full and h_full
             .min_h(px(0.)) // Critical for flex children sizing
             .overflow_hidden()
             .bg(default_bg)
@@ -330,65 +365,67 @@ impl TermPrompt {
 
         for (line_idx, cells) in content.styled_lines.iter().enumerate() {
             let is_cursor_line = line_idx == content.cursor_line;
-            
+
             // Build a row - we'll batch consecutive cells with same styling
-            let mut row = div()
-                .flex()
-                .flex_row()
-                .w_full()
-                .h(px(cell_height));
+            let mut row = div().flex().flex_row().w_full().h(px(cell_height));
 
             // Batch consecutive cells with same styling
             let mut batch_start = 0;
             while batch_start < cells.len() {
                 let first_cell = &cells[batch_start];
                 let is_cursor_start = is_cursor_line && batch_start == content.cursor_col;
-                
+
                 // Get styling for this batch
-                let fg_u32 = (first_cell.fg.r as u32) << 16 | (first_cell.fg.g as u32) << 8 | (first_cell.fg.b as u32);
-                let bg_u32 = (first_cell.bg.r as u32) << 16 | (first_cell.bg.g as u32) << 8 | (first_cell.bg.b as u32);
+                let fg_u32 = (first_cell.fg.r as u32) << 16
+                    | (first_cell.fg.g as u32) << 8
+                    | (first_cell.fg.b as u32);
+                let bg_u32 = (first_cell.bg.r as u32) << 16
+                    | (first_cell.bg.g as u32) << 8
+                    | (first_cell.bg.b as u32);
                 let attrs = first_cell.attrs;
-                
+
                 // Find how many consecutive cells have the same styling (excluding cursor position)
                 let mut batch_end = batch_start + 1;
-                
+
                 // If this is the cursor cell, it's always its own batch
                 if !is_cursor_start {
                     while batch_end < cells.len() {
                         let cell = &cells[batch_end];
                         let is_cursor_here = is_cursor_line && batch_end == content.cursor_col;
-                        
+
                         // Stop if cursor or different styling
                         if is_cursor_here {
                             break;
                         }
-                        
-                        let cell_fg = (cell.fg.r as u32) << 16 | (cell.fg.g as u32) << 8 | (cell.fg.b as u32);
-                        let cell_bg = (cell.bg.r as u32) << 16 | (cell.bg.g as u32) << 8 | (cell.bg.b as u32);
-                        
+
+                        let cell_fg =
+                            (cell.fg.r as u32) << 16 | (cell.fg.g as u32) << 8 | (cell.fg.b as u32);
+                        let cell_bg =
+                            (cell.bg.r as u32) << 16 | (cell.bg.g as u32) << 8 | (cell.bg.b as u32);
+
                         if cell_fg != fg_u32 || cell_bg != bg_u32 || cell.attrs != attrs {
                             break;
                         }
-                        
+
                         batch_end += 1;
                     }
                 }
-                
+
                 // Build the text for this batch
                 let batch_text: String = cells[batch_start..batch_end]
                     .iter()
                     .map(|c| if c.c == '\0' { ' ' } else { c.c })
                     .collect();
-                
+
                 let batch_width = (batch_end - batch_start) as f32 * cell_width;
-                
+
                 // Determine colors
                 let fg_color = if is_cursor_start {
                     rgb(bg_u32) // Invert for cursor
                 } else {
                     rgb(fg_u32)
                 };
-                
+
                 // Determine background color:
                 // - Cursor gets cursor_bg
                 // - Cells with custom background (non-black) get their explicit color
@@ -400,7 +437,7 @@ impl TermPrompt {
                 } else {
                     default_bg
                 };
-                
+
                 let mut span = div()
                     .w(px(batch_width))
                     .h(px(cell_height))
@@ -408,7 +445,7 @@ impl TermPrompt {
                     .bg(bg_color) // Always apply background to prevent bleed-through
                     .text_color(if fg_u32 == 0 { default_fg } else { fg_color })
                     .child(SharedString::from(batch_text));
-                
+
                 // Apply text attributes
                 if attrs.contains(CellAttributes::BOLD) {
                     span = span.font_weight(gpui::FontWeight::BOLD);
@@ -416,7 +453,7 @@ impl TermPrompt {
                 if attrs.contains(CellAttributes::UNDERLINE) {
                     span = span.text_decoration_1();
                 }
-                
+
                 row = row.child(span);
                 batch_start = batch_end;
             }
@@ -440,7 +477,7 @@ impl Render for TermPrompt {
 
         // Start refresh timer if not already active
         self.start_refresh_timer(cx);
-        
+
         // Get window bounds and resize terminal if needed
         let window_bounds = window.bounds();
         self.resize_if_needed(window_bounds.size.width, window_bounds.size.height);
@@ -560,7 +597,7 @@ impl Render for TermPrompt {
         // Render terminal content with styled cells
         let colors = &self.theme.colors;
         let terminal_content = self.render_content(&content);
-        
+
         // Get padding from config
         let padding = self.config.get_padding();
 
@@ -583,14 +620,14 @@ impl Render for TermPrompt {
             .pl(px(padding.left))
             .pr(px(padding.right))
             .pt(px(padding.top))
-            .pb(px(padding.top))  // Use same as top for consistent spacing
+            .pb(px(padding.top)) // Use same as top for consistent spacing
             .bg(rgb(colors.background.main))
             .text_color(rgb(colors.text.primary))
             .overflow_hidden() // Clip any overflow
             .key_context("term_prompt")
             .track_focus(&self.focus_handle)
             .on_key_down(handle_key);
-        
+
         // Apply height - use explicit if set, otherwise use h_full (may not work in all contexts)
         let container = if let Some(h) = self.content_height {
             debug!(content_height = ?h, "TermPrompt using explicit height");
@@ -598,7 +635,7 @@ impl Render for TermPrompt {
         } else {
             container.h_full().min_h(px(0.))
         };
-        
+
         container.child(terminal_content)
     }
 }
@@ -643,13 +680,32 @@ mod tests {
     fn test_ctrl_a_through_z() {
         // Test all Ctrl+letter combinations
         let expected: [(char, u8); 26] = [
-            ('a', 0x01), ('b', 0x02), ('c', 0x03), ('d', 0x04),
-            ('e', 0x05), ('f', 0x06), ('g', 0x07), ('h', 0x08),
-            ('i', 0x09), ('j', 0x0A), ('k', 0x0B), ('l', 0x0C),
-            ('m', 0x0D), ('n', 0x0E), ('o', 0x0F), ('p', 0x10),
-            ('q', 0x11), ('r', 0x12), ('s', 0x13), ('t', 0x14),
-            ('u', 0x15), ('v', 0x16), ('w', 0x17), ('x', 0x18),
-            ('y', 0x19), ('z', 0x1A),
+            ('a', 0x01),
+            ('b', 0x02),
+            ('c', 0x03),
+            ('d', 0x04),
+            ('e', 0x05),
+            ('f', 0x06),
+            ('g', 0x07),
+            ('h', 0x08),
+            ('i', 0x09),
+            ('j', 0x0A),
+            ('k', 0x0B),
+            ('l', 0x0C),
+            ('m', 0x0D),
+            ('n', 0x0E),
+            ('o', 0x0F),
+            ('p', 0x10),
+            ('q', 0x11),
+            ('r', 0x12),
+            ('s', 0x13),
+            ('t', 0x14),
+            ('u', 0x15),
+            ('v', 0x16),
+            ('w', 0x17),
+            ('x', 0x18),
+            ('y', 0x19),
+            ('z', 0x1A),
         ];
 
         for (ch, expected_byte) in expected {
@@ -712,105 +768,154 @@ mod tests {
         const _: () = assert!(REFRESH_INTERVAL_MS >= 4);
         const _: () = assert!(REFRESH_INTERVAL_MS <= 100);
     }
-    
+
     // ========================================================================
     // Terminal Size Calculation Tests
     // ========================================================================
-    
+
     #[test]
     fn test_calculate_terminal_size_basic() {
         use gpui::px;
-        
+
         // Window of 750x500 pixels with default padding (12 left, 12 right, 8 top, 8 bottom)
         // Available width: 750 - 12 - 12 = 726
         // Available height: 500 - 8 - 8 = 484
-        let (cols, rows) = TermPrompt::calculate_terminal_size(px(750.0), px(500.0), 12.0, 12.0, 8.0, 8.0);
-        
+        let (cols, rows) =
+            TermPrompt::calculate_terminal_size(px(750.0), px(500.0), 12.0, 12.0, 8.0, 8.0);
+
         // Expected: 726 / 8.5 = 85.4 -> 85 cols
         // Expected: 484 / 18.2 = 26.6 -> 26 rows
-        assert!((80..=90).contains(&cols), "Cols should be around 85, got {}", cols);
-        assert!((24..=28).contains(&rows), "Rows should be around 26, got {}", rows);
+        assert!(
+            (80..=90).contains(&cols),
+            "Cols should be around 85, got {}",
+            cols
+        );
+        assert!(
+            (24..=28).contains(&rows),
+            "Rows should be around 26, got {}",
+            rows
+        );
     }
-    
+
     #[test]
     fn test_calculate_terminal_size_minimum() {
         use gpui::px;
-        
+
         // Very small window should return minimum size
-        let (cols, rows) = TermPrompt::calculate_terminal_size(px(50.0), px(50.0), 0.0, 0.0, 0.0, 0.0);
-        
+        let (cols, rows) =
+            TermPrompt::calculate_terminal_size(px(50.0), px(50.0), 0.0, 0.0, 0.0, 0.0);
+
         assert_eq!(cols, MIN_COLS, "Should use minimum cols");
         assert_eq!(rows, MIN_ROWS, "Should use minimum rows");
     }
-    
+
     #[test]
     fn test_calculate_terminal_size_large() {
         use gpui::px;
-        
+
         // Large window (1920x1080) with no padding
-        let (cols, rows) = TermPrompt::calculate_terminal_size(px(1920.0), px(1080.0), 0.0, 0.0, 0.0, 0.0);
-        
+        let (cols, rows) =
+            TermPrompt::calculate_terminal_size(px(1920.0), px(1080.0), 0.0, 0.0, 0.0, 0.0);
+
         // Should be roughly 225 cols x 59 rows
-        assert!(cols > 200, "Large window should have many cols, got {}", cols);
-        assert!(rows > 50, "Large window should have many rows, got {}", rows);
+        assert!(
+            cols > 200,
+            "Large window should have many cols, got {}",
+            cols
+        );
+        assert!(
+            rows > 50,
+            "Large window should have many rows, got {}",
+            rows
+        );
     }
-    
+
     #[test]
     fn test_calculate_terminal_size_conservative() {
         use gpui::px;
-        
+
         // Test that we use conservative column calculation to prevent wrapping.
         // CELL_WIDTH is 8.5px (slightly larger than actual 8.4287px Menlo width)
         // to ensure we never tell PTY we have more columns than can render.
-        
+
         // With no padding: 680px / 8.5 = 80.0 -> exactly 80 cols
-        let (cols, _rows) = TermPrompt::calculate_terminal_size(px(680.0), px(500.0), 0.0, 0.0, 0.0, 0.0);
-        assert_eq!(cols, 80, "680px width should give 80 cols (680/8.5=80), got {}", cols);
-        
+        let (cols, _rows) =
+            TermPrompt::calculate_terminal_size(px(680.0), px(500.0), 0.0, 0.0, 0.0, 0.0);
+        assert_eq!(
+            cols, 80,
+            "680px width should give 80 cols (680/8.5=80), got {}",
+            cols
+        );
+
         // 679px / 8.5 = 79.88 -> floors to 79 cols (conservative)
-        let (cols2, _) = TermPrompt::calculate_terminal_size(px(679.0), px(500.0), 0.0, 0.0, 0.0, 0.0);
-        assert_eq!(cols2, 79, "679px width should give 79 cols (679/8.5=79.88 floors to 79), got {}", cols2);
-        
+        let (cols2, _) =
+            TermPrompt::calculate_terminal_size(px(679.0), px(500.0), 0.0, 0.0, 0.0, 0.0);
+        assert_eq!(
+            cols2, 79,
+            "679px width should give 79 cols (679/8.5=79.88 floors to 79), got {}",
+            cols2
+        );
+
         // 500px / 8.5 = 58.82 -> floors to 58 cols
-        let (cols3, _) = TermPrompt::calculate_terminal_size(px(500.0), px(500.0), 0.0, 0.0, 0.0, 0.0);
-        assert_eq!(cols3, 58, "500px width should give 58 cols (500/8.5=58.82 floors to 58), got {}", cols3);
+        let (cols3, _) =
+            TermPrompt::calculate_terminal_size(px(500.0), px(500.0), 0.0, 0.0, 0.0, 0.0);
+        assert_eq!(
+            cols3, 58,
+            "500px width should give 58 cols (500/8.5=58.82 floors to 58), got {}",
+            cols3
+        );
     }
-    
+
     #[test]
     fn test_calculate_terminal_size_with_padding() {
         use gpui::px;
-        
+
         // Test that padding is properly subtracted from available space
         // 500px width with 12px left and 12px right padding = 476px available
         // 476 / 8.5 = 56.0 -> 56 cols
-        let (cols, _) = TermPrompt::calculate_terminal_size(px(500.0), px(500.0), 12.0, 12.0, 0.0, 0.0);
-        assert_eq!(cols, 56, "500px with 24px total horizontal padding should give 56 cols, got {}", cols);
-        
+        let (cols, _) =
+            TermPrompt::calculate_terminal_size(px(500.0), px(500.0), 12.0, 12.0, 0.0, 0.0);
+        assert_eq!(
+            cols, 56,
+            "500px with 24px total horizontal padding should give 56 cols, got {}",
+            cols
+        );
+
         // 500px height with 8px top padding only = 492px available
         // 492 / 18.2 = 27.0 -> 27 rows
-        let (_, rows) = TermPrompt::calculate_terminal_size(px(500.0), px(500.0), 0.0, 0.0, 8.0, 0.0);
-        assert_eq!(rows, 27, "500px with 8px top padding only should give 27 rows, got {}", rows);
-        
+        let (_, rows) =
+            TermPrompt::calculate_terminal_size(px(500.0), px(500.0), 0.0, 0.0, 8.0, 0.0);
+        assert_eq!(
+            rows, 27,
+            "500px with 8px top padding only should give 27 rows, got {}",
+            rows
+        );
+
         // 500px height with 8px top AND 8px bottom padding = 484px available
         // 484 / 18.2 = 26.6 -> 26 rows
-        let (_, rows2) = TermPrompt::calculate_terminal_size(px(500.0), px(500.0), 0.0, 0.0, 8.0, 8.0);
-        assert_eq!(rows2, 26, "500px with 8px top+bottom padding should give 26 rows, got {}", rows2);
+        let (_, rows2) =
+            TermPrompt::calculate_terminal_size(px(500.0), px(500.0), 0.0, 0.0, 8.0, 8.0);
+        assert_eq!(
+            rows2, 26,
+            "500px with 8px top+bottom padding should give 26 rows, got {}",
+            rows2
+        );
     }
-    
+
     // ========================================================================
     // Padding Symmetry Regression Tests
-    // 
+    //
     // BUG FIXED: calculate_terminal_size only subtracted padding_top from height,
     // but render() applied BOTH top AND bottom padding, causing content cutoff.
     // These tests ensure the fix is never regressed.
     // ========================================================================
-    
+
     #[test]
     fn test_padding_symmetry_regression_top_and_bottom_must_both_be_subtracted() {
         use gpui::px;
-        
+
         // REGRESSION TEST: This test would FAIL if padding_bottom is not subtracted.
-        // 
+        //
         // Scenario: 700px window height with 8px top and 8px bottom padding
         // render() applies: pt(8) + pb(8) = 16px total vertical padding
         // calculate_terminal_size MUST subtract BOTH:
@@ -821,23 +926,24 @@ mod tests {
         //   available_height = 700 - 8 = 692px
         //   rows = floor(692 / 18.2) = 38 rows
         //   Then 38 * 18.2 = 691.6px > 684px available = CONTENT CUTOFF!
-        
+
         let padding_top = 8.0;
         let padding_bottom = 8.0;
         let total_height = 700.0;
-        
+
         let (_, rows) = TermPrompt::calculate_terminal_size(
-            px(500.0), 
-            px(total_height), 
-            0.0, 0.0, 
-            padding_top, 
-            padding_bottom
+            px(500.0),
+            px(total_height),
+            0.0,
+            0.0,
+            padding_top,
+            padding_bottom,
         );
-        
+
         // Verify the row count accounts for BOTH paddings
         let expected_available_height = total_height - padding_top - padding_bottom;
         let expected_rows = (expected_available_height / CELL_HEIGHT).floor() as u16;
-        
+
         assert_eq!(
             rows, expected_rows,
             "REGRESSION: padding_bottom not being subtracted! \
@@ -845,24 +951,27 @@ mod tests {
             This means content will be cut off!",
             expected_rows, rows
         );
-        
+
         // Additional invariant: rendered content must fit within available space
         let content_height = rows as f32 * CELL_HEIGHT;
         let available_height = total_height - padding_top - padding_bottom;
         assert!(
             content_height <= available_height,
             "REGRESSION: Content ({:.1}px = {} rows × {:.1}px) exceeds available height ({:.1}px)!",
-            content_height, rows, CELL_HEIGHT, available_height
+            content_height,
+            rows,
+            CELL_HEIGHT,
+            available_height
         );
     }
-    
+
     #[test]
     fn test_padding_symmetry_invariant_content_plus_padding_never_exceeds_total() {
         use gpui::px;
-        
+
         // INVARIANT TEST: rows * CELL_HEIGHT + padding_top + padding_bottom <= total_height
         // This must hold for ANY valid padding values.
-        
+
         let test_cases: Vec<(f32, f32, f32)> = vec![
             // (total_height, padding_top, padding_bottom)
             (700.0, 8.0, 8.0),   // Default case
@@ -872,19 +981,20 @@ mod tests {
             (700.0, 20.0, 20.0), // Very large padding
             (400.0, 50.0, 50.0), // Extreme padding ratio
         ];
-        
+
         for (total_height, padding_top, padding_bottom) in test_cases {
             let (_, rows) = TermPrompt::calculate_terminal_size(
-                px(500.0), 
-                px(total_height), 
-                0.0, 0.0, 
-                padding_top, 
-                padding_bottom
+                px(500.0),
+                px(total_height),
+                0.0,
+                0.0,
+                padding_top,
+                padding_bottom,
             );
-            
+
             let content_height = rows as f32 * CELL_HEIGHT;
             let total_used = content_height + padding_top + padding_bottom;
-            
+
             assert!(
                 total_used <= total_height,
                 "INVARIANT VIOLATED for height={}, top={}, bottom={}: \
@@ -896,27 +1006,28 @@ mod tests {
             );
         }
     }
-    
+
     #[test]
     fn test_padding_edge_case_padding_exceeds_available_height() {
         use gpui::px;
-        
+
         // EDGE CASE: What happens when padding is larger than available height?
         // Should return MIN_ROWS to prevent panic/negative values.
-        
+
         let total_height = 50.0;
         let padding_top = 30.0;
         let padding_bottom = 30.0;
         // Available height = 50 - 30 - 30 = -10px (negative!)
-        
+
         let (_, rows) = TermPrompt::calculate_terminal_size(
-            px(500.0), 
-            px(total_height), 
-            0.0, 0.0, 
-            padding_top, 
-            padding_bottom
+            px(500.0),
+            px(total_height),
+            0.0,
+            0.0,
+            padding_top,
+            padding_bottom,
         );
-        
+
         // Should return minimum rows, not crash or return 0
         assert_eq!(
             rows, MIN_ROWS,
@@ -924,24 +1035,25 @@ mod tests {
             MIN_ROWS, rows
         );
     }
-    
+
     #[test]
     fn test_padding_symmetry_max_height_scenario() {
         use gpui::px;
-        
+
         // This test uses the actual MAX_HEIGHT (700px) from window_resize.rs
         // to verify the exact scenario that was causing content cutoff.
         const MAX_HEIGHT: f32 = 700.0;
         const DEFAULT_PADDING: f32 = 8.0; // From config defaults
-        
+
         let (_, rows) = TermPrompt::calculate_terminal_size(
-            px(500.0), 
-            px(MAX_HEIGHT), 
-            12.0, 12.0,  // left/right padding
-            DEFAULT_PADDING,  // top
-            DEFAULT_PADDING   // bottom
+            px(500.0),
+            px(MAX_HEIGHT),
+            12.0,
+            12.0,            // left/right padding
+            DEFAULT_PADDING, // top
+            DEFAULT_PADDING, // bottom
         );
-        
+
         // With 700px and 8+8=16px vertical padding:
         // Available = 684px, rows = floor(684/18.2) = 37
         assert_eq!(
@@ -950,61 +1062,65 @@ mod tests {
             This was the exact bug scenario!",
             rows
         );
-        
+
         // Verify no cutoff
         let content_height = rows as f32 * CELL_HEIGHT;
         let available_height = MAX_HEIGHT - DEFAULT_PADDING - DEFAULT_PADDING;
-        
+
         assert!(
             content_height <= available_height,
             "Content ({:.1}px) exceeds available space ({:.1}px) - cutoff will occur!",
-            content_height, available_height
+            content_height,
+            available_height
         );
     }
-    
+
     #[test]
     fn test_padding_difference_between_buggy_and_fixed_calculation() {
         use gpui::px;
-        
+
         // This test explicitly compares the buggy calculation vs the fixed one
         // to demonstrate what the bug was.
-        
+
         let height = 700.0;
         let padding_top = 8.0;
         let padding_bottom = 8.0;
-        
+
         // BUGGY calculation (only subtracts top):
         let buggy_available = height - padding_top; // 692px
         let buggy_rows = (buggy_available / CELL_HEIGHT).floor() as u16; // 38 rows
-        
+
         // FIXED calculation (subtracts both):
         let fixed_available = height - padding_top - padding_bottom; // 684px
         let fixed_rows = (fixed_available / CELL_HEIGHT).floor() as u16; // 37 rows
-        
+
         // The actual function should use the FIXED calculation
         let (_, actual_rows) = TermPrompt::calculate_terminal_size(
-            px(500.0), 
-            px(height), 
-            0.0, 0.0, 
-            padding_top, 
-            padding_bottom
+            px(500.0),
+            px(height),
+            0.0,
+            0.0,
+            padding_top,
+            padding_bottom,
         );
-        
+
         assert_ne!(
             actual_rows, buggy_rows,
             "REGRESSION: Function returned buggy row count ({})! \
             Should be {} (with both paddings subtracted).",
             buggy_rows, fixed_rows
         );
-        
+
         assert_eq!(
             actual_rows, fixed_rows,
             "Function should return {} rows (fixed), got {}.",
             fixed_rows, actual_rows
         );
-        
+
         // Show the difference (for documentation)
-        assert_eq!(buggy_rows - fixed_rows, 1, 
+        assert_eq!(
+            buggy_rows - fixed_rows,
+            1,
             "Bug caused 1 extra row, leading to {:.1}px cutoff",
             CELL_HEIGHT
         );

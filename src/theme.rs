@@ -2,7 +2,7 @@ use gpui::{rgb, rgba, Hsla, Rgba};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::process::Command;
-use tracing::{info, warn, error, debug};
+use tracing::{debug, error, info, warn};
 
 /// Transparent color constant (fully transparent black)
 pub const TRANSPARENT: u32 = 0x00000000;
@@ -29,10 +29,10 @@ impl Default for BackgroundOpacity {
         BackgroundOpacity {
             // Lower opacity values to allow vibrancy blur to show through
             // Values below ~0.7 will show more blur effect
-            main: 0.60,          // Was 0.85 - lower for more vibrancy
-            title_bar: 0.65,     // Was 0.9
-            search_box: 0.70,    // Was 0.92
-            log_panel: 0.55,     // Was 0.8
+            main: 0.60,       // Was 0.85 - lower for more vibrancy
+            title_bar: 0.65,  // Was 0.9
+            search_box: 0.70, // Was 0.92
+            log_panel: 0.55,  // Was 0.8
         }
     }
 }
@@ -303,22 +303,54 @@ pub struct TerminalColors {
 }
 
 // Terminal color defaults (VS Code dark theme inspired)
-fn default_terminal_black() -> HexColor { 0x000000 }
-fn default_terminal_red() -> HexColor { 0xcd3131 }
-fn default_terminal_green() -> HexColor { 0x0dbc79 }
-fn default_terminal_yellow() -> HexColor { 0xe5e510 }
-fn default_terminal_blue() -> HexColor { 0x2472c8 }
-fn default_terminal_magenta() -> HexColor { 0xbc3fbc }
-fn default_terminal_cyan() -> HexColor { 0x11a8cd }
-fn default_terminal_white() -> HexColor { 0xe5e5e5 }
-fn default_terminal_bright_black() -> HexColor { 0x666666 }
-fn default_terminal_bright_red() -> HexColor { 0xf14c4c }
-fn default_terminal_bright_green() -> HexColor { 0x23d18b }
-fn default_terminal_bright_yellow() -> HexColor { 0xf5f543 }
-fn default_terminal_bright_blue() -> HexColor { 0x3b8eea }
-fn default_terminal_bright_magenta() -> HexColor { 0xd670d6 }
-fn default_terminal_bright_cyan() -> HexColor { 0x29b8db }
-fn default_terminal_bright_white() -> HexColor { 0xffffff }
+fn default_terminal_black() -> HexColor {
+    0x000000
+}
+fn default_terminal_red() -> HexColor {
+    0xcd3131
+}
+fn default_terminal_green() -> HexColor {
+    0x0dbc79
+}
+fn default_terminal_yellow() -> HexColor {
+    0xe5e510
+}
+fn default_terminal_blue() -> HexColor {
+    0x2472c8
+}
+fn default_terminal_magenta() -> HexColor {
+    0xbc3fbc
+}
+fn default_terminal_cyan() -> HexColor {
+    0x11a8cd
+}
+fn default_terminal_white() -> HexColor {
+    0xe5e5e5
+}
+fn default_terminal_bright_black() -> HexColor {
+    0x666666
+}
+fn default_terminal_bright_red() -> HexColor {
+    0xf14c4c
+}
+fn default_terminal_bright_green() -> HexColor {
+    0x23d18b
+}
+fn default_terminal_bright_yellow() -> HexColor {
+    0xf5f543
+}
+fn default_terminal_bright_blue() -> HexColor {
+    0x3b8eea
+}
+fn default_terminal_bright_magenta() -> HexColor {
+    0xd670d6
+}
+fn default_terminal_bright_cyan() -> HexColor {
+    0x29b8db
+}
+fn default_terminal_bright_white() -> HexColor {
+    0xffffff
+}
 
 impl Default for TerminalColors {
     fn default() -> Self {
@@ -348,7 +380,7 @@ impl TerminalColors {
             bright_white: 0xffffff,
         }
     }
-    
+
     /// Light mode terminal colors
     pub fn light_default() -> Self {
         TerminalColors {
@@ -370,7 +402,7 @@ impl TerminalColors {
             bright_white: 0xa5a5a5,
         }
     }
-    
+
     /// Get color by ANSI index (0-15)
     #[allow(dead_code)]
     pub fn get(&self, index: u8) -> HexColor {
@@ -522,7 +554,7 @@ impl ColorScheme {
                 dimmed: 0x666666,
             },
             accent: AccentColors {
-                selected: 0xfbbf24,    // Script Kit primary: #fbbf24 (yellow/gold)
+                selected: 0xfbbf24,        // Script Kit primary: #fbbf24 (yellow/gold)
                 selected_subtle: 0x2a2a2a, // Subtle dark gray for list selection backgrounds
             },
             ui: UIColors {
@@ -575,16 +607,16 @@ impl ColorScheme {
             let r = (color >> 16) & 0xFF;
             let g = (color >> 8) & 0xFF;
             let b = color & 0xFF;
-            
+
             // Reduce saturation and brightness: blend 30% toward gray
             let gray = 0x80u32;
             let new_r = ((r * 70 + gray * 30) / 100) as u8;
             let new_g = ((g * 70 + gray * 30) / 100) as u8;
             let new_b = ((b * 70 + gray * 30) / 100) as u8;
-            
+
             ((new_r as u32) << 16) | ((new_g as u32) << 8) | (new_b as u32)
         }
-        
+
         ColorScheme {
             background: BackgroundColors {
                 main: darken_hex(self.background.main),
@@ -654,11 +686,11 @@ impl Default for Theme {
 #[allow(dead_code)]
 impl Theme {
     /// Get the appropriate color scheme based on window focus state
-    /// 
+    ///
     /// If focus-aware colors are configured:
     /// - Returns focused colors when focused=true
     /// - Returns unfocused colors when focused=false
-    /// 
+    ///
     /// If focus-aware colors are not configured:
     /// - Always returns the standard colors (automatic dimmed version for unfocused)
     pub fn get_colors(&self, is_focused: bool) -> ColorScheme {
@@ -671,7 +703,7 @@ impl Theme {
                 return unfocused.to_color_scheme();
             }
         }
-        
+
         // Fallback: use standard colors, with automatic dimming for unfocused
         if is_focused {
             self.colors.clone()
@@ -679,29 +711,29 @@ impl Theme {
             self.colors.to_unfocused()
         }
     }
-    
+
     /// Get cursor style if window is focused
     pub fn get_cursor_style(&self, is_focused: bool) -> Option<CursorStyle> {
         if !is_focused {
             return None;
         }
-        
+
         if let Some(ref focus_aware) = self.focus_aware {
             if let Some(ref focused) = focus_aware.focused {
                 return focused.cursor.clone();
             }
         }
-        
+
         // Return default blinking cursor if focused
         Some(CursorStyle::default_focused())
     }
-    
+
     /// Get background opacity settings
     /// Returns the configured opacity or sensible defaults
     pub fn get_opacity(&self) -> BackgroundOpacity {
         self.opacity.clone().unwrap_or_default()
     }
-    
+
     /// Get opacity adjusted for focus state
     /// Unfocused windows are slightly more transparent
     pub fn get_opacity_for_focus(&self, is_focused: bool) -> BackgroundOpacity {
@@ -718,24 +750,24 @@ impl Theme {
             }
         }
     }
-    
+
     /// Get drop shadow configuration
     /// Returns the configured shadow or sensible defaults
     pub fn get_drop_shadow(&self) -> DropShadow {
         self.drop_shadow.clone().unwrap_or_default()
     }
-    
+
     /// Get vibrancy/blur effect settings
     /// Returns the configured vibrancy or sensible defaults
     pub fn get_vibrancy(&self) -> VibrancySettings {
         self.vibrancy.clone().unwrap_or_default()
     }
-    
+
     /// Check if vibrancy effect should be enabled
     pub fn is_vibrancy_enabled(&self) -> bool {
         self.get_vibrancy().enabled
     }
-    
+
     /// Get padding configuration
     /// Returns the configured padding or sensible defaults
     pub fn get_padding(&self) -> Padding {
@@ -759,22 +791,27 @@ pub fn detect_system_appearance() -> bool {
             // If the command succeeds and returns "Dark", we're in dark mode
             let stdout = String::from_utf8_lossy(&output.stdout);
             let is_dark = stdout.to_lowercase().contains("dark");
-            info!(appearance = if is_dark { "dark" } else { "light" }, "System appearance detected");
+            info!(
+                appearance = if is_dark { "dark" } else { "light" },
+                "System appearance detected"
+            );
             is_dark
         }
         Err(_) => {
             // Command failed or not available (e.g., light mode on macOS returns error)
-            debug!("System appearance detection failed or light mode detected, defaulting to light");
+            debug!(
+                "System appearance detection failed or light mode detected, defaulting to light"
+            );
             false
         }
     }
 }
 
 /// Load theme from ~/.kenv/theme.json
-/// 
+///
 /// Colors should be specified as decimal integers in the JSON file.
 /// For example, 0x1e1e1e (hex) = 1980410 (decimal).
-/// 
+///
 /// Example theme.json structure:
 /// ```json
 /// {
@@ -802,7 +839,7 @@ pub fn detect_system_appearance() -> bool {
 ///   }
 /// }
 /// ```
-/// 
+///
 /// If the file doesn't exist or fails to parse, returns a theme based on system appearance detection.
 /// If system appearance detection is not available, defaults to dark mode.
 /// Logs errors to stderr but doesn't fail the application.
@@ -852,39 +889,37 @@ pub fn load_theme() -> Theme {
             log_theme_config(&theme);
             theme
         }
-        Ok(contents) => {
-            match serde_json::from_str::<Theme>(&contents) {
-                Ok(theme) => {
-                    info!(path = %theme_path.display(), "Successfully loaded theme");
-                    log_theme_config(&theme);
-                    theme
-                }
-                Err(e) => {
-                    error!(
-                        path = %theme_path.display(),
-                        error = %e,
-                        "Failed to parse theme JSON, using defaults"
-                    );
-                    debug!(content = %contents, "Malformed theme file content");
-                    let is_dark = detect_system_appearance();
-                    let color_scheme = if is_dark {
-                        ColorScheme::dark_default()
-                    } else {
-                        ColorScheme::light_default()
-                    };
-                    let theme = Theme {
-                        colors: color_scheme,
-                        focus_aware: None,
-                        opacity: Some(BackgroundOpacity::default()),
-                        drop_shadow: Some(DropShadow::default()),
-                        vibrancy: Some(VibrancySettings::default()),
-                        padding: Some(Padding::default()),
-                    };
-                    log_theme_config(&theme);
-                    theme
-                }
+        Ok(contents) => match serde_json::from_str::<Theme>(&contents) {
+            Ok(theme) => {
+                info!(path = %theme_path.display(), "Successfully loaded theme");
+                log_theme_config(&theme);
+                theme
             }
-        }
+            Err(e) => {
+                error!(
+                    path = %theme_path.display(),
+                    error = %e,
+                    "Failed to parse theme JSON, using defaults"
+                );
+                debug!(content = %contents, "Malformed theme file content");
+                let is_dark = detect_system_appearance();
+                let color_scheme = if is_dark {
+                    ColorScheme::dark_default()
+                } else {
+                    ColorScheme::light_default()
+                };
+                let theme = Theme {
+                    colors: color_scheme,
+                    focus_aware: None,
+                    opacity: Some(BackgroundOpacity::default()),
+                    drop_shadow: Some(DropShadow::default()),
+                    vibrancy: Some(VibrancySettings::default()),
+                    padding: Some(Padding::default()),
+                };
+                log_theme_config(&theme);
+                theme
+            }
+        },
     }
 }
 
@@ -895,10 +930,10 @@ pub fn load_theme() -> Theme {
 // They implement Copy to avoid heap allocations when captured by closures.
 
 /// Lightweight struct for list item rendering - Copy to avoid clone in closures
-/// 
+///
 /// This struct pre-computes the exact colors needed for rendering list items,
 /// avoiding the need to clone the full ThemeColors struct into render closures.
-/// 
+///
 /// # Example
 /// ```ignore
 /// let list_colors = theme.colors.list_item_colors();
@@ -934,20 +969,23 @@ pub struct ListItemColors {
 #[allow(dead_code)]
 impl ListItemColors {
     /// Create ListItemColors from a ColorScheme
-    /// 
+    ///
     /// This extracts only the colors needed for list item rendering.
     pub fn from_color_scheme(colors: &ColorScheme) -> Self {
         // Pre-compute rgba colors with appropriate alpha values
         // Background is transparent, hover/selected use subtle colors
         let selected_subtle = colors.accent.selected_subtle;
-        
+
         #[cfg(debug_assertions)]
-        debug!(selected_subtle = format!("#{:06x}", selected_subtle), "Extracting list item colors");
-        
+        debug!(
+            selected_subtle = format!("#{:06x}", selected_subtle),
+            "Extracting list item colors"
+        );
+
         ListItemColors {
-            background: rgba(TRANSPARENT),  // Fully transparent
-            background_hover: rgba((selected_subtle << 8) | 0x40),  // 25% opacity
-            background_selected: rgba((selected_subtle << 8) | 0x80),  // 50% opacity
+            background: rgba(TRANSPARENT), // Fully transparent
+            background_hover: rgba((selected_subtle << 8) | 0x40), // 25% opacity
+            background_selected: rgba((selected_subtle << 8) | 0x80), // 50% opacity
             text: rgb(colors.text.primary),
             text_secondary: rgb(colors.text.secondary),
             text_dimmed: rgb(colors.text.dimmed),
@@ -955,12 +993,12 @@ impl ListItemColors {
             border: rgb(colors.ui.border),
         }
     }
-    
+
     /// Convert a specific color to Hsla for advanced styling
     pub fn text_as_hsla(&self) -> Hsla {
         self.text.into()
     }
-    
+
     /// Get description color based on selection state
     pub fn description_color(&self, is_selected: bool) -> Rgba {
         if is_selected {
@@ -969,7 +1007,7 @@ impl ListItemColors {
             self.text_secondary
         }
     }
-    
+
     /// Get item text color based on selection state
     pub fn item_text_color(&self, is_selected: bool) -> Rgba {
         if is_selected {
@@ -983,7 +1021,7 @@ impl ListItemColors {
 #[allow(dead_code)]
 impl ColorScheme {
     /// Extract only the colors needed for list item rendering
-    /// 
+    ///
     /// This creates a lightweight, Copy struct that can be efficiently
     /// passed into closures without cloning the full ColorScheme.
     pub fn list_item_colors(&self) -> ListItemColors {
@@ -992,7 +1030,7 @@ impl ColorScheme {
 }
 
 /// Lightweight struct for input field rendering
-/// 
+///
 /// Pre-computes colors for search boxes, text inputs, etc.
 #[allow(dead_code)]
 #[derive(Copy, Clone, Debug)]
@@ -1015,13 +1053,13 @@ impl InputFieldColors {
     pub fn from_color_scheme(colors: &ColorScheme) -> Self {
         #[cfg(debug_assertions)]
         debug!("Extracting input field colors");
-        
+
         InputFieldColors {
             background: rgba((colors.background.search_box << 8) | 0x80),
             text: rgb(colors.text.primary),
             placeholder: rgb(colors.text.muted),
             border: rgba((colors.ui.border << 8) | 0x60),
-            cursor: rgb(0x00ffff),  // Cyan cursor
+            cursor: rgb(0x00ffff), // Cyan cursor
         }
     }
 }
@@ -1191,9 +1229,15 @@ mod tests {
         let json = serde_json::to_string(&theme).unwrap();
         let deserialized: Theme = serde_json::from_str(&json).unwrap();
 
-        assert_eq!(deserialized.colors.background.main, theme.colors.background.main);
+        assert_eq!(
+            deserialized.colors.background.main,
+            theme.colors.background.main
+        );
         assert_eq!(deserialized.colors.text.primary, theme.colors.text.primary);
-        assert_eq!(deserialized.colors.accent.selected, theme.colors.accent.selected);
+        assert_eq!(
+            deserialized.colors.accent.selected,
+            theme.colors.accent.selected
+        );
         assert_eq!(deserialized.colors.ui.border, theme.colors.ui.border);
     }
 
@@ -1213,7 +1257,7 @@ mod tests {
         assert_eq!(deserialized.colors.background.main, 0xffffff);
         assert_eq!(deserialized.colors.text.primary, 0x000000);
     }
-    
+
     #[test]
     fn test_opacity_defaults() {
         let opacity = BackgroundOpacity::default();
@@ -1222,7 +1266,7 @@ mod tests {
         assert_eq!(opacity.search_box, 0.70);
         assert_eq!(opacity.log_panel, 0.55);
     }
-    
+
     #[test]
     fn test_drop_shadow_defaults() {
         let shadow = DropShadow::default();
@@ -1234,14 +1278,14 @@ mod tests {
         assert_eq!(shadow.color, 0x000000);
         assert_eq!(shadow.opacity, 0.25);
     }
-    
+
     #[test]
     fn test_vibrancy_defaults() {
         let vibrancy = VibrancySettings::default();
         assert!(vibrancy.enabled);
         assert_eq!(vibrancy.material, "popover");
     }
-    
+
     #[test]
     fn test_padding_defaults() {
         let padding = Padding::default();
@@ -1257,7 +1301,7 @@ mod tests {
         assert_eq!(padding.item_x, 16.0);
         assert_eq!(padding.item_y, 8.0);
     }
-    
+
     #[test]
     fn test_padding_helper_methods() {
         let padding = Padding::default();
@@ -1268,7 +1312,7 @@ mod tests {
         assert_eq!(padding.item_horizontal(), 16.0);
         assert_eq!(padding.item_vertical(), 8.0);
     }
-    
+
     #[test]
     fn test_theme_get_padding() {
         let theme = Theme::default();
@@ -1276,7 +1320,7 @@ mod tests {
         assert_eq!(padding.md, 12.0);
         assert_eq!(padding.content_x, 16.0);
     }
-    
+
     #[test]
     fn test_padding_serialization() {
         let padding = Padding::default();
@@ -1298,113 +1342,113 @@ mod tests {
         let _is_dark = detect_system_appearance();
         // Don't assert a specific value, just ensure it doesn't panic
     }
-    
+
     // ========================================================================
     // ListItemColors Tests
     // ========================================================================
-    
+
     #[test]
     fn test_list_item_colors_is_copy() {
         // Compile-time verification that ListItemColors implements Copy
         fn assert_copy<T: Copy>() {}
         assert_copy::<ListItemColors>();
     }
-    
+
     #[test]
     fn test_list_item_colors_from_dark_scheme() {
         let scheme = ColorScheme::dark_default();
         let colors = scheme.list_item_colors();
-        
+
         // Verify background is transparent
         assert_eq!(colors.background.a, 0.0);
-        
+
         // Verify hover and selected have some opacity (not transparent)
         assert!(colors.background_hover.a > 0.0);
         assert!(colors.background_selected.a > 0.0);
-        
+
         // Verify selected has more opacity than hover
         assert!(colors.background_selected.a > colors.background_hover.a);
     }
-    
+
     #[test]
     fn test_list_item_colors_from_light_scheme() {
         let scheme = ColorScheme::light_default();
         let colors = scheme.list_item_colors();
-        
+
         // Verify we get colors from light scheme
         // Light scheme uses 0xe8e8e8 for selected_subtle
         assert!(colors.background_selected.a > 0.0);
     }
-    
+
     #[test]
     fn test_list_item_colors_description_color() {
         let scheme = ColorScheme::dark_default();
         let colors = scheme.list_item_colors();
-        
+
         let selected_desc = colors.description_color(true);
         let unselected_desc = colors.description_color(false);
-        
+
         // Selected should use accent, unselected should use secondary
         // These should be different colors
         assert_ne!(selected_desc.r, unselected_desc.r);
     }
-    
+
     #[test]
     fn test_list_item_colors_item_text_color() {
         let scheme = ColorScheme::dark_default();
         let colors = scheme.list_item_colors();
-        
+
         let selected_text = colors.item_text_color(true);
         let unselected_text = colors.item_text_color(false);
-        
+
         // For dark theme, selected should be primary (white), unselected secondary
         assert!(selected_text.r >= unselected_text.r);
     }
-    
+
     #[test]
     fn test_list_item_colors_text_as_hsla() {
         let scheme = ColorScheme::dark_default();
         let colors = scheme.list_item_colors();
-        
+
         let hsla = colors.text_as_hsla();
-        
+
         // Dark theme primary text is white (0xffffff)
         // White should have high lightness
         assert!(hsla.l > 0.9);
     }
-    
+
     // ========================================================================
     // InputFieldColors Tests
     // ========================================================================
-    
+
     #[test]
     fn test_input_field_colors_is_copy() {
         // Compile-time verification that InputFieldColors implements Copy
         fn assert_copy<T: Copy>() {}
         assert_copy::<InputFieldColors>();
     }
-    
+
     #[test]
     fn test_input_field_colors_from_scheme() {
         let scheme = ColorScheme::dark_default();
         let colors = scheme.input_field_colors();
-        
+
         // Background should have some alpha (semi-transparent)
         assert!(colors.background.a > 0.0);
         assert!(colors.background.a < 1.0);
-        
+
         // Border should have some alpha
         assert!(colors.border.a > 0.0);
-        
+
         // Text should be fully opaque
         assert_eq!(colors.text.a, 1.0);
     }
-    
+
     #[test]
     fn test_input_field_cursor_color() {
         let scheme = ColorScheme::dark_default();
         let colors = scheme.input_field_colors();
-        
+
         // Cursor should be cyan (0x00ffff)
         // In rgba, cyan has g=1.0, b=1.0, r=0.0
         assert!(colors.cursor.g > 0.9);

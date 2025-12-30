@@ -66,7 +66,7 @@ fn map_language_to_syntax(language: &str) -> &str {
         "yaml" | "yml" => "YAML",
         // Note: TOML may not be in syntect defaults either
         "toml" => "Makefile", // Fallback - TOML not in defaults
-        _ => language, // Try the language name directly as fallback
+        _ => language,        // Try the language name directly as fallback
     }
 }
 
@@ -85,14 +85,15 @@ pub fn highlight_code_lines(code: &str, language: &str) -> Vec<HighlightedLine> 
 
     // Use base16-eighties.dark theme which looks good on dark backgrounds
     let theme = &ts.themes["base16-eighties.dark"];
-    
+
     // Default foreground color for plain text (light gray)
     let default_color = 0xcccccc_u32;
 
     let syntax_name = map_language_to_syntax(language);
-    
+
     // Try to find the syntax by name, or fall back to JavaScript for unknown
-    let syntax = ps.find_syntax_by_name(syntax_name)
+    let syntax = ps
+        .find_syntax_by_name(syntax_name)
         .or_else(|| ps.find_syntax_by_extension(language))
         .or_else(|| ps.find_syntax_by_name("JavaScript")) // Better fallback than plain text
         .unwrap_or_else(|| ps.find_syntax_plain_text());
@@ -102,7 +103,7 @@ pub fn highlight_code_lines(code: &str, language: &str) -> Vec<HighlightedLine> 
 
     for line in LinesWithEndings::from(code) {
         let mut line_spans = Vec::new();
-        
+
         match highlighter.highlight_line(line, &ps) {
             Ok(ranges) => {
                 for (style, text) in ranges {
@@ -110,7 +111,8 @@ pub fn highlight_code_lines(code: &str, language: &str) -> Vec<HighlightedLine> 
                         // Strip trailing newline for cleaner rendering
                         let clean_text = text.trim_end_matches('\n');
                         if !clean_text.is_empty() {
-                            line_spans.push(HighlightedSpan::new(clean_text, style_to_hex_color(&style)));
+                            line_spans
+                                .push(HighlightedSpan::new(clean_text, style_to_hex_color(&style)));
                         }
                     }
                 }
@@ -123,7 +125,7 @@ pub fn highlight_code_lines(code: &str, language: &str) -> Vec<HighlightedLine> 
                 }
             }
         }
-        
+
         result.push(HighlightedLine { spans: line_spans });
     }
 
@@ -146,14 +148,15 @@ pub fn highlight_code(code: &str, language: &str) -> Vec<HighlightedSpan> {
 
     // Use base16-eighties.dark theme which looks good on dark backgrounds
     let theme = &ts.themes["base16-eighties.dark"];
-    
+
     // Default foreground color for plain text (light gray)
     let default_color = 0xcccccc_u32;
 
     let syntax_name = map_language_to_syntax(language);
-    
+
     // Try to find the syntax by name, or fall back to JavaScript for unknown
-    let syntax = ps.find_syntax_by_name(syntax_name)
+    let syntax = ps
+        .find_syntax_by_name(syntax_name)
         .or_else(|| ps.find_syntax_by_extension(language))
         .or_else(|| ps.find_syntax_by_name("JavaScript")) // Better fallback than plain text
         .unwrap_or_else(|| ps.find_syntax_plain_text());
@@ -188,16 +191,24 @@ pub fn highlight_code(code: &str, language: &str) -> Vec<HighlightedSpan> {
 /// Get a list of supported language identifiers
 pub fn supported_languages() -> Vec<&'static str> {
     vec![
-        "typescript", "ts",
-        "javascript", "js",
-        "markdown", "md",
+        "typescript",
+        "ts",
+        "javascript",
+        "js",
+        "markdown",
+        "md",
         "json",
-        "rust", "rs",
-        "python", "py",
+        "rust",
+        "rs",
+        "python",
+        "py",
         "html",
         "css",
-        "shell", "sh", "bash",
-        "yaml", "yml",
+        "shell",
+        "sh",
+        "bash",
+        "yaml",
+        "yml",
         "toml",
     ]
 }
@@ -210,10 +221,10 @@ mod tests {
     fn test_highlight_typescript() {
         let code = "const x: number = 42;";
         let spans = highlight_code(code, "typescript");
-        
+
         // Should produce multiple spans with different colors
         assert!(!spans.is_empty());
-        
+
         // Verify the text content is preserved
         let reconstructed: String = spans.iter().map(|s| s.text.as_str()).collect();
         assert_eq!(reconstructed, code);
@@ -223,7 +234,7 @@ mod tests {
     fn test_highlight_javascript() {
         let code = "function hello() { return 'world'; }";
         let spans = highlight_code(code, "javascript");
-        
+
         assert!(!spans.is_empty());
         let reconstructed: String = spans.iter().map(|s| s.text.as_str()).collect();
         assert_eq!(reconstructed, code);
@@ -233,7 +244,7 @@ mod tests {
     fn test_highlight_markdown() {
         let code = "# Hello World\n\nThis is **bold** text.";
         let spans = highlight_code(code, "markdown");
-        
+
         assert!(!spans.is_empty());
         let reconstructed: String = spans.iter().map(|s| s.text.as_str()).collect();
         assert_eq!(reconstructed, code);
@@ -244,7 +255,7 @@ mod tests {
         let code = "let x = 1;";
         let spans_ts = highlight_code(code, "ts");
         let spans_js = highlight_code(code, "js");
-        
+
         assert!(!spans_ts.is_empty());
         assert!(!spans_js.is_empty());
     }
@@ -253,7 +264,7 @@ mod tests {
     fn test_unknown_language_returns_plain_text() {
         let code = "some random text";
         let spans = highlight_code(code, "unknownlang123");
-        
+
         // Should return at least one span with the full text
         assert!(!spans.is_empty());
         let reconstructed: String = spans.iter().map(|s| s.text.as_str()).collect();
@@ -270,7 +281,7 @@ mod tests {
     fn test_multiline_code() {
         let code = "const a = 1;\nconst b = 2;\nconst c = a + b;";
         let spans = highlight_code(code, "javascript");
-        
+
         assert!(!spans.is_empty());
         let reconstructed: String = spans.iter().map(|s| s.text.as_str()).collect();
         assert_eq!(reconstructed, code);
@@ -279,10 +290,14 @@ mod tests {
     #[test]
     fn test_color_format() {
         let spans = highlight_code("let x = 42;", "typescript");
-        
+
         for span in &spans {
             // Colors should be in valid hex range (0x000000 to 0xFFFFFF)
-            assert!(span.color <= 0xFFFFFF, "Color {:06X} out of range", span.color);
+            assert!(
+                span.color <= 0xFFFFFF,
+                "Color {:06X} out of range",
+                span.color
+            );
         }
     }
 
@@ -308,10 +323,10 @@ mod tests {
     fn test_highlight_lines_preserves_structure() {
         let code = "const a = 1;\nconst b = 2;";
         let lines = highlight_code_lines(code, "js");
-        
+
         // Should have 2 lines
         assert_eq!(lines.len(), 2);
-        
+
         // Each line should have spans
         assert!(!lines[0].spans.is_empty());
         assert!(!lines[1].spans.is_empty());
@@ -322,9 +337,12 @@ mod tests {
         // Use JavaScript which IS in syntect defaults
         let code = "function test() { return 42; }";
         let spans = highlight_code(code, "javascript");
-        
+
         // Check we have different colors (real syntax highlighting)
         let unique_colors: std::collections::HashSet<u32> = spans.iter().map(|s| s.color).collect();
-        assert!(unique_colors.len() > 1, "Expected syntax highlighting to produce multiple colors");
+        assert!(
+            unique_colors.len() > 1,
+            "Expected syntax highlighting to produce multiple colors"
+        );
     }
 }

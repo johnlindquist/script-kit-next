@@ -7,16 +7,16 @@
 #![allow(dead_code)]
 
 /// Vibrancy configuration for GPUI window background appearance
-/// 
+///
 /// GPUI supports three WindowBackgroundAppearance values:
 /// - Opaque: Solid, no transparency
 /// - Transparent: Fully transparent
 /// - Blurred: macOS vibrancy effect (recommended for Spotlight/Raycast-like feel)
-/// 
+///
 /// The actual vibrancy effect is achieved through:
 /// 1. Setting `WindowBackgroundAppearance::Blurred` in WindowOptions (done in main.rs)
 /// 2. Using semi-transparent background colors (controlled by theme opacity settings)
-/// 
+///
 /// The blur shows through the transparent portions of the window background,
 /// creating the native macOS vibrancy effect similar to Spotlight and Raycast.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
@@ -36,7 +36,7 @@ impl WindowVibrancy {
     pub fn is_blurred(&self) -> bool {
         matches!(self, WindowVibrancy::Blurred)
     }
-    
+
     /// Check if this vibrancy setting is fully opaque
     pub fn is_opaque(&self) -> bool {
         matches!(self, WindowVibrancy::Opaque)
@@ -73,7 +73,7 @@ pub fn configure_as_floating_panel() {}
 pub const DEFAULT_PLACEHOLDER: &str = "Script Kit";
 
 /// Configuration for input field placeholder behavior
-/// 
+///
 /// When using this configuration:
 /// - Cursor should be positioned at FAR LEFT (index 0) when input is empty
 /// - Placeholder text appears dimmed/muted when no user input
@@ -103,20 +103,18 @@ impl PlaceholderConfig {
             cursor_at_left: true,
         }
     }
-    
+
     /// Log when placeholder state changes (for observability)
     pub fn log_state_change(&self, is_showing_placeholder: bool) {
         crate::logging::log(
             "PLACEHOLDER",
             &format!(
                 "Placeholder state changed: showing={}, text='{}', cursor_at_left={}",
-                is_showing_placeholder,
-                self.text,
-                self.cursor_at_left
+                is_showing_placeholder, self.text, self.cursor_at_left
             ),
         );
     }
-    
+
     /// Log cursor position on input focus (for observability)
     pub fn log_cursor_position(&self, position: usize, is_empty: bool) {
         crate::logging::log(
@@ -136,18 +134,18 @@ impl PlaceholderConfig {
 // ============================================================================
 
 /// Standard cursor width in pixels for text input fields
-/// 
+///
 /// This matches the standard cursor width used in editor.rs and provides
 /// visual consistency across all input fields.
 pub const CURSOR_WIDTH: f32 = 2.0;
 
 /// Cursor height for large text (.text_lg() / 18px font)
-/// 
+///
 /// This value is calculated to align properly with GPUI's .text_lg() text rendering:
 /// - GPUI's text_lg() uses ~18px font size
 /// - With natural line height (~1.55), this gives ~28px line height
 /// - Cursor should be 18px with 5px top/bottom spacing for vertical centering
-/// 
+///
 /// NOTE: This value differs from `font_size_lg * line_height_normal` in design tokens
 /// because GPUI's .text_lg() has different line-height than our token calculations.
 /// Using this constant ensures proper cursor-text alignment.
@@ -160,13 +158,13 @@ pub const CURSOR_HEIGHT_SM: f32 = 14.0;
 pub const CURSOR_HEIGHT_MD: f32 = 16.0;
 
 /// Vertical margin for cursor centering within text line
-/// 
+///
 /// Apply this as `.my(px(CURSOR_MARGIN_Y))` to vertically center the cursor
 /// within its text line. This follows the editor.rs pattern.
 pub const CURSOR_MARGIN_Y: f32 = 2.0;
 
 /// Configuration for input cursor styling
-/// 
+///
 /// Use this struct to ensure consistent cursor appearance across all input fields.
 /// The cursor should:
 /// 1. Use a fixed height matching the text size (not calculated from design tokens)
@@ -197,7 +195,7 @@ impl CursorStyle {
             margin_y: CURSOR_MARGIN_Y,
         }
     }
-    
+
     /// Cursor style for medium text (.text_md())
     pub const fn medium() -> Self {
         Self {
@@ -206,7 +204,7 @@ impl CursorStyle {
             margin_y: CURSOR_MARGIN_Y,
         }
     }
-    
+
     /// Cursor style for small text (.text_sm())
     pub const fn small() -> Self {
         Self {
@@ -220,96 +218,103 @@ impl CursorStyle {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_default_vibrancy() {
         assert_eq!(WindowVibrancy::default(), WindowVibrancy::Blurred);
     }
-    
+
     #[test]
     fn test_vibrancy_is_blurred() {
         assert!(WindowVibrancy::Blurred.is_blurred());
         assert!(!WindowVibrancy::Opaque.is_blurred());
         assert!(!WindowVibrancy::Transparent.is_blurred());
     }
-    
+
     #[test]
     fn test_vibrancy_is_opaque() {
         assert!(WindowVibrancy::Opaque.is_opaque());
         assert!(!WindowVibrancy::Blurred.is_opaque());
         assert!(!WindowVibrancy::Transparent.is_opaque());
     }
-    
+
     // Placeholder configuration tests
-    
+
     #[test]
     fn test_default_placeholder_text() {
         assert_eq!(DEFAULT_PLACEHOLDER, "Script Kit");
     }
-    
+
     #[test]
     fn test_placeholder_config_default() {
         let config = PlaceholderConfig::default();
         assert_eq!(config.text, "Script Kit");
         assert!(config.cursor_at_left);
     }
-    
+
     #[test]
     fn test_placeholder_config_new() {
         let config = PlaceholderConfig::new("Custom Placeholder");
         assert_eq!(config.text, "Custom Placeholder");
         assert!(config.cursor_at_left);
     }
-    
+
     #[test]
     fn test_placeholder_cursor_at_left_by_default() {
         // Verify that cursor_at_left is true by default
         // This ensures cursor appears at FAR LEFT when input is empty
         let config = PlaceholderConfig::default();
-        assert!(config.cursor_at_left, "Cursor should be at left by default for proper placeholder behavior");
+        assert!(
+            config.cursor_at_left,
+            "Cursor should be at left by default for proper placeholder behavior"
+        );
     }
-    
+
     // Cursor styling tests
-    
+
     #[test]
     fn test_cursor_width_constant() {
         assert_eq!(CURSOR_WIDTH, 2.0);
     }
-    
+
     #[test]
     fn test_cursor_height_lg_matches_text_lg() {
         // CURSOR_HEIGHT_LG should be 18px to match GPUI's .text_lg() font size
         // This ensures proper vertical alignment of cursor with text
         assert_eq!(CURSOR_HEIGHT_LG, 18.0);
     }
-    
+
     #[test]
     fn test_cursor_heights_proportional() {
         // Cursor heights should be proportional to text sizes
         // Use const blocks to satisfy clippy::assertions_on_constants
-        const _: () = { assert!(CURSOR_HEIGHT_SM < CURSOR_HEIGHT_MD); };
-        const _: () = { assert!(CURSOR_HEIGHT_MD < CURSOR_HEIGHT_LG); };
+        const _: () = {
+            assert!(CURSOR_HEIGHT_SM < CURSOR_HEIGHT_MD);
+        };
+        const _: () = {
+            assert!(CURSOR_HEIGHT_MD < CURSOR_HEIGHT_LG);
+        };
     }
-    
+
     #[test]
     fn test_cursor_style_default_is_large() {
         let style = CursorStyle::default();
         assert_eq!(style.height, CURSOR_HEIGHT_LG);
         assert_eq!(style.width, CURSOR_WIDTH);
     }
-    
+
     #[test]
     fn test_cursor_style_constructors() {
         let large = CursorStyle::large();
         assert_eq!(large.height, CURSOR_HEIGHT_LG);
-        
+
         let medium = CursorStyle::medium();
         assert_eq!(medium.height, CURSOR_HEIGHT_MD);
-        
+
         let small = CursorStyle::small();
         assert_eq!(small.height, CURSOR_HEIGHT_SM);
     }
-    
+
     #[test]
     fn test_cursor_margin_constant() {
         // Margin should be 2px for proper vertical centering

@@ -215,20 +215,17 @@ impl PromptContainer {
     fn render_divider(&self) -> impl IntoElement {
         let colors = self.colors;
         let margin = self.config.divider_margin;
-        
+
         // Semi-transparent border (60% opacity)
         let border_with_alpha = (colors.border << 8) | 0x60;
-        
-        div()
-            .mx(px(margin))
-            .h(px(1.))
-            .bg(rgba(border_with_alpha))
+
+        div().mx(px(margin)).h(px(1.)).bg(rgba(border_with_alpha))
     }
 
     /// Render the footer hint text
     fn render_hint(&self, text: &str) -> impl IntoElement {
         let colors = self.colors;
-        
+
         div()
             .w_full()
             .px(px(16.))
@@ -240,7 +237,7 @@ impl PromptContainer {
                 div()
                     .text_xs()
                     .text_color(rgb(colors.text_muted))
-                    .child(text.to_string())
+                    .child(text.to_string()),
             )
     }
 }
@@ -250,10 +247,10 @@ impl RenderOnce for PromptContainer {
         let colors = self.colors;
         let config = self.config;
         let has_header = self.header.is_some();
-        
+
         // Background with opacity
         let bg_with_opacity = (colors.background << 8) | (config.background_opacity as u32);
-        
+
         // Build the container
         let mut container = div()
             .flex()
@@ -264,12 +261,12 @@ impl RenderOnce for PromptContainer {
             .rounded(px(config.rounded_corners))
             .text_color(rgb(colors.text_primary))
             .font_family(".AppleSystemUIFont");
-        
+
         // Add header if present
         if let Some(header) = self.header {
             container = container.child(header);
         }
-        
+
         // Add divider if configured and header was present
         if config.show_divider && has_header {
             // Render divider inline to avoid borrow issues
@@ -278,17 +275,17 @@ impl RenderOnce for PromptContainer {
                 div()
                     .mx(px(config.divider_margin))
                     .h(px(1.))
-                    .bg(rgba(border_with_alpha))
+                    .bg(rgba(border_with_alpha)),
             );
         }
-        
+
         // Add content if present
         // Content element should already have proper flex sizing (e.g., flex_1())
         // Don't wrap in extra div - pass through directly to avoid layout issues
         if let Some(content) = self.content {
             container = container.child(content);
         }
-        
+
         // Add footer if present, or hint text if configured
         if let Some(footer) = self.footer {
             container = container.child(footer);
@@ -306,11 +303,11 @@ impl RenderOnce for PromptContainer {
                         div()
                             .text_xs()
                             .text_color(rgb(colors.text_muted))
-                            .child(hint.clone())
-                    )
+                            .child(hint.clone()),
+                    ),
             );
         }
-        
+
         container
     }
 }

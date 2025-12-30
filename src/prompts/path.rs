@@ -7,20 +7,20 @@
 //! - Submit selected path
 
 use gpui::{
-    div, prelude::*, uniform_list, Context, FocusHandle, Focusable, Render, 
+    div, prelude::*, uniform_list, Context, FocusHandle, Focusable, Render,
     UniformListScrollHandle, Window,
 };
-use std::sync::{Arc, Mutex};
 use std::path::Path;
+use std::sync::{Arc, Mutex};
 
+use crate::components::{
+    PromptContainer, PromptContainerColors, PromptContainerConfig, PromptHeader,
+    PromptHeaderColors, PromptHeaderConfig,
+};
+use crate::designs::{get_tokens, DesignVariant};
+use crate::list_item::{IconKind, ListItem, ListItemColors};
 use crate::logging;
 use crate::theme;
-use crate::designs::{DesignVariant, get_tokens};
-use crate::list_item::{ListItem, ListItemColors, IconKind};
-use crate::components::{
-    PromptHeader, PromptHeaderColors, PromptHeaderConfig,
-    PromptContainer, PromptContainerColors, PromptContainerConfig,
-};
 
 /// Callback for prompt submission
 /// Signature: (id: String, value: Option<String>)
@@ -120,17 +120,21 @@ impl PathPrompt {
         on_submit: SubmitCallback,
         theme: Arc<theme::Theme>,
     ) -> Self {
-        let current_path = start_path.clone()
-            .unwrap_or_else(|| dirs::home_dir()
+        let current_path = start_path.clone().unwrap_or_else(|| {
+            dirs::home_dir()
                 .map(|p| p.to_string_lossy().to_string())
-                .unwrap_or_else(|| "/".to_string()));
-        
-        logging::log("PROMPTS", &format!("PathPrompt::new starting at: {}", current_path));
-        
+                .unwrap_or_else(|| "/".to_string())
+        });
+
+        logging::log(
+            "PROMPTS",
+            &format!("PathPrompt::new starting at: {}", current_path),
+        );
+
         // Load entries from current path
         let entries = Self::load_entries(&current_path);
         let filtered_entries = entries.clone();
-        
+
         PathPrompt {
             id,
             start_path,
@@ -152,103 +156,111 @@ impl PathPrompt {
             cursor_visible: true,
         }
     }
-    
+
     /// Set the callback for showing actions dialog
     pub fn with_show_actions(mut self, callback: ShowActionsCallback) -> Self {
         self.on_show_actions = Some(callback);
         self
     }
-    
+
     /// Set the show actions callback (mutable version)
     pub fn set_show_actions(&mut self, callback: ShowActionsCallback) {
         self.on_show_actions = Some(callback);
     }
-    
+
     /// Set the close actions callback (for toggle behavior)
     pub fn with_close_actions(mut self, callback: CloseActionsCallback) -> Self {
         self.on_close_actions = Some(callback);
         self
     }
-    
+
     /// Set the shared actions_showing state (for toggle behavior)
     pub fn with_actions_showing(mut self, actions_showing: Arc<Mutex<bool>>) -> Self {
         self.actions_showing = actions_showing;
         self
     }
-    
+
     /// Set the shared actions_search_text state (for header display)
     pub fn with_actions_search_text(mut self, actions_search_text: Arc<Mutex<String>>) -> Self {
         self.actions_search_text = actions_search_text;
         self
     }
-    
+
     /// Load directory entries from a path
     fn load_entries(dir_path: &str) -> Vec<PathEntry> {
         let path = Path::new(dir_path);
         let mut entries = Vec::new();
-        
+
         // No ".." entry - use left arrow to navigate to parent
-        
+
         // Read directory entries
         if let Ok(read_dir) = std::fs::read_dir(path) {
             let mut dirs: Vec<PathEntry> = Vec::new();
             let mut files: Vec<PathEntry> = Vec::new();
-            
+
             for entry in read_dir.flatten() {
                 let entry_path = entry.path();
                 let name = entry.file_name().to_string_lossy().to_string();
-                
+
                 // Skip hidden files (starting with .)
                 if name.starts_with('.') {
                     continue;
                 }
-                
+
                 let is_dir = entry_path.is_dir();
                 let path_entry = PathEntry {
                     name,
                     path: entry_path.to_string_lossy().to_string(),
                     is_dir,
                 };
-                
+
                 if is_dir {
                     dirs.push(path_entry);
                 } else {
                     files.push(path_entry);
                 }
             }
-            
+
             // Sort alphabetically (case insensitive)
             dirs.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
             files.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
-            
+
             // Add dirs first, then files
             entries.extend(dirs);
             entries.extend(files);
         }
-        
-        logging::log("PROMPTS", &format!("PathPrompt loaded {} entries from {}", entries.len(), dir_path));
+
+        logging::log(
+            "PROMPTS",
+            &format!(
+                "PathPrompt loaded {} entries from {}",
+                entries.len(),
+                dir_path
+            ),
+        );
         entries
     }
-    
+
     /// Update filtered entries based on filter text
     fn update_filtered(&mut self) {
         if self.filter_text.is_empty() {
             self.filtered_entries = self.entries.clone();
         } else {
             let filter_lower = self.filter_text.to_lowercase();
-            self.filtered_entries = self.entries
+            self.filtered_entries = self
+                .entries
                 .iter()
                 .filter(|e| e.name.to_lowercase().contains(&filter_lower))
                 .cloned()
                 .collect();
         }
-        
+
         // Reset selection to 0 if out of bounds
         if self.selected_index >= self.filtered_entries.len() {
             self.selected_index = 0;
         }
     }
-    
+
     /// Navigate into a directory
     pub fn navigate_to(&mut self, path: &str, cx: &mut Context<Self>) {
         self.current_path = path.to_string();
@@ -263,22 +275,21 @@ impl PathPrompt {
     fn show_actions(&mut self, cx: &mut Context<Self>) {
         if let Some(entry) = self.filtered_entries.get(self.selected_index) {
             if let Some(ref callback) = self.on_show_actions {
-                let path_info = PathInfo::new(
-                    entry.name.clone(),
-                    entry.path.clone(),
-                    entry.is_dir,
+                let path_info = PathInfo::new(entry.name.clone(), entry.path.clone(), entry.is_dir);
+                logging::log(
+                    "PROMPTS",
+                    &format!(
+                        "PathPrompt showing actions for: {} (is_dir={})",
+                        path_info.path, path_info.is_dir
+                    ),
                 );
-                logging::log("PROMPTS", &format!(
-                    "PathPrompt showing actions for: {} (is_dir={})", 
-                    path_info.path, path_info.is_dir
-                ));
                 (callback)(path_info);
                 // Trigger re-render to show ActionsDialog
                 cx.notify();
             }
         }
     }
-    
+
     /// Close actions dialog (for toggle behavior)
     fn close_actions(&mut self, cx: &mut Context<Self>) {
         if let Some(ref callback) = self.on_close_actions {
@@ -287,20 +298,23 @@ impl PathPrompt {
             cx.notify();
         }
     }
-    
+
     /// Toggle actions dialog - show if hidden, close if showing
     pub fn toggle_actions(&mut self, cx: &mut Context<Self>) {
         let is_showing = self.actions_showing.lock().map(|g| *g).unwrap_or(false);
-        
+
         if is_showing {
-            logging::log("PROMPTS", "PathPrompt toggle: closing actions (was showing)");
+            logging::log(
+                "PROMPTS",
+                "PathPrompt toggle: closing actions (was showing)",
+            );
             self.close_actions(cx);
         } else {
             logging::log("PROMPTS", "PathPrompt toggle: showing actions (was hidden)");
             self.show_actions(cx);
         }
     }
-    
+
     /// Submit the selected path - always submits, never navigates
     /// For files and directories: submit the path (script will handle it)
     /// Navigation into directories is handled by → and Tab keys
@@ -308,21 +322,27 @@ impl PathPrompt {
         if let Some(entry) = self.filtered_entries.get(self.selected_index) {
             // Always submit the path, whether it's a file or directory
             // The calling script or default handler will decide what to do with it
-            logging::log("PROMPTS", &format!(
-                "PathPrompt submitting path: {} (is_dir={})", 
-                entry.path, entry.is_dir
-            ));
+            logging::log(
+                "PROMPTS",
+                &format!(
+                    "PathPrompt submitting path: {} (is_dir={})",
+                    entry.path, entry.is_dir
+                ),
+            );
             (self.on_submit)(self.id.clone(), Some(entry.path.clone()));
         } else if !self.filter_text.is_empty() {
             // If no entry selected but filter has text, submit the filter as a path
-            logging::log("PROMPTS", &format!(
-                "PathPrompt submitting filter text as path: {}", 
-                self.filter_text
-            ));
+            logging::log(
+                "PROMPTS",
+                &format!(
+                    "PathPrompt submitting filter text as path: {}",
+                    self.filter_text
+                ),
+            );
             (self.on_submit)(self.id.clone(), Some(self.filter_text.clone()));
         }
     }
-    
+
     /// Handle Enter key - always submit the selected path
     /// The calling code (main.rs) will open it with system default via std::process::Command
     pub fn handle_enter(&mut self, cx: &mut Context<Self>) {
@@ -333,7 +353,13 @@ impl PathPrompt {
 
     /// Cancel - submit None
     pub fn submit_cancel(&mut self) {
-        logging::log("PROMPTS", &format!("PathPrompt submit_cancel called - submitting None for id: {}", self.id));
+        logging::log(
+            "PROMPTS",
+            &format!(
+                "PathPrompt submit_cancel called - submitting None for id: {}",
+                self.id
+            ),
+        );
         (self.on_submit)(self.id.clone(), None);
     }
 
@@ -341,7 +367,8 @@ impl PathPrompt {
     pub fn move_up(&mut self, cx: &mut Context<Self>) {
         if self.selected_index > 0 {
             self.selected_index -= 1;
-            self.list_scroll_handle.scroll_to_item(self.selected_index, gpui::ScrollStrategy::Top);
+            self.list_scroll_handle
+                .scroll_to_item(self.selected_index, gpui::ScrollStrategy::Top);
             cx.notify();
         }
     }
@@ -350,7 +377,8 @@ impl PathPrompt {
     pub fn move_down(&mut self, cx: &mut Context<Self>) {
         if self.selected_index < self.filtered_entries.len().saturating_sub(1) {
             self.selected_index += 1;
-            self.list_scroll_handle.scroll_to_item(self.selected_index, gpui::ScrollStrategy::Top);
+            self.list_scroll_handle
+                .scroll_to_item(self.selected_index, gpui::ScrollStrategy::Top);
             cx.notify();
         }
     }
@@ -383,7 +411,10 @@ impl PathPrompt {
         let path = Path::new(&self.current_path);
         if let Some(parent) = path.parent() {
             let parent_path = parent.to_string_lossy().to_string();
-            logging::log("PROMPTS", &format!("PathPrompt navigating to parent: {}", parent_path));
+            logging::log(
+                "PROMPTS",
+                &format!("PathPrompt navigating to parent: {}", parent_path),
+            );
             self.navigate_to(&parent_path, cx);
         }
         // If at root, do nothing
@@ -400,12 +431,12 @@ impl PathPrompt {
             // If selected entry is a file, do nothing
         }
     }
-    
+
     /// Get the currently selected path info (for actions dialog)
     pub fn get_selected_path_info(&self) -> Option<PathInfo> {
-        self.filtered_entries.get(self.selected_index).map(|entry| {
-            PathInfo::new(entry.name.clone(), entry.path.clone(), entry.is_dir)
-        })
+        self.filtered_entries
+            .get(self.selected_index)
+            .map(|entry| PathInfo::new(entry.name.clone(), entry.path.clone(), entry.is_dir))
     }
 }
 
@@ -420,56 +451,64 @@ impl Render for PathPrompt {
         let tokens = get_tokens(self.design_variant);
         let design_colors = tokens.colors();
 
-        let handle_key = cx.listener(|this: &mut Self, event: &gpui::KeyDownEvent, _window: &mut Window, cx: &mut Context<Self>| {
-            let key_str = event.keystroke.key.to_lowercase();
-            let has_cmd = event.keystroke.modifiers.platform;
-            
-            // Check if actions dialog is showing - if so, don't handle most keys
-            // The ActionsDialog has its own key handler and will handle them
-            let actions_showing = this.actions_showing.lock().map(|g| *g).unwrap_or(false);
-            
-            // Cmd+K always toggles actions (whether showing or not)
-            if has_cmd && key_str == "k" {
-                this.toggle_actions(cx);
-                return;
-            }
-            
-            // When actions are showing, let the ActionsDialog handle all other keys
-            // The ActionsDialog is focused and has its own on_key_down handler
-            if actions_showing {
-                // Don't handle any other keys - let them bubble to ActionsDialog
-                return;
-            }
-            
-            match key_str.as_str() {
-                "up" | "arrowup" => this.move_up(cx),
-                "down" | "arrowdown" => this.move_down(cx),
-                "left" | "arrowleft" => this.navigate_to_parent(cx),
-                "right" | "arrowright" => this.navigate_into_selected(cx),
-                "tab" => {
-                    if event.keystroke.modifiers.shift {
-                        this.navigate_to_parent(cx);
-                    } else {
-                        this.navigate_into_selected(cx);
+        let handle_key = cx.listener(
+            |this: &mut Self,
+             event: &gpui::KeyDownEvent,
+             _window: &mut Window,
+             cx: &mut Context<Self>| {
+                let key_str = event.keystroke.key.to_lowercase();
+                let has_cmd = event.keystroke.modifiers.platform;
+
+                // Check if actions dialog is showing - if so, don't handle most keys
+                // The ActionsDialog has its own key handler and will handle them
+                let actions_showing = this.actions_showing.lock().map(|g| *g).unwrap_or(false);
+
+                // Cmd+K always toggles actions (whether showing or not)
+                if has_cmd && key_str == "k" {
+                    this.toggle_actions(cx);
+                    return;
+                }
+
+                // When actions are showing, let the ActionsDialog handle all other keys
+                // The ActionsDialog is focused and has its own on_key_down handler
+                if actions_showing {
+                    // Don't handle any other keys - let them bubble to ActionsDialog
+                    return;
+                }
+
+                match key_str.as_str() {
+                    "up" | "arrowup" => this.move_up(cx),
+                    "down" | "arrowdown" => this.move_down(cx),
+                    "left" | "arrowleft" => this.navigate_to_parent(cx),
+                    "right" | "arrowright" => this.navigate_into_selected(cx),
+                    "tab" => {
+                        if event.keystroke.modifiers.shift {
+                            this.navigate_to_parent(cx);
+                        } else {
+                            this.navigate_into_selected(cx);
+                        }
                     }
-                }
-                "enter" => this.handle_enter(cx),
-                "escape" => {
-                    logging::log("PROMPTS", "PathPrompt: Escape key pressed - calling submit_cancel()");
-                    this.submit_cancel();
-                }
-                "backspace" => this.handle_backspace(cx),
-                _ => {
-                    if let Some(ref key_char) = event.keystroke.key_char {
-                        if let Some(ch) = key_char.chars().next() {
-                            if !ch.is_control() {
-                                this.handle_char(ch, cx);
+                    "enter" => this.handle_enter(cx),
+                    "escape" => {
+                        logging::log(
+                            "PROMPTS",
+                            "PathPrompt: Escape key pressed - calling submit_cancel()",
+                        );
+                        this.submit_cancel();
+                    }
+                    "backspace" => this.handle_backspace(cx),
+                    _ => {
+                        if let Some(ref key_char) = event.keystroke.key_char {
+                            if let Some(ch) = key_char.chars().next() {
+                                if !ch.is_control() {
+                                    this.handle_char(ch, cx);
+                                }
                             }
                         }
                     }
                 }
-            }
-        });
+            },
+        );
 
         // Use ListItemColors for consistent theming
         let list_colors = if self.design_variant == DesignVariant::Default {
@@ -481,42 +520,44 @@ impl Render for PathPrompt {
         // Clone values needed for the closure
         let filtered_count = self.filtered_entries.len();
         let selected_index = self.selected_index;
-        
+
         // Clone entries for the closure (uniform_list callback doesn't have access to self)
-        let entries_for_list: Vec<(String, bool)> = self.filtered_entries
+        let entries_for_list: Vec<(String, bool)> = self
+            .filtered_entries
             .iter()
             .map(|e| (e.name.clone(), e.is_dir))
             .collect();
-        
+
         // Build list items using ListItem component for consistent styling
         let list = uniform_list(
             "path-list",
             filtered_count,
             move |visible_range: std::ops::Range<usize>, _window, _cx| {
-                visible_range.map(|ix| {
-                    let (name, is_dir) = &entries_for_list[ix];
-                    let is_selected = ix == selected_index;
-                    
-                    // Choose icon based on entry type
-                    let icon = if *is_dir {
-                        IconKind::Emoji("📁".to_string())
-                    } else {
-                        IconKind::Emoji("📄".to_string())
-                    };
-                    
-                    // No description needed - folder icon 📁 is sufficient
-                    let description: Option<String> = None;
-                    
-                    // Use ListItem component for consistent styling with main menu
-                    ListItem::new(name.clone(), list_colors)
-                        .index(ix)
-                        .icon_kind(icon)
-                        .description_opt(description)
-                        .selected(is_selected)
-                        .with_accent_bar(true)
-                        .into_any_element()
-                })
-                .collect()
+                visible_range
+                    .map(|ix| {
+                        let (name, is_dir) = &entries_for_list[ix];
+                        let is_selected = ix == selected_index;
+
+                        // Choose icon based on entry type
+                        let icon = if *is_dir {
+                            IconKind::Emoji("📁".to_string())
+                        } else {
+                            IconKind::Emoji("📄".to_string())
+                        };
+
+                        // No description needed - folder icon 📁 is sufficient
+                        let description: Option<String> = None;
+
+                        // Use ListItem component for consistent styling with main menu
+                        ListItem::new(name.clone(), list_colors)
+                            .index(ix)
+                            .icon_kind(icon)
+                            .description_opt(description)
+                            .selected(is_selected)
+                            .with_accent_bar(true)
+                            .into_any_element()
+                    })
+                    .collect()
             },
         )
         .track_scroll(&self.list_scroll_handle)
@@ -526,12 +567,14 @@ impl Render for PathPrompt {
         // Get entity handles for click callbacks
         let handle_select = cx.entity().downgrade();
         let handle_actions = cx.entity().downgrade();
-        
+
         // Check if actions are currently showing (for CLS-free toggle)
         let show_actions = self.actions_showing.lock().map(|g| *g).unwrap_or(false);
-        
+
         // Get actions search text from shared state
-        let actions_search_text = self.actions_search_text.lock()
+        let actions_search_text = self
+            .actions_search_text
+            .lock()
             .map(|g| g.clone())
             .unwrap_or_default();
 
@@ -601,7 +644,7 @@ impl Render for PathPrompt {
                 PromptContainer::new(container_colors)
                     .config(container_config)
                     .header(header)
-                    .content(list)
+                    .content(list),
             )
     }
 }

@@ -91,7 +91,10 @@ impl ProcessManager {
     /// Returns an error if the PID file cannot be written.
     pub fn write_main_pid(&self) -> std::io::Result<()> {
         let pid = std::process::id();
-        logging::log("PROC", &format!("Writing main PID {} to {:?}", pid, self.main_pid_path));
+        logging::log(
+            "PROC",
+            &format!("Writing main PID {} to {:?}", pid, self.main_pid_path),
+        );
 
         // Ensure parent directory exists
         if let Some(parent) = self.main_pid_path.parent() {
@@ -153,7 +156,10 @@ impl ProcessManager {
 
         logging::log(
             "PROC",
-            &format!("Registering process PID {} for script: {}", pid, script_path),
+            &format!(
+                "Registering process PID {} for script: {}",
+                pid, script_path
+            ),
         );
 
         // Add to in-memory map
@@ -255,7 +261,10 @@ impl ProcessManager {
             match Command::new("kill").args(["-9", &negative_pgid]).output() {
                 Ok(output) => {
                     if output.status.success() {
-                        logging::log("PROC", &format!("Successfully killed process group {}", pid));
+                        logging::log(
+                            "PROC",
+                            &format!("Successfully killed process group {}", pid),
+                        );
                     } else {
                         let stderr = String::from_utf8_lossy(&output.stderr);
                         if stderr.contains("No such process") {
@@ -297,7 +306,10 @@ impl ProcessManager {
     ///
     /// Returns the number of orphans killed.
     pub fn cleanup_orphans(&self) -> usize {
-        logging::log("PROC", "Checking for orphaned processes from previous session");
+        logging::log(
+            "PROC",
+            "Checking for orphaned processes from previous session",
+        );
 
         let orphans = self.load_persisted_pids();
         if orphans.is_empty() {
@@ -324,10 +336,7 @@ impl ProcessManager {
                 self.kill_process(info.pid);
                 killed_count += 1;
             } else {
-                logging::log(
-                    "PROC",
-                    &format!("Orphan PID {} already exited", info.pid),
-                );
+                logging::log("PROC", &format!("Orphan PID {} already exited", info.pid));
             }
         }
 

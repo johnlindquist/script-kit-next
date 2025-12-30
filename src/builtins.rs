@@ -141,7 +141,15 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         "builtin-design-gallery",
         "Design Gallery",
         "Browse separator styles and icon variations",
-        vec!["design", "gallery", "separator", "icon", "style", "theme", "variations"],
+        vec![
+            "design",
+            "gallery",
+            "separator",
+            "icon",
+            "style",
+            "theme",
+            "variations",
+        ],
         BuiltInFeature::DesignGallery,
         "🎨",
     ));
@@ -285,10 +293,7 @@ mod tests {
             BuiltInFeature::WindowSwitcher,
             BuiltInFeature::WindowSwitcher
         );
-        assert_eq!(
-            BuiltInFeature::DesignGallery,
-            BuiltInFeature::DesignGallery
-        );
+        assert_eq!(BuiltInFeature::DesignGallery, BuiltInFeature::DesignGallery);
         assert_ne!(
             BuiltInFeature::ClipboardHistory,
             BuiltInFeature::AppLauncher

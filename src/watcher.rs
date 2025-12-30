@@ -1,10 +1,10 @@
 #![allow(dead_code)]
-use notify::{Watcher, RecursiveMode, Result as NotifyResult, recommended_watcher};
-use std::sync::mpsc::{channel, Receiver, Sender};
+use notify::{recommended_watcher, RecursiveMode, Result as NotifyResult, Watcher};
 use std::path::PathBuf;
+use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
-use std::sync::{Arc, Mutex};
 
 use std::process::Command;
 use tracing::{info, warn};
@@ -64,9 +64,7 @@ impl ConfigWatcher {
         let tx = self
             .tx
             .take()
-            .ok_or_else(|| {
-                std::io::Error::other("watcher already started")
-            })?;
+            .ok_or_else(|| std::io::Error::other("watcher already started"))?;
 
         let thread_handle = thread::spawn(move || {
             if let Err(e) = Self::watch_loop(tx) {
@@ -81,9 +79,7 @@ impl ConfigWatcher {
     /// Internal watch loop running in background thread
     fn watch_loop(tx: Sender<ConfigReloadEvent>) -> NotifyResult<()> {
         // Expand the config path
-        let config_path = PathBuf::from(
-            shellexpand::tilde("~/.kenv/config.ts").as_ref()
-        );
+        let config_path = PathBuf::from(shellexpand::tilde("~/.kenv/config.ts").as_ref());
 
         // Get the parent directory to watch
         let watch_path = config_path
@@ -147,7 +143,10 @@ impl ConfigWatcher {
                                 let _ = tx_clone.send(ConfigReloadEvent::Reload);
                                 let mut flag = debounce_flag.lock().unwrap();
                                 *flag = false;
-                                info!(file = "config.ts", "Config file changed, emitting reload event");
+                                info!(
+                                    file = "config.ts",
+                                    "Config file changed, emitting reload event"
+                                );
                             });
                         }
                     }
@@ -204,9 +203,7 @@ impl ThemeWatcher {
         let tx = self
             .tx
             .take()
-            .ok_or_else(|| {
-                std::io::Error::other("watcher already started")
-            })?;
+            .ok_or_else(|| std::io::Error::other("watcher already started"))?;
 
         let thread_handle = thread::spawn(move || {
             if let Err(e) = Self::watch_loop(tx) {
@@ -221,9 +218,7 @@ impl ThemeWatcher {
     /// Internal watch loop running in background thread
     fn watch_loop(tx: Sender<ThemeReloadEvent>) -> NotifyResult<()> {
         // Expand the theme path
-        let theme_path = PathBuf::from(
-            shellexpand::tilde("~/.kenv/theme.json").as_ref()
-        );
+        let theme_path = PathBuf::from(shellexpand::tilde("~/.kenv/theme.json").as_ref());
 
         // Get the parent directory to watch
         let watch_path = theme_path
@@ -287,7 +282,10 @@ impl ThemeWatcher {
                                 let _ = tx_clone.send(ThemeReloadEvent::Reload);
                                 let mut flag = debounce_flag.lock().unwrap();
                                 *flag = false;
-                                info!(file = "theme.json", "Theme file changed, emitting reload event");
+                                info!(
+                                    file = "theme.json",
+                                    "Theme file changed, emitting reload event"
+                                );
                             });
                         }
                     }
@@ -344,9 +342,7 @@ impl ScriptWatcher {
         let tx = self
             .tx
             .take()
-            .ok_or_else(|| {
-                std::io::Error::other("watcher already started")
-            })?;
+            .ok_or_else(|| std::io::Error::other("watcher already started"))?;
 
         let thread_handle = thread::spawn(move || {
             if let Err(e) = Self::watch_loop(tx) {
@@ -361,12 +357,8 @@ impl ScriptWatcher {
     /// Internal watch loop running in background thread
     fn watch_loop(tx: Sender<ScriptReloadEvent>) -> NotifyResult<()> {
         // Expand the scripts and scriptlets paths
-        let scripts_path = PathBuf::from(
-            shellexpand::tilde("~/.kenv/scripts").as_ref()
-        );
-        let scriptlets_path = PathBuf::from(
-            shellexpand::tilde("~/.kenv/scriptlets").as_ref()
-        );
+        let scripts_path = PathBuf::from(shellexpand::tilde("~/.kenv/scripts").as_ref());
+        let scriptlets_path = PathBuf::from(shellexpand::tilde("~/.kenv/scriptlets").as_ref());
 
         // Create a debounce timer using Arc<Mutex>
         let debounce_active = Arc::new(Mutex::new(false));
@@ -384,7 +376,7 @@ impl ScriptWatcher {
 
         // Watch the scripts directory recursively
         watcher.watch(&scripts_path, RecursiveMode::Recursive)?;
-        
+
         // Watch the scriptlets directory recursively (for *.md files)
         if scriptlets_path.exists() {
             watcher.watch(&scriptlets_path, RecursiveMode::Recursive)?;
@@ -429,7 +421,10 @@ impl ScriptWatcher {
                                 let _ = tx_clone.send(ScriptReloadEvent::Reload);
                                 let mut flag = debounce_flag.lock().unwrap();
                                 *flag = false;
-                                info!(directory = "scripts", "Script directory changed, emitting reload event");
+                                info!(
+                                    directory = "scripts",
+                                    "Script directory changed, emitting reload event"
+                                );
                             });
                         }
                     }
@@ -486,7 +481,10 @@ impl AppearanceWatcher {
     /// This spawns a background thread that polls the system appearance every 2 seconds
     /// and sends appearance change events through the receiver when changes are detected.
     pub fn start(&mut self) -> Result<(), String> {
-        let tx = self.tx.take().ok_or_else(|| "watcher already started".to_string())?;
+        let tx = self
+            .tx
+            .take()
+            .ok_or_else(|| "watcher already started".to_string())?;
 
         let thread_handle = thread::spawn(move || {
             if let Err(e) = Self::watch_loop(tx) {
@@ -517,7 +515,10 @@ impl AppearanceWatcher {
                 };
                 info!(mode = mode, "System appearance changed");
                 if tx.send_blocking(current_appearance.clone()).is_err() {
-                    info!(watcher = "appearance", "Appearance watcher receiver dropped, shutting down");
+                    info!(
+                        watcher = "appearance",
+                        "Appearance watcher receiver dropped, shutting down"
+                    );
                     break;
                 }
                 last_appearance = Some(current_appearance);

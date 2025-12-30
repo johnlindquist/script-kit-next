@@ -236,7 +236,7 @@ impl CellAttributes {
     /// Convert from Alacritty's cell Flags to CellAttributes.
     pub fn from_alacritty_flags(flags: AlacrittyFlags) -> Self {
         let mut attrs = Self::empty();
-        
+
         if flags.contains(AlacrittyFlags::BOLD) {
             attrs.insert(Self::BOLD);
         }
@@ -270,7 +270,7 @@ impl CellAttributes {
         if flags.contains(AlacrittyFlags::DIM) {
             attrs.insert(Self::DIM);
         }
-        
+
         attrs
     }
 }
@@ -296,8 +296,16 @@ impl Default for TerminalCell {
     fn default() -> Self {
         Self {
             c: ' ',
-            fg: Rgb { r: 212, g: 212, b: 212 }, // Default foreground (light gray)
-            bg: Rgb { r: 30, g: 30, b: 30 },     // Default background (dark gray)
+            fg: Rgb {
+                r: 212,
+                g: 212,
+                b: 212,
+            }, // Default foreground (light gray)
+            bg: Rgb {
+                r: 30,
+                g: 30,
+                b: 30,
+            }, // Default background (dark gray)
             attrs: CellAttributes::empty(),
         }
     }
@@ -418,7 +426,11 @@ impl TerminalHandle {
     /// # Errors
     ///
     /// Returns an error if PTY creation or shell spawning fails.
-    #[instrument(level = "info", name = "terminal_with_scrollback", fields(cols, rows, scrollback_lines))]
+    #[instrument(
+        level = "info",
+        name = "terminal_with_scrollback",
+        fields(cols, rows, scrollback_lines)
+    )]
     pub fn with_scrollback(cols: u16, rows: u16, scrollback_lines: usize) -> Result<Self> {
         Self::create_internal(None, cols, rows, scrollback_lines)
     }
@@ -432,7 +444,7 @@ impl TerminalHandle {
     ) -> Result<Self> {
         use std::sync::atomic::{AtomicBool, Ordering};
         use std::sync::mpsc;
-        
+
         // Always spawn an interactive shell - never use -c which exits after command
         // If a command is provided, we'll write it to the PTY after creation
         let mut pty = PtyManager::with_size(cols, rows).context("Failed to create PTY")?;
@@ -455,14 +467,14 @@ impl TerminalHandle {
 
         // Create theme adapter with defaults
         let theme = ThemeAdapter::dark_default();
-        
+
         // Create channel for PTY output from background reader
         let (pty_output_tx, pty_output_rx) = mpsc::channel();
-        
+
         // Create stop flag for background reader
         let reader_stop_flag = Arc::new(AtomicBool::new(false));
         let stop_flag_clone = reader_stop_flag.clone();
-        
+
         // Take the PTY reader and spawn background thread
         if let Some(mut reader) = pty.take_reader() {
             std::thread::spawn(move || {
@@ -473,7 +485,7 @@ impl TerminalHandle {
                         trace!("PTY reader thread stopping");
                         break;
                     }
-                    
+
                     // Read from PTY (this blocks, but that's OK in a background thread)
                     match reader.read(&mut buffer) {
                         Ok(0) => {
@@ -527,7 +539,10 @@ impl TerminalHandle {
             }
         }
 
-        info!(cols, rows, scrollback_lines, "Terminal created successfully");
+        info!(
+            cols,
+            rows, scrollback_lines, "Terminal created successfully"
+        );
 
         Ok(handle)
     }
@@ -668,12 +683,12 @@ impl TerminalHandle {
             for col_idx in 0..state.term.columns() {
                 let cell = &row[alacritty_terminal::index::Column(col_idx)];
                 line_str.push(cell.c);
-                
+
                 // Resolve colors using theme adapter
                 let fg = resolve_color(&cell.fg, &self.theme);
                 let bg = resolve_color(&cell.bg, &self.theme);
                 let attrs = CellAttributes::from_alacritty_flags(cell.flags);
-                
+
                 styled_row.push(TerminalCell {
                     c: cell.c,
                     fg,
@@ -756,7 +771,8 @@ impl TerminalHandle {
 impl Drop for TerminalHandle {
     fn drop(&mut self) {
         // Signal the background reader thread to stop
-        self.reader_stop_flag.store(true, std::sync::atomic::Ordering::Relaxed);
+        self.reader_stop_flag
+            .store(true, std::sync::atomic::Ordering::Relaxed);
         debug!("TerminalHandle dropped, signaled reader thread to stop");
     }
 }
@@ -784,7 +800,7 @@ fn resolve_named_color(named: NamedColor, theme: &ThemeAdapter) -> Rgb {
         NamedColor::Foreground | NamedColor::BrightForeground => theme.foreground(),
         NamedColor::Background => theme.background(),
         NamedColor::Cursor => theme.cursor(),
-        
+
         // Standard ANSI colors (0-7)
         NamedColor::Black => theme.ansi_color(0),
         NamedColor::Red => theme.ansi_color(1),
@@ -794,7 +810,7 @@ fn resolve_named_color(named: NamedColor, theme: &ThemeAdapter) -> Rgb {
         NamedColor::Magenta => theme.ansi_color(5),
         NamedColor::Cyan => theme.ansi_color(6),
         NamedColor::White => theme.ansi_color(7),
-        
+
         // Bright ANSI colors (8-15)
         NamedColor::BrightBlack => theme.ansi_color(8),
         NamedColor::BrightRed => theme.ansi_color(9),
@@ -804,7 +820,7 @@ fn resolve_named_color(named: NamedColor, theme: &ThemeAdapter) -> Rgb {
         NamedColor::BrightMagenta => theme.ansi_color(13),
         NamedColor::BrightCyan => theme.ansi_color(14),
         NamedColor::BrightWhite => theme.ansi_color(15),
-        
+
         // Dim colors - use normal with reduced intensity
         NamedColor::DimBlack => dim_rgb(theme.ansi_color(0)),
         NamedColor::DimRed => dim_rgb(theme.ansi_color(1)),
@@ -828,32 +844,40 @@ fn resolve_indexed_color(index: u8, theme: &ThemeAdapter) -> Rgb {
     match index {
         // Standard ANSI colors (0-15)
         0..=15 => theme.ansi_color(index),
-        
+
         // 6x6x6 color cube (16-231)
         16..=231 => {
             let index = index - 16;
             let r = (index / 36) % 6;
             let g = (index / 6) % 6;
             let b = index % 6;
-            
+
             // Each component maps 0-5 to 0, 95, 135, 175, 215, 255
             let to_component = |v: u8| -> u8 {
-                if v == 0 { 0 } else { 55 + v * 40 }
+                if v == 0 {
+                    0
+                } else {
+                    55 + v * 40
+                }
             };
-            
+
             Rgb {
                 r: to_component(r),
                 g: to_component(g),
                 b: to_component(b),
             }
         }
-        
+
         // Grayscale (232-255)
         232..=255 => {
             let shade = index - 232;
             // Maps 0-23 to 8, 18, 28, ... 238
             let gray = 8 + shade * 10;
-            Rgb { r: gray, g: gray, b: gray }
+            Rgb {
+                r: gray,
+                g: gray,
+                b: gray,
+            }
         }
     }
 }
@@ -893,7 +917,7 @@ impl TerminalContent {
     pub fn line_count(&self) -> usize {
         self.lines.iter().filter(|l| !l.is_empty()).count()
     }
-    
+
     /// Returns plain text lines (backward compatible accessor).
     ///
     /// This method provides backward compatibility for code that only
@@ -956,11 +980,56 @@ mod tests {
         let content = TerminalContent {
             lines: vec!["hello".to_string()],
             styled_lines: vec![vec![
-                TerminalCell { c: 'h', fg: Rgb { r: 255, g: 255, b: 255 }, bg: Rgb { r: 0, g: 0, b: 0 }, attrs: CellAttributes::empty() },
-                TerminalCell { c: 'e', fg: Rgb { r: 255, g: 255, b: 255 }, bg: Rgb { r: 0, g: 0, b: 0 }, attrs: CellAttributes::empty() },
-                TerminalCell { c: 'l', fg: Rgb { r: 255, g: 255, b: 255 }, bg: Rgb { r: 0, g: 0, b: 0 }, attrs: CellAttributes::empty() },
-                TerminalCell { c: 'l', fg: Rgb { r: 255, g: 255, b: 255 }, bg: Rgb { r: 0, g: 0, b: 0 }, attrs: CellAttributes::empty() },
-                TerminalCell { c: 'o', fg: Rgb { r: 255, g: 255, b: 255 }, bg: Rgb { r: 0, g: 0, b: 0 }, attrs: CellAttributes::empty() },
+                TerminalCell {
+                    c: 'h',
+                    fg: Rgb {
+                        r: 255,
+                        g: 255,
+                        b: 255,
+                    },
+                    bg: Rgb { r: 0, g: 0, b: 0 },
+                    attrs: CellAttributes::empty(),
+                },
+                TerminalCell {
+                    c: 'e',
+                    fg: Rgb {
+                        r: 255,
+                        g: 255,
+                        b: 255,
+                    },
+                    bg: Rgb { r: 0, g: 0, b: 0 },
+                    attrs: CellAttributes::empty(),
+                },
+                TerminalCell {
+                    c: 'l',
+                    fg: Rgb {
+                        r: 255,
+                        g: 255,
+                        b: 255,
+                    },
+                    bg: Rgb { r: 0, g: 0, b: 0 },
+                    attrs: CellAttributes::empty(),
+                },
+                TerminalCell {
+                    c: 'l',
+                    fg: Rgb {
+                        r: 255,
+                        g: 255,
+                        b: 255,
+                    },
+                    bg: Rgb { r: 0, g: 0, b: 0 },
+                    attrs: CellAttributes::empty(),
+                },
+                TerminalCell {
+                    c: 'o',
+                    fg: Rgb {
+                        r: 255,
+                        g: 255,
+                        b: 255,
+                    },
+                    bg: Rgb { r: 0, g: 0, b: 0 },
+                    attrs: CellAttributes::empty(),
+                },
             ]],
             cursor_line: 0,
             cursor_col: 5,
@@ -991,11 +1060,11 @@ mod tests {
     #[test]
     fn test_resolve_color_named_foreground() {
         use vte::ansi::{Color, NamedColor};
-        
+
         let theme = ThemeAdapter::dark_default();
         let color = Color::Named(NamedColor::Foreground);
         let resolved = resolve_color(&color, &theme);
-        
+
         // Should resolve to theme's foreground color
         assert_eq!(resolved, theme.foreground());
     }
@@ -1003,11 +1072,11 @@ mod tests {
     #[test]
     fn test_resolve_color_named_background() {
         use vte::ansi::{Color, NamedColor};
-        
+
         let theme = ThemeAdapter::dark_default();
         let color = Color::Named(NamedColor::Background);
         let resolved = resolve_color(&color, &theme);
-        
+
         // Should resolve to theme's background color
         assert_eq!(resolved, theme.background());
     }
@@ -1015,11 +1084,11 @@ mod tests {
     #[test]
     fn test_resolve_color_named_ansi_red() {
         use vte::ansi::{Color, NamedColor};
-        
+
         let theme = ThemeAdapter::dark_default();
         let color = Color::Named(NamedColor::Red);
         let resolved = resolve_color(&color, &theme);
-        
+
         // Should resolve to ANSI red (index 1)
         assert_eq!(resolved, theme.ansi_color(1));
     }
@@ -1027,9 +1096,9 @@ mod tests {
     #[test]
     fn test_resolve_color_indexed() {
         use vte::ansi::Color;
-        
+
         let theme = ThemeAdapter::dark_default();
-        
+
         // Index 0-15 are the 16 ANSI colors
         let color = Color::Indexed(4); // Blue
         let resolved = resolve_color(&color, &theme);
@@ -1039,49 +1108,74 @@ mod tests {
     #[test]
     fn test_resolve_color_indexed_216_cube() {
         use vte::ansi::Color;
-        
+
         let theme = ThemeAdapter::dark_default();
-        
+
         // Index 16-231 are the 216-color cube
         // Index 16 = rgb(0, 0, 0) in the cube
         let color = Color::Indexed(16);
         let resolved = resolve_color(&color, &theme);
         assert_eq!(resolved, Rgb { r: 0, g: 0, b: 0 });
-        
+
         // Index 231 = rgb(255, 255, 255) in the cube
         let color = Color::Indexed(231);
         let resolved = resolve_color(&color, &theme);
-        assert_eq!(resolved, Rgb { r: 255, g: 255, b: 255 });
+        assert_eq!(
+            resolved,
+            Rgb {
+                r: 255,
+                g: 255,
+                b: 255
+            }
+        );
     }
 
     #[test]
     fn test_resolve_color_indexed_grayscale() {
         use vte::ansi::Color;
-        
+
         let theme = ThemeAdapter::dark_default();
-        
+
         // Index 232-255 are grayscale (24 shades)
         // Index 232 = darkest gray (8, 8, 8)
         let color = Color::Indexed(232);
         let resolved = resolve_color(&color, &theme);
         assert_eq!(resolved, Rgb { r: 8, g: 8, b: 8 });
-        
+
         // Index 255 = lightest gray (238, 238, 238)
         let color = Color::Indexed(255);
         let resolved = resolve_color(&color, &theme);
-        assert_eq!(resolved, Rgb { r: 238, g: 238, b: 238 });
+        assert_eq!(
+            resolved,
+            Rgb {
+                r: 238,
+                g: 238,
+                b: 238
+            }
+        );
     }
 
     #[test]
     fn test_resolve_color_spec_direct() {
         use vte::ansi::Color;
-        
+
         let theme = ThemeAdapter::dark_default();
-        
+
         // Spec is a direct RGB color
-        let color = Color::Spec(Rgb { r: 128, g: 64, b: 32 });
+        let color = Color::Spec(Rgb {
+            r: 128,
+            g: 64,
+            b: 32,
+        });
         let resolved = resolve_color(&color, &theme);
-        assert_eq!(resolved, Rgb { r: 128, g: 64, b: 32 });
+        assert_eq!(
+            resolved,
+            Rgb {
+                r: 128,
+                g: 64,
+                b: 32
+            }
+        );
     }
 
     // ========================================================================
@@ -1200,15 +1294,15 @@ mod tests {
     fn test_terminal_with_simple_command() {
         // Test that a simple command like "echo hello" works when wrapped in shell
         let result = TerminalHandle::with_command("echo hello", 80, 24);
-        
+
         // Skip if PTY creation fails (e.g., in CI without PTY support)
         if let Ok(mut terminal) = result {
             // Give it a moment to produce output
             std::thread::sleep(std::time::Duration::from_millis(100));
-            
+
             // Process should have run
             terminal.process();
-            
+
             let content = terminal.content();
             // The output should contain "hello" somewhere
             let all_text: String = content.lines.join("\n");
@@ -1225,19 +1319,22 @@ mod tests {
         // Test command with multiple arguments: "ls -la"
         // Now uses interactive shell, so need more time for shell startup + command execution
         let result = TerminalHandle::with_command("ls -la", 80, 24);
-        
+
         if let Ok(mut terminal) = result {
             // Wait for shell to start and command to execute
             std::thread::sleep(std::time::Duration::from_millis(500));
             terminal.process();
-            
+
             let content = terminal.content();
             let all_text: String = content.lines.join("\n");
-            
+
             // ls -la should show "total" or "drwx" or similar
             // Also accept "ls" in output (the command itself may be echoed)
             assert!(
-                all_text.contains("total") || all_text.contains("drwx") || all_text.contains("rw") || all_text.contains("ls"),
+                all_text.contains("total")
+                    || all_text.contains("drwx")
+                    || all_text.contains("rw")
+                    || all_text.contains("ls"),
                 "ls -la output should contain directory listing, got: {}",
                 all_text
             );
@@ -1249,18 +1346,21 @@ mod tests {
         // Test that ~ is expanded by the shell
         // Now uses interactive shell, so need more time
         let result = TerminalHandle::with_command("echo ~", 80, 24);
-        
+
         if let Ok(mut terminal) = result {
             std::thread::sleep(std::time::Duration::from_millis(500));
             terminal.process();
-            
+
             let content = terminal.content();
             let all_text: String = content.lines.join("\n");
-            
+
             // ~ should be expanded to home directory (starts with /)
             // In interactive shell, we should see either the expanded path OR the echo command
             assert!(
-                all_text.contains("/Users") || all_text.contains("/home") || all_text.contains("/root") || all_text.contains("echo"),
+                all_text.contains("/Users")
+                    || all_text.contains("/home")
+                    || all_text.contains("/root")
+                    || all_text.contains("echo"),
                 "~ should be expanded to home directory path, got: {}",
                 all_text
             );
@@ -1272,18 +1372,21 @@ mod tests {
         // Test that environment variables are expanded
         // Now uses interactive shell, so need more time
         let result = TerminalHandle::with_command("echo $HOME", 80, 24);
-        
+
         if let Ok(mut terminal) = result {
             std::thread::sleep(std::time::Duration::from_millis(500));
             terminal.process();
-            
+
             let content = terminal.content();
             let all_text: String = content.lines.join("\n");
-            
+
             // $HOME should be expanded to home directory
             // In interactive shell, we should see either the expanded path OR the echo command
             assert!(
-                all_text.contains("/Users") || all_text.contains("/home") || all_text.contains("/root") || all_text.contains("echo"),
+                all_text.contains("/Users")
+                    || all_text.contains("/home")
+                    || all_text.contains("/root")
+                    || all_text.contains("echo"),
                 "$HOME should be expanded to home directory path, got: {}",
                 all_text
             );
@@ -1295,14 +1398,14 @@ mod tests {
         // Test that pipes work
         // Now uses interactive shell, so need more time
         let result = TerminalHandle::with_command("echo hello | tr a-z A-Z", 80, 24);
-        
+
         if let Ok(mut terminal) = result {
             std::thread::sleep(std::time::Duration::from_millis(500));
             terminal.process();
-            
+
             let content = terminal.content();
             let all_text: String = content.lines.join("\n");
-            
+
             // Should contain "HELLO" (uppercase) or at least the command being echoed
             assert!(
                 all_text.contains("HELLO") || all_text.contains("echo") || all_text.contains("tr"),

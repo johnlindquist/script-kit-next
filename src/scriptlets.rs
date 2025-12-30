@@ -14,23 +14,42 @@
 //! - Handle nested code fences (``` inside ~~~ and vice versa)
 //! - Variable substitution with named inputs, positional args, and conditionals
 
-use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use tracing::debug;
 
 /// Valid tool types that can be used in code fences
 pub const VALID_TOOLS: &[&str] = &[
-    "bash", "python", "kit", "ts", "js", "transform", "template",
-    "open", "edit", "paste", "type", "submit", "applescript",
-    "ruby", "perl", "php", "node", "deno", "bun",
+    "bash",
+    "python",
+    "kit",
+    "ts",
+    "js",
+    "transform",
+    "template",
+    "open",
+    "edit",
+    "paste",
+    "type",
+    "submit",
+    "applescript",
+    "ruby",
+    "perl",
+    "php",
+    "node",
+    "deno",
+    "bun",
     // Shell variants
-    "zsh", "sh", "fish", "cmd", "powershell", "pwsh",
+    "zsh",
+    "sh",
+    "fish",
+    "cmd",
+    "powershell",
+    "pwsh",
 ];
 
 /// Shell tools (tools that execute in a shell environment)
-pub const SHELL_TOOLS: &[&str] = &[
-    "bash", "zsh", "sh", "fish", "cmd", "powershell", "pwsh",
-];
+pub const SHELL_TOOLS: &[&str] = &["bash", "zsh", "sh", "fish", "cmd", "powershell", "pwsh"];
 
 /// Metadata extracted from HTML comments in scriptlets
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
@@ -91,7 +110,7 @@ impl Scriptlet {
     pub fn new(name: String, tool: String, content: String) -> Self {
         let command = slugify(&name);
         let inputs = extract_named_inputs(&content);
-        
+
         Scriptlet {
             name,
             command,
@@ -134,17 +153,17 @@ fn slugify(name: &str) -> String {
 fn extract_named_inputs(content: &str) -> Vec<String> {
     let mut inputs = Vec::new();
     let mut chars = content.chars().peekable();
-    
+
     while let Some(c) = chars.next() {
         if c == '{' && chars.peek() == Some(&'{') {
             chars.next(); // consume second {
             let mut name = String::new();
-            
+
             // Skip if it's a conditional ({{#if, {{else, {{/if)
             if chars.peek() == Some(&'#') || chars.peek() == Some(&'/') {
                 continue;
             }
-            
+
             // Collect the variable name
             while let Some(&ch) = chars.peek() {
                 if ch == '}' {
@@ -153,7 +172,7 @@ fn extract_named_inputs(content: &str) -> Vec<String> {
                 name.push(ch);
                 chars.next();
             }
-            
+
             // Skip closing }}
             if chars.peek() == Some(&'}') {
                 chars.next();
@@ -161,12 +180,12 @@ fn extract_named_inputs(content: &str) -> Vec<String> {
                     chars.next();
                 }
             }
-            
+
             // Add if valid identifier and not already present
             let trimmed = name.trim();
-            if !trimmed.is_empty() 
-                && !trimmed.starts_with('#') 
-                && !trimmed.starts_with('/') 
+            if !trimmed.is_empty()
+                && !trimmed.starts_with('#')
+                && !trimmed.starts_with('/')
                 && trimmed != "else"
                 && !inputs.contains(&trimmed.to_string())
             {
@@ -174,7 +193,7 @@ fn extract_named_inputs(content: &str) -> Vec<String> {
             }
         }
     }
-    
+
     inputs
 }
 
@@ -182,34 +201,37 @@ fn extract_named_inputs(content: &str) -> Vec<String> {
 /// Supports format: <!-- key: value\nkey2: value2 -->
 pub fn parse_html_comment_metadata(text: &str) -> ScriptletMetadata {
     let mut metadata = ScriptletMetadata::default();
-    
+
     // Find all HTML comment blocks
     let mut remaining = text;
     while let Some(start) = remaining.find("<!--") {
         if let Some(end) = remaining[start..].find("-->") {
             let comment_content = &remaining[start + 4..start + end];
-            
+
             // Parse key: value pairs
             for line in comment_content.lines() {
                 let trimmed = line.trim();
                 if trimmed.is_empty() {
                     continue;
                 }
-                
+
                 if let Some(colon_pos) = trimmed.find(':') {
                     let key = trimmed[..colon_pos].trim().to_lowercase();
                     let value = trimmed[colon_pos + 1..].trim().to_string();
-                    
+
                     if value.is_empty() {
                         continue;
                     }
-                    
+
                     match key.as_str() {
                         "trigger" => metadata.trigger = Some(value),
                         "shortcut" => metadata.shortcut = Some(value),
                         "cron" => metadata.cron = Some(value),
                         "schedule" => metadata.schedule = Some(value),
-                        "background" => metadata.background = Some(value.to_lowercase() == "true" || value == "1"),
+                        "background" => {
+                            metadata.background =
+                                Some(value.to_lowercase() == "true" || value == "1")
+                        }
                         "watch" => metadata.watch = Some(value),
                         "system" => metadata.system = Some(value),
                         "description" => metadata.description = Some(value),
@@ -221,21 +243,21 @@ pub fn parse_html_comment_metadata(text: &str) -> ScriptletMetadata {
                     }
                 }
             }
-            
+
             remaining = &remaining[start + end + 3..];
         } else {
             break;
         }
     }
-    
+
     metadata
 }
 
 /// State for parsing code fences
 #[derive(Clone, Copy, PartialEq)]
 enum FenceType {
-    Backticks,  // ```
-    Tildes,     // ~~~
+    Backticks, // ```
+    Tildes,    // ~~~
 }
 
 /// Extract code block from text, handling nested fences
@@ -251,7 +273,7 @@ pub fn extract_code_block_nested(text: &str) -> Option<(String, String)> {
 
     for line in lines {
         let trimmed = line.trim_start();
-        
+
         if !in_fence {
             // Check for opening fence
             if let Some(fence_info) = detect_fence_start(trimmed) {
@@ -291,14 +313,14 @@ fn detect_fence_start(line: &str) -> Option<(FenceType, usize, String)> {
         let lang = rest.split_whitespace().next().unwrap_or("").to_string();
         return Some((FenceType::Backticks, backtick_count, lang));
     }
-    
+
     let tilde_count = line.chars().take_while(|&c| c == '~').count();
     if tilde_count >= 3 {
         let rest = &line[tilde_count..];
         let lang = rest.split_whitespace().next().unwrap_or("").to_string();
         return Some((FenceType::Tildes, tilde_count, lang));
     }
-    
+
     None
 }
 
@@ -308,18 +330,18 @@ fn is_matching_fence_end(line: &str, fence_type: FenceType, min_count: usize) ->
         FenceType::Backticks => line.chars().take_while(|&c| c == '`').count(),
         FenceType::Tildes => line.chars().take_while(|&c| c == '~').count(),
     };
-    
+
     if count < min_count {
         return false;
     }
-    
+
     // Rest of line should be empty or whitespace
     let rest = &line[count..];
     rest.chars().all(|c| c.is_whitespace())
 }
 
 /// Parse a markdown file into scriptlets
-/// 
+///
 /// # Format
 /// - H1 headers (`# Group Name`) define groups
 /// - H1 can have a code fence that prepends to all scriptlets in that group
@@ -330,43 +352,51 @@ pub fn parse_markdown_as_scriptlets(content: &str, source_path: Option<&str>) ->
     let mut scriptlets = Vec::new();
     let mut current_group = String::new();
     let mut global_prepend = String::new();
-    
+
     // Split by headers while preserving the header type
     let sections = split_by_headers(content);
-    
+
     for section in sections {
         let section_text = section.text;
         let first_line = section_text.lines().next().unwrap_or("");
-        
+
         if first_line.starts_with("## ") {
             // H2: Individual scriptlet
-            let name = first_line.strip_prefix("## ").unwrap_or("").trim().to_string();
-            
+            let name = first_line
+                .strip_prefix("## ")
+                .unwrap_or("")
+                .trim()
+                .to_string();
+
             if name.is_empty() {
                 continue;
             }
-            
+
             // Parse metadata from HTML comments
             let metadata = parse_html_comment_metadata(section_text);
-            
+
             // Extract code block
             if let Some((tool, mut code)) = extract_code_block_nested(section_text) {
                 // Prepend global code if exists and tool matches
                 if !global_prepend.is_empty() {
                     code = format!("{}\n{}", global_prepend, code);
                 }
-                
+
                 // Validate tool type
-                let tool = if tool.is_empty() { "ts".to_string() } else { tool };
-                
+                let tool = if tool.is_empty() {
+                    "ts".to_string()
+                } else {
+                    tool
+                };
+
                 // Check if tool is valid, warn if not
                 if !VALID_TOOLS.contains(&tool.as_str()) {
                     debug!(tool = %tool, name = %name, "Unknown tool type in scriptlet");
                 }
-                
+
                 let inputs = extract_named_inputs(&code);
                 let command = slugify(&name);
-                
+
                 scriptlets.push(Scriptlet {
                     name,
                     command,
@@ -382,9 +412,13 @@ pub fn parse_markdown_as_scriptlets(content: &str, source_path: Option<&str>) ->
             }
         } else if first_line.starts_with("# ") {
             // H1: Group header
-            let group_name = first_line.strip_prefix("# ").unwrap_or("").trim().to_string();
+            let group_name = first_line
+                .strip_prefix("# ")
+                .unwrap_or("")
+                .trim()
+                .to_string();
             current_group = group_name;
-            
+
             // Check for global prepend code block
             if let Some((_, code)) = extract_code_block_nested(section_text) {
                 global_prepend = code;
@@ -393,7 +427,7 @@ pub fn parse_markdown_as_scriptlets(content: &str, source_path: Option<&str>) ->
             }
         }
     }
-    
+
     scriptlets
 }
 
@@ -409,15 +443,15 @@ fn split_by_headers(content: &str) -> Vec<MarkdownSection<'_>> {
     let mut in_fence = false;
     let mut fence_type: Option<FenceType> = None;
     let mut fence_count = 0;
-    
+
     let lines: Vec<&str> = content.lines().collect();
     let line_starts: Vec<usize> = std::iter::once(0)
         .chain(content.match_indices('\n').map(|(i, _)| i + 1))
         .collect();
-    
+
     for (i, line) in lines.iter().enumerate() {
         let trimmed = line.trim_start();
-        
+
         // Track fence state
         if !in_fence {
             if let Some(fence_info) = detect_fence_start(trimmed) {
@@ -432,7 +466,7 @@ fn split_by_headers(content: &str) -> Vec<MarkdownSection<'_>> {
             fence_count = 0;
             continue;
         }
-        
+
         // Only split on headers outside of fences
         if !in_fence && (trimmed.starts_with("# ") || trimmed.starts_with("## ")) {
             if i > 0 {
@@ -447,7 +481,7 @@ fn split_by_headers(content: &str) -> Vec<MarkdownSection<'_>> {
             current_start = i;
         }
     }
-    
+
     // Add remaining content
     if current_start < lines.len() {
         let start = line_starts[current_start];
@@ -455,7 +489,7 @@ fn split_by_headers(content: &str) -> Vec<MarkdownSection<'_>> {
             text: &content[start..],
         });
     }
-    
+
     sections
 }
 
@@ -464,12 +498,12 @@ fn split_by_headers(content: &str) -> Vec<MarkdownSection<'_>> {
 // ============================================================================
 
 /// Format a scriptlet by substituting variables
-/// 
+///
 /// # Variable Types
 /// - `{{variableName}}` - Named input, replaced with value from inputs map
 /// - `$1`, `$2`, etc. (Unix) or `%1`, `%2`, etc. (Windows) - Positional args
 /// - `$@` (Unix) or `%*` (Windows) - All arguments
-/// 
+///
 /// # Arguments
 /// * `content` - The scriptlet content with placeholders
 /// * `inputs` - Map of variable names to values
@@ -482,13 +516,13 @@ pub fn format_scriptlet(
     windows: bool,
 ) -> String {
     let mut result = content.to_string();
-    
+
     // Replace named inputs {{variableName}}
     for (name, value) in inputs {
         let placeholder = format!("{{{{{}}}}}", name);
         result = result.replace(&placeholder, value);
     }
-    
+
     // Replace positional arguments
     if windows {
         // Windows style: %1, %2, etc.
@@ -496,7 +530,7 @@ pub fn format_scriptlet(
             let placeholder = format!("%{}", i + 1);
             result = result.replace(&placeholder, arg);
         }
-        
+
         // Replace %* with all args quoted
         let all_args = positional_args
             .iter()
@@ -510,7 +544,7 @@ pub fn format_scriptlet(
             let placeholder = format!("${}", i + 1);
             result = result.replace(&placeholder, arg);
         }
-        
+
         // Replace $@ with all args quoted
         let all_args = positional_args
             .iter()
@@ -519,17 +553,17 @@ pub fn format_scriptlet(
             .join(" ");
         result = result.replace("$@", &all_args);
     }
-    
+
     result
 }
 
 /// Process conditional blocks in scriptlet content
-/// 
+///
 /// Supports:
 /// - `{{#if flag}}...{{/if}}` - Include content if flag is truthy
 /// - `{{#if flag}}...{{else}}...{{/if}}` - If-else
 /// - `{{#if flag}}...{{else if other}}...{{else}}...{{/if}}` - If-else-if chains
-/// 
+///
 /// # Arguments
 /// * `content` - The scriptlet content with conditionals
 /// * `flags` - Map of flag names to boolean values
@@ -542,14 +576,14 @@ fn process_conditionals_impl(content: &str, flags: &HashMap<String, bool>) -> St
     let mut result = String::with_capacity(content.len());
     let mut i = 0;
     let bytes = content.as_bytes();
-    
+
     while i < bytes.len() {
         // Check for {{#if
-        if i + 5 < bytes.len() && &bytes[i..i+3] == b"{{#" {
+        if i + 5 < bytes.len() && &bytes[i..i + 3] == b"{{#" {
             // Find the closing }}
             if let Some(end_tag) = find_closing_braces(content, i + 3) {
-                let directive = &content[i+3..end_tag];
-                
+                let directive = &content[i + 3..end_tag];
+
                 if directive.starts_with("if ") {
                     let flag_name = directive.strip_prefix("if ").unwrap().trim();
                     let remaining = &content[end_tag + 2..];
@@ -560,7 +594,7 @@ fn process_conditionals_impl(content: &str, flags: &HashMap<String, bool>) -> St
                 }
             }
         }
-        
+
         // Not a conditional, just copy the character
         if i < content.len() {
             result.push(content[i..].chars().next().unwrap());
@@ -569,7 +603,7 @@ fn process_conditionals_impl(content: &str, flags: &HashMap<String, bool>) -> St
             break;
         }
     }
-    
+
     result
 }
 
@@ -577,21 +611,25 @@ fn process_conditionals_impl(content: &str, flags: &HashMap<String, bool>) -> St
 fn find_closing_braces(content: &str, start: usize) -> Option<usize> {
     let bytes = content.as_bytes();
     let mut i = start;
-    
+
     while i + 1 < bytes.len() {
         if bytes[i] == b'}' && bytes[i + 1] == b'}' {
             return Some(i);
         }
         i += 1;
     }
-    
+
     None
 }
 
 /// Process a single if block, returning (result, bytes_consumed)
-fn process_if_block(content: &str, flag_name: &str, flags: &HashMap<String, bool>) -> (String, usize) {
+fn process_if_block(
+    content: &str,
+    flag_name: &str,
+    flags: &HashMap<String, bool>,
+) -> (String, usize) {
     let flag_value = flags.get(flag_name).copied().unwrap_or(false);
-    
+
     let mut depth = 1;
     let mut if_content = String::new();
     let mut else_content = String::new();
@@ -599,17 +637,17 @@ fn process_if_block(content: &str, flag_name: &str, flags: &HashMap<String, bool
     let mut in_else = false;
     let mut current_else_if_flag: Option<String> = None;
     let mut consumed = 0;
-    
+
     let mut chars = content.chars().peekable();
     let mut pos = 0;
-    
+
     while let Some(c) = chars.next() {
         pos += c.len_utf8();
-        
+
         if c == '{' && chars.peek() == Some(&'{') {
             chars.next();
             pos += 1;
-            
+
             // Read what's inside
             let mut inner = String::new();
             while let Some(&ch) = chars.peek() {
@@ -620,7 +658,7 @@ fn process_if_block(content: &str, flag_name: &str, flags: &HashMap<String, bool
                 chars.next();
                 pos += ch.len_utf8();
             }
-            
+
             // Skip closing }}
             if chars.peek() == Some(&'}') {
                 chars.next();
@@ -630,9 +668,9 @@ fn process_if_block(content: &str, flag_name: &str, flags: &HashMap<String, bool
                     pos += 1;
                 }
             }
-            
+
             let inner_trimmed = inner.trim();
-            
+
             if inner_trimmed.starts_with("#if ") {
                 depth += 1;
                 // Add to current content - inner already contains the #
@@ -667,7 +705,11 @@ fn process_if_block(content: &str, flag_name: &str, flags: &HashMap<String, bool
                 in_else = true;
                 current_else_if_flag = None;
             } else if inner_trimmed.starts_with("else if ") && depth == 1 {
-                let else_if_flag = inner_trimmed.strip_prefix("else if ").unwrap().trim().to_string();
+                let else_if_flag = inner_trimmed
+                    .strip_prefix("else if ")
+                    .unwrap()
+                    .trim()
+                    .to_string();
                 in_else = true;
                 current_else_if_flag = Some(else_if_flag.clone());
                 else_if_chains.push((else_if_flag, String::new()));
@@ -694,7 +736,7 @@ fn process_if_block(content: &str, flag_name: &str, flags: &HashMap<String, bool
             if_content.push(c);
         }
     }
-    
+
     // Determine which content to use
     let result = if flag_value {
         // Process nested conditionals in if_content
@@ -703,7 +745,7 @@ fn process_if_block(content: &str, flag_name: &str, flags: &HashMap<String, bool
         // Check else-if chains
         let mut found = false;
         let mut selected_content = String::new();
-        
+
         for (chain_flag, chain_content) in &else_if_chains {
             if flags.get(chain_flag).copied().unwrap_or(false) {
                 selected_content = process_conditionals(chain_content, flags);
@@ -711,7 +753,7 @@ fn process_if_block(content: &str, flag_name: &str, flags: &HashMap<String, bool
                 break;
             }
         }
-        
+
         if !found {
             // Use else content
             process_conditionals(&else_content, flags)
@@ -719,7 +761,7 @@ fn process_if_block(content: &str, flag_name: &str, flags: &HashMap<String, bool
             selected_content
         }
     };
-    
+
     (result, consumed)
 }
 
@@ -729,15 +771,13 @@ fn process_if_block(content: &str, flag_name: &str, flags: &HashMap<String, bool
 
 /// Interpreter tools that require an external interpreter to execute
 #[allow(dead_code)] // Infrastructure ready for use in executor.rs
-pub const INTERPRETER_TOOLS: &[&str] = &[
-    "python", "ruby", "perl", "php", "node",
-];
+pub const INTERPRETER_TOOLS: &[&str] = &["python", "ruby", "perl", "php", "node"];
 
 /// Get the interpreter command for a given tool
-/// 
+///
 /// # Arguments
 /// * `tool` - The tool name (e.g., "python", "ruby")
-/// 
+///
 /// # Returns
 /// The interpreter command to use (e.g., "python3" for "python")
 #[allow(dead_code)] // Infrastructure ready for use in executor.rs
@@ -753,10 +793,10 @@ pub fn get_interpreter_command(tool: &str) -> String {
 }
 
 /// Get platform-specific installation instructions for an interpreter
-/// 
+///
 /// # Arguments
 /// * `interpreter` - The interpreter name (e.g., "python3", "ruby")
-/// 
+///
 /// # Returns
 /// A user-friendly error message with installation instructions
 #[allow(dead_code)] // Infrastructure ready for use in executor.rs
@@ -769,21 +809,20 @@ pub fn interpreter_not_found_message(interpreter: &str) -> String {
         "node" | "nodejs" => "Node.js",
         _ => interpreter,
     };
-    
+
     let install_instructions = get_platform_install_instructions(interpreter);
-    
+
     format!(
         "{} interpreter not found.\n\n{}\n\nAfter installation, restart Script Kit.",
-        tool_name,
-        install_instructions
+        tool_name, install_instructions
     )
 }
 
 /// Get platform-specific installation instructions
-/// 
+///
 /// # Arguments
 /// * `interpreter` - The interpreter name
-/// 
+///
 /// # Returns
 /// Platform-specific installation command suggestions
 #[allow(dead_code)] // Used by interpreter_not_found_message
@@ -802,7 +841,10 @@ fn get_platform_install_instructions(interpreter: &str) -> String {
     }
     #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
     {
-        format!("Please install {} using your system's package manager.", interpreter)
+        format!(
+            "Please install {} using your system's package manager.",
+            interpreter
+        )
     }
 }
 
@@ -818,7 +860,7 @@ fn get_macos_install_instructions(interpreter: &str) -> String {
         "node" | "nodejs" => "node",
         _ => interpreter,
     };
-    
+
     format!(
         "Install using Homebrew:\n  brew install {}\n\nOr download from the official website.",
         brew_package
@@ -836,7 +878,7 @@ fn get_linux_install_instructions(interpreter: &str) -> String {
         "node" | "nodejs" => ("nodejs", "nodejs"),
         _ => (interpreter, interpreter),
     };
-    
+
     format!(
         "Install using your package manager:\n\n  Debian/Ubuntu:\n    sudo apt install {}\n\n  Fedora/RHEL:\n    sudo dnf install {}",
         apt_package, dnf_package
@@ -854,9 +896,12 @@ fn get_windows_install_instructions(interpreter: &str) -> String {
         "node" | "nodejs" => ("nodejs", "https://nodejs.org/"),
         _ => (interpreter, ""),
     };
-    
+
     if download_url.is_empty() {
-        format!("Install using Chocolatey:\n  choco install {}", choco_package)
+        format!(
+            "Install using Chocolatey:\n  choco install {}",
+            choco_package
+        )
     } else {
         format!(
             "Install using Chocolatey:\n  choco install {}\n\nOr download from:\n  {}",
@@ -866,10 +911,10 @@ fn get_windows_install_instructions(interpreter: &str) -> String {
 }
 
 /// Check if a tool is an interpreter tool
-/// 
+///
 /// # Arguments
 /// * `tool` - The tool name to check
-/// 
+///
 /// # Returns
 /// `true` if the tool requires an external interpreter
 #[allow(dead_code)] // Infrastructure ready for use in executor.rs
@@ -878,10 +923,10 @@ pub fn is_interpreter_tool(tool: &str) -> bool {
 }
 
 /// Get the file extension for a given interpreter tool
-/// 
+///
 /// # Arguments
 /// * `tool` - The tool name
-/// 
+///
 /// # Returns
 /// The appropriate file extension for scripts of that type
 #[allow(dead_code)] // Infrastructure ready for use in executor.rs
@@ -897,10 +942,10 @@ pub fn get_interpreter_extension(tool: &str) -> &'static str {
 }
 
 /// Validate that a tool name is a known interpreter
-/// 
+///
 /// # Arguments
 /// * `tool` - The tool name to validate
-/// 
+///
 /// # Returns
 /// `Ok(())` if valid, `Err` with descriptive message if not
 #[allow(dead_code)] // Infrastructure ready for use in executor.rs
@@ -908,7 +953,10 @@ pub fn validate_interpreter_tool(tool: &str) -> Result<(), String> {
     if is_interpreter_tool(tool) {
         Ok(())
     } else if VALID_TOOLS.contains(&tool) {
-        Err(format!("'{}' is a valid tool but not an interpreter tool", tool))
+        Err(format!(
+            "'{}' is a valid tool but not an interpreter tool",
+            tool
+        ))
     } else {
         Err(format!("'{}' is not a recognized tool type", tool))
     }
@@ -953,7 +1001,7 @@ mod tests {
             "bash".to_string(),
             "echo hello".to_string(),
         );
-        
+
         assert_eq!(scriptlet.name, "My Test Script");
         assert_eq!(scriptlet.command, "my-test-script");
         assert_eq!(scriptlet.tool, "bash");
@@ -968,7 +1016,7 @@ mod tests {
             "ts".to_string(),
             "const name = '{{name}}'; const age = {{age}};".to_string(),
         );
-        
+
         assert_eq!(scriptlet.inputs.len(), 2);
         assert!(scriptlet.inputs.contains(&"name".to_string()));
         assert!(scriptlet.inputs.contains(&"age".to_string()));
@@ -977,8 +1025,12 @@ mod tests {
     #[test]
     fn test_scriptlet_is_shell() {
         let bash = Scriptlet::new("test".to_string(), "bash".to_string(), "echo".to_string());
-        let ts = Scriptlet::new("test".to_string(), "ts".to_string(), "console.log()".to_string());
-        
+        let ts = Scriptlet::new(
+            "test".to_string(),
+            "ts".to_string(),
+            "console.log()".to_string(),
+        );
+
         assert!(bash.is_shell());
         assert!(!ts.is_shell());
     }
@@ -986,8 +1038,12 @@ mod tests {
     #[test]
     fn test_scriptlet_is_valid_tool() {
         let valid = Scriptlet::new("test".to_string(), "bash".to_string(), "echo".to_string());
-        let invalid = Scriptlet::new("test".to_string(), "invalid_tool".to_string(), "echo".to_string());
-        
+        let invalid = Scriptlet::new(
+            "test".to_string(),
+            "invalid_tool".to_string(),
+            "echo".to_string(),
+        );
+
         assert!(valid.is_valid_tool());
         assert!(!invalid.is_valid_tool());
     }
@@ -1064,7 +1120,9 @@ mod tests {
 
     #[test]
     fn test_parse_metadata_multiple_fields() {
-        let metadata = parse_html_comment_metadata("<!--\nshortcut: cmd k\ndescription: My script\ntrigger: test\n-->");
+        let metadata = parse_html_comment_metadata(
+            "<!--\nshortcut: cmd k\ndescription: My script\ntrigger: test\n-->",
+        );
         assert_eq!(metadata.shortcut, Some("cmd k".to_string()));
         assert_eq!(metadata.description, Some("My script".to_string()));
         assert_eq!(metadata.trigger, Some("test".to_string()));
@@ -1074,7 +1132,7 @@ mod tests {
     fn test_parse_metadata_background_bool() {
         let metadata = parse_html_comment_metadata("<!-- background: true -->");
         assert_eq!(metadata.background, Some(true));
-        
+
         let metadata = parse_html_comment_metadata("<!-- background: false -->");
         assert_eq!(metadata.background, Some(false));
     }
@@ -1082,7 +1140,10 @@ mod tests {
     #[test]
     fn test_parse_metadata_extra_fields() {
         let metadata = parse_html_comment_metadata("<!-- custom_field: value -->");
-        assert_eq!(metadata.extra.get("custom_field"), Some(&"value".to_string()));
+        assert_eq!(
+            metadata.extra.get("custom_field"),
+            Some(&"value".to_string())
+        );
     }
 
     #[test]
@@ -1094,8 +1155,12 @@ mod tests {
 
     #[test]
     fn test_parse_metadata_colons_in_value() {
-        let metadata = parse_html_comment_metadata("<!-- description: Visit https://example.com for info -->");
-        assert_eq!(metadata.description, Some("Visit https://example.com for info".to_string()));
+        let metadata =
+            parse_html_comment_metadata("<!-- description: Visit https://example.com for info -->");
+        assert_eq!(
+            metadata.description,
+            Some("Visit https://example.com for info".to_string())
+        );
     }
 
     // ========================================
@@ -1123,7 +1188,9 @@ mod tests {
 
     #[test]
     fn test_parse_metadata_expand_with_other_fields() {
-        let metadata = parse_html_comment_metadata("<!--\nexpand: :addr\nshortcut: cmd e\ndescription: Insert address\n-->");
+        let metadata = parse_html_comment_metadata(
+            "<!--\nexpand: :addr\nshortcut: cmd e\ndescription: Insert address\n-->",
+        );
         assert_eq!(metadata.expand, Some(":addr".to_string()));
         assert_eq!(metadata.shortcut, Some("cmd e".to_string()));
         assert_eq!(metadata.description, Some("Insert address".to_string()));
@@ -1182,7 +1249,7 @@ Plain text
 "#;
         let scriptlets = parse_markdown_as_scriptlets(markdown, None);
         assert_eq!(scriptlets.len(), 3);
-        
+
         assert_eq!(scriptlets[0].metadata.expand, Some(":date".to_string()));
         assert_eq!(scriptlets[1].metadata.expand, Some("!email".to_string()));
         assert_eq!(scriptlets[2].metadata.expand, None);
@@ -1194,10 +1261,10 @@ Plain text
             expand: Some(":test".to_string()),
             ..Default::default()
         };
-        
+
         let json = serde_json::to_string(&metadata).unwrap();
         assert!(json.contains("\"expand\":\":test\""));
-        
+
         let deserialized: ScriptletMetadata = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized.expand, Some(":test".to_string()));
     }
@@ -1234,7 +1301,9 @@ Plain text
 
     #[test]
     fn test_parse_metadata_alias_with_other_fields() {
-        let metadata = parse_html_comment_metadata("<!--\nalias: search\nshortcut: cmd s\ndescription: Search the web\n-->");
+        let metadata = parse_html_comment_metadata(
+            "<!--\nalias: search\nshortcut: cmd s\ndescription: Search the web\n-->",
+        );
         assert_eq!(metadata.alias, Some("search".to_string()));
         assert_eq!(metadata.shortcut, Some("cmd s".to_string()));
         assert_eq!(metadata.description, Some("Search the web".to_string()));
@@ -1292,7 +1361,7 @@ https://example.com
 "#;
         let scriptlets = parse_markdown_as_scriptlets(markdown, None);
         assert_eq!(scriptlets.len(), 3);
-        
+
         assert_eq!(scriptlets[0].metadata.alias, Some("goog".to_string()));
         assert_eq!(scriptlets[1].metadata.alias, Some("gh".to_string()));
         assert_eq!(scriptlets[2].metadata.alias, None);
@@ -1304,10 +1373,10 @@ https://example.com
             alias: Some("test".to_string()),
             ..Default::default()
         };
-        
+
         let json = serde_json::to_string(&metadata).unwrap();
         assert!(json.contains("\"alias\":\"test\""));
-        
+
         let deserialized: ScriptletMetadata = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized.alias, Some("test".to_string()));
     }
@@ -1465,12 +1534,12 @@ echo "B"
 "#;
         let scriptlets = parse_markdown_as_scriptlets(markdown, None);
         assert_eq!(scriptlets.len(), 2);
-        
+
         // Both should have the prepended content
         assert!(scriptlets[0].scriptlet_content.contains("#!/bin/bash"));
         assert!(scriptlets[0].scriptlet_content.contains("set -e"));
         assert!(scriptlets[0].scriptlet_content.contains("echo \"A\""));
-        
+
         assert!(scriptlets[1].scriptlet_content.contains("#!/bin/bash"));
         assert!(scriptlets[1].scriptlet_content.contains("echo \"B\""));
     }
@@ -1507,7 +1576,10 @@ console.log("Hello {{name}}! You are {{age}} years old.");
     fn test_parse_markdown_source_path() {
         let markdown = "## Test\n\n```bash\necho\n```";
         let scriptlets = parse_markdown_as_scriptlets(markdown, Some("/path/to/file.md"));
-        assert_eq!(scriptlets[0].source_path, Some("/path/to/file.md".to_string()));
+        assert_eq!(
+            scriptlets[0].source_path,
+            Some("/path/to/file.md".to_string())
+        );
     }
 
     #[test]
@@ -1532,14 +1604,9 @@ console.log("Hello {{name}}! You are {{age}} years old.");
         let mut inputs = HashMap::new();
         inputs.insert("name".to_string(), "Alice".to_string());
         inputs.insert("greeting".to_string(), "Hello".to_string());
-        
-        let result = format_scriptlet(
-            "{{greeting}}, {{name}}!",
-            &inputs,
-            &[],
-            false,
-        );
-        
+
+        let result = format_scriptlet("{{greeting}}, {{name}}!", &inputs, &[], false);
+
         assert_eq!(result, "Hello, Alice!");
     }
 
@@ -1551,7 +1618,7 @@ console.log("Hello {{name}}! You are {{age}} years old.");
             &["first".to_string(), "second".to_string()],
             false,
         );
-        
+
         assert_eq!(result, "echo first and second");
     }
 
@@ -1563,7 +1630,7 @@ console.log("Hello {{name}}! You are {{age}} years old.");
             &["first".to_string(), "second".to_string()],
             true,
         );
-        
+
         assert_eq!(result, "echo first and second");
     }
 
@@ -1575,7 +1642,7 @@ console.log("Hello {{name}}! You are {{age}} years old.");
             &["one".to_string(), "two".to_string(), "three".to_string()],
             false,
         );
-        
+
         assert_eq!(result, r#"echo "one" "two" "three""#);
     }
 
@@ -1587,7 +1654,7 @@ console.log("Hello {{name}}! You are {{age}} years old.");
             &["one".to_string(), "two".to_string()],
             true,
         );
-        
+
         assert_eq!(result, r#"echo "one" "two""#);
     }
 
@@ -1595,14 +1662,14 @@ console.log("Hello {{name}}! You are {{age}} years old.");
     fn test_format_scriptlet_combined() {
         let mut inputs = HashMap::new();
         inputs.insert("prefix".to_string(), "Result:".to_string());
-        
+
         let result = format_scriptlet(
             "{{prefix}} $1 and $2",
             &inputs,
             &["A".to_string(), "B".to_string()],
             false,
         );
-        
+
         assert_eq!(result, "Result: A and B");
     }
 
@@ -1614,7 +1681,7 @@ console.log("Hello {{name}}! You are {{age}} years old.");
             &["has\"quote".to_string()],
             false,
         );
-        
+
         assert_eq!(result, r#"echo "has\"quote""#);
     }
 
@@ -1626,7 +1693,7 @@ console.log("Hello {{name}}! You are {{age}} years old.");
     fn test_process_conditionals_if_true() {
         let mut flags = HashMap::new();
         flags.insert("show".to_string(), true);
-        
+
         let result = process_conditionals("{{#if show}}visible{{/if}}", &flags);
         assert_eq!(result, "visible");
     }
@@ -1635,7 +1702,7 @@ console.log("Hello {{name}}! You are {{age}} years old.");
     fn test_process_conditionals_if_false() {
         let mut flags = HashMap::new();
         flags.insert("show".to_string(), false);
-        
+
         let result = process_conditionals("{{#if show}}visible{{/if}}", &flags);
         assert_eq!(result, "");
     }
@@ -1643,7 +1710,7 @@ console.log("Hello {{name}}! You are {{age}} years old.");
     #[test]
     fn test_process_conditionals_if_missing_flag() {
         let flags = HashMap::new();
-        
+
         let result = process_conditionals("{{#if undefined}}visible{{/if}}", &flags);
         assert_eq!(result, "");
     }
@@ -1652,7 +1719,7 @@ console.log("Hello {{name}}! You are {{age}} years old.");
     fn test_process_conditionals_if_else_true() {
         let mut flags = HashMap::new();
         flags.insert("flag".to_string(), true);
-        
+
         let result = process_conditionals("{{#if flag}}yes{{else}}no{{/if}}", &flags);
         assert_eq!(result, "yes");
     }
@@ -1661,7 +1728,7 @@ console.log("Hello {{name}}! You are {{age}} years old.");
     fn test_process_conditionals_if_else_false() {
         let mut flags = HashMap::new();
         flags.insert("flag".to_string(), false);
-        
+
         let result = process_conditionals("{{#if flag}}yes{{else}}no{{/if}}", &flags);
         assert_eq!(result, "no");
     }
@@ -1671,7 +1738,7 @@ console.log("Hello {{name}}! You are {{age}} years old.");
         let mut flags = HashMap::new();
         flags.insert("a".to_string(), false);
         flags.insert("b".to_string(), true);
-        
+
         let result = process_conditionals("{{#if a}}A{{else if b}}B{{else}}C{{/if}}", &flags);
         assert_eq!(result, "B");
     }
@@ -1681,11 +1748,9 @@ console.log("Hello {{name}}! You are {{age}} years old.");
         let mut flags = HashMap::new();
         flags.insert("outer".to_string(), true);
         flags.insert("inner".to_string(), true);
-        
-        let result = process_conditionals(
-            "{{#if outer}}[{{#if inner}}nested{{/if}}]{{/if}}",
-            &flags,
-        );
+
+        let result =
+            process_conditionals("{{#if outer}}[{{#if inner}}nested{{/if}}]{{/if}}", &flags);
         assert_eq!(result, "[nested]");
     }
 
@@ -1693,7 +1758,7 @@ console.log("Hello {{name}}! You are {{age}} years old.");
     fn test_process_conditionals_preserves_other_content() {
         let mut flags = HashMap::new();
         flags.insert("show".to_string(), true);
-        
+
         let result = process_conditionals("Before {{#if show}}middle{{/if}} after", &flags);
         assert_eq!(result, "Before middle after");
     }
@@ -1702,7 +1767,7 @@ console.log("Hello {{name}}! You are {{age}} years old.");
     fn test_process_conditionals_with_variables() {
         let mut flags = HashMap::new();
         flags.insert("useTitle".to_string(), true);
-        
+
         let result = process_conditionals("{{#if useTitle}}Hello {{name}}{{/if}}", &flags);
         assert_eq!(result, "Hello {{name}}");
     }
@@ -1727,27 +1792,30 @@ const name = "{{name}}";
 {{#if formal}}console.log(`Dear ${name}`);{{else}}console.log(`Hey ${name}!`);{{/if}}
 ```
 "#;
-        
+
         let scriptlets = parse_markdown_as_scriptlets(markdown, Some("/test.md"));
         assert_eq!(scriptlets.len(), 1);
-        
+
         let scriptlet = &scriptlets[0];
         assert_eq!(scriptlet.name, "Greeter");
         assert_eq!(scriptlet.group, "Tools");
-        assert_eq!(scriptlet.metadata.description, Some("Greets a person".to_string()));
+        assert_eq!(
+            scriptlet.metadata.description,
+            Some("Greets a person".to_string())
+        );
         assert_eq!(scriptlet.metadata.shortcut, Some("cmd g".to_string()));
         assert!(scriptlet.inputs.contains(&"name".to_string()));
-        
+
         // Test variable substitution
         let mut inputs = HashMap::new();
         inputs.insert("name".to_string(), "Alice".to_string());
-        
+
         let mut flags = HashMap::new();
         flags.insert("formal".to_string(), true);
-        
+
         let content = process_conditionals(&scriptlet.scriptlet_content, &flags);
         let result = format_scriptlet(&content, &inputs, &[], false);
-        
+
         assert!(result.contains("Alice"));
         assert!(result.contains("Dear"));
         assert!(!result.contains("Hey"));
@@ -1792,27 +1860,27 @@ npm test $@
 npm run build $1
 ```
 "#;
-        
+
         let scriptlets = parse_markdown_as_scriptlets(markdown, None);
-        
+
         // Should have 4 scriptlets: Open URL, Type Date, Run Tests, Build
         assert_eq!(scriptlets.len(), 4);
-        
+
         // First two belong to "Productivity" group
         assert_eq!(scriptlets[0].group, "Productivity");
         assert_eq!(scriptlets[0].name, "Open URL");
         assert_eq!(scriptlets[0].tool, "open");
-        
+
         assert_eq!(scriptlets[1].group, "Productivity");
         assert_eq!(scriptlets[1].name, "Type Date");
         assert_eq!(scriptlets[1].metadata.expand, Some("ddate,,".to_string()));
-        
+
         // Last two belong to "Development" group and have the common setup prepended
         assert_eq!(scriptlets[2].group, "Development");
         assert_eq!(scriptlets[2].name, "Run Tests");
         assert!(scriptlets[2].scriptlet_content.contains("export PATH"));
         assert!(scriptlets[2].scriptlet_content.contains("npm test"));
-        
+
         assert_eq!(scriptlets[3].group, "Development");
         assert_eq!(scriptlets[3].name, "Build");
         assert!(scriptlets[3].scriptlet_content.contains("export PATH"));
@@ -1825,10 +1893,10 @@ npm run build $1
             description: Some("Test".to_string()),
             ..Default::default()
         };
-        
+
         let json = serde_json::to_string(&metadata).unwrap();
         let deserialized: ScriptletMetadata = serde_json::from_str(&json).unwrap();
-        
+
         assert_eq!(metadata.shortcut, deserialized.shortcut);
         assert_eq!(metadata.description, deserialized.description);
     }
@@ -1840,10 +1908,10 @@ npm run build $1
             "bash".to_string(),
             "echo hello".to_string(),
         );
-        
+
         let json = serde_json::to_string(&scriptlet).unwrap();
         let deserialized: Scriptlet = serde_json::from_str(&json).unwrap();
-        
+
         assert_eq!(scriptlet.name, deserialized.name);
         assert_eq!(scriptlet.tool, deserialized.tool);
         assert_eq!(scriptlet.scriptlet_content, deserialized.scriptlet_content);
@@ -1861,7 +1929,7 @@ npm run build $1
         assert!(INTERPRETER_TOOLS.contains(&"perl"));
         assert!(INTERPRETER_TOOLS.contains(&"php"));
         assert!(INTERPRETER_TOOLS.contains(&"node"));
-        
+
         // Verify count
         assert_eq!(INTERPRETER_TOOLS.len(), 5);
     }
@@ -1874,12 +1942,12 @@ npm run build $1
         assert!(is_interpreter_tool("perl"));
         assert!(is_interpreter_tool("php"));
         assert!(is_interpreter_tool("node"));
-        
+
         // Negative cases - shell tools
         assert!(!is_interpreter_tool("bash"));
         assert!(!is_interpreter_tool("sh"));
         assert!(!is_interpreter_tool("zsh"));
-        
+
         // Negative cases - other tools
         assert!(!is_interpreter_tool("ts"));
         assert!(!is_interpreter_tool("kit"));
@@ -1892,13 +1960,13 @@ npm run build $1
     fn test_get_interpreter_command() {
         // Python uses python3
         assert_eq!(get_interpreter_command("python"), "python3");
-        
+
         // Others use their direct name
         assert_eq!(get_interpreter_command("ruby"), "ruby");
         assert_eq!(get_interpreter_command("perl"), "perl");
         assert_eq!(get_interpreter_command("php"), "php");
         assert_eq!(get_interpreter_command("node"), "node");
-        
+
         // Unknown returns as-is
         assert_eq!(get_interpreter_command("unknown"), "unknown");
     }
@@ -1910,7 +1978,7 @@ npm run build $1
         assert_eq!(get_interpreter_extension("perl"), "pl");
         assert_eq!(get_interpreter_extension("php"), "php");
         assert_eq!(get_interpreter_extension("node"), "js");
-        
+
         // Unknown returns txt
         assert_eq!(get_interpreter_extension("unknown"), "txt");
     }
@@ -1942,11 +2010,11 @@ npm run build $1
     #[test]
     fn test_interpreter_not_found_message_python() {
         let msg = interpreter_not_found_message("python3");
-        
+
         // Should contain the tool name
         assert!(msg.contains("Python"));
         assert!(msg.contains("interpreter not found"));
-        
+
         // Should have installation instructions
         #[cfg(target_os = "macos")]
         {
@@ -1960,7 +2028,7 @@ npm run build $1
         {
             assert!(msg.contains("choco install python"));
         }
-        
+
         // Should mention restart
         assert!(msg.contains("restart Script Kit"));
     }
@@ -1968,10 +2036,10 @@ npm run build $1
     #[test]
     fn test_interpreter_not_found_message_ruby() {
         let msg = interpreter_not_found_message("ruby");
-        
+
         assert!(msg.contains("Ruby"));
         assert!(msg.contains("interpreter not found"));
-        
+
         #[cfg(target_os = "macos")]
         {
             assert!(msg.contains("brew install ruby"));
@@ -1981,10 +2049,10 @@ npm run build $1
     #[test]
     fn test_interpreter_not_found_message_node() {
         let msg = interpreter_not_found_message("node");
-        
+
         assert!(msg.contains("Node.js"));
         assert!(msg.contains("interpreter not found"));
-        
+
         #[cfg(target_os = "macos")]
         {
             assert!(msg.contains("brew install node"));
@@ -1994,7 +2062,7 @@ npm run build $1
     #[test]
     fn test_interpreter_not_found_message_perl() {
         let msg = interpreter_not_found_message("perl");
-        
+
         assert!(msg.contains("Perl"));
         assert!(msg.contains("interpreter not found"));
     }
@@ -2002,7 +2070,7 @@ npm run build $1
     #[test]
     fn test_interpreter_not_found_message_php() {
         let msg = interpreter_not_found_message("php");
-        
+
         assert!(msg.contains("PHP"));
         assert!(msg.contains("interpreter not found"));
     }
@@ -2011,8 +2079,11 @@ npm run build $1
     fn test_interpreter_tools_are_valid_tools() {
         // All interpreter tools should also be in VALID_TOOLS
         for tool in INTERPRETER_TOOLS {
-            assert!(VALID_TOOLS.contains(tool), 
-                "Interpreter tool '{}' should be in VALID_TOOLS", tool);
+            assert!(
+                VALID_TOOLS.contains(tool),
+                "Interpreter tool '{}' should be in VALID_TOOLS",
+                tool
+            );
         }
     }
 
@@ -2020,8 +2091,11 @@ npm run build $1
     fn test_interpreter_tools_disjoint_from_shell_tools() {
         // Interpreter tools should not overlap with shell tools
         for tool in INTERPRETER_TOOLS {
-            assert!(!SHELL_TOOLS.contains(tool), 
-                "Interpreter tool '{}' should not be in SHELL_TOOLS", tool);
+            assert!(
+                !SHELL_TOOLS.contains(tool),
+                "Interpreter tool '{}' should not be in SHELL_TOOLS",
+                tool
+            );
         }
     }
 
@@ -2033,7 +2107,7 @@ npm run build $1
             "python".to_string(),
             "print('Hello, World!')".to_string(),
         );
-        
+
         assert_eq!(scriptlet.tool, "python");
         assert!(is_interpreter_tool(&scriptlet.tool));
         assert!(scriptlet.is_valid_tool());
@@ -2063,19 +2137,19 @@ console.log("Hello from Node");
 ```
 "#;
         let scriptlets = parse_markdown_as_scriptlets(markdown, None);
-        
+
         assert_eq!(scriptlets.len(), 3);
-        
+
         // Python
         assert_eq!(scriptlets[0].tool, "python");
         assert!(is_interpreter_tool(&scriptlets[0].tool));
         assert!(scriptlets[0].scriptlet_content.contains("print"));
-        
+
         // Ruby
         assert_eq!(scriptlets[1].tool, "ruby");
         assert!(is_interpreter_tool(&scriptlets[1].tool));
         assert!(scriptlets[1].scriptlet_content.contains("puts"));
-        
+
         // Node
         assert_eq!(scriptlets[2].tool, "node");
         assert!(is_interpreter_tool(&scriptlets[2].tool));
@@ -2141,7 +2215,9 @@ console.log("Hello from Node");
 
     #[test]
     fn test_parse_metadata_cron_with_other_fields() {
-        let metadata = parse_html_comment_metadata("<!--\ncron: 0 */6 * * *\ndescription: Runs every 6 hours\nbackground: true\n-->");
+        let metadata = parse_html_comment_metadata(
+            "<!--\ncron: 0 */6 * * *\ndescription: Runs every 6 hours\nbackground: true\n-->",
+        );
         assert_eq!(metadata.cron, Some("0 */6 * * *".to_string()));
         assert_eq!(metadata.description, Some("Runs every 6 hours".to_string()));
         assert_eq!(metadata.background, Some(true));
@@ -2158,7 +2234,8 @@ console.log("Hello from Node");
     #[test]
     fn test_parse_metadata_cron_and_schedule_together() {
         // Both can exist, though typically only one would be used
-        let metadata = parse_html_comment_metadata("<!--\ncron: 0 9 * * *\nschedule: every day at 9am\n-->");
+        let metadata =
+            parse_html_comment_metadata("<!--\ncron: 0 9 * * *\nschedule: every day at 9am\n-->");
         assert_eq!(metadata.cron, Some("0 9 * * *".to_string()));
         assert_eq!(metadata.schedule, Some("every day at 9am".to_string()));
     }
@@ -2207,7 +2284,10 @@ generate-report.sh
         let scriptlets = parse_markdown_as_scriptlets(markdown, None);
         assert_eq!(scriptlets.len(), 1);
         assert_eq!(scriptlets[0].name, "Weekly Report");
-        assert_eq!(scriptlets[0].metadata.schedule, Some("every monday at 8am".to_string()));
+        assert_eq!(
+            scriptlets[0].metadata.schedule,
+            Some("every monday at 8am".to_string())
+        );
         assert_eq!(scriptlets[0].tool, "bash");
     }
 
@@ -2239,13 +2319,16 @@ manual-task.sh
 "#;
         let scriptlets = parse_markdown_as_scriptlets(markdown, None);
         assert_eq!(scriptlets.len(), 3);
-        
+
         assert_eq!(scriptlets[0].metadata.cron, Some("*/5 * * * *".to_string()));
         assert_eq!(scriptlets[0].metadata.schedule, None);
-        
+
         assert_eq!(scriptlets[1].metadata.cron, None);
-        assert_eq!(scriptlets[1].metadata.schedule, Some("every day at midnight".to_string()));
-        
+        assert_eq!(
+            scriptlets[1].metadata.schedule,
+            Some("every day at midnight".to_string())
+        );
+
         assert_eq!(scriptlets[2].metadata.cron, None);
         assert_eq!(scriptlets[2].metadata.schedule, None);
     }
@@ -2256,10 +2339,10 @@ manual-task.sh
             cron: Some("0 9 * * 1-5".to_string()),
             ..Default::default()
         };
-        
+
         let json = serde_json::to_string(&metadata).unwrap();
         assert!(json.contains("\"cron\":\"0 9 * * 1-5\""));
-        
+
         let deserialized: ScriptletMetadata = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized.cron, Some("0 9 * * 1-5".to_string()));
     }
@@ -2270,12 +2353,15 @@ manual-task.sh
             schedule: Some("every friday at 5pm".to_string()),
             ..Default::default()
         };
-        
+
         let json = serde_json::to_string(&metadata).unwrap();
         assert!(json.contains("\"schedule\":\"every friday at 5pm\""));
-        
+
         let deserialized: ScriptletMetadata = serde_json::from_str(&json).unwrap();
-        assert_eq!(deserialized.schedule, Some("every friday at 5pm".to_string()));
+        assert_eq!(
+            deserialized.schedule,
+            Some("every friday at 5pm".to_string())
+        );
     }
 
     #[test]

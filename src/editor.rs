@@ -13,8 +13,8 @@
 #![allow(dead_code)]
 
 use gpui::{
-    div, prelude::*, px, rgb, rgba, uniform_list, Context, FocusHandle, Focusable, Render,
-    SharedString, UniformListScrollHandle, Window, ClipboardItem,
+    div, prelude::*, px, rgb, rgba, uniform_list, ClipboardItem, Context, FocusHandle, Focusable,
+    Render, SharedString, UniformListScrollHandle, Window,
 };
 use ropey::Rope;
 use std::collections::VecDeque;
@@ -54,7 +54,7 @@ impl CursorPosition {
     pub fn new(line: usize, column: usize) -> Self {
         Self { line, column }
     }
-    
+
     pub fn start() -> Self {
         Self { line: 0, column: 0 }
     }
@@ -73,19 +73,23 @@ impl Selection {
     pub fn new(anchor: CursorPosition, head: CursorPosition) -> Self {
         Self { anchor, head }
     }
-    
+
     pub fn caret(pos: CursorPosition) -> Self {
-        Self { anchor: pos, head: pos }
+        Self {
+            anchor: pos,
+            head: pos,
+        }
     }
-    
+
     pub fn is_empty(&self) -> bool {
         self.anchor == self.head
     }
-    
+
     /// Get the selection as an ordered range (start, end)
     pub fn ordered(&self) -> (CursorPosition, CursorPosition) {
-        if self.anchor.line < self.head.line || 
-           (self.anchor.line == self.head.line && self.anchor.column <= self.head.column) {
+        if self.anchor.line < self.head.line
+            || (self.anchor.line == self.head.line && self.anchor.column <= self.head.column)
+        {
             (self.anchor, self.head)
         } else {
             (self.head, self.anchor)
@@ -129,10 +133,10 @@ pub struct EditorPrompt {
     on_submit: SubmitCallback,
     theme: Arc<Theme>,
     config: Arc<Config>,
-    
+
     // Layout - explicit height for proper sizing (GPUI entities don't inherit parent flex sizing)
     content_height: Option<gpui::Pixels>,
-    
+
     // Change detection for render logging (avoid spam)
     last_render_state: Option<RenderState>,
 }
@@ -157,11 +161,20 @@ impl EditorPrompt {
         theme: Arc<Theme>,
         config: Arc<Config>,
     ) -> Self {
-        Self::with_height(id, content, language, focus_handle, on_submit, theme, config, None)
+        Self::with_height(
+            id,
+            content,
+            language,
+            focus_handle,
+            on_submit,
+            theme,
+            config,
+            None,
+        )
     }
-    
+
     /// Create a new EditorPrompt with explicit height
-    /// 
+    ///
     /// This is necessary because GPUI entities don't inherit parent flex sizing.
     /// When rendered as a child of a sized container, h_full() doesn't resolve
     /// to the parent's height. We must pass an explicit height.
@@ -180,7 +193,10 @@ impl EditorPrompt {
             "EDITOR",
             &format!(
                 "EditorPrompt::new id={}, lang={}, content_len={}, height={:?}",
-                id, language, content.len(), content_height
+                id,
+                language,
+                content.len(),
+                content_height
             ),
         );
 
@@ -216,22 +232,22 @@ impl EditorPrompt {
             last_render_state: None,
         }
     }
-    
+
     /// Set the content height (for dynamic resizing)
     pub fn set_height(&mut self, height: gpui::Pixels) {
         self.content_height = Some(height);
     }
-    
+
     /// Get the configured font size
     fn font_size(&self) -> f32 {
         self.config.get_editor_font_size()
     }
-    
+
     /// Get the line height based on configured font size
     fn line_height(&self) -> f32 {
         self.font_size() * LINE_HEIGHT_MULTIPLIER
     }
-    
+
     /// Get char width scaled to configured font size
     #[allow(dead_code)]
     fn char_width(&self) -> f32 {
@@ -307,7 +323,7 @@ impl EditorPrompt {
             cursor: self.cursor,
             selection: self.selection,
         };
-        
+
         if self.undo_stack.len() >= MAX_UNDO_HISTORY {
             self.undo_stack.pop_front();
         }
@@ -325,7 +341,7 @@ impl EditorPrompt {
                 selection: self.selection,
             };
             self.redo_stack.push_back(current);
-            
+
             // Restore previous state
             self.rope = Rope::from_str(&snapshot.content);
             self.cursor = snapshot.cursor;
@@ -345,7 +361,7 @@ impl EditorPrompt {
                 selection: self.selection,
             };
             self.undo_stack.push_back(current);
-            
+
             // Restore redo state
             self.rope = Rope::from_str(&snapshot.content);
             self.cursor = snapshot.cursor;
@@ -366,22 +382,25 @@ impl EditorPrompt {
     /// Insert text at cursor position
     fn insert_text(&mut self, text: &str) {
         self.save_undo_state();
-        
+
         // Delete selection first if any
         if !self.selection.is_empty() {
             self.delete_selection_internal();
         }
-        
+
         let char_idx = self.cursor_to_char_idx(self.cursor);
         self.rope.insert(char_idx, text);
-        
+
         // Move cursor after inserted text
         let new_idx = char_idx + text.chars().count();
         self.cursor = self.char_idx_to_cursor(new_idx);
         self.selection = Selection::caret(self.cursor);
         self.needs_rehighlight = true;
-        
-        logging::log("EDITOR", &format!("Inserted {} chars at {:?}", text.len(), self.cursor));
+
+        logging::log(
+            "EDITOR",
+            &format!("Inserted {} chars at {:?}", text.len(), self.cursor),
+        );
     }
 
     /// Insert a single character
@@ -399,11 +418,11 @@ impl EditorPrompt {
         if self.selection.is_empty() {
             return;
         }
-        
+
         let (start, end) = self.selection.ordered();
         let start_idx = self.cursor_to_char_idx(start);
         let end_idx = self.cursor_to_char_idx(end);
-        
+
         self.rope.remove(start_idx..end_idx);
         self.cursor = start;
         self.selection = Selection::caret(start);
@@ -412,7 +431,7 @@ impl EditorPrompt {
     /// Delete selected text or character before cursor (backspace)
     fn backspace(&mut self) {
         self.save_undo_state();
-        
+
         if !self.selection.is_empty() {
             self.delete_selection_internal();
         } else if self.cursor.line > 0 || self.cursor.column > 0 {
@@ -429,7 +448,7 @@ impl EditorPrompt {
     /// Delete selected text or character after cursor
     fn delete(&mut self) {
         self.save_undo_state();
-        
+
         if !self.selection.is_empty() {
             self.delete_selection_internal();
         } else {
@@ -447,7 +466,7 @@ impl EditorPrompt {
         if char_idx > 0 {
             self.cursor = self.char_idx_to_cursor(char_idx - 1);
         }
-        
+
         if extend_selection {
             self.selection.head = self.cursor;
         } else {
@@ -461,7 +480,7 @@ impl EditorPrompt {
         if char_idx < self.rope.len_chars() {
             self.cursor = self.char_idx_to_cursor(char_idx + 1);
         }
-        
+
         if extend_selection {
             self.selection.head = self.cursor;
         } else {
@@ -476,7 +495,7 @@ impl EditorPrompt {
             let line_len = self.line_len(self.cursor.line);
             self.cursor.column = self.cursor.column.min(line_len);
         }
-        
+
         if extend_selection {
             self.selection.head = self.cursor;
         } else {
@@ -491,7 +510,7 @@ impl EditorPrompt {
             let line_len = self.line_len(self.cursor.line);
             self.cursor.column = self.cursor.column.min(line_len);
         }
-        
+
         if extend_selection {
             self.selection.head = self.cursor;
         } else {
@@ -502,7 +521,7 @@ impl EditorPrompt {
     /// Move cursor to start of line
     fn move_to_line_start(&mut self, extend_selection: bool) {
         self.cursor.column = 0;
-        
+
         if extend_selection {
             self.selection.head = self.cursor;
         } else {
@@ -513,7 +532,7 @@ impl EditorPrompt {
     /// Move cursor to end of line
     fn move_to_line_end(&mut self, extend_selection: bool) {
         self.cursor.column = self.line_len(self.cursor.line);
-        
+
         if extend_selection {
             self.selection.head = self.cursor;
         } else {
@@ -524,7 +543,7 @@ impl EditorPrompt {
     /// Move cursor to start of document
     fn move_to_document_start(&mut self, extend_selection: bool) {
         self.cursor = CursorPosition::start();
-        
+
         if extend_selection {
             self.selection.head = self.cursor;
         } else {
@@ -536,7 +555,7 @@ impl EditorPrompt {
     fn move_to_document_end(&mut self, extend_selection: bool) {
         let last_line = self.line_count().saturating_sub(1);
         self.cursor = CursorPosition::new(last_line, self.line_len(last_line));
-        
+
         if extend_selection {
             self.selection.head = self.cursor;
         } else {
@@ -550,11 +569,11 @@ impl EditorPrompt {
         if char_idx == 0 {
             return;
         }
-        
+
         // Find the start of the previous word
         let text: String = self.rope.chars().take(char_idx).collect();
         let mut new_idx = char_idx;
-        
+
         // Skip whitespace
         while new_idx > 0 {
             let ch = text.chars().nth(new_idx - 1).unwrap_or(' ');
@@ -563,7 +582,7 @@ impl EditorPrompt {
             }
             new_idx -= 1;
         }
-        
+
         // Skip word characters
         while new_idx > 0 {
             let ch = text.chars().nth(new_idx - 1).unwrap_or(' ');
@@ -572,9 +591,9 @@ impl EditorPrompt {
             }
             new_idx -= 1;
         }
-        
+
         self.cursor = self.char_idx_to_cursor(new_idx);
-        
+
         if extend_selection {
             self.selection.head = self.cursor;
         } else {
@@ -589,10 +608,10 @@ impl EditorPrompt {
         if char_idx >= total_chars {
             return;
         }
-        
+
         let text: String = self.rope.chars().collect();
         let mut new_idx = char_idx;
-        
+
         // Skip current word characters
         while new_idx < total_chars {
             let ch = text.chars().nth(new_idx).unwrap_or(' ');
@@ -601,7 +620,7 @@ impl EditorPrompt {
             }
             new_idx += 1;
         }
-        
+
         // Skip whitespace
         while new_idx < total_chars {
             let ch = text.chars().nth(new_idx).unwrap_or(' ');
@@ -610,9 +629,9 @@ impl EditorPrompt {
             }
             new_idx += 1;
         }
-        
+
         self.cursor = self.char_idx_to_cursor(new_idx);
-        
+
         if extend_selection {
             self.selection.head = self.cursor;
         } else {
@@ -633,11 +652,11 @@ impl EditorPrompt {
         if self.selection.is_empty() {
             return String::new();
         }
-        
+
         let (start, end) = self.selection.ordered();
         let start_idx = self.cursor_to_char_idx(start);
         let end_idx = self.cursor_to_char_idx(end);
-        
+
         self.rope.slice(start_idx..end_idx).to_string()
     }
 
@@ -655,10 +674,10 @@ impl EditorPrompt {
         if self.selection.is_empty() {
             return;
         }
-        
+
         let text = self.get_selected_text();
         cx.write_to_clipboard(ClipboardItem::new_string(text));
-        
+
         self.save_undo_state();
         self.delete_selection_internal();
         self.needs_rehighlight = true;
@@ -693,53 +712,53 @@ impl EditorPrompt {
         let cmd = event.keystroke.modifiers.platform;
         let shift = event.keystroke.modifiers.shift;
         let alt = event.keystroke.modifiers.alt;
-        
+
         match (key.as_str(), cmd, shift, alt) {
             // Submit/Cancel
             ("enter", true, false, false) => self.submit(),
             ("escape", _, _, _) => self.cancel(),
-            
+
             // Undo/Redo
             ("z", true, false, false) => self.undo(),
             ("z", true, true, false) => self.redo(),
-            
+
             // Clipboard
             ("c", true, false, false) => self.copy(cx),
             ("x", true, false, false) => self.cut(cx),
             ("v", true, false, false) => self.paste(cx),
-            
+
             // Select all
             ("a", true, false, false) => self.select_all(),
-            
+
             // Navigation (basic arrow keys, with or without shift for selection)
             // GPUI may send "up" or "arrowup" depending on platform/context
             ("left" | "arrowleft", false, _, false) => self.move_left(shift),
             ("right" | "arrowright", false, _, false) => self.move_right(shift),
             ("up" | "arrowup", false, _, false) => self.move_up(shift),
             ("down" | "arrowdown", false, _, false) => self.move_down(shift),
-            
+
             // Word navigation (Alt/Option + arrow)
             ("left" | "arrowleft", false, _, true) => self.move_word_left(shift),
             ("right" | "arrowright", false, _, true) => self.move_word_right(shift),
-            
+
             // Line start/end (Cmd+Left/Right on Mac)
             ("left" | "arrowleft", true, _, false) => self.move_to_line_start(shift),
             ("right" | "arrowright", true, _, false) => self.move_to_line_end(shift),
             ("home", false, _, _) => self.move_to_line_start(shift),
             ("end", false, _, _) => self.move_to_line_end(shift),
-            
+
             // Document start/end (Cmd+Up/Down on Mac, Cmd+Home/End)
             ("up" | "arrowup", true, _, false) => self.move_to_document_start(shift),
             ("down" | "arrowdown", true, _, false) => self.move_to_document_end(shift),
             ("home", true, _, _) => self.move_to_document_start(shift),
             ("end", true, _, _) => self.move_to_document_end(shift),
-            
+
             // Editing
             ("backspace", _, _, _) => self.backspace(),
             ("delete", _, _, _) => self.delete(),
             ("enter", false, _, _) => self.insert_newline(),
             ("tab", false, false, false) => self.insert_text("    "), // 4 spaces for tab
-            
+
             // Character input
             _ => {
                 if let Some(ref key_char) = event.keystroke.key_char {
@@ -751,40 +770,65 @@ impl EditorPrompt {
                 }
             }
         }
-        
+
         cx.notify();
     }
 
     /// Render a range of lines for uniform_list virtualization
-    fn render_lines(&mut self, range: Range<usize>, _cx: &mut Context<Self>) -> Vec<impl IntoElement> {
+    fn render_lines(
+        &mut self,
+        range: Range<usize>,
+        _cx: &mut Context<Self>,
+    ) -> Vec<impl IntoElement> {
         self.rehighlight_if_needed();
-        
+
         let colors = &self.theme.colors;
         let (sel_start, sel_end) = self.selection.ordered();
-        
+
         range
             .map(|line_idx| {
                 let line_content = self.get_line(line_idx).unwrap_or_default();
                 let line_number = line_idx + 1;
                 let highlighted_line = self.highlighted_lines.get(line_idx);
-                
+
                 // Check if cursor is on this line
                 let cursor_on_line = self.cursor.line == line_idx && self.cursor_visible;
-                let cursor_column = if cursor_on_line { Some(self.cursor.column) } else { None };
-                
+                let cursor_column = if cursor_on_line {
+                    Some(self.cursor.column)
+                } else {
+                    None
+                };
+
                 // Check if this line has selection
-                let line_has_selection = !self.selection.is_empty() &&
-                    line_idx >= sel_start.line && line_idx <= sel_end.line;
-                
+                let line_has_selection = !self.selection.is_empty()
+                    && line_idx >= sel_start.line
+                    && line_idx <= sel_end.line;
+
                 let selection_range = if line_has_selection {
-                    let start_col = if line_idx == sel_start.line { sel_start.column } else { 0 };
-                    let end_col = if line_idx == sel_end.line { sel_end.column } else { line_content.len() };
+                    let start_col = if line_idx == sel_start.line {
+                        sel_start.column
+                    } else {
+                        0
+                    };
+                    let end_col = if line_idx == sel_end.line {
+                        sel_end.column
+                    } else {
+                        line_content.len()
+                    };
                     Some((start_col, end_col))
                 } else {
                     None
                 };
-                
-                self.render_line(line_idx, line_number, &line_content, highlighted_line, cursor_column, selection_range, colors)
+
+                self.render_line(
+                    line_idx,
+                    line_number,
+                    &line_content,
+                    highlighted_line,
+                    cursor_column,
+                    selection_range,
+                    colors,
+                )
             })
             .collect()
     }
@@ -804,14 +848,20 @@ impl EditorPrompt {
         let line_height = px(self.line_height());
         let font_size = px(self.font_size());
         let gutter_width = px(GUTTER_WIDTH);
-        
+
         // Build the line content with syntax highlighting, cursor, and selection
         let content_element = if let Some(hl_line) = highlighted_line {
-            self.render_highlighted_line(line_content, hl_line, cursor_column, selection_range, colors)
+            self.render_highlighted_line(
+                line_content,
+                hl_line,
+                cursor_column,
+                selection_range,
+                colors,
+            )
         } else {
             self.render_plain_line(line_content, cursor_column, selection_range, colors)
         };
-        
+
         div()
             .id(("editor-line", line_idx))
             .flex()
@@ -856,12 +906,12 @@ impl EditorPrompt {
     ) -> gpui::AnyElement {
         let mut elements: Vec<gpui::AnyElement> = Vec::new();
         let mut char_offset = 0;
-        
+
         for span in &hl_line.spans {
             let span_len = span.text.chars().count();
             let span_start = char_offset;
             let span_end = char_offset + span_len;
-            
+
             // Render this span, potentially with cursor and/or selection
             let span_element = self.render_span(
                 &span.text,
@@ -872,18 +922,22 @@ impl EditorPrompt {
                 colors,
             );
             elements.push(span_element.into_any_element());
-            
+
             char_offset = span_end;
         }
-        
+
         // If cursor is at the end of the line (after all content)
         if let Some(col) = cursor_column {
             if col >= char_offset {
                 elements.push(self.render_cursor(colors).into_any_element());
             }
         }
-        
-        div().flex().flex_row().children(elements).into_any_element()
+
+        div()
+            .flex()
+            .flex_row()
+            .children(elements)
+            .into_any_element()
     }
 
     /// Render a plain line (no syntax highlighting)
@@ -902,17 +956,21 @@ impl EditorPrompt {
             selection_range,
             colors,
         );
-        
+
         let mut elements: Vec<gpui::AnyElement> = vec![span_element.into_any_element()];
-        
+
         // If cursor is at the end of the line
         if let Some(col) = cursor_column {
             if col >= line_content.chars().count() {
                 elements.push(self.render_cursor(colors).into_any_element());
             }
         }
-        
-        div().flex().flex_row().children(elements).into_any_element()
+
+        div()
+            .flex()
+            .flex_row()
+            .children(elements)
+            .into_any_element()
     }
 
     /// Render a text span with potential cursor and selection
@@ -927,17 +985,17 @@ impl EditorPrompt {
     ) -> impl IntoElement {
         let span_len = text.chars().count();
         let span_end = span_start + span_len;
-        
+
         // Check if cursor is within this span
         let cursor_in_span = cursor_column
             .map(|col| col >= span_start && col < span_end)
             .unwrap_or(false);
-        
+
         // Check if selection overlaps this span
         let selection_in_span = selection_range
             .map(|(sel_start, sel_end)| sel_start < span_end && sel_end > span_start)
             .unwrap_or(false);
-        
+
         if !cursor_in_span && !selection_in_span {
             // Simple case: no cursor or selection in this span
             return div()
@@ -945,42 +1003,44 @@ impl EditorPrompt {
                 .child(SharedString::from(text.to_string()))
                 .into_any_element();
         }
-        
+
         // Complex case: need to split the span
         let mut elements: Vec<gpui::AnyElement> = Vec::new();
         let chars: Vec<char> = text.chars().collect();
-        
+
         let mut i = 0;
         while i < chars.len() {
             let global_idx = span_start + i;
-            
+
             // Check if cursor is at this position
             if cursor_column == Some(global_idx) {
                 elements.push(self.render_cursor(colors).into_any_element());
             }
-            
+
             // Determine if this character is selected
             let is_selected = selection_range
                 .map(|(sel_start, sel_end)| global_idx >= sel_start && global_idx < sel_end)
                 .unwrap_or(false);
-            
+
             // Collect consecutive characters with same selection state
             let mut end_i = i + 1;
             while end_i < chars.len() {
                 let next_global_idx = span_start + end_i;
                 let next_selected = selection_range
-                    .map(|(sel_start, sel_end)| next_global_idx >= sel_start && next_global_idx < sel_end)
+                    .map(|(sel_start, sel_end)| {
+                        next_global_idx >= sel_start && next_global_idx < sel_end
+                    })
                     .unwrap_or(false);
-                
+
                 // Break if selection state changes or cursor is here
                 if next_selected != is_selected || cursor_column == Some(next_global_idx) {
                     break;
                 }
                 end_i += 1;
             }
-            
+
             let chunk: String = chars[i..end_i].iter().collect();
-            
+
             let chunk_element = if is_selected {
                 div()
                     .bg(rgba(0x3399FF44))
@@ -991,12 +1051,16 @@ impl EditorPrompt {
                     .text_color(rgb(text_color))
                     .child(SharedString::from(chunk))
             };
-            
+
             elements.push(chunk_element.into_any_element());
             i = end_i;
         }
-        
-        div().flex().flex_row().children(elements).into_any_element()
+
+        div()
+            .flex()
+            .flex_row()
+            .children(elements)
+            .into_any_element()
     }
 
     /// Render the cursor
@@ -1013,7 +1077,11 @@ impl EditorPrompt {
     fn render_status_bar(&self) -> impl IntoElement {
         let colors = &self.theme.colors;
         let line_count = self.line_count();
-        let cursor_info = format!("Ln {}, Col {}", self.cursor.line + 1, self.cursor.column + 1);
+        let cursor_info = format!(
+            "Ln {}, Col {}",
+            self.cursor.line + 1,
+            self.cursor.column + 1
+        );
 
         div()
             .flex()
@@ -1065,7 +1133,7 @@ impl Render for EditorPrompt {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let colors = &self.theme.colors;
         let line_count = self.line_count();
-        
+
         // Get padding from config
         let padding = self.config.get_padding();
 
@@ -1076,20 +1144,20 @@ impl Render for EditorPrompt {
 
         // Status bar height constant
         const STATUS_BAR_HEIGHT: f32 = 28.0;
-        
+
         // Calculate editor area height: use explicit height if available, otherwise use flex
         let editor_area = if let Some(total_height) = self.content_height {
             // Explicit height: editor gets total - status bar
             // Note: padding is INSIDE the div (pt/pl/pr), not added to its height
             let editor_height = total_height - gpui::px(STATUS_BAR_HEIGHT);
-            
+
             // Only log when render state changes (avoid log spam every ~500ms)
             let current_state = RenderState {
                 line_count,
                 total_height: Some(total_height),
                 editor_height: Some(editor_height),
             };
-            
+
             if self.last_render_state.as_ref() != Some(&current_state) {
                 tracing::debug!(
                     target: "script_kit_gpui::editor",
@@ -1101,7 +1169,7 @@ impl Render for EditorPrompt {
                 );
                 self.last_render_state = Some(current_state);
             }
-            
+
             div()
                 .w_full()
                 .h(editor_height)
@@ -1142,7 +1210,7 @@ impl Render for EditorPrompt {
                     .size_full(),
                 )
         };
-        
+
         // Build the container - use explicit height if available
         let container = div()
             .id("editor-prompt")
@@ -1154,17 +1222,15 @@ impl Render for EditorPrompt {
             .w_full()
             .bg(rgb(colors.background.main))
             .font_family("Menlo");
-        
+
         // Apply height
         let container = if let Some(h) = self.content_height {
             container.h(h)
         } else {
             container.size_full().min_h(px(0.))
         };
-        
-        container
-            .child(editor_area)
-            .child(self.render_status_bar())
+
+        container.child(editor_area).child(self.render_status_bar())
     }
 }
 
@@ -1181,10 +1247,7 @@ mod tests {
 
     #[test]
     fn test_selection_ordered() {
-        let sel = Selection::new(
-            CursorPosition::new(5, 10),
-            CursorPosition::new(2, 5),
-        );
+        let sel = Selection::new(CursorPosition::new(5, 10), CursorPosition::new(2, 5));
         let (start, end) = sel.ordered();
         assert_eq!(start.line, 2);
         assert_eq!(end.line, 5);
@@ -1195,11 +1258,8 @@ mod tests {
         let pos = CursorPosition::new(3, 7);
         let sel = Selection::caret(pos);
         assert!(sel.is_empty());
-        
-        let sel2 = Selection::new(
-            CursorPosition::new(0, 0),
-            CursorPosition::new(0, 5),
-        );
+
+        let sel2 = Selection::new(CursorPosition::new(0, 0), CursorPosition::new(0, 5));
         assert!(!sel2.is_empty());
     }
 
@@ -1228,13 +1288,13 @@ mod tests {
     /// Regression test: Verify arrow key patterns match BOTH short and long forms.
     /// GPUI sends "up"/"down"/"left"/"right" on macOS, but we must also handle
     /// "arrowup"/"arrowdown"/"arrowleft"/"arrowright" for cross-platform compatibility.
-    /// 
+    ///
     /// This test reads the source code and verifies the patterns are correct.
     /// If this test fails, arrow keys will be broken in the editor!
     #[test]
     fn test_arrow_key_patterns_match_both_forms() {
         let source = include_str!("editor.rs");
-        
+
         // These patterns MUST exist - they match both key name variants
         let required_patterns = [
             r#""up" | "arrowup""#,
@@ -1242,7 +1302,7 @@ mod tests {
             r#""left" | "arrowleft""#,
             r#""right" | "arrowright""#,
         ];
-        
+
         for pattern in required_patterns {
             assert!(
                 source.contains(pattern),
@@ -1252,23 +1312,33 @@ mod tests {
                 pattern
             );
         }
-        
+
         // These patterns are WRONG - they only match one form
         let forbidden_patterns = [
             // Standalone arrowup without the short form - this is broken!
             ("(\"arrowup\", false, _, false)", "arrowup without 'up'"),
-            ("(\"arrowdown\", false, _, false)", "arrowdown without 'down'"),
-            ("(\"arrowleft\", false, _, false)", "arrowleft without 'left'"),
-            ("(\"arrowright\", false, _, false)", "arrowright without 'right'"),
+            (
+                "(\"arrowdown\", false, _, false)",
+                "arrowdown without 'down'",
+            ),
+            (
+                "(\"arrowleft\", false, _, false)",
+                "arrowleft without 'left'",
+            ),
+            (
+                "(\"arrowright\", false, _, false)",
+                "arrowright without 'right'",
+            ),
         ];
-        
+
         for (pattern, desc) in forbidden_patterns {
             assert!(
                 !source.contains(pattern),
                 "CRITICAL: Found broken arrow key pattern ({}) in editor.rs!\n\
                  Pattern '{}' only matches long form. GPUI sends short names like 'up'.\n\
                  Fix: Use \"up\" | \"arrowup\" instead of just \"arrowup\"",
-                desc, pattern
+                desc,
+                pattern
             );
         }
     }

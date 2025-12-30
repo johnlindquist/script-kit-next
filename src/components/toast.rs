@@ -93,7 +93,10 @@ impl ToastColors {
     }
 
     /// Create ToastColors from design colors for design system support
-    pub fn from_design(design_colors: &crate::designs::DesignColors, variant: ToastVariant) -> Self {
+    pub fn from_design(
+        design_colors: &crate::designs::DesignColors,
+        variant: ToastVariant,
+    ) -> Self {
         let (icon_color, border_color) = match variant {
             ToastVariant::Success => (design_colors.success, design_colors.success),
             ToastVariant::Warning => (design_colors.warning, design_colors.warning),
@@ -147,10 +150,7 @@ pub struct ToastAction {
 
 impl ToastAction {
     /// Create a new toast action
-    pub fn new(
-        label: impl Into<SharedString>,
-        callback: ToastActionCallback,
-    ) -> Self {
+    pub fn new(label: impl Into<SharedString>, callback: ToastActionCallback) -> Self {
         Self {
             label: label.into(),
             callback: Rc::new(callback),
@@ -276,17 +276,17 @@ impl Toast {
     pub fn get_duration_ms(&self) -> Option<u64> {
         self.duration_ms
     }
-    
+
     /// Get the toast message
     pub fn get_message(&self) -> &SharedString {
         &self.message
     }
-    
+
     /// Get the toast variant
     pub fn get_variant(&self) -> ToastVariant {
         self.variant
     }
-    
+
     /// Get the toast details
     pub fn get_details(&self) -> Option<&String> {
         self.details.as_ref()
@@ -340,11 +340,7 @@ impl RenderOnce for Toast {
             .child(variant.icon());
 
         // Message and actions column
-        let mut message_col = div()
-            .flex()
-            .flex_col()
-            .flex_1()
-            .gap(px(8.));
+        let mut message_col = div().flex().flex_col().flex_1().gap(px(8.));
 
         // Message text
         let message_text = div()
@@ -357,11 +353,7 @@ impl RenderOnce for Toast {
 
         // Actions row (if any)
         if !self.actions.is_empty() {
-            let mut actions_row = div()
-                .flex()
-                .flex_row()
-                .gap(px(8.))
-                .mt(px(4.));
+            let mut actions_row = div().flex().flex_row().gap(px(8.)).mt(px(4.));
 
             for action in self.actions {
                 let callback = action.callback.clone();
@@ -433,9 +425,7 @@ impl RenderOnce for Toast {
         };
 
         // Assemble content row
-        let mut assembled_row = content_row
-            .child(icon)
-            .child(message_col);
+        let mut assembled_row = content_row.child(icon).child(message_col);
 
         if let Some(dismiss) = dismiss_btn {
             assembled_row = assembled_row.child(dismiss);

@@ -70,15 +70,11 @@ pub fn height_for_view(view_type: ViewType, _item_count: usize) -> Pixels {
             STANDARD_HEIGHT
         }
         // Input-only prompt - compact
-        ViewType::ArgPromptNoChoices => {
-            MIN_HEIGHT
-        }
+        ViewType::ArgPromptNoChoices => MIN_HEIGHT,
         // Full content views (editor, terminal) - max height
-        ViewType::EditorPrompt | ViewType::TermPrompt => {
-            MAX_HEIGHT
-        }
+        ViewType::EditorPrompt | ViewType::TermPrompt => MAX_HEIGHT,
     };
-    
+
     // Log to both legacy and structured logging
     let height_px = f32::from(height);
     info!(
@@ -88,12 +84,9 @@ pub fn height_for_view(view_type: ViewType, _item_count: usize) -> Pixels {
     );
     logging::log(
         "RESIZE",
-        &format!(
-            "height_for_view({:?}) = {:.0}",
-            view_type, height_px
-        ),
+        &format!("height_for_view({:?}) = {:.0}", view_type, height_px),
     );
-    
+
     height
 }
 
@@ -120,19 +113,26 @@ pub fn initial_window_height() -> Pixels {
 /// defer_resize_to_view(ViewType::EditorPrompt, 0, cx);
 /// cx.notify();
 /// ```
-pub fn defer_resize_to_view<T: Render>(view_type: ViewType, item_count: usize, cx: &mut Context<T>) {
+pub fn defer_resize_to_view<T: Render>(
+    view_type: ViewType,
+    item_count: usize,
+    cx: &mut Context<T>,
+) {
     let target_height = height_for_view(view_type, item_count);
-    
+
     cx.spawn(async move |_this, _cx: &mut gpui::AsyncApp| {
         // 16ms delay (~1 frame at 60fps) ensures GPUI render cycle completes
         Timer::after(Duration::from_millis(16)).await;
-        
+
         // Validate window still exists before resizing
         if window_manager::get_main_window().is_some() {
             resize_first_window_to_height(target_height);
         } else {
             warn!("defer_resize_to_view: window no longer exists, skipping resize");
-            logging::log("RESIZE", "WARNING: Window gone before deferred resize could execute");
+            logging::log(
+                "RESIZE",
+                "WARNING: Window gone before deferred resize could execute",
+            );
         }
     })
     .detach();
@@ -170,7 +170,7 @@ pub fn resize_first_window_to_height(target_height: Pixels) {
     unsafe {
         // Get current window frame
         let current_frame: NSRect = msg_send![window, frame];
-        
+
         // Skip if height is already correct (within 1px tolerance)
         let current_height = current_frame.size.height;
         if (current_height - height_f64).abs() < 1.0 {
@@ -193,10 +193,7 @@ pub fn resize_first_window_to_height(target_height: Pixels) {
         );
         logging::log(
             "RESIZE",
-            &format!(
-                "Resize: {:.0} -> {:.0}",
-                current_height, height_f64
-            ),
+            &format!("Resize: {:.0} -> {:.0}", current_height, height_f64),
         );
 
         // Calculate height difference
@@ -249,43 +246,70 @@ mod tests {
     #[test]
     fn test_script_list_fixed_height() {
         // Script list should always be STANDARD_HEIGHT regardless of item count
-        assert_eq!(height_for_view(ViewType::ScriptList, 0), layout::STANDARD_HEIGHT);
-        assert_eq!(height_for_view(ViewType::ScriptList, 5), layout::STANDARD_HEIGHT);
-        assert_eq!(height_for_view(ViewType::ScriptList, 100), layout::STANDARD_HEIGHT);
+        assert_eq!(
+            height_for_view(ViewType::ScriptList, 0),
+            layout::STANDARD_HEIGHT
+        );
+        assert_eq!(
+            height_for_view(ViewType::ScriptList, 5),
+            layout::STANDARD_HEIGHT
+        );
+        assert_eq!(
+            height_for_view(ViewType::ScriptList, 100),
+            layout::STANDARD_HEIGHT
+        );
     }
-    
+
     #[test]
     fn test_arg_with_choices_fixed_height() {
         // Arg with choices should always be STANDARD_HEIGHT
-        assert_eq!(height_for_view(ViewType::ArgPromptWithChoices, 0), layout::STANDARD_HEIGHT);
-        assert_eq!(height_for_view(ViewType::ArgPromptWithChoices, 3), layout::STANDARD_HEIGHT);
-        assert_eq!(height_for_view(ViewType::ArgPromptWithChoices, 50), layout::STANDARD_HEIGHT);
+        assert_eq!(
+            height_for_view(ViewType::ArgPromptWithChoices, 0),
+            layout::STANDARD_HEIGHT
+        );
+        assert_eq!(
+            height_for_view(ViewType::ArgPromptWithChoices, 3),
+            layout::STANDARD_HEIGHT
+        );
+        assert_eq!(
+            height_for_view(ViewType::ArgPromptWithChoices, 50),
+            layout::STANDARD_HEIGHT
+        );
     }
 
     #[test]
     fn test_arg_no_choices_compact() {
         // Arg without choices should be MIN_HEIGHT
-        assert_eq!(height_for_view(ViewType::ArgPromptNoChoices, 0), layout::MIN_HEIGHT);
+        assert_eq!(
+            height_for_view(ViewType::ArgPromptNoChoices, 0),
+            layout::MIN_HEIGHT
+        );
     }
 
     #[test]
     fn test_full_height_views() {
         // Editor and Terminal use MAX_HEIGHT (700px)
-        assert_eq!(height_for_view(ViewType::EditorPrompt, 0), layout::MAX_HEIGHT);
+        assert_eq!(
+            height_for_view(ViewType::EditorPrompt, 0),
+            layout::MAX_HEIGHT
+        );
         assert_eq!(height_for_view(ViewType::TermPrompt, 0), layout::MAX_HEIGHT);
     }
-    
+
     #[test]
     fn test_div_prompt_standard_height() {
         // DivPrompt uses STANDARD_HEIGHT (500px) to match main window
-        assert_eq!(height_for_view(ViewType::DivPrompt, 0), layout::STANDARD_HEIGHT);
+        assert_eq!(
+            height_for_view(ViewType::DivPrompt, 0),
+            layout::STANDARD_HEIGHT
+        );
     }
-    
+
     #[test]
     fn test_initial_window_height() {
         assert_eq!(initial_window_height(), layout::STANDARD_HEIGHT);
     }
-    
+
     #[test]
     fn test_height_constants() {
         assert_eq!(layout::MIN_HEIGHT, px(120.0));

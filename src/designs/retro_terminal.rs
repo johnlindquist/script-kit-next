@@ -113,7 +113,10 @@ impl RetroTerminalRenderer {
         };
 
         div()
-            .id(ElementId::NamedInteger("terminal-item".into(), index as u64))
+            .id(ElementId::NamedInteger(
+                "terminal-item".into(),
+                index as u64,
+            ))
             .w_full()
             .h(px(TERMINAL_ITEM_HEIGHT))
             .px(px(8.))
@@ -180,7 +183,11 @@ impl RetroTerminalRenderer {
                     .text_color(rgb(colors.phosphor))
                     .child(title_line),
             )
-            .child(div().px(px(8.)).child("├────────────────────────────────────────┤"))
+            .child(
+                div()
+                    .px(px(8.))
+                    .child("├────────────────────────────────────────┤"),
+            )
     }
 
     /// Render the terminal footer with ASCII box characters
@@ -198,7 +205,11 @@ impl RetroTerminalRenderer {
             .font_family("Menlo")
             .text_xs()
             .text_color(rgb(colors.dim))
-            .child(div().px(px(8.)).child("├────────────────────────────────────────┤"))
+            .child(
+                div()
+                    .px(px(8.))
+                    .child("├────────────────────────────────────────┤"),
+            )
             .child(div().px(px(8.)).child(status))
             .child(div().px(px(8.)).child(border_bottom))
     }
@@ -406,10 +417,7 @@ pub fn render_terminal_header(
 /// # Returns
 ///
 /// A styled div element representing the preview panel
-pub fn render_terminal_preview_panel(
-    content: &str,
-    colors: TerminalColors,
-) -> impl IntoElement {
+pub fn render_terminal_preview_panel(content: &str, colors: TerminalColors) -> impl IntoElement {
     // Split content into lines for rendering
     let lines: Vec<&str> = content.lines().collect();
 
@@ -460,9 +468,7 @@ pub fn render_terminal_preview_panel(
                         .flex_row()
                         .child(
                             // Line number (dim)
-                            div()
-                                .text_color(rgb(colors.scanline))
-                                .child(line_prefix),
+                            div().text_color(rgb(colors.scanline)).child(line_prefix),
                         )
                         .child(
                             // Line content (bright green)
@@ -501,10 +507,7 @@ pub fn render_terminal_preview_panel(
 /// # Returns
 ///
 /// A styled div element representing the log panel
-pub fn render_terminal_log_panel(
-    logs: &[String],
-    colors: TerminalColors,
-) -> impl IntoElement {
+pub fn render_terminal_log_panel(logs: &[String], colors: TerminalColors) -> impl IntoElement {
     // Create glow effect for the panel
     let panel_glow = vec![BoxShadow {
         color: hsla(120.0 / 360.0, 1.0, 0.5, 0.08), // Very subtle green glow
@@ -588,10 +591,7 @@ pub fn render_terminal_log_panel(
 }
 
 /// Render an empty terminal state with retro messaging
-pub fn render_terminal_empty_state(
-    message: &str,
-    colors: TerminalColors,
-) -> impl IntoElement {
+pub fn render_terminal_empty_state(message: &str, colors: TerminalColors) -> impl IntoElement {
     let display_message = message.to_uppercase();
 
     div()

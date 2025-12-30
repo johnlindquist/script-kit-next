@@ -229,9 +229,9 @@ impl PtyManager {
             size,
         })
     }
-    
+
     /// Takes ownership of the PTY reader for use in a background thread.
-    /// 
+    ///
     /// After calling this, `read()` will return an error.
     /// This is used to move the reader to a background thread for non-blocking I/O.
     pub fn take_reader(&mut self) -> Option<Box<dyn Read + Send>> {
@@ -590,7 +590,10 @@ mod tests {
             std::thread::sleep(std::time::Duration::from_millis(100));
 
             // Should no longer be running
-            assert!(!pty.is_running(), "Process should not be running after kill");
+            assert!(
+                !pty.is_running(),
+                "Process should not be running after kill"
+            );
         }
     }
 

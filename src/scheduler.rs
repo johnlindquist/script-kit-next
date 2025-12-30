@@ -62,6 +62,7 @@ pub struct ScheduledScript {
     /// Next scheduled execution time
     pub next_run: DateTime<Utc>,
     /// Whether this schedule came from Cron: or Schedule: metadata
+    #[allow(dead_code)]
     pub source: ScheduleSource,
 }
 
@@ -71,6 +72,7 @@ pub enum SchedulerEvent {
     /// A script is due to run
     RunScript(PathBuf),
     /// An error occurred during scheduling
+    #[allow(dead_code)]
     Error(String),
 }
 
@@ -129,8 +131,9 @@ impl Scheduler {
         let (cron_expr, source) = match (cron, schedule) {
             (Some(expr), _) => (expr, ScheduleSource::Cron),
             (None, Some(natural)) => {
-                let expr = natural_to_cron(&natural)
-                    .with_context(|| format!("Failed to parse natural language schedule: {}", natural))?;
+                let expr = natural_to_cron(&natural).with_context(|| {
+                    format!("Failed to parse natural language schedule: {}", natural)
+                })?;
                 (expr, ScheduleSource::NaturalLanguage)
             }
             (None, None) => {
@@ -156,7 +159,7 @@ impl Scheduler {
 
         // Add to the list
         let mut scripts = self.scripts.lock().unwrap();
-        
+
         // Check if script already exists and update it
         if let Some(existing) = scripts.iter_mut().find(|s| s.path == path) {
             *existing = scheduled_script.clone();
@@ -182,6 +185,7 @@ impl Scheduler {
     }
 
     /// Remove a script from the scheduler.
+    #[allow(dead_code)]
     pub fn remove_script(&self, path: &PathBuf) -> bool {
         let mut scripts = self.scripts.lock().unwrap();
         let initial_len = scripts.len();
@@ -194,6 +198,7 @@ impl Scheduler {
     }
 
     /// Get a list of all scheduled scripts (for debugging/display).
+    #[allow(dead_code)]
     pub fn list_scripts(&self) -> Vec<ScheduledScript> {
         self.scripts.lock().unwrap().clone()
     }
@@ -234,7 +239,7 @@ impl Scheduler {
             let mut running = self.running.lock().unwrap();
             *running = false;
         }
-        
+
         if let Some(handle) = self.thread_handle.take() {
             let _ = handle.join();
         }
@@ -272,7 +277,7 @@ impl Scheduler {
                 for script in scripts.iter() {
                     if now >= script.next_run {
                         scripts_to_run.push(script.path.clone());
-                        
+
                         // Calculate next run time
                         if let Ok(cron) = parse_cron(&script.cron_expr) {
                             if let Ok(next) = find_next_occurrence(&cron, &now) {
@@ -337,8 +342,7 @@ impl Drop for Scheduler {
 /// The croner crate supports standard 5-field cron (minute, hour, day, month, weekday)
 /// as well as 6-field cron with seconds.
 pub fn parse_cron(expr: &str) -> Result<Cron> {
-    Cron::from_str(expr)
-        .map_err(|e| anyhow::anyhow!("Invalid cron expression '{}': {}", expr, e))
+    Cron::from_str(expr).map_err(|e| anyhow::anyhow!("Invalid cron expression '{}': {}", expr, e))
 }
 
 /// Convert a natural language schedule to a cron expression.
@@ -406,21 +410,37 @@ mod tests {
     fn test_natural_to_cron_basic() {
         // Test basic conversions
         let result = natural_to_cron("every minute");
-        assert!(result.is_ok(), "Failed to parse 'every minute': {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "Failed to parse 'every minute': {:?}",
+            result.err()
+        );
 
         let result = natural_to_cron("every hour");
-        assert!(result.is_ok(), "Failed to parse 'every hour': {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "Failed to parse 'every hour': {:?}",
+            result.err()
+        );
     }
 
     #[test]
     fn test_natural_to_cron_specific_time() {
         // Test specific time parsing
         let result = natural_to_cron("every day at 9am");
-        assert!(result.is_ok(), "Failed to parse 'every day at 9am': {:?}", result.err());
-        
+        assert!(
+            result.is_ok(),
+            "Failed to parse 'every day at 9am': {:?}",
+            result.err()
+        );
+
         if let Ok(cron_str) = result {
             // Should contain hour=9
-            assert!(cron_str.contains("9"), "Expected hour 9 in cron: {}", cron_str);
+            assert!(
+                cron_str.contains("9"),
+                "Expected hour 9 in cron: {}",
+                cron_str
+            );
         }
     }
 
@@ -428,12 +448,19 @@ mod tests {
     fn test_natural_to_cron_weekday() {
         // Test weekday parsing
         let result = natural_to_cron("every tuesday at 2pm");
-        assert!(result.is_ok(), "Failed to parse 'every tuesday at 2pm': {:?}", result.err());
-        
+        assert!(
+            result.is_ok(),
+            "Failed to parse 'every tuesday at 2pm': {:?}",
+            result.err()
+        );
+
         if let Ok(cron_str) = result {
             // Should contain hour=14 (2pm)
-            assert!(cron_str.contains("14") || cron_str.contains("2"), 
-                "Expected hour 14 or 2 in cron: {}", cron_str);
+            assert!(
+                cron_str.contains("14") || cron_str.contains("2"),
+                "Expected hour 14 or 2 in cron: {}",
+                cron_str
+            );
         }
     }
 
@@ -446,15 +473,15 @@ mod tests {
     #[test]
     fn test_scheduler_add_script_with_cron() {
         let (scheduler, _rx) = Scheduler::new();
-        
+
         let result = scheduler.add_script(
             PathBuf::from("/test/script.ts"),
             Some("*/5 * * * *".to_string()),
             None,
         );
-        
+
         assert!(result.is_ok(), "Failed to add script: {:?}", result.err());
-        
+
         let scripts = scheduler.list_scripts();
         assert_eq!(scripts.len(), 1);
         assert_eq!(scripts[0].path, PathBuf::from("/test/script.ts"));
@@ -464,15 +491,15 @@ mod tests {
     #[test]
     fn test_scheduler_add_script_with_natural_language() {
         let (scheduler, _rx) = Scheduler::new();
-        
+
         let result = scheduler.add_script(
             PathBuf::from("/test/script.ts"),
             None,
             Some("every hour".to_string()),
         );
-        
+
         assert!(result.is_ok(), "Failed to add script: {:?}", result.err());
-        
+
         let scripts = scheduler.list_scripts();
         assert_eq!(scripts.len(), 1);
         assert_eq!(scripts[0].source, ScheduleSource::NaturalLanguage);
@@ -481,15 +508,15 @@ mod tests {
     #[test]
     fn test_scheduler_add_script_cron_takes_precedence() {
         let (scheduler, _rx) = Scheduler::new();
-        
+
         let result = scheduler.add_script(
             PathBuf::from("/test/script.ts"),
             Some("0 9 * * *".to_string()),
-            Some("every hour".to_string()),  // Should be ignored
+            Some("every hour".to_string()), // Should be ignored
         );
-        
+
         assert!(result.is_ok());
-        
+
         let scripts = scheduler.list_scripts();
         assert_eq!(scripts.len(), 1);
         assert_eq!(scripts[0].source, ScheduleSource::Cron);
@@ -499,28 +526,26 @@ mod tests {
     #[test]
     fn test_scheduler_add_script_no_schedule() {
         let (scheduler, _rx) = Scheduler::new();
-        
-        let result = scheduler.add_script(
-            PathBuf::from("/test/script.ts"),
-            None,
-            None,
-        );
-        
+
+        let result = scheduler.add_script(PathBuf::from("/test/script.ts"), None, None);
+
         assert!(result.is_err(), "Should fail when no schedule provided");
     }
 
     #[test]
     fn test_scheduler_remove_script() {
         let (scheduler, _rx) = Scheduler::new();
-        
-        scheduler.add_script(
-            PathBuf::from("/test/script.ts"),
-            Some("* * * * *".to_string()),
-            None,
-        ).unwrap();
-        
+
+        scheduler
+            .add_script(
+                PathBuf::from("/test/script.ts"),
+                Some("* * * * *".to_string()),
+                None,
+            )
+            .unwrap();
+
         assert_eq!(scheduler.list_scripts().len(), 1);
-        
+
         let removed = scheduler.remove_script(&PathBuf::from("/test/script.ts"));
         assert!(removed);
         assert!(scheduler.list_scripts().is_empty());
@@ -530,23 +555,19 @@ mod tests {
     fn test_scheduler_update_existing_script() {
         let (scheduler, _rx) = Scheduler::new();
         let path = PathBuf::from("/test/script.ts");
-        
+
         // Add initial script
-        scheduler.add_script(
-            path.clone(),
-            Some("* * * * *".to_string()),
-            None,
-        ).unwrap();
-        
+        scheduler
+            .add_script(path.clone(), Some("* * * * *".to_string()), None)
+            .unwrap();
+
         // Update with new schedule
-        scheduler.add_script(
-            path.clone(),
-            Some("0 9 * * *".to_string()),
-            None,
-        ).unwrap();
-        
+        scheduler
+            .add_script(path.clone(), Some("0 9 * * *".to_string()), None)
+            .unwrap();
+
         let scripts = scheduler.list_scripts();
-        assert_eq!(scripts.len(), 1);  // Should still be 1, not 2
+        assert_eq!(scripts.len(), 1); // Should still be 1, not 2
         assert_eq!(scripts[0].cron_expr, "0 9 * * *");
     }
 
@@ -554,7 +575,7 @@ mod tests {
     fn test_scheduler_event_clone() {
         let event = SchedulerEvent::RunScript(PathBuf::from("/test.ts"));
         let _cloned = event.clone();
-        
+
         let error_event = SchedulerEvent::Error("test error".to_string());
         let _cloned = error_event.clone();
     }
@@ -562,18 +583,25 @@ mod tests {
     #[test]
     fn test_schedule_source_equality() {
         assert_eq!(ScheduleSource::Cron, ScheduleSource::Cron);
-        assert_eq!(ScheduleSource::NaturalLanguage, ScheduleSource::NaturalLanguage);
+        assert_eq!(
+            ScheduleSource::NaturalLanguage,
+            ScheduleSource::NaturalLanguage
+        );
         assert_ne!(ScheduleSource::Cron, ScheduleSource::NaturalLanguage);
     }
 
     #[test]
     fn test_find_next_occurrence() {
-        let cron = parse_cron("0 9 * * *").unwrap();  // Every day at 9 AM
+        let cron = parse_cron("0 9 * * *").unwrap(); // Every day at 9 AM
         let now = Utc::now();
-        
+
         let next = find_next_occurrence(&cron, &now);
-        assert!(next.is_ok(), "Failed to find next occurrence: {:?}", next.err());
-        
+        assert!(
+            next.is_ok(),
+            "Failed to find next occurrence: {:?}",
+            next.err()
+        );
+
         let next = next.unwrap();
         assert!(next > now, "Next occurrence should be in the future");
     }
