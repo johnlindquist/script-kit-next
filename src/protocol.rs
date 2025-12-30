@@ -5953,11 +5953,7 @@ mod tests {
 
     #[test]
     fn test_serialize_action_triggered_no_value() {
-        let msg = Message::action_triggered(
-            "test-action".to_string(),
-            None,
-            "".to_string(),
-        );
+        let msg = Message::action_triggered("test-action".to_string(), None, "".to_string());
         let json = serialize_message(&msg).unwrap();
         assert!(json.contains("\"type\":\"actionTriggered\""));
         assert!(json.contains("\"action\":\"test-action\""));
@@ -5968,10 +5964,15 @@ mod tests {
 
     #[test]
     fn test_parse_action_triggered() {
-        let json = r#"{"type":"actionTriggered","action":"my-action","value":"val","input":"search"}"#;
+        let json =
+            r#"{"type":"actionTriggered","action":"my-action","value":"val","input":"search"}"#;
         let msg = parse_message(json).unwrap();
         match msg {
-            Message::ActionTriggered { action, value, input } => {
+            Message::ActionTriggered {
+                action,
+                value,
+                input,
+            } => {
                 assert_eq!(action, "my-action");
                 assert_eq!(value, Some("val".to_string()));
                 assert_eq!(input, "search");
@@ -5999,7 +6000,7 @@ mod tests {
         // Test the CRITICAL has_action field behavior
         // has_action=true: Rust should send ActionTriggered back to SDK
         // has_action=false: Rust should submit value directly
-        
+
         let action_with_handler = ProtocolAction {
             name: "With Handler".to_string(),
             description: None,
@@ -6010,7 +6011,7 @@ mod tests {
             close: None,
         };
         assert!(action_with_handler.has_action);
-        
+
         let action_without_handler = ProtocolAction {
             name: "Without Handler".to_string(),
             description: None,

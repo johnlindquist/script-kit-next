@@ -437,25 +437,20 @@ impl ActionsDialog {
     pub fn set_sdk_actions(&mut self, actions: Vec<ProtocolAction>) {
         let converted: Vec<Action> = actions
             .iter()
-            .map(|pa| {
-                Action {
-                    id: pa.name.clone(),
-                    title: pa.name.clone(),
-                    description: pa.description.clone(),
-                    category: ActionCategory::ScriptContext,
-                    shortcut: pa.shortcut.clone(),
-                    has_action: pa.has_action,
-                    value: pa.value.clone(),
-                }
+            .map(|pa| Action {
+                id: pa.name.clone(),
+                title: pa.name.clone(),
+                description: pa.description.clone(),
+                category: ActionCategory::ScriptContext,
+                shortcut: pa.shortcut.clone(),
+                has_action: pa.has_action,
+                value: pa.value.clone(),
             })
             .collect();
 
         logging::log(
             "ACTIONS",
-            &format!(
-                "SDK actions set: {} actions",
-                converted.len()
-            ),
+            &format!("SDK actions set: {} actions", converted.len()),
         );
 
         self.actions = converted;
@@ -468,7 +463,10 @@ impl ActionsDialog {
     /// Clear SDK actions and restore built-in actions
     pub fn clear_sdk_actions(&mut self) {
         if self.sdk_actions.is_some() {
-            logging::log("ACTIONS", "Clearing SDK actions, restoring built-in actions");
+            logging::log(
+                "ACTIONS",
+                "Clearing SDK actions, restoring built-in actions",
+            );
             self.sdk_actions = None;
             self.actions = Self::build_actions(&self.focused_script);
             self.filtered_actions = (0..self.actions.len()).collect();
@@ -1541,7 +1539,12 @@ mod tests {
 
     #[test]
     fn test_action_new_defaults() {
-        let action = Action::new("id", "title", Some("desc".to_string()), ActionCategory::ScriptContext);
+        let action = Action::new(
+            "id",
+            "title",
+            Some("desc".to_string()),
+            ActionCategory::ScriptContext,
+        );
         assert_eq!(action.id, "id");
         assert_eq!(action.title, "title");
         assert_eq!(action.description, Some("desc".to_string()));

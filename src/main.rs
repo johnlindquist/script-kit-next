@@ -1654,6 +1654,10 @@ struct ScriptListApp {
     /// Shortcut registry: shortcut -> script_path (for O(1) lookup)
     /// Conflict rule: first-registered wins
     shortcut_registry: std::collections::HashMap<String, String>,
+    /// SDK actions set via setActions() - stored for trigger_action_by_name lookup
+    sdk_actions: Option<Vec<protocol::ProtocolAction>>,
+    /// SDK action shortcuts: normalized_shortcut -> action_name (for O(1) lookup)
+    action_shortcuts: std::collections::HashMap<String, String>,
 }
 
 /// Result of alias matching - either a Script or Scriptlet
@@ -1867,6 +1871,9 @@ impl ScriptListApp {
             // Alias/shortcut registries - populated below
             alias_registry: std::collections::HashMap::new(),
             shortcut_registry: std::collections::HashMap::new(),
+            // SDK actions - starts empty, populated by setActions() from scripts
+            sdk_actions: None,
+            action_shortcuts: std::collections::HashMap::new(),
         };
 
         // Build initial alias/shortcut registries (conflicts logged, not shown via HUD on startup)
@@ -2850,11 +2857,180 @@ impl ScriptListApp {
                 logging::log("UI", "Actions dialog cancelled");
             }
             _ => {
-                logging::log("UI", &format!("Unknown action: {}", action_id));
+                // Check if this is an SDK action with has_action=true
+                if let Some(ref actions) = self.sdk_actions {
+                    if let Some(action) = actions.iter().find(|a| a.name == action_id) {
+                        if action.has_action {
+                            // Send ActionTriggered back to SDK
+                            logging::log(
+                                "ACTIONS",
+                                &format!(
+                                    "SDK action with handler: '{}' (has_action=true), sending ActionTriggered",
+                                    action_id
+                                ),
+                            );
+                            if let Some(ref sender) = self.response_sender {
+                                let msg = protocol::Message::action_triggered(
+                                    action_id.clone(),
+                                    action.value.clone(),
+                                    self.arg_input_text.clone(),
+                                );
+                                if let Err(e) = sender.send(msg) {
+                                    logging::log(
+                                        "ERROR",
+                                        &format!("Failed to send ActionTriggered: {}", e),
+                                    );
+                                }
+                            }
+                        } else if let Some(ref value) = action.value {
+                            // Submit value directly (has_action=false with value)
+                            logging::log(
+                                "ACTIONS",
+                                &format!(
+                                    "SDK action without handler: '{}' (has_action=false), submitting value: {:?}",
+                                    action_id, value
+                                ),
+                            );
+                            if let Some(ref sender) = self.response_sender {
+                                let msg = protocol::Message::Submit {
+                                    id: "action".to_string(),
+                                    value: Some(value.clone()),
+                                };
+                                if let Err(e) = sender.send(msg) {
+                                    logging::log("ERROR", &format!("Failed to send Submit: {}", e));
+                                }
+                            }
+                        } else {
+                            logging::log(
+                                "ACTIONS",
+                                &format!(
+                                    "SDK action '{}' has no value and has_action=false",
+                                    action_id
+                                ),
+                            );
+                        }
+                    } else {
+                        logging::log("UI", &format!("Unknown action: {}", action_id));
+                    }
+                } else {
+                    logging::log("UI", &format!("Unknown action: {}", action_id));
+                }
             }
         }
 
         cx.notify();
+    }
+
+    /// Normalize a shortcut string for consistent comparison
+    /// Converts "cmd+shift+c" and "Cmd+Shift+C" to "cmd+shift+c"
+    fn normalize_shortcut(shortcut: &str) -> String {
+        let mut parts: Vec<&str> = shortcut.split('+').collect();
+
+        // Separate modifiers from key
+        let mut modifiers: Vec<&str> = Vec::new();
+        let mut key: Option<&str> = None;
+
+        for part in parts.drain(..) {
+            let lower = part.trim().to_lowercase();
+            match lower.as_str() {
+                "cmd" | "command" | "meta" | "super" => modifiers.push("cmd"),
+                "ctrl" | "control" => modifiers.push("ctrl"),
+                "alt" | "option" | "opt" => modifiers.push("alt"),
+                "shift" => modifiers.push("shift"),
+                _ => key = Some(part.trim()),
+            }
+        }
+
+        // Sort modifiers for consistent ordering
+        modifiers.sort();
+
+        // Rebuild with sorted modifiers + key
+        let mut result = modifiers.join("+");
+        if let Some(k) = key {
+            if !result.is_empty() {
+                result.push('+');
+            }
+            result.push_str(&k.to_lowercase());
+        }
+
+        result
+    }
+
+    /// Convert a GPUI keystroke to a normalized shortcut string
+    fn keystroke_to_shortcut(key: &str, modifiers: &gpui::Modifiers) -> String {
+        let mut parts: Vec<&str> = Vec::new();
+
+        // Add modifiers in sorted order
+        if modifiers.alt {
+            parts.push("alt");
+        }
+        if modifiers.platform {
+            parts.push("cmd");
+        }
+        if modifiers.control {
+            parts.push("ctrl");
+        }
+        if modifiers.shift {
+            parts.push("shift");
+        }
+
+        // Add the key
+        let key_lower = key.to_lowercase();
+        let mut result = parts.join("+");
+        if !result.is_empty() {
+            result.push('+');
+        }
+        result.push_str(&key_lower);
+
+        result
+    }
+
+    /// Trigger an SDK action by name
+    /// Returns true if the action was found and triggered
+    fn trigger_action_by_name(&mut self, action_name: &str, cx: &mut Context<Self>) -> bool {
+        if let Some(ref actions) = self.sdk_actions {
+            if let Some(action) = actions.iter().find(|a| a.name == action_name) {
+                logging::log(
+                    "ACTIONS",
+                    &format!(
+                        "Triggering SDK action '{}' via shortcut (has_action={})",
+                        action_name, action.has_action
+                    ),
+                );
+
+                if action.has_action {
+                    // Send ActionTriggered back to SDK
+                    if let Some(ref sender) = self.response_sender {
+                        let msg = protocol::Message::action_triggered(
+                            action_name.to_string(),
+                            action.value.clone(),
+                            self.arg_input_text.clone(),
+                        );
+                        if let Err(e) = sender.send(msg) {
+                            logging::log(
+                                "ERROR",
+                                &format!("Failed to send ActionTriggered: {}", e),
+                            );
+                        }
+                    }
+                } else if let Some(ref value) = action.value {
+                    // Submit value directly
+                    if let Some(ref sender) = self.response_sender {
+                        let msg = protocol::Message::Submit {
+                            id: "action".to_string(),
+                            value: Some(value.clone()),
+                        };
+                        if let Err(e) = sender.send(msg) {
+                            logging::log("ERROR", &format!("Failed to send Submit: {}", e));
+                        }
+                    }
+                }
+
+                cx.notify();
+                return true;
+            }
+        }
+        false
     }
 
     /// Edit a script in configured editor (config.editor > $EDITOR > "code")
@@ -4091,6 +4267,9 @@ impl ScriptListApp {
                                     }
                                     Message::Hud { text, duration_ms } => {
                                         Some(PromptMessage::ShowHud { text, duration_ms })
+                                    }
+                                    Message::SetActions { actions } => {
+                                        Some(PromptMessage::SetActions { actions })
                                     }
                                     other => {
                                         // Get the message type name for user feedback
@@ -5664,6 +5843,41 @@ impl ScriptListApp {
             }
             PromptMessage::ShowHud { text, duration_ms } => {
                 self.show_hud(text, duration_ms, cx);
+            }
+            PromptMessage::SetActions { actions } => {
+                logging::log(
+                    "ACTIONS",
+                    &format!("Received setActions with {} actions", actions.len()),
+                );
+
+                // Store SDK actions for trigger_action_by_name lookup
+                self.sdk_actions = Some(actions.clone());
+
+                // Build action shortcuts map for keyboard handling
+                self.action_shortcuts.clear();
+                for action in &actions {
+                    if let Some(ref shortcut) = action.shortcut {
+                        let normalized = Self::normalize_shortcut(shortcut);
+                        logging::log(
+                            "ACTIONS",
+                            &format!(
+                                "Registering action shortcut: '{}' -> '{}' (normalized: '{}')",
+                                shortcut, action.name, normalized
+                            ),
+                        );
+                        self.action_shortcuts
+                            .insert(normalized, action.name.clone());
+                    }
+                }
+
+                // Update ActionsDialog if it exists and is open
+                if let Some(ref dialog) = self.actions_dialog {
+                    dialog.update(cx, |d, _cx| {
+                        d.set_sdk_actions(actions);
+                    });
+                }
+
+                cx.notify();
             }
         }
     }
@@ -7289,6 +7503,25 @@ impl ScriptListApp {
                   cx: &mut Context<Self>| {
                 let key_str = event.keystroke.key.to_lowercase();
                 let has_cmd = event.keystroke.modifiers.platform;
+
+                // Check SDK action shortcuts FIRST (before built-in shortcuts)
+                // This allows scripts to override default shortcuts via setActions()
+                if !this.action_shortcuts.is_empty() {
+                    let key_combo =
+                        Self::keystroke_to_shortcut(&key_str, &event.keystroke.modifiers);
+                    if let Some(action_name) = this.action_shortcuts.get(&key_combo).cloned() {
+                        logging::log(
+                            "ACTIONS",
+                            &format!(
+                                "SDK action shortcut matched: '{}' -> '{}'",
+                                key_combo, action_name
+                            ),
+                        );
+                        if this.trigger_action_by_name(&action_name, cx) {
+                            return;
+                        }
+                    }
+                }
 
                 if has_cmd {
                     let has_shift = event.keystroke.modifiers.shift;
