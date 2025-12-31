@@ -95,6 +95,10 @@ pub mod ocr;
 // Script scheduling with cron expressions and natural language
 pub mod scheduler;
 
+// Kenv environment setup and initialization
+// Ensures ~/.kenv exists with required directories and starter files
+pub mod setup;
+
 // Storybook - Component preview system for development
 pub mod storybook;
 

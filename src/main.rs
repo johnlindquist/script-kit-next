@@ -37,6 +37,7 @@ mod platform;
 mod prompts;
 mod protocol;
 mod scripts;
+mod setup;
 #[cfg(target_os = "macos")]
 mod selected_text;
 mod syntax;
@@ -12239,6 +12240,28 @@ fn render_group_header_item(
 
 fn main() {
     logging::init();
+
+    // Ensure ~/.kenv environment is properly set up (directories, SDK, config, etc.)
+    // This is idempotent - it creates missing directories and files without overwriting user configs
+    let setup_result = setup::ensure_kenv_setup();
+    if setup_result.is_fresh_install {
+        logging::log(
+            "APP",
+            &format!(
+                "Fresh install detected - created ~/.kenv at {}",
+                setup_result.kenv_path.display()
+            ),
+        );
+    }
+    for warning in &setup_result.warnings {
+        logging::log("APP", &format!("Setup warning: {}", warning));
+    }
+    if !setup_result.bun_available {
+        logging::log(
+            "APP",
+            "Warning: bun not found in PATH or common locations. Scripts may not run.",
+        );
+    }
 
     // Write main PID file for orphan detection on crash
     if let Err(e) = PROCESS_MANAGER.write_main_pid() {

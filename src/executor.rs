@@ -293,114 +293,41 @@ fn find_executable(name: &str) -> Option<PathBuf> {
     None
 }
 
-/// Ensure tsconfig.json has the @johnlindquist/kit path mapping
-/// Merges with existing config if present
-fn ensure_tsconfig_paths(tsconfig_path: &PathBuf) {
-    use serde_json::{json, Value};
-
-    let kit_path = json!(["./sdk/kit-sdk.ts"]);
-
-    // Try to read and parse existing tsconfig
-    let mut config: Value = if tsconfig_path.exists() {
-        match std::fs::read_to_string(tsconfig_path) {
-            Ok(content) => serde_json::from_str(&content).unwrap_or_else(|_| json!({})),
-            Err(_) => json!({}),
-        }
-    } else {
-        json!({})
-    };
-
-    // Ensure compilerOptions exists
-    if config.get("compilerOptions").is_none() {
-        config["compilerOptions"] = json!({});
-    }
-
-    // Ensure paths exists in compilerOptions
-    if config["compilerOptions"].get("paths").is_none() {
-        config["compilerOptions"]["paths"] = json!({});
-    }
-
-    // Check if @johnlindquist/kit path is already correct
-    let current_kit_path = config["compilerOptions"]["paths"].get("@johnlindquist/kit");
-    if current_kit_path == Some(&kit_path) {
-        // Already correct, no need to write
-        return;
-    }
-
-    // Set the @johnlindquist/kit path
-    config["compilerOptions"]["paths"]["@johnlindquist/kit"] = kit_path;
-
-    // Write back
-    match serde_json::to_string_pretty(&config) {
-        Ok(json_str) => {
-            if let Err(e) = std::fs::write(tsconfig_path, json_str) {
-                logging::log("EXEC", &format!("Failed to write tsconfig.json: {}", e));
-            } else {
-                logging::log("EXEC", "Updated tsconfig.json with @johnlindquist/kit path");
-            }
-        }
-        Err(e) => {
-            logging::log("EXEC", &format!("Failed to serialize tsconfig.json: {}", e));
-        }
-    }
+// Note: tsconfig.json path mapping is now handled by setup::ensure_kenv_setup()
+// This function is kept for backward compatibility but is a no-op
+#[allow(dead_code)]
+fn ensure_tsconfig_paths(_tsconfig_path: &PathBuf) {
+    // Setup module now handles this at startup
+    // See setup::ensure_tsconfig_paths()
 }
 
-/// Extract the embedded SDK to disk if needed
-/// Returns the path to the extracted SDK file
+/// Get the SDK path - SDK extraction is now handled by setup::ensure_kenv_setup() at startup
+/// This function just returns the expected path since setup has already done the work
 fn ensure_sdk_extracted() -> Option<PathBuf> {
     // Target path: ~/.kenv/sdk/kit-sdk.ts
-    let kenv_dir = dirs::home_dir()?.join(".kenv");
-    let kenv_sdk = kenv_dir.join("sdk");
-    let sdk_path = kenv_sdk.join("kit-sdk.ts");
+    // This is extracted by setup::ensure_kenv_setup() which runs at app startup
+    let sdk_path = dirs::home_dir()?.join(".kenv/sdk/kit-sdk.ts");
 
-    // Create sdk/ dir if needed
-    if !kenv_sdk.exists() {
-        if let Err(e) = std::fs::create_dir_all(&kenv_sdk) {
-            logging::log("EXEC", &format!("Failed to create SDK dir: {}", e));
-            return None;
-        }
-    }
-
-    // Always write embedded SDK to ensure latest version
-    // The embedded SDK is compiled into the binary via include_str!
-    if let Err(e) = std::fs::write(&sdk_path, EMBEDDED_SDK) {
-        logging::log("EXEC", &format!("Failed to write SDK: {}", e));
-        return None;
-    }
-
-    // Log SDK info for debugging
-    let sdk_len = EMBEDDED_SDK.len();
-    logging::log(
-        "EXEC",
-        &format!(
-            "Extracted SDK to {} ({} bytes)",
-            sdk_path.display(),
-            sdk_len
-        ),
-    );
-
-    // Ensure tsconfig.json has @johnlindquist/kit path mapping
-    let tsconfig_path = kenv_dir.join("tsconfig.json");
-    ensure_tsconfig_paths(&tsconfig_path);
-
-    // Always write .gitignore (app-managed)
-    let gitignore_path = kenv_dir.join(".gitignore");
-    let gitignore_content = r#"# SDK files (copied from app on each start)
-sdk/
-logs/
-clipboard-history.db
-"#;
-    if let Err(e) = std::fs::write(&gitignore_path, gitignore_content) {
-        logging::log("EXEC", &format!("Failed to write .gitignore: {}", e));
-        // Non-fatal, continue
+    if sdk_path.exists() {
+        Some(sdk_path)
     } else {
+        // Fallback: write embedded SDK if somehow missing
+        // This shouldn't happen in normal operation since setup runs first
         logging::log(
             "EXEC",
-            &format!("Wrote .gitignore to {}", gitignore_path.display()),
+            "SDK not found at expected path, extracting embedded SDK",
         );
+        let kenv_sdk = dirs::home_dir()?.join(".kenv/sdk");
+        if !kenv_sdk.exists() {
+            std::fs::create_dir_all(&kenv_sdk).ok()?;
+        }
+        std::fs::write(&sdk_path, EMBEDDED_SDK).ok()?;
+        logging::log(
+            "EXEC",
+            &format!("Extracted fallback SDK to {}", sdk_path.display()),
+        );
+        Some(sdk_path)
     }
-
-    Some(sdk_path)
 }
 
 /// Find the SDK path, checking standard locations
