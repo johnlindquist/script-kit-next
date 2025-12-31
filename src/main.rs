@@ -1123,6 +1123,7 @@ enum AppView {
         id: String,
         html: String,
         tailwind: Option<String>,
+        actions: Option<Vec<ProtocolAction>>,
     },
     /// Showing a form prompt from a script (HTML form with submit button)
     FormPrompt {
@@ -1230,20 +1231,24 @@ enum PromptMessage {
         id: String,
         html: String,
         tailwind: Option<String>,
+        actions: Option<Vec<ProtocolAction>>,
     },
     ShowForm {
         id: String,
         html: String,
+        actions: Option<Vec<ProtocolAction>>,
     },
     ShowTerm {
         id: String,
         command: Option<String>,
+        actions: Option<Vec<ProtocolAction>>,
     },
     ShowEditor {
         id: String,
         content: Option<String>,
         language: Option<String>,
         template: Option<String>,
+        actions: Option<Vec<ProtocolAction>>,
     },
     /// Path picker prompt for file/folder selection
     ShowPath {
@@ -1829,7 +1834,8 @@ impl ScriptListApp {
             response_sender: None,
             // Variable-height list state for main menu (section headers at 24px, items at 48px)
             // Start with 0 items, will be reset when grouped_items changes
-            main_list_state: ListState::new(0, ListAlignment::Top, px(100.)),
+            // .measure_all() ensures all items are measured upfront for correct scroll height
+            main_list_state: ListState::new(0, ListAlignment::Top, px(100.)).measure_all(),
             list_scroll_handle: UniformListScrollHandle::new(),
             arg_list_scroll_handle: UniformListScrollHandle::new(),
             clipboard_list_scroll_handle: UniformListScrollHandle::new(),
@@ -4270,26 +4276,28 @@ impl ScriptListApp {
                                         choices,
                                         actions,
                                     }),
-                                    Message::Div { id, html, tailwind } => {
-                                        Some(PromptMessage::ShowDiv { id, html, tailwind })
+                                    Message::Div { id, html, tailwind, actions } => {
+                                        Some(PromptMessage::ShowDiv { id, html, tailwind, actions })
                                     }
-                                    Message::Form { id, html } => {
-                                        Some(PromptMessage::ShowForm { id, html })
+                                    Message::Form { id, html, actions } => {
+                                        Some(PromptMessage::ShowForm { id, html, actions })
                                     }
-                                    Message::Term { id, command } => {
-                                        Some(PromptMessage::ShowTerm { id, command })
+                                    Message::Term { id, command, actions } => {
+                                        Some(PromptMessage::ShowTerm { id, command, actions })
                                     }
                                     Message::Editor {
                                         id,
                                         content,
                                         language,
                                         template,
+                                        actions,
                                         ..
                                     } => Some(PromptMessage::ShowEditor {
                                         id,
                                         content,
                                         language,
                                         template,
+                                        actions,
                                     }),
                                     // New prompt types (scaffolding)
                                     Message::Path {
@@ -4954,15 +4962,20 @@ impl ScriptListApp {
                 defer_resize_to_view(view_type, choice_count, cx);
                 cx.notify();
             }
-            PromptMessage::ShowDiv { id, html, tailwind } => {
+            PromptMessage::ShowDiv { id, html, tailwind, actions } => {
                 logging::log("UI", &format!("Showing div prompt: {}", id));
-                self.current_view = AppView::DivPrompt { id, html, tailwind };
+                // Store SDK actions for the actions panel (Cmd+K)
+                self.sdk_actions = actions.clone();
+                self.current_view = AppView::DivPrompt { id, html, tailwind, actions };
                 self.focused_input = FocusedInput::None; // DivPrompt has no text input
                 defer_resize_to_view(ViewType::DivPrompt, 0, cx);
                 cx.notify();
             }
-            PromptMessage::ShowForm { id, html } => {
+            PromptMessage::ShowForm { id, html, actions } => {
                 logging::log("UI", &format!("Showing form prompt: {}", id));
+
+                // Store SDK actions for the actions panel (Cmd+K)
+                self.sdk_actions = actions;
 
                 // Create form field colors from theme
                 let colors = FormFieldColors::from_theme(&self.theme);
@@ -4984,11 +4997,14 @@ impl ScriptListApp {
                 defer_resize_to_view(view_type, field_count, cx);
                 cx.notify();
             }
-            PromptMessage::ShowTerm { id, command } => {
+            PromptMessage::ShowTerm { id, command, actions } => {
                 logging::log(
                     "UI",
                     &format!("Showing term prompt: {} (command: {:?})", id, command),
                 );
+
+                // Store SDK actions for the actions panel (Cmd+K)
+                self.sdk_actions = actions;
 
                 // Create submit callback for terminal
                 let response_sender = self.response_sender.clone();
@@ -5036,6 +5052,7 @@ impl ScriptListApp {
                 content,
                 language,
                 template,
+                actions,
             } => {
                 logging::log(
                     "UI",
@@ -5046,6 +5063,9 @@ impl ScriptListApp {
                         template.is_some()
                     ),
                 );
+
+                // Store SDK actions for the actions panel (Cmd+K)
+                self.sdk_actions = actions;
 
                 // Create submit callback for editor
                 let response_sender = self.response_sender.clone();
@@ -6482,9 +6502,12 @@ impl Render for ScriptListApp {
                 choices,
                 actions,
             } => self.render_arg_prompt(id, placeholder, choices, actions, cx),
-            AppView::DivPrompt { id, html, tailwind } => {
-                self.render_div_prompt(id, html, tailwind, cx)
-            }
+            AppView::DivPrompt {
+                id,
+                html,
+                tailwind,
+                actions,
+            } => self.render_div_prompt(id, html, tailwind, actions, cx),
             AppView::FormPrompt { entity, .. } => self.render_form_prompt(entity, cx),
             AppView::TermPrompt { entity, .. } => self.render_term_prompt(entity, cx),
             AppView::EditorPrompt { entity, .. } => self.render_editor_prompt(entity, cx),
@@ -8616,18 +8639,6 @@ impl ScriptListApp {
                     .py(px(design_spacing.padding_xs))
                     .child(list_element),
             )
-            // Footer
-            .child(
-                div()
-                    .w_full()
-                    .px(px(design_spacing.padding_lg))
-                    .py(px(design_spacing.padding_sm + design_visual.border_normal)) // 8 + 2 = 10px
-                    .border_t_1()
-                    .border_color(rgba((ui_border << 8) | 0x60))
-                    .text_xs()
-                    .text_color(rgb(text_muted))
-                    .child("↑↓ navigate • ⏎ select • Esc cancel"),
-            )
             // Actions dialog overlay (when Cmd+K is pressed with SDK actions)
             // Uses same pattern as main menu: check BOTH show_actions_popup AND actions_dialog
             .when_some(
@@ -8678,8 +8689,11 @@ impl ScriptListApp {
         id: String,
         html: String,
         _tailwind: Option<String>,
+        actions: Option<Vec<ProtocolAction>>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        let has_actions = actions.is_some() && !actions.as_ref().unwrap().is_empty();
+
         // Use design tokens for GLOBAL theming
         let tokens = get_tokens(self.current_design);
         let design_colors = tokens.colors();
@@ -8691,13 +8705,83 @@ impl ScriptListApp {
         let display_text = strip_html_tags(&html);
 
         let prompt_id = id.clone();
+        let has_actions_for_handler = has_actions;
         let handle_key = cx.listener(
             move |this: &mut Self,
                   event: &gpui::KeyDownEvent,
-                  _window: &mut Window,
+                  window: &mut Window,
                   cx: &mut Context<Self>| {
                 let key_str = event.keystroke.key.to_lowercase();
-                logging::log("KEY", &format!("DivPrompt key: '{}'", key_str));
+                let has_cmd = event.keystroke.modifiers.platform;
+                logging::log("KEY", &format!("DivPrompt key: '{}' cmd={}", key_str, has_cmd));
+
+                // Check for Cmd+K to toggle actions popup (if actions are available)
+                if has_cmd && key_str == "k" && has_actions_for_handler {
+                    logging::log("KEY", "Cmd+K in DivPrompt - calling toggle_arg_actions");
+                    this.toggle_arg_actions(cx, window);
+                    return;
+                }
+
+                // If actions popup is open, route keyboard events to it
+                if this.show_actions_popup {
+                    if let Some(ref dialog) = this.actions_dialog {
+                        match key_str.as_str() {
+                            "up" | "arrowup" => {
+                                dialog.update(cx, |d, cx| d.move_up(cx));
+                                return;
+                            }
+                            "down" | "arrowdown" => {
+                                dialog.update(cx, |d, cx| d.move_down(cx));
+                                return;
+                            }
+                            "enter" => {
+                                let action_id = dialog.read(cx).get_selected_action_id();
+                                if let Some(action_id) = action_id {
+                                    logging::log(
+                                        "ACTIONS",
+                                        &format!("DivPrompt executing action: {}", action_id),
+                                    );
+                                    this.show_actions_popup = false;
+                                    this.actions_dialog = None;
+                                    this.focused_input = FocusedInput::None;
+                                    window.focus(&this.focus_handle, cx);
+                                    this.trigger_action_by_name(&action_id, cx);
+                                }
+                                return;
+                            }
+                            "escape" => {
+                                this.show_actions_popup = false;
+                                this.actions_dialog = None;
+                                this.focused_input = FocusedInput::None;
+                                window.focus(&this.focus_handle, cx);
+                                cx.notify();
+                                return;
+                            }
+                            "backspace" => {
+                                dialog.update(cx, |d, cx| d.handle_backspace(cx));
+                                return;
+                            }
+                            _ => {
+                                if let Some(ref key_char) = event.keystroke.key_char {
+                                    if let Some(ch) = key_char.chars().next() {
+                                        if !ch.is_control() {
+                                            dialog.update(cx, |d, cx| d.handle_char(ch, cx));
+                                        }
+                                    }
+                                }
+                                return;
+                            }
+                        }
+                    }
+                }
+
+                // Check for SDK action shortcuts (only when actions popup is NOT open)
+                let shortcut_key = Self::keystroke_to_shortcut(&key_str, &event.keystroke.modifiers);
+                if let Some(action_name) = this.action_shortcuts.get(&shortcut_key).cloned() {
+                    logging::log("KEY", &format!("SDK action shortcut matched: {}", action_name));
+                    this.trigger_action_by_name(&action_name, cx);
+                    return;
+                }
 
                 match key_str.as_str() {
                     "enter" => {
@@ -8727,6 +8811,7 @@ impl ScriptListApp {
         let content_height = window_resize::layout::STANDARD_HEIGHT;
 
         div()
+            .relative() // Needed for absolute positioned actions dialog overlay
             .flex()
             .flex_col()
             .bg(rgba(bg_with_alpha))
@@ -8740,6 +8825,33 @@ impl ScriptListApp {
             .key_context("div_prompt")
             .track_focus(&self.focus_handle)
             .on_key_down(handle_key)
+            // Header with optional Actions button
+            .when(has_actions, |d| {
+                d.child(
+                    div()
+                        .w_full()
+                        .px(px(design_spacing.padding_lg))
+                        .py(px(design_spacing.padding_md))
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .justify_end()
+                        .child({
+                            let button_colors = ButtonColors::from_theme(&self.theme);
+                            let handle_actions = cx.entity().downgrade();
+                            Button::new("Actions", button_colors)
+                                .variant(ButtonVariant::Ghost)
+                                .shortcut("⌘ K")
+                                .on_click(Box::new(move |_, window, cx| {
+                                    if let Some(app) = handle_actions.upgrade() {
+                                        app.update(cx, |this, cx| {
+                                            this.toggle_arg_actions(cx, window);
+                                        });
+                                    }
+                                }))
+                        }),
+                )
+            })
             // Content area
             .child(
                 div()
@@ -8751,17 +8863,43 @@ impl ScriptListApp {
                     .text_lg()
                     .child(display_text),
             )
-            // Footer
-            .child(
-                div()
-                    .w_full()
-                    .px(px(design_spacing.padding_lg))
-                    .py(px(design_spacing.padding_md))
-                    .border_t_1()
-                    .border_color(rgba((design_colors.border << 8) | 0x60))
-                    .text_xs()
-                    .text_color(rgb(design_colors.text_muted))
-                    .child("Press Enter or Escape to continue"),
+            // Actions dialog overlay (when Cmd+K is pressed with SDK actions)
+            .when_some(
+                if self.show_actions_popup {
+                    self.actions_dialog.clone()
+                } else {
+                    None
+                },
+                |d, dialog| {
+                    let backdrop_click = cx.listener(|this: &mut Self, _event: &gpui::ClickEvent, window: &mut Window, cx: &mut Context<Self>| {
+                        logging::log("FOCUS", "Div actions backdrop clicked - dismissing dialog");
+                        this.show_actions_popup = false;
+                        this.actions_dialog = None;
+                        this.focused_input = FocusedInput::None;
+                        window.focus(&this.focus_handle, cx);
+                        cx.notify();
+                    });
+
+                    d.child(
+                        div()
+                            .absolute()
+                            .inset_0()
+                            .child(
+                                div()
+                                    .id("div-actions-backdrop")
+                                    .absolute()
+                                    .inset_0()
+                                    .on_click(backdrop_click)
+                            )
+                            .child(
+                                div()
+                                    .absolute()
+                                    .top(px(52.))
+                                    .right(px(8.))
+                                    .child(dialog),
+                            ),
+                    )
+                },
             )
             .into_any_element()
     }
@@ -8771,6 +8909,9 @@ impl ScriptListApp {
         entity: Entity<FormPromptState>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        let has_actions = self.sdk_actions.is_some()
+            && !self.sdk_actions.as_ref().unwrap().is_empty();
+
         // Use design tokens for GLOBAL theming
         let tokens = get_tokens(self.current_design);
         let design_colors = tokens.colors();
@@ -8789,24 +8930,92 @@ impl ScriptListApp {
         let entity_for_input = entity.clone();
 
         let prompt_id_for_key = prompt_id.clone();
-        // Key handler for form navigation (Enter/Tab/Escape)
-        // NOTE: Currently unused because form fields handle their own focus via delegated Focusable
-        // Keeping for reference in case we need to re-enable parent-level key handling
-        let _handle_key = cx.listener(
+        // Key handler for form navigation (Enter/Tab/Escape) and Cmd+K actions
+        let has_actions_for_handler = has_actions;
+        let handle_key = cx.listener(
             move |this: &mut Self,
                   event: &gpui::KeyDownEvent,
-                  _window: &mut Window,
+                  window: &mut Window,
                   cx: &mut Context<Self>| {
                 let key_str = event.keystroke.key.to_lowercase();
                 let has_shift = event.keystroke.modifiers.shift;
+                let has_cmd = event.keystroke.modifiers.platform;
 
                 logging::log(
                     "KEY",
                     &format!(
-                        "FormPrompt key: '{}' (shift: {}, key_char: {:?})",
-                        key_str, has_shift, event.keystroke.key_char
+                        "FormPrompt key: '{}' (shift: {}, cmd: {}, key_char: {:?})",
+                        key_str, has_shift, has_cmd, event.keystroke.key_char
                     ),
                 );
+
+                // Check for Cmd+K to toggle actions popup (if actions are available)
+                if has_cmd && key_str == "k" && has_actions_for_handler {
+                    logging::log("KEY", "Cmd+K in FormPrompt - calling toggle_arg_actions");
+                    this.toggle_arg_actions(cx, window);
+                    return;
+                }
+
+                // If actions popup is open, route keyboard events to it
+                if this.show_actions_popup {
+                    if let Some(ref dialog) = this.actions_dialog {
+                        match key_str.as_str() {
+                            "up" | "arrowup" => {
+                                dialog.update(cx, |d, cx| d.move_up(cx));
+                                return;
+                            }
+                            "down" | "arrowdown" => {
+                                dialog.update(cx, |d, cx| d.move_down(cx));
+                                return;
+                            }
+                            "enter" => {
+                                let action_id = dialog.read(cx).get_selected_action_id();
+                                if let Some(action_id) = action_id {
+                                    logging::log(
+                                        "ACTIONS",
+                                        &format!("FormPrompt executing action: {}", action_id),
+                                    );
+                                    this.show_actions_popup = false;
+                                    this.actions_dialog = None;
+                                    this.focused_input = FocusedInput::None;
+                                    window.focus(&this.focus_handle, cx);
+                                    this.trigger_action_by_name(&action_id, cx);
+                                }
+                                return;
+                            }
+                            "escape" => {
+                                this.show_actions_popup = false;
+                                this.actions_dialog = None;
+                                this.focused_input = FocusedInput::None;
+                                window.focus(&this.focus_handle, cx);
+                                cx.notify();
+                                return;
+                            }
+                            "backspace" => {
+                                dialog.update(cx, |d, cx| d.handle_backspace(cx));
+                                return;
+                            }
+                            _ => {
+                                if let Some(ref key_char) = event.keystroke.key_char {
+                                    if let Some(ch) = key_char.chars().next() {
+                                        if !ch.is_control() {
+                                            dialog.update(cx, |d, cx| d.handle_char(ch, cx));
+                                        }
+                                    }
+                                }
+                                return;
+                            }
+                        }
+                    }
+                }
+
+                // Check for SDK action shortcuts
+                let shortcut_key = Self::keystroke_to_shortcut(&key_str, &event.keystroke.modifiers);
+                if let Some(action_name) = this.action_shortcuts.get(&shortcut_key).cloned() {
+                    logging::log("KEY", &format!("SDK action shortcut matched: {}", action_name));
+                    this.trigger_action_by_name(&action_name, cx);
+                    return;
+                }
 
                 // Handle form-level keys (Enter, Escape, Tab) at this level
                 // Forward all other keys to the focused form field for text input
@@ -8866,11 +9075,13 @@ impl ScriptListApp {
 
         // Button colors from theme
         let button_colors = ButtonColors::from_theme(&self.theme);
+        let actions_button_colors = ButtonColors::from_theme(&self.theme);
 
         // Form fields have their own focus handles and on_key_down handlers.
         // We DO NOT track_focus on the container - the fields handle their own focus.
-        // Enter/Escape/Tab are handled by a window-level key handler (see handle_form_navigation_keys).
+        // Enter/Escape/Tab are handled by the handle_key listener above.
         div()
+            .relative() // Needed for absolute positioned actions dialog overlay
             .flex()
             .flex_col()
             .bg(rgba(bg_with_alpha))
@@ -8882,6 +9093,7 @@ impl ScriptListApp {
             .text_color(rgb(design_colors.text_primary))
             .font_family(design_typography.font_family)
             .key_context("form_prompt")
+            .on_key_down(handle_key)
             // Content area with form fields
             .child(
                 div()
@@ -8893,31 +9105,77 @@ impl ScriptListApp {
                     // Render the form entity (contains all fields)
                     .child(entity.clone()),
             )
-            // Footer with Submit button
+            // Header with Actions and Submit buttons
             .child(
                 div()
                     .w_full()
                     .px(px(design_spacing.padding_lg))
                     .py(px(design_spacing.padding_md))
-                    .border_t_1()
-                    .border_color(rgba((design_colors.border << 8) | 0x60))
                     .flex()
                     .flex_row()
                     .items_center()
-                    .justify_between()
-                    // Help text
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(rgb(design_colors.text_muted))
-                            .child("Tab navigate • ⏎ submit • Esc cancel"),
-                    )
-                    // Submit button (visual only - use Enter key to submit)
+                    .justify_end()
+                    .gap_2()
+                    // Actions button (when actions are available)
+                    .when(has_actions, |d| {
+                        let handle_actions = cx.entity().downgrade();
+                        d.child(
+                            Button::new("Actions", actions_button_colors)
+                                .variant(ButtonVariant::Ghost)
+                                .shortcut("⌘ K")
+                                .on_click(Box::new(move |_, window, cx| {
+                                    if let Some(app) = handle_actions.upgrade() {
+                                        app.update(cx, |this, cx| {
+                                            this.toggle_arg_actions(cx, window);
+                                        });
+                                    }
+                                })),
+                        )
+                    })
+                    // Submit button
                     .child(
                         Button::new("Submit", button_colors)
                             .variant(ButtonVariant::Primary)
                             .shortcut("↵"),
                     ),
+            )
+            // Actions dialog overlay
+            .when_some(
+                if self.show_actions_popup {
+                    self.actions_dialog.clone()
+                } else {
+                    None
+                },
+                |d, dialog| {
+                    let backdrop_click = cx.listener(|this: &mut Self, _event: &gpui::ClickEvent, window: &mut Window, cx: &mut Context<Self>| {
+                        logging::log("FOCUS", "Form actions backdrop clicked - dismissing dialog");
+                        this.show_actions_popup = false;
+                        this.actions_dialog = None;
+                        this.focused_input = FocusedInput::None;
+                        window.focus(&this.focus_handle, cx);
+                        cx.notify();
+                    });
+
+                    d.child(
+                        div()
+                            .absolute()
+                            .inset_0()
+                            .child(
+                                div()
+                                    .id("form-actions-backdrop")
+                                    .absolute()
+                                    .inset_0()
+                                    .on_click(backdrop_click)
+                            )
+                            .child(
+                                div()
+                                    .absolute()
+                                    .top(px(52.))
+                                    .right(px(8.))
+                                    .child(dialog),
+                            ),
+                    )
+                },
             )
             .into_any_element()
     }
@@ -8925,11 +9183,21 @@ impl ScriptListApp {
     fn render_term_prompt(
         &mut self,
         entity: Entity<term_prompt::TermPrompt>,
-        _cx: &mut Context<Self>,
+        cx: &mut Context<Self>,
     ) -> AnyElement {
+        let has_actions = self.sdk_actions.is_some()
+            && !self.sdk_actions.as_ref().unwrap().is_empty();
+
+        // Sync suppress_keys with actions popup state so terminal ignores keys when popup is open
+        let show_actions = self.show_actions_popup;
+        entity.update(cx, |term, _| {
+            term.suppress_keys = show_actions;
+        });
+
         // Use design tokens for GLOBAL theming
         let tokens = get_tokens(self.current_design);
         let design_colors = tokens.colors();
+        let design_spacing = tokens.spacing();
 
         // Use design tokens for global theming
         let opacity = self.theme.get_opacity();
@@ -8941,10 +9209,91 @@ impl ScriptListApp {
         // h_full() doesn't work at the root level because there's no parent to fill
         let content_height = window_resize::layout::MAX_HEIGHT;
 
+        // Key handler for Cmd+K actions toggle
+        let has_actions_for_handler = has_actions;
+        let handle_key = cx.listener(
+            move |this: &mut Self,
+                  event: &gpui::KeyDownEvent,
+                  window: &mut Window,
+                  cx: &mut Context<Self>| {
+                let key_str = event.keystroke.key.to_lowercase();
+                let has_cmd = event.keystroke.modifiers.platform;
+
+                // Check for Cmd+K to toggle actions popup (if actions are available)
+                if has_cmd && key_str == "k" && has_actions_for_handler {
+                    logging::log("KEY", "Cmd+K in TermPrompt - calling toggle_arg_actions");
+                    this.toggle_arg_actions(cx, window);
+                    return;
+                }
+
+                // If actions popup is open, route keyboard events to it
+                if this.show_actions_popup {
+                    if let Some(ref dialog) = this.actions_dialog {
+                        match key_str.as_str() {
+                            "up" | "arrowup" => {
+                                dialog.update(cx, |d, cx| d.move_up(cx));
+                                return;
+                            }
+                            "down" | "arrowdown" => {
+                                dialog.update(cx, |d, cx| d.move_down(cx));
+                                return;
+                            }
+                            "enter" => {
+                                let action_id = dialog.read(cx).get_selected_action_id();
+                                if let Some(action_id) = action_id {
+                                    logging::log(
+                                        "ACTIONS",
+                                        &format!("TermPrompt executing action: {}", action_id),
+                                    );
+                                    this.show_actions_popup = false;
+                                    this.actions_dialog = None;
+                                    this.focused_input = FocusedInput::None;
+                                    window.focus(&this.focus_handle, cx);
+                                    this.trigger_action_by_name(&action_id, cx);
+                                }
+                                return;
+                            }
+                            "escape" => {
+                                this.show_actions_popup = false;
+                                this.actions_dialog = None;
+                                this.focused_input = FocusedInput::None;
+                                window.focus(&this.focus_handle, cx);
+                                cx.notify();
+                                return;
+                            }
+                            "backspace" => {
+                                dialog.update(cx, |d, cx| d.handle_backspace(cx));
+                                return;
+                            }
+                            _ => {
+                                if let Some(ref key_char) = event.keystroke.key_char {
+                                    if let Some(ch) = key_char.chars().next() {
+                                        if !ch.is_control() {
+                                            dialog.update(cx, |d, cx| d.handle_char(ch, cx));
+                                        }
+                                    }
+                                }
+                                return;
+                            }
+                        }
+                    }
+                }
+
+                // Check for SDK action shortcuts
+                let shortcut_key = Self::keystroke_to_shortcut(&key_str, &event.keystroke.modifiers);
+                if let Some(action_name) = this.action_shortcuts.get(&shortcut_key).cloned() {
+                    logging::log("KEY", &format!("SDK action shortcut matched: {}", action_name));
+                    this.trigger_action_by_name(&action_name, cx);
+                }
+                // Let other keys fall through to the terminal
+            },
+        );
+
         // Container with explicit height. We wrap the entity in a sized div because
         // GPUI entities don't automatically inherit parent flex sizing.
         // NOTE: No rounded corners for terminal - it should fill edge-to-edge
         div()
+            .relative() // Needed for absolute positioned actions dialog overlay
             .flex()
             .flex_col()
             .bg(rgba(bg_with_alpha))
@@ -8952,18 +9301,90 @@ impl ScriptListApp {
             .w_full()
             .h(content_height)
             .overflow_hidden()
+            .on_key_down(handle_key)
             .child(div().size_full().child(entity))
+            // Actions button in top-right corner when actions are available
+            .when(has_actions, |d| {
+                let button_colors = ButtonColors::from_theme(&self.theme);
+                let handle_actions = cx.entity().downgrade();
+                d.child(
+                    div()
+                        .absolute()
+                        .top(px(design_spacing.padding_md))
+                        .right(px(design_spacing.padding_md))
+                        .child(
+                            Button::new("Actions", button_colors)
+                                .variant(ButtonVariant::Ghost)
+                                .shortcut("⌘ K")
+                                .on_click(Box::new(move |_, window, cx| {
+                                    if let Some(app) = handle_actions.upgrade() {
+                                        app.update(cx, |this, cx| {
+                                            this.toggle_arg_actions(cx, window);
+                                        });
+                                    }
+                                })),
+                        ),
+                )
+            })
+            // Actions dialog overlay
+            .when_some(
+                if self.show_actions_popup {
+                    self.actions_dialog.clone()
+                } else {
+                    None
+                },
+                |d, dialog| {
+                    let backdrop_click = cx.listener(|this: &mut Self, _event: &gpui::ClickEvent, window: &mut Window, cx: &mut Context<Self>| {
+                        logging::log("FOCUS", "Term actions backdrop clicked - dismissing dialog");
+                        this.show_actions_popup = false;
+                        this.actions_dialog = None;
+                        this.focused_input = FocusedInput::None;
+                        window.focus(&this.focus_handle, cx);
+                        cx.notify();
+                    });
+
+                    d.child(
+                        div()
+                            .absolute()
+                            .inset_0()
+                            .child(
+                                div()
+                                    .id("term-actions-backdrop")
+                                    .absolute()
+                                    .inset_0()
+                                    .on_click(backdrop_click)
+                            )
+                            .child(
+                                div()
+                                    .absolute()
+                                    .top(px(52.))
+                                    .right(px(8.))
+                                    .child(dialog),
+                            ),
+                    )
+                },
+            )
             .into_any_element()
     }
 
     fn render_editor_prompt(
         &mut self,
         entity: Entity<EditorPrompt>,
-        _cx: &mut Context<Self>,
+        cx: &mut Context<Self>,
     ) -> AnyElement {
+        let has_actions = self.sdk_actions.is_some()
+            && !self.sdk_actions.as_ref().unwrap().is_empty();
+
+        // Sync suppress_keys with actions popup state so editor ignores keys when popup is open
+        let show_actions = self.show_actions_popup;
+        entity.update(cx, |editor, _| {
+            editor.suppress_keys = show_actions;
+        });
+
         // Use design tokens for GLOBAL theming
         let tokens = get_tokens(self.current_design);
         let design_colors = tokens.colors();
+        let design_spacing = tokens.spacing();
         let design_visual = tokens.visual();
 
         // Use design tokens for global theming
@@ -8976,12 +9397,93 @@ impl ScriptListApp {
         // h_full() doesn't work at the root level because there's no parent to fill
         let content_height = window_resize::layout::MAX_HEIGHT;
 
+        // Key handler for Cmd+K actions toggle (at parent level to intercept before editor)
+        let has_actions_for_handler = has_actions;
+        let handle_key = cx.listener(
+            move |this: &mut Self,
+                  event: &gpui::KeyDownEvent,
+                  window: &mut Window,
+                  cx: &mut Context<Self>| {
+                let key_str = event.keystroke.key.to_lowercase();
+                let has_cmd = event.keystroke.modifiers.platform;
+
+                // Check for Cmd+K to toggle actions popup (if actions are available)
+                if has_cmd && key_str == "k" && has_actions_for_handler {
+                    logging::log("KEY", "Cmd+K in EditorPrompt - calling toggle_arg_actions");
+                    this.toggle_arg_actions(cx, window);
+                    return;
+                }
+
+                // If actions popup is open, route keyboard events to it
+                if this.show_actions_popup {
+                    if let Some(ref dialog) = this.actions_dialog {
+                        match key_str.as_str() {
+                            "up" | "arrowup" => {
+                                dialog.update(cx, |d, cx| d.move_up(cx));
+                                return;
+                            }
+                            "down" | "arrowdown" => {
+                                dialog.update(cx, |d, cx| d.move_down(cx));
+                                return;
+                            }
+                            "enter" => {
+                                let action_id = dialog.read(cx).get_selected_action_id();
+                                if let Some(action_id) = action_id {
+                                    logging::log(
+                                        "ACTIONS",
+                                        &format!("EditorPrompt executing action: {}", action_id),
+                                    );
+                                    this.show_actions_popup = false;
+                                    this.actions_dialog = None;
+                                    this.focused_input = FocusedInput::None;
+                                    window.focus(&this.focus_handle, cx);
+                                    this.trigger_action_by_name(&action_id, cx);
+                                }
+                                return;
+                            }
+                            "escape" => {
+                                this.show_actions_popup = false;
+                                this.actions_dialog = None;
+                                this.focused_input = FocusedInput::None;
+                                window.focus(&this.focus_handle, cx);
+                                cx.notify();
+                                return;
+                            }
+                            "backspace" => {
+                                dialog.update(cx, |d, cx| d.handle_backspace(cx));
+                                return;
+                            }
+                            _ => {
+                                if let Some(ref key_char) = event.keystroke.key_char {
+                                    if let Some(ch) = key_char.chars().next() {
+                                        if !ch.is_control() {
+                                            dialog.update(cx, |d, cx| d.handle_char(ch, cx));
+                                        }
+                                    }
+                                }
+                                return;
+                            }
+                        }
+                    }
+                }
+
+                // Check for SDK action shortcuts
+                let shortcut_key = Self::keystroke_to_shortcut(&key_str, &event.keystroke.modifiers);
+                if let Some(action_name) = this.action_shortcuts.get(&shortcut_key).cloned() {
+                    logging::log("KEY", &format!("SDK action shortcut matched: {}", action_name));
+                    this.trigger_action_by_name(&action_name, cx);
+                }
+                // Let other keys fall through to the editor
+            },
+        );
+
         // NOTE: The EditorPrompt entity has its own track_focus and on_key_down in its render method.
         // We do NOT add track_focus here to avoid duplicate focus tracking on the same handle.
         //
         // Container with explicit height. We wrap the entity in a sized div because
         // GPUI entities don't automatically inherit parent flex sizing.
         div()
+            .relative() // Needed for absolute positioned actions dialog overlay
             .flex()
             .flex_col()
             .bg(rgba(bg_with_alpha))
@@ -8990,7 +9492,69 @@ impl ScriptListApp {
             .h(content_height)
             .overflow_hidden()
             .rounded(px(design_visual.radius_lg))
+            .on_key_down(handle_key)
             .child(div().size_full().child(entity))
+            // Actions button in top-right corner when actions are available
+            .when(has_actions, |d| {
+                let button_colors = ButtonColors::from_theme(&self.theme);
+                let handle_actions = cx.entity().downgrade();
+                d.child(
+                    div()
+                        .absolute()
+                        .top(px(design_spacing.padding_md))
+                        .right(px(design_spacing.padding_md))
+                        .child(
+                            Button::new("Actions", button_colors)
+                                .variant(ButtonVariant::Ghost)
+                                .shortcut("⌘ K")
+                                .on_click(Box::new(move |_, window, cx| {
+                                    if let Some(app) = handle_actions.upgrade() {
+                                        app.update(cx, |this, cx| {
+                                            this.toggle_arg_actions(cx, window);
+                                        });
+                                    }
+                                })),
+                        ),
+                )
+            })
+            // Actions dialog overlay
+            .when_some(
+                if self.show_actions_popup {
+                    self.actions_dialog.clone()
+                } else {
+                    None
+                },
+                |d, dialog| {
+                    let backdrop_click = cx.listener(|this: &mut Self, _event: &gpui::ClickEvent, window: &mut Window, cx: &mut Context<Self>| {
+                        logging::log("FOCUS", "Editor actions backdrop clicked - dismissing dialog");
+                        this.show_actions_popup = false;
+                        this.actions_dialog = None;
+                        this.focused_input = FocusedInput::None;
+                        window.focus(&this.focus_handle, cx);
+                        cx.notify();
+                    });
+
+                    d.child(
+                        div()
+                            .absolute()
+                            .inset_0()
+                            .child(
+                                div()
+                                    .id("editor-actions-backdrop")
+                                    .absolute()
+                                    .inset_0()
+                                    .on_click(backdrop_click)
+                            )
+                            .child(
+                                div()
+                                    .absolute()
+                                    .top(px(52.))
+                                    .right(px(8.))
+                                    .child(dialog),
+                            ),
+                    )
+                },
+            )
             .into_any_element()
     }
 
@@ -10387,18 +10951,6 @@ impl ScriptListApp {
                     .py(px(design_spacing.padding_xs))
                     .child(list_element),
             )
-            // Footer
-            .child(
-                div()
-                    .w_full()
-                    .px(px(design_spacing.padding_lg))
-                    .py(px(design_spacing.padding_sm + design_visual.border_normal))
-                    .border_t_1()
-                    .border_color(rgba((ui_border << 8) | 0x60))
-                    .text_xs()
-                    .text_color(rgb(text_muted))
-                    .child("↑↓ navigate • ⏎ launch • Esc back"),
-            )
             .into_any_element()
     }
 
@@ -10763,18 +11315,6 @@ impl ScriptListApp {
                             .overflow_hidden()
                             .child(actions_panel),
                     ),
-            )
-            // Footer
-            .child(
-                div()
-                    .w_full()
-                    .px(px(design_spacing.padding_lg))
-                    .py(px(design_spacing.padding_sm + design_visual.border_normal))
-                    .border_t_1()
-                    .border_color(rgba((ui_border << 8) | 0x60))
-                    .text_xs()
-                    .text_color(rgb(text_muted))
-                    .child("↑↓ navigate • ⏎ focus • 1-4 tile • M max • N min • C close • Esc back"),
             )
             .into_any_element()
     }
@@ -11440,18 +11980,6 @@ impl ScriptListApp {
                     .overflow_hidden()
                     .py(px(design_spacing.padding_xs))
                     .child(list_element),
-            )
-            // Footer with hint
-            .child(
-                div()
-                    .w_full()
-                    .px(px(design_spacing.padding_lg))
-                    .py(px(design_spacing.padding_sm))
-                    .border_t_1()
-                    .border_color(rgba((ui_border << 8) | 0x40))
-                    .text_xs()
-                    .text_color(rgb(text_dimmed))
-                    .child("↑↓ navigate • Esc back"),
             )
             .into_any_element()
     }

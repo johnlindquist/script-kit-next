@@ -80,6 +80,8 @@ pub struct TermPrompt {
     last_click_position: Option<(usize, usize)>,
     /// Count of rapid clicks at same position (1=single, 2=double, 3=triple)
     click_count: u8,
+    /// When true, ignore all key events (used when actions panel is open)
+    pub suppress_keys: bool,
 }
 
 impl TermPrompt {
@@ -144,6 +146,7 @@ impl TermPrompt {
             last_click_time: None,
             last_click_position: None,
             click_count: 0,
+            suppress_keys: false,
         })
     }
 
@@ -597,6 +600,11 @@ impl Render for TermPrompt {
                   event: &gpui::KeyDownEvent,
                   _window: &mut Window,
                   _cx: &mut Context<Self>| {
+                // When actions panel is open, ignore all key events
+                if this.suppress_keys {
+                    return;
+                }
+
                 let key_str = event.keystroke.key.to_lowercase();
                 let has_ctrl = event.keystroke.modifiers.control;
                 let has_meta = event.keystroke.modifiers.platform;

@@ -964,6 +964,7 @@ interface DivMessage {
   id: string;
   html: string;
   tailwind?: string;
+  actions?: SerializableAction[];
 }
 
 interface EditorMessage {
@@ -971,6 +972,7 @@ interface EditorMessage {
   id: string;
   content: string;
   language: string;
+  actions?: SerializableAction[];
 }
 
 interface MiniMessage {
@@ -999,12 +1001,14 @@ interface FieldsMessage {
   type: 'fields';
   id: string;
   fields: FieldDef[];
+  actions?: SerializableAction[];
 }
 
 interface FormMessage {
   type: 'form';
   id: string;
   html: string;
+  actions?: SerializableAction[];
 }
 
 interface PathMessage {
@@ -1312,6 +1316,7 @@ interface TermMessage {
   type: 'term';
   id: string;
   command?: string;
+  actions?: SerializableAction[];
 }
 
 interface WebcamMessage {
@@ -1609,9 +1614,10 @@ declare global {
    * Opens a Monaco-style code editor
    * @param content - Initial content to display in the editor
    * @param language - Language for syntax highlighting (e.g., 'typescript', 'javascript', 'json')
+   * @param actions - Optional actions to display in the actions panel (Cmd+K)
    * @returns The edited content when user submits
    */
-  function editor(content?: string, language?: string): Promise<string>;
+  function editor(content?: string, language?: string, actions?: Action[]): Promise<string>;
   
   /**
    * Compact prompt variant - same API as arg() but with minimal UI
@@ -2345,8 +2351,30 @@ globalThis.arg = async function arg(
   });
 };
 
-globalThis.div = async function div(html: string, tailwind?: string): Promise<void> {
+globalThis.div = async function div(html: string, tailwind?: string, actionsInput?: Action[]): Promise<void> {
   const id = nextId();
+  
+  // Process actions: store handlers and create serializable actions
+  let serializedActions: SerializableAction[] | undefined;
+  if (actionsInput && actionsInput.length > 0) {
+    // Store action handlers in global map for later invocation
+    for (const action of actionsInput) {
+      if (action.onAction) {
+        (globalThis as any).__kitActionsMap.set(action.name, action.onAction);
+      }
+    }
+    
+    // Convert to serializable format (without function handlers)
+    serializedActions = actionsInput.map(action => ({
+      name: action.name,
+      description: action.description,
+      shortcut: action.shortcut,
+      value: action.value,
+      hasAction: !!action.onAction,
+      visible: action.visible,
+      close: action.close,
+    }));
+  }
   
   return new Promise((resolve) => {
     pending.set(id, () => {
@@ -2358,6 +2386,7 @@ globalThis.div = async function div(html: string, tailwind?: string): Promise<vo
       id,
       html,
       tailwind,
+      actions: serializedActions,
     };
     
     send(message);
@@ -2441,9 +2470,32 @@ globalThis.md = function md(markdown: string): string {
 
 globalThis.editor = async function editor(
   content: string = '',
-  language: string = 'text'
+  language: string = 'text',
+  actionsInput?: Action[]
 ): Promise<string> {
   const id = nextId();
+
+  // Process actions: store handlers and create serializable actions
+  let serializedActions: SerializableAction[] | undefined;
+  if (actionsInput && actionsInput.length > 0) {
+    // Store action handlers in global map for later invocation
+    for (const action of actionsInput) {
+      if (action.onAction) {
+        (globalThis as any).__kitActionsMap.set(action.name, action.onAction);
+      }
+    }
+    
+    // Convert to serializable format (without function handlers)
+    serializedActions = actionsInput.map(action => ({
+      name: action.name,
+      description: action.description,
+      shortcut: action.shortcut,
+      value: action.value,
+      hasAction: !!action.onAction,
+      visible: action.visible,
+      close: action.close,
+    }));
+  }
 
   return new Promise((resolve) => {
     pending.set(id, (msg: SubmitMessage) => {
@@ -2459,6 +2511,7 @@ globalThis.editor = async function editor(
       id,
       content,
       language,
+      actions: serializedActions,
     };
 
     send(message);
@@ -2573,7 +2626,8 @@ globalThis.select = async function select(
 };
 
 globalThis.fields = async function fields(
-  fieldDefs: (string | FieldDef)[]
+  fieldDefs: (string | FieldDef)[],
+  actionsInput?: Action[]
 ): Promise<string[]> {
   const id = nextId();
 
@@ -2583,6 +2637,25 @@ globalThis.fields = async function fields(
     }
     return f;
   });
+
+  // Process actions: store handlers and create serializable actions
+  let serializedActions: SerializableAction[] | undefined;
+  if (actionsInput && actionsInput.length > 0) {
+    for (const action of actionsInput) {
+      if (action.onAction) {
+        (globalThis as any).__kitActionsMap.set(action.name, action.onAction);
+      }
+    }
+    serializedActions = actionsInput.map(action => ({
+      name: action.name,
+      description: action.description,
+      shortcut: action.shortcut,
+      value: action.value,
+      hasAction: !!action.onAction,
+      visible: action.visible,
+      close: action.close,
+    }));
+  }
 
   return new Promise((resolve) => {
     pending.set(id, (msg: SubmitMessage) => {
@@ -2604,6 +2677,7 @@ globalThis.fields = async function fields(
       type: 'fields',
       id,
       fields: normalizedFields,
+      actions: serializedActions,
     };
 
     send(message);
@@ -2611,9 +2685,29 @@ globalThis.fields = async function fields(
 };
 
 globalThis.form = async function form(
-  html: string
+  html: string,
+  actionsInput?: Action[]
 ): Promise<Record<string, string>> {
   const id = nextId();
+
+  // Process actions: store handlers and create serializable actions
+  let serializedActions: SerializableAction[] | undefined;
+  if (actionsInput && actionsInput.length > 0) {
+    for (const action of actionsInput) {
+      if (action.onAction) {
+        (globalThis as any).__kitActionsMap.set(action.name, action.onAction);
+      }
+    }
+    serializedActions = actionsInput.map(action => ({
+      name: action.name,
+      description: action.description,
+      shortcut: action.shortcut,
+      value: action.value,
+      hasAction: !!action.onAction,
+      visible: action.visible,
+      close: action.close,
+    }));
+  }
 
   return new Promise((resolve) => {
     pending.set(id, (msg: SubmitMessage) => {
@@ -2635,6 +2729,7 @@ globalThis.form = async function form(
       type: 'form',
       id,
       html,
+      actions: serializedActions,
     };
 
     send(message);
@@ -3411,8 +3506,30 @@ globalThis.widget = async function widget(
   return controller;
 };
 
-globalThis.term = async function term(command?: string): Promise<string> {
+globalThis.term = async function term(command?: string, actionsInput?: Action[]): Promise<string> {
   const id = nextId();
+
+  // Process actions: store handlers and create serializable actions
+  let serializedActions: SerializableAction[] | undefined;
+  if (actionsInput && actionsInput.length > 0) {
+    // Store action handlers in global map for later invocation
+    for (const action of actionsInput) {
+      if (action.onAction) {
+        (globalThis as any).__kitActionsMap.set(action.name, action.onAction);
+      }
+    }
+    
+    // Convert to serializable format (without function handlers)
+    serializedActions = actionsInput.map(action => ({
+      name: action.name,
+      description: action.description,
+      shortcut: action.shortcut,
+      value: action.value,
+      hasAction: !!action.onAction,
+      visible: action.visible,
+      close: action.close,
+    }));
+  }
 
   return new Promise((resolve) => {
     pending.set(id, (msg: SubmitMessage) => {
@@ -3427,6 +3544,7 @@ globalThis.term = async function term(command?: string): Promise<string> {
       type: 'term',
       id,
       command,
+      actions: serializedActions,
     };
 
     send(message);
@@ -4555,7 +4673,7 @@ declare global {
   function arg(placeholderOrConfig?: string | ArgConfig, choices?: ChoicesInput, actions?: Action[]): Promise<string>;
   function div(html: string, tailwind?: string): Promise<void>;
   function md(markdown: string): string;
-  function editor(content?: string, language?: string): Promise<string>;
+  function editor(content?: string, language?: string, actions?: Action[]): Promise<string>;
   function mini(placeholderOrConfig?: string | ArgConfig, choices?: ChoicesInput): Promise<string>;
   function micro(placeholderOrConfig?: string | ArgConfig, choices?: ChoicesInput): Promise<string>;
   function select(placeholderOrConfig?: string | ArgConfig, choices?: ChoicesInput): Promise<string>;

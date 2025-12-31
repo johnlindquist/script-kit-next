@@ -730,6 +730,9 @@ pub enum Message {
         html: String,
         #[serde(skip_serializing_if = "Option::is_none")]
         tailwind: Option<String>,
+        /// Optional actions for the actions panel (Cmd+K to open)
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        actions: Option<Vec<ProtocolAction>>,
     },
 
     /// App responds with submission (selected value or null)
@@ -775,6 +778,9 @@ pub enum Message {
         on_init: Option<String>,
         #[serde(rename = "onSubmit", skip_serializing_if = "Option::is_none")]
         on_submit: Option<String>,
+        /// Optional actions for the actions panel (Cmd+K to open)
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        actions: Option<Vec<ProtocolAction>>,
     },
 
     /// Compact arg prompt (same as Arg but compact display)
@@ -811,11 +817,23 @@ pub enum Message {
     // ============================================================
     /// Multiple input fields
     #[serde(rename = "fields")]
-    Fields { id: String, fields: Vec<Field> },
+    Fields {
+        id: String,
+        fields: Vec<Field>,
+        /// Optional actions for the actions panel (Cmd+K to open)
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        actions: Option<Vec<ProtocolAction>>,
+    },
 
     /// Custom HTML form
     #[serde(rename = "form")]
-    Form { id: String, html: String },
+    Form {
+        id: String,
+        html: String,
+        /// Optional actions for the actions panel (Cmd+K to open)
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        actions: Option<Vec<ProtocolAction>>,
+    },
 
     // ============================================================
     // FILE/PATH PROMPTS
@@ -874,6 +892,9 @@ pub enum Message {
         id: String,
         #[serde(skip_serializing_if = "Option::is_none")]
         command: Option<String>,
+        /// Optional actions for the actions panel (Cmd+K to open)
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        actions: Option<Vec<ProtocolAction>>,
     },
 
     /// Custom widget with HTML
@@ -1478,6 +1499,7 @@ impl Message {
             id,
             html,
             tailwind: None,
+            actions: None,
         }
     }
 
@@ -1487,6 +1509,7 @@ impl Message {
             id,
             html,
             tailwind: Some(tailwind),
+            actions: None,
         }
     }
 
@@ -1615,6 +1638,7 @@ impl Message {
             template: None,
             on_init: None,
             on_submit: None,
+            actions: None,
         }
     }
 
@@ -1627,6 +1651,7 @@ impl Message {
             template: None,
             on_init: None,
             on_submit: None,
+            actions: None,
         }
     }
 
@@ -1639,6 +1664,7 @@ impl Message {
             template: Some(template),
             on_init: None,
             on_submit: None,
+            actions: None,
         }
     }
 
@@ -1672,12 +1698,20 @@ impl Message {
 
     /// Create a fields prompt message
     pub fn fields(id: String, fields: Vec<Field>) -> Self {
-        Message::Fields { id, fields }
+        Message::Fields {
+            id,
+            fields,
+            actions: None,
+        }
     }
 
     /// Create a form prompt message
     pub fn form(id: String, html: String) -> Self {
-        Message::Form { id, html }
+        Message::Form {
+            id,
+            html,
+            actions: None,
+        }
     }
 
     /// Create a path prompt message
@@ -1723,7 +1757,11 @@ impl Message {
 
     /// Create a term prompt message
     pub fn term(id: String, command: Option<String>) -> Self {
-        Message::Term { id, command }
+        Message::Term {
+            id,
+            command,
+            actions: None,
+        }
     }
 
     /// Create a widget message
@@ -2664,7 +2702,7 @@ mod tests {
         let msg = parse_message(json).unwrap();
 
         match msg {
-            Message::Div { id, html, tailwind } => {
+            Message::Div { id, html, tailwind, .. } => {
                 assert_eq!(id, "2");
                 assert_eq!(html, "<h1>Hello</h1>");
                 assert_eq!(tailwind, None);
@@ -2680,7 +2718,7 @@ mod tests {
         let msg = parse_message(json).unwrap();
 
         match msg {
-            Message::Div { id, html, tailwind } => {
+            Message::Div { id, html, tailwind, .. } => {
                 assert_eq!(id, "2");
                 assert_eq!(html, "<h1>Hello</h1>");
                 assert_eq!(tailwind, Some("text-2xl font-bold".to_string()));
@@ -2862,6 +2900,7 @@ mod tests {
                 template,
                 on_init,
                 on_submit,
+                ..
             } => {
                 assert_eq!(id, "1");
                 assert_eq!(content, None);
@@ -2971,7 +3010,7 @@ mod tests {
             r#"{"type":"fields","id":"1","fields":[{"name":"username","label":"Username"}]}"#;
         let msg = parse_message(json).unwrap();
         match msg {
-            Message::Fields { id, fields } => {
+            Message::Fields { id, fields, .. } => {
                 assert_eq!(id, "1");
                 assert_eq!(fields.len(), 1);
                 assert_eq!(fields[0].name, "username");
@@ -2993,7 +3032,7 @@ mod tests {
         let json = r#"{"type":"form","id":"1","html":"<form></form>"}"#;
         let msg = parse_message(json).unwrap();
         match msg {
-            Message::Form { id, html } => {
+            Message::Form { id, html, .. } => {
                 assert_eq!(id, "1");
                 assert_eq!(html, "<form></form>");
             }
@@ -3158,7 +3197,7 @@ mod tests {
         let json = r#"{"type":"term","id":"1","command":"pwd"}"#;
         let msg = parse_message(json).unwrap();
         match msg {
-            Message::Term { id, command } => {
+            Message::Term { id, command, .. } => {
                 assert_eq!(id, "1");
                 assert_eq!(command, Some("pwd".to_string()));
             }

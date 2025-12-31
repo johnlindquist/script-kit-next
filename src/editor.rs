@@ -154,6 +154,9 @@ pub struct EditorPrompt {
 
     // Snippet/template mode state
     snippet_state: Option<SnippetState>,
+
+    // When true, ignore all key events (used when actions panel is open)
+    pub suppress_keys: bool,
 }
 
 /// Tracked state for change detection in render logging
@@ -246,6 +249,7 @@ impl EditorPrompt {
             content_height,
             last_render_state: None,
             snippet_state: None,
+            suppress_keys: false,
         }
     }
 
@@ -340,6 +344,7 @@ impl EditorPrompt {
             content_height,
             last_render_state: None,
             snippet_state,
+            suppress_keys: false,
         }
     }
 
@@ -922,6 +927,11 @@ impl EditorPrompt {
 
     /// Handle keyboard input
     fn handle_key_event(&mut self, event: &gpui::KeyDownEvent, cx: &mut Context<Self>) {
+        // When actions panel is open, ignore all key events
+        if self.suppress_keys {
+            return;
+        }
+
         let key = event.keystroke.key.to_lowercase();
         let cmd = event.keystroke.modifiers.platform;
         let shift = event.keystroke.modifiers.shift;
@@ -1344,10 +1354,7 @@ impl EditorPrompt {
                 div()
                     .text_color(rgb(colors.text.muted))
                     .text_xs()
-                    .child(SharedString::from(format!(
-                        "{} | Cmd+Enter to submit, Escape to cancel",
-                        self.language
-                    ))),
+                    .child(SharedString::from(self.language.clone())),
             )
     }
 }
