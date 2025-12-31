@@ -60,7 +60,7 @@ cargo check && cargo clippy --all-targets -- -D warnings && cargo test
 | **Verification Gate** | Always run `cargo check && cargo clippy && cargo test` before commits |
 | **SDK Preload** | Test scripts import `../../scripts/kit-sdk`; runtime uses embedded SDK extracted to `~/.kenv/sdk/` |
 | **Arrow Key Names** | ALWAYS match BOTH: `"up" \| "arrowup"`, `"down" \| "arrowdown"`, `"left" \| "arrowleft"`, `"right" \| "arrowright"` |
-| **Visual Testing** | Use stdin JSON protocol + `captureScreenshot()` SDK function, save to `./.test-screenshots/`, then read the file |
+| **Visual Testing** | Use stdin JSON protocol + `captureScreenshot()` SDK function, save to `.test-screenshots/`, then READ the PNG file to analyze |
 | **AI Log Mode** | Set `SCRIPT_KIT_AI_LOG=1` for token-efficient compact logs (see below) |
 | **Config Settings** | Font sizes and padding are configurable via `~/.kenv/config.ts` - use `config.get_*()` helpers |
 
@@ -183,11 +183,12 @@ echo '{"type": "run", "path": "'$(pwd)'/tests/smoke/test-editor-height.ts"}' | .
 
 **For UI layout issues that can't be verified through logs alone, use the stdin JSON protocol combined with the SDK's `captureScreenshot()` function.**
 
-**The workflow:**
+**The proven workflow (verified working):**
 1. Create a test script that uses `captureScreenshot()` to capture the UI state
-2. Save the screenshot to `./.test-screenshots/` using Node's `fs` module
-3. Run the test via stdin JSON protocol
-4. Read the resulting screenshot file to verify the UI
+2. Save the screenshot to `.test-screenshots/` using Node's `fs` module
+3. Run the test via stdin JSON protocol with `SCRIPT_KIT_AI_LOG=1`
+4. **READ the resulting PNG file using the Read tool** to verify the UI
+5. Iterate: fix code → rebuild → retest → re-read screenshot until correct
 
 **Example test script with screenshot capture:**
 ```typescript
@@ -196,17 +197,19 @@ import '../../scripts/kit-sdk';
 import { writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 
-// Set up your UI state
-await div(`<div class="p-4 bg-blue-500">Test Content</div>`);
+console.error('[TEST] Starting visual test...');
 
-// Wait for render
+// Set up your UI state (div supports HTML and Tailwind classes)
+await div(`<div class="p-4 bg-blue-500 text-white rounded-lg">Test Content</div>`);
+
+// Wait for render (500ms is usually enough, 1000ms for complex UIs)
 await new Promise(resolve => setTimeout(resolve, 500));
 
 // Capture screenshot
 const screenshot = await captureScreenshot();
-console.error(`Screenshot: ${screenshot.width}x${screenshot.height}`);
+console.error(`[TEST] Captured: ${screenshot.width}x${screenshot.height}`);
 
-// Save to ./.test-screenshots/
+// Save to .test-screenshots/
 const screenshotDir = join(process.cwd(), '.test-screenshots');
 mkdirSync(screenshotDir, { recursive: true });
 
@@ -214,7 +217,7 @@ const filename = `test-my-layout-${Date.now()}.png`;
 const filepath = join(screenshotDir, filename);
 writeFileSync(filepath, Buffer.from(screenshot.data, 'base64'));
 
-console.error(`[SCREENSHOT] Saved to: ${filepath}`);
+console.error(`[SCREENSHOT] ${filepath}`);
 
 // Exit cleanly
 process.exit(0);
@@ -225,53 +228,66 @@ process.exit(0);
 # Build and run via stdin JSON protocol
 cargo build && echo '{"type": "run", "path": "'$(pwd)'/tests/smoke/test-my-layout.ts"}' | SCRIPT_KIT_AI_LOG=1 ./target/debug/script-kit-gpui 2>&1
 
-# The screenshot will be saved to ./.test-screenshots/test-my-layout-<timestamp>.png
-# Read the file to analyze the UI state
+# Look for [SCREENSHOT] in stderr - it shows the file path
+# MANDATORY: Read the PNG file using Read tool to analyze the UI
 ```
 
 **When to use visual testing:**
 - Layout issues (content not filling space, wrong sizes)
-- Styling problems (colors, borders, spacing)
+- Styling problems (colors, borders, spacing, Tailwind classes)
 - Component visibility issues
+- HTML rendering verification
 - Any UI behavior that logs alone can't verify
 
-**Screenshot analysis workflow:**
+**Screenshot analysis workflow (MANDATORY):**
 1. Write a test script that sets up UI state and calls `captureScreenshot()`
-2. Save the base64 PNG data to `./.test-screenshots/`
-3. Run via stdin JSON: `echo '{"type":"run",...}' | ./target/debug/script-kit-gpui`
-4. Read the resulting screenshot file to verify actual vs expected
-5. If broken, fix code and repeat
+2. Save the base64 PNG data to `.test-screenshots/`
+3. Run via stdin JSON: `echo '{"type":"run",...}' | SCRIPT_KIT_AI_LOG=1 ./target/debug/script-kit-gpui 2>&1`
+4. **READ the PNG file using the Read tool** - this is CRITICAL, don't skip it
+5. Analyze the screenshot: verify colors, layout, text rendering, spacing
+6. If incorrect, fix code and repeat from step 3
 
-**Example: Debugging editor height issue:**
+**Example: Testing Tailwind CSS rendering:**
 ```typescript
-// tests/smoke/test-editor-height-visual.ts
+// tests/smoke/test-tailwind-colors.ts
 import '../../scripts/kit-sdk';
 import { writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 
-// Open editor with specific content
-const editorPromise = editor("function test() {\n  return 42;\n}", "typescript");
+console.error('[TEST] Testing Tailwind colors...');
 
-// Wait for editor to render
-await new Promise(resolve => setTimeout(resolve, 1000));
+// Test multiple Tailwind classes
+await div(`
+  <div class="flex flex-col gap-4 p-4">
+    <div class="p-4 bg-blue-500 text-white rounded-lg">Blue Box</div>
+    <div class="p-4 bg-green-500 text-white rounded-lg">Green Box</div>
+    <div class="p-4 bg-red-500 text-white rounded-lg">Red Box</div>
+  </div>
+`);
 
-// Capture and save screenshot
+await new Promise(resolve => setTimeout(resolve, 500));
+
 const screenshot = await captureScreenshot();
-const screenshotDir = join(process.cwd(), '.test-screenshots');
-mkdirSync(screenshotDir, { recursive: true });
-const filepath = join(screenshotDir, `editor-height-${Date.now()}.png`);
+console.error(`[TEST] Captured: ${screenshot.width}x${screenshot.height}`);
+
+const dir = join(process.cwd(), '.test-screenshots');
+mkdirSync(dir, { recursive: true });
+const filepath = join(dir, `tailwind-colors-${Date.now()}.png`);
 writeFileSync(filepath, Buffer.from(screenshot.data, 'base64'));
 console.error(`[SCREENSHOT] ${filepath}`);
 
-// Now you can read this file to check if editor fills the expected height
+process.exit(0);
 ```
 
 ```bash
 # Run the test
-echo '{"type": "run", "path": "'$(pwd)'/tests/smoke/test-editor-height-visual.ts"}' | SCRIPT_KIT_AI_LOG=1 ./target/debug/script-kit-gpui 2>&1
+echo '{"type": "run", "path": "'$(pwd)'/tests/smoke/test-tailwind-colors.ts"}' | SCRIPT_KIT_AI_LOG=1 ./target/debug/script-kit-gpui 2>&1
 
-# Read the screenshot to analyze - look for the filepath in stderr output
-# The screenshot shows actual rendered state for visual verification
+# Then READ the screenshot file to verify:
+# - Blue, green, red boxes are visible with correct colors
+# - White text is readable
+# - Rounded corners are applied
+# - Flex column layout has proper gap spacing
 ```
 
 ### CRITICAL: Screenshot Capture
@@ -297,7 +313,7 @@ const screenshot = await captureScreenshot();
 console.error(`Captured: ${screenshot.width}x${screenshot.height}`);
 
 // Save to file
-const dir = join(process.cwd(), '.mocks');
+const dir = join(process.cwd(), '.test-screenshots');
 mkdirSync(dir, { recursive: true });
 writeFileSync(join(dir, 'screenshot.png'), Buffer.from(screenshot.data, 'base64'));
 ```
@@ -319,6 +335,8 @@ writeFileSync(join(dir, 'screenshot.png'), Buffer.from(screenshot.data, 'base64'
 | "I can't see what the UI looks like" | Write test script with `captureScreenshot()`, save to `./.test-screenshots/`, read the file |
 | Guessing at layout issues | Use `captureScreenshot()` in test, save PNG to `./.test-screenshots/`, read and analyze |
 | Running without `SCRIPT_KIT_AI_LOG=1` | ALWAYS use AI log mode to save tokens |
+| "I captured a screenshot" without reading it | ALWAYS use Read tool on the PNG file to analyze it |
+| Claiming visual fix is complete without evidence | READ the screenshot and describe what you see |
 
 ### Why This Matters
 
