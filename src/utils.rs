@@ -126,14 +126,34 @@ impl<'a> HtmlParser<'a> {
         self.remaining().chars().next()
     }
 
+    /// Advance by n bytes, ensuring we land on a valid UTF-8 char boundary
     fn advance(&mut self, n: usize) {
-        self.pos = (self.pos + n).min(self.input.len());
+        let new_pos = (self.pos + n).min(self.input.len());
+        // Ensure we're at a valid char boundary
+        self.pos = self.find_char_boundary(new_pos);
+    }
+
+    /// Advance by one character (handles multi-byte UTF-8)
+    fn advance_char(&mut self) {
+        if let Some(c) = self.peek_char() {
+            self.pos = (self.pos + c.len_utf8()).min(self.input.len());
+        }
+    }
+
+    /// Find the nearest valid char boundary at or after the given position
+    fn find_char_boundary(&self, pos: usize) -> usize {
+        let mut p = pos.min(self.input.len());
+        // Move forward until we hit a char boundary
+        while p < self.input.len() && !self.input.is_char_boundary(p) {
+            p += 1;
+        }
+        p.min(self.input.len())
     }
 
     fn skip_whitespace(&mut self) {
         while let Some(c) = self.peek_char() {
             if c.is_whitespace() {
-                self.advance(1);
+                self.advance_char();
             } else {
                 break;
             }
@@ -162,14 +182,14 @@ impl<'a> HtmlParser<'a> {
             return None;
         }
 
-        self.advance(1); // skip '<'
+        self.advance_char(); // skip '<'
 
         // Parse tag name
         let mut tag_name = String::new();
         while let Some(c) = self.peek_char() {
             if c.is_alphanumeric() || c == '-' || c == '_' {
                 tag_name.push(c.to_ascii_lowercase());
-                self.advance(1);
+                self.advance_char();
             } else {
                 break;
             }
@@ -186,15 +206,15 @@ impl<'a> HtmlParser<'a> {
 
             if let Some(c) = self.peek_char() {
                 if c == '>' {
-                    self.advance(1);
+                    self.advance_char();
                     break;
                 }
                 if c == '/' {
                     // Self-closing tag
-                    self.advance(1);
+                    self.advance_char();
                     self.skip_whitespace();
                     if self.peek_char() == Some('>') {
-                        self.advance(1);
+                        self.advance_char();
                     }
                     break;
                 }
@@ -204,21 +224,21 @@ impl<'a> HtmlParser<'a> {
                 while let Some(c) = self.peek_char() {
                     if c.is_alphanumeric() || c == '-' || c == '_' {
                         attr_name.push(c.to_ascii_lowercase());
-                        self.advance(1);
+                        self.advance_char();
                     } else {
                         break;
                     }
                 }
 
                 if attr_name.is_empty() {
-                    self.advance(1); // Skip unknown character
+                    self.advance_char(); // Skip unknown character
                     continue;
                 }
 
                 self.skip_whitespace();
 
                 let attr_value = if self.peek_char() == Some('=') {
-                    self.advance(1); // skip '='
+                    self.advance_char(); // skip '='
                     self.skip_whitespace();
                     self.parse_attribute_value()
                 } else {
@@ -238,16 +258,16 @@ impl<'a> HtmlParser<'a> {
         let quote_char = self.peek_char();
         if quote_char == Some('"') || quote_char == Some('\'') {
             let quote = quote_char.unwrap();
-            self.advance(1); // skip opening quote
+            self.advance_char(); // skip opening quote
 
             let mut value = String::new();
             while let Some(c) = self.peek_char() {
                 if c == quote {
-                    self.advance(1);
+                    self.advance_char();
                     break;
                 }
                 value.push(c);
-                self.advance(1);
+                self.advance_char();
             }
             value
         } else {
@@ -258,7 +278,7 @@ impl<'a> HtmlParser<'a> {
                     break;
                 }
                 value.push(c);
-                self.advance(1);
+                self.advance_char();
             }
             value
         }
@@ -283,7 +303,7 @@ impl<'a> HtmlParser<'a> {
                 break;
             }
             text.push(c);
-            self.advance(1);
+            self.advance_char();
         }
 
         // Decode common HTML entities
@@ -1699,6 +1719,97 @@ mod tests {
                 assert_eq!(children.len(), 1);
             }
             _ => panic!("Expected Span with classes"),
+        }
+    }
+
+    #[test]
+    fn test_parse_multibyte_utf8_bullet_points() {
+        // This is the exact HTML that caused the crash - contains multi-byte '•' character
+        let html = r#"
+  <div class="p-6">
+    <h1 class="text-2xl font-bold mb-4">Div with Actions</h1>
+    <p class="text-gray-400 mb-2">This div prompt has an actions panel.</p>
+    <p class="text-gray-500">Press <kbd class="bg-gray-700 px-2 py-1 rounded">Cmd+K</kbd> to open</p>
+    <ul class="mt-4 space-y-2">
+      <li>• First bullet point</li>
+      <li>• Second bullet point</li>
+      <li>• Third bullet point</li>
+    </ul>
+  </div>"#;
+
+        // Should not panic
+        let elements = parse_html(html);
+        assert!(!elements.is_empty());
+    }
+
+    #[test]
+    fn test_parse_multibyte_utf8_emojis() {
+        // Test with emojis (4-byte UTF-8 characters)
+        let html = "<p>Hello 🌍 World 🚀</p>";
+        let elements = parse_html(html);
+        assert_eq!(elements.len(), 1);
+        match &elements[0] {
+            HtmlElement::Paragraph(children) => {
+                assert_eq!(children.len(), 1);
+                if let HtmlElement::Text(text) = &children[0] {
+                    assert!(text.contains("🌍"));
+                    assert!(text.contains("🚀"));
+                }
+            }
+            _ => panic!("Expected Paragraph"),
+        }
+    }
+
+    #[test]
+    fn test_parse_multibyte_utf8_japanese() {
+        // Test with Japanese characters (3-byte UTF-8)
+        let html = "<div class=\"test\">こんにちは世界</div>";
+        let elements = parse_html(html);
+        assert_eq!(elements.len(), 1);
+        match &elements[0] {
+            HtmlElement::Div { children, .. } => {
+                assert_eq!(children.len(), 1);
+                if let HtmlElement::Text(text) = &children[0] {
+                    assert_eq!(text, "こんにちは世界");
+                }
+            }
+            _ => panic!("Expected Div"),
+        }
+    }
+
+    #[test]
+    fn test_parse_multibyte_utf8_mixed() {
+        // Mix of ASCII, 2-byte, 3-byte, and 4-byte UTF-8
+        let html = "<p>ASCII café 日本語 🎉</p>";
+        let elements = parse_html(html);
+        assert_eq!(elements.len(), 1);
+        match &elements[0] {
+            HtmlElement::Paragraph(children) => {
+                if let HtmlElement::Text(text) = &children[0] {
+                    assert!(text.contains("ASCII"));
+                    assert!(text.contains("café"));
+                    assert!(text.contains("日本語"));
+                    assert!(text.contains("🎉"));
+                }
+            }
+            _ => panic!("Expected Paragraph"),
+        }
+    }
+
+    #[test]
+    fn test_parse_multibyte_in_attribute() {
+        // Multi-byte characters in attribute values
+        let html = r#"<a href="https://example.com/日本語">リンク</a>"#;
+        let elements = parse_html(html);
+        assert_eq!(elements.len(), 1);
+        match &elements[0] {
+            HtmlElement::Link { href, children } => {
+                assert!(href.contains("日本語"));
+                if let HtmlElement::Text(text) = &children[0] {
+                    assert_eq!(text, "リンク");
+                }
+            }
+            _ => panic!("Expected Link"),
         }
     }
 }
