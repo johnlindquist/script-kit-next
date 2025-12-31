@@ -933,8 +933,7 @@ impl Render for ActionsDialog {
                         let item_tokens = get_tokens(design_variant);
                         let item_colors = item_tokens.colors();
                         let item_spacing = item_tokens.spacing();
-                        // Note: Not using item_visual.radius_lg - using POPUP_CORNER_RADIUS instead
-                        // to match the container's actual corner radius
+                        let item_visual = item_tokens.visual();
 
                         // Extract colors for list items - MATCH main list styling exactly
                         // Uses accent_selected_subtle with 0x80 alpha (same as ListItem)
@@ -1013,10 +1012,10 @@ impl Render for ActionsDialog {
                                     // (when search is hidden, last item is at bottom of panel)
                                     let is_first_item = idx == 0;
                                     let is_last_item = idx == filtered_len - 1;
-                                    // Use the popup's actual corner radius (POPUP_CORNER_RADIUS = 12.0)
+                                    // Use the design token's radius_lg for corner radius
                                     // GPUI's overflow_hidden only clips to rectangular bounds, NOT rounded corners
                                     // So we must explicitly round children that touch the container's corners
-                                    let corner_radius = POPUP_CORNER_RADIUS;
+                                    let corner_radius = item_visual.radius_lg;
 
                                     // Left accent color - used as border color when selected
                                     // Using a LEFT BORDER instead of a child div because:
@@ -1152,25 +1151,25 @@ impl Render for ActionsDialog {
         // Calculate dynamic height based on number of items
         // Each item is ACTION_ITEM_HEIGHT, plus search box height (~44px), plus padding
         // When hide_search is true, we don't include the search box height
-        // NOTE: Add 2px for border (1px top + 1px bottom from .border_1()) to prevent
+        // NOTE: Add border_thin * 2 for border (top + bottom from .border_1()) to prevent
         // content from being clipped and causing unnecessary scrolling
         let num_items = self.filtered_actions.len();
         let search_box_height = if self.hide_search { 0.0 } else { 60.0 };
-        let border_height = 2.0; // 1px top + 1px bottom border
+        let border_height = visual.border_thin * 2.0; // top + bottom border
         let items_height =
             (num_items as f32 * ACTION_ITEM_HEIGHT).min(POPUP_MAX_HEIGHT - search_box_height);
         let total_height = items_height + search_box_height + border_height;
 
         // Main overlay popup container
         // Fixed width, dynamic height based on content, rounded corners, shadow, semi-transparent bg
-        // NOTE: Using POPUP_CORNER_RADIUS constant for consistency with child item rounding
+        // NOTE: Using visual.radius_lg from design tokens for consistency with child item rounding
         div()
             .flex()
             .flex_col()
             .w(px(POPUP_WIDTH))
             .h(px(total_height)) // Use calculated height instead of max_h
             .bg(main_bg)
-            .rounded(px(POPUP_CORNER_RADIUS))
+            .rounded(px(visual.radius_lg))
             .shadow(Self::create_popup_shadow())
             .border_1()
             .border_color(container_border)
@@ -1358,7 +1357,14 @@ mod tests {
     fn test_popup_constants() {
         assert_eq!(POPUP_WIDTH, 320.0);
         assert_eq!(POPUP_MAX_HEIGHT, 400.0);
+        // POPUP_CORNER_RADIUS should match the default design token radius_lg
         assert_eq!(POPUP_CORNER_RADIUS, 12.0);
+        // Verify design token default matches our constant (for consistency)
+        let default_visual = crate::designs::DesignVisual::default();
+        assert_eq!(
+            POPUP_CORNER_RADIUS, default_visual.radius_lg,
+            "POPUP_CORNER_RADIUS should match design token radius_lg"
+        );
     }
 
     #[test]
