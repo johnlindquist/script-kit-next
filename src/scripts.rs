@@ -5620,6 +5620,7 @@ const { query } = await input();
                 description: format!("Built-in {} description", i),
                 keywords: vec![format!("keyword{}", i)],
                 feature: crate::builtins::BuiltInFeature::ClipboardHistory,
+                icon: None,
             })
             .collect();
 
