@@ -300,8 +300,6 @@ impl Render for ArgPrompt {
             .px(px(spacing.item_padding_x))
             .py(px(spacing.padding_md))
             .bg(search_box_bg)
-            .border_b_1()
-            .border_color(border_color)
             .flex()
             .flex_row()
             .gap_2()
@@ -317,6 +315,13 @@ impl Render for ArgPrompt {
                     })
                     .child(input_display),
             );
+
+        let show_choice_list = !self.choices.is_empty();
+        let input_container = if show_choice_list {
+            input_container.border_b_1().border_color(border_color)
+        } else {
+            input_container
+        };
 
         // Render choice list - fills all available vertical space
         // Uses flex_1() to grow and fill the remaining height after input container
@@ -411,6 +416,6 @@ impl Render for ArgPrompt {
                     .id(gpui::ElementId::Name(header_semantic_id.into()))
                     .child(input_container),
             )
-            .child(choices_container) // Uses flex_1 to fill all remaining space to bottom
+            .when(show_choice_list, |d| d.child(choices_container)) // Only render list when choices exist
     }
 }

@@ -261,6 +261,20 @@ impl PathPrompt {
         }
     }
 
+    /// Set the current filter text programmatically
+    pub fn set_input(&mut self, text: String, cx: &mut Context<Self>) {
+        if self.filter_text == text {
+            return;
+        }
+
+        self.filter_text = text;
+        self.update_filtered();
+        self.selected_index = 0;
+        self.list_scroll_handle
+            .scroll_to_item(0, gpui::ScrollStrategy::Top);
+        cx.notify();
+    }
+
     /// Navigate into a directory
     pub fn navigate_to(&mut self, path: &str, cx: &mut Context<Self>) {
         self.current_path = path.to_string();

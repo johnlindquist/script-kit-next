@@ -29,6 +29,7 @@ pub struct NavCoalescer {
     /// Timestamp of last navigation event (for determining flush eligibility).
     pub(crate) last_event: std::time::Instant,
     /// Whether the background flush task is currently running.
+    #[allow(dead_code)]
     pub(crate) flush_task_running: bool,
 }
 
@@ -108,7 +109,10 @@ mod tests {
     #[test]
     fn record_first_event_applies_immediately() {
         let mut coalescer = NavCoalescer::new();
-        assert_eq!(coalescer.record(NavDirection::Up), NavRecord::ApplyImmediate);
+        assert_eq!(
+            coalescer.record(NavDirection::Up),
+            NavRecord::ApplyImmediate
+        );
         assert_eq!(coalescer.pending_dir, Some(NavDirection::Up));
         assert_eq!(coalescer.pending_delta, 0);
     }
@@ -116,7 +120,10 @@ mod tests {
     #[test]
     fn record_same_direction_coalesces() {
         let mut coalescer = NavCoalescer::new();
-        assert_eq!(coalescer.record(NavDirection::Down), NavRecord::ApplyImmediate);
+        assert_eq!(
+            coalescer.record(NavDirection::Down),
+            NavRecord::ApplyImmediate
+        );
         assert_eq!(coalescer.record(NavDirection::Down), NavRecord::Coalesced);
         assert_eq!(coalescer.pending_delta, 1);
 
@@ -128,7 +135,10 @@ mod tests {
     #[test]
     fn record_direction_change_flushes_old_delta() {
         let mut coalescer = NavCoalescer::new();
-        assert_eq!(coalescer.record(NavDirection::Up), NavRecord::ApplyImmediate);
+        assert_eq!(
+            coalescer.record(NavDirection::Up),
+            NavRecord::ApplyImmediate
+        );
         assert_eq!(coalescer.record(NavDirection::Up), NavRecord::Coalesced);
 
         match coalescer.record(NavDirection::Down) {

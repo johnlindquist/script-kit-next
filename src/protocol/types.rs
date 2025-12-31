@@ -162,6 +162,8 @@ pub enum ClipboardHistoryAction {
     Unpin,
     Remove,
     Clear,
+    #[serde(rename = "trimOversize")]
+    TrimOversize,
 }
 
 /// Window action type for window management

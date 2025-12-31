@@ -25,7 +25,7 @@ use tracing::{debug, error, info, warn};
 pub const DEFAULT_PORT: u16 = 43210;
 
 /// MCP Server version for discovery
-pub const VERSION: &str = "0.1.0";
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Server capabilities advertised in discovery
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -49,6 +49,7 @@ impl Default for ServerCapabilities {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct DiscoveryInfo {
     pub url: String,
+    pub token: String,
     pub version: String,
     pub capabilities: ServerCapabilities,
 }
@@ -86,7 +87,13 @@ impl McpServer {
         let kenv_path = dirs::home_dir()
             .context("Failed to get home directory")?
             .join(".kenv");
-        Self::new(DEFAULT_PORT, kenv_path)
+
+        let port = std::env::var("MCP_PORT")
+            .ok()
+            .and_then(|v| v.parse::<u16>().ok())
+            .unwrap_or(DEFAULT_PORT);
+
+        Self::new(port, kenv_path)
     }
 
     /// Load existing token or create a new one
@@ -136,6 +143,7 @@ impl McpServer {
     fn write_discovery_file(&self) -> Result<()> {
         let discovery = DiscoveryInfo {
             url: self.url(),
+            token: self.token.clone(),
             version: VERSION.to_string(),
             capabilities: ServerCapabilities::default(),
         };
@@ -186,9 +194,10 @@ impl McpServer {
 
         let token = self.token.clone();
         let kenv_path = self.kenv_path.clone();
+        let port = self.port;
 
         let handle = thread::spawn(move || {
-            info!("MCP server started on port {}", DEFAULT_PORT);
+            info!("MCP server started on port {}", port);
 
             while running.load(Ordering::SeqCst) {
                 match listener.accept() {
@@ -513,6 +522,7 @@ mod tests {
     #[test]
     fn test_discovery_file_created() {
         let (server, temp_dir) = create_test_server(43215);
+        let token = server.token().to_string();
 
         // Discovery file should not exist before start
         let discovery_path = temp_dir.path().join("server.json");
@@ -530,6 +540,7 @@ mod tests {
         let discovery: DiscoveryInfo = serde_json::from_str(&content).unwrap();
 
         assert!(discovery.url.contains("43215"));
+        assert_eq!(discovery.token, token);
         assert_eq!(discovery.version, VERSION);
         assert!(discovery.capabilities.scripts);
 

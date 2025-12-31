@@ -61,11 +61,11 @@ curl -X POST "http://localhost:43210/rpc" \
 
 ## Server Configuration
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| Port | 43210 | HTTP server port |
-| Token File | `~/.kenv/agent-token` | Authentication token location |
-| Discovery File | `~/.kenv/server.json` | Server info for clients |
+| Setting | Default | Environment Variable | Description |
+|---------|---------|---------------------|-------------|
+| Port | 43210 | `MCP_PORT` | HTTP server port |
+| Token File | `~/.kenv/agent-token` | - | Authentication token location |
+| Discovery File | `~/.kenv/server.json` | - | Server info for clients |
 
 ### Discovery File (`~/.kenv/server.json`)
 
@@ -73,9 +73,16 @@ curl -X POST "http://localhost:43210/rpc" \
 {
   "url": "http://localhost:43210",
   "token": "your-token-here",
-  "version": "1.0.0"
+  "version": "0.1.0",
+  "capabilities": {
+    "scripts": true,
+    "prompts": true,
+    "tools": true
+  }
 }
 ```
+
+The `version` field reflects the app version from `Cargo.toml`. The `capabilities` object indicates what features the MCP server supports.
 
 ## Authentication
 

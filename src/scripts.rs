@@ -5580,6 +5580,8 @@ const title = await arg("Enter title");
 
     #[test]
     fn test_extract_schema_from_script() {
+        use crate::schema_parser::ItemsDef;
+
         // Test that extract_full_metadata correctly parses schema
         let content = r#"
 schema = {
@@ -5608,7 +5610,10 @@ const { title, tags } = await input();
         assert_eq!(title_field.description, Some("Note title".to_string()));
 
         let tags_field = sch.input.get("tags").unwrap();
-        assert_eq!(tags_field.items, Some("string".to_string()));
+        assert_eq!(
+            tags_field.items,
+            Some(ItemsDef::Type("string".to_string()))
+        );
 
         // Check output fields
         assert_eq!(sch.output.len(), 1);

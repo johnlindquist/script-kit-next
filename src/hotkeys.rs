@@ -8,21 +8,26 @@ use std::sync::OnceLock;
 use crate::{config, logging, scripts, shortcuts};
 
 // HOTKEY_CHANNEL: Event-driven async_channel for hotkey events (replaces AtomicBool polling)
+#[allow(dead_code)]
 static HOTKEY_CHANNEL: OnceLock<(async_channel::Sender<()>, async_channel::Receiver<()>)> =
     OnceLock::new();
 
 /// Get the hotkey channel, initializing it on first access.
-pub(crate) fn hotkey_channel() -> &'static (async_channel::Sender<()>, async_channel::Receiver<()>) {
+#[allow(dead_code)]
+pub(crate) fn hotkey_channel() -> &'static (async_channel::Sender<()>, async_channel::Receiver<()>)
+{
     HOTKEY_CHANNEL.get_or_init(|| async_channel::bounded(10))
 }
 
 // SCRIPT_HOTKEY_CHANNEL: Channel for script shortcut events (sends script path)
+#[allow(dead_code)]
 static SCRIPT_HOTKEY_CHANNEL: OnceLock<(
     async_channel::Sender<String>,
     async_channel::Receiver<String>,
 )> = OnceLock::new();
 
 /// Get the script hotkey channel, initializing it on first access.
+#[allow(dead_code)]
 pub(crate) fn script_hotkey_channel() -> &'static (
     async_channel::Sender<String>,
     async_channel::Receiver<String>,
@@ -30,8 +35,10 @@ pub(crate) fn script_hotkey_channel() -> &'static (
     SCRIPT_HOTKEY_CHANNEL.get_or_init(|| async_channel::bounded(10))
 }
 
+#[allow(dead_code)]
 static HOTKEY_TRIGGER_COUNT: AtomicU64 = AtomicU64::new(0);
 
+#[allow(dead_code)]
 pub(crate) fn start_hotkey_listener(config: config::Config) {
     std::thread::spawn(move || {
         let manager = match GlobalHotKeyManager::new() {
@@ -298,10 +305,7 @@ mod tests {
         while hotkey_channel().1.try_recv().is_ok() {}
         while script_hotkey_channel().1.try_recv().is_ok() {}
 
-        hotkey_channel()
-            .0
-            .send_blocking(())
-            .expect("send hotkey");
+        hotkey_channel().0.send_blocking(()).expect("send hotkey");
         assert!(matches!(
             script_hotkey_channel().1.try_recv(),
             Err(TryRecvError::Empty)
@@ -313,7 +317,10 @@ mod tests {
             .send_blocking("script".to_string())
             .expect("send script hotkey");
         assert_eq!(
-            script_hotkey_channel().1.try_recv().expect("recv script hotkey"),
+            script_hotkey_channel()
+                .1
+                .try_recv()
+                .expect("recv script hotkey"),
             "script"
         );
     }

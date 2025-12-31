@@ -5,9 +5,8 @@ use gpui::{
 use crate::hotkeys;
 use crate::window_resize::{initial_window_height, reset_resize_debounce};
 use crate::{
-    calculate_eye_line_bounds_on_mouse_display, configure_as_floating_panel,
-    ensure_move_to_active_space, logging, move_first_window_to_bounds, ScriptListApp, NEEDS_RESET,
-    PANEL_CONFIGURED, WINDOW_VISIBLE,
+    calculate_eye_line_bounds_on_mouse_display, logging, move_first_window_to_bounds,
+    platform, ScriptListApp, NEEDS_RESET, PANEL_CONFIGURED, WINDOW_VISIBLE,
 };
 
 /// A simple model that listens for hotkey triggers via async_channel (event-driven).
@@ -97,7 +96,7 @@ impl HotkeyPoller {
                         // Step 0: CRITICAL - Set MoveToActiveSpace BEFORE any activation
                         // This MUST happen before move_first_window_to_bounds, cx.activate(),
                         // or win.activate_window() to prevent macOS from switching spaces
-                        ensure_move_to_active_space();
+                        platform::ensure_move_to_active_space();
 
                         // Step 1: Calculate new bounds on display with mouse, at eye-line height
                         let window_size = size(px(750.), initial_window_height());
@@ -125,7 +124,7 @@ impl HotkeyPoller {
 
                         // Step 3.5: Configure as floating panel on first show only
                         if !PANEL_CONFIGURED.swap(true, std::sync::atomic::Ordering::SeqCst) {
-                            configure_as_floating_panel();
+                            platform::configure_as_floating_panel();
                             logging::log("HOTKEY", "Configured window as floating panel (first show)");
                         }
 

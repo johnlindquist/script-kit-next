@@ -37,7 +37,7 @@ use sha2::{Digest, Sha256};
 use smallvec::SmallVec;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -60,11 +60,18 @@ const MAX_CACHED_ENTRIES: usize = 500;
 /// Polling interval for clipboard changes
 const POLL_INTERVAL_MS: u64 = 500;
 
+/// Default maximum number of bytes allowed for text clipboard entries.
+const DEFAULT_MAX_TEXT_CONTENT_LEN: usize = 100_000;
+
 /// Compute SHA-256 hash of content for fast dedup lookups
 fn compute_content_hash(content: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(content.as_bytes());
     format!("{:x}", hasher.finalize())
+}
+
+fn is_text_over_limit(text: &str) -> bool {
+    text.len() > get_max_text_content_len()
 }
 
 /// Content types for clipboard entries
@@ -235,6 +242,9 @@ static INIT_GUARD: OnceLock<()> = OnceLock::new();
 /// Configured retention days (loaded from config, defaults to DEFAULT_RETENTION_DAYS)
 static RETENTION_DAYS: OnceLock<u32> = OnceLock::new();
 
+/// Configured maximum text entry length (bytes). usize::MAX means no limit.
+static MAX_TEXT_CONTENT_LEN: AtomicUsize = AtomicUsize::new(DEFAULT_MAX_TEXT_CONTENT_LEN);
+
 /// Global image cache for decoded RenderImages (thread-safe)
 /// Key: entry ID, Value: decoded RenderImage
 /// Uses LRU eviction to cap memory usage at ~100-400MB (100 images max)
@@ -349,10 +359,21 @@ pub fn get_retention_days() -> u32 {
     *RETENTION_DAYS.get().unwrap_or(&DEFAULT_RETENTION_DAYS)
 }
 
+/// Get the configured max text length (bytes).
+pub fn get_max_text_content_len() -> usize {
+    MAX_TEXT_CONTENT_LEN.load(Ordering::Relaxed)
+}
+
 /// Set the retention period (call before init_clipboard_history)
 #[allow(dead_code)] // Used by downstream subtasks (config)
 pub fn set_retention_days(days: u32) {
     let _ = RETENTION_DAYS.set(days);
+}
+
+/// Set the max text length (bytes). Use 0 to disable the limit.
+pub fn set_max_text_content_len(max_len: usize) {
+    let value = if max_len == 0 { usize::MAX } else { max_len };
+    MAX_TEXT_CONTENT_LEN.store(value, Ordering::Relaxed);
 }
 
 /// Get the database path (~/.kenv/clipboard-history.db)
@@ -502,6 +523,16 @@ pub fn init_clipboard_history() -> Result<()> {
     // Run initial pruning of old entries
     if let Err(e) = prune_old_entries() {
         warn!(error = %e, "Initial pruning failed");
+    }
+
+    // Remove oversized text entries before caching
+    if let Err(e) = trim_oversize_text_entries() {
+        let correlation_id = Uuid::new_v4().to_string();
+        warn!(
+            correlation_id = %correlation_id,
+            error = %e,
+            "Initial oversize trim failed"
+        );
     }
 
     // Pre-warm the entry cache from database
@@ -685,12 +716,22 @@ fn clipboard_monitor_loop(stop_flag: Arc<AtomicBool>) -> Result<()> {
 
                 if is_new {
                     debug!(text_len = text.len(), "New text detected in clipboard");
-                    match add_entry(&text, ContentType::Text) {
-                        Ok(entry_id) => {
-                            debug!(entry_id = %entry_id, "Added text entry to history");
-                        }
-                        Err(e) => {
-                            warn!(error = %e, "Failed to add text entry to history");
+                    if is_text_over_limit(&text) {
+                        let correlation_id = Uuid::new_v4().to_string();
+                        warn!(
+                            correlation_id = %correlation_id,
+                            text_len = text.len(),
+                            max_len = get_max_text_content_len(),
+                            "Skipping oversized clipboard text entry"
+                        );
+                    } else {
+                        match add_entry(&text, ContentType::Text) {
+                            Ok(entry_id) => {
+                                debug!(entry_id = %entry_id, "Added text entry to history");
+                            }
+                            Err(e) => {
+                                warn!(error = %e, "Failed to add text entry to history");
+                            }
                         }
                     }
                     last_text = Some(text);
@@ -812,6 +853,13 @@ fn encode_image_as_base64(image: &arboard::ImageData) -> Result<String> {
 /// Returns the ID of the entry (either existing or newly created).
 /// This allows callers to use the correct ID for caching (e.g., images).
 fn add_entry(content: &str, content_type: ContentType) -> Result<String> {
+    if content_type == ContentType::Text && is_text_over_limit(content) {
+        anyhow::bail!(
+            "Clipboard text exceeds max length ({} bytes)",
+            get_max_text_content_len()
+        );
+    }
+
     let conn = get_connection()?;
     let conn = conn
         .lock()
@@ -862,6 +910,44 @@ fn add_entry(content: &str, content_type: ContentType) -> Result<String> {
     refresh_entry_cache();
 
     Ok(id)
+}
+
+/// Remove text entries that exceed the configured max length.
+///
+/// Returns the number of entries deleted.
+pub fn trim_oversize_text_entries() -> Result<usize> {
+    let max_len = get_max_text_content_len();
+    if max_len == usize::MAX {
+        return Ok(0);
+    }
+
+    let conn = get_connection()?;
+    let conn = conn
+        .lock()
+        .map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
+
+    let max_len_db = i64::try_from(max_len).unwrap_or(i64::MAX);
+    let deleted = conn
+        .execute(
+            "DELETE FROM history WHERE content_type = 'text' AND length(CAST(content AS BLOB)) > ?",
+            params![max_len_db],
+        )
+        .context("Failed to trim oversized text entries")?;
+
+    if deleted > 0 {
+        let correlation_id = Uuid::new_v4().to_string();
+        info!(
+            correlation_id = %correlation_id,
+            deleted,
+            max_len = max_len_db,
+            "Trimmed oversized clipboard text entries"
+        );
+    }
+
+    drop(conn);
+    refresh_entry_cache();
+
+    Ok(deleted)
 }
 
 /// Get paginated clipboard history entries
@@ -1809,5 +1895,14 @@ mod tests {
             hash.chars().all(|c| c.is_ascii_hexdigit() && !c.is_uppercase()),
             "Hash should be lowercase hex"
         );
+    }
+
+    #[test]
+    fn test_text_length_limit() {
+        let ok_text = "a".repeat(DEFAULT_MAX_TEXT_CONTENT_LEN);
+        assert!(!is_text_over_limit(&ok_text));
+
+        let long_text = "a".repeat(DEFAULT_MAX_TEXT_CONTENT_LEN + 1);
+        assert!(is_text_over_limit(&long_text));
     }
 }

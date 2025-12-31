@@ -4,8 +4,8 @@
 //!
 //! **Key Rules:**
 //! - ScriptList (main window with preview): FIXED at 500px, never resizes
-//! - ArgPrompt with choices (has preview): FIXED at 500px, never resizes  
-//! - ArgPrompt without choices (input only): Compact 120px
+//! - ArgPrompt with choices: Dynamic height based on choice count (capped at 500px)
+//! - ArgPrompt without choices (input only): Compact input-only height
 //! - Editor/Div/Term: Full height 700px
 
 #[cfg(target_os = "macos")]
@@ -17,15 +17,29 @@ use gpui::{px, Context, Pixels, Render, Timer};
 use std::time::Duration;
 use tracing::{debug, warn};
 
+use crate::list_item::LIST_ITEM_HEIGHT;
 use crate::logging;
 use crate::window_manager;
 
 /// Layout constants for height calculations
 pub mod layout {
     use gpui::{px, Pixels};
+    use crate::panel::{CURSOR_HEIGHT_LG, CURSOR_MARGIN_Y};
 
-    /// Minimum window height (header only, no list) - for input-only prompts
-    pub const MIN_HEIGHT: Pixels = px(120.0);
+    /// Input row vertical padding (matches default design spacing padding_md)
+    pub const ARG_INPUT_PADDING_Y: f32 = 12.0;
+    /// List container vertical padding (top + bottom, matches default padding_xs)
+    pub const ARG_LIST_PADDING_Y: f32 = 8.0;
+    /// Divider thickness (matches default design border_thin)
+    pub const ARG_DIVIDER_HEIGHT: f32 = 1.0;
+    /// Input row text height (cursor height + margins)
+    pub const ARG_INPUT_LINE_HEIGHT: f32 = CURSOR_HEIGHT_LG + (CURSOR_MARGIN_Y * 2.0);
+    /// Total input-only height (header only, no list)
+    pub const ARG_HEADER_HEIGHT: f32 =
+        (ARG_INPUT_PADDING_Y * 2.0) + ARG_INPUT_LINE_HEIGHT;
+
+    /// Minimum window height (input only) - for input-only prompts
+    pub const MIN_HEIGHT: Pixels = px(ARG_HEADER_HEIGHT);
 
     /// Standard height for views with preview panel (script list, arg with choices)
     /// This is FIXED - these views do NOT resize dynamically
@@ -40,7 +54,7 @@ pub mod layout {
 pub enum ViewType {
     /// Script list view (main launcher) - has preview panel, FIXED height
     ScriptList,
-    /// Arg prompt with choices - has preview panel, FIXED height
+    /// Arg prompt with choices - dynamic height based on item count
     ArgPromptWithChoices,
     /// Arg prompt without choices (input only) - compact height
     ArgPromptNoChoices,
@@ -56,18 +70,30 @@ pub enum ViewType {
 ///
 /// # Arguments
 /// * `view_type` - The type of view being displayed
-/// * `_item_count` - Unused, kept for API compatibility
+/// * `item_count` - Number of items in the current view (used for dynamic sizing)
 ///
 /// # Returns
 /// The window height for this view type
-pub fn height_for_view(view_type: ViewType, _item_count: usize) -> Pixels {
+pub fn height_for_view(view_type: ViewType, item_count: usize) -> Pixels {
     use layout::*;
+
+    let clamp_height = |height: Pixels| -> Pixels {
+        let height_f = f32::from(height);
+        let min_f = f32::from(MIN_HEIGHT);
+        let max_f = f32::from(STANDARD_HEIGHT);
+        px(height_f.clamp(min_f, max_f))
+    };
 
     match view_type {
         // Views with preview panel - FIXED height, no dynamic resizing
         // DivPrompt also uses standard height to match main window
-        ViewType::ScriptList | ViewType::ArgPromptWithChoices | ViewType::DivPrompt => {
-            STANDARD_HEIGHT
+        ViewType::ScriptList | ViewType::DivPrompt => STANDARD_HEIGHT,
+        ViewType::ArgPromptWithChoices => {
+            let visible_items = item_count.max(1) as f32;
+            let list_height =
+                (visible_items * LIST_ITEM_HEIGHT) + ARG_LIST_PADDING_Y + ARG_DIVIDER_HEIGHT;
+            let total_height = ARG_HEADER_HEIGHT + list_height;
+            clamp_height(px(total_height))
         }
         // Input-only prompt - compact
         ViewType::ArgPromptNoChoices => MIN_HEIGHT,
@@ -239,18 +265,21 @@ mod tests {
     }
 
     #[test]
-    fn test_arg_with_choices_fixed_height() {
-        // Arg with choices should always be STANDARD_HEIGHT
+    fn test_arg_with_choices_dynamic_height() {
+        // Arg with choices should size to items, clamped to STANDARD_HEIGHT
+        let base_height = layout::ARG_HEADER_HEIGHT
+            + layout::ARG_DIVIDER_HEIGHT
+            + layout::ARG_LIST_PADDING_Y;
         assert_eq!(
-            height_for_view(ViewType::ArgPromptWithChoices, 0),
-            layout::STANDARD_HEIGHT
+            height_for_view(ViewType::ArgPromptWithChoices, 1),
+            px(base_height + LIST_ITEM_HEIGHT)
         );
         assert_eq!(
-            height_for_view(ViewType::ArgPromptWithChoices, 3),
-            layout::STANDARD_HEIGHT
+            height_for_view(ViewType::ArgPromptWithChoices, 2),
+            px(base_height + (2.0 * LIST_ITEM_HEIGHT))
         );
         assert_eq!(
-            height_for_view(ViewType::ArgPromptWithChoices, 50),
+            height_for_view(ViewType::ArgPromptWithChoices, 100),
             layout::STANDARD_HEIGHT
         );
     }
@@ -290,7 +319,7 @@ mod tests {
 
     #[test]
     fn test_height_constants() {
-        assert_eq!(layout::MIN_HEIGHT, px(120.0));
+        assert_eq!(layout::MIN_HEIGHT, px(layout::ARG_HEADER_HEIGHT));
         assert_eq!(layout::STANDARD_HEIGHT, px(500.0));
         assert_eq!(layout::MAX_HEIGHT, px(700.0));
     }

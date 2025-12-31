@@ -85,6 +85,10 @@ pub enum Message {
     #[serde(rename = "forceSubmit")]
     ForceSubmit { value: serde_json::Value },
 
+    /// Set the current prompt's input text
+    #[serde(rename = "setInput")]
+    SetInput { text: String },
+
     // ============================================================
     // TEXT INPUT PROMPTS
     // ============================================================
@@ -1350,6 +1354,15 @@ impl Message {
         }
     }
 
+    /// Create a clipboard history trim oversize request
+    pub fn clipboard_history_trim_oversize(request_id: String) -> Self {
+        Message::ClipboardHistory {
+            request_id,
+            action: ClipboardHistoryAction::TrimOversize,
+            entry_id: None,
+        }
+    }
+
     /// Create a clipboard history entry response
     pub fn clipboard_history_entry(
         request_id: String,
@@ -1760,5 +1773,10 @@ impl Message {
     /// Create a SetActions message
     pub fn set_actions(actions: Vec<ProtocolAction>) -> Self {
         Message::SetActions { actions }
+    }
+
+    /// Create a SetInput message
+    pub fn set_input(text: String) -> Self {
+        Message::SetInput { text }
     }
 }

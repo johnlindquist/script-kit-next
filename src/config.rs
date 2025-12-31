@@ -19,6 +19,8 @@ pub const DEFAULT_UI_SCALE: f32 = 1.0;
 pub const DEFAULT_CLIPBOARD_HISTORY: bool = true;
 pub const DEFAULT_APP_LAUNCHER: bool = true;
 pub const DEFAULT_WINDOW_SWITCHER: bool = true;
+/// Default max text length for clipboard history entries (bytes)
+pub const DEFAULT_CLIPBOARD_HISTORY_MAX_TEXT_LENGTH: usize = 100_000;
 
 /// Default process limits
 pub const DEFAULT_HEALTH_CHECK_INTERVAL_MS: u64 = 5000;
@@ -155,6 +157,13 @@ pub struct Config {
         rename = "processLimits"
     )]
     pub process_limits: Option<ProcessLimits>,
+    /// Maximum text length for clipboard history entries (bytes). 0 = no limit.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "clipboardHistoryMaxTextLength"
+    )]
+    pub clipboard_history_max_text_length: Option<usize>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -178,6 +187,7 @@ impl Default for Config {
             ui_scale: None,           // Will use DEFAULT_UI_SCALE via getter
             built_ins: None,          // Will use BuiltInConfig::default() via getter
             process_limits: None,     // Will use ProcessLimits::default() via getter
+            clipboard_history_max_text_length: None, // Will use default via getter
         }
     }
 }
@@ -222,6 +232,13 @@ impl Config {
     #[allow(dead_code)] // Will be used by builtins module
     pub fn get_builtins(&self) -> BuiltInConfig {
         self.built_ins.clone().unwrap_or_default()
+    }
+
+    /// Returns max clipboard history text length (bytes), or default if not configured
+    #[allow(dead_code)] // Used for clipboard history limits
+    pub fn get_clipboard_history_max_text_length(&self) -> usize {
+        self.clipboard_history_max_text_length
+            .unwrap_or(DEFAULT_CLIPBOARD_HISTORY_MAX_TEXT_LENGTH)
     }
 
     /// Returns the process limits configuration, or defaults if not configured
@@ -346,6 +363,15 @@ mod tests {
     }
 
     #[test]
+    fn test_clipboard_history_max_text_length_default() {
+        let config = Config::default();
+        assert_eq!(
+            config.get_clipboard_history_max_text_length(),
+            DEFAULT_CLIPBOARD_HISTORY_MAX_TEXT_LENGTH
+        );
+    }
+
+    #[test]
     fn test_config_serialization() {
         let config = Config {
             hotkey: HotkeyConfig {
@@ -360,6 +386,7 @@ mod tests {
             ui_scale: None,
             built_ins: None,
             process_limits: None,
+            clipboard_history_max_text_length: None,
         };
 
         let json = serde_json::to_string(&config).unwrap();
@@ -397,6 +424,7 @@ mod tests {
             ui_scale: None,
             built_ins: None,
             process_limits: None,
+            clipboard_history_max_text_length: None,
         };
         assert_eq!(config.bun_path, Some("/custom/path/bun".to_string()));
     }
@@ -416,6 +444,7 @@ mod tests {
             ui_scale: None,
             built_ins: None,
             process_limits: None,
+            clipboard_history_max_text_length: None,
         };
         assert_eq!(config.bun_path, None);
     }
@@ -435,6 +464,7 @@ mod tests {
             ui_scale: None,
             built_ins: None,
             process_limits: None,
+            clipboard_history_max_text_length: None,
         };
 
         let json = serde_json::to_string(&config).unwrap();
@@ -459,6 +489,7 @@ mod tests {
             ui_scale: None,
             built_ins: None,
             process_limits: None,
+            clipboard_history_max_text_length: None,
         };
 
         let json = serde_json::to_string(&config).unwrap();
@@ -550,6 +581,7 @@ mod tests {
             ui_scale: None,
             built_ins: None,
             process_limits: None,
+            clipboard_history_max_text_length: None,
         };
 
         assert_eq!(config.hotkey.modifiers.len(), 0);
@@ -575,6 +607,7 @@ mod tests {
                 ui_scale: None,
                 built_ins: None,
                 process_limits: None,
+                clipboard_history_max_text_length: None,
             };
 
             let json = serde_json::to_string(&config).unwrap();
@@ -599,6 +632,7 @@ mod tests {
             ui_scale: None,
             built_ins: None,
             process_limits: None,
+            clipboard_history_max_text_length: None,
         };
 
         let json = serde_json::to_string(&config).unwrap();
@@ -623,6 +657,7 @@ mod tests {
             ui_scale: None,
             built_ins: None,
             process_limits: None,
+            clipboard_history_max_text_length: None,
         };
 
         let json = serde_json::to_string(&config).unwrap();
@@ -648,6 +683,7 @@ mod tests {
             ui_scale: None,
             built_ins: None,
             process_limits: None,
+            clipboard_history_max_text_length: None,
         };
 
         // Config editor takes precedence
@@ -675,6 +711,7 @@ mod tests {
             ui_scale: None,
             built_ins: None,
             process_limits: None,
+            clipboard_history_max_text_length: None,
         };
 
         // Should fall back to EDITOR env var
@@ -708,6 +745,7 @@ mod tests {
             ui_scale: None,
             built_ins: None,
             process_limits: None,
+            clipboard_history_max_text_length: None,
         };
 
         // Should fall back to "code" default
@@ -741,6 +779,7 @@ mod tests {
             ui_scale: None,
             built_ins: None,
             process_limits: None,
+            clipboard_history_max_text_length: None,
         };
 
         // Config editor should win
@@ -843,6 +882,7 @@ mod tests {
             ui_scale: None,
             built_ins: None,
             process_limits: None,
+            clipboard_history_max_text_length: None,
         };
 
         let padding = config.get_padding();
@@ -872,6 +912,7 @@ mod tests {
             ui_scale: None,
             built_ins: None,
             process_limits: None,
+            clipboard_history_max_text_length: None,
         };
 
         assert_eq!(config.get_editor_font_size(), 16.0);
@@ -898,6 +939,7 @@ mod tests {
             ui_scale: None,
             built_ins: None,
             process_limits: None,
+            clipboard_history_max_text_length: None,
         };
 
         assert_eq!(config.get_terminal_font_size(), 12.0);
@@ -924,6 +966,7 @@ mod tests {
             ui_scale: Some(1.5),
             built_ins: None,
             process_limits: None,
+            clipboard_history_max_text_length: None,
         };
 
         assert_eq!(config.get_ui_scale(), 1.5);
@@ -1011,6 +1054,7 @@ mod tests {
             ui_scale: Some(1.5),
             built_ins: None,
             process_limits: None,
+            clipboard_history_max_text_length: None,
         };
 
         let json = serde_json::to_string(&config).unwrap();
@@ -1106,6 +1150,7 @@ mod tests {
                 window_switcher: true,
             }),
             process_limits: None,
+            clipboard_history_max_text_length: None,
         };
 
         let builtins = config.get_builtins();
@@ -1193,6 +1238,7 @@ mod tests {
             ui_scale: None,
             built_ins: Some(BuiltInConfig::default()),
             process_limits: None,
+            clipboard_history_max_text_length: None,
         };
 
         let json = serde_json::to_string(&config).unwrap();
@@ -1331,6 +1377,7 @@ mod tests {
                 max_runtime_seconds: Some(300),
                 health_check_interval_ms: 3000,
             }),
+            clipboard_history_max_text_length: None,
         };
 
         let limits = config.get_process_limits();
@@ -1424,6 +1471,7 @@ mod tests {
             ui_scale: None,
             built_ins: None,
             process_limits: Some(ProcessLimits::default()),
+            clipboard_history_max_text_length: None,
         };
 
         let json = serde_json::to_string(&config).unwrap();

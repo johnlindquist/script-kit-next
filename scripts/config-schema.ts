@@ -157,6 +157,17 @@
  * - Disable all but launcher: { clipboardHistory: false, windowSwitcher: false }
  * - Enable all (explicit):   { clipboardHistory: true, appLauncher: true, windowSwitcher: true }
  *
+ * FIELD: clipboardHistoryMaxTextLength
+ * TYPE: number (optional)
+ * PURPOSE: Limit text size stored for clipboard history entries (bytes)
+ * DEFAULT: 100000
+ * NOTES: Set to 0 to disable the limit
+ *
+ * EXAMPLES:
+ * - Default limit: 100000
+ * - Larger limit:  200000
+ * - No limit:      0
+ *
  * ═══════════════════════════════════════════════════════════════════════════
  * CATEGORY 4: PROCESS LIMITS (OPTIONAL)
  * ═══════════════════════════════════════════════════════════════════════════
@@ -410,6 +421,7 @@
  * | builtIns.clipboardHistory | boolean | true                       | no       |
  * | builtIns.appLauncher      | boolean | true                       | no       |
  * | builtIns.windowSwitcher   | boolean | true                       | no       |
+ * | clipboardHistoryMaxTextLength | number | 100000                  | no       |
  * | processLimits     | ProcessLimits  | {healthCheck:5000}          | no       |
  * | processLimits.maxMemoryMb        | number | unlimited            | no       |
  * | processLimits.maxRuntimeSeconds  | number | unlimited            | no       |

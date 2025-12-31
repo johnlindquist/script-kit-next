@@ -75,6 +75,7 @@ export interface Config {
   terminalFontSize?: number;
   uiScale?: number;
   builtIns?: BuiltInConfig;
+  clipboardHistoryMaxTextLength?: number;
   processLimits?: ProcessLimits;
 }
 

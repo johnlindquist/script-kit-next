@@ -7,6 +7,7 @@
 
 use std::io::{BufRead, BufReader, Read};
 use tracing::{debug, warn};
+use uuid::Uuid;
 
 use super::message::Message;
 
@@ -71,6 +72,44 @@ pub enum ParseResult {
     },
     /// JSON parsing failed entirely (syntax error)
     ParseError(serde_json::Error),
+}
+
+/// Structured parse issue for user-facing error reporting.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ParseIssueKind {
+    MissingType,
+    UnknownType,
+    InvalidPayload,
+    ParseError,
+}
+
+#[derive(Debug, Clone)]
+pub struct ParseIssue {
+    pub correlation_id: String,
+    pub kind: ParseIssueKind,
+    pub message_type: Option<String>,
+    pub error: Option<String>,
+    pub raw_preview: String,
+    pub raw_len: usize,
+}
+
+impl ParseIssue {
+    fn new(
+        kind: ParseIssueKind,
+        message_type: Option<String>,
+        error: Option<String>,
+        raw_preview: String,
+        raw_len: usize,
+    ) -> Self {
+        Self {
+            correlation_id: Uuid::new_v4().to_string(),
+            kind,
+            message_type,
+            error,
+            raw_preview,
+            raw_len,
+        }
+    }
 }
 
 /// Parse a message with graceful handling of unknown types
@@ -224,6 +263,17 @@ impl<R: Read> JsonlReader<R> {
     /// * `Ok(None)` - End of stream
     /// * `Err(e)` - IO error (not parse errors for unknown types)
     pub fn next_message_graceful(&mut self) -> Result<Option<Message>, std::io::Error> {
+        self.next_message_graceful_with_handler(|_| {})
+    }
+
+    /// Read the next message with graceful unknown type handling, reporting parse issues.
+    pub fn next_message_graceful_with_handler<F>(
+        &mut self,
+        mut on_issue: F,
+    ) -> Result<Option<Message>, std::io::Error>
+    where
+        F: FnMut(ParseIssue),
+    {
         loop {
             // P1-12 FIX: Reuse buffer instead of allocating new String each iteration
             self.line_buffer.clear();
@@ -248,20 +298,38 @@ impl<R: Read> JsonlReader<R> {
                             return Ok(Some(msg));
                         }
                         ParseResult::MissingType { .. } => {
+                            let issue = ParseIssue::new(
+                                ParseIssueKind::MissingType,
+                                None,
+                                None,
+                                preview.to_string(),
+                                raw_len,
+                            );
                             warn!(
-                                raw_preview = %preview,
-                                raw_len = raw_len,
+                                correlation_id = %issue.correlation_id,
+                                raw_preview = %issue.raw_preview,
+                                raw_len = issue.raw_len,
                                 "Skipping message with missing 'type' field"
                             );
+                            on_issue(issue);
                             continue;
                         }
                         ParseResult::UnknownType { message_type, .. } => {
+                            let issue = ParseIssue::new(
+                                ParseIssueKind::UnknownType,
+                                Some(message_type.clone()),
+                                None,
+                                preview.to_string(),
+                                raw_len,
+                            );
                             warn!(
+                                correlation_id = %issue.correlation_id,
                                 message_type = %message_type,
-                                raw_preview = %preview,
-                                raw_len = raw_len,
+                                raw_preview = %issue.raw_preview,
+                                raw_len = issue.raw_len,
                                 "Skipping unknown message type"
                             );
+                            on_issue(issue);
                             continue;
                         }
                         ParseResult::InvalidPayload {
@@ -269,23 +337,41 @@ impl<R: Read> JsonlReader<R> {
                             error,
                             ..
                         } => {
+                            let issue = ParseIssue::new(
+                                ParseIssueKind::InvalidPayload,
+                                Some(message_type.clone()),
+                                Some(error.clone()),
+                                preview.to_string(),
+                                raw_len,
+                            );
                             warn!(
+                                correlation_id = %issue.correlation_id,
                                 message_type = %message_type,
                                 error = %error,
-                                raw_preview = %preview,
-                                raw_len = raw_len,
+                                raw_preview = %issue.raw_preview,
+                                raw_len = issue.raw_len,
                                 "Skipping message with invalid payload"
                             );
+                            on_issue(issue);
                             continue;
                         }
                         ParseResult::ParseError(e) => {
+                            let issue = ParseIssue::new(
+                                ParseIssueKind::ParseError,
+                                None,
+                                Some(e.to_string()),
+                                preview.to_string(),
+                                raw_len,
+                            );
                             // Log but continue - graceful degradation
                             warn!(
+                                correlation_id = %issue.correlation_id,
                                 error = %e,
-                                raw_preview = %preview,
-                                raw_len = raw_len,
+                                raw_preview = %issue.raw_preview,
+                                raw_len = issue.raw_len,
                                 "Skipping malformed JSON message"
                             );
+                            on_issue(issue);
                             continue;
                         }
                     }
@@ -419,5 +505,31 @@ mod tests {
         // Should be EOF
         let msg3 = reader.next_message_graceful().unwrap();
         assert!(msg3.is_none());
+    }
+
+    #[test]
+    fn test_jsonl_reader_reports_invalid_payload() {
+        use std::io::Cursor;
+
+        let jsonl = r#"{"type":"arg","id":"1"}
+{"type":"beep"}
+"#;
+        let cursor = Cursor::new(jsonl);
+        let mut reader = JsonlReader::new(cursor);
+        let mut issues: Vec<ParseIssue> = Vec::new();
+
+        let msg = reader
+            .next_message_graceful_with_handler(|issue| issues.push(issue))
+            .unwrap();
+
+        assert!(matches!(msg, Some(Message::Beep {})));
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].kind, ParseIssueKind::InvalidPayload);
+        assert_eq!(issues[0].message_type.as_deref(), Some("arg"));
+        assert!(issues[0]
+            .error
+            .as_deref()
+            .unwrap_or("")
+            .contains("placeholder"));
     }
 }

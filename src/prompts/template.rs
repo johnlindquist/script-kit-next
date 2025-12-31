@@ -143,6 +143,17 @@ impl TemplatePrompt {
         result
     }
 
+    /// Set the current input value programmatically
+    pub fn set_input(&mut self, text: String, cx: &mut Context<Self>) {
+        if let Some(value) = self.values.get_mut(self.current_input) {
+            if *value == text {
+                return;
+            }
+            *value = text;
+            cx.notify();
+        }
+    }
+
     /// Submit the filled template
     fn submit(&mut self) {
         // Replace placeholders with actual values for final submission

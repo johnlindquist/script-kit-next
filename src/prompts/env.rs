@@ -167,6 +167,16 @@ impl EnvPrompt {
         }
     }
 
+    /// Set the input text programmatically
+    pub fn set_input(&mut self, text: String, cx: &mut Context<Self>) {
+        if self.input_text == text {
+            return;
+        }
+
+        self.input_text = text;
+        cx.notify();
+    }
+
     /// Cancel - submit None
     fn submit_cancel(&mut self) {
         (self.on_submit)(self.id.clone(), None);

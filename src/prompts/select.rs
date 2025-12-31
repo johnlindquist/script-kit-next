@@ -99,6 +99,17 @@ impl SelectPrompt {
         self.focused_index = 0;
     }
 
+    /// Set the filter text programmatically
+    pub fn set_input(&mut self, text: String, cx: &mut Context<Self>) {
+        if self.filter_text == text {
+            return;
+        }
+
+        self.filter_text = text;
+        self.refilter();
+        cx.notify();
+    }
+
     /// Toggle selection of currently focused item
     fn toggle_selection(&mut self, cx: &mut Context<Self>) {
         if let Some(&choice_idx) = self.filtered_choices.get(self.focused_index) {

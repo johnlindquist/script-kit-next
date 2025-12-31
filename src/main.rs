@@ -10,8 +10,7 @@ use gpui::{
 use std::sync::atomic::{AtomicBool, Ordering};
 
 mod process_manager;
-use cocoa::appkit::NSApp;
-use cocoa::base::{id, nil};
+use cocoa::base::id;
 use cocoa::foundation::{NSPoint, NSRect, NSSize};
 use core_graphics::event::CGEvent;
 use core_graphics::event_source::{CGEventSource, CGEventSourceStateID};
@@ -34,6 +33,7 @@ mod list_item;
 mod logging;
 mod panel;
 mod perf;
+mod platform;
 mod prompts;
 mod protocol;
 mod scripts;
@@ -110,6 +110,7 @@ mod mcp_server;
 mod mcp_streaming;
 
 use crate::components::toast::{Toast, ToastAction, ToastColors};
+use crate::error::ErrorSeverity;
 use crate::filter_coalescer::FilterCoalescer;
 use crate::form_prompt::FormPromptState;
 use crate::hotkey_pollers::start_hotkey_event_handler;
@@ -822,6 +823,14 @@ enum PromptMessage {
         script_path: String,
         suggestions: Vec<String>,
     },
+    /// Protocol parsing error reported from script stdout
+    ProtocolError {
+        correlation_id: String,
+        summary: String,
+        details: Option<String>,
+        severity: ErrorSeverity,
+        script_path: String,
+    },
     /// Unhandled message type from script - shows warning toast
     UnhandledMessage {
         message_type: String,
@@ -833,6 +842,10 @@ enum PromptMessage {
     /// Force submit the current prompt with a value (from SDK's submit() function)
     ForceSubmit {
         value: serde_json::Value,
+    },
+    /// Set the current prompt input text
+    SetInput {
+        text: String,
     },
     /// Show HUD overlay message
     ShowHud {
@@ -1337,6 +1350,9 @@ impl ScriptListApp {
 
     fn update_config(&mut self, cx: &mut Context<Self>) {
         self.config = config::load_config();
+        clipboard_history::set_max_text_content_len(
+            self.config.get_clipboard_history_max_text_length(),
+        );
         logging::log(
             "APP",
             &format!("Config reloaded: padding={:?}", self.config.get_padding()),
@@ -2083,6 +2099,35 @@ impl ScriptListApp {
 
         let target_height = height_for_view(view_type, item_count);
         resize_first_window_to_height(target_height);
+    }
+
+    fn set_prompt_input(&mut self, text: String, cx: &mut Context<Self>) {
+        match &mut self.current_view {
+            AppView::ArgPrompt { .. } => {
+                self.arg_input_text = text;
+                self.arg_selected_index = 0;
+                self.arg_list_scroll_handle
+                    .scroll_to_item(0, ScrollStrategy::Top);
+                self.update_window_size();
+                cx.notify();
+            }
+            AppView::PathPrompt { entity, .. } => {
+                entity.update(cx, |prompt, cx| prompt.set_input(text, cx));
+            }
+            AppView::SelectPrompt { entity, .. } => {
+                entity.update(cx, |prompt, cx| prompt.set_input(text, cx));
+            }
+            AppView::EnvPrompt { entity, .. } => {
+                entity.update(cx, |prompt, cx| prompt.set_input(text, cx));
+            }
+            AppView::TemplatePrompt { entity, .. } => {
+                entity.update(cx, |prompt, cx| prompt.set_input(text, cx));
+            }
+            AppView::FormPrompt { entity, .. } => {
+                entity.update(cx, |prompt, cx| prompt.set_input(text, cx));
+            }
+            _ => {}
+        }
     }
 
     /// Helper to get filtered arg choices without cloning
@@ -3048,8 +3093,79 @@ impl ScriptListApp {
                     let script_path = script_path_clone;
 
                     loop {
-                        // Use next_message_graceful to skip non-JSON lines (e.g., console.log output)
-                        match stdout_reader.next_message_graceful() {
+                        // Use next_message_graceful_with_handler to skip non-JSON lines and report parse issues
+                        match stdout_reader.next_message_graceful_with_handler(|issue| {
+                            let should_report = matches!(
+                                issue.kind,
+                                protocol::ParseIssueKind::InvalidPayload
+                                    | protocol::ParseIssueKind::UnknownType
+                            );
+                            if !should_report {
+                                return;
+                            }
+
+                            let summary = match issue.kind {
+                                protocol::ParseIssueKind::InvalidPayload => issue
+                                    .message_type
+                                    .as_deref()
+                                    .map(|message_type| {
+                                        format!(
+                                            "Invalid '{}' message payload from script",
+                                            message_type
+                                        )
+                                    })
+                                    .unwrap_or_else(|| {
+                                        "Invalid message payload from script".to_string()
+                                    }),
+                                protocol::ParseIssueKind::UnknownType => issue
+                                    .message_type
+                                    .as_deref()
+                                    .map(|message_type| {
+                                        format!(
+                                            "Unknown '{}' message type from script",
+                                            message_type
+                                        )
+                                    })
+                                    .unwrap_or_else(|| "Unknown message type from script".to_string()),
+                                _ => "Protocol message issue from script".to_string(),
+                            };
+
+                            let mut details_lines = Vec::new();
+                            details_lines.push(format!("Script: {}", script_path));
+                            if let Some(ref message_type) = issue.message_type {
+                                details_lines.push(format!("Type: {}", message_type));
+                            }
+                            if let Some(ref error) = issue.error {
+                                details_lines.push(format!("Error: {}", error));
+                            }
+                            if !issue.raw_preview.is_empty() {
+                                details_lines.push(format!("Preview: {}", issue.raw_preview));
+                            }
+                            let details = Some(details_lines.join("\n"));
+
+                            let severity = match issue.kind {
+                                protocol::ParseIssueKind::InvalidPayload => ErrorSeverity::Error,
+                                protocol::ParseIssueKind::UnknownType => ErrorSeverity::Warning,
+                                _ => ErrorSeverity::Warning,
+                            };
+
+                            let correlation_id = issue.correlation_id.clone();
+                            let prompt_msg = PromptMessage::ProtocolError {
+                                correlation_id: issue.correlation_id,
+                                summary,
+                                details,
+                                severity,
+                                script_path: script_path.clone(),
+                            };
+
+                            if tx.send_blocking(prompt_msg).is_err() {
+                                tracing::warn!(
+                                    correlation_id = %correlation_id,
+                                    script_path = %script_path,
+                                    "Prompt channel closed, dropping protocol error"
+                                );
+                            }
+                        }) {
                             Ok(Some(msg)) => {
                                 logging::log("EXEC", &format!("Received message: {:?}", msg));
 
@@ -3184,6 +3300,17 @@ impl ScriptListApp {
                                         protocol::ClipboardHistoryAction::Clear => {
                                             match clipboard_history::clear_history() {
                                                 Ok(()) => Message::clipboard_history_success(
+                                                    request_id.clone(),
+                                                ),
+                                                Err(e) => Message::clipboard_history_error(
+                                                    request_id.clone(),
+                                                    e.to_string(),
+                                                ),
+                                            }
+                                        }
+                                        protocol::ClipboardHistoryAction::TrimOversize => {
+                                            match clipboard_history::trim_oversize_text_entries() {
+                                                Ok(_) => Message::clipboard_history_success(
                                                     request_id.clone(),
                                                 ),
                                                 Err(e) => Message::clipboard_history_error(
@@ -3796,6 +3923,9 @@ impl ScriptListApp {
                                     }
                                     Message::SetActions { actions } => {
                                         Some(PromptMessage::SetActions { actions })
+                                    }
+                                    Message::SetInput { text } => {
+                                        Some(PromptMessage::SetInput { text })
                                     }
                                     other => {
                                         // Get the message type name for user feedback
@@ -4812,6 +4942,40 @@ impl ScriptListApp {
 
                 cx.notify();
             }
+            PromptMessage::ProtocolError {
+                correlation_id,
+                summary,
+                details,
+                severity,
+                script_path,
+            } => {
+                tracing::warn!(
+                    correlation_id = %correlation_id,
+                    script_path = %script_path,
+                    summary = %summary,
+                    "Protocol parse issue received"
+                );
+
+                let mut toast = Toast::from_severity(summary.clone(), severity, &self.theme)
+                    .details_opt(details.clone())
+                    .duration_ms(Some(8000));
+
+                if let Some(ref detail_text) = details {
+                    let detail_clone = detail_text.clone();
+                    toast = toast.action(ToastAction::new(
+                        "Copy Details",
+                        Box::new(move |_, _, _| {
+                            use arboard::Clipboard;
+                            if let Ok(mut clipboard) = Clipboard::new() {
+                                let _ = clipboard.set_text(detail_clone.clone());
+                            }
+                        }),
+                    ));
+                }
+
+                self.toast_manager.push(toast);
+                cx.notify();
+            }
             PromptMessage::UnhandledMessage { message_type } => {
                 logging::log(
                     "WARN",
@@ -5469,6 +5633,9 @@ impl ScriptListApp {
             }
             PromptMessage::ShowHud { text, duration_ms } => {
                 self.show_hud(text, duration_ms, cx);
+            }
+            PromptMessage::SetInput { text } => {
+                self.set_prompt_input(text, cx);
             }
             PromptMessage::SetActions { actions } => {
                 logging::log(
@@ -7823,6 +7990,7 @@ impl ScriptListApp {
         let _theme = &self.theme;
         let _filtered = self.filtered_arg_choices();
         let has_actions = actions.is_some() && !actions.as_ref().unwrap().is_empty();
+        let has_choices = !choices.is_empty();
 
         // Use design tokens for GLOBAL theming - all prompts use current design
         let tokens = get_tokens(self.current_design);
@@ -8009,7 +8177,6 @@ impl ScriptListApp {
         let arg_selected_index = self.arg_selected_index;
         let filtered_choices = self.get_filtered_arg_choices_owned();
         let filtered_choices_len = filtered_choices.len();
-        let has_arg_choices = matches!(self.current_view, AppView::ArgPrompt { ref choices, .. } if !choices.is_empty());
         logging::log_debug(
             "UI",
             &format!(
@@ -8020,16 +8187,14 @@ impl ScriptListApp {
 
         // P0: Build virtualized choice list using uniform_list
         let list_element: AnyElement = if filtered_choices_len == 0 {
-            let mut empty_state = div()
+            div()
                 .w_full()
                 .py(px(design_spacing.padding_xl))
                 .text_center()
                 .text_color(rgb(design_colors.text_muted))
-                .font_family(design_typography.font_family);
-            if has_arg_choices {
-                empty_state = empty_state.child("No choices match your filter");
-            }
-            empty_state.into_any_element()
+                .font_family(design_typography.font_family)
+                .child("No choices match your filter")
+                .into_any_element()
         } else {
             // P0: Use uniform_list for virtualized scrolling of arg choices
             // Now uses shared ListItem component for consistent design with script list
@@ -8183,24 +8348,25 @@ impl ScriptListApp {
                             .child(format!("{} choices", choices.len())),
                     ),
             )
-            // Divider
-            .child(
-                div()
-                    .mx(px(design_spacing.padding_lg))
-                    .h(px(design_visual.border_thin))
-                    .bg(rgba((ui_border << 8) | 0x60)),
-            )
-            // P0: Choice list using virtualized uniform_list
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .flex_1()
-                    .min_h(px(0.)) // P0: Allow flex container to shrink
-                    .w_full()
-                    .py(px(design_spacing.padding_xs))
-                    .child(list_element),
-            )
+            // Choices list (only when prompt has choices)
+            .when(has_choices, |d| {
+                d.child(
+                    div()
+                        .mx(px(design_spacing.padding_lg))
+                        .h(px(design_visual.border_thin))
+                        .bg(rgba((ui_border << 8) | 0x60)),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .flex_1()
+                        .min_h(px(0.)) // P0: Allow flex container to shrink
+                        .w_full()
+                        .py(px(design_spacing.padding_xs))
+                        .child(list_element),
+                )
+            })
             // Actions dialog overlay (when Cmd+K is pressed with SDK actions)
             // Uses same pattern as main menu: check BOTH show_actions_popup AND actions_dialog
             .when_some(
@@ -12069,85 +12235,6 @@ fn render_group_header_item(
         .into_any_element()
 }
 
-/// Ensure the window has MoveToActiveSpace collection behavior.
-/// MUST be called BEFORE any window activation/ordering.
-/// This makes the window move to the current space rather than forcing a space switch.
-#[cfg(target_os = "macos")]
-fn ensure_move_to_active_space() {
-    unsafe {
-        // Use WindowManager to get the main window (not keyWindow, which may not exist yet)
-        let window = match window_manager::get_main_window() {
-            Some(w) => w,
-            None => {
-                logging::log(
-                    "PANEL",
-                    "WARNING: Main window not registered, cannot set MoveToActiveSpace",
-                );
-                return;
-            }
-        };
-
-        // NSWindowCollectionBehaviorMoveToActiveSpace = (1 << 1) = 2
-        // This makes the window MOVE to the current active space when shown
-        let collection_behavior: u64 = 2;
-        let _: () = msg_send![window, setCollectionBehavior:collection_behavior];
-
-        logging::log(
-            "PANEL",
-            "Set MoveToActiveSpace collection behavior (before activation)",
-        );
-    }
-}
-
-#[cfg(not(target_os = "macos"))]
-fn ensure_move_to_active_space() {}
-
-/// Configure the current window as a floating macOS panel that appears above other apps
-#[cfg(target_os = "macos")]
-fn configure_as_floating_panel() {
-    unsafe {
-        let app: id = NSApp();
-
-        // Get the key window (the most recently activated window)
-        let window: id = msg_send![app, keyWindow];
-
-        if window != nil {
-            // NSFloatingWindowLevel = 3
-            // This makes the window float above normal windows
-            let floating_level: i32 = 3;
-            let _: () = msg_send![window, setLevel:floating_level];
-
-            // NSWindowCollectionBehaviorMoveToActiveSpace = (1 << 1)
-            // This makes the window MOVE to the current active space when shown
-            // (instead of forcing user back to the space where window was last visible)
-            let collection_behavior: u64 = 2;
-            let _: () = msg_send![window, setCollectionBehavior:collection_behavior];
-
-            // CRITICAL: Disable macOS window state restoration
-            // This prevents macOS from remembering and restoring the window position
-            // when the app is relaunched or the window is shown again
-            let _: () = msg_send![window, setRestorable:false];
-
-            // Also disable the window's autosave frame name which can cause position caching
-            let empty_string: id = msg_send![class!(NSString), string];
-            let _: () = msg_send![window, setFrameAutosaveName:empty_string];
-
-            logging::log(
-                "PANEL",
-                "Configured window as floating panel (level=3, MoveToActiveSpace, restorable=false, no autosave)",
-            );
-        } else {
-            logging::log(
-                "PANEL",
-                "Warning: No key window found to configure as panel",
-            );
-        }
-    }
-}
-
-#[cfg(not(target_os = "macos"))]
-fn configure_as_floating_panel() {}
-
 fn main() {
     logging::init();
 
@@ -12205,6 +12292,20 @@ fn main() {
             );
         }
     }
+
+    // Load config early so we can use it for hotkey registration AND clipboard history settings
+    // This avoids duplicate config::load_config() calls (~100-300ms startup savings)
+    let loaded_config = config::load_config();
+    logging::log(
+        "APP",
+        &format!(
+            "Loaded config: hotkey={:?}+{}, bun_path={:?}",
+            loaded_config.hotkey.modifiers, loaded_config.hotkey.key, loaded_config.bun_path
+        ),
+    );
+    clipboard_history::set_max_text_content_len(
+        loaded_config.get_clipboard_history_max_text_length(),
+    );
 
     // Initialize clipboard history monitoring (background thread)
     if let Err(e) = clipboard_history::init_clipboard_history() {
@@ -12279,17 +12380,6 @@ fn main() {
             }
         });
     }
-
-    // Load config early so we can use it for hotkey registration AND pass to ScriptListApp
-    // This avoids duplicate config::load_config() calls (~100-300ms startup savings)
-    let loaded_config = config::load_config();
-    logging::log(
-        "APP",
-        &format!(
-            "Loaded config: hotkey={:?}+{}, bun_path={:?}",
-            loaded_config.hotkey.modifiers, loaded_config.hotkey.key, loaded_config.bun_path
-        ),
-    );
 
     // Clone before start_hotkey_listener consumes original
     let config_for_app = loaded_config.clone();
@@ -12919,7 +13009,7 @@ fn main() {
 
                                     // Configure as floating panel on first show
                                     if !PANEL_CONFIGURED.swap(true, Ordering::SeqCst) {
-                                        configure_as_floating_panel();
+                                        platform::configure_as_floating_panel();
                                     }
 
                                     // Focus the window

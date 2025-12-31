@@ -488,6 +488,7 @@ export interface ProcessLimits {
  *     appLauncher: true,
  *     windowSwitcher: true
  *   },
+ *   clipboardHistoryMaxTextLength: 100000,
  *   processLimits: {
  *     maxMemoryMb: 512,
  *     maxRuntimeSeconds: 300,
@@ -581,6 +582,16 @@ export interface Config {
    * @example { appLauncher: false, windowSwitcher: false } // Disable launcher and switcher
    */
   builtIns?: BuiltInConfig;
+  
+  /**
+   * Maximum text length (bytes) to store for clipboard history entries.
+   * Set to 0 to disable the limit.
+   * 
+   * @default 100000
+   * @example 200000 // Allow larger text entries
+   * @example 0 // No limit
+   */
+  clipboardHistoryMaxTextLength?: number;
   
   /**
    * Process resource limits and health monitoring configuration.
@@ -1320,6 +1331,11 @@ interface SetActionsMessage {
   actions: SerializableAction[];
 }
 
+interface SetInputMessage {
+  type: 'setInput';
+  text: string;
+}
+
 interface ActionTriggeredMessage {
   type: 'actionTriggered';
   action: string;
@@ -1413,7 +1429,7 @@ interface WidgetEventMessage {
 interface ClipboardHistoryMessage {
   type: 'clipboardHistory';
   requestId: string;
-  action: 'list' | 'pin' | 'unpin' | 'remove' | 'clear';
+  action: 'list' | 'pin' | 'unpin' | 'remove' | 'clear' | 'trimOversize';
   entryId?: string;
 }
 
@@ -1860,6 +1876,12 @@ declare global {
    * @param actions - Array of action definitions
    */
   function setActions(actions: Action[]): Promise<void>;
+
+  /**
+   * Set the current prompt's input text.
+   * @param text - Input text to apply
+   */
+  function setInput(text: string): void;
   
   /**
    * Copy text to clipboard (alias for clipboard.writeText)
@@ -2206,6 +2228,11 @@ declare global {
    * Clear all clipboard history entries (except pinned ones)
    */
   function clipboardHistoryClear(): Promise<void>;
+
+  /**
+   * Remove text clipboard entries that exceed the max length limit
+   */
+  function clipboardHistoryTrimOversize(): Promise<void>;
   
   // =============================================================================
   // Window Management Functions (System Windows)
@@ -3254,6 +3281,18 @@ globalThis.setActions = async function setActions(actions: Action[]): Promise<vo
     actions: serializable,
   };
   
+  send(message);
+};
+
+/**
+ * Set the current prompt's input text.
+ * @param text - Input text to apply
+ */
+globalThis.setInput = function setInput(text: string): void {
+  const message: SetInputMessage = {
+    type: 'setInput',
+    text,
+  };
   send(message);
 };
 
@@ -4316,6 +4355,33 @@ globalThis.clipboardHistoryClear = async function clipboardHistoryClear(): Promi
   });
 };
 
+globalThis.clipboardHistoryTrimOversize = async function clipboardHistoryTrimOversize(): Promise<void> {
+  const id = nextId();
+  
+  return new Promise((resolve, reject) => {
+    pending.set(id, (msg: ResponseMessage) => {
+      if (msg.type === 'clipboardHistoryResult') {
+        const resultMsg = msg as ClipboardHistoryResultMessage;
+        if (resultMsg.success) {
+          resolve();
+        } else {
+          reject(new Error(resultMsg.error ?? 'Unknown error'));
+        }
+      } else {
+        resolve();
+      }
+    });
+    
+    const message: ClipboardHistoryMessage = {
+      type: 'clipboardHistory',
+      requestId: id,
+      action: 'trimOversize',
+    };
+    
+    send(message);
+  });
+};
+
 // =============================================================================
 // Window Management Functions (System Windows)
 // =============================================================================
@@ -4934,6 +5000,7 @@ declare global {
   function clipboardHistoryUnpin(entryId: string): Promise<void>;
   function clipboardHistoryRemove(entryId: string): Promise<void>;
   function clipboardHistoryClear(): Promise<void>;
+  function clipboardHistoryTrimOversize(): Promise<void>;
 
   // Window Management
   function getWindows(): Promise<SystemWindowInfo[]>;
@@ -4965,6 +5032,7 @@ declare global {
   function setPanel(html: string): void;
   function setPreview(html: string): void;
   function setPrompt(html: string): void;
+  function setInput(text: string): void;
   function captureScreenshot(options?: ScreenshotOptions): Promise<ScreenshotData>;
 
   // Utilities

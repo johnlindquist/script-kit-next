@@ -67,6 +67,7 @@ interface Config {
   terminalFontSize?: number;
   uiScale?: number;
   builtIns?: BuiltInConfig;
+  clipboardHistoryMaxTextLength?: number;
   processLimits?: ProcessLimits;
 }
 
@@ -94,6 +95,7 @@ const DEFAULTS: Required<Config> = {
     appLauncher: true,
     windowSwitcher: true
   },
+  clipboardHistoryMaxTextLength: 100000,
   processLimits: {
     maxMemoryMb: undefined,
     maxRuntimeSeconds: undefined,
@@ -195,6 +197,12 @@ const CONFIG_SCHEMA: ConfigOption[] = [
     type: "boolean",
     default: true,
     description: "Enable window switcher built-in feature"
+  },
+  {
+    key: "clipboardHistoryMaxTextLength",
+    type: "number",
+    default: 100000,
+    description: "Maximum text length (bytes) to store for clipboard history entries (0 = no limit)"
   },
   {
     key: "processLimits.maxMemoryMb",

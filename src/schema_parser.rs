@@ -41,6 +41,17 @@ pub enum FieldType {
     Any,
 }
 
+/// Array item schema definition
+/// Supports both shorthand (`items: "string"`) and full object syntax (`items: { type: "string", enum: [...] }`)
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(untagged)]
+pub enum ItemsDef {
+    /// Shorthand: just the type name (e.g., `items: "string"`)
+    Type(String),
+    /// Full schema object (e.g., `items: { type: "string", enum: ["a", "b"] }`)
+    Schema(Box<FieldDef>),
+}
+
 /// Definition of a single field in the schema
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -60,7 +71,9 @@ pub struct FieldDef {
     pub default: Option<serde_json::Value>,
 
     /// For array types, the type of items
-    pub items: Option<String>,
+    /// Supports both shorthand (`"string"`) and full schema (`{ type: "string", enum: [...] }`)
+    #[serde(default)]
+    pub items: Option<ItemsDef>,
 
     /// For object types, nested field definitions
     pub properties: Option<HashMap<String, FieldDef>>,
@@ -383,18 +396,29 @@ impl Schema {
 fn field_to_json_schema(field: &FieldDef) -> serde_json::Value {
     let mut schema = serde_json::Map::new();
 
-    let type_str = match field.field_type {
-        FieldType::String => "string",
-        FieldType::Number => "number",
-        FieldType::Boolean => "boolean",
-        FieldType::Array => "array",
-        FieldType::Object => "object",
-        FieldType::Any => "any",
-    };
-    schema.insert(
-        "type".to_string(),
-        serde_json::Value::String(type_str.to_string()),
-    );
+    // JSON Schema: "any" is not a valid type, so represent it as a union.
+    match field.field_type {
+        FieldType::Any => {
+            schema.insert(
+                "type".to_string(),
+                serde_json::json!(["string", "number", "boolean", "object", "array", "null"]),
+            );
+        }
+        _ => {
+            let type_str = match field.field_type {
+                FieldType::String => "string",
+                FieldType::Number => "number",
+                FieldType::Boolean => "boolean",
+                FieldType::Array => "array",
+                FieldType::Object => "object",
+                FieldType::Any => unreachable!("handled above"),
+            };
+            schema.insert(
+                "type".to_string(),
+                serde_json::Value::String(type_str.to_string()),
+            );
+        }
+    }
 
     if let Some(desc) = &field.description {
         schema.insert(
@@ -415,19 +439,40 @@ fn field_to_json_schema(field: &FieldDef) -> serde_json::Value {
         schema.insert("enum".to_string(), serde_json::Value::Array(vals));
     }
 
+    // min/max: apply correctly depending on field type
     if let Some(min) = field.min {
-        if matches!(field.field_type, FieldType::Number) {
-            schema.insert("minimum".to_string(), serde_json::json!(min));
-        } else {
-            schema.insert("minLength".to_string(), serde_json::json!(min as i64));
+        match field.field_type {
+            FieldType::Number => {
+                schema.insert("minimum".to_string(), serde_json::json!(min));
+            }
+            FieldType::String => {
+                schema.insert("minLength".to_string(), serde_json::json!(min as u64));
+            }
+            FieldType::Array => {
+                schema.insert("minItems".to_string(), serde_json::json!(min as u64));
+            }
+            FieldType::Object => {
+                schema.insert("minProperties".to_string(), serde_json::json!(min as u64));
+            }
+            _ => {}
         }
     }
 
     if let Some(max) = field.max {
-        if matches!(field.field_type, FieldType::Number) {
-            schema.insert("maximum".to_string(), serde_json::json!(max));
-        } else {
-            schema.insert("maxLength".to_string(), serde_json::json!(max as i64));
+        match field.field_type {
+            FieldType::Number => {
+                schema.insert("maximum".to_string(), serde_json::json!(max));
+            }
+            FieldType::String => {
+                schema.insert("maxLength".to_string(), serde_json::json!(max as u64));
+            }
+            FieldType::Array => {
+                schema.insert("maxItems".to_string(), serde_json::json!(max as u64));
+            }
+            FieldType::Object => {
+                schema.insert("maxProperties".to_string(), serde_json::json!(max as u64));
+            }
+            _ => {}
         }
     }
 
@@ -438,19 +483,38 @@ fn field_to_json_schema(field: &FieldDef) -> serde_json::Value {
         );
     }
 
+    // items: support both string shorthand and full schema object
     if let Some(items) = &field.items {
-        schema.insert("items".to_string(), serde_json::json!({"type": items}));
+        let items_schema = match items {
+            ItemsDef::Type(t) => serde_json::json!({ "type": t }),
+            ItemsDef::Schema(def) => field_to_json_schema(def),
+        };
+        schema.insert("items".to_string(), items_schema);
     }
 
+    // properties: include nested required keys (useful and safe)
     if let Some(props) = &field.properties {
         let mut prop_schemas = serde_json::Map::new();
+        let mut required_props: Vec<serde_json::Value> = Vec::new();
+
         for (name, prop_field) in props {
             prop_schemas.insert(name.clone(), field_to_json_schema(prop_field));
+            if prop_field.required {
+                required_props.push(serde_json::Value::String(name.clone()));
+            }
         }
+
         schema.insert(
             "properties".to_string(),
             serde_json::Value::Object(prop_schemas),
         );
+
+        if !required_props.is_empty() {
+            schema.insert(
+                "required".to_string(),
+                serde_json::Value::Array(required_props),
+            );
+        }
     }
 
     if let Some(example) = &field.example {
@@ -801,5 +865,71 @@ const { input, output } = defineSchema({
             schema1.input.get("name").unwrap().required,
             schema2.input.get("name").unwrap().required
         );
+    }
+
+    #[test]
+    fn test_parse_array_items_as_object_schema() {
+        let content = r#"
+schema = {
+  input: {
+    transforms: {
+      type: "array",
+      required: true,
+      items: { type: "string", enum: ["uppercase", "lowercase"] }
+    }
+  }
+}
+"#;
+
+        let result = extract_schema(content);
+        assert!(result.schema.is_some(), "Errors: {:?}", result.errors);
+
+        let schema = result.schema.unwrap();
+        let transforms = schema.input.get("transforms").expect("missing transforms");
+        assert_eq!(transforms.field_type, FieldType::Array);
+
+        // Verify items parsed as a nested schema object
+        let items = transforms.items.as_ref().expect("missing items");
+        match items {
+            ItemsDef::Schema(def) => {
+                assert_eq!(def.field_type, FieldType::String);
+                assert_eq!(
+                    def.enum_values,
+                    Some(vec!["uppercase".to_string(), "lowercase".to_string()])
+                );
+            }
+            _ => panic!("Expected items to be a schema object"),
+        }
+
+        // Verify JSON Schema output includes items.enum properly
+        let json_schema = schema.to_json_schema_input();
+        let items_schema = &json_schema["properties"]["transforms"]["items"];
+        assert_eq!(items_schema["type"], "string");
+        let enum_vals = items_schema["enum"].as_array().expect("missing enum");
+        assert!(enum_vals.contains(&serde_json::json!("uppercase")));
+        assert!(enum_vals.contains(&serde_json::json!("lowercase")));
+    }
+
+    #[test]
+    fn test_array_min_max_become_min_items_max_items() {
+        let content = r#"
+schema = {
+  input: {
+    tags: { type: "array", min: 1, max: 5, items: "string" }
+  }
+}
+"#;
+
+        let result = extract_schema(content);
+        assert!(result.schema.is_some(), "Errors: {:?}", result.errors);
+
+        let schema = result.schema.unwrap();
+        let json_schema = schema.to_json_schema_input();
+        let tags = &json_schema["properties"]["tags"];
+
+        assert_eq!(tags["type"], "array");
+        assert_eq!(tags["minItems"], 1);
+        assert_eq!(tags["maxItems"], 5);
+        assert_eq!(tags["items"]["type"], "string");
     }
 }

@@ -25,7 +25,7 @@
 //! - `exit`: Terminate script
 //! - `show`/`hide`: Window visibility
 //! - `setPosition`, `setSize`, `setAlwaysOnTop`: Window management
-//! - `setPanel`, `setPreview`, `setPrompt`: UI updates
+//! - `setPanel`, `setPreview`, `setPrompt`, `setInput`: UI updates
 //! - `setActions`, `actionTriggered`: Actions menu
 //!
 //! ## State Queries (request/response pattern)

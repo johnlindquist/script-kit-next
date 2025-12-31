@@ -238,9 +238,11 @@ mod tests {
 
     #[test]
     fn keystroke_to_shortcut_orders_modifiers() {
-        let mut modifiers = gpui::Modifiers::default();
-        modifiers.alt = true;
-        modifiers.shift = true;
+        let modifiers = gpui::Modifiers {
+            alt: true,
+            shift: true,
+            ..Default::default()
+        };
         assert_eq!(keystroke_to_shortcut("K", &modifiers), "alt+shift+k");
 
         let modifiers = gpui::Modifiers::default();

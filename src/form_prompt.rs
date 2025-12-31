@@ -274,6 +274,29 @@ impl FormPromptState {
             }
         }
     }
+
+    /// Set the current field's input text programmatically.
+    pub fn set_input(&mut self, text: String, cx: &mut Context<Self>) {
+        if let Some((_, entity)) = self.fields.get(self.focused_index) {
+            match entity {
+                FormFieldEntity::TextField(e) => {
+                    let value = text.clone();
+                    e.update(cx, |field, cx| {
+                        field.set_value(value);
+                        cx.notify();
+                    });
+                }
+                FormFieldEntity::TextArea(e) => {
+                    let value = text.clone();
+                    e.update(cx, |field, cx| {
+                        field.set_value(value);
+                        cx.notify();
+                    });
+                }
+                FormFieldEntity::Checkbox(_) => {}
+            }
+        }
+    }
 }
 
 impl Render for FormPromptState {

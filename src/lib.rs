@@ -18,6 +18,7 @@ pub mod logging;
 pub mod navigation;
 pub mod panel;
 pub mod perf;
+pub mod platform;
 pub mod prompts;
 pub mod protocol;
 pub mod scripts;

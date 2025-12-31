@@ -83,6 +83,10 @@ export default {
   //   // Window switcher - manage open windows across applications
   //   windowSwitcher: true,
   // },
+  //
+  // Max text size (bytes) stored per clipboard history entry
+  // Set to 0 to disable the limit
+  // clipboardHistoryMaxTextLength: 100000,
 
   // ===========================================================================
   // Process Limits
