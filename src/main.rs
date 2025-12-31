@@ -4339,13 +4339,12 @@ impl ScriptListApp {
                     "EXEC",
                     &format!("Loaded {} clipboard entries (cached)", entries.len()),
                 );
-                // Initial selected_index should be 1 (first entry after "Today" header)
-                // Index 0 is the time group header which is not selectable
-                let initial_selected = if entries.is_empty() { 0 } else { 1 };
+                // Initial selected_index should be 0 (first entry)
+                // Note: clipboard history uses a flat list without section headers
                 self.current_view = AppView::ClipboardHistoryView {
                     entries,
                     filter: String::new(),
-                    selected_index: initial_selected,
+                    selected_index: 0,
                 };
                 // Use standard height for clipboard history view
                 defer_resize_to_view(ViewType::ScriptList, 0, cx);

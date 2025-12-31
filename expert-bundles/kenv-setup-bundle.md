@@ -398,7 +398,7 @@ fn main() {
 {
   "colors": {
     "background": {
-      "main": 1980410,
+      "main": 1973790,
       "title_bar": 2961712,
       "search_box": 3947580,
       "log_panel": 851213
