@@ -738,12 +738,13 @@ impl ScriptListApp {
         // P3: Notify immediately so input field updates (responsive typing)
         cx.notify();
 
-        // P3: Stage 2 - Coalesce expensive search work with 16ms delay
-        // Keep only the latest filter text while a timer is pending.
+        // P3: Stage 2 - Debounce expensive search/window resize work
+        // The input display is synchronous above, but fuzzy search is expensive.
+        // Use 8ms debounce (half a frame) to batch rapid keystrokes.
         if self.filter_coalescer.queue(self.filter_input.text().to_string()) {
             cx.spawn(async move |this, cx| {
-                // Wait 16ms for coalescing window (one frame at 60fps)
-                Timer::after(std::time::Duration::from_millis(16)).await;
+                // Wait 8ms for coalescing window (half frame at 60fps)
+                Timer::after(std::time::Duration::from_millis(8)).await;
 
                 let _ = cx.update(|cx| {
                     this.update(cx, |app, cx| {
@@ -1855,7 +1856,6 @@ impl ScriptListApp {
         // Clear filter and selection state for fresh menu
         self.filter_input.clear();
         self.computed_filter_text.clear();
-        self.filter_coalescer.reset();
         self.selected_index = 0;
         self.last_scrolled_index = None;
         // Use main_list_state for variable-height list (not the legacy list_scroll_handle)

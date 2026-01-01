@@ -14,16 +14,12 @@ impl ScriptListApp {
 
         if text.is_empty() {
             // Empty - always reserve cursor space, only show bg when visible
-            return div()
-                .flex()
-                .flex_row()
-                .items_center()
-                .child(
-                    div()
-                        .w(px(CURSOR_WIDTH))
-                        .h(px(CURSOR_HEIGHT_LG))
-                        .when(is_cursor_visible, |d: gpui::Div| d.bg(rgb(text_primary))),
-                );
+            return div().flex().flex_row().items_center().child(
+                div()
+                    .w(px(CURSOR_WIDTH))
+                    .h(px(CURSOR_HEIGHT_LG))
+                    .when(is_cursor_visible, |d: gpui::Div| d.bg(rgb(text_primary))),
+            );
         }
 
         if has_selection {
@@ -40,14 +36,18 @@ impl ScriptListApp {
                 .flex_row()
                 .items_center()
                 .overflow_x_hidden()
-                .when(!before.is_empty(), |d: gpui::Div| d.child(div().child(before)))
+                .when(!before.is_empty(), |d: gpui::Div| {
+                    d.child(div().child(before))
+                })
                 .child(
                     div()
                         .bg(rgba((accent_color << 8) | 0x60))
                         .text_color(rgb(0xffffff))
                         .child(selected),
                 )
-                .when(!after.is_empty(), |d: gpui::Div| d.child(div().child(after)))
+                .when(!after.is_empty(), |d: gpui::Div| {
+                    d.child(div().child(after))
+                })
         } else {
             // No selection: before cursor | cursor | after cursor
             // Always reserve cursor space to prevent layout shift during blink
@@ -59,7 +59,9 @@ impl ScriptListApp {
                 .flex_row()
                 .items_center()
                 .overflow_x_hidden()
-                .when(!before.is_empty(), |d: gpui::Div| d.child(div().child(before)))
+                .when(!before.is_empty(), |d: gpui::Div| {
+                    d.child(div().child(before))
+                })
                 // Always render cursor element, only show bg when visible
                 .child(
                     div()
@@ -67,7 +69,9 @@ impl ScriptListApp {
                         .h(px(CURSOR_HEIGHT_LG))
                         .when(is_cursor_visible, |d: gpui::Div| d.bg(rgb(text_primary))),
                 )
-                .when(!after.is_empty(), |d: gpui::Div| d.child(div().child(after)))
+                .when(!after.is_empty(), |d: gpui::Div| {
+                    d.child(div().child(after))
+                })
         }
     }
 
@@ -588,11 +592,12 @@ impl ScriptListApp {
                                 this.last_scrolled_index = None;
                                 this.main_list_state.scroll_to_reveal_item(0);
                                 this.last_scrolled_index = Some(0);
-                                // Trigger coalesced search update
+                                // P3: Debounce expensive search work with 8ms delay
+                                // Input display is already updated; this batches the fuzzy search
                                 let new_text = this.filter_input.text().to_string();
                                 if this.filter_coalescer.queue(new_text) {
                                     cx.spawn(async move |this, cx| {
-                                        gpui::Timer::after(std::time::Duration::from_millis(16)).await;
+                                        gpui::Timer::after(std::time::Duration::from_millis(8)).await;
                                         let _ = cx.update(|cx| {
                                             this.update(cx, |app, cx| {
                                                 if let Some(latest) = app.filter_coalescer.take_latest() {
@@ -724,7 +729,8 @@ impl ScriptListApp {
                             // ALIGNMENT: cursor takes CURSOR_WIDTH + CURSOR_GAP_X space, so we
                             // apply negative margin to placeholder to align it with typed text
                             .when(filter_is_empty, |d: gpui::Div| {
-                                let is_cursor_visible = self.focused_input == FocusedInput::MainFilter
+                                let is_cursor_visible = self.focused_input
+                                    == FocusedInput::MainFilter
                                     && self.cursor_visible;
                                 // Always render cursor div to reserve space, only show bg when visible
                                 d.child(
@@ -733,13 +739,15 @@ impl ScriptListApp {
                                         .h(px(CURSOR_HEIGHT_LG))
                                         .my(px(CURSOR_MARGIN_Y))
                                         .mr(px(CURSOR_GAP_X))
-                                        .when(is_cursor_visible, |d: gpui::Div| d.bg(rgb(text_primary))),
+                                        .when(is_cursor_visible, |d: gpui::Div| {
+                                            d.bg(rgb(text_primary))
+                                        }),
                                 )
                                 .child(
                                     div()
                                         .ml(px(-(CURSOR_WIDTH + CURSOR_GAP_X)))
                                         .text_color(rgb(text_muted))
-                                        .child(DEFAULT_PLACEHOLDER)
+                                        .child(DEFAULT_PLACEHOLDER),
                                 )
                             })
                             // When has text: show text with cursor/selection via helper
