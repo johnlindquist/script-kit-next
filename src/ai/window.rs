@@ -23,7 +23,7 @@ use cocoa::appkit::NSApp;
 #[cfg(target_os = "macos")]
 use cocoa::base::{id, nil};
 use gpui_component::{
-    button::{Button, ButtonVariants},
+    button::{Button, ButtonCustomVariant, ButtonVariants},
     input::{Input, InputEvent, InputState},
     theme::{ActiveTheme, Theme as GpuiTheme, ThemeColor, ThemeMode},
     IconName, Root, Sizable,
@@ -1027,6 +1027,7 @@ impl AiApp {
         let input_area = div()
             .flex()
             .flex_col()
+            .w_full()
             .border_t_1()
             .border_color(cx.theme().border)
             .bg(cx.theme().title_bar)
@@ -1036,14 +1037,18 @@ impl AiApp {
                     .flex()
                     .items_center()
                     .justify_between()
+                    .w_full()
+                    .overflow_hidden()
                     .px_3()
                     .py_1()
                     .child(self.render_model_picker(cx))
                     .child(
-                        // Keyboard shortcut hint
+                        // Keyboard shortcut hint - use flex_shrink_0 to not shrink, text_nowrap to not wrap
                         div()
+                            .flex_shrink_0()
                             .text_xs()
                             .text_color(cx.theme().muted_foreground)
+                            .whitespace_nowrap()
                             .child("⌘+Enter to send"),
                     ),
             )
@@ -1053,29 +1058,60 @@ impl AiApp {
                     .flex()
                     .items_center()
                     .gap_2()
+                    .w_full()
+                    .overflow_hidden()
                     .px_3()
                     .pb_3()
-                    .child(div().flex_1().child(Input::new(&self.input_state).w_full()))
-                    .child(
+                    .child(div().flex_1().min_w_0().child(Input::new(&self.input_state).w_full()))
+                    .child({
+                        // Hardcode Script Kit's accent yellow color (#FBD024) directly
+                        // since theme mapping seems to have issues with gpui-component buttons
+                        // 0xFBD024 = rgb(251, 208, 36) - the signature Script Kit gold/yellow
+                        let accent_yellow: Hsla = rgb(0xFBD024).into();
+                        let black_fg = Hsla {
+                            h: 0.0,
+                            s: 0.0,
+                            l: 0.1, // Dark gray for text/icon visibility
+                            a: 1.0,
+                        };
+
                         Button::new("submit")
-                            .primary()
+                            .custom(
+                                ButtonCustomVariant::new(cx)
+                                    .color(accent_yellow)
+                                    .foreground(black_fg)
+                                    .border(accent_yellow)
+                                    .hover(Hsla {
+                                        h: accent_yellow.h,
+                                        s: accent_yellow.s,
+                                        l: accent_yellow.l * 0.85, // Darker on hover
+                                        a: 1.0,
+                                    })
+                                    .active(Hsla {
+                                        h: accent_yellow.h,
+                                        s: accent_yellow.s,
+                                        l: accent_yellow.l * 0.75, // Even darker when active
+                                        a: 1.0,
+                                    })
+                            )
                             .small()
                             .icon(IconName::ArrowRight)
                             .on_click(cx.listener(|this, _, window, cx| {
                                 this.submit_message(window, cx);
-                            })),
-                    ),
+                            }))
+                    }),
             );
 
         // Determine what to show in the content area
         let has_messages = !self.current_messages.is_empty() || self.is_streaming;
 
-        // Build main layout
+        // Build main layout - use overflow_hidden to prevent content from extending beyond bounds
         div()
             .flex_1()
             .flex()
             .flex_col()
             .h_full()
+            .overflow_hidden() // Prevent content from overflowing the main panel bounds
             .child(titlebar)
             .child(
                 // Messages area or welcome state
@@ -1168,9 +1204,15 @@ fn map_scriptkit_to_gpui_theme(sk_theme: &crate::theme::Theme) -> ThemeColor {
     theme_color.sidebar_primary_foreground = hex_to_hsla(colors.text.primary);
 
     // Primary (accent-colored buttons) - yellow/gold background with dark text/icons
-    // Use explicit black (0x000000) for foreground to ensure icon visibility against yellow
+    // Use explicit black Hsla for foreground to ensure icon visibility against yellow
     theme_color.primary = hex_to_hsla(colors.accent.selected);
-    theme_color.primary_foreground = hex_to_hsla(0x000000); // Black for maximum contrast
+    // Black with full opacity - using Hsla directly since rgb(0x000000).into() may have issues
+    theme_color.primary_foreground = Hsla {
+        h: 0.0,
+        s: 0.0,
+        l: 0.0, // Black (0% lightness)
+        a: 1.0, // Full opacity
+    };
     theme_color.primary_hover = hex_to_hsla(colors.accent.selected).opacity(0.9);
     theme_color.primary_active = hex_to_hsla(colors.accent.selected).opacity(0.8);
 
