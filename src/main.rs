@@ -155,58 +155,8 @@ use syntax::highlight_code_lines;
 #[allow(dead_code)]
 type PromptChannel = (mpsc::Sender<PromptMessage>, mpsc::Receiver<PromptMessage>);
 
-/// Render a path string with highlighted matched characters.
-///
-/// Takes the display path, the filename that was matched against, and the indices
-/// of matched characters in the filename. Returns a vector of (text, is_highlighted)
-/// tuples for rendering.
-fn render_path_with_highlights(
-    display_path: &str,
-    filename: &str,
-    filename_indices: &[usize],
-) -> Vec<(String, bool)> {
-    if filename_indices.is_empty() {
-        return vec![(display_path.to_string(), false)];
-    }
-
-    // Find where the filename starts in the display path
-    let filename_start = if let Some(pos) = display_path.rfind(filename) {
-        pos
-    } else if let Some(pos) = display_path.rfind('/') {
-        pos + 1
-    } else {
-        0
-    };
-
-    let mut result = Vec::new();
-    let chars: Vec<char> = display_path.chars().collect();
-    let mut current_text = String::new();
-    let mut current_highlighted = false;
-
-    for (i, ch) in chars.iter().enumerate() {
-        let is_in_filename = i >= filename_start;
-        let filename_char_idx = if is_in_filename {
-            i - filename_start
-        } else {
-            usize::MAX
-        };
-        let is_highlighted = is_in_filename && filename_indices.contains(&filename_char_idx);
-
-        if is_highlighted != current_highlighted && !current_text.is_empty() {
-            result.push((current_text.clone(), current_highlighted));
-            current_text.clear();
-        }
-
-        current_text.push(*ch);
-        current_highlighted = is_highlighted;
-    }
-
-    if !current_text.is_empty() {
-        result.push((current_text, current_highlighted));
-    }
-
-    result
-}
+// Import render_path_with_highlights from utils
+use utils::render_path_with_highlights;
 
 // Global state for hotkey signaling between threads
 static WINDOW_VISIBLE: AtomicBool = AtomicBool::new(false); // Track window visibility for toggle (starts hidden)
