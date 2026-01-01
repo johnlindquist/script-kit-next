@@ -559,6 +559,9 @@ include!("app_navigation.rs");
 // App execution methods (execute_builtin, execute_app, execute_window_focus)
 include!("app_execute.rs");
 
+// App actions handling (handle_action, trigger_action_by_name)
+include!("app_actions.rs");
+
 impl Focusable for ScriptListApp {
     fn focus_handle(&self, _cx: &App) -> FocusHandle {
         self.focus_handle.clone()
