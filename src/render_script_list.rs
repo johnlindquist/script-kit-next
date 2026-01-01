@@ -290,6 +290,11 @@ impl ScriptListApp {
                   event: &gpui::KeyDownEvent,
                   window: &mut Window,
                   cx: &mut Context<Self>| {
+                // Global shortcuts (Cmd+W only - ScriptList has special ESC handling below)
+                if this.handle_global_shortcut_with_options(event, false, cx) {
+                    return;
+                }
+
                 let key_str = event.keystroke.key.to_lowercase();
                 let has_cmd = event.keystroke.modifiers.platform;
 
@@ -464,25 +469,11 @@ impl ScriptListApp {
                     "enter" => this.execute_selected(cx),
                     "escape" => {
                         if !this.filter_text.is_empty() {
+                            // Clear filter first if there's text
                             this.update_filter(None, false, true, cx);
                         } else {
-                            // Update visibility state for hotkey toggle
-                            WINDOW_VISIBLE.store(false, Ordering::SeqCst);
-                            // Reset UI state before hiding (clears selection, scroll position, filter)
-                            logging::log("UI", "Resetting to script list before hiding via Escape");
-                            this.reset_to_script_list(cx);
-                            logging::log("HOTKEY", "Window hidden via Escape key");
-                            // PERF: Measure window hide latency
-                            let hide_start = std::time::Instant::now();
-                            cx.hide();
-                            let hide_elapsed = hide_start.elapsed();
-                            logging::log(
-                                "PERF",
-                                &format!(
-                                    "Window hide (Escape) took {:.2}ms",
-                                    hide_elapsed.as_secs_f64() * 1000.0
-                                ),
-                            );
+                            // Filter is empty - close window
+                            this.close_and_reset_window(cx);
                         }
                     }
                     "backspace" => this.update_filter(None, true, false, cx),

@@ -797,8 +797,6 @@ impl ScriptListApp {
         }
     }
 
-
-
     fn render_actions_dialog(&mut self, cx: &mut Context<Self>) -> AnyElement {
         // Use design tokens for GLOBAL theming
         let tokens = get_tokens(self.current_design);
@@ -819,14 +817,9 @@ impl ScriptListApp {
                   event: &gpui::KeyDownEvent,
                   _window: &mut Window,
                   cx: &mut Context<Self>| {
-                let key_str = event.keystroke.key.to_lowercase();
-                logging::log("KEY", &format!("ActionsDialog key: '{}'", key_str));
-
-                if key_str.as_str() == "escape" {
-                    logging::log("KEY", "ESC in ActionsDialog - returning to script list");
-                    this.current_view = AppView::ScriptList;
-                    cx.notify();
-                }
+                // Global shortcuts (Cmd+W, ESC closes window from ActionsDialog too)
+                // ActionsDialog has no other key handling, so we just call the global handler
+                let _ = this.handle_global_shortcut_with_options(event, true, cx);
             },
         );
 

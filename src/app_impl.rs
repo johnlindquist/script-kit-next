@@ -1569,6 +1569,91 @@ impl ScriptListApp {
         logging::log("EXEC", "=== Script cancellation complete ===");
     }
 
+    /// Close window and reset to default state (Cmd+W global handler)
+    ///
+    /// This method handles the global Cmd+W shortcut which should work
+    /// regardless of what prompt or view is currently active. It:
+    /// 1. Cancels any running script
+    /// 2. Resets state to the default script list
+    /// 3. Hides the window
+    fn close_and_reset_window(&mut self, cx: &mut Context<Self>) {
+        logging::log("VISIBILITY", "=== Cmd+W: Close and reset window ===");
+
+        // Update visibility state FIRST to prevent race conditions
+        WINDOW_VISIBLE.store(false, std::sync::atomic::Ordering::SeqCst);
+        logging::log("VISIBILITY", "WINDOW_VISIBLE set to: false");
+
+        // If in a prompt, cancel the script execution
+        if self.is_in_prompt() {
+            logging::log("VISIBILITY", "In prompt mode - canceling script before hiding");
+            self.cancel_script_execution(cx);
+        } else {
+            // Just reset to script list (clears filter, selection, scroll)
+            self.reset_to_script_list(cx);
+        }
+
+        // Hide the window
+        logging::log("VISIBILITY", "Hiding window via Cmd+W");
+        cx.hide();
+        logging::log("VISIBILITY", "=== Cmd+W: Window closed ===");
+    }
+
+    /// Handle global keyboard shortcuts with configurable dismissability
+    ///
+    /// Returns `true` if the shortcut was handled (caller should return early)
+    ///
+    /// # Arguments
+    /// * `event` - The key down event to check
+    /// * `is_dismissable` - If true, ESC key will also close the window (for prompts like arg, div, form, etc.)
+    ///   If false, only Cmd+W closes the window (for prompts like term, editor)
+    /// * `cx` - The context
+    ///
+    /// # Handled shortcuts
+    /// - Cmd+W: Always closes window and resets to default state
+    /// - Escape: Only closes window if `is_dismissable` is true AND actions popup is not showing
+    fn handle_global_shortcut_with_options(
+        &mut self,
+        event: &gpui::KeyDownEvent,
+        is_dismissable: bool,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let key_str = event.keystroke.key.to_lowercase();
+        let has_cmd = event.keystroke.modifiers.platform;
+
+        // Cmd+W always closes window
+        if has_cmd && key_str == "w" {
+            logging::log("KEY", "Cmd+W - closing window");
+            self.close_and_reset_window(cx);
+            return true;
+        }
+
+        // ESC closes dismissable prompts (when actions popup is not showing)
+        if is_dismissable && key_str == "escape" && !self.show_actions_popup {
+            logging::log("KEY", "ESC in dismissable prompt - closing window");
+            self.close_and_reset_window(cx);
+            return true;
+        }
+
+        false
+    }
+
+    /// Check if the current view is a dismissable prompt
+    ///
+    /// Dismissable prompts are those that feel "closeable" with escape:
+    /// - ArgPrompt, DivPrompt, FormPrompt, SelectPrompt, PathPrompt, EnvPrompt, DropPrompt, TemplatePrompt
+    /// - Built-in views (ClipboardHistory, AppLauncher, WindowSwitcher, DesignGallery)
+    /// - ScriptList
+    ///
+    /// Non-dismissable prompts:
+    /// - TermPrompt, EditorPrompt (these require explicit Cmd+W to close)
+    #[allow(dead_code)]
+    fn is_dismissable_view(&self) -> bool {
+        !matches!(
+            self.current_view,
+            AppView::TermPrompt { .. } | AppView::EditorPrompt { .. }
+        )
+    }
+
     /// Show a HUD (heads-up display) overlay message
     ///
     /// This creates a separate floating window positioned at bottom-center of the

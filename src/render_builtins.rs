@@ -73,6 +73,11 @@ impl ScriptListApp {
                   event: &gpui::KeyDownEvent,
                   _window: &mut Window,
                   cx: &mut Context<Self>| {
+                // Global shortcuts (Cmd+W, ESC for dismissable views)
+                if this.handle_global_shortcut_with_options(event, true, cx) {
+                    return;
+                }
+
                 let key_str = event.keystroke.key.to_lowercase();
                 logging::log("KEY", &format!("ClipboardHistory key: '{}'", key_str));
 
@@ -147,13 +152,7 @@ impl ScriptListApp {
                                 }
                             }
                         }
-                        "escape" => {
-                            logging::log(
-                                "KEY",
-                                "ESC in ClipboardHistory - returning to script list",
-                            );
-                            this.reset_to_script_list(cx);
-                        }
+                        // Note: "escape" is handled by handle_global_shortcut_with_options above
                         "backspace" => {
                             if !filter.is_empty() {
                                 filter.pop();
@@ -716,6 +715,12 @@ impl ScriptListApp {
                   event: &gpui::KeyDownEvent,
                   _window: &mut Window,
                   cx: &mut Context<Self>| {
+                // Global shortcuts (Cmd+W) - handled first regardless of view state
+                // Global shortcuts (Cmd+W, ESC for dismissable views)
+                if this.handle_global_shortcut_with_options(event, true, cx) {
+                    return;
+                }
+
                 let key_str = event.keystroke.key.to_lowercase();
                 logging::log("KEY", &format!("AppLauncher key: '{}'", key_str));
 
@@ -765,10 +770,7 @@ impl ScriptListApp {
                                 }
                             }
                         }
-                        "escape" => {
-                            logging::log("KEY", "ESC in AppLauncher - returning to script list");
-                            this.reset_to_script_list(cx);
-                        }
+                        // Note: "escape" is handled by handle_global_shortcut_with_options above
                         "backspace" => {
                             if !filter.is_empty() {
                                 filter.pop();
@@ -1014,6 +1016,11 @@ impl ScriptListApp {
                   event: &gpui::KeyDownEvent,
                   _window: &mut Window,
                   cx: &mut Context<Self>| {
+                // Global shortcuts (Cmd+W, ESC for dismissable views)
+                if this.handle_global_shortcut_with_options(event, true, cx) {
+                    return;
+                }
+
                 let key_str = event.keystroke.key.to_lowercase();
                 logging::log("KEY", &format!("WindowSwitcher key: '{}'", key_str));
 
@@ -1087,10 +1094,7 @@ impl ScriptListApp {
                                 }
                             }
                         }
-                        "escape" => {
-                            logging::log("KEY", "ESC in WindowSwitcher - returning to script list");
-                            this.reset_to_script_list(cx);
-                        }
+                        // Note: "escape" is handled by handle_global_shortcut_with_options above
                         "backspace" => {
                             if !filter.is_empty() {
                                 filter.pop();
@@ -1653,6 +1657,12 @@ impl ScriptListApp {
                   event: &gpui::KeyDownEvent,
                   _window: &mut Window,
                   cx: &mut Context<Self>| {
+                // Global shortcuts (Cmd+W) - handled first regardless of view state
+                // Global shortcuts (Cmd+W, ESC for dismissable views)
+                if this.handle_global_shortcut_with_options(event, true, cx) {
+                    return;
+                }
+
                 let key_str = event.keystroke.key.to_lowercase();
                 logging::log("KEY", &format!("DesignGallery key: '{}'", key_str));
 
@@ -1685,10 +1695,7 @@ impl ScriptListApp {
                                 cx.notify();
                             }
                         }
-                        "escape" => {
-                            logging::log("KEY", "ESC in DesignGallery - returning to script list");
-                            this.reset_to_script_list(cx);
-                        }
+                        // Note: "escape" is handled by handle_global_shortcut_with_options above
                         "backspace" => {
                             if !filter.is_empty() {
                                 filter.pop();

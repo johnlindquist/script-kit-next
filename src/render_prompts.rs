@@ -33,6 +33,11 @@ impl ScriptListApp {
                   event: &gpui::KeyDownEvent,
                   window: &mut Window,
                   cx: &mut Context<Self>| {
+                // Global shortcuts (Cmd+W, ESC for dismissable prompts)
+                if this.handle_global_shortcut_with_options(event, true, cx) {
+                    return;
+                }
+
                 let key_str = event.keystroke.key.to_lowercase();
                 let has_cmd = event.keystroke.modifiers.platform;
                 logging::log(
@@ -166,12 +171,7 @@ impl ScriptListApp {
                         }
                         // Case 3: No choices and no input - do nothing (prevent empty submissions)
                     }
-                    "escape" => {
-                        logging::log("KEY", "ESC in ArgPrompt - canceling script");
-                        // Send cancel response and clean up fully
-                        this.submit_prompt_response(prompt_id.clone(), None, cx);
-                        this.cancel_script_execution(cx);
-                    }
+                    // Note: "escape" is handled by handle_global_shortcut_with_options above
                     "backspace" => {
                         if !this.arg_input_text.is_empty() {
                             this.arg_input_text.pop();
@@ -607,6 +607,11 @@ impl ScriptListApp {
                   event: &gpui::KeyDownEvent,
                   window: &mut Window,
                   cx: &mut Context<Self>| {
+                // Global shortcuts (Cmd+W, ESC for dismissable prompts)
+                if this.handle_global_shortcut_with_options(event, true, cx) {
+                    return;
+                }
+
                 let key_str = event.keystroke.key.to_lowercase();
                 let has_cmd = event.keystroke.modifiers.platform;
 
@@ -683,10 +688,165 @@ impl ScriptListApp {
         // Use explicit height from layout constants
         let content_height = window_resize::layout::STANDARD_HEIGHT;
 
+        // Pre-build the overlay header (needs to reference captured variables)
+        let header_overlay = if has_actions {
+            let button_colors = ButtonColors::from_theme(&self.theme);
+            let handle_actions = cx.entity().downgrade();
+            let show_actions = self.show_actions_popup;
+
+            // Get actions search text from the dialog
+            let search_text = self
+                .actions_dialog
+                .as_ref()
+                .map(|dialog| dialog.read(cx).search_text.clone())
+                .unwrap_or_default();
+            let search_is_empty = search_text.is_empty();
+            let search_display: SharedString = if search_is_empty {
+                "Search actions...".into()
+            } else {
+                search_text.into()
+            };
+            let accent_color = design_colors.accent;
+            let text_primary = design_colors.text_primary;
+            let text_muted = design_colors.text_muted;
+            let text_dimmed = design_colors.text_dimmed;
+            let search_box_bg = self.theme.colors.background.search_box;
+            let cursor_visible_for_search =
+                self.focused_input == FocusedInput::ActionsSearch && self.cursor_visible;
+
+            Some(
+                div()
+                    .absolute()
+                    .top_0()
+                    .left_0()
+                    .right_0()
+                    .px(px(design_spacing.padding_lg))
+                    .py(px(design_spacing.padding_md))
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .justify_end()
+                    .child(
+                        div()
+                            .relative()
+                            .h(px(28.))
+                            .flex()
+                            .items_center()
+                            // Layer 1: Actions button - visible when NOT showing actions search
+                            .child(
+                                div()
+                                    .absolute()
+                                    .inset_0()
+                                    .flex()
+                                    .flex_row()
+                                    .items_center()
+                                    .justify_end()
+                                    .when(show_actions, |d| d.opacity(0.).invisible())
+                                    .child(
+                                        Button::new("Actions", button_colors)
+                                            .variant(ButtonVariant::Ghost)
+                                            .shortcut("⌘ K")
+                                            .on_click(Box::new(move |_, window, cx| {
+                                                if let Some(app) = handle_actions.upgrade() {
+                                                    app.update(cx, |this, cx| {
+                                                        this.toggle_arg_actions(cx, window);
+                                                    });
+                                                }
+                                            })),
+                                    )
+                                    .child(
+                                        div()
+                                            .mx(px(4.))
+                                            .text_color(rgba((text_dimmed << 8) | 0x60))
+                                            .text_sm()
+                                            .child("|"),
+                                    ),
+                            )
+                            // Layer 2: Actions search input - visible when showing actions search
+                            .child(
+                                div()
+                                    .absolute()
+                                    .inset_0()
+                                    .flex()
+                                    .flex_row()
+                                    .items_center()
+                                    .justify_end()
+                                    .gap(px(8.))
+                                    .when(!show_actions, |d| d.opacity(0.).invisible())
+                                    .child(div().text_color(rgb(text_dimmed)).text_xs().child("⌘K"))
+                                    .child(
+                                        div()
+                                            .id("div-actions-search")
+                                            .flex_shrink_0()
+                                            .w(px(130.))
+                                            .min_w(px(130.))
+                                            .max_w(px(130.))
+                                            .h(px(24.))
+                                            .min_h(px(24.))
+                                            .max_h(px(24.))
+                                            .overflow_hidden()
+                                            .flex()
+                                            .flex_row()
+                                            .items_center()
+                                            .px(px(8.))
+                                            .rounded(px(4.))
+                                            .bg(rgba(
+                                                (search_box_bg << 8)
+                                                    | if search_is_empty { 0x40 } else { 0x80 },
+                                            ))
+                                            .border_1()
+                                            .border_color(rgba(
+                                                (accent_color << 8)
+                                                    | if search_is_empty { 0x20 } else { 0x40 },
+                                            ))
+                                            .text_sm()
+                                            .text_color(if search_is_empty {
+                                                rgb(text_muted)
+                                            } else {
+                                                rgb(text_primary)
+                                            })
+                                            .when(search_is_empty, |d| {
+                                                d.child(
+                                                    div()
+                                                        .w(px(2.))
+                                                        .h(px(14.))
+                                                        .mr(px(2.))
+                                                        .rounded(px(1.))
+                                                        .when(cursor_visible_for_search, |d| {
+                                                            d.bg(rgb(accent_color))
+                                                        }),
+                                                )
+                                            })
+                                            .child(search_display)
+                                            .when(!search_is_empty, |d| {
+                                                d.child(
+                                                    div()
+                                                        .w(px(2.))
+                                                        .h(px(14.))
+                                                        .ml(px(2.))
+                                                        .rounded(px(1.))
+                                                        .when(cursor_visible_for_search, |d| {
+                                                            d.bg(rgb(accent_color))
+                                                        }),
+                                                )
+                                            }),
+                                    )
+                                    .child(
+                                        div()
+                                            .mx(px(4.))
+                                            .text_color(rgba((text_dimmed << 8) | 0x60))
+                                            .text_sm()
+                                            .child("|"),
+                                    ),
+                            ),
+                    ),
+            )
+        } else {
+            None
+        };
+
         div()
-            .relative() // Needed for absolute positioned actions dialog overlay
-            .flex()
-            .flex_col()
+            .relative() // Needed for absolute positioned overlays
             .bg(rgba(bg_with_alpha))
             .shadow(box_shadows)
             .w_full()
@@ -695,171 +855,16 @@ impl ScriptListApp {
             .rounded(px(design_visual.radius_lg))
             .track_focus(&self.focus_handle) // Required to receive key events
             .on_key_down(handle_key)
-            // CLS-FREE ACTIONS AREA: Matches main menu and ArgPrompt pattern
-            .when(has_actions, |d| {
-                let button_colors = ButtonColors::from_theme(&self.theme);
-                let handle_actions = cx.entity().downgrade();
-                let show_actions = self.show_actions_popup;
-
-                // Get actions search text from the dialog
-                let search_text = self
-                    .actions_dialog
-                    .as_ref()
-                    .map(|dialog| dialog.read(cx).search_text.clone())
-                    .unwrap_or_default();
-                let search_is_empty = search_text.is_empty();
-                let search_display: SharedString = if search_is_empty {
-                    "Search actions...".into()
-                } else {
-                    search_text.into()
-                };
-                let accent_color = design_colors.accent;
-                let text_primary = design_colors.text_primary;
-                let text_muted = design_colors.text_muted;
-                let text_dimmed = design_colors.text_dimmed;
-                let search_box_bg = self.theme.colors.background.search_box;
-                let cursor_visible_for_search =
-                    self.focused_input == FocusedInput::ActionsSearch && self.cursor_visible;
-
-                d.child(
-                    div()
-                        .w_full()
-                        .px(px(design_spacing.padding_lg))
-                        .py(px(design_spacing.padding_md))
-                        .flex()
-                        .flex_row()
-                        .items_center()
-                        .justify_end()
-                        .child(
-                            div()
-                                .relative()
-                                .h(px(28.))
-                                .flex()
-                                .items_center()
-                                // Layer 1: Actions button - visible when NOT showing actions search
-                                .child(
-                                    div()
-                                        .absolute()
-                                        .inset_0()
-                                        .flex()
-                                        .flex_row()
-                                        .items_center()
-                                        .justify_end()
-                                        .when(show_actions, |d| d.opacity(0.).invisible())
-                                        .child(
-                                            Button::new("Actions", button_colors)
-                                                .variant(ButtonVariant::Ghost)
-                                                .shortcut("⌘ K")
-                                                .on_click(Box::new(move |_, window, cx| {
-                                                    if let Some(app) = handle_actions.upgrade() {
-                                                        app.update(cx, |this, cx| {
-                                                            this.toggle_arg_actions(cx, window);
-                                                        });
-                                                    }
-                                                })),
-                                        )
-                                        .child(
-                                            div()
-                                                .mx(px(4.))
-                                                .text_color(rgba((text_dimmed << 8) | 0x60))
-                                                .text_sm()
-                                                .child("|"),
-                                        ),
-                                )
-                                // Layer 2: Actions search input - visible when showing actions search
-                                .child(
-                                    div()
-                                        .absolute()
-                                        .inset_0()
-                                        .flex()
-                                        .flex_row()
-                                        .items_center()
-                                        .justify_end()
-                                        .gap(px(8.))
-                                        .when(!show_actions, |d| d.opacity(0.).invisible())
-                                        .child(
-                                            div()
-                                                .text_color(rgb(text_dimmed))
-                                                .text_xs()
-                                                .child("⌘K"),
-                                        )
-                                        .child(
-                                            div()
-                                                .id("div-actions-search")
-                                                .flex_shrink_0()
-                                                .w(px(130.))
-                                                .min_w(px(130.))
-                                                .max_w(px(130.))
-                                                .h(px(24.))
-                                                .min_h(px(24.))
-                                                .max_h(px(24.))
-                                                .overflow_hidden()
-                                                .flex()
-                                                .flex_row()
-                                                .items_center()
-                                                .px(px(8.))
-                                                .rounded(px(4.))
-                                                .bg(rgba(
-                                                    (search_box_bg << 8)
-                                                        | if search_is_empty { 0x40 } else { 0x80 },
-                                                ))
-                                                .border_1()
-                                                .border_color(rgba(
-                                                    (accent_color << 8)
-                                                        | if search_is_empty { 0x20 } else { 0x40 },
-                                                ))
-                                                .text_sm()
-                                                .text_color(if search_is_empty {
-                                                    rgb(text_muted)
-                                                } else {
-                                                    rgb(text_primary)
-                                                })
-                                                .when(search_is_empty, |d| {
-                                                    d.child(
-                                                        div()
-                                                            .w(px(2.))
-                                                            .h(px(14.))
-                                                            .mr(px(2.))
-                                                            .rounded(px(1.))
-                                                            .when(cursor_visible_for_search, |d| {
-                                                                d.bg(rgb(accent_color))
-                                                            }),
-                                                    )
-                                                })
-                                                .child(search_display)
-                                                .when(!search_is_empty, |d| {
-                                                    d.child(
-                                                        div()
-                                                            .w(px(2.))
-                                                            .h(px(14.))
-                                                            .ml(px(2.))
-                                                            .rounded(px(1.))
-                                                            .when(cursor_visible_for_search, |d| {
-                                                                d.bg(rgb(accent_color))
-                                                            }),
-                                                    )
-                                                }),
-                                        )
-                                        .child(
-                                            div()
-                                                .mx(px(4.))
-                                                .text_color(rgba((text_dimmed << 8) | 0x60))
-                                                .text_sm()
-                                                .child("|"),
-                                        ),
-                                ),
-                        ),
-                )
-            })
-            // Content area - render the DivPrompt entity which handles HTML parsing and rendering
+            // Content area FIRST - render the DivPrompt entity (full height)
             .child(
                 div()
-                    .flex_1()
-                    .w_full()
+                    .size_full()
                     .min_h(px(0.)) // Critical: allows flex children to size properly
                     .overflow_hidden()
                     .child(entity.clone()),
             )
+            // Header overlay SECOND - absolute positioned, renders ON TOP of content
+            .when_some(header_overlay, |d, header| d.child(header))
             // Actions dialog overlay (when Cmd+K is pressed with SDK actions)
             .when_some(
                 if self.show_actions_popup {
@@ -936,6 +941,11 @@ impl ScriptListApp {
                   event: &gpui::KeyDownEvent,
                   window: &mut Window,
                   cx: &mut Context<Self>| {
+                // Global shortcuts (Cmd+W, ESC for dismissable prompts)
+                if this.handle_global_shortcut_with_options(event, true, cx) {
+                    return;
+                }
+
                 let key_str = event.keystroke.key.to_lowercase();
                 let has_shift = event.keystroke.modifiers.shift;
                 let has_cmd = event.keystroke.modifiers.platform;
@@ -1036,12 +1046,7 @@ impl ScriptListApp {
                         logging::log("FORM", &format!("Form values: {}", values));
                         this.submit_prompt_response(prompt_id_for_key.clone(), Some(values), cx);
                     }
-                    "escape" => {
-                        // ESC cancels the script completely
-                        logging::log("KEY", "ESC in FormPrompt - canceling script");
-                        this.submit_prompt_response(prompt_id_for_key.clone(), None, cx);
-                        this.cancel_script_execution(cx);
-                    }
+                    // Note: "escape" is handled by handle_global_shortcut_with_options above
                     "tab" => {
                         // Tab navigation between fields
                         if has_shift {
@@ -1340,6 +1345,11 @@ impl ScriptListApp {
                   event: &gpui::KeyDownEvent,
                   window: &mut Window,
                   cx: &mut Context<Self>| {
+                // Global shortcuts (Cmd+W only - term is NOT dismissable with ESC)
+                if this.handle_global_shortcut_with_options(event, false, cx) {
+                    return;
+                }
+
                 let key_str = event.keystroke.key.to_lowercase();
                 let has_cmd = event.keystroke.modifiers.platform;
 
@@ -1655,6 +1665,11 @@ impl ScriptListApp {
                   event: &gpui::KeyDownEvent,
                   window: &mut Window,
                   cx: &mut Context<Self>| {
+                // Global shortcuts (Cmd+W only - editor is NOT dismissable with ESC)
+                if this.handle_global_shortcut_with_options(event, false, cx) {
+                    return;
+                }
+
                 let key_str = event.keystroke.key.to_lowercase();
                 let has_cmd = event.keystroke.modifiers.platform;
 
@@ -1939,7 +1954,7 @@ impl ScriptListApp {
     fn render_select_prompt(
         &mut self,
         entity: Entity<SelectPrompt>,
-        _cx: &mut Context<Self>,
+        cx: &mut Context<Self>,
     ) -> AnyElement {
         // Use design tokens for GLOBAL theming
         let tokens = get_tokens(self.current_design);
@@ -1952,7 +1967,20 @@ impl ScriptListApp {
         let bg_with_alpha = self.hex_to_rgba_with_opacity(bg_hex, opacity.main);
         let box_shadows = self.create_box_shadows();
 
+        // Key handler for global shortcuts (Cmd+W, ESC)
+        let handle_key = cx.listener(
+            move |this: &mut Self,
+                  event: &gpui::KeyDownEvent,
+                  _window: &mut Window,
+                  cx: &mut Context<Self>| {
+                // Global shortcuts (Cmd+W, ESC for dismissable prompts)
+                // Other keys are handled by the SelectPrompt entity's own key handler
+                let _ = this.handle_global_shortcut_with_options(event, true, cx);
+            },
+        );
+
         // SelectPrompt entity has its own track_focus and on_key_down in its render method.
+        // We wrap with our own handler to intercept Cmd+W and ESC first.
         div()
             .flex()
             .flex_col()
@@ -1962,6 +1990,7 @@ impl ScriptListApp {
             .h_full()
             .overflow_hidden()
             .rounded(px(design_visual.radius_lg))
+            .on_key_down(handle_key)
             .child(div().size_full().child(entity))
             .into_any_element()
     }
@@ -2086,6 +2115,11 @@ impl ScriptListApp {
                   event: &gpui::KeyDownEvent,
                   window: &mut Window,
                   cx: &mut Context<Self>| {
+                // Global shortcuts (Cmd+W, ESC for dismissable prompts)
+                if this.handle_global_shortcut_with_options(event, true, cx) {
+                    return;
+                }
+
                 let key_str = event.keystroke.key.to_lowercase();
                 let has_cmd = event.keystroke.modifiers.platform;
 
@@ -2237,7 +2271,7 @@ impl ScriptListApp {
     fn render_env_prompt(
         &mut self,
         entity: Entity<EnvPrompt>,
-        _cx: &mut Context<Self>,
+        cx: &mut Context<Self>,
     ) -> AnyElement {
         // Use design tokens for GLOBAL theming
         let tokens = get_tokens(self.current_design);
@@ -2250,7 +2284,20 @@ impl ScriptListApp {
         let bg_with_alpha = self.hex_to_rgba_with_opacity(bg_hex, opacity.main);
         let box_shadows = self.create_box_shadows();
 
+        // Key handler for global shortcuts (Cmd+W, ESC)
+        let handle_key = cx.listener(
+            move |this: &mut Self,
+                  event: &gpui::KeyDownEvent,
+                  _window: &mut Window,
+                  cx: &mut Context<Self>| {
+                // Global shortcuts (Cmd+W, ESC for dismissable prompts)
+                // Other keys are handled by the EnvPrompt entity's own key handler
+                let _ = this.handle_global_shortcut_with_options(event, true, cx);
+            },
+        );
+
         // EnvPrompt entity has its own track_focus and on_key_down in its render method.
+        // We wrap with our own handler to intercept Cmd+W and ESC first.
         div()
             .flex()
             .flex_col()
@@ -2260,6 +2307,7 @@ impl ScriptListApp {
             .h_full()
             .overflow_hidden()
             .rounded(px(design_visual.radius_lg))
+            .on_key_down(handle_key)
             .child(div().size_full().child(entity))
             .into_any_element()
     }
@@ -2267,7 +2315,7 @@ impl ScriptListApp {
     fn render_drop_prompt(
         &mut self,
         entity: Entity<DropPrompt>,
-        _cx: &mut Context<Self>,
+        cx: &mut Context<Self>,
     ) -> AnyElement {
         // Use design tokens for GLOBAL theming
         let tokens = get_tokens(self.current_design);
@@ -2280,7 +2328,20 @@ impl ScriptListApp {
         let bg_with_alpha = self.hex_to_rgba_with_opacity(bg_hex, opacity.main);
         let box_shadows = self.create_box_shadows();
 
+        // Key handler for global shortcuts (Cmd+W, ESC)
+        let handle_key = cx.listener(
+            move |this: &mut Self,
+                  event: &gpui::KeyDownEvent,
+                  _window: &mut Window,
+                  cx: &mut Context<Self>| {
+                // Global shortcuts (Cmd+W, ESC for dismissable prompts)
+                // Other keys are handled by the DropPrompt entity's own key handler
+                let _ = this.handle_global_shortcut_with_options(event, true, cx);
+            },
+        );
+
         // DropPrompt entity has its own track_focus and on_key_down in its render method.
+        // We wrap with our own handler to intercept Cmd+W and ESC first.
         div()
             .flex()
             .flex_col()
@@ -2290,6 +2351,7 @@ impl ScriptListApp {
             .h_full()
             .overflow_hidden()
             .rounded(px(design_visual.radius_lg))
+            .on_key_down(handle_key)
             .child(div().size_full().child(entity))
             .into_any_element()
     }
@@ -2297,7 +2359,7 @@ impl ScriptListApp {
     fn render_template_prompt(
         &mut self,
         entity: Entity<TemplatePrompt>,
-        _cx: &mut Context<Self>,
+        cx: &mut Context<Self>,
     ) -> AnyElement {
         // Use design tokens for GLOBAL theming
         let tokens = get_tokens(self.current_design);
@@ -2310,7 +2372,20 @@ impl ScriptListApp {
         let bg_with_alpha = self.hex_to_rgba_with_opacity(bg_hex, opacity.main);
         let box_shadows = self.create_box_shadows();
 
+        // Key handler for global shortcuts (Cmd+W, ESC)
+        let handle_key = cx.listener(
+            move |this: &mut Self,
+                  event: &gpui::KeyDownEvent,
+                  _window: &mut Window,
+                  cx: &mut Context<Self>| {
+                // Global shortcuts (Cmd+W, ESC for dismissable prompts)
+                // Other keys are handled by the TemplatePrompt entity's own key handler
+                let _ = this.handle_global_shortcut_with_options(event, true, cx);
+            },
+        );
+
         // TemplatePrompt entity has its own track_focus and on_key_down in its render method.
+        // We wrap with our own handler to intercept Cmd+W and ESC first.
         div()
             .flex()
             .flex_col()
@@ -2320,6 +2395,7 @@ impl ScriptListApp {
             .h_full()
             .overflow_hidden()
             .rounded(px(design_visual.radius_lg))
+            .on_key_down(handle_key)
             .child(div().size_full().child(entity))
             .into_any_element()
     }

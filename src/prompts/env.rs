@@ -5,14 +5,18 @@
 //! - Secure storage via system keyring (keychain on macOS)
 //! - Mask input for secret values
 //! - Remember values for future sessions
+//!
+//! Design: Matches ArgPrompt-no-choices (single input line, minimal height)
 
 use gpui::{
-    div, prelude::*, px, rgb, Context, FocusHandle, Focusable, Render, SharedString, Window,
+    div, prelude::*, px, rgb, rgba, svg, Context, FocusHandle, Focusable, Render, SharedString,
+    Window,
 };
 use std::sync::Arc;
 
 use crate::designs::{get_tokens, DesignVariant};
 use crate::logging;
+use crate::panel::{CURSOR_GAP_X, CURSOR_HEIGHT_LG, CURSOR_MARGIN_Y, CURSOR_WIDTH};
 use crate::theme;
 
 use super::SubmitCallback;
@@ -215,8 +219,9 @@ impl Focusable for EnvPrompt {
 impl Render for EnvPrompt {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let tokens = get_tokens(self.design_variant);
-        let colors = tokens.colors();
-        let spacing = tokens.spacing();
+        let design_colors = tokens.colors();
+        let design_spacing = tokens.spacing();
+        let design_typography = tokens.typography();
 
         let handle_key = cx.listener(
             |this: &mut Self,
@@ -242,132 +247,149 @@ impl Render for EnvPrompt {
             },
         );
 
-        let (main_bg, text_color, muted_color, search_box_bg, border_color) =
-            if self.design_variant == DesignVariant::Default {
-                (
-                    rgb(self.theme.colors.background.main),
-                    rgb(self.theme.colors.text.secondary),
-                    rgb(self.theme.colors.text.muted),
-                    rgb(self.theme.colors.background.search_box),
-                    rgb(self.theme.colors.ui.border),
-                )
-            } else {
-                (
-                    rgb(colors.background),
-                    rgb(colors.text_secondary),
-                    rgb(colors.text_muted),
-                    rgb(colors.background_secondary),
-                    rgb(colors.border),
-                )
-            };
+        // Use design tokens for consistent styling (matches ArgPrompt)
+        let text_primary = design_colors.text_primary;
+        let text_muted = design_colors.text_muted;
+        let text_dimmed = design_colors.text_dimmed;
+        let accent_color = design_colors.accent;
 
-        let prompt_text = self
+        // Build placeholder text: "Enter {KEY}" or custom prompt, with lock icon for secrets
+        let placeholder: SharedString = self
             .prompt
             .clone()
-            .unwrap_or_else(|| format!("Enter value for {}", self.key));
+            .map(|p| {
+                if self.secret {
+                    format!("🔒 {}", p)
+                } else {
+                    p
+                }
+            })
+            .unwrap_or_else(|| {
+                if self.secret {
+                    format!("🔒 Enter {}", self.key)
+                } else {
+                    format!("Enter {}", self.key)
+                }
+            })
+            .into();
 
         let display_text = self.display_text();
-        let input_display = if display_text.is_empty() {
-            SharedString::from("Type here...")
+        let input_is_empty = display_text.is_empty();
+
+        let input_display: SharedString = if input_is_empty {
+            placeholder
         } else {
-            SharedString::from(display_text)
+            display_text.into()
         };
 
-        // Icon based on secret mode
-        let icon = if self.secret { "🔐" } else { "📝" };
+        // Cursor visibility (always visible for now, can add blink timer later)
+        let cursor_visible = true;
 
+        // Main container - matches ArgPrompt-no-choices layout exactly
+        // Single row with: input area + Submit button + logo
         div()
             .id(gpui::ElementId::Name("window:env".into()))
             .flex()
             .flex_col()
             .w_full()
             .h_full()
-            .bg(main_bg)
-            .text_color(text_color)
-            .p(px(spacing.padding_lg))
+            .text_color(rgb(text_primary))
+            .font_family(design_typography.font_family)
             .key_context("env_prompt")
             .track_focus(&self.focus_handle)
             .on_key_down(handle_key)
-            // Header with icon and key name
+            // Single header row (matches ArgPrompt exactly)
             .child(
                 div()
+                    .w_full()
+                    .px(px(design_spacing.padding_lg))
+                    .py(px(design_spacing.padding_md))
                     .flex()
                     .flex_row()
                     .items_center()
-                    .gap_2()
-                    .child(div().text_xl().child(icon))
+                    .gap_3()
+                    // Input area with cursor (same pattern as ArgPrompt)
+                    .child(
+                        div()
+                            .flex_1()
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .text_lg()
+                            .text_color(if input_is_empty {
+                                rgb(text_muted)
+                            } else {
+                                rgb(text_primary)
+                            })
+                            // When empty: cursor LEFT (before placeholder)
+                            .when(input_is_empty, |d| {
+                                d.child(
+                                    div()
+                                        .w(px(CURSOR_WIDTH))
+                                        .h(px(CURSOR_HEIGHT_LG))
+                                        .my(px(CURSOR_MARGIN_Y))
+                                        .mr(px(CURSOR_GAP_X))
+                                        .when(cursor_visible, |d| d.bg(rgb(text_primary))),
+                                )
+                            })
+                            // Display text - with negative margin for placeholder alignment
+                            .when(input_is_empty, |d| {
+                                d.child(
+                                    div()
+                                        .ml(px(-(CURSOR_WIDTH + CURSOR_GAP_X)))
+                                        .child(input_display.clone()),
+                                )
+                            })
+                            .when(!input_is_empty, |d| d.child(input_display.clone()))
+                            // When typing: cursor RIGHT (after text)
+                            .when(!input_is_empty, |d| {
+                                d.child(
+                                    div()
+                                        .w(px(CURSOR_WIDTH))
+                                        .h(px(CURSOR_HEIGHT_LG))
+                                        .my(px(CURSOR_MARGIN_Y))
+                                        .ml(px(CURSOR_GAP_X))
+                                        .when(cursor_visible, |d| d.bg(rgb(text_primary))),
+                                )
+                            }),
+                    )
+                    // Submit button area (matches ArgPrompt style)
                     .child(
                         div()
                             .flex()
-                            .flex_col()
+                            .flex_row()
+                            .items_center()
                             .child(
                                 div()
-                                    .text_lg()
-                                    .font_weight(gpui::FontWeight::SEMIBOLD)
-                                    .child(prompt_text),
+                                    .text_color(rgb(accent_color))
+                                    .text_sm()
+                                    .child("Submit"),
                             )
                             .child(
                                 div()
+                                    .ml(px(4.))
+                                    .px(px(4.))
+                                    .py(px(2.))
+                                    .rounded(px(4.))
+                                    .bg(rgba((text_dimmed << 8) | 0x30))
+                                    .text_color(rgb(text_muted))
+                                    .text_xs()
+                                    .child("↵"),
+                            )
+                            .child(
+                                div()
+                                    .mx(px(4.))
+                                    .text_color(rgba((text_dimmed << 8) | 0x60))
                                     .text_sm()
-                                    .text_color(muted_color)
-                                    .child(format!("Key: {}", self.key)),
+                                    .child("|"),
                             ),
-                    ),
-            )
-            // Input field
-            .child(
-                div()
-                    .mt(px(spacing.padding_lg))
-                    .px(px(spacing.item_padding_x))
-                    .py(px(spacing.padding_md))
-                    .bg(search_box_bg)
-                    .border_1()
-                    .border_color(border_color)
-                    .rounded(px(6.))
-                    .text_color(if self.input_text.is_empty() {
-                        muted_color
-                    } else {
-                        text_color
-                    })
-                    .child(input_display),
-            )
-            // Footer hint
-            .child(
-                div()
-                    .mt(px(spacing.padding_md))
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .gap_2()
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(muted_color)
-                            .child(if self.secret {
-                                "🔒 Value will be stored securely in system keychain"
-                            } else {
-                                "Value will be saved to environment"
-                            }),
-                    ),
-            )
-            // Keyboard hints
-            .child(
-                div()
-                    .mt(px(spacing.padding_sm))
-                    .flex()
-                    .flex_row()
-                    .gap_4()
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(muted_color)
-                            .child("Enter to submit"),
                     )
+                    // Script Kit logo
                     .child(
-                        div()
-                            .text_xs()
-                            .text_color(muted_color)
-                            .child("Esc to cancel"),
+                        svg()
+                            .path(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/logo.svg"))
+                            .size(px(16.))
+                            .text_color(rgb(accent_color)),
                     ),
             )
     }

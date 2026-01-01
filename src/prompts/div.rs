@@ -7,8 +7,8 @@
 //! - Simple keyboard: Enter or Escape to submit
 
 use gpui::{
-    div, prelude::*, px, rgb, rgba, Context, Div, FocusHandle, Focusable, FontWeight, Hsla, Render,
-    Window,
+    div, prelude::*, px, rgb, rgba, Context, Div, FocusHandle, Focusable, FontWeight, Hsla, Point,
+    Render, ScrollHandle, Window,
 };
 use std::sync::Arc;
 
@@ -147,6 +147,10 @@ pub struct DivPrompt {
     pub design_variant: DesignVariant,
     /// Container customization options
     pub container_options: ContainerOptions,
+    /// Scroll handle for tracking scroll position
+    pub scroll_handle: ScrollHandle,
+    /// Cached scroll offset for scrollbar rendering
+    scroll_offset: Point<f32>,
 }
 
 impl DivPrompt {
@@ -218,7 +222,14 @@ impl DivPrompt {
             theme,
             design_variant,
             container_options,
+            scroll_handle: ScrollHandle::new(),
+            scroll_offset: Point::default(),
         }
+    }
+
+    /// Get the current scroll offset (Y position in pixels)
+    pub fn scroll_offset_y(&self) -> f32 {
+        self.scroll_offset.y
     }
 
     /// Submit - always with None value (just acknowledgment)
@@ -841,7 +852,6 @@ impl Render for DivPrompt {
         // Get design tokens for the current design variant
         let tokens = get_tokens(self.design_variant);
         let colors = tokens.colors();
-        let spacing = tokens.spacing();
 
         let handle_key = cx.listener(
             move |this: &mut Self,
@@ -922,8 +932,9 @@ impl Render for DivPrompt {
             Hsla::from(rgb(colors.background))
         };
 
-        // Determine container padding
-        let container_padding = self.container_options.get_padding(spacing.padding_lg);
+        // Determine container padding - use uniform padding for consistent appearance
+        // Default to 12px (matching config default) for balanced top/left spacing
+        let container_padding = self.container_options.get_padding(12.0);
 
         // Generate semantic IDs for div prompt elements
         let panel_semantic_id = format!("panel:content-{}", self.id);
@@ -952,15 +963,18 @@ impl Render for DivPrompt {
             content_base
         };
 
-        // Add ID to make it Stateful, then enable vertical scrolling
+        // Add ID to make it Stateful, then enable vertical scrolling with tracked scroll handle
         // overflow_y_scroll requires StatefulInteractiveElement trait (needs .id() first)
         let content_container = content_styled
             .id(gpui::ElementId::Name(panel_semantic_id.into()))
-            .overflow_y_scroll();
+            .overflow_y_scroll()
+            .track_scroll(&self.scroll_handle);
 
         // Main container - fills entire window height with no bottom gap
+        // Use relative positioning to overlay scrollbar
         div()
             .id(gpui::ElementId::Name("window:div".into()))
+            .relative()
             .flex()
             .flex_col()
             .w_full()
@@ -972,7 +986,6 @@ impl Render for DivPrompt {
             .track_focus(&self.focus_handle)
             .on_key_down(handle_key)
             .child(content_container)
-        // Footer removed - content now extends to bottom of container
     }
 }
 
