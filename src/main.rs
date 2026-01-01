@@ -523,6 +523,9 @@ struct ScriptListApp {
     action_shortcuts: std::collections::HashMap<String, String>,
     // Navigation coalescing for rapid arrow key events (20ms window)
     nav_coalescer: NavCoalescer,
+    // Window focus tracking - for detecting focus lost and auto-dismissing prompts
+    // When window loses focus while in a dismissable prompt, close and reset
+    was_window_focused: bool,
     // Scroll stabilization: track last scrolled-to index for each scroll handle
     #[allow(dead_code)]
     last_scrolled_main: Option<usize>,
@@ -620,6 +623,22 @@ impl Render for ScriptListApp {
                 }
             }
         }
+
+        // Focus-lost auto-dismiss: Close dismissable prompts when user clicks another app
+        // This makes the app feel more native - clicking away from a prompt dismisses it
+        let is_app_active = platform::is_app_active();
+        if self.was_window_focused && !is_app_active {
+            // Window just lost focus (user clicked on another app)
+            // Only auto-dismiss if we're in a dismissable view AND window is visible
+            if self.is_dismissable_view() && WINDOW_VISIBLE.load(Ordering::SeqCst) {
+                logging::log(
+                    "FOCUS",
+                    "Window lost focus while in dismissable view - closing",
+                );
+                self.close_and_reset_window(cx);
+            }
+        }
+        self.was_window_focused = is_app_active;
 
         // NOTE: Prompt messages are now handled via event-driven async_channel listener
         // spawned in execute_interactive() - no polling needed in render()

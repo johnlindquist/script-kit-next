@@ -161,6 +161,38 @@ pub fn configure_as_floating_panel() {
 }
 
 // ============================================================================
+// App Active State Detection
+// ============================================================================
+
+/// Check if the application is currently active (has focus).
+///
+/// On macOS, this uses NSApplication's isActive property to determine
+/// if our app is the frontmost app receiving keyboard events.
+///
+/// # Returns
+/// - `true` if the app is active (user is interacting with our windows)
+/// - `false` if another app is active (user clicked on another app)
+///
+/// # Platform Support
+/// - macOS: Uses NSApplication isActive
+/// - Other platforms: Always returns true (not yet implemented)
+#[cfg(target_os = "macos")]
+pub fn is_app_active() -> bool {
+    unsafe {
+        let app: id = NSApp();
+        let is_active: bool = msg_send![app, isActive];
+        is_active
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn is_app_active() -> bool {
+    // TODO: Implement for other platforms
+    // On non-macOS, assume always active
+    true
+}
+
+// ============================================================================
 // Constants
 // ============================================================================
 

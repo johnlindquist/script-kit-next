@@ -216,6 +216,8 @@ impl ScriptListApp {
             action_shortcuts: std::collections::HashMap::new(),
             // Navigation coalescing for rapid arrow key events
             nav_coalescer: NavCoalescer::new(),
+            // Window focus tracking - for detecting focus lost and auto-dismissing prompts
+            was_window_focused: true,
             // Scroll stabilization: track last scrolled index for each handle
             last_scrolled_main: None,
             last_scrolled_arg: None,
