@@ -99,8 +99,13 @@ open = "5"
 inventory = "0.3"  # Compile-time story registration (same pattern as Zed)
 clap = { version = "4", features = ["derive"] }  # CLI argument parsing
 
-# Note: We tried gpui-component for its Input widget but it requires complex Root 
-# wrapper initialization. Our custom TextInputState is simpler and meets our needs.
+# gpui-component - Community UI component library for GPUI
+# Used for the separate Notes window feature (Raycast Notes parity)
+# Requires Root wrapper - the Notes window is a separate window from the main launcher
+gpui-component = { git = "https://github.com/longbridge/gpui-component", package = "gpui-component" }
+
+# i18n support required by gpui-component
+rust-i18n = "3"
 
 # Core Foundation for CFRunLoop (keyboard monitoring)
 core-foundation = "0.10"

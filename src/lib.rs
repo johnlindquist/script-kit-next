@@ -132,3 +132,7 @@ pub mod mcp_resources;
 // Stdin commands - external command handling via stdin
 // Provides JSON command protocol for testing and automation
 pub mod stdin_commands;
+
+// Notes - Raycast Notes feature parity
+// Separate floating window for note-taking with gpui-component
+pub mod notes;

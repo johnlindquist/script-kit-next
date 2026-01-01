@@ -114,6 +114,9 @@ mod mcp_script_tools;
 mod mcp_server;
 mod mcp_streaming;
 
+// Notes - Raycast Notes feature parity (separate floating window)
+mod notes;
+
 use crate::components::text_input::TextInputState;
 use crate::components::toast::{Toast, ToastAction, ToastColors};
 use crate::error::ErrorSeverity;
@@ -1524,6 +1527,28 @@ fn main() {
                                             view.update_window_size();
                                         }
                                     });
+                                });
+                            }
+                            Some(TrayMenuAction::OpenNotes) => {
+                                logging::log("TRAY", "Notes menu item clicked");
+                                let _ = cx.update(|cx| {
+                                    if let Err(e) = notes::open_notes_window(cx) {
+                                        logging::log(
+                                            "TRAY",
+                                            &format!("Failed to open notes window: {}", e),
+                                        );
+                                    }
+                                });
+                            }
+                            Some(TrayMenuAction::NewNote) => {
+                                logging::log("TRAY", "New Note menu item clicked");
+                                let _ = cx.update(|cx| {
+                                    if let Err(e) = notes::quick_capture(cx) {
+                                        logging::log(
+                                            "TRAY",
+                                            &format!("Failed to quick capture note: {}", e),
+                                        );
+                                    }
                                 });
                             }
                             Some(TrayMenuAction::Settings) => {

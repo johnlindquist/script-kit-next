@@ -20,6 +20,8 @@ const LOGO_SVG: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" width="32" hei
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TrayMenuAction {
     OpenScriptKit,
+    OpenNotes,
+    NewNote,
     Settings,
     Quit,
 }
@@ -29,6 +31,8 @@ pub struct TrayManager {
     #[allow(dead_code)]
     tray_icon: TrayIcon,
     open_script_kit_id: String,
+    open_notes_id: String,
+    new_note_id: String,
     settings_id: String,
     quit_id: String,
 }
@@ -43,7 +47,8 @@ impl TrayManager {
     /// - Tray icon creation fails
     pub fn new() -> Result<Self> {
         let icon = Self::create_icon_from_svg()?;
-        let (menu, open_id, settings_id, quit_id) = Self::create_menu()?;
+        let (menu, open_id, open_notes_id, new_note_id, settings_id, quit_id) =
+            Self::create_menu()?;
 
         let tray_icon = TrayIconBuilder::new()
             .with_icon(icon)
@@ -56,6 +61,8 @@ impl TrayManager {
         Ok(Self {
             tray_icon,
             open_script_kit_id: open_id,
+            open_notes_id,
+            new_note_id,
             settings_id,
             quit_id,
         })
@@ -88,28 +95,47 @@ impl TrayManager {
     }
 
     /// Creates the tray menu with standard items
-    fn create_menu() -> Result<(Menu, String, String, String)> {
+    fn create_menu() -> Result<(Menu, String, String, String, String, String)> {
         let menu = Menu::new();
 
         // Create menu items
         let open_item = MenuItem::new("Open Script Kit", true, None);
+        let open_notes_item = MenuItem::new("Notes", true, None);
+        let new_note_item = MenuItem::new("New Note", true, None);
         let settings_item = MenuItem::new("Settings", true, None);
         let quit_item = MenuItem::new("Quit", true, None);
 
         // Store IDs for event matching
         let open_id = open_item.id().0.clone();
+        let open_notes_id = open_notes_item.id().0.clone();
+        let new_note_id = new_note_item.id().0.clone();
         let settings_id = settings_item.id().0.clone();
         let quit_id = quit_item.id().0.clone();
 
         // Add items to menu
         menu.append(&open_item).context("Failed to add Open item")?;
+        menu.append(&PredefinedMenuItem::separator())
+            .context("Failed to add separator")?;
+        menu.append(&open_notes_item)
+            .context("Failed to add Notes item")?;
+        menu.append(&new_note_item)
+            .context("Failed to add New Note item")?;
+        menu.append(&PredefinedMenuItem::separator())
+            .context("Failed to add separator")?;
         menu.append(&settings_item)
             .context("Failed to add Settings item")?;
         menu.append(&PredefinedMenuItem::separator())
             .context("Failed to add separator")?;
         menu.append(&quit_item).context("Failed to add Quit item")?;
 
-        Ok((menu, open_id, settings_id, quit_id))
+        Ok((
+            menu,
+            open_id,
+            open_notes_id,
+            new_note_id,
+            settings_id,
+            quit_id,
+        ))
     }
 
     /// Returns the menu event receiver for handling menu clicks
@@ -137,6 +163,10 @@ impl TrayManager {
         let id = &event.id.0;
         if id == &self.open_script_kit_id {
             Some(TrayMenuAction::OpenScriptKit)
+        } else if id == &self.open_notes_id {
+            Some(TrayMenuAction::OpenNotes)
+        } else if id == &self.new_note_id {
+            Some(TrayMenuAction::NewNote)
         } else if id == &self.settings_id {
             Some(TrayMenuAction::Settings)
         } else if id == &self.quit_id {

@@ -160,18 +160,35 @@ impl ScriptListApp {
             let grouped_items_clone = grouped_items.clone();
             let flat_results_clone = flat_results.clone();
 
-            // Calculate scrollbar parameters
-            // Estimate visible items based on typical container height
-            // Note: With variable heights, this is approximate
-            let estimated_container_height = 400.0_f32; // Typical visible height
-            let visible_items = (estimated_container_height / LIST_ITEM_HEIGHT) as usize;
+            // Calculate scrollbar parameters for variable-height items
+            // Count section headers vs regular items to get true content height
+            let mut header_count = 0_usize;
+            let mut item_count_regular = 0_usize;
+            for item in grouped_items.iter() {
+                match item {
+                    GroupedListItem::SectionHeader(_) => header_count += 1,
+                    GroupedListItem::Item(_) => item_count_regular += 1,
+                }
+            }
 
-            // Use selected_index as approximate scroll offset
-            let scroll_offset = if self.selected_index > visible_items.saturating_sub(1) {
-                self.selected_index.saturating_sub(visible_items / 2)
+            // Calculate true content height: headers at 24px, items at 48px
+            let total_content_height = (header_count as f32 * SECTION_HEADER_HEIGHT)
+                + (item_count_regular as f32 * LIST_ITEM_HEIGHT);
+
+            // Typical visible container height
+            let estimated_container_height = 400.0_f32;
+
+            // Calculate visible items as a ratio of container to total content
+            // This gives a more accurate thumb size for the scrollbar
+            let visible_ratio = if total_content_height > 0.0 {
+                (estimated_container_height / total_content_height).min(1.0)
             } else {
-                0
+                1.0
             };
+            let visible_items = ((item_count as f32) * visible_ratio).ceil() as usize;
+
+            // Get actual scroll position from ListState (not approximated from selected_index)
+            let scroll_offset = self.main_list_state.logical_scroll_top().item_ix;
 
             // Get scrollbar colors from theme or design
             let scrollbar_colors = if is_default_design {
