@@ -31,6 +31,23 @@ impl HotkeyPoller {
                 logging::log("VISIBILITY", "║  HOTKEY TRIGGERED - TOGGLE WINDOW                          ║");
                 logging::log("VISIBILITY", "╚════════════════════════════════════════════════════════════╝");
 
+                // CRITICAL: If Notes or AI windows are open, the main hotkey should be completely ignored.
+                // The hotkeys are independent - main hotkey should have ZERO effect on Notes/AI.
+                let notes_open = notes::is_notes_window_open();
+                let ai_open = ai::is_ai_window_open();
+                
+                if notes_open || ai_open {
+                    logging::log(
+                        "VISIBILITY", 
+                        &format!(
+                            "Notes/AI window is open (notes={}, ai={}) - main hotkey IGNORED",
+                            notes_open, ai_open
+                        )
+                    );
+                    logging::log("VISIBILITY", "═══════════════════════════════════════════════════════════════");
+                    continue; // Completely skip - don't toggle main window at all
+                }
+
                 // Check current visibility state for toggle behavior
                 let is_visible = script_kit_gpui::is_main_window_visible();
                 let needs_reset = NEEDS_RESET.load(std::sync::atomic::Ordering::SeqCst);
@@ -52,6 +69,10 @@ impl HotkeyPoller {
                     // Window is visible - check if in prompt mode
                     let window_clone = window;
 
+                    // Check if Notes or AI windows are open - if so, only hide main window, not the whole app
+                    let notes_open = notes::is_notes_window_open();
+                    let ai_open = ai::is_ai_window_open();
+
                     // First check if we're in a prompt - if so, cancel and hide
                     let _ = cx.update(move |cx: &mut App| {
                         let _ = window_clone.update(
@@ -72,17 +93,27 @@ impl HotkeyPoller {
                             },
                         );
 
-                        // Always hide the window when hotkey pressed while visible
+                        // Hide the main window
                         logging::log("HOTKEY", "Hiding window (toggle: visible -> hidden)");
-                        // PERF: Measure window hide latency
                         let hide_start = std::time::Instant::now();
-                        cx.hide();
+
+                        // CRITICAL: If Notes or AI windows are open, only hide the main window
+                        // using platform::hide_main_window(). Don't call cx.hide() which would
+                        // hide ALL windows including Notes/AI.
+                        if notes_open || ai_open {
+                            logging::log("HOTKEY", "Notes/AI window open - using orderOut to hide only main window");
+                            platform::hide_main_window();
+                        } else {
+                            // No other windows open - safe to hide the entire app
+                            cx.hide();
+                        }
+
                         let hide_elapsed = hide_start.elapsed();
                         logging::log(
                             "PERF",
                             &format!("Window hide took {:.2}ms", hide_elapsed.as_secs_f64() * 1000.0),
                         );
-                        logging::log("HOTKEY", "Window hidden via cx.hide()");
+                        logging::log("HOTKEY", "Main window hidden");
                     });
                 } else {
                     logging::log("VISIBILITY", "Decision: SHOW (window is currently hidden)");

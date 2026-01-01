@@ -25,7 +25,16 @@ fn get_notes_db_path() -> PathBuf {
 }
 
 /// Initialize the notes database
+///
+/// This function is idempotent - it's safe to call multiple times.
+/// If the database is already initialized, it returns Ok(()) immediately.
 pub fn init_notes_db() -> Result<()> {
+    // Check if already initialized - this is the common case after first init
+    if NOTES_DB.get().is_some() {
+        debug!("Notes database already initialized, skipping");
+        return Ok(());
+    }
+
     let db_path = get_notes_db_path();
 
     // Ensure directory exists
@@ -84,9 +93,9 @@ pub fn init_notes_db() -> Result<()> {
 
     info!(db_path = %db_path.display(), "Notes database initialized");
 
-    NOTES_DB
-        .set(Arc::new(Mutex::new(conn)))
-        .map_err(|_| anyhow::anyhow!("Notes database already initialized"))?;
+    // Use get_or_init pattern to handle race condition where another thread
+    // might have initialized the DB between our check and set
+    let _ = NOTES_DB.get_or_init(|| Arc::new(Mutex::new(conn)));
 
     Ok(())
 }

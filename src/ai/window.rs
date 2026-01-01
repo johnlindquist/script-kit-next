@@ -127,6 +127,46 @@ fn group_chats_by_date(chats: &[Chat]) -> Vec<(DateGroup, Vec<&Chat>)> {
     groups
 }
 
+/// Generate a contextual mock AI response based on the user's message
+/// Used for demo/testing when no AI providers are configured
+fn generate_mock_response(user_message: &str) -> String {
+    let msg_lower = user_message.to_lowercase();
+
+    // Contextual responses based on common patterns
+    if msg_lower.contains("hello") || msg_lower.contains("hi") || msg_lower.starts_with("hey") {
+        return "Hello! I'm Script Kit's AI assistant running in demo mode. Since no API key is configured, I'm providing mock responses. To enable real AI, set `SCRIPT_KIT_ANTHROPIC_API_KEY` or `SCRIPT_KIT_OPENAI_API_KEY` in your environment.".to_string();
+    }
+
+    if msg_lower.contains("script") || msg_lower.contains("automation") {
+        return "Script Kit is a powerful automation tool! Here are some things you can do:\n\n1. **Create scripts** - Write TypeScript/JavaScript to automate tasks\n2. **Use prompts** - `arg()`, `editor()`, `div()` for interactive UIs\n3. **Hotkeys** - Bind scripts to global keyboard shortcuts\n4. **Snippets** - Text expansion with dynamic content\n\nTry running a script with `Cmd+;` to see it in action!".to_string();
+    }
+
+    if msg_lower.contains("help") || msg_lower.contains("how") {
+        return "I'm here to help! In demo mode, I can explain Script Kit concepts:\n\n• **Scripts** live in `~/.kenv/scripts/`\n• **SDK** provides `arg()`, `div()`, `editor()`, and more\n• **Hotkeys** are configured in script metadata\n• **This AI chat** works with Claude or GPT when you add an API key\n\nWhat would you like to know more about?".to_string();
+    }
+
+    if msg_lower.contains("code") || msg_lower.contains("example") {
+        return "Here's a simple Script Kit example:\n\n```typescript\n// Name: Hello World\n// Shortcut: cmd+shift+h\n\nconst name = await arg(\"What's your name?\");\nawait div(`<h1>Hello, ${name}!</h1>`);\n```\n\nThis creates a script that:\n1. Asks for your name via a prompt\n2. Displays a greeting in an HTML view\n\nSave this to `~/.kenv/scripts/hello.ts` and run it!".to_string();
+    }
+
+    if msg_lower.contains("api") || msg_lower.contains("key") || msg_lower.contains("configure") {
+        return "To enable real AI responses, configure an API key:\n\n**For Claude (Anthropic):**\n```bash\nexport SCRIPT_KIT_ANTHROPIC_API_KEY=\"sk-ant-...\"\n```\n\n**For GPT (OpenAI):**\n```bash\nexport SCRIPT_KIT_OPENAI_API_KEY=\"sk-...\"\n```\n\nAdd these to your `~/.zshrc` or `~/.kenv/.env` file, then restart Script Kit.".to_string();
+    }
+
+    // Default response for unrecognized queries
+    format!(
+        "I received your message: \"{}\"\n\n\
+        I'm running in **demo mode** because no AI API key is configured. \
+        My responses are pre-written examples.\n\n\
+        To get real AI responses:\n\
+        1. Get an API key from Anthropic or OpenAI\n\
+        2. Set `SCRIPT_KIT_ANTHROPIC_API_KEY` or `SCRIPT_KIT_OPENAI_API_KEY`\n\
+        3. Restart Script Kit\n\n\
+        Try asking about \"scripts\", \"help\", or \"code examples\" to see more demo responses!",
+        user_message.chars().take(50).collect::<String>()
+    )
+}
+
 /// Global handle to the AI window
 static AI_WINDOW: std::sync::OnceLock<std::sync::Mutex<Option<gpui::WindowHandle<Root>>>> =
     std::sync::OnceLock::new();
@@ -468,8 +508,17 @@ impl AiApp {
         cx.notify();
     }
 
-    /// Start streaming an AI response
+    /// Start streaming an AI response (or mock response if no providers configured)
     fn start_streaming_response(&mut self, chat_id: ChatId, cx: &mut Context<Self>) {
+        // Check if we have a model selected - if not, use mock mode
+        let use_mock_mode = self.selected_model.is_none() || self.available_models.is_empty();
+
+        if use_mock_mode {
+            info!(chat_id = %chat_id, "No AI providers configured - using mock mode");
+            self.start_mock_streaming_response(chat_id, cx);
+            return;
+        }
+
         // Get the selected model
         let model = match &self.selected_model {
             Some(m) => m.clone(),
@@ -594,6 +643,71 @@ impl AiApp {
         .detach();
     }
 
+    /// Start a mock streaming response for testing/demo when no AI providers are configured
+    fn start_mock_streaming_response(&mut self, chat_id: ChatId, cx: &mut Context<Self>) {
+        // Set streaming state
+        self.is_streaming = true;
+        self.streaming_content.clear();
+
+        // Get the last user message to generate a contextual mock response
+        let user_message = self
+            .current_messages
+            .last()
+            .map(|m| m.content.clone())
+            .unwrap_or_default();
+
+        // Generate a mock response based on the user's message
+        let mock_response = generate_mock_response(&user_message);
+
+        info!(
+            chat_id = %chat_id,
+            user_message_len = user_message.len(),
+            mock_response_len = mock_response.len(),
+            "Starting mock streaming response"
+        );
+
+        // Simulate streaming by revealing the response word by word
+        let words: Vec<String> = mock_response
+            .split_inclusive(char::is_whitespace)
+            .map(|s| s.to_string())
+            .collect();
+
+        cx.spawn(async move |this, cx| {
+            use gpui::Timer;
+
+            let mut accumulated = String::new();
+            let mut delay_counter = 0u64;
+
+            for word in words {
+                // Vary delay slightly based on word position (30-60ms range)
+                delay_counter = delay_counter.wrapping_add(17); // Simple pseudo-variation
+                let delay = 30 + (delay_counter % 30);
+                Timer::after(std::time::Duration::from_millis(delay)).await;
+
+                accumulated.push_str(&word);
+
+                let current_content = accumulated.clone();
+                let _ = cx.update(|cx| {
+                    this.update(cx, |app, cx| {
+                        app.streaming_content = current_content;
+                        cx.notify();
+                    })
+                });
+            }
+
+            // Small delay before finishing
+            Timer::after(std::time::Duration::from_millis(100)).await;
+
+            // Finish streaming
+            let _ = cx.update(|cx| {
+                this.update(cx, |app, cx| {
+                    app.finish_streaming(chat_id, cx);
+                })
+            });
+        })
+        .detach();
+    }
+
     /// Finish streaming and save the assistant message
     fn finish_streaming(&mut self, chat_id: ChatId, cx: &mut Context<Self>) {
         if !self.streaming_content.is_empty() {
@@ -642,8 +756,83 @@ impl AiApp {
             .child(Input::new(&self.search_state).w_full().small())
     }
 
+    /// Toggle sidebar visibility
+    fn toggle_sidebar(&mut self, cx: &mut Context<Self>) {
+        self.sidebar_collapsed = !self.sidebar_collapsed;
+        cx.notify();
+    }
+
+    /// Render the sidebar toggle button using the Sidebar icon from our icon library
+    fn render_sidebar_toggle(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        // Use opacity to indicate state - dimmed when collapsed
+        let icon_color = if self.sidebar_collapsed {
+            cx.theme().muted_foreground.opacity(0.5)
+        } else {
+            cx.theme().muted_foreground
+        };
+
+        div()
+            .id("sidebar-toggle")
+            .flex()
+            .items_center()
+            .justify_center()
+            .size(px(24.))
+            .rounded_md()
+            .cursor_pointer()
+            .hover(|s| s.bg(cx.theme().muted.opacity(0.3)))
+            .on_mouse_down(
+                gpui::MouseButton::Left,
+                cx.listener(|this, _, _, cx| {
+                    this.toggle_sidebar(cx);
+                }),
+            )
+            .child(
+                svg()
+                    .external_path(LocalIconName::Sidebar.external_path())
+                    .size(px(16.))
+                    .text_color(icon_color),
+            )
+    }
+
     /// Render the chats sidebar with date groupings
     fn render_sidebar(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        // If sidebar is collapsed, just show a thin strip with toggle button
+        if self.sidebar_collapsed {
+            return div()
+                .flex()
+                .flex_col()
+                .w(px(48.))
+                .h_full()
+                .bg(cx.theme().sidebar)
+                .border_r_1()
+                .border_color(cx.theme().sidebar_border)
+                .items_center()
+                // Top row - aligned with traffic lights (h=28px to match window chrome)
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_end()
+                        .w_full()
+                        .h(px(28.))
+                        .px_2()
+                        .child(self.render_sidebar_toggle(cx)),
+                )
+                // New chat button below
+                .child(
+                    div().pt_1().child(
+                        Button::new("new-chat-collapsed")
+                            .ghost()
+                            .xsmall()
+                            .icon(IconName::Plus)
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.create_chat(window, cx);
+                            })),
+                    ),
+                )
+                .into_any_element();
+        }
+
         let selected_id = self.selected_chat_id;
         let date_groups = group_chats_by_date(&self.chats);
 
@@ -654,40 +843,40 @@ impl AiApp {
             .flex_col()
             .w(px(240.))
             .h_full()
-            .pt(px(28.)) // Leave space for macOS traffic light buttons
             .bg(cx.theme().sidebar)
             .border_r_1()
             .border_color(cx.theme().sidebar_border)
-            // Header
+            // Top row - sidebar toggle aligned with traffic lights (right side of that row)
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_end() // Push to right side (traffic lights are on left)
+                    .w_full()
+                    .h(px(28.)) // Match traffic light row height
+                    .px_2()
+                    .child(self.render_sidebar_toggle(cx)),
+            )
+            // Header with new chat button and search
             .child(
                 div()
                     .flex()
                     .flex_col()
                     .w_full()
-                    .p_2()
+                    .px_2()
+                    .pb_2()
                     .gap_2()
+                    // New chat button row
                     .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .justify_between()
-                            .w_full()
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .font_weight(gpui::FontWeight::SEMIBOLD)
-                                    .text_color(cx.theme().sidebar_foreground)
-                                    .child("Chats"),
-                            )
-                            .child(
-                                Button::new("new-chat")
-                                    .ghost()
-                                    .xsmall()
-                                    .icon(IconName::Plus)
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        this.create_chat(window, cx);
-                                    })),
-                            ),
+                        div().flex().items_center().justify_end().w_full().child(
+                            Button::new("new-chat")
+                                .ghost()
+                                .xsmall()
+                                .icon(IconName::Plus)
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    this.create_chat(window, cx);
+                                })),
+                        ),
                     )
                     .child(self.render_search(cx)),
             )
@@ -705,6 +894,7 @@ impl AiApp {
                         self.render_date_group(group, chats, selected_id, cx)
                     })),
             )
+            .into_any_element()
     }
 
     /// Render a date group section (Today, Yesterday, This Week, Older)
@@ -1183,6 +1373,10 @@ impl Render for AiApp {
                             this.create_chat(window, cx);
                         }
                         "enter" | "return" => this.submit_message(window, cx),
+                        // Cmd+\ to toggle sidebar (like Raycast)
+                        "\\" | "backslash" => this.toggle_sidebar(cx),
+                        // Cmd+B also toggles sidebar (common convention)
+                        "b" => this.toggle_sidebar(cx),
                         _ => {}
                     }
                 }
@@ -1324,11 +1518,17 @@ fn ensure_theme_initialized(cx: &mut App) {
     info!("AI window theme synchronized with Script Kit");
 }
 
-/// Toggle the AI window (open if closed, close if open)
+/// Toggle the AI window (open if closed, bring to front if open)
+/// 
+/// The AI window behaves as a NORMAL window (not a floating panel):
+/// - Can go behind other windows when it loses focus
+/// - Hotkey brings it to front and focuses it
+/// - Does NOT affect other windows (main window, notes window)
+/// - Does NOT hide the app when closed
 pub fn open_ai_window(cx: &mut App) -> Result<()> {
     use crate::logging;
 
-    logging::log("PANEL", "open_ai_window called - checking toggle state");
+    logging::log("AI", "open_ai_window called - checking state");
 
     // Ensure gpui-component theme is initialized before opening window
     ensure_theme_initialized(cx);
@@ -1338,34 +1538,28 @@ pub fn open_ai_window(cx: &mut App) -> Result<()> {
 
     // Check if window already exists and is valid
     if let Some(ref handle) = *guard {
-        // Window exists - check if it's valid and close it (toggle OFF)
-        if handle
-            .update(cx, |_, window, _cx| {
-                window.remove_window();
+        // Window exists - check if it's valid
+        let window_valid = handle
+            .update(cx, |_root, window, _cx| {
+                // Window is valid - bring it to front and focus it
+                window.activate_window();
             })
-            .is_ok()
-        {
-            logging::log("PANEL", "AI window was open - closing (toggle OFF)");
-            *guard = None;
+            .is_ok();
 
-            // After closing AI, hide the app if main window isn't supposed to be visible
-            // This prevents macOS from bringing the main window forward
-            if !crate::is_main_window_visible() {
-                logging::log(
-                    "PANEL",
-                    "Main window not visible - hiding app to prevent focus",
-                );
-                cx.hide();
-            }
-
+        if window_valid {
+            logging::log("AI", "AI window exists - bringing to front and focusing");
+            // Activate the app to ensure the window can receive focus
+            cx.activate(true);
             return Ok(());
         }
+        
         // Window handle was invalid, fall through to create new window
-        logging::log("PANEL", "AI window handle was invalid - creating new");
+        logging::log("AI", "AI window handle was invalid - creating new");
+        *guard = None;
     }
 
-    // Create new window (toggle ON)
-    logging::log("PANEL", "AI window not open - creating new (toggle ON)");
+    // Create new window
+    logging::log("AI", "Creating new AI window");
     info!("Opening new AI window");
 
     let window_options = WindowOptions {
@@ -1381,6 +1575,8 @@ pub fn open_ai_window(cx: &mut App) -> Result<()> {
         }),
         focus: true,
         show: true,
+        // IMPORTANT: Use Normal window kind (not PopUp) so it behaves like a regular window
+        // This allows it to go behind other windows and participate in normal window ordering
         kind: gpui::WindowKind::Normal,
         ..Default::default()
     };
@@ -1390,10 +1586,16 @@ pub fn open_ai_window(cx: &mut App) -> Result<()> {
         cx.new(|cx| Root::new(view, window, cx))
     })?;
 
+    // Activate the app and window so user can immediately start typing
+    cx.activate(true);
+    let _ = handle.update(cx, |_root, window, _cx| {
+        window.activate_window();
+    });
+
     *guard = Some(handle);
 
-    // Configure as floating panel (always on top) after window is created
-    configure_ai_as_floating_panel();
+    // NOTE: We do NOT configure as floating panel - this is a normal window
+    // that can go behind other windows
 
     Ok(())
 }
@@ -1408,6 +1610,17 @@ pub fn close_ai_window(cx: &mut App) {
             window.remove_window();
         });
     }
+}
+
+/// Check if the AI window is currently open
+/// 
+/// Returns true if the AI window exists and is valid.
+/// This is used by other parts of the app to check if AI is open
+/// without affecting it.
+pub fn is_ai_window_open() -> bool {
+    let window_handle = AI_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
+    let guard = window_handle.lock().unwrap();
+    guard.is_some()
 }
 
 /// Configure the AI window as a floating panel (always on top).

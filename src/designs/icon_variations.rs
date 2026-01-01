@@ -104,6 +104,9 @@ pub enum IconName {
     // Media
     PlayFilled,
     PlayOutlined,
+
+    // UI/Layout
+    Sidebar,
 }
 
 impl IconName {
@@ -137,6 +140,8 @@ impl IconName {
             // Media
             Self::PlayFilled,
             Self::PlayOutlined,
+            // UI/Layout
+            Self::Sidebar,
         ]
     }
 
@@ -170,6 +175,7 @@ impl IconName {
             Self::ChevronDown => "Chevron Down",
             Self::PlayFilled => "Play Filled",
             Self::PlayOutlined => "Play Outlined",
+            Self::Sidebar => "Sidebar",
         }
     }
 
@@ -198,6 +204,7 @@ impl IconName {
             Self::ChevronDown => "Expand down",
             Self::PlayFilled => "Run/execute (filled)",
             Self::PlayOutlined => "Run/execute (outline)",
+            Self::Sidebar => "Toggle sidebar panel",
         }
     }
 
@@ -227,6 +234,7 @@ impl IconName {
             Self::ChevronDown => "chevron_down",
             Self::PlayFilled => "play_filled",
             Self::PlayOutlined => "play_outlined",
+            Self::Sidebar => "sidebar",
         };
         format!("icons/{}.svg", file_name).into()
     }
@@ -281,6 +289,7 @@ impl IconName {
                 env!("CARGO_MANIFEST_DIR"),
                 "/assets/icons/play_outlined.svg"
             ),
+            Self::Sidebar => concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/sidebar.svg"),
         }
     }
 
@@ -302,6 +311,7 @@ impl IconName {
                 IconCategory::Arrows
             }
             Self::PlayFilled | Self::PlayOutlined => IconCategory::Media,
+            Self::Sidebar => IconCategory::Actions,
         }
     }
 }
@@ -521,6 +531,9 @@ pub fn icon_name_from_str(name: &str) -> Option<IconName> {
         "playfilled" | "play" | "run" | "execute" => Some(IconName::PlayFilled),
         "playoutlined" => Some(IconName::PlayOutlined),
 
+        // UI/Layout
+        "sidebar" | "panel" | "layout" => Some(IconName::Sidebar),
+
         _ => None,
     }
 }
@@ -531,7 +544,7 @@ mod tests {
 
     #[test]
     fn test_icon_count() {
-        assert_eq!(IconName::count(), 22);
+        assert_eq!(IconName::count(), 23); // 22 + 1 (Sidebar)
     }
 
     #[test]

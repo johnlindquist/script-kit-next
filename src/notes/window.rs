@@ -82,8 +82,16 @@ pub struct NotesApp {
     last_line_count: usize,
 
     /// Initial window height - used as minimum for auto-resize
-    /// The window should never shrink below this unless user manually resizes
     initial_height: f32,
+
+    /// Whether auto-sizing is enabled
+    /// When enabled: window grows AND shrinks to fit content (min = initial_height)
+    /// When disabled: window size is fixed until user re-enables via actions panel
+    /// Disabled automatically when user manually resizes the window
+    auto_sizing_enabled: bool,
+
+    /// Last known window height - used to detect manual resize
+    last_window_height: f32,
 
     /// Focus handle for keyboard navigation
     focus_handle: FocusHandle,
@@ -175,6 +183,8 @@ impl NotesApp {
             window_hovered: false,
             last_line_count: initial_line_count,
             initial_height,
+            auto_sizing_enabled: true,          // Auto-sizing ON by default
+            last_window_height: initial_height, // Track for manual resize detection
             focus_handle,
             _subscriptions: vec![editor_sub, search_sub],
             show_actions_panel: false,
@@ -211,14 +221,19 @@ impl NotesApp {
     }
 
     /// Update window height based on content line count
-    /// Raycast-style: window grows from compact size as content increases
+    /// Raycast-style: window grows AND shrinks to fit content when auto_sizing_enabled
     /// IMPORTANT: Window never shrinks below initial_height (the height at window creation)
     fn update_window_height(
-        &self,
+        &mut self,
         window: &mut Window,
         line_count: usize,
         _cx: &mut Context<Self>,
     ) {
+        // Skip if auto-sizing is disabled (user manually resized)
+        if !self.auto_sizing_enabled {
+            return;
+        }
+
         // Constants for layout calculation - adjusted for compact sticky-note style
         const TITLEBAR_HEIGHT: f32 = 32.0;
         const FOOTER_HEIGHT: f32 = 24.0;
@@ -238,8 +253,10 @@ impl NotesApp {
         let current_bounds = window.bounds();
         let old_height: f32 = current_bounds.size.height.into();
 
-        // Only resize if we need to grow (never shrink below initial)
-        if clamped_height > old_height {
+        // Resize if height needs to change (both grow AND shrink)
+        // Use a small threshold to avoid constant tiny adjustments
+        const RESIZE_THRESHOLD: f32 = 5.0;
+        if (clamped_height - old_height).abs() > RESIZE_THRESHOLD {
             let new_size = size(current_bounds.size.width, px(clamped_height));
 
             debug!(
@@ -247,10 +264,43 @@ impl NotesApp {
                 new_height = clamped_height,
                 min_height = min_height,
                 line_count = line_count,
-                "Auto-resize: growing window height"
+                auto_sizing = self.auto_sizing_enabled,
+                "Auto-resize: adjusting window height"
             );
 
             window.resize(new_size);
+            self.last_window_height = clamped_height;
+        }
+    }
+
+    /// Enable auto-sizing (called from actions panel)
+    pub fn enable_auto_sizing(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.auto_sizing_enabled = true;
+        // Re-calculate and apply the correct height
+        let line_count = self.last_line_count;
+        self.update_window_height(window, line_count, cx);
+        info!("Auto-sizing enabled");
+        cx.notify();
+    }
+
+    /// Check if user manually resized the window and disable auto-sizing if so
+    fn detect_manual_resize(&mut self, window: &Window) {
+        if !self.auto_sizing_enabled {
+            return; // Already disabled
+        }
+
+        let current_height: f32 = window.bounds().size.height.into();
+
+        // If height differs significantly from what we set, user resized manually
+        const MANUAL_RESIZE_THRESHOLD: f32 = 10.0;
+        if (current_height - self.last_window_height).abs() > MANUAL_RESIZE_THRESHOLD {
+            self.auto_sizing_enabled = false;
+            self.last_window_height = current_height;
+            debug!(
+                current_height = current_height,
+                last_height = self.last_window_height,
+                "Manual resize detected - auto-sizing disabled"
+            );
         }
     }
 
@@ -509,6 +559,9 @@ impl NotesApp {
             NotesAction::FindInNote => {
                 // Future feature - for now just log
                 info!("Find in note not yet implemented");
+            }
+            NotesAction::EnableAutoSizing => {
+                self.enable_auto_sizing(window, cx);
             }
             NotesAction::Cancel => {
                 // Panel was cancelled, nothing to do
@@ -960,6 +1013,7 @@ impl NotesApp {
                                         NotesAction::CopyNote => "📋",
                                         NotesAction::DeleteNote => "🗑",
                                         NotesAction::Cancel => "✕",
+                                        NotesAction::EnableAutoSizing => "↕",
                                     }),
                             )
                             .child(
@@ -1096,7 +1150,10 @@ impl Focusable for NotesApp {
 }
 
 impl Render for NotesApp {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        // Detect if user manually resized the window (disables auto-sizing)
+        self.detect_manual_resize(window);
+
         let show_actions = self.show_actions_panel;
         let show_browse = self.show_browse_panel;
 
@@ -1366,11 +1423,11 @@ pub fn open_notes_window(cx: &mut App) -> Result<()> {
             *guard = None;
 
             // After closing Notes, hide the app if main window isn't supposed to be visible
-            // This prevents macOS from bringing the main window forward
-            if !crate::is_main_window_visible() {
+            // AND AI window isn't open. Only hide when no windows should be visible.
+            if !crate::is_main_window_visible() && !crate::ai::is_ai_window_open() {
                 logging::log(
                     "PANEL",
-                    "Main window not visible - hiding app to prevent focus",
+                    "Main window not visible and AI not open - hiding app",
                 );
                 cx.hide();
             }
@@ -1381,14 +1438,15 @@ pub fn open_notes_window(cx: &mut App) -> Result<()> {
         logging::log("PANEL", "Notes window handle was invalid - creating new");
     }
 
-    // If main window is visible, close it (Notes takes focus)
+    // If main window is visible, hide it (Notes takes focus)
+    // Use platform::hide_main_window() to only hide the main window, not the whole app
     if crate::is_main_window_visible() {
         logging::log(
             "PANEL",
             "Main window was visible - hiding it since Notes is opening",
         );
         crate::set_main_window_visible(false);
-        cx.hide();
+        crate::platform::hide_main_window();
     }
 
     // Create new window (toggle ON)
@@ -1433,6 +1491,12 @@ pub fn open_notes_window(cx: &mut App) -> Result<()> {
     // This brings the app to the foreground on macOS, which is required
     // for the window to receive keyboard focus when the app wasn't already active
     cx.activate(true);
+
+    // CRITICAL: Hide the main window AFTER activating the app
+    // When we activate the app, macOS may bring all windows to the front.
+    // We need to explicitly hide the main window to prevent it from appearing.
+    // This uses orderOut: which hides just the main window, not the entire app.
+    crate::platform::hide_main_window();
 
     // Focus the editor input in the Notes window
     if let Some(notes_app) = notes_app_holder.lock().unwrap().clone() {
@@ -1479,6 +1543,17 @@ pub fn close_notes_window(cx: &mut App) {
             window.remove_window();
         });
     }
+}
+
+/// Check if the notes window is currently open
+///
+/// Returns true if the Notes window exists and is valid.
+/// This is used by other parts of the app to check if Notes is open
+/// without affecting it.
+pub fn is_notes_window_open() -> bool {
+    let window_handle = NOTES_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
+    let guard = window_handle.lock().unwrap();
+    guard.is_some()
 }
 
 /// Configure the Notes window as a floating panel (always on top).

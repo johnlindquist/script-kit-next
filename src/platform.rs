@@ -162,6 +162,52 @@ pub fn configure_as_floating_panel() {
 }
 
 // ============================================================================
+// Main Window Visibility Control
+// ============================================================================
+
+/// Hide the main window without hiding the entire app.
+///
+/// This is used when opening secondary windows (Notes, AI) to ensure the main
+/// window stays hidden while the secondary window is shown. Unlike cx.hide(),
+/// this doesn't hide all windows - only the main window.
+///
+/// # macOS Behavior
+///
+/// Uses NSWindow orderOut: to remove the main window from the screen without
+/// affecting other windows. The window is not minimized, just hidden.
+///
+/// # Other Platforms
+///
+/// No-op on non-macOS platforms.
+#[cfg(target_os = "macos")]
+pub fn hide_main_window() {
+    unsafe {
+        // Use WindowManager to get the main window
+        let window = match window_manager::get_main_window() {
+            Some(w) => w,
+            None => {
+                logging::log(
+                    "PANEL",
+                    "hide_main_window: Main window not registered, nothing to hide",
+                );
+                return;
+            }
+        };
+
+        // orderOut: removes the window from the screen without affecting other windows
+        // nil sender means the action is programmatic, not from a menu item
+        let _: () = msg_send![window, orderOut:nil];
+
+        logging::log("PANEL", "Main window hidden via orderOut:");
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn hide_main_window() {
+    // No-op on non-macOS platforms
+}
+
+// ============================================================================
 // App Active State Detection
 // ============================================================================
 

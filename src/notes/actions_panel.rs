@@ -41,6 +41,8 @@ pub enum NotesAction {
     CopyNote,
     /// Delete the current note
     DeleteNote,
+    /// Enable auto-sizing (window grows/shrinks with content)
+    EnableAutoSizing,
     /// Panel was cancelled (Escape pressed)
     Cancel,
 }
@@ -54,6 +56,7 @@ impl NotesAction {
             NotesAction::FindInNote,
             NotesAction::CopyNote,
             NotesAction::DeleteNote,
+            NotesAction::EnableAutoSizing,
         ]
     }
 
@@ -65,6 +68,7 @@ impl NotesAction {
             NotesAction::FindInNote => "Find in Note",
             NotesAction::CopyNote => "Copy Note",
             NotesAction::DeleteNote => "Delete Note",
+            NotesAction::EnableAutoSizing => "Enable Auto-Sizing",
             NotesAction::Cancel => "Cancel",
         }
     }
@@ -77,6 +81,7 @@ impl NotesAction {
             NotesAction::FindInNote => "F",
             NotesAction::CopyNote => "C",
             NotesAction::DeleteNote => "D",
+            NotesAction::EnableAutoSizing => "A",
             NotesAction::Cancel => "Esc",
         }
     }
@@ -97,6 +102,7 @@ impl NotesAction {
             NotesAction::FindInNote => IconName::Search,
             NotesAction::CopyNote => IconName::Copy,
             NotesAction::DeleteNote => IconName::Delete,
+            NotesAction::EnableAutoSizing => IconName::Maximize,
             NotesAction::Cancel => IconName::Close,
         }
     }
@@ -109,6 +115,7 @@ impl NotesAction {
             NotesAction::FindInNote => "find_in_note",
             NotesAction::CopyNote => "copy_note",
             NotesAction::DeleteNote => "delete_note",
+            NotesAction::EnableAutoSizing => "enable_auto_sizing",
             NotesAction::Cancel => "cancel",
         }
     }
@@ -537,6 +544,7 @@ mod tests {
         assert_eq!(NotesAction::FindInNote.label(), "Find in Note");
         assert_eq!(NotesAction::CopyNote.label(), "Copy Note");
         assert_eq!(NotesAction::DeleteNote.label(), "Delete Note");
+        assert_eq!(NotesAction::EnableAutoSizing.label(), "Enable Auto-Sizing");
     }
 
     #[test]
@@ -546,17 +554,19 @@ mod tests {
         assert_eq!(NotesAction::FindInNote.shortcut_display(), "⌘F");
         assert_eq!(NotesAction::CopyNote.shortcut_display(), "⌘C");
         assert_eq!(NotesAction::DeleteNote.shortcut_display(), "⌘D");
+        assert_eq!(NotesAction::EnableAutoSizing.shortcut_display(), "⌘A");
     }
 
     #[test]
     fn test_notes_action_all() {
         let all = NotesAction::all();
-        assert_eq!(all.len(), 5);
+        assert_eq!(all.len(), 6);
         assert!(all.contains(&NotesAction::NewNote));
         assert!(all.contains(&NotesAction::BrowseNotes));
         assert!(all.contains(&NotesAction::FindInNote));
         assert!(all.contains(&NotesAction::CopyNote));
         assert!(all.contains(&NotesAction::DeleteNote));
+        assert!(all.contains(&NotesAction::EnableAutoSizing));
     }
 
     #[test]
@@ -566,6 +576,7 @@ mod tests {
         assert_eq!(NotesAction::FindInNote.id(), "find_in_note");
         assert_eq!(NotesAction::CopyNote.id(), "copy_note");
         assert_eq!(NotesAction::DeleteNote.id(), "delete_note");
+        assert_eq!(NotesAction::EnableAutoSizing.id(), "enable_auto_sizing");
     }
 
     #[test]
