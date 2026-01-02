@@ -35,5 +35,9 @@
     "offset_y": 8.0,
     "color": 0,
     "opacity": 0.25
+  },
+  "vibrancy": {
+    "enabled": true,
+    "material": "popover"
   }
 }

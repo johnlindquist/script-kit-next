@@ -9,6 +9,7 @@ pub mod components;
 pub mod config;
 pub mod designs;
 pub mod editor;
+pub mod editor_v2;
 pub mod error;
 pub mod executor;
 pub mod form_prompt;

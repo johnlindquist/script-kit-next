@@ -48,6 +48,8 @@ pub struct TypedMetadata {
     pub placeholder: Option<String>,
     /// Cron expression for scheduled execution
     pub cron: Option<String>,
+    /// Natural language schedule (e.g., "every tuesday at 2pm") - converted to cron internally
+    pub schedule: Option<String>,
     /// Watch patterns for file-triggered execution
     #[serde(default)]
     pub watch: Vec<String>,
@@ -495,5 +497,37 @@ metadata = {
         assert_eq!(meta.tags, Vec::<String>::new());
         assert!(!meta.hidden);
         assert!(!meta.background);
+    }
+
+    #[test]
+    fn test_parse_schedule_field() {
+        let content = r#"
+metadata = {
+    name: "Scheduled Script",
+    description: "Runs on a schedule",
+    schedule: "every tuesday at 2pm"
+}
+"#;
+        let result = extract_typed_metadata(content);
+        assert!(result.errors.is_empty(), "Errors: {:?}", result.errors);
+        let meta = result.metadata.unwrap();
+        assert_eq!(meta.name, Some("Scheduled Script".to_string()));
+        assert_eq!(meta.schedule, Some("every tuesday at 2pm".to_string()));
+    }
+
+    #[test]
+    fn test_parse_cron_and_schedule_together() {
+        let content = r#"
+metadata = {
+    name: "Dual Scheduled",
+    cron: "0 14 * * 2",
+    schedule: "every tuesday at 2pm"
+}
+"#;
+        let result = extract_typed_metadata(content);
+        assert!(result.errors.is_empty(), "Errors: {:?}", result.errors);
+        let meta = result.metadata.unwrap();
+        assert_eq!(meta.cron, Some("0 14 * * 2".to_string()));
+        assert_eq!(meta.schedule, Some("every tuesday at 2pm".to_string()));
     }
 }

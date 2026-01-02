@@ -251,9 +251,10 @@ impl ScriptListApp {
                 // Get the target height for editor view
                 let editor_height = window_resize::layout::MAX_HEIGHT;
 
-                // Create editor: use with_template if template provided, otherwise with_height
+                // Create editor v2 (gpui-component based with Find/Replace)
+                // Use with_template if template provided, otherwise with_height
                 let editor_prompt = if let Some(template_str) = template {
-                    EditorPrompt::with_template(
+                    EditorPromptV2::with_template(
                         id.clone(),
                         template_str,
                         language.unwrap_or_else(|| "plaintext".to_string()),
@@ -264,7 +265,7 @@ impl ScriptListApp {
                         Some(editor_height),
                     )
                 } else {
-                    EditorPrompt::with_height(
+                    EditorPromptV2::with_height(
                         id.clone(),
                         content.unwrap_or_default(),
                         language.unwrap_or_else(|| "markdown".to_string()),
@@ -277,7 +278,7 @@ impl ScriptListApp {
                 };
 
                 let entity = cx.new(|_| editor_prompt);
-                self.current_view = AppView::EditorPrompt {
+                self.current_view = AppView::EditorPromptV2 {
                     id,
                     entity,
                     focus_handle: editor_focus_handle,
@@ -616,7 +617,7 @@ impl ScriptListApp {
                         -1,
                         None,
                     ),
-                    AppView::EditorPrompt { id, .. } => (
+                    AppView::EditorPrompt { id, .. } | AppView::EditorPromptV2 { id, .. } => (
                         "editor".to_string(),
                         Some(id.clone()),
                         None,
@@ -831,6 +832,7 @@ impl ScriptListApp {
                     AppView::FormPrompt { id, .. } => Some(id.clone()),
                     AppView::TermPrompt { id, .. } => Some(id.clone()),
                     AppView::EditorPrompt { id, .. } => Some(id.clone()),
+                    AppView::EditorPromptV2 { id, .. } => Some(id.clone()),
                     _ => None,
                 };
 

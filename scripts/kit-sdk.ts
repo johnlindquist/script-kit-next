@@ -885,6 +885,15 @@ export interface ScriptSchema {
  *   hidden: false
  * }
  * ```
+ * 
+ * @example Scheduled script using natural language
+ * ```typescript
+ * metadata = {
+ *   name: 'Daily Backup',
+ *   description: 'Backup important files',
+ *   schedule: 'every day at 2pm'
+ * }
+ * ```
  */
 export interface ScriptMetadata {
   /** Display name for the script */
@@ -909,6 +918,8 @@ export interface ScriptMetadata {
   placeholder?: string;
   /** Cron expression for scheduled execution */
   cron?: string;
+  /** Natural language schedule (e.g., 'every tuesday at 2pm') - converted to cron internally */
+  schedule?: string;
   /** Watch patterns for file-triggered execution */
   watch?: string[];
   /** Background script (runs without UI) */

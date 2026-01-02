@@ -13,9 +13,9 @@
 use anyhow::Result;
 use chrono::{Datelike, NaiveDate, Utc};
 use gpui::{
-    div, prelude::*, px, rgb, size, svg, App, Context, Entity, FocusHandle, Focusable, Hsla,
-    IntoElement, KeyDownEvent, ParentElement, Render, ScrollHandle, SharedString, Styled,
-    Subscription, Window, WindowBounds, WindowOptions,
+    div, hsla, point, prelude::*, px, rgb, size, svg, App, BoxShadow, Context, Entity, FocusHandle,
+    Focusable, Hsla, IntoElement, KeyDownEvent, ParentElement, Render, ScrollHandle, SharedString,
+    Styled, Subscription, Window, WindowBounds, WindowOptions,
 };
 
 // Import local IconName for SVG icons (has external_path() method)
@@ -40,6 +40,7 @@ use super::config::ModelInfo;
 use super::model::{Chat, ChatId, Message, MessageRole};
 use super::providers::ProviderRegistry;
 use super::storage;
+use crate::watcher::ThemeWatcher;
 
 /// Events from the streaming thread
 enum StreamingEvent {
@@ -1431,6 +1432,53 @@ impl AiApp {
             // Input area (fixed height, always visible at bottom)
             .child(input_area)
     }
+
+    /// Create box shadows from theme configuration
+    /// Uses the same drop_shadow settings as the main window
+    fn create_box_shadows(&self) -> Vec<BoxShadow> {
+        let theme = crate::theme::load_theme();
+        let shadow_config = theme.get_drop_shadow();
+
+        if !shadow_config.enabled {
+            return vec![];
+        }
+
+        // Convert hex color to HSLA
+        let r = ((shadow_config.color >> 16) & 0xFF) as f32 / 255.0;
+        let g = ((shadow_config.color >> 8) & 0xFF) as f32 / 255.0;
+        let b = (shadow_config.color & 0xFF) as f32 / 255.0;
+
+        // Simple RGB to HSL conversion
+        let max = r.max(g).max(b);
+        let min = r.min(g).min(b);
+        let l = (max + min) / 2.0;
+
+        let (h, s) = if max == min {
+            (0.0, 0.0)
+        } else {
+            let d = max - min;
+            let s = if l > 0.5 {
+                d / (2.0 - max - min)
+            } else {
+                d / (max + min)
+            };
+            let h = if max == r {
+                (g - b) / d + if g < b { 6.0 } else { 0.0 }
+            } else if max == g {
+                (b - r) / d + 2.0
+            } else {
+                (r - g) / d + 4.0
+            };
+            (h / 6.0, s)
+        };
+
+        vec![BoxShadow {
+            color: hsla(h, s, l, shadow_config.opacity),
+            offset: point(px(shadow_config.offset_x), px(shadow_config.offset_y)),
+            blur_radius: px(shadow_config.blur_radius),
+            spread_radius: px(shadow_config.spread_radius),
+        }]
+    }
 }
 
 impl Focusable for AiApp {
@@ -1441,11 +1489,14 @@ impl Focusable for AiApp {
 
 impl Render for AiApp {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let box_shadows = self.create_box_shadows();
+
         div()
             .flex()
             .flex_row()
             .size_full()
             .bg(cx.theme().background)
+            .shadow(box_shadows)
             .text_color(cx.theme().foreground)
             .track_focus(&self.focus_handle)
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
@@ -1656,6 +1707,14 @@ pub fn open_ai_window(cx: &mut App) -> Result<()> {
     logging::log("AI", "Creating new AI window");
     info!("Opening new AI window");
 
+    // Load theme to determine window background appearance (vibrancy)
+    let theme = crate::theme::load_theme();
+    let window_background = if theme.is_vibrancy_enabled() {
+        gpui::WindowBackgroundAppearance::Blurred
+    } else {
+        gpui::WindowBackgroundAppearance::Opaque
+    };
+
     let window_options = WindowOptions {
         window_bounds: Some(WindowBounds::Windowed(gpui::Bounds::centered(
             None,
@@ -1667,6 +1726,7 @@ pub fn open_ai_window(cx: &mut App) -> Result<()> {
             appears_transparent: true,
             ..Default::default()
         }),
+        window_background,
         focus: true,
         show: true,
         // IMPORTANT: Use Normal window kind (not PopUp) so it behaves like a regular window
@@ -1701,6 +1761,34 @@ pub fn open_ai_window(cx: &mut App) -> Result<()> {
 
     // NOTE: We do NOT configure as floating panel - this is a normal window
     // that can go behind other windows
+
+    // Theme hot-reload watcher for AI window
+    // Spawns a background task that watches ~/.kenv/theme.json for changes
+    let app_entity_holder_ref = AI_APP_ENTITY.get_or_init(|| std::sync::Mutex::new(None));
+    if let Some(ai_app) = app_entity_holder_ref.lock().unwrap().clone() {
+        let ai_app_for_theme = ai_app.clone();
+        cx.spawn(async move |cx: &mut gpui::AsyncApp| {
+            let (mut theme_watcher, theme_rx) = ThemeWatcher::new();
+            if theme_watcher.start().is_err() {
+                return;
+            }
+            loop {
+                gpui::Timer::after(std::time::Duration::from_millis(200)).await;
+                if theme_rx.try_recv().is_ok() {
+                    info!("AI window: theme.json changed, reloading");
+                    let _ = cx.update(|cx| {
+                        // Re-sync gpui-component theme with updated Script Kit theme
+                        crate::theme::sync_gpui_component_theme(cx);
+                        // Notify the AI window to re-render with new colors
+                        ai_app_for_theme.update(cx, |_app, cx| {
+                            cx.notify();
+                        });
+                    });
+                }
+            }
+        })
+        .detach();
+    }
 
     Ok(())
 }

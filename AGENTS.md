@@ -65,6 +65,7 @@ cargo check && cargo clippy --all-targets -- -D warnings && cargo test
 | **Config Settings** | Font sizes and padding are configurable via `~/.kenv/config.ts` - use `config.get_*()` helpers |
 | **Notes Window** | Separate floating window in `src/notes/`; test via `{"type": "openNotes"}` stdin command |
 | **AI Window** | BYOK chat in `src/ai/`; test via `{"type": "openAi"}` stdin command |
+| **Script Metadata** | Prefer `metadata = {...}` global variable over `// Name:` comment-based format |
 
 ---
 
@@ -106,6 +107,95 @@ When `SCRIPT_KIT_AI_LOG=1`, stderr uses token-efficient format for AI agents:
 ```
 
 **Enable:** `SCRIPT_KIT_AI_LOG=1 ./target/debug/script-kit-gpui 2>&1`
+
+---
+
+## Script Metadata
+
+Script Kit scripts use metadata to define their name, description, keyboard shortcuts, and other properties. There are two formats available:
+
+### Preferred: Global Metadata Variable
+
+**Use this format for all new scripts.** It provides TypeScript type safety, better IDE support, and access to more metadata fields.
+
+```typescript
+import '../../scripts/kit-sdk';
+
+export const metadata = {
+  name: "My Script",
+  description: "Does something useful",
+  shortcut: "cmd+shift+m",
+  author: "Your Name",
+  // Additional typed fields available
+};
+
+// Script implementation
+const result = await arg("Choose an option", ["A", "B", "C"]);
+console.log(result);
+```
+
+### Legacy: Comment-Based Metadata
+
+Comment-based metadata still works for backwards compatibility, but is **soft-deprecated** for new scripts.
+
+```typescript
+// Name: My Script
+// Description: Does something useful
+// Shortcut: cmd+shift+m
+
+import '../../scripts/kit-sdk';
+
+// Script implementation
+const result = await arg("Choose an option", ["A", "B", "C"]);
+```
+
+### Why Prefer Global Metadata?
+
+| Aspect | Global `metadata = {...}` | Comment `// Name:` |
+|--------|---------------------------|---------------------|
+| **Type Safety** | Full TypeScript types | None |
+| **IDE Support** | Autocomplete, error checking | No assistance |
+| **Field Discovery** | Explore via types | Must know field names |
+| **Validation** | Compile-time errors | Runtime errors only |
+| **Extensibility** | Easy to add new fields | Limited to parsing rules |
+| **Backwards Compat** | ✅ Works in new versions | ✅ Still supported |
+
+### Migration Example
+
+**Before (comment-based):**
+```typescript
+// Name: Open Project
+// Description: Opens a project in VS Code
+// Shortcut: cmd+shift+p
+
+import '../../scripts/kit-sdk';
+```
+
+**After (global metadata):**
+```typescript
+import '../../scripts/kit-sdk';
+
+export const metadata = {
+  name: "Open Project",
+  description: "Opens a project in VS Code",
+  shortcut: "cmd+shift+p",
+};
+```
+
+### Metadata in Test Scripts
+
+Test scripts should also use the global metadata format:
+
+```typescript
+import '../../scripts/kit-sdk';
+
+export const metadata = {
+  name: "SDK Test - arg()",
+  description: "Tests arg() prompt behavior",
+};
+
+// Test implementation...
+```
 
 ---
 
@@ -1763,10 +1853,12 @@ Tests output structured JSONL for machine parsing:
 Follow this pattern for SDK tests:
 
 ```typescript
-// Name: SDK Test - myFunction()
-// Description: Tests myFunction() behavior
-
 import '../../scripts/kit-sdk';
+
+export const metadata = {
+  name: "SDK Test - myFunction()",
+  description: "Tests myFunction() behavior",
+};
 
 interface TestResult {
   test: string;

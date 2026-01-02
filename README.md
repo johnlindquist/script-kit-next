@@ -90,8 +90,10 @@ What's changed:
 Create `~/.kenv/scripts/hello.ts`:
 
 ```typescript
-// Name: Hello World
-// Description: My first script
+metadata = {
+  name: "Hello World",
+  description: "My first script"
+}
 
 const name = await arg("What's your name?");
 await div(`<h1 class="text-4xl p-8">Hello, ${name}!</h1>`);
@@ -154,8 +156,10 @@ bun add zod lodash-es date-fns
 Then use them in your scripts:
 
 ```typescript
-// Name: Process Data
-// Description: Using external packages
+metadata = {
+  name: "Process Data",
+  description: "Using external packages"
+}
 
 import { z } from "zod";
 import { groupBy } from "lodash-es";
@@ -169,17 +173,24 @@ await div(`<pre>${JSON.stringify(groupBy(parsed.items, x => x[0]), null, 2)}</pr
 
 ### Script Metadata
 
-Add metadata comments at the top of your scripts:
+Use the global `metadata` variable to define script properties:
 
 ```typescript
-// Name: My Script
-// Description: What it does
-// Author: Your Name
-// Shortcut: cmd+shift+m
-// Schedule: 0 9 * * *
+metadata = {
+  name: "My Script",
+  description: "What it does",
+  author: "Your Name",
+  shortcut: "cmd+shift+m",
+  schedule: "0 9 * * *",
+  // Additional options:
+  // hidden: true,        // Hide from script list
+  // tags: ["utility"],   // Categorize scripts
+}
 
 // Your code here...
 ```
+
+> **Note:** The global `metadata` format is the recommended approach. It provides TypeScript type checking, better IDE support, and access to more fields. Comment-based metadata (`// Name:`, `// Description:`) still works for backwards compatibility.
 
 ## Configuration
 

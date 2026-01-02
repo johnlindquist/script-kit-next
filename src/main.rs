@@ -33,6 +33,7 @@ mod components;
 mod config;
 mod designs;
 mod editor;
+mod editor_v2;
 mod error;
 mod executor;
 mod filter_coalescer;
@@ -138,6 +139,7 @@ use crate::navigation::{NavCoalescer, NavDirection, NavRecord};
 use crate::toast_manager::{PendingToast, ToastManager};
 use components::ToastVariant;
 use editor::EditorPrompt;
+use editor_v2::EditorPromptV2;
 use prompts::{
     ContainerOptions, ContainerPadding, DivPrompt, DropPrompt, EnvPrompt, PathInfo, PathPrompt,
     SelectPrompt, TemplatePrompt,
@@ -262,11 +264,20 @@ enum AppView {
         id: String,
         entity: Entity<term_prompt::TermPrompt>,
     },
-    /// Showing an editor prompt from a script
+    /// Showing an editor prompt from a script (legacy - keeping for backward compatibility)
+    #[allow(dead_code)]
     EditorPrompt {
         #[allow(dead_code)]
         id: String,
         entity: Entity<EditorPrompt>,
+        /// Separate focus handle for the editor (not shared with parent)
+        focus_handle: FocusHandle,
+    },
+    /// Showing an editor prompt v2 (gpui-component based with Find/Replace)
+    EditorPromptV2 {
+        #[allow(dead_code)]
+        id: String,
+        entity: Entity<EditorPromptV2>,
         /// Separate focus handle for the editor (not shared with parent)
         focus_handle: FocusHandle,
     },
@@ -670,7 +681,8 @@ impl Render for ScriptListApp {
         // Only enforce focus when the main window is currently focused.
         if is_window_focused {
             match &self.current_view {
-                AppView::EditorPrompt { focus_handle, .. } => {
+                AppView::EditorPrompt { focus_handle, .. }
+                | AppView::EditorPromptV2 { focus_handle, .. } => {
                     // EditorPrompt has its own focus handle - focus it
                     let is_focused = focus_handle.is_focused(window);
                     if !is_focused {
@@ -762,6 +774,7 @@ impl Render for ScriptListApp {
             AppView::FormPrompt { entity, .. } => self.render_form_prompt(entity, cx),
             AppView::TermPrompt { entity, .. } => self.render_term_prompt(entity, cx),
             AppView::EditorPrompt { entity, .. } => self.render_editor_prompt(entity, cx),
+            AppView::EditorPromptV2 { entity, .. } => self.render_editor_prompt_v2(entity, cx),
             AppView::SelectPrompt { entity, .. } => self.render_select_prompt(entity, cx),
             AppView::PathPrompt { entity, .. } => self.render_path_prompt(entity, cx),
             AppView::EnvPrompt { entity, .. } => self.render_env_prompt(entity, cx),
@@ -1067,6 +1080,22 @@ fn main() {
         let window_size = size(px(750.), initial_window_height());
         let bounds = calculate_eye_line_bounds_on_mouse_display(window_size);
 
+        // Load theme to determine window background appearance (vibrancy)
+        let initial_theme = theme::load_theme();
+        let window_background = if initial_theme.is_vibrancy_enabled() {
+            WindowBackgroundAppearance::Blurred
+        } else {
+            WindowBackgroundAppearance::Opaque
+        };
+        logging::log(
+            "THEME",
+            &format!(
+                "Window background appearance: {:?} (vibrancy_enabled={})",
+                window_background,
+                initial_theme.is_vibrancy_enabled()
+            ),
+        );
+
         // Store the ScriptListApp entity for direct access (needed since Root wraps the view)
         let app_entity_holder: Arc<Mutex<Option<Entity<ScriptListApp>>>> = Arc::new(Mutex::new(None));
         let app_entity_for_closure = app_entity_holder.clone();
@@ -1076,7 +1105,7 @@ fn main() {
                 window_bounds: Some(WindowBounds::Windowed(bounds)),
                 titlebar: None,
                 is_movable: true,
-                window_background: WindowBackgroundAppearance::Blurred,
+                window_background,
                 show: false, // Start hidden - only show on hotkey press
                 focus: false, // Don't focus on creation
                 ..Default::default()

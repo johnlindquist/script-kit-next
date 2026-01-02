@@ -65,93 +65,6 @@ impl Default for VibrancySettings {
     }
 }
 
-/// Padding configuration for consistent spacing across prompts
-///
-/// All values are in pixels. These can be configured in theme.json
-/// and are used by all prompt renderers for consistent spacing.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Padding {
-    /// Extra small padding (default: 4.0)
-    pub xs: f32,
-    /// Small padding (default: 8.0)
-    pub sm: f32,
-    /// Medium padding - the base padding size (default: 12.0)
-    pub md: f32,
-    /// Large padding (default: 16.0)
-    pub lg: f32,
-    /// Extra large padding (default: 24.0)
-    pub xl: f32,
-    /// Horizontal padding for content areas (default: 16.0)
-    pub content_x: f32,
-    /// Vertical padding for content areas (default: 12.0)
-    pub content_y: f32,
-    /// Horizontal padding inside prompts (default: 16.0)
-    pub prompt_x: f32,
-    /// Vertical padding inside prompts (default: 12.0)
-    pub prompt_y: f32,
-    /// Horizontal padding for list items (default: 16.0)
-    pub item_x: f32,
-    /// Vertical padding for list items (default: 8.0)
-    pub item_y: f32,
-}
-
-impl Default for Padding {
-    fn default() -> Self {
-        Padding {
-            xs: 4.0,
-            sm: 8.0,
-            md: 12.0,
-            lg: 16.0,
-            xl: 24.0,
-            content_x: 16.0,
-            content_y: 12.0,
-            prompt_x: 16.0,
-            prompt_y: 12.0,
-            item_x: 16.0,
-            item_y: 8.0,
-        }
-    }
-}
-
-#[allow(dead_code)]
-impl Padding {
-    /// Get horizontal padding as a tuple (left, right) - both are the same
-    #[inline]
-    pub fn content_horizontal(&self) -> f32 {
-        self.content_x
-    }
-
-    /// Get vertical padding as a tuple (top, bottom) - both are the same
-    #[inline]
-    pub fn content_vertical(&self) -> f32 {
-        self.content_y
-    }
-
-    /// Get prompt horizontal padding
-    #[inline]
-    pub fn prompt_horizontal(&self) -> f32 {
-        self.prompt_x
-    }
-
-    /// Get prompt vertical padding
-    #[inline]
-    pub fn prompt_vertical(&self) -> f32 {
-        self.prompt_y
-    }
-
-    /// Get item horizontal padding
-    #[inline]
-    pub fn item_horizontal(&self) -> f32 {
-        self.item_x
-    }
-
-    /// Get item vertical padding
-    #[inline]
-    pub fn item_vertical(&self) -> f32 {
-        self.item_y
-    }
-}
-
 /// Drop shadow configuration for the window
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DropShadow {
@@ -492,6 +405,61 @@ pub struct FocusAwareColorScheme {
     pub unfocused: Option<FocusColorScheme>,
 }
 
+/// Font configuration for the editor and terminal
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FontConfig {
+    /// Monospace font family for editor/terminal (default: "Menlo" on macOS)
+    #[serde(default = "default_mono_font_family")]
+    pub mono_family: String,
+    /// Monospace font size in pixels (default: 14.0)
+    #[serde(default = "default_mono_font_size")]
+    pub mono_size: f32,
+    /// UI font family (default: system font)
+    #[serde(default = "default_ui_font_family")]
+    pub ui_family: String,
+    /// UI font size in pixels (default: 14.0)
+    #[serde(default = "default_ui_font_size")]
+    pub ui_size: f32,
+}
+
+fn default_mono_font_family() -> String {
+    #[cfg(target_os = "macos")]
+    {
+        "Menlo".to_string()
+    }
+    #[cfg(target_os = "windows")]
+    {
+        "Consolas".to_string()
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        "DejaVu Sans Mono".to_string()
+    }
+}
+
+fn default_mono_font_size() -> f32 {
+    14.0
+}
+
+fn default_ui_font_family() -> String {
+    ".SystemUIFont".to_string()
+}
+
+fn default_ui_font_size() -> f32 {
+    14.0
+}
+
+impl Default for FontConfig {
+    fn default() -> Self {
+        FontConfig {
+            mono_family: default_mono_font_family(),
+            mono_size: default_mono_font_size(),
+            ui_family: default_ui_font_family(),
+            ui_size: default_ui_font_size(),
+        }
+    }
+}
+
 /// Complete theme definition
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Theme {
@@ -508,9 +476,9 @@ pub struct Theme {
     /// Vibrancy/blur effect settings
     #[serde(default)]
     pub vibrancy: Option<VibrancySettings>,
-    /// Padding configuration for consistent spacing
+    /// Font configuration for editor and terminal
     #[serde(default)]
-    pub padding: Option<Padding>,
+    pub fonts: Option<FontConfig>,
 }
 
 #[allow(dead_code)]
@@ -680,7 +648,7 @@ impl Default for Theme {
             opacity: Some(BackgroundOpacity::default()),
             drop_shadow: Some(DropShadow::default()),
             vibrancy: Some(VibrancySettings::default()),
-            padding: Some(Padding::default()),
+            fonts: Some(FontConfig::default()),
         }
     }
 }
@@ -770,10 +738,10 @@ impl Theme {
         self.get_vibrancy().enabled
     }
 
-    /// Get padding configuration
-    /// Returns the configured padding or sensible defaults
-    pub fn get_padding(&self) -> Padding {
-        self.padding.clone().unwrap_or_default()
+    /// Get font configuration
+    /// Returns the configured fonts or sensible defaults
+    pub fn get_fonts(&self) -> FontConfig {
+        self.fonts.clone().unwrap_or_default()
     }
 }
 
@@ -864,7 +832,7 @@ pub fn load_theme() -> Theme {
             opacity: Some(BackgroundOpacity::default()),
             drop_shadow: Some(DropShadow::default()),
             vibrancy: Some(VibrancySettings::default()),
-            padding: Some(Padding::default()),
+            fonts: Some(FontConfig::default()),
         };
         log_theme_config(&theme);
         return theme;
@@ -886,7 +854,7 @@ pub fn load_theme() -> Theme {
                 opacity: Some(BackgroundOpacity::default()),
                 drop_shadow: Some(DropShadow::default()),
                 vibrancy: Some(VibrancySettings::default()),
-                padding: Some(Padding::default()),
+                fonts: Some(FontConfig::default()),
             };
             log_theme_config(&theme);
             theme
@@ -916,7 +884,7 @@ pub fn load_theme() -> Theme {
                     opacity: Some(BackgroundOpacity::default()),
                     drop_shadow: Some(DropShadow::default()),
                     vibrancy: Some(VibrancySettings::default()),
-                    padding: Some(Padding::default()),
+                    fonts: Some(FontConfig::default()),
                 };
                 log_theme_config(&theme);
                 theme
@@ -1074,64 +1042,6 @@ impl ColorScheme {
     }
 }
 
-/// Lightweight padding values struct - Copy to avoid clone in closures
-///
-/// This struct pre-computes the most commonly used padding values in f32 form,
-/// ready for use with gpui::px(). All values are in pixels.
-///
-/// # Example
-/// ```ignore
-/// let padding = theme.get_padding().to_values();
-/// // Pass padding into closure - it's Copy, so no heap allocation
-/// div().px(px(padding.content_x)).py(px(padding.content_y))
-/// ```
-#[allow(dead_code)]
-#[derive(Copy, Clone, Debug, PartialEq)]
-pub struct PaddingValues {
-    /// Extra small padding
-    pub xs: f32,
-    /// Small padding
-    pub sm: f32,
-    /// Medium padding (base)
-    pub md: f32,
-    /// Large padding
-    pub lg: f32,
-    /// Extra large padding
-    pub xl: f32,
-    /// Content area horizontal padding
-    pub content_x: f32,
-    /// Content area vertical padding
-    pub content_y: f32,
-    /// Prompt horizontal padding
-    pub prompt_x: f32,
-    /// Prompt vertical padding
-    pub prompt_y: f32,
-    /// List item horizontal padding
-    pub item_x: f32,
-    /// List item vertical padding
-    pub item_y: f32,
-}
-
-#[allow(dead_code)]
-impl Padding {
-    /// Convert to a Copy-able PaddingValues for use in closures
-    pub fn to_values(&self) -> PaddingValues {
-        PaddingValues {
-            xs: self.xs,
-            sm: self.sm,
-            md: self.md,
-            lg: self.lg,
-            xl: self.xl,
-            content_x: self.content_x,
-            content_y: self.content_y,
-            prompt_x: self.prompt_x,
-            prompt_y: self.prompt_y,
-            item_x: self.item_x,
-            item_y: self.item_y,
-        }
-    }
-}
-
 // ============================================================================
 // End Lightweight Theme Extraction Helpers
 // ============================================================================
@@ -1172,17 +1082,6 @@ fn log_theme_config(theme: &Theme) {
         warning = format!("#{:06x}", theme.colors.ui.warning),
         info = format!("#{:06x}", theme.colors.ui.info),
         "Theme status colors"
-    );
-    let padding = theme.get_padding();
-    debug!(
-        xs = padding.xs,
-        sm = padding.sm,
-        md = padding.md,
-        lg = padding.lg,
-        xl = padding.xl,
-        content_x = padding.content_x,
-        content_y = padding.content_y,
-        "Theme padding configured"
     );
 }
 
@@ -1328,10 +1227,29 @@ pub fn sync_gpui_component_theme(cx: &mut App) {
     // Map Script Kit colors to gpui-component ThemeColor
     let custom_colors = map_scriptkit_to_gpui_theme(&sk_theme);
 
-    // Apply the custom colors to the global theme
+    // Get font configuration
+    let fonts = sk_theme.get_fonts();
+
+    // Apply the custom colors and fonts to the global theme
     let theme = GpuiTheme::global_mut(cx);
     theme.colors = custom_colors;
     theme.mode = ThemeMode::Dark; // Script Kit uses dark mode by default
+
+    // Set monospace font for code editor (used by InputState in code_editor mode)
+    theme.mono_font_family = fonts.mono_family.clone().into();
+    theme.mono_font_size = gpui::px(fonts.mono_size);
+
+    // Set UI font
+    theme.font_family = fonts.ui_family.clone().into();
+    theme.font_size = gpui::px(fonts.ui_size);
+
+    debug!(
+        mono_font = fonts.mono_family,
+        mono_size = fonts.mono_size,
+        ui_font = fonts.ui_family,
+        ui_size = fonts.ui_size,
+        "Font configuration applied to gpui-component"
+    );
 
     tracing_info!("gpui-component theme synchronized with Script Kit");
 }
@@ -1405,7 +1323,7 @@ mod tests {
             opacity: Some(BackgroundOpacity::default()),
             drop_shadow: Some(DropShadow::default()),
             vibrancy: Some(VibrancySettings::default()),
-            padding: Some(Padding::default()),
+            fonts: Some(FontConfig::default()),
         };
         let json = serde_json::to_string(&theme).unwrap();
         let deserialized: Theme = serde_json::from_str(&json).unwrap();
@@ -1440,55 +1358,6 @@ mod tests {
         let vibrancy = VibrancySettings::default();
         assert!(vibrancy.enabled);
         assert_eq!(vibrancy.material, "popover");
-    }
-
-    #[test]
-    fn test_padding_defaults() {
-        let padding = Padding::default();
-        assert_eq!(padding.xs, 4.0);
-        assert_eq!(padding.sm, 8.0);
-        assert_eq!(padding.md, 12.0);
-        assert_eq!(padding.lg, 16.0);
-        assert_eq!(padding.xl, 24.0);
-        assert_eq!(padding.content_x, 16.0);
-        assert_eq!(padding.content_y, 12.0);
-        assert_eq!(padding.prompt_x, 16.0);
-        assert_eq!(padding.prompt_y, 12.0);
-        assert_eq!(padding.item_x, 16.0);
-        assert_eq!(padding.item_y, 8.0);
-    }
-
-    #[test]
-    fn test_padding_helper_methods() {
-        let padding = Padding::default();
-        assert_eq!(padding.content_horizontal(), 16.0);
-        assert_eq!(padding.content_vertical(), 12.0);
-        assert_eq!(padding.prompt_horizontal(), 16.0);
-        assert_eq!(padding.prompt_vertical(), 12.0);
-        assert_eq!(padding.item_horizontal(), 16.0);
-        assert_eq!(padding.item_vertical(), 8.0);
-    }
-
-    #[test]
-    fn test_theme_get_padding() {
-        let theme = Theme::default();
-        let padding = theme.get_padding();
-        assert_eq!(padding.md, 12.0);
-        assert_eq!(padding.content_x, 16.0);
-    }
-
-    #[test]
-    fn test_padding_serialization() {
-        let padding = Padding::default();
-        let json = serde_json::to_string(&padding).unwrap();
-        let deserialized: Padding = serde_json::from_str(&json).unwrap();
-        assert_eq!(deserialized.xs, padding.xs);
-        assert_eq!(deserialized.sm, padding.sm);
-        assert_eq!(deserialized.md, padding.md);
-        assert_eq!(deserialized.lg, padding.lg);
-        assert_eq!(deserialized.xl, padding.xl);
-        assert_eq!(deserialized.content_x, padding.content_x);
-        assert_eq!(deserialized.content_y, padding.content_y);
     }
 
     #[test]

@@ -5,9 +5,9 @@
 
 use anyhow::Result;
 use gpui::{
-    div, prelude::*, px, rgb, size, App, Context, Entity, FocusHandle, Focusable, Hsla,
-    IntoElement, KeyDownEvent, ParentElement, Render, Styled, Subscription, Window, WindowBounds,
-    WindowOptions,
+    div, hsla, point, prelude::*, px, rgb, size, App, BoxShadow, Context, Entity, FocusHandle,
+    Focusable, Hsla, IntoElement, KeyDownEvent, ParentElement, Render, Styled, Subscription,
+    Window, WindowBounds, WindowOptions,
 };
 
 #[cfg(target_os = "macos")]
@@ -1209,6 +1209,53 @@ impl NotesApp {
                 )
         }
     }
+
+    /// Create box shadows from theme configuration
+    /// Uses the same drop_shadow settings as the main window
+    fn create_box_shadows(&self) -> Vec<BoxShadow> {
+        let theme = crate::theme::load_theme();
+        let shadow_config = theme.get_drop_shadow();
+
+        if !shadow_config.enabled {
+            return vec![];
+        }
+
+        // Convert hex color to HSLA
+        let r = ((shadow_config.color >> 16) & 0xFF) as f32 / 255.0;
+        let g = ((shadow_config.color >> 8) & 0xFF) as f32 / 255.0;
+        let b = (shadow_config.color & 0xFF) as f32 / 255.0;
+
+        // Simple RGB to HSL conversion
+        let max = r.max(g).max(b);
+        let min = r.min(g).min(b);
+        let l = (max + min) / 2.0;
+
+        let (h, s) = if max == min {
+            (0.0, 0.0)
+        } else {
+            let d = max - min;
+            let s = if l > 0.5 {
+                d / (2.0 - max - min)
+            } else {
+                d / (max + min)
+            };
+            let h = if max == r {
+                (g - b) / d + if g < b { 6.0 } else { 0.0 }
+            } else if max == g {
+                (b - r) / d + 2.0
+            } else {
+                (r - g) / d + 4.0
+            };
+            (h / 6.0, s)
+        };
+
+        vec![BoxShadow {
+            color: hsla(h, s, l, shadow_config.opacity),
+            offset: point(px(shadow_config.offset_x), px(shadow_config.offset_y)),
+            blur_radius: px(shadow_config.blur_radius),
+            spread_radius: px(shadow_config.spread_radius),
+        }]
+    }
 }
 
 impl Focusable for NotesApp {
@@ -1228,6 +1275,8 @@ impl Render for NotesApp {
 
         // Raycast-style single-note view: no sidebar, editor fills full width
         // Track window hover for traffic lights visibility
+        let box_shadows = self.create_box_shadows();
+
         div()
             .id("notes-window-root")
             .flex()
@@ -1235,6 +1284,7 @@ impl Render for NotesApp {
             .size_full()
             .relative()
             .bg(cx.theme().background)
+            .shadow(box_shadows)
             .text_color(cx.theme().foreground)
             .track_focus(&self.focus_handle)
             // Track window hover for showing/hiding chrome
@@ -1573,6 +1623,14 @@ pub fn open_notes_window(cx: &mut App) -> Result<()> {
 
     let bounds = calculate_top_right_bounds(window_width, window_height, padding);
 
+    // Load theme to determine window background appearance (vibrancy)
+    let theme = crate::theme::load_theme();
+    let window_background = if theme.is_vibrancy_enabled() {
+        gpui::WindowBackgroundAppearance::Blurred
+    } else {
+        gpui::WindowBackgroundAppearance::Opaque
+    };
+
     let window_options = WindowOptions {
         window_bounds: Some(WindowBounds::Windowed(bounds)),
         titlebar: Some(gpui::TitlebarOptions {
@@ -1583,6 +1641,7 @@ pub fn open_notes_window(cx: &mut App) -> Result<()> {
                 y: px(8.),
             }),
         }),
+        window_background,
         focus: true,
         show: true,
         kind: gpui::WindowKind::Normal,
@@ -1644,7 +1703,7 @@ pub fn open_notes_window(cx: &mut App) -> Result<()> {
         });
     }
 
-    *guard = Some(handle.clone());
+    *guard = Some(handle);
 
     // Configure as floating panel (always on top) after window is created
     configure_notes_as_floating_panel();

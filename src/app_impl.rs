@@ -880,7 +880,9 @@ impl ScriptListApp {
             }
             AppView::DivPrompt { .. } => (ViewType::DivPrompt, 0),
             AppView::FormPrompt { .. } => (ViewType::DivPrompt, 0), // Use DivPrompt size for forms
-            AppView::EditorPrompt { .. } => (ViewType::EditorPrompt, 0),
+            AppView::EditorPrompt { .. } | AppView::EditorPromptV2 { .. } => {
+                (ViewType::EditorPrompt, 0)
+            }
             AppView::SelectPrompt { .. } => (ViewType::ArgPromptWithChoices, 0),
             AppView::PathPrompt { .. } => (ViewType::DivPrompt, 0),
             AppView::EnvPrompt { .. } => (ViewType::ArgPromptNoChoices, 0), // Env prompt is a simple input
@@ -1794,7 +1796,7 @@ impl ScriptListApp {
     fn is_dismissable_view(&self) -> bool {
         !matches!(
             self.current_view,
-            AppView::TermPrompt { .. } | AppView::EditorPrompt { .. }
+            AppView::TermPrompt { .. } | AppView::EditorPrompt { .. } | AppView::EditorPromptV2 { .. }
         )
     }
 
@@ -1932,6 +1934,7 @@ impl ScriptListApp {
             AppView::FormPrompt { .. } => "FormPrompt",
             AppView::TermPrompt { .. } => "TermPrompt",
             AppView::EditorPrompt { .. } => "EditorPrompt",
+            AppView::EditorPromptV2 { .. } => "EditorPromptV2",
             AppView::SelectPrompt { .. } => "SelectPrompt",
             AppView::PathPrompt { .. } => "PathPrompt",
             AppView::EnvPrompt { .. } => "EnvPrompt",
@@ -2040,6 +2043,7 @@ impl ScriptListApp {
                 | AppView::FormPrompt { .. }
                 | AppView::TermPrompt { .. }
                 | AppView::EditorPrompt { .. }
+                | AppView::EditorPromptV2 { .. }
                 | AppView::ClipboardHistoryView { .. }
                 | AppView::AppLauncherView { .. }
                 | AppView::WindowSwitcherView { .. }
