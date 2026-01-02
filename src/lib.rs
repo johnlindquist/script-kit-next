@@ -151,6 +151,9 @@ pub mod login_item;
 // Used for smooth hover effects, toast animations, and other UI transitions
 pub mod transitions;
 
+// File watchers for theme, config, scripts, and system appearance
+pub mod watcher;
+
 // Shared window visibility state
 // Used to track main window visibility across the app
 // Notes/AI windows use this to decide whether to hide the app after closing
