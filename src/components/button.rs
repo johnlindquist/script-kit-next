@@ -196,9 +196,9 @@ impl RenderOnce for Button {
             }
         };
 
-        // Build shortcut element if present - same accent color as label
+        // Build shortcut element if present - same size and accent color as label
         let shortcut_element = if let Some(sc) = self.shortcut {
-            div().text_xs().ml(px(4.)).child(sc)
+            div().ml(px(4.)).child(sc)
         } else {
             div()
         };

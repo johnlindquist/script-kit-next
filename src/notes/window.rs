@@ -984,13 +984,18 @@ impl NotesApp {
 
         // Raycast-style: titlebar only visible on hover, centered title, right-aligned actions
         let window_hovered = self.window_hovered || self.force_hovered;
+        
+        // Get muted foreground color for subtle icons/text
+        let muted_color = cx.theme().muted_foreground;
+        
         let titlebar = div()
             .id("notes-titlebar")
             .flex()
             .items_center()
-            .justify_between()
+            .justify_center() // Center the title
             .h(px(32.))
             .px_3()
+            .relative() // For absolute positioning of icons
             // No background - blends with window
             .bg(cx.theme().background)
             // Only show titlebar elements when window is hovered
@@ -1003,47 +1008,53 @@ impl NotesApp {
                 cx.notify();
             }))
             .child(
-                // Note title (truncated) - only visible when hovered
+                // Note title (truncated) - CENTERED in titlebar
                 div()
                     .flex()
                     .items_center()
                     .overflow_hidden()
                     .text_ellipsis()
                     .text_sm()
-                    .text_color(cx.theme().foreground)
+                    .text_color(muted_color) // Use muted color for subtle title
                     .when(!window_hovered, |d| d.opacity(0.))
                     .child(title),
             )
             // Conditionally show icons based on state - only when window is hovered
             // Raycast-style: 3 icons on the right - settings (actions), panel (browse), + (new)
+            // Use absolute positioning to keep title centered
             .when(window_hovered && has_selection && !is_trash, |d| {
                 d.child(
                     div()
+                        .absolute()
+                        .right_3() // Align to right with same padding as px_3
                         .flex()
                         .items_center()
-                        .gap_1()
+                        .gap_2() // Even spacing between icons
                         // Icon 1: Command key icon - opens actions panel (⌘K)
                         .child(
-                            Button::new("cmd-action")
-                                .ghost()
-                                .xsmall()
-                                .label("⌘")
-                                .tooltip("Actions (⌘K)")
+                            div()
+                                .id("titlebar-cmd-icon")
+                                .text_sm()
+                                .text_color(muted_color.opacity(0.7)) // Muted, subtle icon
+                                .cursor_pointer()
+                                .hover(|s| s.text_color(muted_color)) // Slightly brighter on hover
                                 .on_click(cx.listener(|this, _, window, cx| {
                                     if this.show_actions_panel {
                                         this.close_actions_panel(window, cx);
                                     } else {
                                         this.open_actions_panel(window, cx);
                                     }
-                                })),
+                                }))
+                                .child("⌘"),
                         )
                         // Icon 2: List icon - for browsing notes
                         .child(
-                            Button::new("browse-notes")
-                                .ghost()
-                                .xsmall()
-                                .label("☰")
-                                .tooltip("Browse Notes (⌘P)")
+                            div()
+                                .id("titlebar-browse-icon")
+                                .text_sm()
+                                .text_color(muted_color.opacity(0.7)) // Muted, subtle icon
+                                .cursor_pointer()
+                                .hover(|s| s.text_color(muted_color)) // Slightly brighter on hover
                                 .on_click(cx.listener(|this, _, window, cx| {
                                     if this.show_browse_panel {
                                         this.close_browse_panel(cx);
@@ -1052,18 +1063,21 @@ impl NotesApp {
                                         this.show_browse_panel = true;
                                         this.open_browse_panel(window, cx);
                                     }
-                                })),
+                                }))
+                                .child("≡"),
                         )
                         // Icon 3: Plus icon - for new note
                         .child(
-                            Button::new("new-note")
-                                .ghost()
-                                .xsmall()
-                                .label("+")
-                                .tooltip("New Note (⌘N)")
+                            div()
+                                .id("titlebar-new-icon")
+                                .text_sm()
+                                .text_color(muted_color.opacity(0.7)) // Muted, subtle icon
+                                .cursor_pointer()
+                                .hover(|s| s.text_color(muted_color)) // Slightly brighter on hover
                                 .on_click(cx.listener(|this, _, window, cx| {
                                     this.create_note(window, cx);
-                                })),
+                                }))
+                                .child("+"),
                         ),
                 )
             })
