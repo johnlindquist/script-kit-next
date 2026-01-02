@@ -26,7 +26,10 @@ use gpui::{
     div, point, prelude::*, px, uniform_list, App, BoxShadow, Context, FocusHandle, Focusable,
     Hsla, MouseButton, Render, ScrollStrategy, SharedString, UniformListScrollHandle, Window,
 };
-use gpui_component::{theme::{ActiveTheme, Theme}, Icon, IconName};
+use gpui_component::{
+    theme::{ActiveTheme, Theme},
+    Icon, IconName,
+};
 use std::sync::Arc;
 use tracing::debug;
 
@@ -215,9 +218,9 @@ enum NotesActionSection {
 impl NotesActionSection {
     fn for_action(action: NotesAction) -> Self {
         match action {
-            NotesAction::NewNote
-            | NotesAction::DuplicateNote
-            | NotesAction::BrowseNotes => NotesActionSection::Primary,
+            NotesAction::NewNote | NotesAction::DuplicateNote | NotesAction::BrowseNotes => {
+                NotesActionSection::Primary
+            }
             NotesAction::FindInNote
             | NotesAction::CopyNoteAs
             | NotesAction::CopyDeeplink
@@ -247,14 +250,17 @@ impl NotesActionItem {
 pub const PANEL_WIDTH: f32 = 320.0;
 pub const PANEL_MAX_HEIGHT: f32 = 580.0;
 pub const PANEL_CORNER_RADIUS: f32 = 12.0;
-pub const ACTION_ITEM_HEIGHT: f32 = 42.0;
-pub const ACCENT_BAR_WIDTH: f32 = 3.0;
+pub const ACTION_ITEM_HEIGHT: f32 = 44.0;
 pub const PANEL_SEARCH_HEIGHT: f32 = 44.0;
 pub const PANEL_BORDER_HEIGHT: f32 = 2.0;
+/// Horizontal inset for action rows (creates rounded pill appearance)
+pub const ACTION_ROW_INSET: f32 = 6.0;
+/// Corner radius for selected row background
+pub const SELECTION_RADIUS: f32 = 8.0;
 
 pub fn panel_height_for_rows(row_count: usize) -> f32 {
-    let items_height =
-        (row_count as f32 * ACTION_ITEM_HEIGHT).min(PANEL_MAX_HEIGHT - (PANEL_SEARCH_HEIGHT + 16.0));
+    let items_height = (row_count as f32 * ACTION_ITEM_HEIGHT)
+        .min(PANEL_MAX_HEIGHT - (PANEL_SEARCH_HEIGHT + 16.0));
     items_height + PANEL_SEARCH_HEIGHT + PANEL_BORDER_HEIGHT
 }
 
@@ -286,10 +292,7 @@ impl NotesActionsPanel {
         on_action: NotesActionCallback,
     ) -> Self {
         let filtered_indices: Vec<usize> = (0..actions.len()).collect();
-        let selected_index = actions
-            .iter()
-            .position(|item| item.enabled)
-            .unwrap_or(0);
+        let selected_index = actions.iter().position(|item| item.enabled).unwrap_or(0);
 
         debug!(action_count = actions.len(), "Notes actions panel created");
 
@@ -363,7 +366,13 @@ impl NotesActionsPanel {
         self.filtered_indices
             .get(self.selected_index)
             .and_then(|&idx| self.actions.get(idx))
-            .and_then(|item| if item.enabled { Some(item.action) } else { None })
+            .and_then(|item| {
+                if item.enabled {
+                    Some(item.action)
+                } else {
+                    None
+                }
+            })
     }
 
     /// Refilter actions based on search text
@@ -376,13 +385,7 @@ impl NotesActionsPanel {
                 .actions
                 .iter()
                 .enumerate()
-                .filter(|(_, action)| {
-                    action
-                        .action
-                        .label()
-                        .to_lowercase()
-                        .contains(&search_lower)
-                })
+                .filter(|(_, action)| action.action.label().to_lowercase().contains(&search_lower))
                 .map(|(idx, _)| idx)
                 .collect();
         }
@@ -405,8 +408,8 @@ impl NotesActionsPanel {
         if self.selected_index >= self.filtered_indices.len()
             || !self.is_selectable(self.selected_index)
         {
-            if let Some(index) = (0..self.filtered_indices.len())
-                .find(|&idx| self.is_selectable(idx))
+            if let Some(index) =
+                (0..self.filtered_indices.len()).find(|&idx| self.is_selectable(idx))
             {
                 self.selected_index = index;
             } else {
@@ -500,7 +503,7 @@ impl Render for NotesActionsPanel {
             SharedString::from(self.search_text.clone())
         };
 
-        // Build search input row
+        // Build search input row - Raycast style: no search icon, just placeholder with cursor
         let search_input = div()
             .w_full()
             .h(px(PANEL_SEARCH_HEIGHT))
@@ -512,14 +515,7 @@ impl Render for NotesActionsPanel {
             .flex()
             .flex_row()
             .items_center()
-            .gap(px(8.0))
-            // Search icon
-            .child(
-                Icon::new(IconName::Search)
-                    .size_4()
-                    .text_color(text_muted),
-            )
-            // Search field
+            // Search field - full width, no icon
             .child(
                 div()
                     .flex_1()
@@ -616,82 +612,91 @@ impl Render for NotesActionsPanel {
                                         a: 0.0,
                                     };
 
+                                    // Raycast-style: rounded pill selection, no left accent bar
+                                    // Outer wrapper provides horizontal inset for the rounded background
                                     let action_row = div()
                                         .id(idx)
                                         .w_full()
                                         .h(px(ACTION_ITEM_HEIGHT))
+                                        .px(px(ACTION_ROW_INSET))
                                         .flex()
-                                        .flex_row()
-                                        .items_center()
-                                        .bg(if is_selected {
-                                            theme.list_active
-                                        } else {
-                                            transparent
-                                        })
-                                        // Left accent bar for selection
-                                        .border_l(px(ACCENT_BAR_WIDTH))
-                                        .border_color(if is_selected {
-                                            theme.accent
-                                        } else {
-                                            transparent
-                                        })
+                                        .flex_col()
+                                        .justify_center()
+                                        // Section divider as top border
                                         .when(is_section_start, |d| {
                                             d.border_t_1().border_color(theme.border)
                                         })
-                                        .when(is_enabled, |d| d.hover(|s| s.bg(theme.list_hover)))
-                                        .when(is_enabled, |d| d.cursor_pointer())
-                                        .when(!is_enabled, |d| d.opacity(0.5))
-                                        // Content
+                                        // Inner row with rounded background
                                         .child(
                                             div()
-                                                .flex_1()
-                                                .px(px(12.0))
+                                                .w_full()
+                                                .h(px(ACTION_ITEM_HEIGHT - 8.0))
                                                 .flex()
                                                 .flex_row()
                                                 .items_center()
-                                                .justify_between()
-                                                // Left: icon + label
+                                                .px(px(8.0))
+                                                .rounded(px(SELECTION_RADIUS))
+                                                .bg(if is_selected {
+                                                    theme.list_active
+                                                } else {
+                                                    transparent
+                                                })
+                                                .when(is_enabled, |d| {
+                                                    d.hover(|s| s.bg(theme.list_hover))
+                                                })
+                                                .when(is_enabled, |d| d.cursor_pointer())
+                                                .when(!is_enabled, |d| d.opacity(0.5))
+                                                // Content row: icon + label + shortcuts
                                                 .child(
                                                     div()
+                                                        .flex_1()
                                                         .flex()
                                                         .flex_row()
                                                         .items_center()
-                                                        .gap(px(8.0))
-                                                        // Icon - render using gpui_component Icon
-                                                        .child({
-                                                            let icon_name: IconName =
-                                                                action.action.icon();
-                                                            Icon::new(icon_name)
-                                                                .size_4()
-                                                                .text_color(if is_enabled {
-                                                                    theme.foreground
-                                                                } else {
-                                                                    theme.muted_foreground
-                                                                })
-                                                        })
-                                                        // Label
+                                                        .justify_between()
+                                                        // Left: icon + label
                                                         .child(
                                                             div()
-                                                                .text_sm()
-                                                                .text_color(if is_enabled {
-                                                                    theme.foreground
-                                                                } else {
-                                                                    theme.muted_foreground
+                                                                .flex()
+                                                                .flex_row()
+                                                                .items_center()
+                                                                .gap(px(8.0))
+                                                                // Icon
+                                                                .child({
+                                                                    let icon_name: IconName =
+                                                                        action.action.icon();
+                                                                    Icon::new(icon_name)
+                                                                        .size_4()
+                                                                        .text_color(if is_enabled {
+                                                                            theme.foreground
+                                                                        } else {
+                                                                            theme.muted_foreground
+                                                                        })
                                                                 })
-                                                                .font_weight(if is_selected {
-                                                                    gpui::FontWeight::MEDIUM
-                                                                } else {
-                                                                    gpui::FontWeight::NORMAL
-                                                                })
-                                                                .child(action.action.label()),
-                                                        ),
-                                                )
-                                                // Right: shortcut badge
-                                                .child(
-                                                    render_shortcut_keys(
-                                                        action.action.shortcut_keys(),
-                                                        theme,
-                                                    ),
+                                                                // Label
+                                                                .child(
+                                                                    div()
+                                                                        .text_sm()
+                                                                        .text_color(if is_enabled {
+                                                                            theme.foreground
+                                                                        } else {
+                                                                            theme.muted_foreground
+                                                                        })
+                                                                        .font_weight(
+                                                                            if is_selected {
+                                                                                gpui::FontWeight::MEDIUM
+                                                                            } else {
+                                                                                gpui::FontWeight::NORMAL
+                                                                            },
+                                                                        )
+                                                                        .child(action.action.label()),
+                                                                ),
+                                                        )
+                                                        // Right: shortcut badge
+                                                        .child(render_shortcut_keys(
+                                                            action.action.shortcut_keys(),
+                                                            theme,
+                                                        )),
                                                 ),
                                         )
                                         .when(is_enabled, |d| {
@@ -747,11 +752,7 @@ fn render_shortcut_keys(keys: &[&'static str], theme: &Theme) -> impl IntoElemen
         return div().into_any_element();
     }
 
-    let mut row = div()
-        .flex()
-        .flex_row()
-        .items_center()
-        .gap(px(4.0));
+    let mut row = div().flex().flex_row().items_center().gap(px(4.0));
 
     for key in keys {
         row = row.child(
@@ -840,10 +841,12 @@ mod tests {
 
     #[test]
     fn test_panel_constants() {
-        // Verify panel matches main ActionsDialog dimensions
+        // Verify panel matches Raycast-style dimensions
         assert_eq!(PANEL_WIDTH, 320.0);
         assert_eq!(PANEL_MAX_HEIGHT, 580.0);
         assert_eq!(PANEL_CORNER_RADIUS, 12.0);
-        assert_eq!(ACTION_ITEM_HEIGHT, 42.0);
+        assert_eq!(ACTION_ITEM_HEIGHT, 44.0);
+        assert_eq!(ACTION_ROW_INSET, 6.0);
+        assert_eq!(SELECTION_RADIUS, 8.0);
     }
 }

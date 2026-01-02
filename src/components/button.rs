@@ -196,9 +196,9 @@ impl RenderOnce for Button {
             }
         };
 
-        // Build shortcut element if present - same size and accent color as label
+        // Build shortcut element if present - smaller than label, same accent color
         let shortcut_element = if let Some(sc) = self.shortcut {
-            div().ml(px(4.)).child(sc)
+            div().text_xs().ml(px(4.)).child(sc)
         } else {
             div()
         };
@@ -223,7 +223,7 @@ impl RenderOnce for Button {
             .rounded(px(6.))
             .bg(bg_color)
             .text_color(text_color)
-            .text_base()
+            .text_sm()
             .font_weight(FontWeight::MEDIUM)
             .font_family(".AppleSystemUIFont")
             .cursor_pointer()
