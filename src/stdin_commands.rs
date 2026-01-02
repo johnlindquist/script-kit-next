@@ -65,6 +65,9 @@ pub enum ExternalCommand {
     /// title: Title pattern to match (e.g., "Script Kit AI" for the AI window)
     /// path: File path to save the PNG screenshot
     CaptureWindow { title: String, path: String },
+    /// Set the AI window search filter (for testing chat search)
+    /// text: Search query to filter chats
+    SetAiSearch { text: String },
 }
 
 /// Start a thread that listens on stdin for external JSONL commands.

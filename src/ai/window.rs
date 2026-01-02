@@ -172,6 +172,10 @@ fn generate_mock_response(user_message: &str) -> String {
 static AI_WINDOW: std::sync::OnceLock<std::sync::Mutex<Option<gpui::WindowHandle<Root>>>> =
     std::sync::OnceLock::new();
 
+/// Global handle to the AiApp entity (for updating state from outside)
+static AI_APP_ENTITY: std::sync::OnceLock<std::sync::Mutex<Option<Entity<AiApp>>>> =
+    std::sync::OnceLock::new();
+
 /// The main AI chat application view
 pub struct AiApp {
     /// All chats (cached from storage)
@@ -343,30 +347,52 @@ impl AiApp {
         }
     }
 
-    /// Handle search query changes
+    /// Handle search query changes - filters chats in real-time as user types
     fn on_search_change(&mut self, cx: &mut Context<Self>) {
         let query = self.search_state.read(cx).value().to_string();
         self.search_query = query.clone();
 
-        // If search is not empty, use FTS search
+        debug!(query = %query, "Search query changed");
+
+        // If search is not empty, filter chats
         if !query.trim().is_empty() {
-            match storage::search_chats(&query) {
-                Ok(results) => {
-                    self.chats = results;
-                    // Update selection if current chat not in results
-                    if let Some(id) = self.selected_chat_id {
-                        if !self.chats.iter().any(|c| c.id == id) {
-                            self.selected_chat_id = self.chats.first().map(|c| c.id);
-                        }
-                    }
+            // Use simple case-insensitive title matching for responsiveness
+            // FTS search is available but can fail on special characters
+            let query_lower = query.to_lowercase();
+            let all_chats = storage::get_all_chats().unwrap_or_default();
+            self.chats = all_chats
+                .into_iter()
+                .filter(|chat| chat.title.to_lowercase().contains(&query_lower))
+                .collect();
+
+            debug!(results = self.chats.len(), "Search filtered chats");
+
+            // Always select first result when filtering
+            if !self.chats.is_empty() {
+                let first_id = self.chats[0].id;
+                if self.selected_chat_id != Some(first_id) {
+                    self.selected_chat_id = Some(first_id);
+                    // Load messages for the selected chat
+                    self.current_messages = storage::get_chat_messages(&first_id)
+                        .unwrap_or_default();
                 }
-                Err(e) => {
-                    tracing::error!(error = %e, "Search failed");
-                }
+            } else {
+                self.selected_chat_id = None;
+                self.current_messages = Vec::new();
             }
         } else {
             // Reload all chats when search is cleared
             self.chats = storage::get_all_chats().unwrap_or_default();
+            // Keep current selection if it still exists, otherwise select first
+            if let Some(id) = self.selected_chat_id {
+                if !self.chats.iter().any(|c| c.id == id) {
+                    self.selected_chat_id = self.chats.first().map(|c| c.id);
+                    if let Some(new_id) = self.selected_chat_id {
+                        self.current_messages = storage::get_chat_messages(&new_id)
+                            .unwrap_or_default();
+                    }
+                }
+            }
         }
 
         cx.notify();
@@ -1171,12 +1197,15 @@ impl AiApp {
             None
         };
 
-        // Note: overflow_y_scrollbar() wraps the element, so flex_1() goes after it
+        // Messages list with vertical scrollbar
+        // Note: The container (in render_main_panel) handles flex_1 for sizing
+        // We use size_full() here to fill the bounded container
         div()
             .flex()
             .flex_col()
             .p_3()
             .gap_3()
+            .size_full()
             // Render all messages
             .children(
                 self.current_messages
@@ -1186,7 +1215,6 @@ impl AiApp {
             // Show streaming content if streaming
             .children(streaming_element)
             .overflow_y_scrollbar()
-            .flex_1()
     }
 
     /// Render the main chat panel
@@ -1351,22 +1379,33 @@ impl AiApp {
         // Determine what to show in the content area
         let has_messages = !self.current_messages.is_empty() || self.is_streaming;
 
-        // Build main layout - use overflow_hidden to prevent content from extending beyond bounds
+        // Build main layout
+        // Structure: titlebar (fixed) -> content area (flex_1, scrollable) -> input area (fixed)
         div()
             .flex_1()
             .flex()
             .flex_col()
             .h_full()
-            .overflow_hidden() // Prevent content from overflowing the main panel bounds
+            .overflow_hidden()
+            // Titlebar (fixed height)
             .child(titlebar)
+            // Content area - this wrapper gets flex_1 to fill remaining space
+            // The scrollable content goes inside this bounded container
             .child(
-                // Messages area or welcome state
-                if has_messages {
-                    self.render_messages(cx).into_any_element()
-                } else {
-                    self.render_welcome(cx).into_any_element()
-                },
+                div()
+                    .flex_1()
+                    .flex()
+                    .flex_col()
+                    .overflow_hidden()
+                    .child(
+                        if has_messages {
+                            self.render_messages(cx).into_any_element()
+                        } else {
+                            self.render_welcome(cx).into_any_element()
+                        },
+                    ),
             )
+            // Input area (fixed height, always visible at bottom)
             .child(input_area)
     }
 }
@@ -1606,10 +1645,21 @@ pub fn open_ai_window(cx: &mut App) -> Result<()> {
         ..Default::default()
     };
 
+    // Create a holder for the AiApp entity so we can store it
+    let ai_app_holder: std::sync::Arc<std::sync::Mutex<Option<Entity<AiApp>>>> =
+        std::sync::Arc::new(std::sync::Mutex::new(None));
+    let ai_app_holder_clone = ai_app_holder.clone();
+
     let handle = cx.open_window(window_options, |window, cx| {
         let view = cx.new(|cx| AiApp::new(window, cx));
+        // Store the AiApp entity for later access
+        *ai_app_holder_clone.lock().unwrap() = Some(view.clone());
         cx.new(|cx| Root::new(view, window, cx))
     })?;
+
+    // Store the AiApp entity globally
+    let app_entity_holder = AI_APP_ENTITY.get_or_init(|| std::sync::Mutex::new(None));
+    *app_entity_holder.lock().unwrap() = ai_app_holder.lock().unwrap().take();
 
     // Activate the app and window so user can immediately start typing
     cx.activate(true);
@@ -1635,6 +1685,10 @@ pub fn close_ai_window(cx: &mut App) {
             window.remove_window();
         });
     }
+
+    // Also clear the AiApp entity reference
+    let app_entity_holder = AI_APP_ENTITY.get_or_init(|| std::sync::Mutex::new(None));
+    *app_entity_holder.lock().unwrap() = None;
 }
 
 /// Check if the AI window is currently open
@@ -1646,6 +1700,39 @@ pub fn is_ai_window_open() -> bool {
     let window_handle = AI_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
     let guard = window_handle.lock().unwrap();
     guard.is_some()
+}
+
+/// Set the search filter text in the AI window.
+/// Used for testing the search functionality via stdin commands.
+pub fn set_ai_search(cx: &mut App, query: &str) {
+    use crate::logging;
+
+    // Get the AI window handle for the window context
+    let window_handle = AI_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
+    let window_guard = window_handle.lock().unwrap();
+
+    // Get the AiApp entity
+    let app_entity_holder = AI_APP_ENTITY.get_or_init(|| std::sync::Mutex::new(None));
+    let app_guard = app_entity_holder.lock().unwrap();
+
+    if let (Some(handle), Some(app_entity)) = (window_guard.as_ref(), app_guard.as_ref()) {
+        let query_owned = query.to_string();
+        let app_entity_clone = app_entity.clone();
+
+        let _ = handle.update(cx, |_root, window, cx| {
+            app_entity_clone.update(cx, |app, cx| {
+                // Set the search input value
+                app.search_state.update(cx, |state, cx| {
+                    state.set_value(query_owned.clone(), window, cx);
+                });
+                // Trigger the search change handler
+                app.on_search_change(cx);
+                logging::log("AI", &format!("Search filter set to: {}", query_owned));
+            });
+        });
+    } else {
+        logging::log("AI", "Cannot set search - AI window not open");
+    }
 }
 
 /// Configure the AI window as a floating panel (always on top).

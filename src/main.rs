@@ -1726,6 +1726,10 @@ fn main() {
                                     }
                                 }
                             }
+                            ExternalCommand::SetAiSearch { text } => {
+                                logging::log("STDIN", &format!("Setting AI search filter to: {}", text));
+                                ai::set_ai_search(ctx, &text);
+                            }
                         }
                         ctx.notify();
                         }); // close app_entity_inner.update
