@@ -393,6 +393,11 @@ impl NotesApp {
             });
         }
 
+        // Focus the editor after selecting a note
+        self.editor_state.update(cx, |state, cx| {
+            state.focus(window, cx);
+        });
+
         cx.notify();
     }
 
@@ -695,6 +700,12 @@ impl NotesApp {
         self.show_actions_panel = false;
         self.actions_panel = None;
         self.restore_actions_panel_height(window);
+        
+        // Refocus the editor after closing the actions panel
+        self.editor_state.update(cx, |state, cx| {
+            state.focus(window, cx);
+        });
+        
         cx.notify();
     }
 
@@ -742,9 +753,16 @@ impl NotesApp {
             NotesAction::NewNote => self.create_note(window, cx),
             NotesAction::DuplicateNote => self.duplicate_selected_note(window, cx),
             NotesAction::BrowseNotes => {
-                self.close_actions_panel(window, cx);
+                // Close actions panel first, then open browse panel
+                // Don't call close_actions_panel here - it refocuses editor
+                // Instead, just clear the state and let open_browse_panel handle focus
+                self.show_actions_panel = false;
+                self.actions_panel = None;
+                self.restore_actions_panel_height(window);
                 self.show_browse_panel = true;
                 self.open_browse_panel(window, cx);
+                cx.notify();
+                return; // Early return - browse panel handles its own focus
             }
             NotesAction::FindInNote => {
                 self.close_actions_panel(window, cx);
@@ -752,7 +770,7 @@ impl NotesApp {
                     state.focus(window, cx);
                 });
                 cx.dispatch_action(&Search);
-                return;
+                return; // Early return - already handled focus
             }
             NotesAction::CopyNoteAs => self.copy_note_as_markdown(),
             NotesAction::CopyDeeplink => self.copy_note_deeplink(),
@@ -769,6 +787,7 @@ impl NotesApp {
                 // Panel was cancelled, nothing to do
             }
         }
+        // Default: close actions panel and refocus editor
         self.close_actions_panel(window, cx);
         cx.notify();
     }
@@ -783,6 +802,10 @@ impl NotesApp {
             .collect();
 
         let browse_panel = cx.new(|cx| BrowsePanel::new(note_items, window, cx));
+        
+        // Focus the browse panel
+        let panel_focus_handle = browse_panel.read(cx).focus_handle(cx);
+        window.focus(&panel_focus_handle, cx);
 
         self.browse_panel = Some(browse_panel);
         cx.notify();
@@ -790,9 +813,10 @@ impl NotesApp {
 
     /// Handle note selection from browse panel
     fn handle_browse_select(&mut self, id: NoteId, window: &mut Window, cx: &mut Context<Self>) {
-        self.select_note(id, window, cx);
         self.show_browse_panel = false;
         self.browse_panel = None;
+        // select_note already focuses the editor
+        self.select_note(id, window, cx);
         cx.notify();
     }
 
@@ -831,10 +855,16 @@ impl NotesApp {
         cx.notify();
     }
 
-    /// Close the browse panel
-    fn close_browse_panel(&mut self, cx: &mut Context<Self>) {
+    /// Close the browse panel and refocus the editor
+    fn close_browse_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.show_browse_panel = false;
         self.browse_panel = None;
+        
+        // Refocus the editor after closing the browse panel
+        self.editor_state.update(cx, |state, cx| {
+            state.focus(window, cx);
+        });
+        
         cx.notify();
     }
 
@@ -1057,7 +1087,7 @@ impl NotesApp {
                                 .hover(|s| s.text_color(muted_color)) // Slightly brighter on hover
                                 .on_click(cx.listener(|this, _, window, cx| {
                                     if this.show_browse_panel {
-                                        this.close_browse_panel(cx);
+                                        this.close_browse_panel(window, cx);
                                     } else {
                                         this.close_actions_panel(window, cx);
                                         this.show_browse_panel = true;
@@ -1168,6 +1198,10 @@ impl NotesApp {
     }
 
     /// Render the actions panel overlay (Cmd+K)
+    /// 
+    /// IMPORTANT: Uses items_start + fixed top padding to keep the search input
+    /// at a stable position. Without this, the panel would re-center when items
+    /// are filtered out, causing the search input to jump around.
     fn render_actions_panel_overlay(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let panel = self
             .actions_panel
@@ -1175,14 +1209,19 @@ impl NotesApp {
             .map(|panel| panel.clone().into_any_element())
             .unwrap_or_else(|| div().into_any_element());
 
+        // Fixed top offset so search input stays at same position regardless of item count
+        const PANEL_TOP_OFFSET: f32 = 32.0;
+
         div()
             .id("actions-panel-overlay")
             .absolute()
             .inset_0()
             .bg(gpui::rgba(0x00000080))
             .flex()
-            .items_center()
-            .justify_center()
+            .flex_col()
+            .items_center()      // Horizontally centered
+            .justify_start()     // Vertically aligned to top (not centered!)
+            .pt(px(PANEL_TOP_OFFSET)) // Fixed offset from top
             .on_mouse_down(
                 gpui::MouseButton::Left,
                 cx.listener(|this, _, window, cx| {
@@ -1397,7 +1436,7 @@ impl Render for NotesApp {
                         return;
                     }
                     if this.show_browse_panel {
-                        this.close_browse_panel(cx);
+                        this.close_browse_panel(window, cx);
                         return;
                     }
                 }
