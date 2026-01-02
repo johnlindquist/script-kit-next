@@ -28,6 +28,7 @@ use cocoa::base::{id, nil};
 use gpui_component::{
     button::{Button, ButtonCustomVariant, ButtonVariants},
     input::{Input, InputEvent, InputState},
+    scroll::ScrollableElement,
     theme::{ActiveTheme, Theme as GpuiTheme, ThemeColor, ThemeMode},
     Icon, IconName, Root, Sizable,
 };
@@ -881,18 +882,20 @@ impl AiApp {
                     .child(self.render_search(cx)),
             )
             // Scrollable chat list with date groups
+            // Note: overflow_y_scrollbar() wraps the element in a Scrollable container
+            // that uses size_full(), so flex_1() goes on the wrapper, not the inner content
             .child(
                 div()
-                    .flex_1()
                     .flex()
                     .flex_col()
-                    .overflow_y_hidden()
                     .px_2()
                     .pb_2()
                     .gap_3()
                     .children(date_groups.into_iter().map(|(group, chats)| {
                         self.render_date_group(group, chats, selected_id, cx)
-                    })),
+                    }))
+                    .overflow_y_scrollbar()
+                    .flex_1(),
             )
             .into_any_element()
     }
@@ -974,14 +977,34 @@ impl AiApp {
                     .child(title),
             )
             .when_some(preview, |d, preview_text| {
+                // Clean up preview: skip markdown headings, find actual content
+                let clean_preview: String = preview_text
+                    .lines()
+                    .map(|line| line.trim())
+                    .find(|line| {
+                        // Skip empty lines
+                        !line.is_empty()
+                        // Skip markdown headings
+                        && !line.starts_with('#')
+                        // Skip code fence markers
+                        && !line.starts_with("```")
+                        // Skip horizontal rules
+                        && !line.chars().all(|c| c == '-' || c == '*' || c == '_')
+                    })
+                    .unwrap_or("")
+                    .chars()
+                    .take(50)
+                    .collect();
+                
                 d.child(
-                    // Preview (muted, smaller text)
+                    // Preview (muted, smaller text, single line only)
                     div()
                         .text_xs()
                         .text_color(cx.theme().muted_foreground)
                         .overflow_hidden()
+                        .whitespace_nowrap()
                         .text_ellipsis()
-                        .child(preview_text),
+                        .child(clean_preview),
                 )
             })
     }
@@ -1148,12 +1171,12 @@ impl AiApp {
             None
         };
 
+        // Note: overflow_y_scrollbar() wraps the element, so flex_1() goes after it
         div()
-            .flex_1()
             .flex()
             .flex_col()
-            .overflow_y_hidden()
             .p_3()
+            .gap_3()
             // Render all messages
             .children(
                 self.current_messages
@@ -1162,6 +1185,8 @@ impl AiApp {
             )
             // Show streaming content if streaming
             .children(streaming_element)
+            .overflow_y_scrollbar()
+            .flex_1()
     }
 
     /// Render the main chat panel

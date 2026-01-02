@@ -1604,7 +1604,7 @@ impl ScriptListApp {
     /// 2. Resets state to the default script list
     /// 3. Hides the window
     fn close_and_reset_window(&mut self, cx: &mut Context<Self>) {
-        logging::log("VISIBILITY", "=== Cmd+W: Close and reset window ===");
+        logging::log("VISIBILITY", "=== Close and reset window ===");
 
         // Update visibility state FIRST to prevent race conditions
         script_kit_gpui::set_main_window_visible(false);
@@ -1619,10 +1619,31 @@ impl ScriptListApp {
             self.reset_to_script_list(cx);
         }
 
-        // Hide the window
-        logging::log("VISIBILITY", "Hiding window via Cmd+W");
-        cx.hide();
-        logging::log("VISIBILITY", "=== Cmd+W: Window closed ===");
+        // Check if Notes or AI windows are open BEFORE hiding
+        let notes_open = notes::is_notes_window_open();
+        let ai_open = ai::is_ai_window_open();
+        logging::log(
+            "VISIBILITY",
+            &format!(
+                "Secondary windows: notes_open={}, ai_open={}",
+                notes_open, ai_open
+            ),
+        );
+
+        // CRITICAL: Only hide main window if Notes/AI are open
+        // cx.hide() hides the ENTIRE app (all windows), so we use
+        // platform::hide_main_window() to hide only the main window
+        if notes_open || ai_open {
+            logging::log(
+                "VISIBILITY",
+                "Using hide_main_window() - secondary windows are open",
+            );
+            platform::hide_main_window();
+        } else {
+            logging::log("VISIBILITY", "Using cx.hide() - no secondary windows");
+            cx.hide();
+        }
+        logging::log("VISIBILITY", "=== Window closed ===");
     }
 
     /// Handle global keyboard shortcuts with configurable dismissability

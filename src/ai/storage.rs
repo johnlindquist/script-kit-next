@@ -400,6 +400,17 @@ pub fn search_chats(query: &str) -> Result<Vec<Chat>> {
 
 /// Save a message
 pub fn save_message(message: &Message) -> Result<()> {
+    save_message_internal(message, true)
+}
+
+/// Save a message without updating the chat's updated_at timestamp.
+/// Used for mock data insertion where we want to preserve historical dates.
+fn save_message_without_update(message: &Message) -> Result<()> {
+    save_message_internal(message, false)
+}
+
+/// Internal message save with optional chat timestamp update
+fn save_message_internal(message: &Message, update_chat_timestamp: bool) -> Result<()> {
     let db = get_db()?;
     let conn = db
         .lock()
@@ -424,13 +435,15 @@ pub fn save_message(message: &Message) -> Result<()> {
     )
     .context("Failed to save message")?;
 
-    // Update the chat's updated_at timestamp
-    let now = Utc::now().to_rfc3339();
-    conn.execute(
-        "UPDATE chats SET updated_at = ?2 WHERE id = ?1",
-        params![message.chat_id.as_str(), now],
-    )
-    .context("Failed to update chat timestamp")?;
+    // Update the chat's updated_at timestamp (unless explicitly skipped for mock data)
+    if update_chat_timestamp {
+        let now = Utc::now().to_rfc3339();
+        conn.execute(
+            "UPDATE chats SET updated_at = ?2 WHERE id = ?1",
+            params![message.chat_id.as_str(), now],
+        )
+        .context("Failed to update chat timestamp")?;
+    }
 
     debug!(
         message_id = %message.id,
@@ -652,146 +665,496 @@ fn row_to_message(row: &rusqlite::Row) -> rusqlite::Result<Message> {
 // Mock Data for Testing
 // ============================================================================
 
-/// Insert mock chat data for visual testing.
-/// Creates sample chats with messages to verify the UI layout.
+/// Insert comprehensive mock chat data for visual testing.
+/// Creates many chats across different time periods with long conversations
+/// to verify search functionality and scrolling behavior.
+#[allow(clippy::useless_vec)] // vec! is more readable for mock data definitions
 pub fn insert_mock_data() -> Result<()> {
     use chrono::Duration;
 
     // First, ensure the database is initialized
-    // (init_ai_db is idempotent via OnceLock)
     if AI_DB.get().is_none() {
         init_ai_db()?;
     }
 
     let now = Utc::now();
-    let yesterday = now - Duration::days(1);
-    let last_week = now - Duration::days(5);
 
-    // Chat 1: "Hello World Example" (Today)
+    // Helper to create a chat with messages
+    let mut total_chats = 0;
+    let mut total_messages = 0;
+
+    // ========================================================================
+    // TODAY - 5 chats
+    // ========================================================================
+
+    // Chat 1: Long conversation about Python (TODAY - scrollable)
     let chat1_id = ChatId::new();
-    let chat1 = Chat {
+    create_chat(&Chat {
         id: chat1_id,
-        title: "Hello World Example".to_string(),
-        created_at: now - Duration::hours(1),
-        updated_at: now,
+        title: "Python Best Practices Discussion".to_string(),
+        created_at: now - Duration::hours(2),
+        updated_at: now - Duration::minutes(10),
         deleted_at: None,
         model_id: "claude-3-5-sonnet-20241022".to_string(),
         provider: "anthropic".to_string(),
-    };
-    create_chat(&chat1)?;
+    })?;
+    total_chats += 1;
 
-    // Messages for Chat 1
-    let msg1_1 = Message {
-        id: uuid::Uuid::new_v4().to_string(),
-        chat_id: chat1_id,
-        role: MessageRole::User,
-        content: "Hello! Can you help me write a hello world program?".to_string(),
-        created_at: now - Duration::minutes(30),
-        tokens_used: Some(15),
-    };
-    save_message(&msg1_1)?;
+    let python_messages = vec![
+        (MessageRole::User, "What are some Python best practices I should follow?"),
+        (MessageRole::Assistant, "Great question! Here are the key Python best practices:\n\n## 1. Follow PEP 8 Style Guide\n\n```python\n# Good\ndef calculate_total(items: list[Item]) -> float:\n    return sum(item.price for item in items)\n\n# Bad\ndef calculateTotal(Items):\n    total=0\n    for i in Items:total+=i.price\n    return total\n```\n\n## 2. Use Type Hints\n\nType hints improve code readability and enable better IDE support:\n\n```python\nfrom typing import Optional, List\n\ndef find_user(user_id: int) -> Optional[User]:\n    return users.get(user_id)\n```\n\n## 3. Use Context Managers\n\n```python\nwith open('file.txt', 'r') as f:\n    content = f.read()\n```\n\nWould you like me to elaborate on any of these?"),
+        (MessageRole::User, "Yes, tell me more about type hints"),
+        (MessageRole::Assistant, "## Deep Dive into Type Hints\n\nType hints were introduced in Python 3.5 and have become increasingly important.\n\n### Basic Types\n\n```python\nname: str = \"Alice\"\nage: int = 30\nheight: float = 5.9\nis_active: bool = True\n```\n\n### Collection Types\n\n```python\nfrom typing import List, Dict, Set, Tuple\n\nnames: List[str] = [\"Alice\", \"Bob\"]\nages: Dict[str, int] = {\"Alice\": 30}\nunique_ids: Set[int] = {1, 2, 3}\ncoordinates: Tuple[float, float] = (10.5, 20.3)\n```\n\n### Modern Syntax (Python 3.9+)\n\n```python\n# You can use built-in types directly\nnames: list[str] = [\"Alice\", \"Bob\"]\nages: dict[str, int] = {\"Alice\": 30}\n```\n\n### Optional and Union\n\n```python\nfrom typing import Optional, Union\n\ndef find_user(id: int) -> Optional[User]:\n    return None  # or User instance\n\n# Union for multiple types\ndef process(data: Union[str, bytes]) -> str:\n    if isinstance(data, bytes):\n        return data.decode()\n    return data\n```\n\n### Generic Types\n\n```python\nfrom typing import TypeVar, Generic\n\nT = TypeVar('T')\n\nclass Stack(Generic[T]):\n    def __init__(self) -> None:\n        self._items: list[T] = []\n    \n    def push(self, item: T) -> None:\n        self._items.append(item)\n    \n    def pop(self) -> T:\n        return self._items.pop()\n```"),
+        (MessageRole::User, "What about dataclasses?"),
+        (MessageRole::Assistant, "## Python Dataclasses\n\nDataclasses reduce boilerplate for classes that primarily store data.\n\n### Basic Usage\n\n```python\nfrom dataclasses import dataclass\n\n@dataclass\nclass User:\n    name: str\n    age: int\n    email: str = \"\"\n```\n\nThis automatically generates:\n- `__init__`\n- `__repr__`\n- `__eq__`\n\n### Frozen (Immutable) Dataclasses\n\n```python\n@dataclass(frozen=True)\nclass Point:\n    x: float\n    y: float\n```\n\n### With Default Factory\n\n```python\nfrom dataclasses import dataclass, field\nfrom typing import List\n\n@dataclass\nclass Team:\n    name: str\n    members: List[str] = field(default_factory=list)\n```\n\n### Post-Init Processing\n\n```python\n@dataclass\nclass Rectangle:\n    width: float\n    height: float\n    area: float = field(init=False)\n    \n    def __post_init__(self):\n        self.area = self.width * self.height\n```"),
+        (MessageRole::User, "Thanks! One more question - what about async/await?"),
+        (MessageRole::Assistant, "## Async/Await in Python\n\nAsynchronous programming allows concurrent execution without threads.\n\n### Basic Async Function\n\n```python\nimport asyncio\n\nasync def fetch_data(url: str) -> dict:\n    # Simulate network delay\n    await asyncio.sleep(1)\n    return {\"url\": url, \"data\": \"...\"}\n```\n\n### Running Async Code\n\n```python\nasync def main():\n    result = await fetch_data(\"https://api.example.com\")\n    print(result)\n\nasyncio.run(main())\n```\n\n### Concurrent Execution\n\n```python\nasync def fetch_all(urls: list[str]) -> list[dict]:\n    tasks = [fetch_data(url) for url in urls]\n    results = await asyncio.gather(*tasks)\n    return results\n```\n\n### Async Context Managers\n\n```python\nclass AsyncDatabase:\n    async def __aenter__(self):\n        await self.connect()\n        return self\n    \n    async def __aexit__(self, *args):\n        await self.disconnect()\n\nasync def main():\n    async with AsyncDatabase() as db:\n        await db.query(\"SELECT * FROM users\")\n```\n\n### Async Iterators\n\n```python\nasync def read_lines(filename: str):\n    async with aiofiles.open(filename) as f:\n        async for line in f:\n            yield line.strip()\n\nasync def main():\n    async for line in read_lines(\"data.txt\"):\n        print(line)\n```"),
+    ];
 
-    let msg1_2 = Message {
-        id: uuid::Uuid::new_v4().to_string(),
-        chat_id: chat1_id,
-        role: MessageRole::Assistant,
-        content: "Of course! Here's a simple hello world program in Python:\n\n```python\nprint('Hello, World!')\n```\n\nThis is the most basic Python program. Would you like me to explain how it works?".to_string(),
-        created_at: now - Duration::minutes(29),
-        tokens_used: Some(45),
-    };
-    save_message(&msg1_2)?;
+    for (i, (role, content)) in python_messages.iter().enumerate() {
+        save_message_without_update(&Message {
+            id: uuid::Uuid::new_v4().to_string(),
+            chat_id: chat1_id,
+            role: *role,
+            content: content.to_string(),
+            created_at: now - Duration::minutes(120 - i as i64 * 10),
+            tokens_used: Some(content.len() as u32 / 4),
+        })?;
+        total_messages += 1;
+    }
 
-    let msg1_3 = Message {
-        id: uuid::Uuid::new_v4().to_string(),
-        chat_id: chat1_id,
-        role: MessageRole::User,
-        content: "Yes please".to_string(),
-        created_at: now - Duration::minutes(28),
-        tokens_used: Some(5),
-    };
-    save_message(&msg1_3)?;
-
-    let msg1_4 = Message {
-        id: uuid::Uuid::new_v4().to_string(),
-        chat_id: chat1_id,
-        role: MessageRole::Assistant,
-        content: "The `print()` function outputs text to the console. The string 'Hello, World!' is passed as an argument, and Python displays it. This is typically the first program you write when learning a new language!\n\nHere are some variations you might find interesting:\n\n**Multiple lines:**\n```python\nprint('Hello,')\nprint('World!')\n```\n\n**Using f-strings:**\n```python\nname = 'World'\nprint(f'Hello, {name}!')\n```\n\nWould you like to try any other languages?".to_string(),
-        created_at: now - Duration::minutes(27),
-        tokens_used: Some(120),
-    };
-    save_message(&msg1_4)?;
-
-    // Chat 2: "Code Review" (Yesterday)
+    // Chat 2: Quick question (TODAY)
     let chat2_id = ChatId::new();
-    let chat2 = Chat {
+    create_chat(&Chat {
         id: chat2_id,
-        title: "Code Review Request".to_string(),
-        created_at: yesterday - Duration::hours(2),
+        title: "Git Rebase vs Merge".to_string(),
+        created_at: now - Duration::hours(1),
+        updated_at: now - Duration::minutes(30),
+        deleted_at: None,
+        model_id: "gpt-4o".to_string(),
+        provider: "openai".to_string(),
+    })?;
+    total_chats += 1;
+
+    save_message_without_update(&Message {
+        id: uuid::Uuid::new_v4().to_string(),
+        chat_id: chat2_id,
+        role: MessageRole::User,
+        content: "What's the difference between git rebase and merge?".to_string(),
+        created_at: now - Duration::minutes(35),
+        tokens_used: Some(12),
+    })?;
+    save_message_without_update(&Message {
+        id: uuid::Uuid::new_v4().to_string(),
+        chat_id: chat2_id,
+        role: MessageRole::Assistant,
+        content: "## Git Merge vs Rebase\n\n**Merge** creates a new commit that combines two branches:\n```\n  A---B---C feature\n /         \\\nD---E---F---G main (merge commit)\n```\n\n**Rebase** replays your commits on top of another branch:\n```\n          A'--B'--C' feature\n         /\nD---E---F main\n```\n\n### When to use each:\n- **Merge**: Preserves history, good for shared branches\n- **Rebase**: Cleaner history, good for local/feature branches".to_string(),
+        created_at: now - Duration::minutes(34),
+        tokens_used: Some(85),
+    })?;
+    total_messages += 2;
+
+    // Chat 3: Another today chat (searchable keyword: "typescript")
+    let chat3_id = ChatId::new();
+    create_chat(&Chat {
+        id: chat3_id,
+        title: "TypeScript Generics Tutorial".to_string(),
+        created_at: now - Duration::hours(3),
+        updated_at: now - Duration::hours(2),
+        deleted_at: None,
+        model_id: "claude-3-5-sonnet-20241022".to_string(),
+        provider: "anthropic".to_string(),
+    })?;
+    total_chats += 1;
+
+    save_message_without_update(&Message {
+        id: uuid::Uuid::new_v4().to_string(),
+        chat_id: chat3_id,
+        role: MessageRole::User,
+        content: "Explain TypeScript generics with examples".to_string(),
+        created_at: now - Duration::hours(3),
+        tokens_used: Some(8),
+    })?;
+    save_message_without_update(&Message {
+        id: uuid::Uuid::new_v4().to_string(),
+        chat_id: chat3_id,
+        role: MessageRole::Assistant,
+        content: "## TypeScript Generics\n\nGenerics allow you to write reusable, type-safe code.\n\n```typescript\nfunction identity<T>(arg: T): T {\n    return arg;\n}\n\nconst num = identity<number>(42);\nconst str = identity<string>(\"hello\");\n```\n\n### Generic Interfaces\n\n```typescript\ninterface Container<T> {\n    value: T;\n    getValue(): T;\n}\n```\n\n### Generic Constraints\n\n```typescript\ninterface Lengthwise {\n    length: number;\n}\n\nfunction logLength<T extends Lengthwise>(arg: T): void {\n    console.log(arg.length);\n}\n```".to_string(),
+        created_at: now - Duration::hours(3) + Duration::minutes(1),
+        tokens_used: Some(95),
+    })?;
+    total_messages += 2;
+
+    // Chat 4: Docker question (TODAY)
+    let chat4_id = ChatId::new();
+    create_chat(&Chat {
+        id: chat4_id,
+        title: "Docker Compose Setup".to_string(),
+        created_at: now - Duration::hours(4),
+        updated_at: now - Duration::hours(3),
+        deleted_at: None,
+        model_id: "gpt-4o".to_string(),
+        provider: "openai".to_string(),
+    })?;
+    total_chats += 1;
+
+    save_message_without_update(&Message {
+        id: uuid::Uuid::new_v4().to_string(),
+        chat_id: chat4_id,
+        role: MessageRole::User,
+        content: "How do I set up Docker Compose for a Node.js app with PostgreSQL?".to_string(),
+        created_at: now - Duration::hours(4),
+        tokens_used: Some(15),
+    })?;
+    save_message_without_update(&Message {
+        id: uuid::Uuid::new_v4().to_string(),
+        chat_id: chat4_id,
+        role: MessageRole::Assistant,
+        content: "Here's a complete Docker Compose setup:\n\n```yaml\nversion: '3.8'\n\nservices:\n  app:\n    build: .\n    ports:\n      - \"3000:3000\"\n    environment:\n      - DATABASE_URL=postgresql://user:pass@db:5432/mydb\n    depends_on:\n      - db\n\n  db:\n    image: postgres:15\n    environment:\n      - POSTGRES_USER=user\n      - POSTGRES_PASSWORD=pass\n      - POSTGRES_DB=mydb\n    volumes:\n      - postgres_data:/var/lib/postgresql/data\n\nvolumes:\n  postgres_data:\n```\n\nAnd your Dockerfile:\n\n```dockerfile\nFROM node:20-alpine\nWORKDIR /app\nCOPY package*.json ./\nRUN npm install\nCOPY . .\nEXPOSE 3000\nCMD [\"npm\", \"start\"]\n```".to_string(),
+        created_at: now - Duration::hours(4) + Duration::minutes(1),
+        tokens_used: Some(120),
+    })?;
+    total_messages += 2;
+
+    // Chat 5: React hooks (TODAY)
+    let chat5_id = ChatId::new();
+    create_chat(&Chat {
+        id: chat5_id,
+        title: "React useEffect Cleanup".to_string(),
+        created_at: now - Duration::hours(5),
+        updated_at: now - Duration::hours(4),
+        deleted_at: None,
+        model_id: "claude-3-5-sonnet-20241022".to_string(),
+        provider: "anthropic".to_string(),
+    })?;
+    total_chats += 1;
+
+    save_message_without_update(&Message {
+        id: uuid::Uuid::new_v4().to_string(),
+        chat_id: chat5_id,
+        role: MessageRole::User,
+        content: "When do I need cleanup in useEffect?".to_string(),
+        created_at: now - Duration::hours(5),
+        tokens_used: Some(10),
+    })?;
+    save_message_without_update(&Message {
+        id: uuid::Uuid::new_v4().to_string(),
+        chat_id: chat5_id,
+        role: MessageRole::Assistant,
+        content: "## useEffect Cleanup\n\nYou need cleanup when your effect:\n\n1. **Subscribes to events**\n```jsx\nuseEffect(() => {\n  window.addEventListener('resize', handler);\n  return () => window.removeEventListener('resize', handler);\n}, []);\n```\n\n2. **Sets up timers**\n```jsx\nuseEffect(() => {\n  const id = setInterval(tick, 1000);\n  return () => clearInterval(id);\n}, []);\n```\n\n3. **Opens connections**\n```jsx\nuseEffect(() => {\n  const ws = new WebSocket(url);\n  return () => ws.close();\n}, [url]);\n```".to_string(),
+        created_at: now - Duration::hours(5) + Duration::minutes(1),
+        tokens_used: Some(80),
+    })?;
+    total_messages += 2;
+
+    // ========================================================================
+    // YESTERDAY - 4 chats
+    // ========================================================================
+    let yesterday = now - Duration::days(1);
+
+    // Chat 6: API Design (YESTERDAY) - Long conversation
+    let chat6_id = ChatId::new();
+    create_chat(&Chat {
+        id: chat6_id,
+        title: "RESTful API Design Principles".to_string(),
+        created_at: yesterday - Duration::hours(5),
         updated_at: yesterday,
         deleted_at: None,
         model_id: "gpt-4o".to_string(),
         provider: "openai".to_string(),
-    };
-    create_chat(&chat2)?;
+    })?;
+    total_chats += 1;
 
-    let msg2_1 = Message {
-        id: uuid::Uuid::new_v4().to_string(),
-        chat_id: chat2_id,
-        role: MessageRole::User,
-        content: "Can you review this code?".to_string(),
-        created_at: yesterday - Duration::minutes(30),
-        tokens_used: Some(8),
-    };
-    save_message(&msg2_1)?;
+    let api_messages = vec![
+        (MessageRole::User, "What are the best practices for designing a REST API?"),
+        (MessageRole::Assistant, "## REST API Design Best Practices\n\n### 1. Use Nouns for Resources\n```\nGET /users          # List users\nGET /users/123      # Get user 123\nPOST /users         # Create user\nPUT /users/123      # Update user 123\nDELETE /users/123   # Delete user 123\n```\n\n### 2. Use HTTP Methods Correctly\n- **GET**: Read (idempotent)\n- **POST**: Create\n- **PUT**: Full update (idempotent)\n- **PATCH**: Partial update\n- **DELETE**: Remove (idempotent)\n\n### 3. Use Proper Status Codes\n- 200 OK\n- 201 Created\n- 204 No Content\n- 400 Bad Request\n- 401 Unauthorized\n- 403 Forbidden\n- 404 Not Found\n- 500 Internal Server Error"),
+        (MessageRole::User, "What about pagination?"),
+        (MessageRole::Assistant, "## API Pagination\n\n### Offset-Based (Simple)\n```\nGET /users?page=2&limit=20\n```\n\nResponse:\n```json\n{\n  \"data\": [...],\n  \"pagination\": {\n    \"page\": 2,\n    \"limit\": 20,\n    \"total\": 150,\n    \"pages\": 8\n  }\n}\n```\n\n### Cursor-Based (Scalable)\n```\nGET /users?cursor=abc123&limit=20\n```\n\nResponse:\n```json\n{\n  \"data\": [...],\n  \"next_cursor\": \"xyz789\",\n  \"has_more\": true\n}\n```\n\n### Link Headers (RFC 5988)\n```\nLink: </users?page=3>; rel=\"next\",\n      </users?page=1>; rel=\"prev\""),
+        (MessageRole::User, "How do I handle errors?"),
+        (MessageRole::Assistant, "## API Error Handling\n\n### Standard Error Response Format\n\n```json\n{\n  \"error\": {\n    \"code\": \"VALIDATION_ERROR\",\n    \"message\": \"Invalid input data\",\n    \"details\": [\n      {\n        \"field\": \"email\",\n        \"message\": \"Invalid email format\"\n      }\n    ],\n    \"request_id\": \"req_abc123\"\n  }\n}\n```\n\n### Error Codes by Category\n\n**Client Errors (4xx)**\n- 400: Validation failed\n- 401: Missing/invalid auth\n- 403: Insufficient permissions\n- 404: Resource not found\n- 409: Conflict (duplicate)\n- 422: Unprocessable entity\n- 429: Rate limited\n\n**Server Errors (5xx)**\n- 500: Internal error\n- 502: Bad gateway\n- 503: Service unavailable\n- 504: Gateway timeout"),
+    ];
 
-    let msg2_2 = Message {
-        id: uuid::Uuid::new_v4().to_string(),
-        chat_id: chat2_id,
-        role: MessageRole::Assistant,
-        content: "I'd be happy to review your code. Please share it and I'll provide feedback on structure, best practices, and potential improvements.".to_string(),
-        created_at: yesterday - Duration::minutes(29),
-        tokens_used: Some(35),
-    };
-    save_message(&msg2_2)?;
+    for (i, (role, content)) in api_messages.iter().enumerate() {
+        save_message_without_update(&Message {
+            id: uuid::Uuid::new_v4().to_string(),
+            chat_id: chat6_id,
+            role: *role,
+            content: content.to_string(),
+            created_at: yesterday - Duration::hours(5) + Duration::minutes(i as i64 * 5),
+            tokens_used: Some(content.len() as u32 / 4),
+        })?;
+        total_messages += 1;
+    }
 
-    // Chat 3: "Longer Discussion" (This Week - 5 days ago)
-    let chat3_id = ChatId::new();
-    let chat3 = Chat {
-        id: chat3_id,
-        title: "Understanding Rust Lifetimes".to_string(),
-        created_at: last_week - Duration::hours(3),
-        updated_at: last_week,
+    // Chat 7: SQL Query (YESTERDAY)
+    let chat7_id = ChatId::new();
+    create_chat(&Chat {
+        id: chat7_id,
+        title: "Complex SQL JOIN Query".to_string(),
+        created_at: yesterday - Duration::hours(8),
+        updated_at: yesterday - Duration::hours(7),
         deleted_at: None,
         model_id: "claude-3-5-sonnet-20241022".to_string(),
         provider: "anthropic".to_string(),
-    };
-    create_chat(&chat3)?;
+    })?;
+    total_chats += 1;
 
-    let msg3_1 = Message {
+    save_message_without_update(&Message {
         id: uuid::Uuid::new_v4().to_string(),
-        chat_id: chat3_id,
+        chat_id: chat7_id,
         role: MessageRole::User,
-        content: "I'm confused about Rust lifetimes. Can you explain them in simple terms?"
-            .to_string(),
-        created_at: last_week - Duration::minutes(45),
-        tokens_used: Some(18),
-    };
-    save_message(&msg3_1)?;
-
-    let msg3_2 = Message {
+        content: "Help me write a SQL query to get users with their orders".to_string(),
+        created_at: yesterday - Duration::hours(8),
+        tokens_used: Some(15),
+    })?;
+    save_message_without_update(&Message {
         id: uuid::Uuid::new_v4().to_string(),
-        chat_id: chat3_id,
+        chat_id: chat7_id,
         role: MessageRole::Assistant,
-        content: "Absolutely! Think of lifetimes as Rust's way of tracking how long references are valid.\n\n## The Core Idea\n\nWhen you create a reference to some data, Rust needs to ensure that:\n1. The reference doesn't outlive the data it points to\n2. You don't have mutable and immutable references at the same time\n\n## A Simple Example\n\n```rust\nfn main() {\n    let r;                // ---------+-- 'a\n    {                     //          |\n        let x = 5;        // -+-- 'b  |\n        r = &x;           //  |       |\n    }                     // -+       |\n    println!(\"{}\", r);   //          |\n}                         // ---------+\n```\n\nThis won't compile because `r` (lifetime 'a) would reference `x` (lifetime 'b) after `x` is dropped.\n\n## When You Need Annotations\n\nUsually Rust infers lifetimes, but sometimes you need to be explicit:\n\n```rust\nfn longest<'a>(x: &'a str, y: &'a str) -> &'a str {\n    if x.len() > y.len() { x } else { y }\n}\n```\n\nThis tells Rust: \"the returned reference will live as long as the shorter of the two input references.\"\n\nWant me to show more examples?".to_string(),
-        created_at: last_week - Duration::minutes(43),
-        tokens_used: Some(280),
-    };
-    save_message(&msg3_2)?;
+        content: "```sql\nSELECT \n    u.id,\n    u.name,\n    u.email,\n    COUNT(o.id) as order_count,\n    COALESCE(SUM(o.total), 0) as total_spent\nFROM users u\nLEFT JOIN orders o ON u.id = o.user_id\nWHERE u.active = true\nGROUP BY u.id, u.name, u.email\nHAVING COUNT(o.id) > 0\nORDER BY total_spent DESC\nLIMIT 100;\n```".to_string(),
+        created_at: yesterday - Duration::hours(8) + Duration::minutes(1),
+        tokens_used: Some(65),
+    })?;
+    total_messages += 2;
+
+    // Chat 8: Kubernetes (YESTERDAY)
+    let chat8_id = ChatId::new();
+    create_chat(&Chat {
+        id: chat8_id,
+        title: "Kubernetes Deployment YAML".to_string(),
+        created_at: yesterday - Duration::hours(10),
+        updated_at: yesterday - Duration::hours(9),
+        deleted_at: None,
+        model_id: "gpt-4o".to_string(),
+        provider: "openai".to_string(),
+    })?;
+    total_chats += 1;
+
+    save_message_without_update(&Message {
+        id: uuid::Uuid::new_v4().to_string(),
+        chat_id: chat8_id,
+        role: MessageRole::User,
+        content: "Create a Kubernetes deployment for a web app".to_string(),
+        created_at: yesterday - Duration::hours(10),
+        tokens_used: Some(12),
+    })?;
+    save_message_without_update(&Message {
+        id: uuid::Uuid::new_v4().to_string(),
+        chat_id: chat8_id,
+        role: MessageRole::Assistant,
+        content: "```yaml\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: web-app\n  labels:\n    app: web-app\nspec:\n  replicas: 3\n  selector:\n    matchLabels:\n      app: web-app\n  template:\n    metadata:\n      labels:\n        app: web-app\n    spec:\n      containers:\n      - name: web-app\n        image: myapp:latest\n        ports:\n        - containerPort: 8080\n        resources:\n          limits:\n            memory: \"256Mi\"\n            cpu: \"500m\"\n        livenessProbe:\n          httpGet:\n            path: /health\n            port: 8080\n          initialDelaySeconds: 30\n---\napiVersion: v1\nkind: Service\nmetadata:\n  name: web-app-service\nspec:\n  selector:\n    app: web-app\n  ports:\n  - port: 80\n    targetPort: 8080\n  type: LoadBalancer\n```".to_string(),
+        created_at: yesterday - Duration::hours(10) + Duration::minutes(1),
+        tokens_used: Some(120),
+    })?;
+    total_messages += 2;
+
+    // Chat 9: CSS Grid (YESTERDAY)
+    let chat9_id = ChatId::new();
+    create_chat(&Chat {
+        id: chat9_id,
+        title: "CSS Grid Layout Examples".to_string(),
+        created_at: yesterday - Duration::hours(12),
+        updated_at: yesterday - Duration::hours(11),
+        deleted_at: None,
+        model_id: "claude-3-5-sonnet-20241022".to_string(),
+        provider: "anthropic".to_string(),
+    })?;
+    total_chats += 1;
+
+    save_message_without_update(&Message {
+        id: uuid::Uuid::new_v4().to_string(),
+        chat_id: chat9_id,
+        role: MessageRole::User,
+        content: "Show me CSS Grid examples".to_string(),
+        created_at: yesterday - Duration::hours(12),
+        tokens_used: Some(8),
+    })?;
+    save_message_without_update(&Message {
+        id: uuid::Uuid::new_v4().to_string(),
+        chat_id: chat9_id,
+        role: MessageRole::Assistant,
+        content: "## CSS Grid Examples\n\n### Basic Grid\n```css\n.container {\n  display: grid;\n  grid-template-columns: repeat(3, 1fr);\n  gap: 20px;\n}\n```\n\n### Named Areas\n```css\n.layout {\n  display: grid;\n  grid-template-areas:\n    \"header header header\"\n    \"sidebar main main\"\n    \"footer footer footer\";\n  grid-template-columns: 200px 1fr 1fr;\n}\n\n.header { grid-area: header; }\n.sidebar { grid-area: sidebar; }\n.main { grid-area: main; }\n```".to_string(),
+        created_at: yesterday - Duration::hours(12) + Duration::minutes(1),
+        tokens_used: Some(75),
+    })?;
+    total_messages += 2;
+
+    // ========================================================================
+    // THIS WEEK - 5 chats (2-6 days ago)
+    // ========================================================================
+
+    // Chat 10: Rust Ownership (3 days ago) - Very long conversation for scrolling
+    let three_days_ago = now - Duration::days(3);
+    let chat10_id = ChatId::new();
+    create_chat(&Chat {
+        id: chat10_id,
+        title: "Understanding Rust Ownership".to_string(),
+        created_at: three_days_ago - Duration::hours(2),
+        updated_at: three_days_ago,
+        deleted_at: None,
+        model_id: "claude-3-5-sonnet-20241022".to_string(),
+        provider: "anthropic".to_string(),
+    })?;
+    total_chats += 1;
+
+    let rust_messages = vec![
+        (MessageRole::User, "Explain Rust ownership to me"),
+        (MessageRole::Assistant, "## Rust Ownership\n\nOwnership is Rust's most unique feature and enables memory safety without garbage collection.\n\n### The Three Rules\n\n1. Each value has an owner\n2. Only one owner at a time\n3. Value is dropped when owner goes out of scope\n\n```rust\nfn main() {\n    let s1 = String::from(\"hello\"); // s1 owns the string\n    let s2 = s1;                     // ownership moves to s2\n    // println!(\"{}\", s1);          // ERROR! s1 no longer valid\n    println!(\"{}\", s2);              // OK\n}\n```"),
+        (MessageRole::User, "What about borrowing?"),
+        (MessageRole::Assistant, "## Borrowing in Rust\n\nBorrowing lets you reference data without taking ownership.\n\n### Immutable Borrows\n\n```rust\nfn calculate_length(s: &String) -> usize {\n    s.len()\n}\n\nfn main() {\n    let s = String::from(\"hello\");\n    let len = calculate_length(&s); // borrow s\n    println!(\"Length of '{}' is {}\", s, len); // s still valid\n}\n```\n\n### Mutable Borrows\n\n```rust\nfn change(s: &mut String) {\n    s.push_str(\", world\");\n}\n\nfn main() {\n    let mut s = String::from(\"hello\");\n    change(&mut s);\n    println!(\"{}\", s); // \"hello, world\"\n}\n```\n\n### Borrowing Rules\n\n1. You can have either ONE mutable reference OR any number of immutable references\n2. References must always be valid"),
+        (MessageRole::User, "Can you explain lifetimes?"),
+        (MessageRole::Assistant, "## Rust Lifetimes\n\nLifetimes ensure references are valid for as long as they're used.\n\n### Why Lifetimes?\n\n```rust\n// This won't compile - dangling reference\nfn dangling() -> &String {\n    let s = String::from(\"hello\");\n    &s  // s goes out of scope, reference would be invalid\n}\n```\n\n### Lifetime Annotations\n\n```rust\n// 'a is a lifetime parameter\nfn longest<'a>(x: &'a str, y: &'a str) -> &'a str {\n    if x.len() > y.len() { x } else { y }\n}\n```\n\nThis says: \"The returned reference will live at least as long as the shorter of x and y.\"\n\n### Lifetime Elision\n\nRust can often infer lifetimes:\n\n```rust\n// These are equivalent\nfn first_word(s: &str) -> &str { ... }\nfn first_word<'a>(s: &'a str) -> &'a str { ... }\n```\n\n### Static Lifetime\n\n```rust\nlet s: &'static str = \"I live forever!\";\n```"),
+        (MessageRole::User, "What are smart pointers?"),
+        (MessageRole::Assistant, "## Smart Pointers in Rust\n\n### Box<T> - Heap Allocation\n\n```rust\nlet b = Box::new(5);\nprintln!(\"b = {}\", b);\n\n// Useful for recursive types\nenum List {\n    Cons(i32, Box<List>),\n    Nil,\n}\n```\n\n### Rc<T> - Reference Counting\n\n```rust\nuse std::rc::Rc;\n\nlet a = Rc::new(5);\nlet b = Rc::clone(&a); // Increases ref count\nlet c = Rc::clone(&a);\n\nprintln!(\"count = {}\", Rc::strong_count(&a)); // 3\n```\n\n### Arc<T> - Thread-Safe Rc\n\n```rust\nuse std::sync::Arc;\nuse std::thread;\n\nlet data = Arc::new(vec![1, 2, 3]);\n\nfor _ in 0..3 {\n    let data = Arc::clone(&data);\n    thread::spawn(move || {\n        println!(\"{:?}\", data);\n    });\n}\n```\n\n### RefCell<T> - Interior Mutability\n\n```rust\nuse std::cell::RefCell;\n\nlet data = RefCell::new(5);\n\n*data.borrow_mut() += 1;\nprintln!(\"{}\", data.borrow()); // 6\n```"),
+        (MessageRole::User, "How do I handle errors in Rust?"),
+        (MessageRole::Assistant, "## Error Handling in Rust\n\n### Result<T, E>\n\n```rust\nuse std::fs::File;\nuse std::io::{self, Read};\n\nfn read_file(path: &str) -> Result<String, io::Error> {\n    let mut file = File::open(path)?;\n    let mut contents = String::new();\n    file.read_to_string(&mut contents)?;\n    Ok(contents)\n}\n```\n\n### The ? Operator\n\nPropagates errors automatically:\n\n```rust\nfn get_user(id: u32) -> Result<User, Error> {\n    let conn = database::connect()?;\n    let user = conn.query_user(id)?;\n    Ok(user)\n}\n```\n\n### Custom Error Types\n\n```rust\n#[derive(Debug)]\nenum AppError {\n    IoError(io::Error),\n    ParseError(String),\n    NotFound,\n}\n\nimpl From<io::Error> for AppError {\n    fn from(err: io::Error) -> Self {\n        AppError::IoError(err)\n    }\n}\n```\n\n### anyhow for Applications\n\n```rust\nuse anyhow::{Context, Result};\n\nfn main() -> Result<()> {\n    let config = read_config()\n        .context(\"Failed to read config\")?;\n    Ok(())\n}\n```\n\n### thiserror for Libraries\n\n```rust\nuse thiserror::Error;\n\n#[derive(Error, Debug)]\npub enum DataError {\n    #[error(\"database error: {0}\")]\n    Database(#[from] sqlx::Error),\n    #[error(\"not found: {0}\")]\n    NotFound(String),\n}\n```"),
+    ];
+
+    for (i, (role, content)) in rust_messages.iter().enumerate() {
+        save_message_without_update(&Message {
+            id: uuid::Uuid::new_v4().to_string(),
+            chat_id: chat10_id,
+            role: *role,
+            content: content.to_string(),
+            created_at: three_days_ago - Duration::hours(2) + Duration::minutes(i as i64 * 8),
+            tokens_used: Some(content.len() as u32 / 4),
+        })?;
+        total_messages += 1;
+    }
+
+    // Chat 11: Authentication (4 days ago)
+    let four_days_ago = now - Duration::days(4);
+    let chat11_id = ChatId::new();
+    create_chat(&Chat {
+        id: chat11_id,
+        title: "JWT Authentication Setup".to_string(),
+        created_at: four_days_ago,
+        updated_at: four_days_ago,
+        deleted_at: None,
+        model_id: "gpt-4o".to_string(),
+        provider: "openai".to_string(),
+    })?;
+    total_chats += 1;
+
+    save_message_without_update(&Message {
+        id: uuid::Uuid::new_v4().to_string(),
+        chat_id: chat11_id,
+        role: MessageRole::User,
+        content: "How do I implement JWT authentication?".to_string(),
+        created_at: four_days_ago,
+        tokens_used: Some(10),
+    })?;
+    save_message_without_update(&Message {
+        id: uuid::Uuid::new_v4().to_string(),
+        chat_id: chat11_id,
+        role: MessageRole::Assistant,
+        content: "## JWT Authentication\n\n```javascript\nconst jwt = require('jsonwebtoken');\n\n// Generate token\nconst token = jwt.sign(\n  { userId: user.id },\n  process.env.JWT_SECRET,\n  { expiresIn: '24h' }\n);\n\n// Verify token middleware\nfunction authenticate(req, res, next) {\n  const token = req.headers.authorization?.split(' ')[1];\n  try {\n    const decoded = jwt.verify(token, process.env.JWT_SECRET);\n    req.user = decoded;\n    next();\n  } catch (err) {\n    res.status(401).json({ error: 'Invalid token' });\n  }\n}\n```".to_string(),
+        created_at: four_days_ago + Duration::minutes(1),
+        tokens_used: Some(85),
+    })?;
+    total_messages += 2;
+
+    // Chat 12-14: More chats for variety
+    for (i, (title, topic)) in [
+        ("GraphQL Schema Design", "graphql"),
+        ("WebSocket Implementation", "websocket"),
+        ("CI/CD Pipeline Setup", "pipeline"),
+    ]
+    .iter()
+    .enumerate()
+    {
+        let days_ago = now - Duration::days(5 + i as i64);
+        let chat_id = ChatId::new();
+        create_chat(&Chat {
+            id: chat_id,
+            title: title.to_string(),
+            created_at: days_ago,
+            updated_at: days_ago,
+            deleted_at: None,
+            model_id: if i % 2 == 0 {
+                "claude-3-5-sonnet-20241022"
+            } else {
+                "gpt-4o"
+            }
+            .to_string(),
+            provider: if i % 2 == 0 { "anthropic" } else { "openai" }.to_string(),
+        })?;
+        total_chats += 1;
+
+        save_message_without_update(&Message {
+            id: uuid::Uuid::new_v4().to_string(),
+            chat_id,
+            role: MessageRole::User,
+            content: format!("Tell me about {}", topic),
+            created_at: days_ago,
+            tokens_used: Some(6),
+        })?;
+        save_message_without_update(&Message {
+            id: uuid::Uuid::new_v4().to_string(),
+            chat_id,
+            role: MessageRole::Assistant,
+            content: format!(
+                "Here's an overview of {}...\n\n(This is mock content for testing)",
+                topic
+            ),
+            created_at: days_ago + Duration::minutes(1),
+            tokens_used: Some(20),
+        })?;
+        total_messages += 2;
+    }
+
+    // ========================================================================
+    // OLDER - 5+ chats (8+ days ago)
+    // ========================================================================
+
+    for (i, title) in [
+        "Machine Learning Basics",
+        "Database Optimization",
+        "Security Best Practices",
+        "Microservices Architecture",
+        "Testing Strategies",
+        "Performance Tuning",
+        "Code Review Guidelines",
+    ]
+    .iter()
+    .enumerate()
+    {
+        let days_ago = now - Duration::days(10 + i as i64 * 3);
+        let chat_id = ChatId::new();
+        create_chat(&Chat {
+            id: chat_id,
+            title: title.to_string(),
+            created_at: days_ago,
+            updated_at: days_ago,
+            deleted_at: None,
+            model_id: "claude-3-5-sonnet-20241022".to_string(),
+            provider: "anthropic".to_string(),
+        })?;
+        total_chats += 1;
+
+        save_message_without_update(&Message {
+            id: uuid::Uuid::new_v4().to_string(),
+            chat_id,
+            role: MessageRole::User,
+            content: format!("Explain {} in detail", title.to_lowercase()),
+            created_at: days_ago,
+            tokens_used: Some(8),
+        })?;
+        save_message_without_update(&Message {
+            id: uuid::Uuid::new_v4().to_string(),
+            chat_id,
+            role: MessageRole::Assistant,
+            content: format!("## {}\n\nThis is a comprehensive topic...\n\n(Mock content for testing the older section)", title),
+            created_at: days_ago + Duration::minutes(1),
+            tokens_used: Some(25),
+        })?;
+        total_messages += 2;
+    }
 
     info!(
-        chat_count = 3,
-        message_count = 8,
-        "Mock data inserted for AI visual testing"
+        chat_count = total_chats,
+        message_count = total_messages,
+        "Comprehensive mock data inserted for AI visual testing"
     );
 
     Ok(())
