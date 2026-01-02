@@ -1015,27 +1015,61 @@ impl NotesApp {
                     .child(title),
             )
             // Conditionally show icons based on state - only when window is hovered
-            .children(if window_hovered && has_selection && !is_trash {
-                // Hover-reveal actions: ⌘K
-                Some(
-                    div().flex().items_center().gap_1().child(
-                        Button::new("shortcut")
-                            .ghost()
-                            .xsmall()
-                            .label("⌘K")
-                            .tooltip("Actions (⌘K)")
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                if this.show_actions_panel {
-                                    this.close_actions_panel(window, cx);
-                                } else {
-                                    this.open_actions_panel(window, cx);
-                                }
-                            })),
-                    ),
+            // Raycast-style: 3 icons on the right - settings (actions), panel (browse), + (new)
+            .when(window_hovered && has_selection && !is_trash, |d| {
+                d.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_1()
+                        // Icon 1: Command key icon - opens actions panel (⌘K)
+                        .child(
+                            Button::new("cmd-action")
+                                .ghost()
+                                .xsmall()
+                                .label("⌘")
+                                .tooltip("Actions (⌘K)")
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    if this.show_actions_panel {
+                                        this.close_actions_panel(window, cx);
+                                    } else {
+                                        this.open_actions_panel(window, cx);
+                                    }
+                                })),
+                        )
+                        // Icon 2: List icon - for browsing notes
+                        .child(
+                            Button::new("browse-notes")
+                                .ghost()
+                                .xsmall()
+                                .label("☰")
+                                .tooltip("Browse Notes (⌘P)")
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    if this.show_browse_panel {
+                                        this.close_browse_panel(cx);
+                                    } else {
+                                        this.close_actions_panel(window, cx);
+                                        this.show_browse_panel = true;
+                                        this.open_browse_panel(window, cx);
+                                    }
+                                })),
+                        )
+                        // Icon 3: Plus icon - for new note
+                        .child(
+                            Button::new("new-note")
+                                .ghost()
+                                .xsmall()
+                                .label("+")
+                                .tooltip("New Note (⌘N)")
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    this.create_note(window, cx);
+                                })),
+                        ),
                 )
-            } else if has_selection && is_trash {
+            })
+            .when(has_selection && is_trash, |d| {
                 // Trash actions (always visible)
-                Some(
+                d.child(
                     div()
                         .flex()
                         .gap_1()
@@ -1058,11 +1092,10 @@ impl NotesApp {
                                 })),
                         ),
                 )
-            } else {
-                None
             });
 
         // Build character count footer - only visible on hover
+        // Raycast style: character count on LEFT, T icon on RIGHT
         let footer = div()
             .flex()
             .items_center()
@@ -1074,14 +1107,7 @@ impl NotesApp {
             // Hide when window not hovered
             .when(!window_hovered, |d| d.opacity(0.))
             .child(
-                // Type indicator (T for text)
-                div()
-                    .text_xs()
-                    .text_color(cx.theme().muted_foreground)
-                    .child("T"),
-            )
-            .child(
-                // Character count
+                // Character count on LEFT (Raycast style)
                 div()
                     .text_xs()
                     .text_color(cx.theme().muted_foreground)
@@ -1090,6 +1116,13 @@ impl NotesApp {
                         char_count,
                         if char_count == 1 { "" } else { "s" }
                     )),
+            )
+            .child(
+                // Type indicator (T for text) on RIGHT (Raycast style)
+                div()
+                    .text_xs()
+                    .text_color(cx.theme().muted_foreground)
+                    .child("T"),
             );
 
         // Build main editor layout - Raycast style: clean, no visible input borders
