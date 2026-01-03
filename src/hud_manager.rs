@@ -157,17 +157,16 @@ impl Render for HudView {
             .h_full()
             .flex()
             .items_center()
-            .justify_between()
+            .justify_center()
             .px(px(16.))
             .py(px(8.))
             .gap(px(12.))
             // Use theme-matching dark background (0x1e1e1e with full opacity)
             .bg(rgb(0x1e1e1e))
             .rounded(px(8.)) // Rounded corners matching main window
-            // Text styling - system font, smaller size, white text
+            // Text styling - system font, smaller size, white text, centered
             .child(
                 div()
-                    .flex_1()
                     .text_sm()
                     .text_color(rgb(0xFFFFFF))
                     .overflow_hidden()
