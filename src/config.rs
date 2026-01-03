@@ -39,6 +39,7 @@ pub const DEFAULT_CONFIRMATION_COMMANDS: &[&str] = &[
     "builtin-log-out",
     "builtin-empty-trash",
     "builtin-sleep",
+    "builtin-quit-script-kit",
     "builtin-test-confirmation", // Dev test item
 ];
 

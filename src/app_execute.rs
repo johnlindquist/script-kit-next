@@ -270,6 +270,13 @@ impl ScriptListApp {
                             return; // Don't hide window for test
                         }
 
+                        // App control
+                        SystemActionType::QuitScriptKit => {
+                            logging::log("EXEC", "Quitting Script Kit");
+                            cx.quit();
+                            return;
+                        }
+
                         // System utilities
                         SystemActionType::ToggleDoNotDisturb => {
                             system_actions::toggle_do_not_disturb()

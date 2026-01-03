@@ -59,6 +59,9 @@ pub enum SystemActionType {
     #[cfg(debug_assertions)]
     TestConfirmation,
 
+    // App control
+    QuitScriptKit,
+
     // System utilities
     ToggleDoNotDisturb,
     StartScreenSaver,
@@ -624,6 +627,16 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ],
         BuiltInFeature::SystemAction(SystemActionType::Brightness100),
         "☀️",
+    ));
+
+    // App control
+    entries.push(BuiltInEntry::new_with_icon(
+        "builtin-quit-script-kit",
+        "Quit Script Kit",
+        "Quit the Script Kit application",
+        vec!["quit", "exit", "close", "script", "kit", "app"],
+        BuiltInFeature::SystemAction(SystemActionType::QuitScriptKit),
+        "🚪",
     ));
 
     // System utilities
