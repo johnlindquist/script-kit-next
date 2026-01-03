@@ -4,7 +4,7 @@
     "typescript": "^5.9.3"
   },
   "imports": {
-    "@johnlindquist/kit": "./scripts/kit-sdk.ts",
+    "@scriptkit/sdk": "./scripts/kit-sdk.ts",
     "#kit": "./scripts/kit-sdk.ts"
   },
   "scripts": {

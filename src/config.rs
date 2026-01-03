@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::Command;
 use tracing::{info, instrument, warn};
@@ -162,6 +163,20 @@ impl Default for ContentPadding {
     }
 }
 
+/// Configuration for a specific command (script, built-in, or app).
+///
+/// Used to set per-command shortcuts and visibility options.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommandConfig {
+    /// Optional keyboard shortcut to invoke this command directly
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shortcut: Option<HotkeyConfig>,
+    /// Whether this command should be hidden from the main menu
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hidden: Option<bool>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     pub hotkey: HotkeyConfig,
@@ -264,6 +279,7 @@ impl Default for Config {
             frecency: None,           // Will use FrecencyConfig::default() via getter
             notes_hotkey: None,       // Will use HotkeyConfig::default_notes_hotkey() via getter
             ai_hotkey: None,          // Will use HotkeyConfig::default_ai_hotkey() via getter
+            commands: None,           // No per-command overrides by default
         }
     }
 }
@@ -413,7 +429,7 @@ pub fn load_config() -> Config {
                         // Provide helpful error message for common config mistakes
                         let error_hint = if e.to_string().contains("missing field `hotkey`") {
                             "\n\nHint: Your config.ts must include a 'hotkey' field. Example:\n\
-                            import type { Config } from \"@scriptkit/kit\";\n\n\
+                            import type { Config } from \"@scriptkit/sdk\";\n\n\
                             export default {\n\
                               hotkey: {\n\
                                 modifiers: [\"meta\"],\n\
@@ -487,6 +503,7 @@ mod tests {
             frecency: None,
             notes_hotkey: None,
             ai_hotkey: None,
+            commands: None,
         };
 
         let json = serde_json::to_string(&config).unwrap();
@@ -528,6 +545,7 @@ mod tests {
             frecency: None,
             notes_hotkey: None,
             ai_hotkey: None,
+            commands: None,
         };
         assert_eq!(config.bun_path, Some("/custom/path/bun".to_string()));
     }
@@ -551,6 +569,7 @@ mod tests {
             frecency: None,
             notes_hotkey: None,
             ai_hotkey: None,
+            commands: None,
         };
         assert_eq!(config.bun_path, None);
     }
@@ -574,6 +593,7 @@ mod tests {
             frecency: None,
             notes_hotkey: None,
             ai_hotkey: None,
+            commands: None,
         };
 
         let json = serde_json::to_string(&config).unwrap();
@@ -602,6 +622,7 @@ mod tests {
             frecency: None,
             notes_hotkey: None,
             ai_hotkey: None,
+            commands: None,
         };
 
         let json = serde_json::to_string(&config).unwrap();
@@ -697,6 +718,7 @@ mod tests {
             frecency: None,
             notes_hotkey: None,
             ai_hotkey: None,
+            commands: None,
         };
 
         assert_eq!(config.hotkey.modifiers.len(), 0);
@@ -726,6 +748,7 @@ mod tests {
                 frecency: None,
                 notes_hotkey: None,
                 ai_hotkey: None,
+                commands: None,
             };
 
             let json = serde_json::to_string(&config).unwrap();
@@ -754,6 +777,7 @@ mod tests {
             frecency: None,
             notes_hotkey: None,
             ai_hotkey: None,
+            commands: None,
         };
 
         let json = serde_json::to_string(&config).unwrap();
@@ -782,6 +806,7 @@ mod tests {
             frecency: None,
             notes_hotkey: None,
             ai_hotkey: None,
+            commands: None,
         };
 
         let json = serde_json::to_string(&config).unwrap();
@@ -811,6 +836,7 @@ mod tests {
             frecency: None,
             notes_hotkey: None,
             ai_hotkey: None,
+            commands: None,
         };
 
         // Config editor takes precedence
@@ -842,6 +868,7 @@ mod tests {
             frecency: None,
             notes_hotkey: None,
             ai_hotkey: None,
+            commands: None,
         };
 
         // Should fall back to EDITOR env var
@@ -879,6 +906,7 @@ mod tests {
             frecency: None,
             notes_hotkey: None,
             ai_hotkey: None,
+            commands: None,
         };
 
         // Should fall back to "code" default
@@ -916,6 +944,7 @@ mod tests {
             frecency: None,
             notes_hotkey: None,
             ai_hotkey: None,
+            commands: None,
         };
 
         // Config editor should win
@@ -1022,6 +1051,7 @@ mod tests {
             frecency: None,
             notes_hotkey: None,
             ai_hotkey: None,
+            commands: None,
         };
 
         let padding = config.get_padding();
@@ -1055,6 +1085,7 @@ mod tests {
             frecency: None,
             notes_hotkey: None,
             ai_hotkey: None,
+            commands: None,
         };
 
         assert_eq!(config.get_editor_font_size(), 16.0);
@@ -1085,6 +1116,7 @@ mod tests {
             frecency: None,
             notes_hotkey: None,
             ai_hotkey: None,
+            commands: None,
         };
 
         assert_eq!(config.get_terminal_font_size(), 12.0);
@@ -1115,6 +1147,7 @@ mod tests {
             frecency: None,
             notes_hotkey: None,
             ai_hotkey: None,
+            commands: None,
         };
 
         assert_eq!(config.get_ui_scale(), 1.5);
@@ -1206,6 +1239,7 @@ mod tests {
             frecency: None,
             notes_hotkey: None,
             ai_hotkey: None,
+            commands: None,
         };
 
         let json = serde_json::to_string(&config).unwrap();
@@ -1305,6 +1339,7 @@ mod tests {
             frecency: None,
             notes_hotkey: None,
             ai_hotkey: None,
+            commands: None,
         };
 
         let builtins = config.get_builtins();
@@ -1396,6 +1431,7 @@ mod tests {
             frecency: None,
             notes_hotkey: None,
             ai_hotkey: None,
+            commands: None,
         };
 
         let json = serde_json::to_string(&config).unwrap();
@@ -1538,6 +1574,7 @@ mod tests {
             frecency: None,
             notes_hotkey: None,
             ai_hotkey: None,
+            commands: None,
         };
 
         let limits = config.get_process_limits();
@@ -1635,6 +1672,7 @@ mod tests {
             frecency: None,
             notes_hotkey: None,
             ai_hotkey: None,
+            commands: None,
         };
 
         let json = serde_json::to_string(&config).unwrap();

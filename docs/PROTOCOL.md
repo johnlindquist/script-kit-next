@@ -1607,13 +1607,13 @@ This message is logged and skipped without crashing.
 import '../../scripts/kit-sdk';
 
 // In production (after tsconfig.json path mapping)
-import '@johnlindquist/kit';
+import '@scriptkit/sdk';
 ```
 
 ### SDK Version
 
 ```typescript
-import { SDK_VERSION } from '@johnlindquist/kit';
+import { SDK_VERSION } from '@scriptkit/sdk';
 console.log(SDK_VERSION); // "0.2.0"
 ```
 

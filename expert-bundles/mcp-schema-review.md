@@ -1462,7 +1462,7 @@ schema = {
     #[test]
     fn test_parse_define_schema_function() {
         let content = r#"
-import "@johnlindquist/kit"
+import "@scriptkit/sdk"
 
 const { input, output } = defineSchema({
     input: {
@@ -5370,7 +5370,7 @@ Scripts with a `schema` definition are automatically exposed as MCP tools.
 **Option 1: Using `defineSchema()` (Recommended)**
 
 ```typescript
-import "@johnlindquist/kit"
+import "@scriptkit/sdk"
 
 metadata = {
   name: "My Tool",
@@ -5394,7 +5394,7 @@ output({ result: `${message} x${count}` })
 **Option 2: Direct Schema Assignment**
 
 ```typescript
-import "@johnlindquist/kit"
+import "@scriptkit/sdk"
 
 // Name comes from metadata (preferred) or // Name: comment
 metadata = {
@@ -5907,7 +5907,7 @@ All tests passed!
 1. Create a script in `~/.sk/kit/scripts/`:
 
 ```typescript
-import "@johnlindquist/kit"
+import "@scriptkit/sdk"
 
 metadata = {
   name: "My Tool Name",
@@ -6460,7 +6460,7 @@ main "$@"
 // Name: JSON Tool
 // Description: Parse and manipulate JSON
 
-import "@johnlindquist/kit"
+import "@scriptkit/sdk"
 
 metadata = {
   name: "JSON Processor",
@@ -6582,7 +6582,7 @@ if (!metadata.mcp) {
 // Name: Text Transform Tool
 // Description: Transform text in various ways
 
-import "@johnlindquist/kit"
+import "@scriptkit/sdk"
 
 metadata = {
   name: "Text Transformer",
@@ -6684,7 +6684,7 @@ if (!metadata.mcp) {
 // Name: Greeting Tool
 // Description: Simple greeting example for MCP
 
-import "@johnlindquist/kit"
+import "@scriptkit/sdk"
 
 // Typed metadata takes priority over comments
 metadata = {
@@ -6754,7 +6754,7 @@ if (!metadata.mcp) {
 // Name: File Info Tool  
 // Description: Get information about files
 
-import "@johnlindquist/kit"
+import "@scriptkit/sdk"
 import { stat } from "node:fs/promises"
 import { basename, extname, dirname } from "node:path"
 
@@ -6845,7 +6845,7 @@ if (!metadata.mcp) {
 // Name: Calculator Tool
 // Description: Perform basic math operations
 
-import "@johnlindquist/kit"
+import "@scriptkit/sdk"
 
 metadata = {
   name: "Math Calculator",
@@ -6929,7 +6929,7 @@ if (!metadata.mcp) {
 // Name: No Schema Tool
 // Description: A script without schema (should NOT appear as MCP tool)
 
-import "@johnlindquist/kit"
+import "@scriptkit/sdk"
 
 // This script has no schema, so it should NOT be exposed as an MCP tool
 // Only scripts with `schema = {...}` or `defineSchema({...})` become tools

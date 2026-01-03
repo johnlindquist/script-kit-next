@@ -1,7 +1,7 @@
 // Name: Text Transform Tool
 // Description: Transform text in various ways
 
-import "@johnlindquist/kit"
+import "@scriptkit/sdk"
 
 metadata = {
   name: "Text Transformer",

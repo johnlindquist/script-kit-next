@@ -1,7 +1,7 @@
 // Name: Calculator Tool
 // Description: Perform basic math operations
 
-import "@johnlindquist/kit"
+import "@scriptkit/sdk"
 
 metadata = {
   name: "Math Calculator",

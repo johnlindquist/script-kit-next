@@ -619,7 +619,7 @@ export interface ProcessLimits {
  * 
  * @example Minimal configuration (only hotkey required)
  * ```typescript
- * import type { Config } from "@scriptkit/kit";
+ * import type { Config } from "@scriptkit/sdk";
  * 
  * export default {
  *   hotkey: {
@@ -631,7 +631,7 @@ export interface ProcessLimits {
  * 
  * @example Full configuration with all options
  * ```typescript
- * import type { Config } from "@scriptkit/kit";
+ * import type { Config } from "@scriptkit/sdk";
  * 
  * export default {
  *   hotkey: {

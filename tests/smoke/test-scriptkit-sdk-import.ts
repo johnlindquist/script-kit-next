@@ -1,10 +1,10 @@
-// Test: Verify @johnlindquist/kit import works
+// Test: Verify @scriptkit/sdk import works
 // This tests that the import redirect is configured correctly
 
-import "@johnlindquist/kit";
+import "@scriptkit/sdk";
 
 // Verify the SDK is loaded by checking SDK_VERSION export
-const version = (await import("@johnlindquist/kit")).SDK_VERSION;
+const version = (await import("@scriptkit/sdk")).SDK_VERSION;
 console.log(`SDK_VERSION: ${version}`);
 
 // Verify globals are available
@@ -16,7 +16,7 @@ console.log(`md available: ${typeof md}`);
 await div(md(`
 # Import Test Passed!
 
-- \`import "@johnlindquist/kit"\` ✓
+- \`import "@scriptkit/sdk"\` ✓
 - SDK_VERSION: ${version} ✓
 - Global functions available ✓
 `));

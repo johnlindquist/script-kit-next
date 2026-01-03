@@ -1,7 +1,7 @@
 // Name: No Schema Tool
 // Description: A script without schema (should NOT appear as MCP tool)
 
-import "@johnlindquist/kit"
+import "@scriptkit/sdk"
 
 // This script has no schema, so it should NOT be exposed as an MCP tool
 // Only scripts with `schema = {...}` or `defineSchema({...})` become tools

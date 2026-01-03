@@ -191,7 +191,7 @@ Scripts with a `schema` definition are automatically exposed as MCP tools.
 **Option 1: Using `defineSchema()` (Recommended)**
 
 ```typescript
-import "@johnlindquist/kit"
+import "@scriptkit/sdk"
 
 metadata = {
   name: "My Tool",
@@ -215,7 +215,7 @@ output({ result: `${message} x${count}` })
 **Option 2: Direct Schema Assignment**
 
 ```typescript
-import "@johnlindquist/kit"
+import "@scriptkit/sdk"
 
 // Name comes from metadata (preferred) or // Name: comment
 metadata = {

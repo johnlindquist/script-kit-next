@@ -41,7 +41,7 @@ Script Kit is a productivity tool that runs TypeScript scripts with a rich UI.
 ## Quick Start
 
 ```typescript
-import "@scriptkit/kit";
+import "@scriptkit/sdk";
 
 export const metadata = {
   name: "My Script",
@@ -73,7 +73,7 @@ Scripts use the `metadata` export for configuration. This is the **preferred for
 ### Basic Metadata
 
 ```typescript
-import "@scriptkit/kit";
+import "@scriptkit/sdk";
 
 export const metadata = {
   name: "My Script",           // Display name in menu
@@ -123,7 +123,7 @@ Comment-based metadata is supported but **deprecated** for new scripts:
 Import the Script Kit SDK to get global functions:
 
 ```typescript
-import "@scriptkit/kit";
+import "@scriptkit/sdk";
 ```
 
 This import:
@@ -288,7 +288,7 @@ author: Your Name
 
 ## Greeting Tool
 \`\`\`tool:greet
-import "@scriptkit/kit";
+import "@scriptkit/sdk";
 const name = await arg("Enter name");
 await div(`<h1>Hello, ${name}!</h1>`);
 \`\`\`
@@ -331,7 +331,7 @@ Best regards
 The `~/.sk/kit/config.ts` file configures Script Kit:
 
 ```typescript
-import type { Config } from "@scriptkit/kit";
+import type { Config } from "@scriptkit/sdk";
 
 export default {
   // Global hotkey to show Script Kit
@@ -387,7 +387,7 @@ kit run my-script
 Add console.error() for debug output:
 
 ```typescript
-import "@scriptkit/kit";
+import "@scriptkit/sdk";
 
 console.error("[DEBUG] Script starting...");
 const result = await arg("Choose", ["A", "B"]);
@@ -401,7 +401,7 @@ console.error("[DEBUG] User chose:", result);
 ### Example 1: Quick Note
 
 ```typescript
-import "@scriptkit/kit";
+import "@scriptkit/sdk";
 
 export const metadata = {
   name: "Quick Note",
@@ -424,7 +424,7 @@ await div(`<p class="text-green-400">Note saved!</p>`);
 ### Example 2: GitHub Repo Opener
 
 ```typescript
-import "@scriptkit/kit";
+import "@scriptkit/sdk";
 
 export const metadata = {
   name: "Open GitHub Repo",
@@ -449,7 +449,7 @@ await open(repo);
 ### Example 3: JSON Formatter
 
 ```typescript
-import "@scriptkit/kit";
+import "@scriptkit/sdk";
 
 export const metadata = {
   name: "Format JSON",
@@ -469,7 +469,7 @@ try {
 ### Example 4: System Info Widget
 
 ```typescript
-import "@scriptkit/kit";
+import "@scriptkit/sdk";
 import os from "os";
 
 export const metadata = {
@@ -493,7 +493,7 @@ await div(info);
 ### Example 5: File Search
 
 ```typescript
-import "@scriptkit/kit";
+import "@scriptkit/sdk";
 
 export const metadata = {
   name: "Find Files",
@@ -524,7 +524,7 @@ if (files.length === 0) {
 ## Best Practices
 
 1. **Always use `export const metadata`** - Get type safety and IDE support
-2. **Import the SDK first** - `import "@scriptkit/kit"` at the top
+2. **Import the SDK first** - `import "@scriptkit/sdk"` at the top
 3. **Use Tailwind classes** - Built-in support for styling in div()
 4. **Handle errors gracefully** - Wrap async operations in try/catch
 5. **Keep scripts focused** - One script, one task
@@ -1064,7 +1064,7 @@ fn write_string_if_changed(path: &Path, contents: &str, warnings: &mut Vec<Strin
     }
 }
 
-/// Ensure tsconfig.json has the @scriptkit/kit path mapping (merge-safe)
+/// Ensure tsconfig.json has the @scriptkit/sdk path mapping (merge-safe)
 fn ensure_tsconfig_paths(tsconfig_path: &Path, warnings: &mut Vec<String>) {
     use serde_json::{json, Value};
 
@@ -1086,18 +1086,19 @@ fn ensure_tsconfig_paths(tsconfig_path: &Path, warnings: &mut Vec<String>) {
         config["compilerOptions"]["paths"] = json!({});
     }
 
-    // Check if already has the correct @scriptkit/kit path
-    let current_kit_path = config["compilerOptions"]["paths"].get("@scriptkit/kit");
+    // Check if already has the correct @scriptkit/sdk path
+    let current_kit_path = config["compilerOptions"]["paths"].get("@scriptkit/sdk");
     if current_kit_path == Some(&kit_path) {
         return;
     }
 
-    // Set the new @scriptkit/kit path
-    config["compilerOptions"]["paths"]["@scriptkit/kit"] = kit_path;
+    // Set the new @scriptkit/sdk path
+    config["compilerOptions"]["paths"]["@scriptkit/sdk"] = kit_path;
 
-    // Remove old @johnlindquist/kit path if it exists (migration)
+    // Remove old path variants if they exist (migration)
     if let Some(paths) = config["compilerOptions"]["paths"].as_object_mut() {
         paths.remove("@johnlindquist/kit");
+        paths.remove("@scriptkit/kit");
     }
 
     match serde_json::to_string_pretty(&config) {
@@ -1110,7 +1111,7 @@ fn ensure_tsconfig_paths(tsconfig_path: &Path, warnings: &mut Vec<String>) {
                 ));
                 warn!(error = %e, "Failed to write tsconfig.json");
             } else {
-                info!("Updated tsconfig.json with @scriptkit/kit path mapping");
+                info!("Updated tsconfig.json with @scriptkit/sdk path mapping");
             }
         }
         Err(e) => {

@@ -1,26 +1,26 @@
-// Name: SDK Test - @johnlindquist/kit import redirect
-// Description: Tests that import '@johnlindquist/kit' works correctly
+// Name: SDK Test - @scriptkit/sdk import redirect
+// Description: Tests that import '@scriptkit/sdk' works correctly
 
 /**
  * SDK TEST: test-import-redirect.ts
  * 
- * Tests that the @johnlindquist/kit import redirect works correctly.
+ * Tests that the @scriptkit/sdk import redirect works correctly.
  * This verifies that the package.json "imports" field properly redirects
- * `import '@johnlindquist/kit'` to our local kit-sdk.ts implementation.
+ * `import '@scriptkit/sdk'` to our local kit-sdk.ts implementation.
  * 
  * Expected behavior:
- * - import '@johnlindquist/kit' should work without errors
+ * - import '@scriptkit/sdk' should work without errors
  * - After import, global functions (arg, div, md, etc.) should be available
  * - The SDK_VERSION export should be accessible
  * - All major API categories should be defined
  */
 
-// THE KEY TEST: Using the @johnlindquist/kit import path
+// THE KEY TEST: Using the @scriptkit/sdk import path
 // This tests the package.json "imports" field redirect
-import '@johnlindquist/kit';
+import '@scriptkit/sdk';
 
 // Also test that we can import specific exports
-import { SDK_VERSION } from '@johnlindquist/kit';
+import { SDK_VERSION } from '@scriptkit/sdk';
 
 // =============================================================================
 // Test Infrastructure
@@ -55,7 +55,7 @@ function debug(msg: string) {
 // =============================================================================
 
 debug('test-import-redirect.ts starting...');
-debug(`Testing @johnlindquist/kit import redirect...`);
+debug(`Testing @scriptkit/sdk import redirect...`);
 
 // -----------------------------------------------------------------------------
 // Test 1: SDK_VERSION is accessible from named import
@@ -520,12 +520,12 @@ try {
 // Summary
 // -----------------------------------------------------------------------------
 debug('test-import-redirect.ts completed!');
-debug('All tests verify that @johnlindquist/kit import redirect works correctly.');
+debug('All tests verify that @scriptkit/sdk import redirect works correctly.');
 
 // Display summary using div/md
-await div(md(`# @johnlindquist/kit Import Redirect Tests Complete
+await div(md(`# @scriptkit/sdk Import Redirect Tests Complete
 
-The import redirect from \`@johnlindquist/kit\` has been tested.
+The import redirect from \`@scriptkit/sdk\` has been tested.
 
 ## What Was Verified
 
@@ -542,10 +542,10 @@ The import redirect from \`@johnlindquist/kit\` has been tested.
 
 \`\`\`typescript
 // Side-effect import (registers globals)
-import '@johnlindquist/kit';
+import '@scriptkit/sdk';
 
 // Named export import
-import { SDK_VERSION } from '@johnlindquist/kit';
+import { SDK_VERSION } from '@scriptkit/sdk';
 \`\`\`
 
 ---

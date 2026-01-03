@@ -1300,10 +1300,10 @@ The SDK (`scripts/kit-sdk.ts`) is deployed using a two-tier system:
 
 **Path mapping**: The app updates `~/.sk/kit/tsconfig.json` with:
 ```json
-{ "compilerOptions": { "paths": { "@johnlindquist/kit": ["./sdk/kit-sdk.ts"] } } }
+{ "compilerOptions": { "paths": { "@scriptkit/sdk": ["./sdk/kit-sdk.ts"] } } }
 ```
 
-This allows scripts to use `import '@johnlindquist/kit'` for IDE support.
+This allows scripts to use `import '@scriptkit/sdk'` for IDE support.
 
 ### User Configuration (config.ts)
 
@@ -1311,7 +1311,7 @@ The app reads settings from `~/.sk/kit/config.ts`. Configuration is loaded at st
 
 **Example config.ts:**
 ```typescript
-import type { Config } from "@johnlindquist/kit";
+import type { Config } from "@scriptkit/sdk";
 
 export default {
   // Required: Global hotkey to show/hide Script Kit

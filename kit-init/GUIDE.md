@@ -173,7 +173,7 @@ const result = await arg("Pick something");
 The SDK is automatically preloaded, so all functions are available globally. However, for TypeScript type hints, you can import it:
 
 ```typescript
-import "@scriptkit/kit";
+import "@scriptkit/sdk";
 
 // Now you get full autocomplete for arg(), div(), editor(), etc.
 ```
@@ -534,7 +534,7 @@ tags: utility, shell
 Create `~/.sk/kit/config.ts` to customize Script Kit:
 
 ```typescript
-import type { Config } from "@scriptkit/kit";
+import type { Config } from "@scriptkit/sdk";
 
 export default {
   // Required: Global hotkey to show/hide Script Kit

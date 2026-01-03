@@ -1,7 +1,7 @@
 // Name: JSON Tool
 // Description: Parse and manipulate JSON
 
-import "@johnlindquist/kit"
+import "@scriptkit/sdk"
 
 metadata = {
   name: "JSON Processor",

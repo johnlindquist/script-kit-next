@@ -350,7 +350,7 @@ const PROMPTS: Record<string, string> = {
         <li>Feature two</li>
         <li>Feature three</li>
       </ul>
-      <pre class="bg-gray-800 rounded p-3 text-sm text-green-400 font-mono">const kit = await import("@johnlindquist/kit");</pre>
+      <pre class="bg-gray-800 rounded p-3 text-sm text-green-400 font-mono">const kit = await import("@scriptkit/sdk");</pre>
     </div>
   `,
   'prompt-editor': `
@@ -362,7 +362,7 @@ const PROMPTS: Record<string, string> = {
       <div class="p-4 font-mono text-sm">
         <div class="flex">
           <span class="text-gray-600 w-8 text-right mr-4">1</span>
-          <span><span class="text-purple-400">import</span> <span class="text-white">{</span> <span class="text-yellow-400">arg</span> <span class="text-white">}</span> <span class="text-purple-400">from</span> <span class="text-green-400">"@johnlindquist/kit"</span></span>
+          <span><span class="text-purple-400">import</span> <span class="text-white">{</span> <span class="text-yellow-400">arg</span> <span class="text-white">}</span> <span class="text-purple-400">from</span> <span class="text-green-400">"@scriptkit/sdk"</span></span>
         </div>
         <div class="flex">
           <span class="text-gray-600 w-8 text-right mr-4">2</span>
@@ -419,7 +419,7 @@ const PROMPTS: Record<string, string> = {
         <span class="ml-2 text-xs text-gray-400">Terminal</span>
       </div>
       <div class="p-4 font-mono text-sm text-green-400">
-        <div>$ npm install @johnlindquist/kit</div>
+        <div>$ npm install @scriptkit/sdk</div>
         <div class="text-gray-400">added 42 packages in 2.3s</div>
         <div class="mt-2">$ kit run hello-world</div>
         <div class="text-white">Hello, World!</div>

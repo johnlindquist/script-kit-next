@@ -1,4 +1,4 @@
-import type { Config } from "@scriptkit/kit";
+import type { Config } from "@scriptkit/sdk";
 
 /**
  * Script Kit Configuration

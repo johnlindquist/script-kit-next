@@ -62,7 +62,7 @@ Quick way to create a new script without opening the main window.
    // Name: New Script
    // Description: 
    
-   import "@johnlindquist/kit"
+   import "@scriptkit/sdk"
    
    
    ```

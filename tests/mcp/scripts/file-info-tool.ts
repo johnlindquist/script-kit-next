@@ -1,7 +1,7 @@
 // Name: File Info Tool  
 // Description: Get information about files
 
-import "@johnlindquist/kit"
+import "@scriptkit/sdk"
 import { stat } from "node:fs/promises"
 import { basename, extname, dirname } from "node:path"
 

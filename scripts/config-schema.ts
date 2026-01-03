@@ -133,7 +133,7 @@
  *
  * EXAMPLE 4: Full configuration with multiple command types
  * ```typescript
- * import type { Config } from "@scriptkit/kit";
+ * import type { Config } from "@scriptkit/sdk";
  *
  * export default {
  *   hotkey: { modifiers: ["meta"], key: "Semicolon" },
@@ -235,7 +235,7 @@
  *
  * FILE STRUCTURE:
  * ```typescript
- * import type { Config } from "@scriptkit/kit";
+ * import type { Config } from "@scriptkit/sdk";
  *
  * export default {
  *   // ... configuration options ...
@@ -486,7 +486,7 @@
  * ═══════════════════════════════════════════════════════════════════════════
  *
  * ```typescript
- * import type { Config } from "@scriptkit/kit";
+ * import type { Config } from "@scriptkit/sdk";
  *
  * export default {
  *   hotkey: {
@@ -503,7 +503,7 @@
  * ═══════════════════════════════════════════════════════════════════════════
  *
  * ```typescript
- * import type { Config } from "@scriptkit/kit";
+ * import type { Config } from "@scriptkit/sdk";
  *
  * export default {
  *   hotkey: {
@@ -535,7 +535,7 @@
  * ═══════════════════════════════════════════════════════════════════════════
  *
  * ```typescript
- * import type { Config } from "@scriptkit/kit";
+ * import type { Config } from "@scriptkit/sdk";
  *
  * export default {
  *   hotkey: {
@@ -561,7 +561,7 @@
  * ═══════════════════════════════════════════════════════════════════════════
  *
  * ```typescript
- * import type { Config } from "@scriptkit/kit";
+ * import type { Config } from "@scriptkit/sdk";
  *
  * export default {
  *   hotkey: {
@@ -597,7 +597,7 @@
  * ═══════════════════════════════════════════════════════════════════════════
  *
  * ```typescript
- * import type { Config } from "@scriptkit/kit";
+ * import type { Config } from "@scriptkit/sdk";
  *
  * export default {
  *   hotkey: {
@@ -648,7 +648,7 @@
  * └───────────────────────────────────────────────────────────────────────────┘
  *
  * WHEN MODIFYING CONFIG:
- * 1. Always import Config type from "@scriptkit/kit"
+ * 1. Always import Config type from "@scriptkit/sdk"
  * 2. Use `satisfies Config` at the end for type checking
  * 3. Only include fields that differ from defaults (for minimal configs)
  * 4. Hotkey is the ONLY required field
@@ -893,7 +893,7 @@ export type CommandsConfig = Partial<Record<CommandId, CommandConfig>>;
  * 
  * @example Minimal configuration (only hotkey required)
  * ```typescript
- * import type { Config } from "@scriptkit/kit";
+ * import type { Config } from "@scriptkit/sdk";
  * 
  * export default {
  *   hotkey: { modifiers: ["meta"], key: "Semicolon" }
@@ -902,7 +902,7 @@ export type CommandsConfig = Partial<Record<CommandId, CommandConfig>>;
  * 
  * @example Configuration with command shortcuts
  * ```typescript
- * import type { Config } from "@scriptkit/kit";
+ * import type { Config } from "@scriptkit/sdk";
  * 
  * export default {
  *   hotkey: { modifiers: ["meta"], key: "Semicolon" },

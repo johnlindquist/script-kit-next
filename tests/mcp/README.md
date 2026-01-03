@@ -90,7 +90,7 @@ All tests passed!
 1. Create a script in `~/.sk/kit/scripts/`:
 
 ```typescript
-import "@johnlindquist/kit"
+import "@scriptkit/sdk"
 
 metadata = {
   name: "My Tool Name",

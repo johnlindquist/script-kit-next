@@ -1,7 +1,7 @@
 // Name: Greeting Tool
 // Description: Simple greeting example for MCP
 
-import "@johnlindquist/kit"
+import "@scriptkit/sdk"
 
 // Typed metadata takes priority over comments
 metadata = {

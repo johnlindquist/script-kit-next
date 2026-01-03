@@ -367,7 +367,7 @@ function writeConfigFile(content: string): void {
  * Create a default config file
  */
 function createDefaultConfig(): string {
-  return `import type { Config } from "@scriptkit/kit";
+  return `import type { Config } from "@scriptkit/sdk";
 
 export default {
   hotkey: {

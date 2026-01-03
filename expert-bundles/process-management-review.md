@@ -935,7 +935,7 @@ fn find_executable(name: &str) -> Option<PathBuf> {
     None
 }
 
-/// Ensure tsconfig.json has the @johnlindquist/kit path mapping
+/// Ensure tsconfig.json has the @scriptkit/sdk path mapping
 /// Merges with existing config if present
 fn ensure_tsconfig_paths(tsconfig_path: &PathBuf) {
     use serde_json::{json, Value};
@@ -962,15 +962,15 @@ fn ensure_tsconfig_paths(tsconfig_path: &PathBuf) {
         config["compilerOptions"]["paths"] = json!({});
     }
 
-    // Check if @johnlindquist/kit path is already correct
-    let current_kit_path = config["compilerOptions"]["paths"].get("@johnlindquist/kit");
+    // Check if @scriptkit/sdk path is already correct
+    let current_kit_path = config["compilerOptions"]["paths"].get("@scriptkit/sdk");
     if current_kit_path == Some(&kit_path) {
         // Already correct, no need to write
         return;
     }
 
-    // Set the @johnlindquist/kit path
-    config["compilerOptions"]["paths"]["@johnlindquist/kit"] = kit_path;
+    // Set the @scriptkit/sdk path
+    config["compilerOptions"]["paths"]["@scriptkit/sdk"] = kit_path;
 
     // Write back
     match serde_json::to_string_pretty(&config) {
@@ -978,7 +978,7 @@ fn ensure_tsconfig_paths(tsconfig_path: &PathBuf) {
             if let Err(e) = std::fs::write(tsconfig_path, json_str) {
                 logging::log("EXEC", &format!("Failed to write tsconfig.json: {}", e));
             } else {
-                logging::log("EXEC", "Updated tsconfig.json with @johnlindquist/kit path");
+                logging::log("EXEC", "Updated tsconfig.json with @scriptkit/sdk path");
             }
         }
         Err(e) => {
@@ -1021,7 +1021,7 @@ fn ensure_sdk_extracted() -> Option<PathBuf> {
         ),
     );
 
-    // Ensure tsconfig.json has @johnlindquist/kit path mapping
+    // Ensure tsconfig.json has @scriptkit/sdk path mapping
     let tsconfig_path = kenv_dir.join("tsconfig.json");
     ensure_tsconfig_paths(&tsconfig_path);
 

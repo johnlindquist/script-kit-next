@@ -106,7 +106,7 @@ fn name_to_title(name: &str) -> String {
 fn generate_script_template(name: &str) -> String {
     let title = name_to_title(name);
     format!(
-        r#"import "@scriptkit/kit";
+        r#"import "@scriptkit/sdk";
 
 export const metadata = {{
   name: "{title}",
@@ -126,7 +126,7 @@ console.log(result);
 fn generate_scriptlet_template(name: &str) -> String {
     let title = name_to_title(name);
     format!(
-        r#"import "@scriptkit/kit";
+        r#"import "@scriptkit/sdk";
 
 export const metadata = {{
   name: "{title}",
@@ -345,7 +345,7 @@ mod tests {
     #[test]
     fn test_generate_script_template() {
         let template = generate_script_template("my-script");
-        assert!(template.contains("import \"@scriptkit/kit\";"));
+        assert!(template.contains("import \"@scriptkit/sdk\";"));
         assert!(template.contains("export const metadata = {"));
         assert!(template.contains("name: \"My Script\""));
         assert!(template.contains("description: \"\""));
@@ -355,7 +355,7 @@ mod tests {
     #[test]
     fn test_generate_scriptlet_template() {
         let template = generate_scriptlet_template("my-scriptlet");
-        assert!(template.contains("import \"@scriptkit/kit\";"));
+        assert!(template.contains("import \"@scriptkit/sdk\";"));
         assert!(template.contains("export const metadata = {"));
         assert!(template.contains("name: \"My Scriptlet\""));
         assert!(template.contains("await div("));
