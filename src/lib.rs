@@ -7,9 +7,9 @@
 
 pub mod components;
 pub mod config;
+pub mod debug_grid;
 pub mod designs;
 pub mod editor;
-pub mod editor_v2;
 pub mod error;
 pub mod executor;
 pub mod form_prompt;

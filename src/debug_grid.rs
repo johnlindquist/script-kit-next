@@ -30,6 +30,8 @@ pub struct GridConfig {
     pub show_box_model: bool,
     /// Show alignment snap lines between components
     pub show_alignment_guides: bool,
+    /// Show component dimensions in labels (e.g., "Run (55x28)")
+    pub show_dimensions: bool,
     /// Which components to show bounds for
     pub depth: GridDepth,
     /// Color scheme for the overlay
@@ -43,6 +45,7 @@ impl Default for GridConfig {
             show_bounds: true,
             show_box_model: false,
             show_alignment_guides: true,
+            show_dimensions: false,
             depth: GridDepth::Prompts,
             color_scheme: GridColorScheme::default(),
         }
@@ -269,7 +272,11 @@ pub fn render_grid_overlay(
         .children(
             // Component bounds
             if config.show_bounds {
-                Some(render_all_component_bounds(components, colors))
+                Some(render_all_component_bounds(
+                    components,
+                    colors,
+                    config.show_dimensions,
+                ))
             } else {
                 None
             },
@@ -333,12 +340,28 @@ pub fn render_grid_lines(bounds: Bounds<Pixels>, grid_size: u32, color: u32) -> 
 }
 
 /// Render a single component's bounding box with label
+///
+/// If `show_dimensions` is true, the label will include the component's
+/// width and height in pixels, e.g., "Header (500x45)".
 pub fn render_component_bounds(
     component: &ComponentBounds,
     colors: &GridColorScheme,
+    show_dimensions: bool,
 ) -> impl IntoElement {
     let color = colors.color_for_type(&component.component_type);
     let bounds = component.bounds;
+
+    // Format label with optional dimensions
+    let label = if show_dimensions {
+        format!(
+            "{} ({}x{})",
+            component.name,
+            pixels_to_f32(bounds.size.width) as i32,
+            pixels_to_f32(bounds.size.height) as i32
+        )
+    } else {
+        component.name.clone()
+    };
 
     div()
         .absolute()
@@ -359,7 +382,7 @@ pub fn render_component_bounds(
                 .bg(rgba(colors.label_background))
                 .text_color(rgba(colors.label_text))
                 .text_xs()
-                .child(component.name.clone()),
+                .child(label),
         )
 }
 
@@ -367,11 +390,12 @@ pub fn render_component_bounds(
 fn render_all_component_bounds(
     components: &[ComponentBounds],
     colors: &GridColorScheme,
+    show_dimensions: bool,
 ) -> impl IntoElement {
     div().absolute().children(
         components
             .iter()
-            .map(|c| render_component_bounds(c, colors)),
+            .map(move |c| render_component_bounds(c, colors, show_dimensions)),
     )
 }
 
@@ -663,6 +687,16 @@ mod tests {
         assert!(config.show_bounds);
         assert!(!config.show_box_model);
         assert!(config.show_alignment_guides);
+        assert!(!config.show_dimensions); // Off by default
+    }
+
+    #[test]
+    fn test_show_dimensions_config() {
+        let config = GridConfig {
+            show_dimensions: true,
+            ..Default::default()
+        };
+        assert!(config.show_dimensions);
     }
 
     #[test]

@@ -251,6 +251,8 @@ export interface GridOptions {
   showBoxModel?: boolean;
   /** Show alignment guides between components */
   showAlignmentGuides?: boolean;
+  /** Show component dimensions in labels (e.g., "Header (500x45)") */
+  showDimensions?: boolean;
   /** Which components to show bounds for */
   depth?: 'prompts' | 'all' | string[];
   /** Custom color scheme */
@@ -277,6 +279,111 @@ export interface ScreenshotOptions {
    * @default false
    */
   hiDpi?: boolean;
+}
+
+// =============================================================================
+// Layout Info Types (AI Agent Debugging)
+// =============================================================================
+
+/** Box model sides (top, right, bottom, left) in pixels */
+export interface BoxModelSides {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+}
+
+/** Computed box model for a component */
+export interface ComputedBoxModel {
+  /** Padding values (inner spacing) */
+  padding?: BoxModelSides;
+  /** Margin values (outer spacing) */
+  margin?: BoxModelSides;
+  /** Gap between flex/grid children */
+  gap?: number;
+}
+
+/** Computed flex properties for a component */
+export interface ComputedFlexStyle {
+  /** Flex direction: "row" or "column" */
+  direction?: string;
+  /** Flex grow value */
+  grow?: number;
+  /** Flex shrink value */
+  shrink?: number;
+  /** Align items: "start", "center", "end", "stretch" */
+  alignItems?: string;
+  /** Justify content: "start", "center", "end", "space-between", etc. */
+  justifyContent?: string;
+}
+
+/** Bounding rectangle in pixels */
+export interface LayoutBounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** Component type for categorization */
+export type LayoutComponentType =
+  | 'prompt'
+  | 'input'
+  | 'button'
+  | 'list'
+  | 'listItem'
+  | 'header'
+  | 'container'
+  | 'panel'
+  | 'other';
+
+/**
+ * Information about a single component in the layout tree.
+ * 
+ * This provides everything an AI agent needs to understand "why"
+ * a component is positioned/sized the way it is.
+ */
+export interface LayoutComponentInfo {
+  /** Component name/identifier */
+  name: string;
+  /** Component type for categorization */
+  type: LayoutComponentType;
+  /** Bounding rectangle (absolute position and size) */
+  bounds: LayoutBounds;
+  /** Computed box model (padding, margin, gap) */
+  boxModel?: ComputedBoxModel;
+  /** Computed flex properties */
+  flex?: ComputedFlexStyle;
+  /** Nesting depth (0 = root, 1 = child of root, etc.) */
+  depth: number;
+  /** Parent component name (if any) */
+  parent?: string;
+  /** Child component names */
+  children?: string[];
+  /**
+   * Human-readable explanation of why this component has its current size/position.
+   * Example: "Height is 45px = padding(8) + content(28) + padding(8) + divider(1)"
+   */
+  explanation?: string;
+}
+
+/**
+ * Full layout information for the current UI state.
+ * 
+ * Returned by `getLayoutInfo()` SDK function.
+ * Contains the component tree and window-level information.
+ */
+export interface LayoutInfo {
+  /** Window width in pixels */
+  windowWidth: number;
+  /** Window height in pixels */
+  windowHeight: number;
+  /** Current prompt type (e.g., "arg", "div", "editor", "mainMenu") */
+  promptType: string;
+  /** All components in the layout tree */
+  components: LayoutComponentInfo[];
+  /** Timestamp when layout was captured (ISO 8601) */
+  timestamp: string;
 }
 
 // =============================================================================
@@ -1236,6 +1343,21 @@ interface ScreenshotResultMessage {
   height: number;
 }
 
+interface GetLayoutInfoMessage {
+  type: 'getLayoutInfo';
+  requestId: string;
+}
+
+interface LayoutInfoResultMessage {
+  type: 'layoutInfoResult';
+  requestId: string;
+  windowWidth: number;
+  windowHeight: number;
+  promptType: string;
+  components: LayoutComponentInfo[];
+  timestamp: string;
+}
+
 interface KeyboardMessage {
   type: 'keyboard';
   action: 'type' | 'tap';
@@ -1522,6 +1644,7 @@ interface ShowGridMessage {
   showBounds?: boolean;
   showBoxModel?: boolean;
   showAlignmentGuides?: boolean;
+  showDimensions?: boolean;
   depth?: 'prompts' | 'all' | string[];
   colorScheme?: GridColorScheme;
 }
@@ -2146,6 +2269,17 @@ declare global {
    * @returns Promise with base64-encoded PNG data and dimensions
    */
   function captureScreenshot(options?: ScreenshotOptions): Promise<ScreenshotData>;
+  
+  /**
+   * Get detailed layout information for the current UI state.
+   * 
+   * Returns comprehensive component information including bounds, box model,
+   * flex properties, and human-readable explanations of why components are sized.
+   * Designed for AI agents to understand "why" components are positioned/sized.
+   * 
+   * @returns LayoutInfo with component tree and window information
+   */
+  function getLayoutInfo(): Promise<LayoutInfo>;
   
   /**
    * Force submit the current prompt with a value
@@ -4127,6 +4261,70 @@ globalThis.captureScreenshot = async function captureScreenshot(
   });
 };
 
+/**
+ * Get detailed layout information for the current UI state.
+ * 
+ * This returns comprehensive component information including:
+ * - Bounds (position and size)
+ * - Box model (padding, margin, gap)
+ * - Flex properties (direction, grow, align)
+ * - Human-readable explanations of why components are sized as they are
+ * 
+ * Designed for AI agents to understand "why" components are positioned/sized.
+ * 
+ * @example
+ * ```typescript
+ * const layout = await getLayoutInfo();
+ * console.log('Window:', layout.windowWidth, 'x', layout.windowHeight);
+ * console.log('Prompt type:', layout.promptType);
+ * 
+ * // Find the header and understand its layout
+ * const header = layout.components.find(c => c.name === 'Header');
+ * if (header) {
+ *   console.log('Header bounds:', header.bounds);
+ *   console.log('Why this size:', header.explanation);
+ * }
+ * ```
+ * 
+ * @returns LayoutInfo with component tree and window information
+ */
+globalThis.getLayoutInfo = async function getLayoutInfo(): Promise<LayoutInfo> {
+  const requestId = nextId();
+  
+  return new Promise((resolve) => {
+    addPending(requestId, (msg: ResponseMessage) => {
+      // Handle layoutInfoResult message type
+      if (msg.type === 'layoutInfoResult') {
+        const resultMsg = msg as LayoutInfoResultMessage;
+        resolve({
+          windowWidth: resultMsg.windowWidth ?? 0,
+          windowHeight: resultMsg.windowHeight ?? 0,
+          promptType: resultMsg.promptType ?? 'unknown',
+          components: resultMsg.components ?? [],
+          timestamp: resultMsg.timestamp ?? new Date().toISOString(),
+        });
+        return;
+      }
+      
+      // Fallback for unexpected message type
+      resolve({
+        windowWidth: 0,
+        windowHeight: 0,
+        promptType: 'unknown',
+        components: [],
+        timestamp: new Date().toISOString(),
+      });
+    });
+    
+    const message: GetLayoutInfoMessage = {
+      type: 'getLayoutInfo',
+      requestId,
+    };
+    
+    send(message);
+  });
+};
+
 // Prompt Control
 globalThis.submit = function submit(value: unknown): void {
   const message: ForceSubmitMessage = { type: 'forceSubmit', value };
@@ -5152,6 +5350,7 @@ declare global {
   function setPrompt(html: string): void;
   function setInput(text: string): void;
   function captureScreenshot(options?: ScreenshotOptions): Promise<ScreenshotData>;
+  function getLayoutInfo(): Promise<LayoutInfo>;
 
   // Utilities
   function uuid(): string;

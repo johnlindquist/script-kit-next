@@ -900,6 +900,25 @@ impl ScriptListApp {
                                     continue;
                                 }
 
+                                // Handle GetLayoutInfo - needs UI state, forward to UI thread
+                                if let Message::GetLayoutInfo { request_id } = &msg {
+                                    logging::log(
+                                        "EXEC",
+                                        &format!("GetLayoutInfo request: {}", request_id),
+                                    );
+                                    let prompt_msg = PromptMessage::GetLayoutInfo {
+                                        request_id: request_id.clone(),
+                                    };
+                                    if tx.send_blocking(prompt_msg).is_err() {
+                                        logging::log(
+                                            "EXEC",
+                                            "Prompt channel closed, reader exiting",
+                                        );
+                                        break;
+                                    }
+                                    continue;
+                                }
+
                                 // Handle CaptureScreenshot directly (no UI needed)
                                 if let Message::CaptureScreenshot { request_id, hi_dpi } = &msg {
                                     let hi_dpi_mode = hi_dpi.unwrap_or(false);

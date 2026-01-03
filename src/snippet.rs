@@ -393,6 +393,10 @@ impl ParsedSnippet {
     /// - Ranges **after** the edit point are shifted by `delta = new_len - old_len`
     /// - Ranges **containing** the edit point (within current tabstop) are resized by `delta`
     /// - Ranges **before** the edit point are unchanged
+    ///
+    /// Note: This is prepared for linked editing support (when the same tabstop appears
+    /// multiple times in a template, edits should sync across all occurrences).
+    #[allow(dead_code)]
     pub fn update_tabstops_after_edit(
         &mut self,
         current_tabstop_idx: usize,

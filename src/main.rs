@@ -504,6 +504,10 @@ enum PromptMessage {
     GetState {
         request_id: String,
     },
+    /// Request to get layout info with component tree and computed styles
+    GetLayoutInfo {
+        request_id: String,
+    },
     /// Force submit the current prompt with a value (from SDK's submit() function)
     ForceSubmit {
         value: serde_json::Value,
@@ -1623,8 +1627,9 @@ fn main() {
                             // Note: We have both `window` from Root and `view` from entity here
                             // ctx is Context<ScriptListApp>, window is &mut Window
                         match cmd {
-                            ExternalCommand::Run { ref path } => {
-                                logging::log("STDIN", &format!("Executing script: {}", path));
+                            ExternalCommand::Run { ref path, ref request_id } => {
+                                let rid = request_id.as_deref().unwrap_or("-");
+                                logging::log("STDIN", &format!("[{}] Executing script: {}", rid, path));
                                 // Show and focus window - match hotkey handler setup for consistency
                                 script_kit_gpui::set_main_window_visible(true);
                                 
@@ -1648,8 +1653,9 @@ fn main() {
                                 // Send RunScript message to be handled
                                 view.handle_prompt_message(PromptMessage::RunScript { path: path.clone() }, ctx);
                             }
-                            ExternalCommand::Show => {
-                                logging::log("STDIN", "Showing window");
+                            ExternalCommand::Show { ref request_id } => {
+                                let rid = request_id.as_deref().unwrap_or("-");
+                                logging::log("STDIN", &format!("[{}] Showing window", rid));
                                 // Show and focus window - match hotkey handler setup for consistency
                                 script_kit_gpui::set_main_window_visible(true);
                                 
@@ -1670,13 +1676,15 @@ fn main() {
                                 let focus_handle = view.focus_handle(ctx);
                                 window.focus(&focus_handle, ctx);
                             }
-                            ExternalCommand::Hide => {
-                                logging::log("STDIN", "Hiding main window");
+                            ExternalCommand::Hide { ref request_id } => {
+                                let rid = request_id.as_deref().unwrap_or("-");
+                                logging::log("STDIN", &format!("[{}] Hiding main window", rid));
                                 script_kit_gpui::set_main_window_visible(false);
                                 ctx.hide();
                             }
-                            ExternalCommand::SetFilter { ref text } => {
-                                logging::log("STDIN", &format!("Setting filter to: '{}'", text));
+                            ExternalCommand::SetFilter { ref text, ref request_id } => {
+                                let rid = request_id.as_deref().unwrap_or("-");
+                                logging::log("STDIN", &format!("[{}] Setting filter to: '{}'", rid, text));
                                 view.set_filter_text_immediate(text.clone(), window, ctx);
                                 let _ = view.get_filtered_results_cached(); // Update cache
                             }
@@ -1871,6 +1879,37 @@ fn main() {
                                             }
                                         }
                                     }
+                                    AppView::EditorPrompt { entity, id, .. } => {
+                                        // Editor prompt key handling for template/snippet navigation
+                                        logging::log("STDIN", &format!("SimulateKey: Dispatching '{}' to EditorPrompt (snippet test)", key_lower));
+                                        let entity_clone = entity.clone();
+                                        let prompt_id_clone = id.clone();
+
+                                        // Handle Tab key for snippet navigation
+                                        if key_lower == "tab" && !has_cmd {
+                                            entity_clone.update(ctx, |editor: &mut EditorPrompt, editor_cx| {
+                                                logging::log("STDIN", "SimulateKey: Tab in EditorPrompt - calling next_tabstop");
+                                                if editor.in_snippet_mode() {
+                                                    editor.next_tabstop_public(window, editor_cx);
+                                                } else {
+                                                    logging::log("STDIN", "SimulateKey: Tab - not in snippet mode");
+                                                }
+                                            });
+                                        } else if key_lower == "enter" && has_cmd {
+                                            // Cmd+Enter submits - get content from editor
+                                            logging::log("STDIN", "SimulateKey: Cmd+Enter in EditorPrompt - submitting");
+                                            let content = entity_clone.update(ctx, |editor, editor_cx| {
+                                                editor.content(editor_cx)
+                                            });
+                                            view.submit_prompt_response(prompt_id_clone.clone(), Some(content), ctx);
+                                        } else if key_lower == "escape" && !has_cmd {
+                                            logging::log("STDIN", "SimulateKey: Escape in EditorPrompt - cancelling");
+                                            view.submit_prompt_response(prompt_id_clone.clone(), None, ctx);
+                                            view.cancel_script_execution(ctx);
+                                        } else {
+                                            logging::log("STDIN", &format!("SimulateKey: Unhandled key '{}' in EditorPrompt", key_lower));
+                                        }
+                                    }
                                     _ => {
                                         logging::log("STDIN", &format!("SimulateKey: View {:?} not supported for key simulation", std::mem::discriminant(&view.current_view)));
                                     }
@@ -1925,16 +1964,17 @@ fn main() {
                                 logging::log("STDIN", &format!("Setting AI input to: {} (submit={})", text, submit));
                                 ai::set_ai_input(ctx, &text, submit);
                             }
-                            ExternalCommand::ShowGrid { grid_size, show_bounds, show_box_model, show_alignment_guides, ref depth } => {
+                            ExternalCommand::ShowGrid { grid_size, show_bounds, show_box_model, show_alignment_guides, show_dimensions, ref depth } => {
                                 logging::log("STDIN", &format!(
-                                    "ShowGrid: size={}, bounds={}, box_model={}, guides={}, depth={:?}",
-                                    grid_size, show_bounds, show_box_model, show_alignment_guides, depth
+                                    "ShowGrid: size={}, bounds={}, box_model={}, guides={}, dimensions={}, depth={:?}",
+                                    grid_size, show_bounds, show_box_model, show_alignment_guides, show_dimensions, depth
                                 ));
                                 let options = protocol::GridOptions {
                                     grid_size,
                                     show_bounds,
                                     show_box_model,
                                     show_alignment_guides,
+                                    show_dimensions,
                                     depth: depth.clone(),
                                     color_scheme: None,
                                 };

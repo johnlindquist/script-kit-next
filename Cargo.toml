@@ -100,10 +100,11 @@ open = "5"
 inventory = "0.3"  # Compile-time story registration (same pattern as Zed)
 clap = { version = "4", features = ["derive"] }  # CLI argument parsing
 
-# gpui-component - Community UI component library for GPUI
-# Used for the separate Notes window feature (Raycast Notes parity)
-# Requires Root wrapper - the Notes window is a separate window from the main launcher
-gpui-component = { git = "https://github.com/longbridge/gpui-component", package = "gpui-component" }
+# gpui-component - Community UI component library for GPUI (FORKED)
+# Fork adds set_selection() method for programmatic text selection (snippet/template support)
+# Original: https://github.com/longbridge/gpui-component
+# Fork: https://github.com/johnlindquist/gpui-component
+gpui-component = { git = "https://github.com/johnlindquist/gpui-component", package = "gpui-component" }
 
 # i18n support required by gpui-component
 rust-i18n = "3"

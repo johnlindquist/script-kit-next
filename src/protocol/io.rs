@@ -630,6 +630,7 @@ mod tests {
             show_bounds: true,
             show_box_model: false,
             show_alignment_guides: true,
+            show_dimensions: true,
             depth: GridDepthOption::Components(vec!["header".to_string(), "list".to_string()]),
             color_scheme: Some(GridColorScheme {
                 grid_lines: Some("#FF0000".to_string()),

@@ -644,6 +644,30 @@ pub enum Message {
     },
 
     // ============================================================
+    // LAYOUT INFO (AI Agent Debugging)
+    // ============================================================
+    /// Request layout information with component tree and computed styles
+    ///
+    /// Returns detailed information about every component's position,
+    /// size, padding, margin, gap, and flex properties. Designed to
+    /// help AI agents understand "why" components are positioned/sized.
+    #[serde(rename = "getLayoutInfo")]
+    GetLayoutInfo {
+        #[serde(rename = "requestId")]
+        request_id: String,
+    },
+
+    /// Response with full layout information
+    #[serde(rename = "layoutInfoResult")]
+    LayoutInfoResult {
+        #[serde(rename = "requestId")]
+        request_id: String,
+        /// Full layout information including component tree
+        #[serde(flatten)]
+        info: LayoutInfo,
+    },
+
+    // ============================================================
     // ERROR REPORTING
     // ============================================================
     /// Script error with structured error information
@@ -962,6 +986,9 @@ impl Message {
             // Element query
             | Message::GetElements { request_id, .. }
             | Message::ElementsResult { request_id, .. }
+            // Layout info
+            | Message::GetLayoutInfo { request_id, .. }
+            | Message::LayoutInfoResult { request_id, .. }
             // Scriptlet operations
             | Message::RunScriptlet { request_id, .. }
             | Message::GetScriptlets { request_id, .. }
@@ -1594,6 +1621,20 @@ impl Message {
             elements,
             total_count,
         }
+    }
+
+    // ============================================================
+    // Constructor methods for layout info
+    // ============================================================
+
+    /// Create a get layout info request
+    pub fn get_layout_info(request_id: String) -> Self {
+        Message::GetLayoutInfo { request_id }
+    }
+
+    /// Create a layout info result response
+    pub fn layout_info_result(request_id: String, info: LayoutInfo) -> Self {
+        Message::LayoutInfoResult { request_id, info }
     }
 
     // ============================================================

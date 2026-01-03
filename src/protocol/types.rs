@@ -633,6 +633,10 @@ pub struct GridOptions {
     #[serde(default)]
     pub show_alignment_guides: bool,
 
+    /// Show component dimensions in labels (e.g., "Header (500x45)")
+    #[serde(default)]
+    pub show_dimensions: bool,
+
     /// Which components to show bounds for
     /// - "prompts": Top-level prompts only
     /// - "all": All rendered elements
@@ -787,4 +791,241 @@ impl ScriptErrorData {
         self.timestamp = Some(timestamp);
         self
     }
+}
+
+// ============================================================
+// LAYOUT INFO (AI Agent Debugging)
+// ============================================================
+
+/// Computed box model for a component (padding, margin, gap)
+///
+/// All values are in pixels. This provides the "why" behind spacing -
+/// AI agents can understand if space comes from padding, margin, or gap.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ComputedBoxModel {
+    /// Padding values (inner spacing)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub padding: Option<BoxModelSides>,
+    /// Margin values (outer spacing)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub margin: Option<BoxModelSides>,
+    /// Gap between flex/grid children
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gap: Option<f32>,
+}
+
+/// Box model sides (top, right, bottom, left)
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+pub struct BoxModelSides {
+    pub top: f32,
+    pub right: f32,
+    pub bottom: f32,
+    pub left: f32,
+}
+
+impl BoxModelSides {
+    pub fn uniform(value: f32) -> Self {
+        Self {
+            top: value,
+            right: value,
+            bottom: value,
+            left: value,
+        }
+    }
+
+    pub fn symmetric(vertical: f32, horizontal: f32) -> Self {
+        Self {
+            top: vertical,
+            right: horizontal,
+            bottom: vertical,
+            left: horizontal,
+        }
+    }
+}
+
+/// Computed flex properties for a component
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ComputedFlexStyle {
+    /// Flex direction: "row" or "column"
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub direction: Option<String>,
+    /// Flex grow value
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub grow: Option<f32>,
+    /// Flex shrink value
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub shrink: Option<f32>,
+    /// Align items: "start", "center", "end", "stretch"
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub align_items: Option<String>,
+    /// Justify content: "start", "center", "end", "space-between", etc.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub justify_content: Option<String>,
+}
+
+/// Bounding rectangle in pixels
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+pub struct LayoutBounds {
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
+}
+
+/// Component type for categorization
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum LayoutComponentType {
+    Prompt,
+    Input,
+    Button,
+    List,
+    ListItem,
+    Header,
+    #[default]
+    Container,
+    Panel,
+    Other,
+}
+
+/// Information about a single component in the layout tree
+///
+/// This is the core data structure for `getLayoutInfo()`.
+/// It provides everything an AI agent needs to understand "why"
+/// a component is positioned/sized the way it is.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct LayoutComponentInfo {
+    /// Component name/identifier
+    pub name: String,
+    /// Component type for categorization
+    #[serde(rename = "type")]
+    pub component_type: LayoutComponentType,
+    /// Bounding rectangle (absolute position and size)
+    pub bounds: LayoutBounds,
+    /// Computed box model (padding, margin, gap)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub box_model: Option<ComputedBoxModel>,
+    /// Computed flex properties
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub flex: Option<ComputedFlexStyle>,
+    /// Nesting depth (0 = root, 1 = child of root, etc.)
+    pub depth: u32,
+    /// Parent component name (if any)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent: Option<String>,
+    /// Child component names
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub children: Vec<String>,
+    /// Human-readable explanation of why this component has its current size/position
+    /// Example: "Height is 45px = padding(8) + content(28) + padding(8) + divider(1)"
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub explanation: Option<String>,
+}
+
+impl LayoutComponentInfo {
+    pub fn new(name: impl Into<String>, component_type: LayoutComponentType) -> Self {
+        Self {
+            name: name.into(),
+            component_type,
+            bounds: LayoutBounds::default(),
+            box_model: None,
+            flex: None,
+            depth: 0,
+            parent: None,
+            children: Vec::new(),
+            explanation: None,
+        }
+    }
+
+    pub fn with_bounds(mut self, x: f32, y: f32, width: f32, height: f32) -> Self {
+        self.bounds = LayoutBounds {
+            x,
+            y,
+            width,
+            height,
+        };
+        self
+    }
+
+    pub fn with_padding(mut self, top: f32, right: f32, bottom: f32, left: f32) -> Self {
+        let box_model = self.box_model.get_or_insert_with(ComputedBoxModel::default);
+        box_model.padding = Some(BoxModelSides {
+            top,
+            right,
+            bottom,
+            left,
+        });
+        self
+    }
+
+    pub fn with_margin(mut self, top: f32, right: f32, bottom: f32, left: f32) -> Self {
+        let box_model = self.box_model.get_or_insert_with(ComputedBoxModel::default);
+        box_model.margin = Some(BoxModelSides {
+            top,
+            right,
+            bottom,
+            left,
+        });
+        self
+    }
+
+    pub fn with_gap(mut self, gap: f32) -> Self {
+        let box_model = self.box_model.get_or_insert_with(ComputedBoxModel::default);
+        box_model.gap = Some(gap);
+        self
+    }
+
+    pub fn with_flex_column(mut self) -> Self {
+        let flex = self.flex.get_or_insert_with(ComputedFlexStyle::default);
+        flex.direction = Some("column".to_string());
+        self
+    }
+
+    pub fn with_flex_row(mut self) -> Self {
+        let flex = self.flex.get_or_insert_with(ComputedFlexStyle::default);
+        flex.direction = Some("row".to_string());
+        self
+    }
+
+    pub fn with_flex_grow(mut self, grow: f32) -> Self {
+        let flex = self.flex.get_or_insert_with(ComputedFlexStyle::default);
+        flex.grow = Some(grow);
+        self
+    }
+
+    pub fn with_depth(mut self, depth: u32) -> Self {
+        self.depth = depth;
+        self
+    }
+
+    pub fn with_parent(mut self, parent: impl Into<String>) -> Self {
+        self.parent = Some(parent.into());
+        self
+    }
+
+    pub fn with_explanation(mut self, explanation: impl Into<String>) -> Self {
+        self.explanation = Some(explanation.into());
+        self
+    }
+}
+
+/// Full layout information for the current UI state
+///
+/// Returned by `getLayoutInfo()` SDK function.
+/// Contains the component tree and window-level information.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct LayoutInfo {
+    /// Window dimensions
+    pub window_width: f32,
+    pub window_height: f32,
+    /// Current prompt type (e.g., "arg", "div", "editor", "mainMenu")
+    pub prompt_type: String,
+    /// All components in the layout tree
+    pub components: Vec<LayoutComponentInfo>,
+    /// Timestamp when layout was captured (ISO 8601)
+    pub timestamp: String,
 }

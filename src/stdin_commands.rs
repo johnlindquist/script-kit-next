@@ -39,17 +39,39 @@ fn default_grid_size() -> u32 {
 }
 
 /// External commands that can be sent to the app via stdin
+///
+/// All commands support an optional `requestId` field for correlation.
+/// When present, the request_id is logged with all related operations,
+/// making it easy for AI agents to trace command execution through logs.
 #[derive(Debug, Clone, serde::Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum ExternalCommand {
     /// Run a script by path
-    Run { path: String },
+    Run {
+        path: String,
+        /// Optional request ID for correlation in logs
+        #[serde(default, rename = "requestId")]
+        request_id: Option<String>,
+    },
     /// Show the window
-    Show,
+    Show {
+        /// Optional request ID for correlation in logs
+        #[serde(default, rename = "requestId")]
+        request_id: Option<String>,
+    },
     /// Hide the window
-    Hide,
+    Hide {
+        /// Optional request ID for correlation in logs
+        #[serde(default, rename = "requestId")]
+        request_id: Option<String>,
+    },
     /// Set the filter text (for testing)
-    SetFilter { text: String },
+    SetFilter {
+        text: String,
+        /// Optional request ID for correlation in logs
+        #[serde(default, rename = "requestId")]
+        request_id: Option<String>,
+    },
     /// Trigger a built-in feature by name (for testing)
     TriggerBuiltin { name: String },
     /// Simulate a key press (for testing)
@@ -92,6 +114,8 @@ pub enum ExternalCommand {
         show_box_model: bool,
         #[serde(default, rename = "showAlignmentGuides")]
         show_alignment_guides: bool,
+        #[serde(default, rename = "showDimensions")]
+        show_dimensions: bool,
         #[serde(default)]
         depth: GridDepthOption,
     },
@@ -167,7 +191,23 @@ mod tests {
         let json = r#"{"type": "run", "path": "/path/to/script.ts"}"#;
         let cmd: ExternalCommand = serde_json::from_str(json).unwrap();
         match cmd {
-            ExternalCommand::Run { path } => assert_eq!(path, "/path/to/script.ts"),
+            ExternalCommand::Run { path, request_id } => {
+                assert_eq!(path, "/path/to/script.ts");
+                assert!(request_id.is_none());
+            }
+            _ => panic!("Expected Run command"),
+        }
+    }
+
+    #[test]
+    fn test_external_command_run_with_request_id() {
+        let json = r#"{"type": "run", "path": "/path/to/script.ts", "requestId": "req-123"}"#;
+        let cmd: ExternalCommand = serde_json::from_str(json).unwrap();
+        match cmd {
+            ExternalCommand::Run { path, request_id } => {
+                assert_eq!(path, "/path/to/script.ts");
+                assert_eq!(request_id, Some("req-123".to_string()));
+            }
             _ => panic!("Expected Run command"),
         }
     }
@@ -176,14 +216,26 @@ mod tests {
     fn test_external_command_show_deserialization() {
         let json = r#"{"type": "show"}"#;
         let cmd: ExternalCommand = serde_json::from_str(json).unwrap();
-        assert!(matches!(cmd, ExternalCommand::Show));
+        assert!(matches!(cmd, ExternalCommand::Show { request_id: None }));
+    }
+
+    #[test]
+    fn test_external_command_show_with_request_id() {
+        let json = r#"{"type": "show", "requestId": "req-456"}"#;
+        let cmd: ExternalCommand = serde_json::from_str(json).unwrap();
+        match cmd {
+            ExternalCommand::Show { request_id } => {
+                assert_eq!(request_id, Some("req-456".to_string()));
+            }
+            _ => panic!("Expected Show command"),
+        }
     }
 
     #[test]
     fn test_external_command_hide_deserialization() {
         let json = r#"{"type": "hide"}"#;
         let cmd: ExternalCommand = serde_json::from_str(json).unwrap();
-        assert!(matches!(cmd, ExternalCommand::Hide));
+        assert!(matches!(cmd, ExternalCommand::Hide { request_id: None }));
     }
 
     #[test]
@@ -191,7 +243,23 @@ mod tests {
         let json = r#"{"type": "setFilter", "text": "hello world"}"#;
         let cmd: ExternalCommand = serde_json::from_str(json).unwrap();
         match cmd {
-            ExternalCommand::SetFilter { text } => assert_eq!(text, "hello world"),
+            ExternalCommand::SetFilter { text, request_id } => {
+                assert_eq!(text, "hello world");
+                assert!(request_id.is_none());
+            }
+            _ => panic!("Expected SetFilter command"),
+        }
+    }
+
+    #[test]
+    fn test_external_command_set_filter_with_request_id() {
+        let json = r#"{"type": "setFilter", "text": "hello", "requestId": "req-789"}"#;
+        let cmd: ExternalCommand = serde_json::from_str(json).unwrap();
+        match cmd {
+            ExternalCommand::SetFilter { text, request_id } => {
+                assert_eq!(text, "hello");
+                assert_eq!(request_id, Some("req-789".to_string()));
+            }
             _ => panic!("Expected SetFilter command"),
         }
     }
@@ -251,17 +319,18 @@ mod tests {
     fn test_external_command_clone() {
         let cmd = ExternalCommand::Run {
             path: "/test".to_string(),
+            request_id: None,
         };
         let cloned = cmd.clone();
         match cloned {
-            ExternalCommand::Run { path } => assert_eq!(path, "/test"),
+            ExternalCommand::Run { path, .. } => assert_eq!(path, "/test"),
             _ => panic!("Expected Run command"),
         }
     }
 
     #[test]
     fn test_external_command_debug() {
-        let cmd = ExternalCommand::Show;
+        let cmd = ExternalCommand::Show { request_id: None };
         let debug_str = format!("{:?}", cmd);
         assert!(debug_str.contains("Show"));
     }
@@ -311,12 +380,14 @@ mod tests {
                 show_bounds,
                 show_box_model,
                 show_alignment_guides,
+                show_dimensions,
                 depth,
             } => {
                 assert_eq!(grid_size, 8); // default
                 assert!(!show_bounds); // default false
                 assert!(!show_box_model); // default false
                 assert!(!show_alignment_guides); // default false
+                assert!(!show_dimensions); // default false
                 assert!(matches!(depth, GridDepthOption::Preset(_))); // default
             }
             _ => panic!("Expected ShowGrid command"),
@@ -325,7 +396,7 @@ mod tests {
 
     #[test]
     fn test_external_command_show_grid_with_options() {
-        let json = r#"{"type": "showGrid", "gridSize": 16, "showBounds": true, "showBoxModel": true, "showAlignmentGuides": true, "depth": "all"}"#;
+        let json = r#"{"type": "showGrid", "gridSize": 16, "showBounds": true, "showBoxModel": true, "showAlignmentGuides": true, "showDimensions": true, "depth": "all"}"#;
         let cmd: ExternalCommand = serde_json::from_str(json).unwrap();
         match cmd {
             ExternalCommand::ShowGrid {
@@ -333,12 +404,14 @@ mod tests {
                 show_bounds,
                 show_box_model,
                 show_alignment_guides,
+                show_dimensions,
                 depth,
             } => {
                 assert_eq!(grid_size, 16);
                 assert!(show_bounds);
                 assert!(show_box_model);
                 assert!(show_alignment_guides);
+                assert!(show_dimensions);
                 match depth {
                     GridDepthOption::Preset(s) => assert_eq!(s, "all"),
                     _ => panic!("Expected Preset depth"),

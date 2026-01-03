@@ -822,6 +822,38 @@ impl ScriptListApp {
                     logging::log("ERROR", "No response sender available for state result");
                 }
             }
+            PromptMessage::GetLayoutInfo { request_id } => {
+                logging::log(
+                    "UI",
+                    &format!("Collecting layout info for request: {}", request_id),
+                );
+
+                // Build layout info from current window state
+                let layout_info = self.build_layout_info(cx);
+
+                // Create the response
+                let response = Message::layout_info_result(request_id.clone(), layout_info);
+
+                logging::log(
+                    "UI",
+                    &format!("Sending layout info result for request: {}", request_id),
+                );
+
+                // Send the response
+                if let Some(ref sender) = self.response_sender {
+                    if let Err(e) = sender.send(response) {
+                        logging::log(
+                            "ERROR",
+                            &format!("Failed to send layout info result: {}", e),
+                        );
+                    }
+                } else {
+                    logging::log(
+                        "ERROR",
+                        "No response sender available for layout info result",
+                    );
+                }
+            }
             PromptMessage::ForceSubmit { value } => {
                 logging::log(
                     "UI",
