@@ -1049,7 +1049,7 @@ pub fn load_theme() -> Theme {
         }
         Ok(contents) => match serde_json::from_str::<Theme>(&contents) {
             Ok(theme) => {
-                info!(path = %theme_path.display(), "Successfully loaded theme");
+                debug!(path = %theme_path.display(), "Successfully loaded theme");
                 log_theme_config(&theme);
                 theme
             }

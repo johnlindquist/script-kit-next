@@ -126,6 +126,9 @@ pub struct NotesApp {
 
     /// Previous height before showing the actions panel
     actions_panel_prev_height: Option<f32>,
+
+    /// Cached box shadows from theme (avoid reloading theme on every render)
+    cached_box_shadows: Vec<BoxShadow>,
 }
 
 impl NotesApp {
@@ -191,6 +194,9 @@ impl NotesApp {
             "Notes app initialized"
         );
 
+        // Pre-compute box shadows from theme (avoid reloading on every render)
+        let cached_box_shadows = Self::compute_box_shadows();
+
         Self {
             notes,
             deleted_notes,
@@ -215,6 +221,7 @@ impl NotesApp {
             browse_panel: None,
             pending_action: Arc::new(Mutex::new(None)),
             actions_panel_prev_height: None,
+            cached_box_shadows,
         }
     }
 
@@ -1297,9 +1304,13 @@ impl NotesApp {
         }
     }
 
-    /// Create box shadows from theme configuration
-    /// Uses the same drop_shadow settings as the main window
+    /// Get cached box shadows (computed once at construction)
     fn create_box_shadows(&self) -> Vec<BoxShadow> {
+        self.cached_box_shadows.clone()
+    }
+
+    /// Compute box shadows from theme configuration (called once at construction)
+    fn compute_box_shadows() -> Vec<BoxShadow> {
         let theme = crate::theme::load_theme();
         let shadow_config = theme.get_drop_shadow();
 
@@ -1342,6 +1353,11 @@ impl NotesApp {
             blur_radius: px(shadow_config.blur_radius),
             spread_radius: px(shadow_config.spread_radius),
         }]
+    }
+
+    /// Update cached box shadows when theme changes
+    pub fn update_theme(&mut self, _cx: &mut Context<Self>) {
+        self.cached_box_shadows = Self::compute_box_shadows();
     }
 }
 

@@ -227,6 +227,9 @@ pub struct AiApp {
 
     /// Scroll handle for the messages area (for auto-scrolling during streaming)
     messages_scroll_handle: ScrollHandle,
+
+    /// Cached box shadows from theme (avoid reloading theme on every render)
+    cached_box_shadows: Vec<BoxShadow>,
 }
 
 impl AiApp {
@@ -312,6 +315,9 @@ impl AiApp {
 
         info!(chat_count = chats.len(), "AI app initialized");
 
+        // Pre-compute box shadows from theme (avoid reloading on every render)
+        let cached_box_shadows = Self::compute_box_shadows();
+
         Self {
             chats,
             selected_chat_id,
@@ -330,6 +336,7 @@ impl AiApp {
             streaming_content: String::new(),
             current_messages,
             messages_scroll_handle: ScrollHandle::new(),
+            cached_box_shadows,
         }
     }
 
@@ -1433,9 +1440,13 @@ impl AiApp {
             .child(input_area)
     }
 
-    /// Create box shadows from theme configuration
-    /// Uses the same drop_shadow settings as the main window
+    /// Get cached box shadows (computed once at construction)
     fn create_box_shadows(&self) -> Vec<BoxShadow> {
+        self.cached_box_shadows.clone()
+    }
+
+    /// Compute box shadows from theme configuration (called once at construction)
+    fn compute_box_shadows() -> Vec<BoxShadow> {
         let theme = crate::theme::load_theme();
         let shadow_config = theme.get_drop_shadow();
 
@@ -1478,6 +1489,11 @@ impl AiApp {
             blur_radius: px(shadow_config.blur_radius),
             spread_radius: px(shadow_config.spread_radius),
         }]
+    }
+
+    /// Update cached box shadows when theme changes
+    pub fn update_theme(&mut self, _cx: &mut Context<Self>) {
+        self.cached_box_shadows = Self::compute_box_shadows();
     }
 }
 
