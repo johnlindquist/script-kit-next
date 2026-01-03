@@ -1,6 +1,6 @@
 use gpui::{rgb, rgba, App, Hsla, Rgba};
 use gpui_component::theme::{Theme as GpuiTheme, ThemeColor, ThemeMode};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::path::PathBuf;
 use std::process::Command;
 use tracing::info as tracing_info;
@@ -10,7 +10,188 @@ use tracing::{debug, error, info, warn};
 pub const TRANSPARENT: u32 = 0x00000000;
 
 /// Hex color representation (u32)
+/// Supports deserialization from:
+/// - Numbers: `1973790`
+/// - Hex strings: `"#1E1E1E"` or `"1E1E1E"` or `"0x1E1E1E"`
+/// - RGB/RGBA strings: `"rgb(30, 30, 30)"` or `"rgba(30, 30, 30, 1.0)"`
 pub type HexColor = u32;
+
+/// Custom serialization/deserialization for HexColor
+/// Serializes as hex string "#RRGGBB" for readability
+/// Deserializes from number, hex string, or rgba() format
+mod hex_color_serde {
+    use super::*;
+    use serde::de::{self, Visitor};
+    use std::fmt;
+
+    pub fn serialize<S>(color: &HexColor, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        // Serialize as "#RRGGBB" hex string for readability
+        serializer.serialize_str(&format!("#{:06X}", color))
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<HexColor, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct HexColorVisitor;
+
+        impl<'de> Visitor<'de> for HexColorVisitor {
+            type Value = HexColor;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a number, hex string (#RRGGBB), or rgba(r, g, b, a)")
+            }
+
+            fn visit_u64<E>(self, value: u64) -> Result<HexColor, E>
+            where
+                E: de::Error,
+            {
+                Ok(value as HexColor)
+            }
+
+            fn visit_i64<E>(self, value: i64) -> Result<HexColor, E>
+            where
+                E: de::Error,
+            {
+                Ok(value as HexColor)
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<HexColor, E>
+            where
+                E: de::Error,
+            {
+                parse_color_string(value).map_err(de::Error::custom)
+            }
+        }
+
+        deserializer.deserialize_any(HexColorVisitor)
+    }
+
+    /// Parse a color string into a HexColor
+    /// Supports: "#RRGGBB", "RRGGBB", "0xRRGGBB", "rgb(r,g,b)", "rgba(r,g,b,a)"
+    pub fn parse_color_string(s: &str) -> Result<HexColor, String> {
+        let s = s.trim();
+
+        // Handle hex formats: #RRGGBB, RRGGBB, 0xRRGGBB
+        if let Some(hex) = s.strip_prefix('#') {
+            return parse_hex(hex);
+        }
+        if let Some(hex) = s.strip_prefix("0x").or_else(|| s.strip_prefix("0X")) {
+            return parse_hex(hex);
+        }
+
+        // Handle rgba(r, g, b, a) format
+        if let Some(inner) = s.strip_prefix("rgba(").and_then(|s| s.strip_suffix(')')) {
+            let parts: Vec<&str> = inner.split(',').map(|p| p.trim()).collect();
+            if parts.len() == 4 {
+                let r: u8 = parts[0].parse().map_err(|_| "invalid red value")?;
+                let g: u8 = parts[1].parse().map_err(|_| "invalid green value")?;
+                let b: u8 = parts[2].parse().map_err(|_| "invalid blue value")?;
+                // Alpha is ignored for HexColor (RGB only)
+                return Ok(((r as u32) << 16) | ((g as u32) << 8) | (b as u32));
+            }
+            return Err("rgba() requires 4 values: r, g, b, a".to_string());
+        }
+
+        // Handle rgb(r, g, b) format
+        if let Some(inner) = s.strip_prefix("rgb(").and_then(|s| s.strip_suffix(')')) {
+            let parts: Vec<&str> = inner.split(',').map(|p| p.trim()).collect();
+            if parts.len() == 3 {
+                let r: u8 = parts[0].parse().map_err(|_| "invalid red value")?;
+                let g: u8 = parts[1].parse().map_err(|_| "invalid green value")?;
+                let b: u8 = parts[2].parse().map_err(|_| "invalid blue value")?;
+                return Ok(((r as u32) << 16) | ((g as u32) << 8) | (b as u32));
+            }
+            return Err("rgb() requires 3 values: r, g, b".to_string());
+        }
+
+        // Try parsing as bare hex (6 characters)
+        if s.len() == 6 && s.chars().all(|c| c.is_ascii_hexdigit()) {
+            return parse_hex(s);
+        }
+
+        Err(format!(
+            "invalid color format '{}' - use #RRGGBB, rgba(r,g,b,a), or a number",
+            s
+        ))
+    }
+
+    fn parse_hex(hex: &str) -> Result<HexColor, String> {
+        if hex.len() != 6 {
+            return Err(format!("hex color must be 6 characters, got {}", hex.len()));
+        }
+        u32::from_str_radix(hex, 16).map_err(|_| format!("invalid hex color: {}", hex))
+    }
+}
+
+/// Wrapper module for Option<HexColor> serialization
+mod hex_color_option_serde {
+    use super::*;
+    use serde::de::{self, Visitor};
+    use std::fmt;
+
+    #[allow(dead_code)]
+    pub fn serialize<S>(color: &Option<HexColor>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match color {
+            Some(c) => serializer.serialize_str(&format!("#{:06X}", c)),
+            None => serializer.serialize_none(),
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<HexColor>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct OptionHexColorVisitor;
+
+        impl<'de> Visitor<'de> for OptionHexColorVisitor {
+            type Value = Option<HexColor>;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("null, a number, hex string, or rgba()")
+            }
+
+            fn visit_none<E>(self) -> Result<Option<HexColor>, E>
+            where
+                E: de::Error,
+            {
+                Ok(None)
+            }
+
+            fn visit_some<D>(self, deserializer: D) -> Result<Option<HexColor>, D::Error>
+            where
+                D: Deserializer<'de>,
+            {
+                hex_color_serde::deserialize(deserializer).map(Some)
+            }
+
+            fn visit_u64<E>(self, value: u64) -> Result<Option<HexColor>, E>
+            where
+                E: de::Error,
+            {
+                Ok(Some(value as HexColor))
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<Option<HexColor>, E>
+            where
+                E: de::Error,
+            {
+                super::hex_color_serde::parse_color_string(value)
+                    .map(Some)
+                    .map_err(de::Error::custom)
+            }
+        }
+
+        deserializer.deserialize_any(OptionHexColorVisitor)
+    }
+}
 
 /// Background opacity settings for window transparency
 /// Values range from 0.0 (fully transparent) to 1.0 (fully opaque)
@@ -78,7 +259,8 @@ pub struct DropShadow {
     pub offset_x: f32,
     /// Vertical offset (default: 8.0)
     pub offset_y: f32,
-    /// Shadow color as hex (default: 0x000000 - black)
+    /// Shadow color as hex (default: #000000 - black)
+    #[serde(with = "hex_color_serde")]
     pub color: HexColor,
     /// Shadow opacity (default: 0.25)
     pub opacity: f32,
@@ -101,40 +283,50 @@ impl Default for DropShadow {
 /// Background color definitions
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BackgroundColors {
-    /// Main background (0x1e1e1e)
+    /// Main background (#1E1E1E)
+    #[serde(with = "hex_color_serde")]
     pub main: HexColor,
-    /// Title bar background (0x2d2d30)
+    /// Title bar background (#2D2D30)
+    #[serde(with = "hex_color_serde")]
     pub title_bar: HexColor,
-    /// Search box background (0x3c3c3c)
+    /// Search box background (#3C3C3C)
+    #[serde(with = "hex_color_serde")]
     pub search_box: HexColor,
-    /// Log panel background (0x0d0d0d)
+    /// Log panel background (#0D0D0D)
+    #[serde(with = "hex_color_serde")]
     pub log_panel: HexColor,
 }
 
 /// Text color definitions
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TextColors {
-    /// Primary text color (0xffffff - white)
+    /// Primary text color (#FFFFFF - white)
+    #[serde(with = "hex_color_serde")]
     pub primary: HexColor,
-    /// Secondary text color (0xe0e0e0)
+    /// Secondary text color (#CCCCCC - light gray)
+    #[serde(with = "hex_color_serde")]
     pub secondary: HexColor,
-    /// Tertiary text color (0x999999)
+    /// Tertiary text color (#999999)
+    #[serde(with = "hex_color_serde")]
     pub tertiary: HexColor,
-    /// Muted text color (0x808080)
+    /// Muted text color (#808080)
+    #[serde(with = "hex_color_serde")]
     pub muted: HexColor,
-    /// Dimmed text color (0x666666)
+    /// Dimmed text color (#666666)
+    #[serde(with = "hex_color_serde")]
     pub dimmed: HexColor,
 }
 
 /// Accent and highlight colors
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AccentColors {
-    /// Primary accent color (0xfbbf24 - yellow/gold for Script Kit)
+    /// Primary accent color (#FBBF24 - yellow/gold for Script Kit)
     /// Used for: selected items, button text, logo, highlights
+    #[serde(with = "hex_color_serde")]
     pub selected: HexColor,
-    /// Subtle selection for list items - barely visible highlight (0x2a2a2a - dark gray)
+    /// Subtle selection for list items - barely visible highlight (#2A2A2A - dark gray)
     /// Used for polished, Raycast-like selection backgrounds
-    #[serde(default = "default_selected_subtle")]
+    #[serde(default = "default_selected_subtle", with = "hex_color_serde")]
     pub selected_subtle: HexColor,
 }
 
@@ -146,18 +338,20 @@ fn default_selected_subtle() -> HexColor {
 /// Border and UI element colors
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UIColors {
-    /// Border color (0x464647)
+    /// Border color (#464647)
+    #[serde(with = "hex_color_serde")]
     pub border: HexColor,
-    /// Success color for logs (0x00ff00 - green)
+    /// Success color for logs (#00FF00 - green)
+    #[serde(with = "hex_color_serde")]
     pub success: HexColor,
-    /// Error color for error messages (0xef4444 - red-500)
-    #[serde(default = "default_error_color")]
+    /// Error color for error messages (#EF4444 - red-500)
+    #[serde(default = "default_error_color", with = "hex_color_serde")]
     pub error: HexColor,
-    /// Warning color for warning messages (0xf59e0b - amber-500)
-    #[serde(default = "default_warning_color")]
+    /// Warning color for warning messages (#F59E0B - amber-500)
+    #[serde(default = "default_warning_color", with = "hex_color_serde")]
     pub warning: HexColor,
-    /// Info color for informational messages (0x3b82f6 - blue-500)
-    #[serde(default = "default_info_color")]
+    /// Info color for informational messages (#3B82F6 - blue-500)
+    #[serde(default = "default_info_color", with = "hex_color_serde")]
     pub info: HexColor,
 }
 
@@ -168,52 +362,52 @@ pub struct UIColors {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TerminalColors {
     /// ANSI 0: Black
-    #[serde(default = "default_terminal_black")]
+    #[serde(default = "default_terminal_black", with = "hex_color_serde")]
     pub black: HexColor,
     /// ANSI 1: Red
-    #[serde(default = "default_terminal_red")]
+    #[serde(default = "default_terminal_red", with = "hex_color_serde")]
     pub red: HexColor,
     /// ANSI 2: Green
-    #[serde(default = "default_terminal_green")]
+    #[serde(default = "default_terminal_green", with = "hex_color_serde")]
     pub green: HexColor,
     /// ANSI 3: Yellow
-    #[serde(default = "default_terminal_yellow")]
+    #[serde(default = "default_terminal_yellow", with = "hex_color_serde")]
     pub yellow: HexColor,
     /// ANSI 4: Blue
-    #[serde(default = "default_terminal_blue")]
+    #[serde(default = "default_terminal_blue", with = "hex_color_serde")]
     pub blue: HexColor,
     /// ANSI 5: Magenta
-    #[serde(default = "default_terminal_magenta")]
+    #[serde(default = "default_terminal_magenta", with = "hex_color_serde")]
     pub magenta: HexColor,
     /// ANSI 6: Cyan
-    #[serde(default = "default_terminal_cyan")]
+    #[serde(default = "default_terminal_cyan", with = "hex_color_serde")]
     pub cyan: HexColor,
     /// ANSI 7: White
-    #[serde(default = "default_terminal_white")]
+    #[serde(default = "default_terminal_white", with = "hex_color_serde")]
     pub white: HexColor,
     /// ANSI 8: Bright Black (Gray)
-    #[serde(default = "default_terminal_bright_black")]
+    #[serde(default = "default_terminal_bright_black", with = "hex_color_serde")]
     pub bright_black: HexColor,
     /// ANSI 9: Bright Red
-    #[serde(default = "default_terminal_bright_red")]
+    #[serde(default = "default_terminal_bright_red", with = "hex_color_serde")]
     pub bright_red: HexColor,
     /// ANSI 10: Bright Green
-    #[serde(default = "default_terminal_bright_green")]
+    #[serde(default = "default_terminal_bright_green", with = "hex_color_serde")]
     pub bright_green: HexColor,
     /// ANSI 11: Bright Yellow
-    #[serde(default = "default_terminal_bright_yellow")]
+    #[serde(default = "default_terminal_bright_yellow", with = "hex_color_serde")]
     pub bright_yellow: HexColor,
     /// ANSI 12: Bright Blue
-    #[serde(default = "default_terminal_bright_blue")]
+    #[serde(default = "default_terminal_bright_blue", with = "hex_color_serde")]
     pub bright_blue: HexColor,
     /// ANSI 13: Bright Magenta
-    #[serde(default = "default_terminal_bright_magenta")]
+    #[serde(default = "default_terminal_bright_magenta", with = "hex_color_serde")]
     pub bright_magenta: HexColor,
     /// ANSI 14: Bright Cyan
-    #[serde(default = "default_terminal_bright_cyan")]
+    #[serde(default = "default_terminal_bright_cyan", with = "hex_color_serde")]
     pub bright_cyan: HexColor,
     /// ANSI 15: Bright White
-    #[serde(default = "default_terminal_bright_white")]
+    #[serde(default = "default_terminal_bright_white", with = "hex_color_serde")]
     pub bright_white: HexColor,
 }
 
@@ -361,7 +555,8 @@ fn default_info_color() -> HexColor {
 /// Cursor styling for text input
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CursorStyle {
-    /// Cursor color when focused (0x00ffff - cyan)
+    /// Cursor color when focused (#00FFFF - cyan)
+    #[serde(with = "hex_color_serde")]
     pub color: HexColor,
     /// Cursor blink interval in milliseconds
     pub blink_interval_ms: u64,
@@ -1458,5 +1653,181 @@ mod tests {
         // In rgba, cyan has g=1.0, b=1.0, r=0.0
         assert!(colors.cursor.g > 0.9);
         assert!(colors.cursor.b > 0.9);
+    }
+
+    // ========================================================================
+    // Hex Color Parsing Tests
+    // ========================================================================
+
+    #[test]
+    fn test_hex_color_parse_hash_prefix() {
+        let result = hex_color_serde::parse_color_string("#FBBF24");
+        assert_eq!(result.unwrap(), 0xFBBF24);
+    }
+
+    #[test]
+    fn test_hex_color_parse_lowercase() {
+        let result = hex_color_serde::parse_color_string("#fbbf24");
+        assert_eq!(result.unwrap(), 0xFBBF24);
+    }
+
+    #[test]
+    fn test_hex_color_parse_0x_prefix() {
+        let result = hex_color_serde::parse_color_string("0xFBBF24");
+        assert_eq!(result.unwrap(), 0xFBBF24);
+    }
+
+    #[test]
+    fn test_hex_color_parse_bare_hex() {
+        let result = hex_color_serde::parse_color_string("FBBF24");
+        assert_eq!(result.unwrap(), 0xFBBF24);
+    }
+
+    #[test]
+    fn test_hex_color_parse_rgb() {
+        let result = hex_color_serde::parse_color_string("rgb(251, 191, 36)");
+        assert_eq!(result.unwrap(), 0xFBBF24);
+    }
+
+    #[test]
+    fn test_hex_color_parse_rgba() {
+        let result = hex_color_serde::parse_color_string("rgba(251, 191, 36, 1.0)");
+        assert_eq!(result.unwrap(), 0xFBBF24);
+    }
+
+    #[test]
+    fn test_hex_color_parse_black() {
+        assert_eq!(
+            hex_color_serde::parse_color_string("#000000").unwrap(),
+            0x000000
+        );
+        assert_eq!(
+            hex_color_serde::parse_color_string("rgb(0, 0, 0)").unwrap(),
+            0x000000
+        );
+    }
+
+    #[test]
+    fn test_hex_color_parse_white() {
+        assert_eq!(
+            hex_color_serde::parse_color_string("#FFFFFF").unwrap(),
+            0xFFFFFF
+        );
+        assert_eq!(
+            hex_color_serde::parse_color_string("rgb(255, 255, 255)").unwrap(),
+            0xFFFFFF
+        );
+    }
+
+    #[test]
+    fn test_hex_color_parse_invalid() {
+        assert!(hex_color_serde::parse_color_string("invalid").is_err());
+        assert!(hex_color_serde::parse_color_string("#GGG").is_err());
+        assert!(hex_color_serde::parse_color_string("rgb(300, 0, 0)").is_err());
+        // 300 > 255
+    }
+
+    #[test]
+    fn test_hex_color_json_deserialize_string() {
+        let json = r##"{"main": "#1E1E1E"}"##;
+        #[derive(Deserialize)]
+        struct TestStruct {
+            #[serde(with = "hex_color_serde")]
+            main: HexColor,
+        }
+        let parsed: TestStruct = serde_json::from_str(json).unwrap();
+        assert_eq!(parsed.main, 0x1E1E1E);
+    }
+
+    #[test]
+    fn test_hex_color_json_deserialize_number() {
+        let json = r##"{"main": 1973790}"##; // 0x1E1E1E = 1973790
+        #[derive(Deserialize)]
+        struct TestStruct {
+            #[serde(with = "hex_color_serde")]
+            main: HexColor,
+        }
+        let parsed: TestStruct = serde_json::from_str(json).unwrap();
+        assert_eq!(parsed.main, 0x1E1E1E);
+    }
+
+    #[test]
+    fn test_hex_color_json_serialize() {
+        #[derive(Serialize)]
+        struct TestStruct {
+            #[serde(with = "hex_color_serde")]
+            main: HexColor,
+        }
+        let data = TestStruct { main: 0xFBBF24 };
+        let json = serde_json::to_string(&data).unwrap();
+        assert_eq!(json, r##"{"main":"#FBBF24"}"##);
+    }
+
+    #[test]
+    fn test_theme_deserialize_hex_strings() {
+        let json = r##"{
+            "colors": {
+                "background": {
+                    "main": "#1E1E1E",
+                    "title_bar": "#2D2D30",
+                    "search_box": "#3C3C3C",
+                    "log_panel": "#0D0D0D"
+                },
+                "text": {
+                    "primary": "#FFFFFF",
+                    "secondary": "#CCCCCC",
+                    "tertiary": "#999999",
+                    "muted": "#808080",
+                    "dimmed": "#666666"
+                },
+                "accent": {
+                    "selected": "#FBBF24"
+                },
+                "ui": {
+                    "border": "#464647",
+                    "success": "#00FF00"
+                }
+            }
+        }"##;
+
+        let theme: Theme = serde_json::from_str(json).unwrap();
+        assert_eq!(theme.colors.background.main, 0x1E1E1E);
+        assert_eq!(theme.colors.accent.selected, 0xFBBF24);
+        assert_eq!(theme.colors.text.secondary, 0xCCCCCC);
+    }
+
+    #[test]
+    fn test_theme_deserialize_mixed_formats() {
+        // Mix of hex strings and numbers should work
+        let json = r##"{
+            "colors": {
+                "background": {
+                    "main": "#1E1E1E",
+                    "title_bar": 2960688,
+                    "search_box": "rgb(60, 60, 60)",
+                    "log_panel": "0x0D0D0D"
+                },
+                "text": {
+                    "primary": "#FFFFFF",
+                    "secondary": "#CCCCCC",
+                    "tertiary": "#999999",
+                    "muted": "#808080",
+                    "dimmed": "#666666"
+                },
+                "accent": {
+                    "selected": "rgba(251, 191, 36, 1.0)"
+                },
+                "ui": {
+                    "border": "#464647",
+                    "success": "#00FF00"
+                }
+            }
+        }"##;
+
+        let theme: Theme = serde_json::from_str(json).unwrap();
+        assert_eq!(theme.colors.background.main, 0x1E1E1E);
+        assert_eq!(theme.colors.background.title_bar, 2960688);
+        assert_eq!(theme.colors.background.search_box, 0x3C3C3C);
+        assert_eq!(theme.colors.accent.selected, 0xFBBF24);
     }
 }

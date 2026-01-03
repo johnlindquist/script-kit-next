@@ -1,31 +1,35 @@
 {
   "colors": {
     "background": {
-      "main": 1973790,
-      "title_bar": 2961712,
-      "search_box": 3947580,
-      "log_panel": 851213
+      "main": "#1E1E1E",
+      "title_bar": "#2D2D30",
+      "search_box": "#3C3C3C",
+      "log_panel": "#0D0D0D"
     },
     "text": {
-      "primary": 16777215,
-      "secondary": 14737920,
-      "tertiary": 10066329,
-      "muted": 8421504,
-      "dimmed": 6710886
+      "primary": "#FFFFFF",
+      "secondary": "#CCCCCC",
+      "tertiary": "#999999",
+      "muted": "#808080",
+      "dimmed": "#666666"
     },
     "accent": {
-      "selected": 31948
+      "selected": "#FBBF24",
+      "selected_subtle": "#2A2A2A"
     },
     "ui": {
-      "border": 4609607,
-      "success": 65280
+      "border": "#464647",
+      "success": "#00FF00",
+      "error": "#EF4444",
+      "warning": "#F59E0B",
+      "info": "#3B82F6"
     }
   },
   "opacity": {
-    "main": 0.85,
-    "title_bar": 0.9,
-    "search_box": 0.92,
-    "log_panel": 0.8
+    "main": 0.3,
+    "title_bar": 0.65,
+    "search_box": 0.7,
+    "log_panel": 0.55
   },
   "drop_shadow": {
     "enabled": true,
@@ -33,7 +37,7 @@
     "spread_radius": 0.0,
     "offset_x": 0.0,
     "offset_y": 8.0,
-    "color": 0,
+    "color": "#000000",
     "opacity": 0.25
   },
   "vibrancy": {

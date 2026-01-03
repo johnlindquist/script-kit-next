@@ -47,31 +47,36 @@ fn test_load_scriptlets_returns_vec() {
 #[test]
 fn test_extract_kit_from_path_nested() {
     use std::path::Path;
-    let home = Path::new("/Users/test");
+    // kit_root is ~/.sk/kit, not home directory
+    let kit_root = Path::new("/Users/test/.sk/kit");
 
-    // Nested kit path
+    // Nested kit path: ~/.sk/kit/my-kit/scriptlets/file.md -> kit = "my-kit"
     let nested_path = Path::new("/Users/test/.sk/kit/my-kit/scriptlets/file.md");
-    let kit = extract_kit_from_path(nested_path, home);
+    let kit = extract_kit_from_path(nested_path, kit_root);
     assert_eq!(kit, Some("my-kit".to_string()));
 }
 
 #[test]
 fn test_extract_kit_from_path_main_kit() {
     use std::path::Path;
-    let home = Path::new("/Users/test");
+    // kit_root is ~/.sk/kit, not home directory
+    let kit_root = Path::new("/Users/test/.sk/kit");
 
-    // Main kit path (not nested)
-    let main_path = Path::new("/Users/test/.sk/kit/scriptlets/file.md");
-    let kit = extract_kit_from_path(main_path, home);
-    assert_eq!(kit, None);
+    // Main kit path: ~/.sk/kit/main/scriptlets/file.md -> kit = "main"
+    let main_path = Path::new("/Users/test/.sk/kit/main/scriptlets/file.md");
+    let kit = extract_kit_from_path(main_path, kit_root);
+    assert_eq!(kit, Some("main".to_string()));
 }
 
 #[test]
 fn test_build_scriptlet_file_path() {
     use std::path::Path;
-    let md_path = Path::new("/Users/test/.sk/kit/scriptlets/my-scripts.md");
+    let md_path = Path::new("/Users/test/.sk/kit/main/scriptlets/my-scripts.md");
     let result = build_scriptlet_file_path(md_path, "my-slug");
-    assert_eq!(result, "/Users/test/.sk/kit/scriptlets/my-scripts.md#my-slug");
+    assert_eq!(
+        result,
+        "/Users/test/.sk/kit/main/scriptlets/my-scripts.md#my-slug"
+    );
 }
 
 #[test]
@@ -631,7 +636,7 @@ fn test_fuzzy_search_by_path() {
     let scripts = vec![
         Script {
             name: "foo".to_string(),
-            path: PathBuf::from("/home/user/.sk/kit/scripts/open.ts"),
+            path: PathBuf::from("/home/user/.sk/kit/main/scripts/open.ts"),
             extension: "ts".to_string(),
             icon: None,
             description: None,
@@ -651,7 +656,8 @@ fn test_fuzzy_search_by_path() {
         },
     ];
 
-    let results = fuzzy_search_scripts(&scripts, "kenv");
+    // Search for ".sk" which is in the new path structure
+    let results = fuzzy_search_scripts(&scripts, ".sk");
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].script.name, "foo");
 }
