@@ -157,6 +157,11 @@ impl TermPrompt {
     }
 
     /// Get the configured font size
+    ///
+    /// KEEP as px() because:
+    /// 1. User explicitly configured a pixel size in config.ts (terminalFontSize)
+    /// 2. Terminal requires precise character sizing for monospace grid alignment
+    /// 3. Cell dimensions (width/height) are calculated from this value
     fn font_size(&self) -> f32 {
         self.config.get_terminal_font_size()
     }

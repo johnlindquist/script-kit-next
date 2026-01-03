@@ -475,11 +475,11 @@ impl RenderOnce for ListItem {
             .flex_col()
             .justify_center();
 
-        // Name - 14px font, medium weight (tighter than before)
+        // Name - text_sm (0.875rem ≈ 14px), medium weight (tighter than before)
         // Single-line with ellipsis truncation for long content
         item_content = item_content.child(
             div()
-                .text_size(px(14.))
+                .text_sm()
                 .font_weight(FontWeight::MEDIUM)
                 .overflow_hidden()
                 .text_ellipsis()
@@ -488,13 +488,13 @@ impl RenderOnce for ListItem {
                 .child(self.name),
         );
 
-        // Description - 12px font, muted color (never changes on selection - only bg shows selection)
+        // Description - text_xs (0.75rem ≈ 12px), muted color (never changes on selection - only bg shows selection)
         // Single-line with ellipsis truncation for long content
         if let Some(desc) = self.description {
             let desc_color = rgb(colors.text_muted);
             item_content = item_content.child(
                 div()
-                    .text_size(px(12.))
+                    .text_xs()
                     .line_height(px(14.))
                     .text_color(desc_color)
                     .overflow_hidden()
@@ -505,9 +505,10 @@ impl RenderOnce for ListItem {
         }
 
         // Shortcut badge (if present) - right-aligned
+        // text_xs (0.75rem ≈ 12px) is closest match for 11px
         let shortcut_element = if let Some(sc) = self.shortcut {
             div()
-                .text_size(px(11.))
+                .text_xs()
                 .text_color(rgb(colors.text_dimmed))
                 .px(px(6.))
                 .py(px(2.))

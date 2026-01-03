@@ -71,7 +71,7 @@ impl Render for HudView {
             // Text styling - system font, smaller size, white text
             .child(
                 div()
-                    .text_size(px(13.))
+                    .text_sm()
                     .text_color(rgb(0xFFFFFF))
                     .overflow_hidden()
                     .text_ellipsis()

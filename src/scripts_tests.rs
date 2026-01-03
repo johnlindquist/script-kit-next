@@ -2783,11 +2783,11 @@ fn test_get_grouped_results_empty_filter_grouped_view() {
     // Results should contain all items
     assert_eq!(results.len(), 2);
 
-    // Grouped should have MAIN section (no RECENT since frecency is empty)
+    // Grouped should have SCRIPTS section (no RECENT since frecency is empty)
     assert!(!grouped.is_empty());
 
-    // First item should be MAIN section header
-    assert!(matches!(&grouped[0], GroupedListItem::SectionHeader(s) if s == "MAIN"));
+    // First item should be SCRIPTS section header (since inputs are scripts only)
+    assert!(matches!(&grouped[0], GroupedListItem::SectionHeader(s) if s == "SCRIPTS"));
 }
 
 #[test]
@@ -2846,7 +2846,7 @@ fn test_get_grouped_results_with_frecency() {
     // Results should contain all items
     assert_eq!(results.len(), 3);
 
-    // Grouped should have both RECENT and MAIN sections
+    // Grouped should have both RECENT and SCRIPTS sections
     let section_headers: Vec<&str> = grouped
         .iter()
         .filter_map(|item| match item {
@@ -2856,7 +2856,7 @@ fn test_get_grouped_results_with_frecency() {
         .collect();
 
     assert!(section_headers.contains(&"RECENT"));
-    assert!(section_headers.contains(&"MAIN"));
+    assert!(section_headers.contains(&"SCRIPTS"));
 }
 
 #[test]
@@ -2914,8 +2914,7 @@ fn test_get_grouped_results_frecency_script_appears_before_builtins() {
     // Verify structure:
     // grouped[0] = SectionHeader("RECENT")
     // grouped[1] = Item(idx) where results[idx] is the frecency script
-    // grouped[2] = SectionHeader("MAIN")
-    // grouped[3+] = Items including builtins and other scripts
+    // Then type-based sections: SCRIPTS, COMMANDS, etc.
 
     // First should be RECENT header
     assert!(
@@ -2940,42 +2939,54 @@ fn test_get_grouped_results_frecency_script_appears_before_builtins() {
         })
     );
 
-    // Third should be MAIN header
+    // Collect all section headers and items
+    let section_headers: Vec<&str> = grouped
+        .iter()
+        .filter_map(|item| match item {
+            GroupedListItem::SectionHeader(s) => Some(s.as_str()),
+            _ => None,
+        })
+        .collect();
+
+    // Should have RECENT, SCRIPTS, and COMMANDS sections
     assert!(
-        matches!(&grouped[2], GroupedListItem::SectionHeader(s) if s == "MAIN"),
-        "Third item should be MAIN section header, got {:?}",
-        grouped[2]
+        section_headers.contains(&"SCRIPTS"),
+        "Should have SCRIPTS section for non-recent script. Headers: {:?}",
+        section_headers
+    );
+    assert!(
+        section_headers.contains(&"COMMANDS"),
+        "Should have COMMANDS section for builtins. Headers: {:?}",
+        section_headers
     );
 
-    // Find builtins in MAIN section (after grouped[2])
-    let main_items: Vec<&str> = grouped[3..]
+    // Find builtins in COMMANDS section
+    let commands_items: Vec<&str> = grouped
         .iter()
         .filter_map(|item| {
             if let GroupedListItem::Item(idx) = item {
-                Some(results[*idx].name())
+                let result = &results[*idx];
+                if matches!(result, SearchResult::BuiltIn(_)) {
+                    Some(result.name())
+                } else {
+                    None
+                }
             } else {
                 None
             }
         })
         .collect();
 
-    // Builtins should be in MAIN, not RECENT
+    // Builtins should be in COMMANDS, not RECENT
     assert!(
-        main_items.contains(&"Clipboard History"),
-        "Clipboard History should be in MAIN section, not RECENT. MAIN items: {:?}",
-        main_items
+        commands_items.contains(&"Clipboard History"),
+        "Clipboard History should be in COMMANDS section, not RECENT. COMMANDS items: {:?}",
+        commands_items
     );
     assert!(
-        main_items.contains(&"App Launcher"),
-        "App Launcher should be in MAIN section. MAIN items: {:?}",
-        main_items
-    );
-
-    // Verify the frecency script is NOT in MAIN (it's in RECENT)
-    assert!(
-        !main_items.contains(&"test-script"),
-        "test-script should NOT be in MAIN (it should be in RECENT). MAIN items: {:?}",
-        main_items
+        commands_items.contains(&"App Launcher"),
+        "App Launcher should be in COMMANDS section. COMMANDS items: {:?}",
+        commands_items
     );
 }
 
@@ -3134,8 +3145,8 @@ fn test_get_grouped_results_selection_priority_with_frecency() {
     // Verify the structure explicitly
     // grouped[0] = SectionHeader("RECENT")
     // grouped[1] = Item(zebra-script) <- THIS should be first selection
-    // grouped[2] = SectionHeader("MAIN")
-    // grouped[3+] = Other items (builtins and scripts sorted together alphabetically)
+    // grouped[2] = SectionHeader("SCRIPTS") or next type-based section
+    // grouped[3+] = Other items sorted alphabetically within their sections
 
     let grouped_names: Vec<String> = grouped
         .iter()
@@ -3145,28 +3156,25 @@ fn test_get_grouped_results_selection_priority_with_frecency() {
         })
         .collect();
 
-    // First 3 items should be: RECENT header, frecency item, MAIN header
+    // First 3 items should be: RECENT header, frecency item, SCRIPTS header (for non-recent scripts)
     assert_eq!(
         &grouped_names[..3],
-        &["[RECENT]", "zebra-script", "[MAIN]"],
-        "First 3 items should be: RECENT header, frecency item, MAIN header. Got: {:?}",
+        &["[RECENT]", "zebra-script", "[SCRIPTS]"],
+        "First 3 items should be: RECENT header, frecency item, SCRIPTS header. Got: {:?}",
         grouped_names
     );
 }
 
 #[test]
-fn test_get_grouped_results_no_frecency_builtins_sorted_with_scripts() {
-    // TDD FAILING TEST: This test documents the BUG and expected fix.
+fn test_get_grouped_results_no_frecency_items_in_type_sections() {
+    // This test verifies the type-based sectioning behavior.
     //
-    // BUG: When there's NO frecency data, builtins appear BEFORE scripts in MAIN,
-    // regardless of alphabetical order. This causes "Clipboard History" to always
-    // appear first.
+    // When there's NO frecency data, items are grouped into type-based sections:
+    // - SCRIPTS: user scripts
+    // - COMMANDS: builtins
     //
-    // EXPECTED BEHAVIOR (after fix): MAIN section items sorted alphabetically by name,
-    // with builtins mixed in with scripts.
-    //
-    // Current broken behavior: ["App Launcher", "Clipboard History", "alpha-script", "zebra-script"]
-    // Expected fixed behavior:  ["alpha-script", "App Launcher", "Clipboard History", "zebra-script"]
+    // Items are sorted alphabetically within each section.
+    // Sections appear in order: SCRIPTS, SCRIPTLETS, COMMANDS, APPS
 
     let scripts = vec![
         Script {
@@ -3207,7 +3215,7 @@ fn test_get_grouped_results_no_frecency_builtins_sorted_with_scripts() {
         10,
     );
 
-    // With no frecency, should only have MAIN section
+    // With no frecency, should have SCRIPTS and COMMANDS sections
     let grouped_names: Vec<String> = grouped
         .iter()
         .map(|item| match item {
@@ -3216,30 +3224,26 @@ fn test_get_grouped_results_no_frecency_builtins_sorted_with_scripts() {
         })
         .collect();
 
-    // First should be MAIN header (no RECENT because no frecency)
+    // First should be SCRIPTS header (scripts come before commands in order)
     assert_eq!(
-        grouped_names[0], "[MAIN]",
-        "First item should be MAIN header when no frecency. Got: {:?}",
+        grouped_names[0], "[SCRIPTS]",
+        "First item should be SCRIPTS header when no frecency. Got: {:?}",
         grouped_names
     );
 
-    // Items should be sorted alphabetically - check the order
-    let item_names: Vec<&str> = grouped_names[1..].iter().map(|s| s.as_str()).collect();
-
-    // EXPECTED: Items sorted alphabetically, builtins mixed with scripts
-    // "alpha-script" < "App Launcher" < "Clipboard History" < "zebra-script"
+    // Expected structure: [SCRIPTS], alpha-script, zebra-script, [COMMANDS], App Launcher, Clipboard History
     assert_eq!(
-        item_names,
+        grouped_names,
         vec![
+            "[SCRIPTS]",
             "alpha-script",
+            "zebra-script",
+            "[COMMANDS]",
             "App Launcher",
             "Clipboard History",
-            "zebra-script"
         ],
-        "BUG: Builtins appear before scripts instead of being sorted alphabetically. \
-             This causes 'Clipboard History' to always be first choice. \
-             Expected alphabetical order, got: {:?}",
-        item_names
+        "Items should be in type-based sections, sorted alphabetically within each. Got: {:?}",
+        grouped_names
     );
 }
 

@@ -1109,6 +1109,9 @@ impl Render for EditorPrompt {
         let mono_font: SharedString = fonts.mono_family.into();
 
         // Get font size from config (used for inner container inheritance)
+        // KEEP as px() because:
+        // 1. User explicitly configured a pixel size in config.ts
+        // 2. Editor requires precise character sizing for monospace alignment
         let font_size = self.config.get_editor_font_size();
 
         // Action handlers for snippet Tab navigation
@@ -1233,18 +1236,20 @@ impl Render for EditorPrompt {
                 .border_t_1()
                 .border_color(rgb(colors.ui.border))
                 // Left side: snippet indicator (if in snippet mode)
+                // Uses text_xs() because this is UI chrome, not editor content
                 .child(
                     div()
-                        .text_size(px(11.))
+                        .text_xs()
                         .text_color(rgb(colors.accent.selected))
                         .when_some(snippet_indicator, |d, indicator| {
                             d.child(SharedString::from(indicator))
                         }),
                 )
                 // Right side: language indicator
+                // Uses text_xs() because this is UI chrome, not editor content
                 .child(
                     div()
-                        .text_size(px(11.))
+                        .text_xs()
                         .text_color(rgb(colors.text.muted))
                         .child(language_display),
                 ),

@@ -342,6 +342,7 @@ fn render_element(element: &HtmlElement, ctx: RenderContext) -> Div {
             // Collect all text content from children
             let text_content = collect_text(children);
 
+            // User-specified pixel size - not converted to rem
             div()
                 .w_full()
                 .text_size(px(font_size))
@@ -357,7 +358,7 @@ fn render_element(element: &HtmlElement, ctx: RenderContext) -> Div {
 
             div()
                 .w_full()
-                .text_size(px(14.0))
+                .text_sm()
                 .text_color(rgb(ctx.text_secondary))
                 .mb(px(8.0))
                 .child(text_content)
@@ -380,7 +381,7 @@ fn render_element(element: &HtmlElement, ctx: RenderContext) -> Div {
             .bg(rgba((ctx.code_bg << 8) | 0x80))
             .rounded(px(4.0))
             .font_family("Menlo")
-            .text_size(px(13.0))
+            .text_sm()
             .text_color(rgb(ctx.accent_color))
             .child(code.clone()),
 
@@ -391,7 +392,7 @@ fn render_element(element: &HtmlElement, ctx: RenderContext) -> Div {
             .bg(rgba((ctx.code_bg << 8) | 0xC0))
             .rounded(px(6.0))
             .font_family("Menlo")
-            .text_size(px(13.0))
+            .text_sm()
             .text_color(rgb(ctx.text_primary))
             .child(code.clone()),
 
@@ -652,6 +653,7 @@ fn apply_tailwind_styles(mut element: Div, class_string: &str) -> Div {
     }
 
     // Typography
+    // User-specified pixel size - not converted to rem
     if let Some(size) = styles.font_size {
         element = element.text_size(px(size));
     }
@@ -770,7 +772,7 @@ fn render_inline(element: &HtmlElement, ctx: RenderContext) -> Div {
             .bg(rgba((ctx.code_bg << 8) | 0x80))
             .rounded(px(3.0))
             .font_family("Menlo")
-            .text_size(px(12.0))
+            .text_xs()
             .text_color(rgb(ctx.accent_color))
             .child(code.clone()),
 
@@ -834,7 +836,7 @@ fn render_inline(element: &HtmlElement, ctx: RenderContext) -> Div {
             .bg(rgba((ctx.code_bg << 8) | 0x80))
             .rounded(px(3.0))
             .font_family("Menlo")
-            .text_size(px(12.0))
+            .text_xs()
             .child(code.clone()),
 
         HtmlElement::HorizontalRule => div().w(px(20.0)).h(px(1.0)).bg(rgb(ctx.hr_color)),
