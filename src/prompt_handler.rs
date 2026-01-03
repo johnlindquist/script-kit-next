@@ -255,7 +255,14 @@ impl ScriptListApp {
                 // Default to markdown for all editor content
                 let resolved_language = language.unwrap_or_else(|| "markdown".to_string());
 
-                // Use with_template if template provided, otherwise with_height
+                // Use with_template if template provided, or if content contains tabstop patterns
+                // This auto-detects VSCode-style templates like ${1:name} or $1
+                let content_str = content.unwrap_or_default();
+                let has_tabstops = content_str.contains("${")
+                    || regex::Regex::new(r"\$\d")
+                        .map(|re| re.is_match(&content_str))
+                        .unwrap_or(false);
+
                 let editor_prompt = if let Some(template_str) = template {
                     EditorPrompt::with_template(
                         id.clone(),
@@ -267,10 +274,26 @@ impl ScriptListApp {
                         std::sync::Arc::new(self.config.clone()),
                         Some(editor_height),
                     )
+                } else if has_tabstops {
+                    // Auto-detect template in content
+                    logging::log(
+                        "UI",
+                        &format!("Auto-detected template in content: {}", content_str),
+                    );
+                    EditorPrompt::with_template(
+                        id.clone(),
+                        content_str,
+                        resolved_language.clone(),
+                        editor_focus_handle.clone(),
+                        submit_callback,
+                        std::sync::Arc::new(self.theme.clone()),
+                        std::sync::Arc::new(self.config.clone()),
+                        Some(editor_height),
+                    )
                 } else {
                     EditorPrompt::with_height(
                         id.clone(),
-                        content.unwrap_or_default(),
+                        content_str,
                         resolved_language.clone(),
                         editor_focus_handle.clone(),
                         submit_callback,

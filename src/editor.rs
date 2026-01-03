@@ -488,53 +488,111 @@ impl EditorPrompt {
     ///
     /// This is called before next_tabstop/prev_tabstop to record what the user typed,
     /// so we can calculate correct offsets for subsequent tabstops.
+    ///
+    /// The key insight: when the user types to replace a selected placeholder,
+    /// the selection disappears and the cursor ends up at the end of what they typed.
+    /// We need to read from the ORIGINAL start position of this tabstop to the
+    /// current cursor position to capture what they actually typed.
     fn capture_current_tabstop_value(&mut self, cx: &mut Context<Self>) {
-        let Some(ref mut state) = self.snippet_state else {
-            return;
+        // First, gather all the info we need with immutable borrows
+        let (current_idx, tabstop_start_char, old_value) = {
+            let Some(ref state) = self.snippet_state else {
+                return;
+            };
+            let current_idx = state.current_tabstop_idx;
+            if current_idx >= state.current_values.len() {
+                return;
+            }
+
+            // Get the last known start position for this tabstop
+            let tabstop_start_char = state
+                .last_selection_ranges
+                .get(current_idx)
+                .and_then(|r| r.map(|(start, _)| start));
+
+            let old_value = state.current_values[current_idx].clone();
+
+            (current_idx, tabstop_start_char, old_value)
         };
+
         let Some(ref editor_state) = self.editor_state else {
             return;
         };
 
-        let current_idx = state.current_tabstop_idx;
-        if current_idx >= state.current_values.len() {
-            return;
-        }
+        // Get current editor state
+        let (cursor_pos_char, selection_start_char, selection_end_char, full_text): (
+            usize,
+            usize,
+            usize,
+            String,
+        ) = editor_state.update(cx, |input_state, _cx| {
+            let selection = input_state.selection();
+            let text = input_state.value();
 
-        // Get the current selection range from the editor
-        let (selection_start, selection_end, selected_text): (usize, usize, String) = editor_state
-            .update(cx, |input_state, _cx| {
-                let selection = input_state.selection();
-                let text = input_state.value();
+            // Use cursor position (selection.end when collapsed, or end of selection)
+            let cursor_byte = selection.end;
+            let cursor_char = text
+                .get(..cursor_byte)
+                .map(|s| s.chars().count())
+                .unwrap_or(0);
 
-                // Get the text within the current selection (or cursor position)
-                let sel_text: String =
-                    if selection.start < selection.end && selection.end <= text.len() {
-                        text[selection.start..selection.end].to_string()
-                    } else {
-                        String::new()
-                    };
+            let sel_start_char = text
+                .get(..selection.start)
+                .map(|s| s.chars().count())
+                .unwrap_or(0);
+            let sel_end_char = cursor_char;
 
-                // Convert byte offsets to char offsets for storage
-                let start_chars = text[..selection.start].chars().count();
-                let end_chars = text[..selection.end].chars().count();
+            (cursor_char, sel_start_char, sel_end_char, text.to_string())
+        });
 
-                (start_chars, end_chars, sel_text)
-            });
+        logging::log(
+            "EDITOR",
+            &format!(
+                "Snippet capture: tabstop_idx={}, tabstop_start={:?}, cursor={}, selection=[{},{}), text='{}'",
+                current_idx, tabstop_start_char, cursor_pos_char, selection_start_char, selection_end_char, full_text
+            ),
+        );
 
-        // Update the stored value if we have a selection
-        if !selected_text.is_empty() || selection_start != selection_end {
-            let old_value = &state.current_values[current_idx];
+        // Determine the range to capture
+        let (capture_start, capture_end) = if let Some(start) = tabstop_start_char {
+            // We have a known start position - read from there to cursor
+            // This handles the case where user typed to replace the placeholder
+            (start, cursor_pos_char)
+        } else {
+            // Fallback: use original tabstop range adjusted for previous edits
+            if let Some((adj_start, adj_end)) = self.calculate_adjusted_offset(current_idx) {
+                (adj_start, adj_end)
+            } else {
+                return;
+            }
+        };
+
+        // Extract the text at this range (convert char offsets to byte offsets)
+        let captured_value: String = {
+            let chars: Vec<char> = full_text.chars().collect();
+            let start = capture_start.min(chars.len());
+            let end = capture_end.min(chars.len());
+            if start <= end {
+                chars[start..end].iter().collect()
+            } else {
+                String::new()
+            }
+        };
+
+        // Only update if we actually have something (could be empty if user deleted all)
+        if captured_value != old_value {
             logging::log(
                 "EDITOR",
                 &format!(
-                    "Snippet: captured tabstop {} value '{}' -> '{}'",
-                    current_idx, old_value, selected_text
+                    "Snippet: captured tabstop {} value '{}' -> '{}' (range [{}, {}))",
+                    current_idx, old_value, captured_value, capture_start, capture_end
                 ),
             );
-
-            state.current_values[current_idx] = selected_text;
-            state.last_selection_ranges[current_idx] = Some((selection_start, selection_end));
+            // Now we can mutably borrow
+            if let Some(ref mut state) = self.snippet_state {
+                state.current_values[current_idx] = captured_value;
+                state.last_selection_ranges[current_idx] = Some((capture_start, capture_end));
+            }
         }
     }
 
@@ -632,13 +690,21 @@ impl EditorPrompt {
                 .map(|(i, _)| i)
                 .unwrap_or(text.len());
 
+            // Log what text we're actually selecting
+            let selected_text = if start_bytes < end_bytes && end_bytes <= text.len() {
+                &text[start_bytes..end_bytes]
+            } else {
+                ""
+            };
             logging::log(
                 "EDITOR",
                 &format!(
-                    "Snippet: setting selection bytes [{}, {}) in text len={}",
+                    "Snippet: setting selection bytes [{}, {}) = '{}' in text len={}, full_text='{}'",
                     start_bytes,
                     end_bytes,
-                    text.len()
+                    selected_text,
+                    text.len(),
+                    text
                 ),
             );
 
