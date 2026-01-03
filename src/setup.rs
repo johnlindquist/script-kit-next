@@ -10,13 +10,13 @@ use std::path::{Path, PathBuf};
 use tracing::{debug, info, instrument, warn};
 
 /// Embedded config template (included at compile time)
-const EMBEDDED_CONFIG_TEMPLATE: &str = include_str!("../scripts/config-template.ts");
+const EMBEDDED_CONFIG_TEMPLATE: &str = include_str!("../kit-init/config-template.ts");
 
 /// Embedded SDK content (included at compile time)
 const EMBEDDED_SDK: &str = include_str!("../scripts/kit-sdk.ts");
 
 /// Optional theme example (included at compile time)
-const EMBEDDED_THEME_EXAMPLE: &str = include_str!("../theme.example.json");
+const EMBEDDED_THEME_EXAMPLE: &str = include_str!("../kit-init/theme.example.json");
 
 /// Embedded package.json template for user's kit directory
 /// The "type": "module" enables top-level await in all .ts scripts
@@ -28,7 +28,7 @@ const EMBEDDED_PACKAGE_JSON: &str = r#"{
 "#;
 
 /// Embedded GUIDE.md comprehensive user guide
-const EMBEDDED_GUIDE_MD: &str = include_str!("../scripts/GUIDE.md");
+const EMBEDDED_GUIDE_MD: &str = include_str!("../kit-init/GUIDE.md");
 
 /// Embedded AGENTS.md guide for AI agents writing user scripts
 const EMBEDDED_AGENTS_MD: &str = r###"# Script Kit User Scripts Guide

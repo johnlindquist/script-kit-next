@@ -8,11 +8,10 @@ fn main() {
     // Trigger rebuild when SDK source changes (it's embedded via include_str!)
     println!("cargo:rerun-if-changed=scripts/kit-sdk.ts");
 
-    // Trigger rebuild when config template changes (also embedded)
-    println!("cargo:rerun-if-changed=scripts/config-template.ts");
-
-    // Trigger rebuild when theme example changes (also embedded)
-    println!("cargo:rerun-if-changed=theme.example.json");
+    // Trigger rebuild when kit-init files change (embedded and shipped to ~/.sk/kit/)
+    println!("cargo:rerun-if-changed=kit-init/config-template.ts");
+    println!("cargo:rerun-if-changed=kit-init/theme.example.json");
+    println!("cargo:rerun-if-changed=kit-init/GUIDE.md");
 
     // Trigger rebuild when bundled fonts change (embedded via include_bytes!)
     println!("cargo:rerun-if-changed=assets/fonts/JetBrainsMono-Regular.ttf");
