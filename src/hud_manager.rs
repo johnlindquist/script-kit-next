@@ -187,12 +187,7 @@ impl Render for HudView {
                         .cursor_pointer()
                         .hover(|s| s.bg(rgb(0x1084d8))) // Lighter on hover
                         .active(|s| s.bg(rgb(0x006cbe))) // Darker on press
-                        .child(
-                            div()
-                                .text_xs()
-                                .text_color(rgb(0xFFFFFF))
-                                .child(label),
-                        )
+                        .child(div().text_xs().text_color(rgb(0xFFFFFF)).child(label))
                         .on_click(cx.listener(move |_this, _event, _window, _cx| {
                             if let Some(ref action) = action {
                                 action.execute(None); // TODO: Get editor from config
@@ -498,7 +493,10 @@ pub fn show_hud_with_action(
             );
         }
         Err(e) => {
-            logging::log("HUD", &format!("Failed to create action HUD window: {:?}", e));
+            logging::log(
+                "HUD",
+                &format!("Failed to create action HUD window: {:?}", e),
+            );
         }
     }
 }

@@ -1,5 +1,7 @@
 use super::*;
+use std::collections::HashMap;
 use std::path::PathBuf;
+use std::process::Command;
 
 #[test]
 fn test_is_typescript() {

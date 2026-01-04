@@ -730,12 +730,12 @@ impl NotesApp {
         self.show_actions_panel = false;
         self.actions_panel = None;
         self.restore_actions_panel_height(window);
-        
+
         // Refocus the editor after closing the actions panel
         self.editor_state.update(cx, |state, cx| {
             state.focus(window, cx);
         });
-        
+
         cx.notify();
     }
 
@@ -957,12 +957,12 @@ impl NotesApp {
     fn close_browse_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.show_browse_panel = false;
         self.browse_panel = None;
-        
+
         // Refocus the editor after closing the browse panel
         self.editor_state.update(cx, |state, cx| {
             state.focus(window, cx);
         });
-        
+
         cx.notify();
     }
 
@@ -1113,10 +1113,10 @@ impl NotesApp {
 
         // Raycast-style: titlebar only visible on hover, centered title, right-aligned actions
         let window_hovered = self.window_hovered || self.force_hovered;
-        
+
         // Get muted foreground color for subtle icons/text
         let muted_color = cx.theme().muted_foreground;
-        
+
         let titlebar = div()
             .id("notes-titlebar")
             .flex()
@@ -1302,7 +1302,7 @@ impl NotesApp {
     }
 
     /// Render the actions panel overlay (Cmd+K)
-    /// 
+    ///
     /// IMPORTANT: Uses items_start + fixed top padding to keep the search input
     /// at a stable position. Without this, the panel would re-center when items
     /// are filtered out, causing the search input to jump around.
@@ -1323,8 +1323,8 @@ impl NotesApp {
             .bg(gpui::rgba(0x00000080))
             .flex()
             .flex_col()
-            .items_center()      // Horizontally centered
-            .justify_start()     // Vertically aligned to top (not centered!)
+            .items_center() // Horizontally centered
+            .justify_start() // Vertically aligned to top (not centered!)
             .pt(px(PANEL_TOP_OFFSET)) // Fixed offset from top
             .on_mouse_down(
                 gpui::MouseButton::Left,

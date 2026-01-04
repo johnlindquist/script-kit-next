@@ -21,7 +21,6 @@
 //! and follows the Root wrapper pattern required by gpui-component.
 //!
 
-
 // Allow dead code in this module - many functions are designed for future use
 #![allow(dead_code)]
 

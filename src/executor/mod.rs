@@ -1,0 +1,58 @@
+//! Script execution module
+//!
+//! This module handles all aspects of script execution including:
+//! - Interactive script sessions with bidirectional JSONL communication
+//! - Scriptlet execution (embedded scripts in markdown)
+//! - Error parsing and suggestions
+//! - Selected text operations
+//! - Auto-submit mode for autonomous testing
+
+mod auto_submit;
+mod errors;
+mod runner;
+mod scriptlet;
+mod selected_text;
+
+// Re-export public items for external use and backwards compatibility
+// Allow unused imports - these are public API exports that may be used by external code
+// or will be used in the future (marked #[allow(dead_code)] in their source files)
+#[allow(unused_imports)]
+pub use auto_submit::{
+    get_auto_submit_config, get_auto_submit_delay, get_auto_submit_index, get_auto_submit_value,
+    is_auto_submit_enabled, AutoSubmitConfig,
+};
+
+pub use errors::{extract_error_message, generate_suggestions, parse_stack_trace};
+
+// Infrastructure exports - available for future integration
+#[allow(unused_imports)]
+pub use errors::{generate_crash_suggestions, signal_to_name, CrashInfo};
+
+pub use runner::{execute_script_interactive, ScriptSession};
+
+// Additional runner exports for testing and backwards compatibility
+#[allow(unused_imports)]
+pub use runner::{
+    execute_script, find_executable, find_sdk_path, is_javascript, is_typescript, run_command,
+    spawn_script, ProcessHandle, SplitSession,
+};
+
+pub use scriptlet::{run_scriptlet, ScriptletExecOptions};
+
+// Additional scriptlet exports for backwards compatibility
+#[allow(unused_imports)]
+pub use scriptlet::{
+    build_final_content, execute_applescript, execute_edit, execute_open, execute_paste,
+    execute_shell_scriptlet, execute_submit, execute_transform, execute_type, execute_typescript,
+    execute_with_interpreter, shell_not_found_suggestions, ScriptletResult,
+};
+
+pub use selected_text::{handle_selected_text_message, SelectedTextHandleResult};
+
+// Re-export tool_extension only for tests
+#[cfg(test)]
+pub use scriptlet::tool_extension;
+
+#[cfg(test)]
+#[path = "../executor_tests.rs"]
+mod tests;

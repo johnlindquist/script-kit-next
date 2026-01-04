@@ -927,29 +927,28 @@ impl Render for ScriptListApp {
             let banner_colors = WarningBannerColors::from_theme(&self.theme);
             let entity = cx.entity().downgrade();
             let entity_for_dismiss = entity.clone();
-            
+
             Some(
-                div()
-                    .w_full()
-                    .px(px(12.))
-                    .pt(px(8.))
-                    .child(
-                        WarningBanner::new("bun is not installed. Click to download from bun.sh", banner_colors)
-                            .on_click(Box::new(move |_event, _window, cx| {
-                                if let Some(app) = entity.upgrade() {
-                                    app.update(cx, |this, _cx| {
-                                        this.open_bun_website();
-                                    });
-                                }
-                            }))
-                            .on_dismiss(Box::new(move |_event, _window, cx| {
-                                if let Some(app) = entity_for_dismiss.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        this.dismiss_bun_warning(cx);
-                                    });
-                                }
-                            })),
-                    ),
+                div().w_full().px(px(12.)).pt(px(8.)).child(
+                    WarningBanner::new(
+                        "bun is not installed. Click to download from bun.sh",
+                        banner_colors,
+                    )
+                    .on_click(Box::new(move |_event, _window, cx| {
+                        if let Some(app) = entity.upgrade() {
+                            app.update(cx, |this, _cx| {
+                                this.open_bun_website();
+                            });
+                        }
+                    }))
+                    .on_dismiss(Box::new(move |_event, _window, cx| {
+                        if let Some(app) = entity_for_dismiss.upgrade() {
+                            app.update(cx, |this, cx| {
+                                this.dismiss_bun_warning(cx);
+                            });
+                        }
+                    })),
+                ),
             )
         } else {
             None
@@ -962,17 +961,9 @@ impl Render for ScriptListApp {
             .flex()
             .flex_col()
             // Warning banner appears at the top when bun is not available
-            .when_some(warning_banner, |container, banner| {
-                container.child(banner)
-            })
+            .when_some(warning_banner, |container, banner| container.child(banner))
             // Main content takes remaining space
-            .child(
-                div()
-                    .flex_1()
-                    .w_full()
-                    .min_h(px(0.))
-                    .child(main_content)
-            )
+            .child(div().flex_1().w_full().min_h(px(0.)).child(main_content))
             .when_some(grid_config, |container, config| {
                 let overlay_bounds = gpui::Bounds {
                     origin: gpui::point(px(0.), px(0.)),
