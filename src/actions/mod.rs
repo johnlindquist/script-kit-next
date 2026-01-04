@@ -10,48 +10,29 @@
 //! - Context-aware actions based on focused script
 //!
 //! ## Module Structure
-//! - `types`: Core types (Action, ActionCategory, ScriptInfo, ActionCallback)
+//! - `types`: Core types (Action, ActionCategory, ScriptInfo)
 //! - `builders`: Factory functions for creating action lists
 //! - `constants`: Popup dimensions and styling constants
 //! - `dialog`: ActionsDialog struct and implementation
-//! - `script_utils`: Script creation utilities
 
 mod builders;
 mod constants;
 mod dialog;
-mod script_utils;
 mod types;
 
-// Re-export public API
+// Re-export only the public API that is actually used externally:
+// - ScriptInfo: used by main.rs for action context
+// - ActionsDialog: the main dialog component
 
-// Types
-pub use types::{Action, ActionCallback, ActionCategory, ScriptInfo};
-
-// Builders
-pub use builders::{get_global_actions, get_path_context_actions, get_script_context_actions};
-
-// Constants
-#[allow(unused_imports)]
-pub use constants::{
-    ACCENT_BAR_WIDTH, ACTION_ITEM_HEIGHT, ITEM_PADDING_X, ITEM_PADDING_Y, POPUP_CORNER_RADIUS,
-    POPUP_MAX_HEIGHT, POPUP_PADDING, POPUP_WIDTH,
-};
-
-// Dialog
 pub use dialog::ActionsDialog;
-
-// Script utilities
-pub use script_utils::{
-    create_script_file, generate_script_template, get_script_path, script_exists,
-    validate_script_name,
-};
-
-// Re-export PathInfo from prompts module for convenience
-pub use crate::prompts::PathInfo;
+pub use types::ScriptInfo;
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    // Import from submodules directly - these are only used in tests
+    use super::builders::{get_global_actions, get_script_context_actions};
+    use super::constants::{ACTION_ITEM_HEIGHT, POPUP_MAX_HEIGHT};
+    use super::types::{Action, ActionCategory, ScriptInfo};
     use crate::protocol::ProtocolAction;
 
     #[test]
@@ -89,23 +70,26 @@ mod tests {
             close: None,
         };
 
-        // Simulate conversion logic from set_sdk_actions
-        let action = Action {
-            id: protocol_action.name.clone(),
-            title: protocol_action.name.clone(),
-            description: protocol_action.description.clone(),
-            category: ActionCategory::ScriptContext,
-            shortcut: protocol_action.shortcut.clone(),
-            has_action: protocol_action.has_action,
-            value: protocol_action.value.clone(),
-        };
+        // Test that ProtocolAction fields are accessible for conversion
+        // The actual conversion in dialog.rs copies these to Action struct
+        assert_eq!(protocol_action.name, "Copy");
+        assert_eq!(
+            protocol_action.description,
+            Some("Copy to clipboard".to_string())
+        );
+        assert_eq!(protocol_action.shortcut, Some("cmd+c".to_string()));
+        assert_eq!(protocol_action.value, Some("copy-value".to_string()));
+        assert!(protocol_action.has_action);
 
+        // Create Action using builder pattern (used by get_*_actions)
+        let action = Action::new(
+            protocol_action.name.clone(),
+            protocol_action.name.clone(),
+            protocol_action.description.clone(),
+            ActionCategory::ScriptContext,
+        );
         assert_eq!(action.id, "Copy");
         assert_eq!(action.title, "Copy");
-        assert_eq!(action.description, Some("Copy to clipboard".to_string()));
-        assert_eq!(action.shortcut, Some("cmd+c".to_string()));
-        assert_eq!(action.value, Some("copy-value".to_string()));
-        assert!(action.has_action);
     }
 
     #[test]

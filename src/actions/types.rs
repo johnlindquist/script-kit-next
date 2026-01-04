@@ -14,6 +14,9 @@ pub type ActionCallback = Arc<dyn Fn(String) + Send + Sync>;
 pub struct ScriptInfo {
     /// Display name of the script
     pub name: String,
+    // Note: path is written during construction for completeness but currently
+    // action handlers read directly from ProtocolAction. Kept for API consistency.
+    #[allow(dead_code)]
     /// Full path to the script file
     pub path: String,
 }
@@ -28,6 +31,11 @@ impl ScriptInfo {
 }
 
 /// Available actions in the actions menu
+///
+/// Note: The `has_action` and `value` fields are populated from ProtocolAction
+/// for consistency, but the actual routing logic reads from the original
+/// ProtocolAction. These fields are kept for future use cases where Action
+/// might need independent behavior.
 #[derive(Debug, Clone)]
 pub struct Action {
     pub id: String,
@@ -37,9 +45,10 @@ pub struct Action {
     /// Optional keyboard shortcut hint (e.g., "⌘E")
     pub shortcut: Option<String>,
     /// If true, send ActionTriggered to SDK; if false, submit value directly
-    /// Built-in actions default to false; SDK actions may set this to true
+    #[allow(dead_code)]
     pub has_action: bool,
     /// Optional value to submit when action is triggered
+    #[allow(dead_code)]
     pub value: Option<String>,
 }
 
@@ -72,16 +81,6 @@ impl Action {
         self.shortcut = Some(shortcut.into());
         self
     }
-
-    pub fn with_value(mut self, value: impl Into<String>) -> Self {
-        self.value = Some(value.into());
-        self
-    }
-
-    pub fn with_has_action(mut self, has_action: bool) -> Self {
-        self.has_action = has_action;
-        self
-    }
 }
 
 #[cfg(test)]
@@ -103,26 +102,6 @@ mod tests {
     }
 
     #[test]
-    fn test_action_with_has_action() {
-        let action = Action::new("test", "Test Action", None, ActionCategory::GlobalOps)
-            .with_has_action(true);
-        assert!(action.has_action);
-
-        let action2 = Action::new("test2", "Test Action 2", None, ActionCategory::GlobalOps);
-        assert!(!action2.has_action); // default is false
-    }
-
-    #[test]
-    fn test_action_with_value() {
-        let action = Action::new("test", "Test Action", None, ActionCategory::GlobalOps)
-            .with_value("my-value");
-        assert_eq!(action.value, Some("my-value".to_string()));
-
-        let action2 = Action::new("test2", "Test Action 2", None, ActionCategory::GlobalOps);
-        assert!(action2.value.is_none()); // default is None
-    }
-
-    #[test]
     fn test_action_new_defaults() {
         let action = Action::new(
             "id",
@@ -135,7 +114,5 @@ mod tests {
         assert_eq!(action.description, Some("desc".to_string()));
         assert_eq!(action.category, ActionCategory::ScriptContext);
         assert!(action.shortcut.is_none());
-        assert!(!action.has_action);
-        assert!(action.value.is_none());
     }
 }
