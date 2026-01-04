@@ -24,48 +24,48 @@ const LOGO_SVG: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" width="32" hei
   <path fill="currentColor" d="M14 25a2 2 0 0 1 2-2h14a2 2 0 1 1 0 4H16a2 2 0 0 1-2-2ZM0 7.381c0-1.796 1.983-2.884 3.498-1.92l13.728 8.736c1.406.895 1.406 2.946 0 3.84L3.498 26.775C1.983 27.738 0 26.649 0 24.854V7.38Z"/>
 </svg>"#;
 
-// Menu item SVG icons (16x16, black/white outline style)
-// These are embedded as template images for proper light/dark mode adaptation
+// Menu item SVG icons (16x16, white outline style for dark menus)
+// These are rendered as white icons for macOS dark mode menu bar
 
 const ICON_HOME: &str = r#"<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-<path d="M2.5 6.5L8 2L13.5 6.5V13C13.5 13.2761 13.2761 13.5 13 13.5H10V10C10 8.89543 9.10457 8 8 8C6.89543 8 6 8.89543 6 10V13.5H3C2.72386 13.5 2.5 13.2761 2.5 13V6.5Z" stroke="black" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M2.5 6.5L8 2L13.5 6.5V13C13.5 13.2761 13.2761 13.5 13 13.5H10V10C10 8.89543 9.10457 8 8 8C6.89543 8 6 8.89543 6 10V13.5H3C2.72386 13.5 2.5 13.2761 2.5 13V6.5Z" stroke="white" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>"#;
 
 const ICON_EDIT: &str = r#"<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-<path d="M11 2.5L13.5 5L6 12.5H3.5V10L11 2.5Z" stroke="black" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M11 2.5L13.5 5L6 12.5H3.5V10L11 2.5Z" stroke="white" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>"#;
 
 const ICON_MESSAGE: &str = r#"<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-<path d="M14.5 7.5C14.5 10.8137 11.5899 13.5 8 13.5C7.10444 13.5 6.25147 13.3347 5.47266 13.0352L2 14L3.12132 11.0607C2.11929 10.0587 1.5 8.84315 1.5 7.5C1.5 4.18629 4.41015 1.5 8 1.5C11.5899 1.5 14.5 4.18629 14.5 7.5Z" stroke="black" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M14.5 7.5C14.5 10.8137 11.5899 13.5 8 13.5C7.10444 13.5 6.25147 13.3347 5.47266 13.0352L2 14L3.12132 11.0607C2.11929 10.0587 1.5 8.84315 1.5 7.5C1.5 4.18629 4.41015 1.5 8 1.5C11.5899 1.5 14.5 4.18629 14.5 7.5Z" stroke="white" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>"#;
 
 const ICON_GITHUB: &str = r#"<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-<path fill-rule="evenodd" clip-rule="evenodd" d="M8 1C4.13 1 1 4.13 1 8C1 11.1 3.01 13.7 5.77 14.67C6.11 14.73 6.24 14.52 6.24 14.34C6.24 14.18 6.23 13.68 6.23 13.15C4.5 13.51 4.08 12.83 3.96 12.47C3.89 12.29 3.57 11.73 3.29 11.57C3.06 11.44 2.72 11.08 3.28 11.07C3.81 11.06 4.19 11.57 4.32 11.78C4.92 12.81 5.87 12.53 6.26 12.35C6.32 11.94 6.49 11.66 6.68 11.5C5.17 11.33 3.59 10.78 3.59 8.15C3.59 7.38 3.89 6.74 4.34 6.25C4.27 6.08 4.03 5.35 4.41 4.38C4.41 4.38 4.97 4.2 6.24 5.1C6.78 4.95 7.35 4.88 7.92 4.87C8.49 4.88 9.06 4.95 9.6 5.1C10.87 4.19 11.43 4.38 11.43 4.38C11.81 5.35 11.57 6.08 11.5 6.25C11.95 6.74 12.25 7.38 12.25 8.15C12.25 10.79 10.66 11.33 9.15 11.5C9.39 11.7 9.6 12.09 9.6 12.69C9.6 13.54 9.59 14.22 9.59 14.35C9.59 14.53 9.72 14.74 10.06 14.68C12.99 13.7 15 11.09 15 8C15 4.13 11.87 1 8 1Z" fill="black"/>
+<path fill-rule="evenodd" clip-rule="evenodd" d="M8 1C4.13 1 1 4.13 1 8C1 11.1 3.01 13.7 5.77 14.67C6.11 14.73 6.24 14.52 6.24 14.34C6.24 14.18 6.23 13.68 6.23 13.15C4.5 13.51 4.08 12.83 3.96 12.47C3.89 12.29 3.57 11.73 3.29 11.57C3.06 11.44 2.72 11.08 3.28 11.07C3.81 11.06 4.19 11.57 4.32 11.78C4.92 12.81 5.87 12.53 6.26 12.35C6.32 11.94 6.49 11.66 6.68 11.5C5.17 11.33 3.59 10.78 3.59 8.15C3.59 7.38 3.89 6.74 4.34 6.25C4.27 6.08 4.03 5.35 4.41 4.38C4.41 4.38 4.97 4.2 6.24 5.1C6.78 4.95 7.35 4.88 7.92 4.87C8.49 4.88 9.06 4.95 9.6 5.1C10.87 4.19 11.43 4.38 11.43 4.38C11.81 5.35 11.57 6.08 11.5 6.25C11.95 6.74 12.25 7.38 12.25 8.15C12.25 10.79 10.66 11.33 9.15 11.5C9.39 11.7 9.6 12.09 9.6 12.69C9.6 13.54 9.59 14.22 9.59 14.35C9.59 14.53 9.72 14.74 10.06 14.68C12.99 13.7 15 11.09 15 8C15 4.13 11.87 1 8 1Z" fill="white"/>
 </svg>"#;
 
 const ICON_BOOK: &str = r#"<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-<path d="M2.5 3C2.5 2.44772 2.94772 2 3.5 2H5.5C6.69347 2 7.67833 2.83755 7.93586 3.95336C7.97856 4.13921 8.02144 4.13921 8.06414 3.95336C8.32167 2.83755 9.30653 2 10.5 2H12.5C13.0523 2 13.5 2.44772 13.5 3V11C13.5 11.5523 13.0523 12 12.5 12H10C8.89543 12 8 12.8954 8 14C8 12.8954 7.10457 12 6 12H3.5C2.94772 12 2.5 11.5523 2.5 11V3Z" stroke="black" stroke-width="1.2"/>
-<path d="M8 4V14" stroke="black" stroke-width="1.2"/>
+<path d="M2.5 3C2.5 2.44772 2.94772 2 3.5 2H5.5C6.69347 2 7.67833 2.83755 7.93586 3.95336C7.97856 4.13921 8.02144 4.13921 8.06414 3.95336C8.32167 2.83755 9.30653 2 10.5 2H12.5C13.0523 2 13.5 2.44772 13.5 3V11C13.5 11.5523 13.0523 12 12.5 12H10C8.89543 12 8 12.8954 8 14C8 12.8954 7.10457 12 6 12H3.5C2.94772 12 2.5 11.5523 2.5 11V3Z" stroke="white" stroke-width="1.2"/>
+<path d="M8 4V14" stroke="white" stroke-width="1.2"/>
 </svg>"#;
 
 const ICON_DISCORD: &str = r#"<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-<path d="M13.07 3.26C12.14 2.83 11.14 2.51 10.1 2.33C9.97 2.56 9.82 2.86 9.72 3.1C8.61 2.94 7.51 2.94 6.42 3.1C6.32 2.86 6.17 2.56 6.03 2.33C4.99 2.51 3.99 2.83 3.06 3.27C1.21 6.07 0.72 8.8 0.96 11.49C2.21 12.42 3.42 12.97 4.61 13.33C4.9 12.93 5.16 12.51 5.38 12.06C4.95 11.9 4.54 11.7 4.16 11.46C4.26 11.39 4.36 11.31 4.45 11.23C6.74 12.31 9.29 12.31 11.55 11.23C11.65 11.31 11.75 11.39 11.84 11.46C11.46 11.7 11.05 11.9 10.62 12.06C10.84 12.51 11.1 12.94 11.39 13.33C12.58 12.97 13.79 12.42 15.04 11.49C15.33 8.36 14.48 5.66 13.07 3.26ZM5.52 9.8C4.82 9.8 4.24 9.14 4.24 8.34C4.24 7.54 4.8 6.88 5.52 6.88C6.23 6.88 6.82 7.54 6.8 8.34C6.8 9.14 6.23 9.8 5.52 9.8ZM10.48 9.8C9.78 9.8 9.2 9.14 9.2 8.34C9.2 7.54 9.76 6.88 10.48 6.88C11.19 6.88 11.78 7.54 11.76 8.34C11.76 9.14 11.19 9.8 10.48 9.8Z" fill="black"/>
+<path d="M13.07 3.26C12.14 2.83 11.14 2.51 10.1 2.33C9.97 2.56 9.82 2.86 9.72 3.1C8.61 2.94 7.51 2.94 6.42 3.1C6.32 2.86 6.17 2.56 6.03 2.33C4.99 2.51 3.99 2.83 3.06 3.27C1.21 6.07 0.72 8.8 0.96 11.49C2.21 12.42 3.42 12.97 4.61 13.33C4.9 12.93 5.16 12.51 5.38 12.06C4.95 11.9 4.54 11.7 4.16 11.46C4.26 11.39 4.36 11.31 4.45 11.23C6.74 12.31 9.29 12.31 11.55 11.23C11.65 11.31 11.75 11.39 11.84 11.46C11.46 11.7 11.05 11.9 10.62 12.06C10.84 12.51 11.1 12.94 11.39 13.33C12.58 12.97 13.79 12.42 15.04 11.49C15.33 8.36 14.48 5.66 13.07 3.26ZM5.52 9.8C4.82 9.8 4.24 9.14 4.24 8.34C4.24 7.54 4.8 6.88 5.52 6.88C6.23 6.88 6.82 7.54 6.8 8.34C6.8 9.14 6.23 9.8 5.52 9.8ZM10.48 9.8C9.78 9.8 9.2 9.14 9.2 8.34C9.2 7.54 9.76 6.88 10.48 6.88C11.19 6.88 11.78 7.54 11.76 8.34C11.76 9.14 11.19 9.8 10.48 9.8Z" fill="white"/>
 </svg>"#;
 
 const ICON_AT_SIGN: &str = r#"<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-<circle cx="8" cy="8" r="2.5" stroke="black" stroke-width="1.2"/>
-<path d="M14.5 8C14.5 11.5899 11.5899 14.5 8 14.5C4.41015 14.5 1.5 11.5899 1.5 8C1.5 4.41015 4.41015 1.5 8 1.5C11.5899 1.5 14.5 4.41015 14.5 8ZM14.5 8V9.5C14.5 10.6046 13.6046 11.5 12.5 11.5C11.3954 11.5 10.5 10.6046 10.5 9.5V5.5" stroke="black" stroke-width="1.2" stroke-linecap="round"/>
+<circle cx="8" cy="8" r="2.5" stroke="white" stroke-width="1.2"/>
+<path d="M14.5 8C14.5 11.5899 11.5899 14.5 8 14.5C4.41015 14.5 1.5 11.5899 1.5 8C1.5 4.41015 4.41015 1.5 8 1.5C11.5899 1.5 14.5 4.41015 14.5 8ZM14.5 8V9.5C14.5 10.6046 13.6046 11.5 12.5 11.5C11.3954 11.5 10.5 10.6046 10.5 9.5V5.5" stroke="white" stroke-width="1.2" stroke-linecap="round"/>
 </svg>"#;
 
 const ICON_SETTINGS: &str = r#"<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-<path d="M6.5 2.5H9.5L10 4L11.5 5L13.5 4.5L15 7L13.5 8.5V9.5L15 11L13.5 13.5L11.5 13L10 14L9.5 15.5H6.5L6 14L4.5 13L2.5 13.5L1 11L2.5 9.5V8.5L1 7L2.5 4.5L4.5 5L6 4L6.5 2.5Z" stroke="black" stroke-width="1.2" stroke-linejoin="round"/>
-<circle cx="8" cy="9" r="2" stroke="black" stroke-width="1.2"/>
+<path d="M6.5 2.5H9.5L10 4L11.5 5L13.5 4.5L15 7L13.5 8.5V9.5L15 11L13.5 13.5L11.5 13L10 14L9.5 15.5H6.5L6 14L4.5 13L2.5 13.5L1 11L2.5 9.5V8.5L1 7L2.5 4.5L4.5 5L6 4L6.5 2.5Z" stroke="white" stroke-width="1.2" stroke-linejoin="round"/>
+<circle cx="8" cy="9" r="2" stroke="white" stroke-width="1.2"/>
 </svg>"#;
 
 const ICON_LOG_OUT: &str = r#"<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-<path d="M6 14H3C2.44772 14 2 13.5523 2 13V3C2 2.44772 2.44772 2 3 2H6" stroke="black" stroke-width="1.2" stroke-linecap="round"/>
-<path d="M11 11L14 8L11 5" stroke="black" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M14 8H6" stroke="black" stroke-width="1.2" stroke-linecap="round"/>
+<path d="M6 14H3C2.44772 14 2 13.5523 2 13V3C2 2.44772 2.44772 2 3 2H6" stroke="white" stroke-width="1.2" stroke-linecap="round"/>
+<path d="M11 11L14 8L11 5" stroke="white" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M14 8H6" stroke="white" stroke-width="1.2" stroke-linecap="round"/>
 </svg>"#;
 
 /// Menu item identifiers for matching events
