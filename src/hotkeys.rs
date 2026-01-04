@@ -3,7 +3,7 @@ use global_hotkey::{
     GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState,
 };
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
 
 use crate::{config, logging, scripts, shortcuts};
@@ -418,6 +418,15 @@ pub(crate) fn ai_hotkey_channel(
     AI_HOTKEY_CHANNEL.get_or_init(|| async_channel::bounded(10))
 }
 
+/// Tracks whether the main hotkey was successfully registered
+/// Used by main.rs to detect if the app has an alternate entry point
+static MAIN_HOTKEY_REGISTERED: AtomicBool = AtomicBool::new(false);
+
+/// Check if the main hotkey was successfully registered
+pub fn is_main_hotkey_registered() -> bool {
+    MAIN_HOTKEY_REGISTERED.load(Ordering::SeqCst)
+}
+
 #[allow(dead_code)]
 static HOTKEY_TRIGGER_COUNT: AtomicU64 = AtomicU64::new(0);
 
@@ -530,8 +539,12 @@ pub(crate) fn start_hotkey_listener(config: config::Config) {
                 "HOTKEY",
                 &format!("Failed to register {}: {}", hotkey_display, e),
             );
+            // Main hotkey registration failed - flag stays false
             return;
         }
+
+        // Mark main hotkey as successfully registered
+        MAIN_HOTKEY_REGISTERED.store(true, Ordering::SeqCst);
 
         logging::log(
             "HOTKEY",

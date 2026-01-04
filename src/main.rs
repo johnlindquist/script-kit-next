@@ -23,7 +23,6 @@ use process_manager::PROCESS_MANAGER;
 // Platform utilities - mouse position, display info, window movement, screenshots
 use platform::{
     calculate_eye_line_bounds_on_mouse_display, capture_app_screenshot, capture_window_by_title,
-    move_first_window_to_bounds,
 };
 #[macro_use]
 extern crate objc;
@@ -249,6 +248,140 @@ fn pending_toast_to_notification(toast: &PendingToast) -> Notification {
 #[allow(dead_code)]
 pub fn is_shutting_down() -> bool {
     SHUTDOWN_REQUESTED.load(Ordering::SeqCst)
+}
+
+// ============================================================================
+// WINDOW SHOW/HIDE HELPERS
+// ============================================================================
+// These helpers consolidate duplicated window show/hide logic that was
+// scattered across hotkey handler, tray menu, stdin commands, and fallback.
+// All show/hide paths should use these helpers for consistency.
+
+/// Show the main window with proper positioning, panel configuration, and focus.
+///
+/// This is the canonical way to show the main window. It:
+/// 1. Sets MAIN_WINDOW_VISIBLE state
+/// 2. Moves window to active space
+/// 3. Positions at eye-line on the display containing the mouse
+/// 4. Configures as floating panel (first time only)
+/// 5. Activates the window and focuses the input
+/// 6. Resets resize debounce and handles NEEDS_RESET if set
+///
+/// # Arguments
+/// * `window` - The main window handle (WindowHandle<Root>)
+/// * `app_entity` - The ScriptListApp entity
+/// * `cx` - The application context
+fn show_main_window_helper(
+    window: WindowHandle<Root>,
+    app_entity: Entity<ScriptListApp>,
+    cx: &mut App,
+) {
+    logging::log("VISIBILITY", "show_main_window_helper called");
+    
+    // 1. Set visibility state
+    set_main_window_visible(true);
+    
+    // 2. Move to active space (macOS)
+    platform::ensure_move_to_active_space();
+    
+    // 3. Position at eye-line on mouse display
+    let window_size = gpui::size(px(750.), initial_window_height());
+    let bounds = platform::calculate_eye_line_bounds_on_mouse_display(window_size);
+    platform::move_first_window_to_bounds(&bounds);
+    
+    // 4. Configure as floating panel (first time only)
+    if !PANEL_CONFIGURED.load(Ordering::SeqCst) {
+        platform::configure_as_floating_panel();
+        PANEL_CONFIGURED.store(true, Ordering::SeqCst);
+    }
+    
+    // 5. Activate window
+    cx.activate(true);
+    let _ = window.update(cx, |_root, win, _cx| {
+        win.activate_window();
+    });
+    
+    // 6. Focus input, reset resize debounce, and handle NEEDS_RESET
+    app_entity.update(cx, |view, ctx| {
+        let focus_handle = view.focus_handle(ctx);
+        let _ = window.update(ctx, |_root, win, _cx| {
+            win.focus(&focus_handle, _cx);
+        });
+        
+        // Reset resize debounce to ensure proper window sizing
+        reset_resize_debounce();
+        
+        // Handle NEEDS_RESET: if set (e.g., script completed while hidden),
+        // reset to script list. Otherwise, ensure window size is correct.
+        if NEEDS_RESET
+            .compare_exchange(true, false, Ordering::SeqCst, Ordering::SeqCst)
+            .is_ok()
+        {
+            logging::log(
+                "VISIBILITY",
+                "NEEDS_RESET was true - resetting to script list",
+            );
+            view.reset_to_script_list(ctx);
+        } else {
+            // Ensure window size matches current view
+            view.update_window_size();
+        }
+    });
+    
+    logging::log("VISIBILITY", "Main window shown and focused");
+}
+
+/// Hide the main window with proper state management.
+///
+/// This is the canonical way to hide the main window. It:
+/// 1. Sets MAIN_WINDOW_VISIBLE state to false
+/// 2. Cancels any active prompt (if in prompt mode)
+/// 3. Resets to script list
+/// 4. Uses hide_main_window() if Notes/AI windows are open (to avoid hiding them)
+/// 5. Uses cx.hide() if no secondary windows are open
+///
+/// # Arguments
+/// * `app_entity` - The ScriptListApp entity
+/// * `cx` - The application context
+fn hide_main_window_helper(app_entity: Entity<ScriptListApp>, cx: &mut App) {
+    logging::log("VISIBILITY", "hide_main_window_helper called");
+    
+    // 1. Set visibility state
+    set_main_window_visible(false);
+    
+    // 2. Check secondary windows BEFORE the update closure
+    let notes_open = notes::is_notes_window_open();
+    let ai_open = ai::is_ai_window_open();
+    logging::log(
+        "VISIBILITY",
+        &format!(
+            "Secondary windows: notes_open={}, ai_open={}",
+            notes_open, ai_open
+        ),
+    );
+    
+    // 3. Cancel prompt and reset UI
+    app_entity.update(cx, |view, ctx| {
+        if view.is_in_prompt() {
+            logging::log("VISIBILITY", "Canceling prompt before hiding");
+            view.cancel_script_execution(ctx);
+        }
+        view.reset_to_script_list(ctx);
+    });
+    
+    // 4. Hide appropriately based on secondary windows
+    if notes_open || ai_open {
+        logging::log(
+            "VISIBILITY",
+            "Using hide_main_window() - secondary windows are open",
+        );
+        platform::hide_main_window();
+    } else {
+        logging::log("VISIBILITY", "Using cx.hide() - no secondary windows");
+        cx.hide();
+    }
+    
+    logging::log("VISIBILITY", "Main window hidden");
 }
 
 /// Register bundled JetBrains Mono font with GPUI's text system
@@ -1053,27 +1186,17 @@ fn main() {
     }
 
     // Register signal handlers for graceful shutdown
-    // Using libc directly since ctrlc crate is not available
+    // SAFETY: Signal handlers can only safely call async-signal-safe functions.
+    // We ONLY set an atomic flag here. All cleanup (logging, killing processes,
+    // removing PID files) happens in a GPUI task that monitors this flag.
     #[cfg(unix)]
     {
-        extern "C" fn handle_signal(sig: libc::c_int) {
-            logging::log("SIGNAL", &format!("Received signal {}", sig));
-
-            // Set shutdown flag to prevent new script spawns
+        extern "C" fn handle_signal(_sig: libc::c_int) {
+            // ASYNC-SIGNAL-SAFE: Only set atomic flag
+            // Do NOT call: logging, mutexes, heap allocation, or any Rust code
+            // that might allocate or lock. The GPUI shutdown monitor task will
+            // handle all cleanup on the main thread.
             SHUTDOWN_REQUESTED.store(true, Ordering::SeqCst);
-
-            // Kill all tracked child processes
-            logging::log("SIGNAL", "Killing all child processes");
-            PROCESS_MANAGER.kill_all_processes();
-
-            // Remove main PID file
-            PROCESS_MANAGER.remove_main_pid();
-
-            // For SIGINT/SIGTERM, exit gracefully
-            // Note: We can't call cx.quit() from here since we're in a signal handler
-            // The process will terminate after killing children
-            logging::log("SIGNAL", "Exiting after signal cleanup");
-            std::process::exit(0);
         }
 
         unsafe {
@@ -1083,7 +1206,7 @@ fn main() {
             libc::signal(libc::SIGHUP, handle_signal as libc::sighandler_t);
             logging::log(
                 "APP",
-                "Signal handlers registered (SIGINT, SIGTERM, SIGHUP)",
+                "Signal handlers registered (SIGINT, SIGTERM, SIGHUP) - cleanup via GPUI task",
             );
         }
     }
@@ -1207,20 +1330,43 @@ fn main() {
 
     hotkeys::start_hotkey_listener(loaded_config);
 
+    // Start watchers and track which ones succeeded
+    // We only spawn poll loops for watchers that successfully started
     let (mut appearance_watcher, appearance_rx) = watcher::AppearanceWatcher::new();
-    if let Err(e) = appearance_watcher.start() {
-        logging::log("APP", &format!("Failed to start appearance watcher: {}", e));
-    }
+    let appearance_watcher_ok = match appearance_watcher.start() {
+        Ok(()) => {
+            logging::log("APP", "Appearance watcher started");
+            true
+        }
+        Err(e) => {
+            logging::log("APP", &format!("Failed to start appearance watcher: {}", e));
+            false
+        }
+    };
 
     let (mut config_watcher, config_rx) = watcher::ConfigWatcher::new();
-    if let Err(e) = config_watcher.start() {
-        logging::log("APP", &format!("Failed to start config watcher: {}", e));
-    }
+    let config_watcher_ok = match config_watcher.start() {
+        Ok(()) => {
+            logging::log("APP", "Config watcher started");
+            true
+        }
+        Err(e) => {
+            logging::log("APP", &format!("Failed to start config watcher: {}", e));
+            false
+        }
+    };
 
     let (mut script_watcher, script_rx) = watcher::ScriptWatcher::new();
-    if let Err(e) = script_watcher.start() {
-        logging::log("APP", &format!("Failed to start script watcher: {}", e));
-    }
+    let script_watcher_ok = match script_watcher.start() {
+        Ok(()) => {
+            logging::log("APP", "Script watcher started");
+            true
+        }
+        Err(e) => {
+            logging::log("APP", &format!("Failed to start script watcher: {}", e));
+            false
+        }
+    };
 
     // Initialize script scheduler
     // Creates the scheduler and scans for scripts with // Cron: or // Schedule: metadata
@@ -1357,6 +1503,35 @@ fn main() {
         // WINDOW_VISIBLE is already false by default (static initializer)
         logging::log("HOTKEY", "Window created but not shown (use hotkey to show)");
 
+        // Fallback: If both hotkey AND tray fail, the user has no way to access the app!
+        // Wait a short time for hotkey registration, then check if we need to show the window.
+        let tray_ok = tray_manager.is_some();
+        let window_for_fallback = window;
+        let app_entity_for_fallback = app_entity.clone();
+        cx.spawn(async move |cx: &mut gpui::AsyncApp| {
+            // Wait 500ms for hotkey registration to complete (it runs in a separate thread)
+            Timer::after(std::time::Duration::from_millis(500)).await;
+            
+            let hotkey_ok = hotkeys::is_main_hotkey_registered();
+            
+            if !hotkey_ok && !tray_ok {
+                logging::log("APP", "");
+                logging::log("APP", "╔════════════════════════════════════════════════════════════════════════════╗");
+                logging::log("APP", "║  WARNING: Both hotkey and tray initialization failed!                     ║");
+                logging::log("APP", "║  Showing window at startup as fallback entry point.                       ║");
+                logging::log("APP", "║  Check logs for specific errors.                                          ║");
+                logging::log("APP", "╚════════════════════════════════════════════════════════════════════════════╝");
+                logging::log("APP", "");
+                
+                // Show window using the centralized helper
+                let _ = cx.update(|cx| {
+                    show_main_window_helper(window_for_fallback, app_entity_for_fallback, cx);
+                });
+            } else {
+                logging::log("APP", &format!("Entry points available: hotkey={}, tray={}", hotkey_ok, tray_ok));
+            }
+        }).detach();
+
         // Main window hotkey listener - uses Entity<ScriptListApp> instead of WindowHandle
         let app_entity_for_hotkey = app_entity.clone();
         let window_for_hotkey = window;
@@ -1376,93 +1551,13 @@ fn main() {
 
                 if is_visible {
                     logging::log("VISIBILITY", "Decision: HIDE");
-                    script_kit_gpui::set_main_window_visible(false);
-
-                    // Check if Notes or AI windows are open BEFORE the closure
-                    let notes_open = notes::is_notes_window_open();
-                    let ai_open = ai::is_ai_window_open();
-                    logging::log(
-                        "VISIBILITY",
-                        &format!(
-                            "Secondary windows: notes_open={}, ai_open={}",
-                            notes_open, ai_open
-                        ),
-                    );
-
                     let _ = cx.update(move |cx: &mut gpui::App| {
-                        // Cancel any active prompt and reset UI
-                        app_entity_inner.update(cx, |view, ctx| {
-                            if view.is_in_prompt() {
-                                logging::log("HOTKEY", "Canceling prompt before hiding");
-                                view.cancel_script_execution(ctx);
-                            }
-                            view.reset_to_script_list(ctx);
-                        });
-
-                        // CRITICAL: Only hide main window if Notes/AI are open
-                        // cx.hide() hides the ENTIRE app (all windows), so we use
-                        // platform::hide_main_window() to hide only the main window
-                        if notes_open || ai_open {
-                            logging::log(
-                                "HOTKEY",
-                                "Using hide_main_window() - secondary windows are open",
-                            );
-                            platform::hide_main_window();
-                        } else {
-                            logging::log("HOTKEY", "Using cx.hide() - no secondary windows");
-                            cx.hide();
-                        }
-                        logging::log("HOTKEY", "Main window hidden");
+                        hide_main_window_helper(app_entity_inner, cx);
                     });
                 } else {
                     logging::log("VISIBILITY", "Decision: SHOW");
-
-                    script_kit_gpui::set_main_window_visible(true);
-
                     let _ = cx.update(move |cx: &mut gpui::App| {
-                        // Position window on mouse display at eye-line
-                        platform::ensure_move_to_active_space();
-
-                        let window_size = gpui::size(px(750.), initial_window_height());
-                        let bounds = platform::calculate_eye_line_bounds_on_mouse_display(window_size);
-                        platform::move_first_window_to_bounds(&bounds);
-
-                        // Configure as floating panel on first show
-                        if !PANEL_CONFIGURED.load(std::sync::atomic::Ordering::SeqCst) {
-                            platform::configure_as_floating_panel();
-                            PANEL_CONFIGURED.store(true, std::sync::atomic::Ordering::SeqCst);
-                        }
-
-                        // Activate window and focus input
-                        cx.activate(true);
-                        let _ = window_inner.update(cx, |_root, window, _cx| {
-                            window.activate_window();
-                        });
-
-                        // Focus the input and check for any missed reset
-                        // (reset should happen on hide, but this is a safety net)
-                        app_entity_inner.update(cx, |view, ctx| {
-                            let focus_handle = view.focus_handle(ctx);
-                            window_inner.update(ctx, |_root, window, _cx| {
-                                window.focus(&focus_handle, _cx);
-                            }).ok();
-
-                            // Safety net: if NEEDS_RESET is still true, reset now
-                            if NEEDS_RESET.compare_exchange(
-                                true,
-                                false,
-                                Ordering::SeqCst,
-                                Ordering::SeqCst,
-                            ).is_ok() {
-                                logging::log(
-                                    "VISIBILITY",
-                                    "NEEDS_RESET was true (safety net) - resetting to script list",
-                                );
-                                view.reset_to_script_list(ctx);
-                            }
-                        });
-
-                        logging::log("HOTKEY", "Window shown and activated");
+                        show_main_window_helper(window_inner, app_entity_inner, cx);
                     });
                 }
             }
@@ -1504,73 +1599,117 @@ fn main() {
         }).detach();
 
         // Appearance change watcher - event-driven with async_channel
-        let app_entity_for_appearance = app_entity.clone();
-        cx.spawn(async move |cx: &mut gpui::AsyncApp| {
-            // Event-driven: blocks until appearance change event received
-            while let Ok(_event) = appearance_rx.recv().await {
-                logging::log("APP", "System appearance changed, updating theme");
-                let _ = cx.update(|cx| {
-                    // Sync gpui-component theme with new system appearance
-                    theme::sync_gpui_component_theme(cx);
-
-                    app_entity_for_appearance.update(cx, |view, ctx| {
-                        view.update_theme(ctx);
-                    });
-                });
-            }
-            logging::log("APP", "Appearance watcher channel closed");
-        }).detach();
-
-        // Config reload watcher - watches ~/.sk/kit/config.ts for changes
-        let app_entity_for_config = app_entity.clone();
-        cx.spawn(async move |cx: &mut gpui::AsyncApp| {
-            loop {
-                Timer::after(std::time::Duration::from_millis(200)).await;
-
-                if config_rx.try_recv().is_ok() {
-                    logging::log("APP", "Config file changed, reloading");
+        // Only spawn if watcher started successfully
+        if appearance_watcher_ok {
+            let app_entity_for_appearance = app_entity.clone();
+            cx.spawn(async move |cx: &mut gpui::AsyncApp| {
+                // Event-driven: blocks until appearance change event received
+                while let Ok(_event) = appearance_rx.recv().await {
+                    logging::log("APP", "System appearance changed, updating theme");
                     let _ = cx.update(|cx| {
-                        app_entity_for_config.update(cx, |view, ctx| {
-                            view.update_config(ctx);
+                        // Sync gpui-component theme with new system appearance
+                        theme::sync_gpui_component_theme(cx);
+
+                        app_entity_for_appearance.update(cx, |view, ctx| {
+                            view.update_theme(ctx);
                         });
                     });
                 }
-            }
-        }).detach();
+                logging::log("APP", "Appearance watcher channel closed");
+            }).detach();
+        }
+
+        // Config reload watcher - watches ~/.sk/kit/config.ts for changes
+        // Only spawn if watcher started successfully
+        if config_watcher_ok {
+            let app_entity_for_config = app_entity.clone();
+            cx.spawn(async move |cx: &mut gpui::AsyncApp| {
+                loop {
+                    Timer::after(std::time::Duration::from_millis(200)).await;
+
+                    if config_rx.try_recv().is_ok() {
+                        logging::log("APP", "Config file changed, reloading");
+                        let _ = cx.update(|cx| {
+                            app_entity_for_config.update(cx, |view, ctx| {
+                                view.update_config(ctx);
+                            });
+                        });
+                    }
+                }
+            }).detach();
+        }
 
         // Script/scriptlets reload watcher - watches ~/.sk/kit/*/scripts/ and ~/.sk/kit/*/scriptlets/
         // Uses incremental updates for scriptlet files, full reload for scripts
         // Also re-scans for scheduled scripts to pick up new/modified schedules
-        let app_entity_for_scripts = app_entity.clone();
-        let scheduler_for_scripts = scheduler.clone();
-        cx.spawn(async move |cx: &mut gpui::AsyncApp| {
-            use watcher::ScriptReloadEvent;
+        // Only spawn if watcher started successfully
+        if script_watcher_ok {
+            let app_entity_for_scripts = app_entity.clone();
+            let scheduler_for_scripts = scheduler.clone();
+            cx.spawn(async move |cx: &mut gpui::AsyncApp| {
+                use watcher::ScriptReloadEvent;
 
-            loop {
-                Timer::after(std::time::Duration::from_millis(200)).await;
+                loop {
+                    Timer::after(std::time::Duration::from_millis(200)).await;
 
-                // Drain all pending events
-                while let Ok(event) = script_rx.try_recv() {
-                    match event {
-                        ScriptReloadEvent::FileChanged(path) | ScriptReloadEvent::FileCreated(path) => {
-                            // Check if it's a scriptlet file (markdown in scriptlets directory)
-                            let is_scriptlet = path.extension().map(|e| e == "md").unwrap_or(false);
+                    // Drain all pending events
+                    while let Ok(event) = script_rx.try_recv() {
+                        match event {
+                            ScriptReloadEvent::FileChanged(path) | ScriptReloadEvent::FileCreated(path) => {
+                                // Check if it's a scriptlet file (markdown in scriptlets directory)
+                                let is_scriptlet = path.extension().map(|e| e == "md").unwrap_or(false);
 
-                            if is_scriptlet {
-                                logging::log("APP", &format!("Scriptlet file changed: {}", path.display()));
-                                let path_clone = path.clone();
-                                let _ = cx.update(|cx| {
-                                    app_entity_for_scripts.update(cx, |view, ctx| {
-                                        view.handle_scriptlet_file_change(&path_clone, false, ctx);
+                                if is_scriptlet {
+                                    logging::log("APP", &format!("Scriptlet file changed: {}", path.display()));
+                                    let path_clone = path.clone();
+                                    let _ = cx.update(|cx| {
+                                        app_entity_for_scripts.update(cx, |view, ctx| {
+                                            view.handle_scriptlet_file_change(&path_clone, false, ctx);
+                                        });
                                     });
-                                });
-                            } else {
-                                logging::log("APP", &format!("Script file changed: {}", path.display()));
-                                // Re-scan for scheduled scripts when script files change
+                                } else {
+                                    logging::log("APP", &format!("Script file changed: {}", path.display()));
+                                    // Re-scan for scheduled scripts when script files change
+                                    if let Ok(scheduler_guard) = scheduler_for_scripts.lock() {
+                                        let new_count = scripts::register_scheduled_scripts(&scheduler_guard);
+                                        if new_count > 0 {
+                                            logging::log("APP", &format!("Re-registered {} scheduled scripts after file change", new_count));
+                                        }
+                                    }
+                                    let _ = cx.update(|cx| {
+                                        app_entity_for_scripts.update(cx, |view, ctx| {
+                                            view.refresh_scripts(ctx);
+                                        });
+                                    });
+                                }
+                            }
+                            ScriptReloadEvent::FileDeleted(path) => {
+                                let is_scriptlet = path.extension().map(|e| e == "md").unwrap_or(false);
+
+                                if is_scriptlet {
+                                    logging::log("APP", &format!("Scriptlet file deleted: {}", path.display()));
+                                    let path_clone = path.clone();
+                                    let _ = cx.update(|cx| {
+                                        app_entity_for_scripts.update(cx, |view, ctx| {
+                                            view.handle_scriptlet_file_change(&path_clone, true, ctx);
+                                        });
+                                    });
+                                } else {
+                                    logging::log("APP", &format!("Script file deleted: {}", path.display()));
+                                    let _ = cx.update(|cx| {
+                                        app_entity_for_scripts.update(cx, |view, ctx| {
+                                            view.refresh_scripts(ctx);
+                                        });
+                                    });
+                                }
+                            }
+                            ScriptReloadEvent::FullReload => {
+                                logging::log("APP", "Full script/scriptlet reload requested");
+                                // Re-scan for scheduled scripts
                                 if let Ok(scheduler_guard) = scheduler_for_scripts.lock() {
                                     let new_count = scripts::register_scheduled_scripts(&scheduler_guard);
                                     if new_count > 0 {
-                                        logging::log("APP", &format!("Re-registered {} scheduled scripts after file change", new_count));
+                                        logging::log("APP", &format!("Re-registered {} scheduled scripts after full reload", new_count));
                                     }
                                 }
                                 let _ = cx.update(|cx| {
@@ -1580,45 +1719,10 @@ fn main() {
                                 });
                             }
                         }
-                        ScriptReloadEvent::FileDeleted(path) => {
-                            let is_scriptlet = path.extension().map(|e| e == "md").unwrap_or(false);
-
-                            if is_scriptlet {
-                                logging::log("APP", &format!("Scriptlet file deleted: {}", path.display()));
-                                let path_clone = path.clone();
-                                let _ = cx.update(|cx| {
-                                    app_entity_for_scripts.update(cx, |view, ctx| {
-                                        view.handle_scriptlet_file_change(&path_clone, true, ctx);
-                                    });
-                                });
-                            } else {
-                                logging::log("APP", &format!("Script file deleted: {}", path.display()));
-                                let _ = cx.update(|cx| {
-                                    app_entity_for_scripts.update(cx, |view, ctx| {
-                                        view.refresh_scripts(ctx);
-                                    });
-                                });
-                            }
-                        }
-                        ScriptReloadEvent::FullReload => {
-                            logging::log("APP", "Full script/scriptlet reload requested");
-                            // Re-scan for scheduled scripts
-                            if let Ok(scheduler_guard) = scheduler_for_scripts.lock() {
-                                let new_count = scripts::register_scheduled_scripts(&scheduler_guard);
-                                if new_count > 0 {
-                                    logging::log("APP", &format!("Re-registered {} scheduled scripts after full reload", new_count));
-                                }
-                            }
-                            let _ = cx.update(|cx| {
-                                app_entity_for_scripts.update(cx, |view, ctx| {
-                                    view.refresh_scripts(ctx);
-                                });
-                            });
-                        }
                     }
                 }
-            }
-        }).detach();
+            }).detach();
+        }
 
         // NOTE: Prompt message listener is now spawned per-script in execute_interactive()
         // using event-driven async_channel instead of 50ms polling
@@ -1630,11 +1734,23 @@ fn main() {
             logging::log("APP", "Scheduler event handler started");
 
             loop {
+                // Check shutdown flag - exit loop if shutting down
+                if SHUTDOWN_REQUESTED.load(Ordering::SeqCst) {
+                    logging::log("SCHEDULER", "Shutdown requested, exiting scheduler event handler");
+                    break;
+                }
+                
                 // Use recv_timeout to periodically check for events without blocking forever
                 match scheduler_rx.recv_timeout(std::time::Duration::from_secs(1)) {
                     Ok(event) => {
                         match event {
                             scheduler::SchedulerEvent::RunScript(path) => {
+                                // Check shutdown flag before spawning new scripts
+                                if SHUTDOWN_REQUESTED.load(Ordering::SeqCst) {
+                                    logging::log("SCHEDULER", &format!("Skipping scheduled script (shutdown in progress): {}", path.display()));
+                                    continue;
+                                }
+                                
                                 logging::log("SCHEDULER", &format!("Executing scheduled script: {}", path.display()));
 
                                 // Execute the script using the existing executor infrastructure
@@ -1721,40 +1837,46 @@ fn main() {
         });
 
         // Test command file watcher - allows smoke tests to trigger script execution
-        let app_entity_for_test = app_entity.clone();
-        cx.spawn(async move |cx: &mut gpui::AsyncApp| {
-            let cmd_file = std::path::PathBuf::from("/tmp/script-kit-gpui-cmd.txt");
-            loop {
-                Timer::after(std::time::Duration::from_millis(500)).await;
+        // SECURITY: This feature is ONLY enabled in debug builds to prevent local privilege escalation.
+        // In release builds, any process that can write to /tmp could trigger script execution.
+        #[cfg(debug_assertions)]
+        {
+            let app_entity_for_test = app_entity.clone();
+            cx.spawn(async move |cx: &mut gpui::AsyncApp| {
+                logging::log("TEST", "Debug command file watcher enabled (debug build only)");
+                let cmd_file = std::path::PathBuf::from("/tmp/script-kit-gpui-cmd.txt");
+                loop {
+                    Timer::after(std::time::Duration::from_millis(500)).await;
 
-                if cmd_file.exists() {
-                    if let Ok(content) = std::fs::read_to_string(&cmd_file) {
-                        let _ = std::fs::remove_file(&cmd_file); // Remove immediately to prevent re-processing
+                    if cmd_file.exists() {
+                        if let Ok(content) = std::fs::read_to_string(&cmd_file) {
+                            let _ = std::fs::remove_file(&cmd_file); // Remove immediately to prevent re-processing
 
-                        for line in content.lines() {
-                            if line.starts_with("run:") {
-                                let script_name = line.strip_prefix("run:").unwrap_or("").trim();
-                                logging::log("TEST", &format!("Test command: run script '{}'", script_name));
+                            for line in content.lines() {
+                                if line.starts_with("run:") {
+                                    let script_name = line.strip_prefix("run:").unwrap_or("").trim();
+                                    logging::log("TEST", &format!("Test command: run script '{}'", script_name));
 
-                                let script_name_owned = script_name.to_string();
-                                let app_entity_inner = app_entity_for_test.clone();
-                                let _ = cx.update(|cx| {
-                                    app_entity_inner.update(cx, |view, ctx| {
-                                        // Find and run the script interactively
-                                        if let Some(script) = view.scripts.iter().find(|s| s.name == script_name_owned || s.path.to_string_lossy().contains(&script_name_owned)).cloned() {
-                                            logging::log("TEST", &format!("Found script: {}", script.name));
-                                            view.execute_interactive(&script, ctx);
-                                        } else {
-                                            logging::log("TEST", &format!("Script not found: {}", script_name_owned));
-                                        }
+                                    let script_name_owned = script_name.to_string();
+                                    let app_entity_inner = app_entity_for_test.clone();
+                                    let _ = cx.update(|cx| {
+                                        app_entity_inner.update(cx, |view, ctx| {
+                                            // Find and run the script interactively
+                                            if let Some(script) = view.scripts.iter().find(|s| s.name == script_name_owned || s.path.to_string_lossy().contains(&script_name_owned)).cloned() {
+                                                logging::log("TEST", &format!("Found script: {}", script.name));
+                                                view.execute_interactive(&script, ctx);
+                                            } else {
+                                                logging::log("TEST", &format!("Script not found: {}", script_name_owned));
+                                            }
+                                        });
                                     });
-                                });
+                                }
                             }
                         }
                     }
                 }
-            }
-        }).detach();
+            }).detach();
+        }
 
         // External command listener - receives commands via stdin (event-driven, no polling)
         let stdin_rx = start_stdin_listener();
@@ -1802,16 +1924,18 @@ fn main() {
                             ExternalCommand::Run { ref path, ref request_id } => {
                                 let rid = request_id.as_deref().unwrap_or("-");
                                 logging::log("STDIN", &format!("[{}] Executing script: {}", rid, path));
-                                // Show and focus window - match hotkey handler setup for consistency
+                                
+                                // NOTE: This is a simplified show path for script execution.
+                                // We show the window, then immediately run the script.
+                                // The core logic matches show_main_window_helper().
+                                
                                 script_kit_gpui::set_main_window_visible(true);
-
-                                // Position window on mouse display at eye-line (same as hotkey handler)
                                 platform::ensure_move_to_active_space();
+                                
                                 let window_size = gpui::size(px(750.), initial_window_height());
                                 let bounds = platform::calculate_eye_line_bounds_on_mouse_display(window_size);
                                 platform::move_first_window_to_bounds(&bounds);
 
-                                // Configure as floating panel on first show (same as hotkey handler)
                                 if !PANEL_CONFIGURED.load(std::sync::atomic::Ordering::SeqCst) {
                                     platform::configure_as_floating_panel();
                                     PANEL_CONFIGURED.store(true, std::sync::atomic::Ordering::SeqCst);
@@ -1829,19 +1953,18 @@ fn main() {
                                 let rid = request_id.as_deref().unwrap_or("-");
                                 logging::log("STDIN", &format!("[{}] Showing window", rid));
 
-                                // Menu bar tracking is now handled by frontmost_app_tracker
-                                // which pre-fetches menu items in background when apps activate
-
-                                // Show and focus window - match hotkey handler setup for consistency
+                                // NOTE: This is a simplified show path for explicit stdin commands.
+                                // Unlike the hotkey handler, we don't need NEEDS_RESET handling
+                                // because this is an explicit show (not a toggle).
+                                // The core logic matches show_main_window_helper().
+                                
                                 script_kit_gpui::set_main_window_visible(true);
-
-                                // Position window on mouse display at eye-line (same as hotkey handler)
                                 platform::ensure_move_to_active_space();
+                                
                                 let window_size = gpui::size(px(750.), initial_window_height());
                                 let bounds = platform::calculate_eye_line_bounds_on_mouse_display(window_size);
                                 platform::move_first_window_to_bounds(&bounds);
 
-                                // Configure as floating panel on first show (same as hotkey handler)
                                 if !PANEL_CONFIGURED.load(std::sync::atomic::Ordering::SeqCst) {
                                     platform::configure_as_floating_panel();
                                     PANEL_CONFIGURED.store(true, std::sync::atomic::Ordering::SeqCst);
@@ -1856,7 +1979,19 @@ fn main() {
                                 let rid = request_id.as_deref().unwrap_or("-");
                                 logging::log("STDIN", &format!("[{}] Hiding main window", rid));
                                 script_kit_gpui::set_main_window_visible(false);
-                                ctx.hide();
+                                
+                                // Check if Notes or AI windows are open
+                                let notes_open = notes::is_notes_window_open();
+                                let ai_open = ai::is_ai_window_open();
+                                
+                                // CRITICAL: Only hide main window if Notes/AI are open
+                                // ctx.hide() hides the ENTIRE app (all windows)
+                                if notes_open || ai_open {
+                                    logging::log("STDIN", "Using hide_main_window() - secondary windows are open");
+                                    platform::hide_main_window();
+                                } else {
+                                    ctx.hide();
+                                }
                             }
                             ExternalCommand::SetFilter { ref text, ref request_id } => {
                                 let rid = request_id.as_deref().unwrap_or("-");
@@ -2231,43 +2366,10 @@ fn main() {
                         match tray_mgr.match_menu_event(&event) {
                             Some(TrayMenuAction::OpenScriptKit) => {
                                 logging::log("TRAY", "Open Script Kit menu item clicked");
+                                let window_inner = window_for_tray;
                                 let app_entity_inner = app_entity_for_tray.clone();
                                 let _ = cx.update(|cx| {
-                                    // Show and focus window (same logic as hotkey handler)
-                                    script_kit_gpui::set_main_window_visible(true);
-
-                                    // Calculate new bounds on display with mouse
-                                    let window_size = size(px(750.), initial_window_height());
-                                    let new_bounds = calculate_eye_line_bounds_on_mouse_display(window_size);
-
-                                    // Move window first
-                                    move_first_window_to_bounds(&new_bounds);
-
-                                    // Activate the app
-                                    cx.activate(true);
-
-                                    // Configure as floating panel on first show
-                                    if !PANEL_CONFIGURED.swap(true, Ordering::SeqCst) {
-                                        platform::configure_as_floating_panel();
-                                    }
-
-                                    // Focus the window via Root, then update app entity
-                                    let _ = window_for_tray.update(cx, |_root, win, root_cx| {
-                                        win.activate_window();
-                                        app_entity_inner.update(root_cx, |view, ctx| {
-                                            let focus_handle = view.focus_handle(ctx);
-                                            win.focus(&focus_handle, ctx);
-
-                                            // Reset if needed and ensure proper sizing
-                                            reset_resize_debounce();
-
-                                            if NEEDS_RESET.compare_exchange(true, false, Ordering::SeqCst, Ordering::SeqCst).is_ok() {
-                                                view.reset_to_script_list(ctx);
-                                            } else {
-                                                view.update_window_size();
-                                            }
-                                        });
-                                    });
+                                    show_main_window_helper(window_inner, app_entity_inner, cx);
                                 });
                             }
                             Some(TrayMenuAction::OpenNotes) => {
@@ -2341,6 +2443,10 @@ fn main() {
                             }
                             Some(TrayMenuAction::Quit) => {
                                 logging::log("TRAY", "Quit menu item clicked");
+                                // Set shutdown flag FIRST - prevents new script spawns
+                                // and triggers the shutdown monitor task for unified cleanup
+                                SHUTDOWN_REQUESTED.store(true, Ordering::SeqCst);
+                                
                                 // Clean up processes and PID file before quitting
                                 PROCESS_MANAGER.kill_all_processes();
                                 PROCESS_MANAGER.remove_main_pid();
@@ -2359,6 +2465,36 @@ fn main() {
                 logging::log("TRAY", "Tray menu event handler exiting");
             }).detach();
         }
+
+        // Shutdown monitor task - checks SHUTDOWN_REQUESTED flag set by signal handler
+        // Performs all cleanup on the main thread where it's safe to call logging,
+        // mutexes, and other non-async-signal-safe functions.
+        cx.spawn(async move |cx: &mut gpui::AsyncApp| {
+            loop {
+                // Check every 100ms for shutdown signal
+                Timer::after(std::time::Duration::from_millis(100)).await;
+
+                if SHUTDOWN_REQUESTED.load(Ordering::SeqCst) {
+                    logging::log("SHUTDOWN", "Shutdown signal detected, performing graceful cleanup");
+
+                    // Kill all tracked child processes
+                    logging::log("SHUTDOWN", "Killing all child processes");
+                    PROCESS_MANAGER.kill_all_processes();
+
+                    // Remove main PID file
+                    PROCESS_MANAGER.remove_main_pid();
+
+                    logging::log("SHUTDOWN", "Cleanup complete, quitting application");
+
+                    // Quit the GPUI application
+                    let _ = cx.update(|cx| {
+                        cx.quit();
+                    });
+
+                    break;
+                }
+            }
+        }).detach();
 
         logging::log("APP", "Application ready - Cmd+; to show, Esc to hide, Cmd+K for actions");
     });
