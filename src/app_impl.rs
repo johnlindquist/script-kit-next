@@ -857,7 +857,7 @@ impl ScriptListApp {
     }
 
     #[allow(dead_code)]
-    fn filtered_scripts(&self) -> Vec<scripts::Script> {
+    fn filtered_scripts(&self) -> Vec<Arc<scripts::Script>> {
         let filter_text = self.filter_text();
         if filter_text.is_empty() {
             self.scripts.clone()

@@ -6,6 +6,7 @@ use nucleo_matcher::{Matcher, Utf32Str};
 use std::cmp::Ordering;
 use std::fs;
 use std::path::PathBuf;
+use std::sync::Arc;
 use tracing::{debug, instrument, warn};
 
 use crate::app_launcher::AppInfo;
@@ -68,9 +69,10 @@ pub struct MatchIndices {
 }
 
 /// Represents a scored match result for fuzzy search
+/// Uses Arc<Script> for cheap cloning during filter operations (H1 optimization)
 #[derive(Clone, Debug)]
 pub struct ScriptMatch {
-    pub script: Script,
+    pub script: Arc<Script>,
     pub score: i32,
     /// The filename used for matching (e.g., "my-script.ts")
     pub filename: String,
@@ -79,9 +81,10 @@ pub struct ScriptMatch {
 }
 
 /// Represents a scored match result for fuzzy search on scriptlets
+/// Uses Arc<Scriptlet> for cheap cloning during filter operations (H1 optimization)
 #[derive(Clone, Debug)]
 pub struct ScriptletMatch {
-    pub scriptlet: Scriptlet,
+    pub scriptlet: Arc<Scriptlet>,
     pub score: i32,
     /// The display file path with anchor for matching (e.g., "url.md#open-github")
     pub display_file_path: Option<String>,
@@ -502,10 +505,12 @@ fn parse_scriptlet_section(
 }
 
 /// Reads scriptlets from all *.md files in ~/.sk/kit/*/scriptlets/
-/// Returns a sorted list of Scriptlet structs parsed from markdown
+/// Returns a sorted list of Arc-wrapped Scriptlet structs parsed from markdown
 /// Returns empty vec if directory doesn't exist or is inaccessible
+///
+/// H1 Optimization: Returns Arc<Scriptlet> to avoid expensive clones during filter operations.
 #[instrument(level = "debug", skip_all)]
-pub fn read_scriptlets() -> Vec<Scriptlet> {
+pub fn read_scriptlets() -> Vec<Arc<Scriptlet>> {
     let kit_path = get_kit_path();
 
     // Default to main kit for backwards compatibility
@@ -547,7 +552,7 @@ pub fn read_scriptlets() -> Vec<Scriptlet> {
                                 if let Some(scriptlet) =
                                     parse_scriptlet_section(&current_section, Some(&path))
                                 {
-                                    scriptlets.push(scriptlet);
+                                    scriptlets.push(Arc::new(scriptlet));
                                 }
                                 current_section = line.to_string();
                             } else {
@@ -561,7 +566,7 @@ pub fn read_scriptlets() -> Vec<Scriptlet> {
                             if let Some(scriptlet) =
                                 parse_scriptlet_section(&current_section, Some(&path))
                             {
-                                scriptlets.push(scriptlet);
+                                scriptlets.push(Arc::new(scriptlet));
                             }
                         }
                     }
@@ -601,9 +606,11 @@ pub fn read_scriptlets() -> Vec<Scriptlet> {
 /// - ~/.sk/kit/*/scriptlets/*.md (all kits)
 ///
 /// Uses `crate::scriptlets::parse_markdown_as_scriptlets` for parsing.
-/// Returns scriptlets sorted by group then by name.
+/// Returns Arc-wrapped scriptlets sorted by group then by name.
+///
+/// H1 Optimization: Returns Arc<Scriptlet> to avoid expensive clones during filter operations.
 #[instrument(level = "debug", skip_all)]
-pub fn load_scriptlets() -> Vec<Scriptlet> {
+pub fn load_scriptlets() -> Vec<Arc<Scriptlet>> {
     let kit_path = get_kit_path();
 
     let mut scriptlets = Vec::new();
@@ -640,7 +647,7 @@ pub fn load_scriptlets() -> Vec<Scriptlet> {
                                             &parsed_scriptlet.command,
                                         );
 
-                                        scriptlets.push(Scriptlet {
+                                        scriptlets.push(Arc::new(Scriptlet {
                                             name: parsed_scriptlet.name,
                                             description: parsed_scriptlet.metadata.description,
                                             code: parsed_scriptlet.scriptlet_content,
@@ -655,7 +662,7 @@ pub fn load_scriptlets() -> Vec<Scriptlet> {
                                             file_path: Some(file_path),
                                             command: Some(parsed_scriptlet.command),
                                             alias: parsed_scriptlet.metadata.alias,
-                                        });
+                                        }));
                                     }
                                 }
                                 Err(e) => {
@@ -726,13 +733,15 @@ fn build_scriptlet_file_path(md_path: &std::path::Path, command: &str) -> String
 /// This function parses a single .md file and returns all scriptlets found in it.
 /// Used for incremental updates when a scriptlet file changes.
 ///
+/// H1 Optimization: Returns Arc<Scriptlet> to avoid expensive clones during filter operations.
+///
 /// # Arguments
 /// * `path` - Path to the markdown file
 ///
 /// # Returns
-/// Vector of Scriptlet structs parsed from the file, or empty vec on error
+/// Vector of Arc-wrapped Scriptlet structs parsed from the file, or empty vec on error
 #[instrument(level = "debug", skip_all, fields(path = %path.display()))]
-pub fn read_scriptlets_from_file(path: &std::path::Path) -> Vec<Scriptlet> {
+pub fn read_scriptlets_from_file(path: &std::path::Path) -> Vec<Arc<Scriptlet>> {
     // Verify it's a markdown file
     if path.extension().and_then(|e| e.to_str()) != Some("md") {
         debug!(path = %path.display(), "Not a markdown file, skipping");
@@ -761,13 +770,13 @@ pub fn read_scriptlets_from_file(path: &std::path::Path) -> Vec<Scriptlet> {
     // Determine kit from path
     let kit = extract_kit_from_path(path, &kit_path);
 
-    // Convert parsed scriptlets to our Scriptlet format
-    let scriptlets: Vec<Scriptlet> = parsed
+    // Convert parsed scriptlets to our Arc-wrapped Scriptlet format
+    let scriptlets: Vec<Arc<Scriptlet>> = parsed
         .into_iter()
         .map(|parsed_scriptlet| {
             let file_path = build_scriptlet_file_path(path, &parsed_scriptlet.command);
 
-            Scriptlet {
+            Arc::new(Scriptlet {
                 name: parsed_scriptlet.name,
                 description: parsed_scriptlet.metadata.description,
                 code: parsed_scriptlet.scriptlet_content,
@@ -782,7 +791,7 @@ pub fn read_scriptlets_from_file(path: &std::path::Path) -> Vec<Scriptlet> {
                 file_path: Some(file_path),
                 command: Some(parsed_scriptlet.command),
                 alias: parsed_scriptlet.metadata.alias,
-            }
+            })
         })
         .collect();
 
@@ -796,10 +805,12 @@ pub fn read_scriptlets_from_file(path: &std::path::Path) -> Vec<Scriptlet> {
 }
 
 /// Reads scripts from ~/.sk/kit/*/scripts/ directories
-/// Returns a sorted list of Script structs for .ts and .js files
+/// Returns a sorted list of Arc-wrapped Script structs for .ts and .js files
 /// Returns empty vec if directory doesn't exist or is inaccessible
+///
+/// H1 Optimization: Returns Arc<Script> to avoid expensive clones during filter operations.
 #[instrument(level = "debug", skip_all)]
-pub fn read_scripts() -> Vec<Script> {
+pub fn read_scripts() -> Vec<Arc<Script>> {
     let kit_path = get_kit_path();
 
     // Glob pattern to find scripts in all kits
@@ -835,7 +846,8 @@ pub fn read_scripts() -> Vec<Script> {
 }
 
 /// Read scripts from a single directory and append to the scripts vector
-fn read_scripts_from_dir(scripts_dir: &PathBuf, scripts: &mut Vec<Script>) {
+/// H1 Optimization: Creates Arc-wrapped Scripts for cheap cloning.
+fn read_scripts_from_dir(scripts_dir: &PathBuf, scripts: &mut Vec<Arc<Script>>) {
     // Read the directory contents
     match std::fs::read_dir(scripts_dir) {
         Ok(entries) => {
@@ -860,7 +872,7 @@ fn read_scripts_from_dir(scripts_dir: &PathBuf, scripts: &mut Vec<Script>) {
                                                 .name
                                                 .unwrap_or_else(|| filename_str.to_string());
 
-                                            scripts.push(Script {
+                                            scripts.push(Arc::new(Script {
                                                 name,
                                                 path: path.clone(),
                                                 extension: ext_str.to_string(),
@@ -870,7 +882,7 @@ fn read_scripts_from_dir(scripts_dir: &PathBuf, scripts: &mut Vec<Script>) {
                                                 shortcut: script_metadata.shortcut,
                                                 typed_metadata,
                                                 schema,
-                                            });
+                                            }));
                                         }
                                     }
                                 }
@@ -1149,7 +1161,10 @@ fn extract_scriptlet_display_path(file_path: &Option<String>) -> Option<String> 
 /// Searches across name, filename (e.g., "my-script.ts"), description, and path
 /// Returns results sorted by relevance score (highest first)
 /// Match indices are provided to enable UI highlighting of matched characters
-pub fn fuzzy_search_scripts(scripts: &[Script], query: &str) -> Vec<ScriptMatch> {
+///
+/// H1 Optimization: Accepts Arc<Script> to avoid expensive clones during filter operations.
+/// Each ScriptMatch contains an Arc::clone which is just a refcount bump.
+pub fn fuzzy_search_scripts(scripts: &[Arc<Script>], query: &str) -> Vec<ScriptMatch> {
     if query.is_empty() {
         // If no query, return all scripts with equal score, sorted by name
         return scripts
@@ -1157,7 +1172,7 @@ pub fn fuzzy_search_scripts(scripts: &[Script], query: &str) -> Vec<ScriptMatch>
             .map(|s| {
                 let filename = extract_filename(&s.path);
                 ScriptMatch {
-                    script: s.clone(),
+                    script: Arc::clone(s),
                     score: 0,
                     filename,
                     match_indices: MatchIndices::default(),
@@ -1223,7 +1238,7 @@ pub fn fuzzy_search_scripts(scripts: &[Script], query: &str) -> Vec<ScriptMatch>
 
         if score > 0 {
             matches.push(ScriptMatch {
-                script: script.clone(),
+                script: Arc::clone(script),
                 score,
                 filename,
                 match_indices,
@@ -1244,7 +1259,10 @@ pub fn fuzzy_search_scripts(scripts: &[Script], query: &str) -> Vec<ScriptMatch>
 /// Searches across name, file_path with anchor (e.g., "url.md#open-github"), description, and code
 /// Returns results sorted by relevance score (highest first)
 /// Match indices are provided to enable UI highlighting of matched characters
-pub fn fuzzy_search_scriptlets(scriptlets: &[Scriptlet], query: &str) -> Vec<ScriptletMatch> {
+///
+/// H1 Optimization: Accepts Arc<Scriptlet> to avoid expensive clones during filter operations.
+/// Each ScriptletMatch contains an Arc::clone which is just a refcount bump.
+pub fn fuzzy_search_scriptlets(scriptlets: &[Arc<Scriptlet>], query: &str) -> Vec<ScriptletMatch> {
     if query.is_empty() {
         // If no query, return all scriptlets with equal score, sorted by name
         return scriptlets
@@ -1252,7 +1270,7 @@ pub fn fuzzy_search_scriptlets(scriptlets: &[Scriptlet], query: &str) -> Vec<Scr
             .map(|s| {
                 let display_file_path = extract_scriptlet_display_path(&s.file_path);
                 ScriptletMatch {
-                    scriptlet: s.clone(),
+                    scriptlet: Arc::clone(s),
                     score: 0,
                     display_file_path,
                     match_indices: MatchIndices::default(),
@@ -1329,7 +1347,7 @@ pub fn fuzzy_search_scriptlets(scriptlets: &[Scriptlet], query: &str) -> Vec<Scr
 
         if score > 0 {
             matches.push(ScriptletMatch {
-                scriptlet: scriptlet.clone(),
+                scriptlet: Arc::clone(scriptlet),
                 score,
                 display_file_path,
                 match_indices,
@@ -1589,9 +1607,11 @@ pub fn fuzzy_search_windows(
 /// Perform unified fuzzy search across scripts, scriptlets, and built-ins
 /// Returns combined and ranked results sorted by relevance
 /// Built-ins appear at the TOP of results (before scripts) when scores are equal
+///
+/// H1 Optimization: Accepts Arc<Script> and Arc<Scriptlet> to avoid expensive clones.
 pub fn fuzzy_search_unified(
-    scripts: &[Script],
-    scriptlets: &[Scriptlet],
+    scripts: &[Arc<Script>],
+    scriptlets: &[Arc<Scriptlet>],
     query: &str,
 ) -> Vec<SearchResult> {
     fuzzy_search_unified_with_builtins(scripts, scriptlets, &[], query)
@@ -1600,9 +1620,11 @@ pub fn fuzzy_search_unified(
 /// Perform unified fuzzy search across scripts, scriptlets, and built-ins
 /// Returns combined and ranked results sorted by relevance
 /// Built-ins appear at the TOP of results (before scripts) when scores are equal
+///
+/// H1 Optimization: Accepts Arc<Script> and Arc<Scriptlet> to avoid expensive clones.
 pub fn fuzzy_search_unified_with_builtins(
-    scripts: &[Script],
-    scriptlets: &[Scriptlet],
+    scripts: &[Arc<Script>],
+    scriptlets: &[Arc<Scriptlet>],
     builtins: &[BuiltInEntry],
     query: &str,
 ) -> Vec<SearchResult> {
@@ -1614,9 +1636,11 @@ pub fn fuzzy_search_unified_with_builtins(
 /// Returns combined and ranked results sorted by relevance
 /// Built-ins appear at the TOP of results (before scripts) when scores are equal
 /// Apps appear after built-ins but before scripts when scores are equal
+///
+/// H1 Optimization: Accepts Arc<Script> and Arc<Scriptlet> to avoid expensive clones.
 pub fn fuzzy_search_unified_all(
-    scripts: &[Script],
-    scriptlets: &[Scriptlet],
+    scripts: &[Arc<Script>],
+    scriptlets: &[Arc<Scriptlet>],
     builtins: &[BuiltInEntry],
     apps: &[crate::app_launcher::AppInfo],
     query: &str,
@@ -1678,9 +1702,11 @@ pub fn fuzzy_search_unified_all(
 /// Perform unified fuzzy search across scripts, scriptlets, built-ins, apps, and windows
 /// Returns combined and ranked results sorted by relevance
 /// Order by type when scores are equal: Built-ins > Apps > Windows > Scripts > Scriptlets
+///
+/// H1 Optimization: Accepts Arc<Script> and Arc<Scriptlet> to avoid expensive clones.
 pub fn fuzzy_search_unified_with_windows(
-    scripts: &[Script],
-    scriptlets: &[Scriptlet],
+    scripts: &[Arc<Script>],
+    scriptlets: &[Arc<Scriptlet>],
     builtins: &[BuiltInEntry],
     apps: &[crate::app_launcher::AppInfo],
     windows: &[crate::window_control::WindowInfo],
@@ -1779,11 +1805,12 @@ pub const DEFAULT_MAX_RECENT_ITEMS: usize = 10;
 /// `(Vec<GroupedListItem>, Vec<SearchResult>)` - Grouped items and the flat results array.
 /// The `usize` in `Item(usize)` is the index into the flat results array.
 ///
+/// H1 Optimization: Accepts Arc<Script> and Arc<Scriptlet> to avoid expensive clones.
 #[instrument(level = "debug", skip_all, fields(filter_len = filter_text.len()))]
 #[allow(clippy::too_many_arguments)]
 pub fn get_grouped_results(
-    scripts: &[Script],
-    scriptlets: &[Scriptlet],
+    scripts: &[Arc<Script>],
+    scriptlets: &[Arc<Scriptlet>],
     builtins: &[BuiltInEntry],
     apps: &[AppInfo],
     frecency_store: &FrecencyStore,

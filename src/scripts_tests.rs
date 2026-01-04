@@ -1,4 +1,15 @@
 use super::*;
+use std::sync::Arc;
+
+/// Helper to wrap Vec<Script> into Vec<Arc<Script>> for tests
+fn wrap_scripts(scripts: Vec<Script>) -> Vec<Arc<Script>> {
+    scripts.into_iter().map(Arc::new).collect()
+}
+
+/// Helper to wrap Vec<Scriptlet> into Vec<Arc<Scriptlet>> for tests
+fn wrap_scriptlets(scriptlets: Vec<Scriptlet>) -> Vec<Arc<Scriptlet>> {
+    scriptlets.into_iter().map(Arc::new).collect()
+}
 
 /// Helper to create a test Scriptlet with minimal required fields
 fn test_scriptlet(name: &str, tool: &str, code: &str) -> Scriptlet {
@@ -242,7 +253,7 @@ fn test_script_struct_has_required_fields() {
 
 #[test]
 fn test_fuzzy_search_by_name() {
-    let scripts = vec![
+    let scripts = wrap_scripts(vec![
         Script {
             name: "openfile".to_string(),
             path: PathBuf::from("/test/openfile.ts"),
@@ -263,7 +274,7 @@ fn test_fuzzy_search_by_name() {
             shortcut: None,
             ..Default::default()
         },
-    ];
+    ]);
 
     let results = fuzzy_search_scripts(&scripts, "open");
     assert_eq!(results.len(), 1);
@@ -273,7 +284,7 @@ fn test_fuzzy_search_by_name() {
 
 #[test]
 fn test_fuzzy_search_empty_query() {
-    let scripts = vec![Script {
+    let scripts = wrap_scripts(vec![Script {
         name: "test1".to_string(),
         path: PathBuf::from("/test/test1.ts"),
         extension: "ts".to_string(),
@@ -282,7 +293,7 @@ fn test_fuzzy_search_empty_query() {
         alias: None,
         shortcut: None,
         ..Default::default()
-    }];
+    }]);
 
     let results = fuzzy_search_scripts(&scripts, "");
     assert_eq!(results.len(), 1);
@@ -291,7 +302,7 @@ fn test_fuzzy_search_empty_query() {
 
 #[test]
 fn test_fuzzy_search_ranking() {
-    let scripts = vec![
+    let scripts = wrap_scripts(vec![
         Script {
             name: "openfile".to_string(),
             path: PathBuf::from("/test/openfile.ts"),
@@ -322,7 +333,7 @@ fn test_fuzzy_search_ranking() {
             shortcut: None,
             ..Default::default()
         },
-    ];
+    ]);
 
     let results = fuzzy_search_scripts(&scripts, "open");
     // Should have all three results
@@ -337,10 +348,10 @@ fn test_fuzzy_search_ranking() {
 
 #[test]
 fn test_fuzzy_search_scriptlets() {
-    let scriptlets = vec![
+    let scriptlets = wrap_scriptlets(vec![
         test_scriptlet_with_desc("Copy Text", "ts", "copy()", "Copy current selection"),
         test_scriptlet("Paste Code", "ts", "paste()"),
-    ];
+    ]);
 
     let results = fuzzy_search_scriptlets(&scriptlets, "copy");
     assert_eq!(results.len(), 1);
@@ -350,7 +361,7 @@ fn test_fuzzy_search_scriptlets() {
 
 #[test]
 fn test_fuzzy_search_unified() {
-    let scripts = vec![Script {
+    let scripts = wrap_scripts(vec![Script {
         name: "open".to_string(),
         path: PathBuf::from("/test/open.ts"),
         extension: "ts".to_string(),
@@ -359,14 +370,14 @@ fn test_fuzzy_search_unified() {
         alias: None,
         shortcut: None,
         ..Default::default()
-    }];
+    }]);
 
-    let scriptlets = vec![test_scriptlet_with_desc(
+    let scriptlets = wrap_scriptlets(vec![test_scriptlet_with_desc(
         "Open Browser",
         "ts",
         "open()",
         "Open in browser",
-    )];
+    )]);
 
     let results = fuzzy_search_unified(&scripts, &scriptlets, "open");
     assert_eq!(results.len(), 2);
@@ -387,7 +398,7 @@ fn test_fuzzy_search_unified() {
 #[test]
 fn test_search_result_type_label() {
     let script = SearchResult::Script(ScriptMatch {
-        script: Script {
+        script: Arc::new(Script {
             name: "test".to_string(),
             path: PathBuf::from("/test.ts"),
             extension: "ts".to_string(),
@@ -396,14 +407,14 @@ fn test_search_result_type_label() {
             alias: None,
             shortcut: None,
             ..Default::default()
-        },
+        }),
         score: 100,
         filename: "test.ts".to_string(),
         match_indices: MatchIndices::default(),
     });
 
     let scriptlet = SearchResult::Scriptlet(ScriptletMatch {
-        scriptlet: test_scriptlet("snippet", "ts", "code"),
+        scriptlet: Arc::new(test_scriptlet("snippet", "ts", "code")),
         score: 50,
         display_file_path: None,
         match_indices: MatchIndices::default(),
@@ -557,7 +568,7 @@ fn test_fuzzy_match_pattern_longer_than_haystack() {
 
 #[test]
 fn test_fuzzy_search_no_results() {
-    let scripts = vec![Script {
+    let scripts = wrap_scripts(vec![Script {
         name: "test".to_string(),
         path: PathBuf::from("/test.ts"),
         extension: "ts".to_string(),
@@ -566,7 +577,7 @@ fn test_fuzzy_search_no_results() {
         alias: None,
         shortcut: None,
         ..Default::default()
-    }];
+    }]);
 
     let results = fuzzy_search_scripts(&scripts, "nonexistent");
     assert_eq!(results.len(), 0);
@@ -574,7 +585,7 @@ fn test_fuzzy_search_no_results() {
 
 #[test]
 fn test_fuzzy_search_all_match() {
-    let scripts = vec![
+    let scripts = wrap_scripts(vec![
         Script {
             name: "test1".to_string(),
             path: PathBuf::from("/test1.ts"),
@@ -595,7 +606,7 @@ fn test_fuzzy_search_all_match() {
             shortcut: None,
             ..Default::default()
         },
-    ];
+    ]);
 
     let results = fuzzy_search_scripts(&scripts, "test");
     assert_eq!(results.len(), 2);
@@ -603,7 +614,7 @@ fn test_fuzzy_search_all_match() {
 
 #[test]
 fn test_fuzzy_search_by_description() {
-    let scripts = vec![
+    let scripts = wrap_scripts(vec![
         Script {
             name: "foo".to_string(),
             path: PathBuf::from("/foo.ts"),
@@ -624,7 +635,7 @@ fn test_fuzzy_search_by_description() {
             shortcut: None,
             ..Default::default()
         },
-    ];
+    ]);
 
     let results = fuzzy_search_scripts(&scripts, "database");
     assert_eq!(results.len(), 1);
@@ -633,7 +644,7 @@ fn test_fuzzy_search_by_description() {
 
 #[test]
 fn test_fuzzy_search_by_path() {
-    let scripts = vec![
+    let scripts = wrap_scripts(vec![
         Script {
             name: "foo".to_string(),
             path: PathBuf::from("/home/user/.sk/kit/main/scripts/open.ts"),
@@ -654,7 +665,7 @@ fn test_fuzzy_search_by_path() {
             shortcut: None,
             ..Default::default()
         },
-    ];
+    ]);
 
     // Search for ".sk" which is in the new path structure
     let results = fuzzy_search_scripts(&scripts, ".sk");
@@ -664,7 +675,7 @@ fn test_fuzzy_search_by_path() {
 
 #[test]
 fn test_fuzzy_search_score_ordering() {
-    let scripts = vec![
+    let scripts = wrap_scripts(vec![
         Script {
             name: "exactmatch".to_string(),
             path: PathBuf::from("/test.ts"),
@@ -685,7 +696,7 @@ fn test_fuzzy_search_score_ordering() {
             shortcut: None,
             ..Default::default()
         },
-    ];
+    ]);
 
     let results = fuzzy_search_scripts(&scripts, "exactmatch");
     // Name match should score higher than description match
@@ -695,10 +706,10 @@ fn test_fuzzy_search_score_ordering() {
 
 #[test]
 fn test_fuzzy_search_scriptlets_by_tool() {
-    let scriptlets = vec![
+    let scriptlets = wrap_scriptlets(vec![
         test_scriptlet("Snippet1", "bash", "code"),
         test_scriptlet("Snippet2", "ts", "code"),
-    ];
+    ]);
 
     let results = fuzzy_search_scriptlets(&scriptlets, "bash");
     assert_eq!(results.len(), 1);
@@ -707,12 +718,12 @@ fn test_fuzzy_search_scriptlets_by_tool() {
 
 #[test]
 fn test_fuzzy_search_scriptlets_no_results() {
-    let scriptlets = vec![test_scriptlet_with_desc(
+    let scriptlets = wrap_scriptlets(vec![test_scriptlet_with_desc(
         "Copy Text",
         "ts",
         "copy()",
         "Copy current selection",
-    )];
+    )]);
 
     let results = fuzzy_search_scriptlets(&scriptlets, "paste");
     assert_eq!(results.len(), 0);
@@ -720,7 +731,7 @@ fn test_fuzzy_search_scriptlets_no_results() {
 
 #[test]
 fn test_fuzzy_search_unified_empty_query() {
-    let scripts = vec![Script {
+    let scripts = wrap_scripts(vec![Script {
         name: "script1".to_string(),
         path: PathBuf::from("/script1.ts"),
         extension: "ts".to_string(),
@@ -729,9 +740,9 @@ fn test_fuzzy_search_unified_empty_query() {
         alias: None,
         shortcut: None,
         ..Default::default()
-    }];
+    }]);
 
-    let scriptlets = vec![test_scriptlet("Snippet1", "ts", "code")];
+    let scriptlets = wrap_scriptlets(vec![test_scriptlet("Snippet1", "ts", "code")]);
 
     let results = fuzzy_search_unified(&scripts, &scriptlets, "");
     assert_eq!(results.len(), 2);
@@ -739,7 +750,7 @@ fn test_fuzzy_search_unified_empty_query() {
 
 #[test]
 fn test_fuzzy_search_unified_scripts_first() {
-    let scripts = vec![Script {
+    let scripts = wrap_scripts(vec![Script {
         name: "test".to_string(),
         path: PathBuf::from("/test.ts"),
         extension: "ts".to_string(),
@@ -748,14 +759,14 @@ fn test_fuzzy_search_unified_scripts_first() {
         alias: None,
         shortcut: None,
         ..Default::default()
-    }];
+    }]);
 
-    let scriptlets = vec![test_scriptlet_with_desc(
+    let scriptlets = wrap_scriptlets(vec![test_scriptlet_with_desc(
         "test",
         "ts",
         "test()",
         "test snippet",
-    )];
+    )]);
 
     let results = fuzzy_search_unified(&scripts, &scriptlets, "test");
     // When scores are equal, scripts should come first
@@ -771,7 +782,7 @@ fn test_fuzzy_search_unified_scripts_first() {
 #[test]
 fn test_search_result_properties() {
     let script_match = ScriptMatch {
-        script: Script {
+        script: Arc::new(Script {
             name: "TestScript".to_string(),
             path: PathBuf::from("/test.ts"),
             extension: "ts".to_string(),
@@ -780,7 +791,7 @@ fn test_search_result_properties() {
             alias: None,
             shortcut: None,
             ..Default::default()
-        },
+        }),
         score: 100,
         filename: "test.ts".to_string(),
         match_indices: MatchIndices::default(),
@@ -1361,7 +1372,7 @@ fn test_scriptlet_clone_independence() {
 
 #[test]
 fn test_search_multiple_scriptlets() {
-    let scriptlets = vec![
+    let scriptlets = wrap_scriptlets(vec![
         test_scriptlet_with_desc("Copy", "ts", "copy()", "Copy to clipboard"),
         test_scriptlet_with_desc("Paste", "ts", "paste()", "Paste from clipboard"),
         test_scriptlet_with_desc(
@@ -1370,7 +1381,7 @@ fn test_search_multiple_scriptlets() {
             "pasteCustom()",
             "Custom paste with format",
         ),
-    ];
+    ]);
 
     let results = fuzzy_search_scriptlets(&scriptlets, "paste");
     assert_eq!(results.len(), 2); // "Paste" and "Custom Paste"
@@ -1380,7 +1391,7 @@ fn test_search_multiple_scriptlets() {
 
 #[test]
 fn test_unified_search_mixed_results() {
-    let scripts = vec![
+    let scripts = wrap_scripts(vec![
         Script {
             name: "openFile".to_string(),
             path: PathBuf::from("/openFile.ts"),
@@ -1401,9 +1412,9 @@ fn test_unified_search_mixed_results() {
             shortcut: None,
             ..Default::default()
         },
-    ];
+    ]);
 
-    let scriptlets = vec![test_scriptlet("Open URL", "ts", "open(url)")];
+    let scriptlets = wrap_scriptlets(vec![test_scriptlet("Open URL", "ts", "open(url)")]);
 
     let results = fuzzy_search_unified(&scripts, &scriptlets, "open");
     assert_eq!(results.len(), 2); // "openFile" script and "Open URL" scriptlet
@@ -1412,7 +1423,7 @@ fn test_unified_search_mixed_results() {
 #[test]
 fn test_search_result_name_accessor() {
     let script = SearchResult::Script(ScriptMatch {
-        script: Script {
+        script: Arc::new(Script {
             name: "TestName".to_string(),
             path: PathBuf::from("/test.ts"),
             extension: "ts".to_string(),
@@ -1421,7 +1432,7 @@ fn test_search_result_name_accessor() {
             alias: None,
             shortcut: None,
             ..Default::default()
-        },
+        }),
         score: 50,
         filename: "test.ts".to_string(),
         match_indices: MatchIndices::default(),
@@ -1433,7 +1444,12 @@ fn test_search_result_name_accessor() {
 #[test]
 fn test_search_result_description_accessor() {
     let scriptlet = SearchResult::Scriptlet(ScriptletMatch {
-        scriptlet: test_scriptlet_with_desc("Test", "ts", "code", "Test Description"),
+        scriptlet: Arc::new(test_scriptlet_with_desc(
+            "Test",
+            "ts",
+            "code",
+            "Test Description",
+        )),
         score: 75,
         display_file_path: None,
         match_indices: MatchIndices::default(),
@@ -1476,7 +1492,7 @@ third()
 
 #[test]
 fn test_fuzzy_search_preserves_vector_order() {
-    let scripts = vec![
+    let scripts = wrap_scripts(vec![
         Script {
             name: "alpha".to_string(),
             path: PathBuf::from("/alpha.ts"),
@@ -1507,7 +1523,7 @@ fn test_fuzzy_search_preserves_vector_order() {
             shortcut: None,
             ..Default::default()
         },
-    ];
+    ]);
 
     let results = fuzzy_search_scripts(&scripts, "");
     assert_eq!(results.len(), 3);
@@ -1548,7 +1564,7 @@ fn test_fuzzy_match_special_characters() {
 #[test]
 fn test_read_scripts_returns_sorted_list() {
     // read_scripts should return sorted by name
-    let scripts = vec![
+    let scripts = wrap_scripts(vec![
         Script {
             name: "zebra".to_string(),
             path: PathBuf::from("/zebra.ts"),
@@ -1579,7 +1595,7 @@ fn test_read_scripts_returns_sorted_list() {
             shortcut: None,
             ..Default::default()
         },
-    ];
+    ]);
 
     // Manual check of sorting (since read_scripts reads from filesystem)
     let mut sorted = scripts.clone();
@@ -1592,10 +1608,10 @@ fn test_read_scripts_returns_sorted_list() {
 
 #[test]
 fn test_scriptlet_ordering_by_name() {
-    let scriptlets = vec![
+    let scriptlets = wrap_scriptlets(vec![
         test_scriptlet("Zebra", "ts", "code"),
         test_scriptlet("Apple", "ts", "code"),
-    ];
+    ]);
 
     let results = fuzzy_search_scriptlets(&scriptlets, "");
     // Empty query returns all scriptlets in original order with score 0
@@ -1608,9 +1624,9 @@ fn test_scriptlet_ordering_by_name() {
 
 #[test]
 fn test_large_search_result_set() {
-    let mut scripts = Vec::new();
+    let mut scripts_raw = Vec::new();
     for i in 0..100 {
-        scripts.push(Script {
+        scripts_raw.push(Script {
             name: format!("script_{:03}", i),
             path: PathBuf::from(format!("/script_{}.ts", i)),
             extension: "ts".to_string(),
@@ -1621,6 +1637,7 @@ fn test_large_search_result_set() {
             ..Default::default()
         });
     }
+    let scripts = wrap_scripts(scripts_raw);
 
     let results = fuzzy_search_scripts(&scripts, "script_05");
     // Should find scripts with 05 in name
@@ -1630,7 +1647,7 @@ fn test_large_search_result_set() {
 
 #[test]
 fn test_script_match_score_meaningful() {
-    let scripts = vec![Script {
+    let scripts = wrap_scripts(vec![Script {
         name: "openfile".to_string(),
         path: PathBuf::from("/test.ts"),
         extension: "ts".to_string(),
@@ -1639,7 +1656,7 @@ fn test_script_match_score_meaningful() {
         alias: None,
         shortcut: None,
         ..Default::default()
-    }];
+    }]);
 
     let results = fuzzy_search_scripts(&scripts, "open");
     assert!(results[0].score >= 50); // Should have at least fuzzy match score
@@ -1689,7 +1706,7 @@ open("https://example.com");
 
 #[test]
 fn test_search_consistency_across_calls() {
-    let scripts = vec![Script {
+    let scripts = wrap_scripts(vec![Script {
         name: "test".to_string(),
         path: PathBuf::from("/test.ts"),
         extension: "ts".to_string(),
@@ -1698,7 +1715,7 @@ fn test_search_consistency_across_calls() {
         alias: None,
         shortcut: None,
         ..Default::default()
-    }];
+    }]);
 
     let result1 = fuzzy_search_scripts(&scripts, "test");
     let result2 = fuzzy_search_scripts(&scripts, "test");
@@ -1711,7 +1728,7 @@ fn test_search_consistency_across_calls() {
 
 #[test]
 fn test_search_result_name_never_empty() {
-    let scripts = vec![Script {
+    let scripts = wrap_scripts(vec![Script {
         name: "test".to_string(),
         path: PathBuf::from("/test.ts"),
         extension: "ts".to_string(),
@@ -1720,7 +1737,7 @@ fn test_search_result_name_never_empty() {
         alias: None,
         shortcut: None,
         ..Default::default()
-    }];
+    }]);
 
     let results = fuzzy_search_scripts(&scripts, "test");
     for result in results {
@@ -1753,7 +1770,7 @@ const obj = { key: "value" };
 
 #[test]
 fn test_fuzzy_search_with_unicode() {
-    let scripts = vec![Script {
+    let scripts = wrap_scripts(vec![Script {
         name: "café".to_string(),
         path: PathBuf::from("/cafe.ts"),
         extension: "ts".to_string(),
@@ -1762,7 +1779,7 @@ fn test_fuzzy_search_with_unicode() {
         alias: None,
         shortcut: None,
         ..Default::default()
-    }];
+    }]);
 
     // Should be able to search for the ASCII version
     let results = fuzzy_search_scripts(&scripts, "cafe");
@@ -1848,7 +1865,7 @@ code here
 #[test]
 fn test_search_result_type_label_consistency() {
     let script = SearchResult::Script(ScriptMatch {
-        script: Script {
+        script: Arc::new(Script {
             name: "test".to_string(),
             path: PathBuf::from("/test.ts"),
             extension: "ts".to_string(),
@@ -1857,7 +1874,7 @@ fn test_search_result_type_label_consistency() {
             alias: None,
             shortcut: None,
             ..Default::default()
-        },
+        }),
         score: 0,
         filename: "test.ts".to_string(),
         match_indices: MatchIndices::default(),
@@ -1867,7 +1884,7 @@ fn test_search_result_type_label_consistency() {
     assert_eq!(script.type_label(), "Script");
 
     let scriptlet = SearchResult::Scriptlet(ScriptletMatch {
-        scriptlet: test_scriptlet("test", "ts", "code"),
+        scriptlet: Arc::new(test_scriptlet("test", "ts", "code")),
         score: 0,
         display_file_path: None,
         match_indices: MatchIndices::default(),
@@ -1880,12 +1897,12 @@ fn test_search_result_type_label_consistency() {
 #[test]
 fn test_empty_inputs_handling() {
     // Empty script list
-    let empty_scripts: Vec<Script> = vec![];
+    let empty_scripts: Vec<Arc<Script>> = vec![];
     let results = fuzzy_search_scripts(&empty_scripts, "test");
     assert!(results.is_empty());
 
     // Empty scriptlet list
-    let empty_scriptlets: Vec<Scriptlet> = vec![];
+    let empty_scriptlets: Vec<Arc<Scriptlet>> = vec![];
     let results = fuzzy_search_scriptlets(&empty_scriptlets, "test");
     assert!(results.is_empty());
 
@@ -1900,7 +1917,7 @@ fn test_empty_inputs_handling() {
 
 #[test]
 fn test_exact_substring_at_start_highest_score() {
-    let scripts = vec![
+    let scripts = wrap_scripts(vec![
         Script {
             name: "open".to_string(),
             path: PathBuf::from("/open.ts"),
@@ -1921,7 +1938,7 @@ fn test_exact_substring_at_start_highest_score() {
             shortcut: None,
             ..Default::default()
         },
-    ];
+    ]);
 
     let results = fuzzy_search_scripts(&scripts, "open");
     // "open" starts with "open" (score 100 + fuzzy 50 = 150)
@@ -1932,7 +1949,7 @@ fn test_exact_substring_at_start_highest_score() {
 
 #[test]
 fn test_description_match_lower_priority_than_name() {
-    let scripts = vec![
+    let scripts = wrap_scripts(vec![
         Script {
             name: "test".to_string(),
             path: PathBuf::from("/test.ts"),
@@ -1953,7 +1970,7 @@ fn test_description_match_lower_priority_than_name() {
             shortcut: None,
             ..Default::default()
         },
-    ];
+    ]);
 
     let results = fuzzy_search_scripts(&scripts, "test");
     // Name match should rank higher than description match
@@ -1962,7 +1979,7 @@ fn test_description_match_lower_priority_than_name() {
 
 #[test]
 fn test_path_match_lowest_priority() {
-    let scripts = vec![
+    let scripts = wrap_scripts(vec![
         Script {
             name: "test".to_string(),
             path: PathBuf::from("/test.ts"),
@@ -1983,7 +2000,7 @@ fn test_path_match_lowest_priority() {
             shortcut: None,
             ..Default::default()
         },
-    ];
+    ]);
 
     let results = fuzzy_search_scripts(&scripts, "test");
     // Name match should rank higher than path match
@@ -1997,7 +2014,7 @@ fn test_scriptlet_code_match_lower_than_description() {
 
     let other = test_scriptlet("Other", "ts", "copy()");
 
-    let scriptlets = vec![snippet, other];
+    let scriptlets = wrap_scriptlets(vec![snippet, other]);
 
     let results = fuzzy_search_scriptlets(&scriptlets, "copy");
     // Description match should score higher than code match
@@ -2006,10 +2023,10 @@ fn test_scriptlet_code_match_lower_than_description() {
 
 #[test]
 fn test_tool_type_bonus_in_scoring() {
-    let scriptlets = vec![
+    let scriptlets = wrap_scriptlets(vec![
         test_scriptlet("Script1", "bash", "code"),
         test_scriptlet("Script2", "ts", "code"),
-    ];
+    ]);
 
     let results = fuzzy_search_scriptlets(&scriptlets, "bash");
     // "bash" matches tool type in Script1
@@ -2019,7 +2036,7 @@ fn test_tool_type_bonus_in_scoring() {
 
 #[test]
 fn test_longer_exact_match_ties_with_fuzzy() {
-    let scripts = vec![
+    let scripts = wrap_scripts(vec![
         Script {
             name: "open".to_string(),
             path: PathBuf::from("/open.ts"),
@@ -2040,7 +2057,7 @@ fn test_longer_exact_match_ties_with_fuzzy() {
             shortcut: None,
             ..Default::default()
         },
-    ];
+    ]);
 
     let results = fuzzy_search_scripts(&scripts, "open");
     // Both have name matches at start (100 points) and fuzzy match (50 points)
@@ -2051,7 +2068,7 @@ fn test_longer_exact_match_ties_with_fuzzy() {
 
 #[test]
 fn test_case_insensitive_matching() {
-    let scripts = vec![Script {
+    let scripts = wrap_scripts(vec![Script {
         name: "OpenFile".to_string(),
         path: PathBuf::from("/openfile.ts"),
         extension: "ts".to_string(),
@@ -2060,7 +2077,7 @@ fn test_case_insensitive_matching() {
         alias: None,
         shortcut: None,
         ..Default::default()
-    }];
+    }]);
 
     let results = fuzzy_search_scripts(&scripts, "OPEN");
     assert_eq!(results.len(), 1);
@@ -2069,7 +2086,7 @@ fn test_case_insensitive_matching() {
 
 #[test]
 fn test_ranking_preserves_relative_order_on_score_tie() {
-    let scripts = vec![
+    let scripts = wrap_scripts(vec![
         Script {
             name: "aaa".to_string(),
             path: PathBuf::from("/aaa.ts"),
@@ -2090,7 +2107,7 @@ fn test_ranking_preserves_relative_order_on_score_tie() {
             shortcut: None,
             ..Default::default()
         },
-    ];
+    ]);
 
     let results = fuzzy_search_scripts(&scripts, "test");
     // Same score, should sort by name
@@ -2100,10 +2117,10 @@ fn test_ranking_preserves_relative_order_on_score_tie() {
 
 #[test]
 fn test_scriptlet_name_match_bonus_points() {
-    let scriptlets = vec![
+    let scriptlets = wrap_scriptlets(vec![
         test_scriptlet("copy", "ts", "copy()"),
         test_scriptlet("paste", "ts", "copy()"),
-    ];
+    ]);
 
     let results = fuzzy_search_scriptlets(&scriptlets, "copy");
     // "copy" name has higher bonus than "paste" code match
@@ -2113,7 +2130,7 @@ fn test_scriptlet_name_match_bonus_points() {
 
 #[test]
 fn test_unified_search_ties_scripts_first() {
-    let scripts = vec![Script {
+    let scripts = wrap_scripts(vec![Script {
         name: "test".to_string(),
         path: PathBuf::from("/test.ts"),
         extension: "ts".to_string(),
@@ -2122,14 +2139,14 @@ fn test_unified_search_ties_scripts_first() {
         alias: None,
         shortcut: None,
         ..Default::default()
-    }];
+    }]);
 
-    let scriptlets = vec![test_scriptlet_with_desc(
+    let scriptlets = wrap_scriptlets(vec![test_scriptlet_with_desc(
         "test",
         "ts",
         "test()",
         "Test snippet",
-    )];
+    )]);
 
     let results = fuzzy_search_unified(&scripts, &scriptlets, "test");
     // Same score, scripts should come before scriptlets
@@ -2145,7 +2162,7 @@ fn test_unified_search_ties_scripts_first() {
 
 #[test]
 fn test_partial_match_scores_appropriately() {
-    let scripts = vec![Script {
+    let scripts = wrap_scripts(vec![Script {
         name: "test".to_string(),
         path: PathBuf::from("/test.ts"),
         extension: "ts".to_string(),
@@ -2154,7 +2171,7 @@ fn test_partial_match_scores_appropriately() {
         alias: None,
         shortcut: None,
         ..Default::default()
-    }];
+    }]);
 
     let results = fuzzy_search_scripts(&scripts, "es");
     // "es" is fuzzy match in "test" but not a substring match
@@ -2164,7 +2181,7 @@ fn test_partial_match_scores_appropriately() {
 
 #[test]
 fn test_multiple_word_query() {
-    let scripts = vec![
+    let scripts = wrap_scripts(vec![
         Script {
             name: "open file".to_string(),
             path: PathBuf::from("/openfile.ts"),
@@ -2185,7 +2202,7 @@ fn test_multiple_word_query() {
             shortcut: None,
             ..Default::default()
         },
-    ];
+    ]);
 
     // Query with space - will be treated as literal string
     let results = fuzzy_search_scripts(&scripts, "open file");
@@ -2195,7 +2212,7 @@ fn test_multiple_word_query() {
 #[test]
 fn test_all_search_types_contribute_to_score() {
     // Test that all scoring categories work
-    let scripts = vec![Script {
+    let scripts = wrap_scripts(vec![Script {
         name: "database".to_string(),
         path: PathBuf::from("/database.ts"),
         extension: "ts".to_string(),
@@ -2204,7 +2221,7 @@ fn test_all_search_types_contribute_to_score() {
         alias: None,
         shortcut: None,
         ..Default::default()
-    }];
+    }]);
 
     let results = fuzzy_search_scripts(&scripts, "database");
     // Should match on name (100 + 50 = 150) + description (25) = 175
@@ -2214,7 +2231,7 @@ fn test_all_search_types_contribute_to_score() {
 #[test]
 fn test_search_quality_metrics() {
     // Ensure search returns meaningful results
-    let scripts = vec![
+    let scripts = wrap_scripts(vec![
         Script {
             name: "zzzFile".to_string(),
             path: PathBuf::from("/home/user/.sk/kit/scripts/zzzFile.ts"),
@@ -2245,7 +2262,7 @@ fn test_search_quality_metrics() {
             shortcut: None,
             ..Default::default()
         },
-    ];
+    ]);
 
     let results = fuzzy_search_scripts(&scripts, "file");
     // Two should match (zzzFile name and saveData description)
@@ -2257,7 +2274,7 @@ fn test_search_quality_metrics() {
 
 #[test]
 fn test_relevance_ranking_realistic_scenario() {
-    let scripts = vec![
+    let scripts = wrap_scripts(vec![
         Script {
             name: "grep".to_string(),
             path: PathBuf::from("/grep.ts"),
@@ -2288,7 +2305,7 @@ fn test_relevance_ranking_realistic_scenario() {
             shortcut: None,
             ..Default::default()
         },
-    ];
+    ]);
 
     let results = fuzzy_search_scripts(&scripts, "grep");
     // "grep" name should rank highest
@@ -2300,7 +2317,7 @@ fn test_relevance_ranking_realistic_scenario() {
 #[test]
 fn test_mixed_content_search() {
     // Combine scripts and scriptlets in unified search
-    let scripts = vec![Script {
+    let scripts = wrap_scripts(vec![Script {
         name: "copyClipboard".to_string(),
         path: PathBuf::from("/copy.ts"),
         extension: "ts".to_string(),
@@ -2309,11 +2326,11 @@ fn test_mixed_content_search() {
         alias: None,
         shortcut: None,
         ..Default::default()
-    }];
+    }]);
 
     let mut quick_copy = test_scriptlet_with_desc("Quick Copy", "ts", "copy()", "Copy selection");
     quick_copy.shortcut = Some("cmd c".to_string());
-    let scriptlets = vec![quick_copy];
+    let scriptlets = wrap_scriptlets(vec![quick_copy]);
 
     let results = fuzzy_search_unified(&scripts, &scriptlets, "copy");
     assert_eq!(results.len(), 2);
@@ -2485,7 +2502,7 @@ fn test_search_result_builtin_variant() {
 
 #[test]
 fn test_unified_search_with_builtins() {
-    let scripts = vec![Script {
+    let scripts = wrap_scripts(vec![Script {
         name: "my-clipboard".to_string(),
         path: PathBuf::from("/clipboard.ts"),
         extension: "ts".to_string(),
@@ -2494,14 +2511,14 @@ fn test_unified_search_with_builtins() {
         alias: None,
         shortcut: None,
         ..Default::default()
-    }];
+    }]);
 
-    let scriptlets = vec![test_scriptlet_with_desc(
+    let scriptlets = wrap_scriptlets(vec![test_scriptlet_with_desc(
         "Clipboard Helper",
         "ts",
         "clipboard()",
         "Helper for clipboard",
-    )];
+    )]);
 
     let builtins = create_test_builtins();
 
@@ -2526,7 +2543,7 @@ fn test_unified_search_with_builtins() {
 
 #[test]
 fn test_unified_search_builtins_appear_at_top() {
-    let scripts = vec![Script {
+    let scripts = wrap_scripts(vec![Script {
         name: "history".to_string(),
         path: PathBuf::from("/history.ts"),
         extension: "ts".to_string(),
@@ -2535,7 +2552,7 @@ fn test_unified_search_builtins_appear_at_top() {
         alias: None,
         shortcut: None,
         ..Default::default()
-    }];
+    }]);
 
     let builtins = create_test_builtins();
 
@@ -2557,7 +2574,7 @@ fn test_unified_search_builtins_appear_at_top() {
 #[test]
 fn test_unified_search_backward_compatible() {
     // Ensure the original fuzzy_search_unified still works without builtins
-    let scripts = vec![Script {
+    let scripts = wrap_scripts(vec![Script {
         name: "test".to_string(),
         path: PathBuf::from("/test.ts"),
         extension: "ts".to_string(),
@@ -2566,9 +2583,9 @@ fn test_unified_search_backward_compatible() {
         alias: None,
         shortcut: None,
         ..Default::default()
-    }];
+    }]);
 
-    let scriptlets = vec![test_scriptlet("Test Snippet", "ts", "test()")];
+    let scriptlets = wrap_scriptlets(vec![test_scriptlet("Test Snippet", "ts", "test()")]);
 
     let results = fuzzy_search_unified(&scripts, &scriptlets, "test");
 
@@ -2644,8 +2661,8 @@ fn test_search_result_window_type_label() {
 
 #[test]
 fn test_fuzzy_search_unified_with_windows_empty_inputs() {
-    let scripts: Vec<Script> = vec![];
-    let scriptlets: Vec<Scriptlet> = vec![];
+    let scripts: Vec<Arc<Script>> = wrap_scripts(vec![]);
+    let scriptlets: Vec<Arc<Scriptlet>> = wrap_scriptlets(vec![]);
     let builtins: Vec<BuiltInEntry> = vec![];
     let apps: Vec<crate::app_launcher::AppInfo> = vec![];
     let windows: Vec<crate::window_control::WindowInfo> = vec![];
@@ -2664,7 +2681,7 @@ fn test_fuzzy_search_unified_with_windows_empty_inputs() {
 
 #[test]
 fn test_fuzzy_search_unified_with_windows_returns_scripts() {
-    let scripts = vec![Script {
+    let scripts = wrap_scripts(vec![Script {
         name: "test_script".to_string(),
         path: PathBuf::from("/test.ts"),
         extension: "ts".to_string(),
@@ -2673,8 +2690,8 @@ fn test_fuzzy_search_unified_with_windows_returns_scripts() {
         alias: None,
         shortcut: None,
         ..Default::default()
-    }];
-    let scriptlets: Vec<Scriptlet> = vec![];
+    }]);
+    let scriptlets: Vec<Arc<Scriptlet>> = wrap_scriptlets(vec![]);
     let builtins: Vec<BuiltInEntry> = vec![];
     let apps: Vec<crate::app_launcher::AppInfo> = vec![];
     let windows: Vec<crate::window_control::WindowInfo> = vec![];
@@ -2698,7 +2715,7 @@ fn test_fuzzy_search_unified_with_windows_returns_scripts() {
 
 #[test]
 fn test_get_grouped_results_search_mode_flat_list() {
-    let scripts = vec![
+    let scripts = wrap_scripts(vec![
         Script {
             name: "open".to_string(),
             path: PathBuf::from("/open.ts"),
@@ -2719,8 +2736,8 @@ fn test_get_grouped_results_search_mode_flat_list() {
             shortcut: None,
             ..Default::default()
         },
-    ];
-    let scriptlets: Vec<Scriptlet> = vec![];
+    ]);
+    let scriptlets: Vec<Arc<Scriptlet>> = wrap_scriptlets(vec![]);
     let builtins: Vec<BuiltInEntry> = vec![];
     let apps: Vec<AppInfo> = vec![];
     let frecency_store = FrecencyStore::new();
@@ -2748,7 +2765,7 @@ fn test_get_grouped_results_search_mode_flat_list() {
 
 #[test]
 fn test_get_grouped_results_empty_filter_grouped_view() {
-    let scripts = vec![
+    let scripts = wrap_scripts(vec![
         Script {
             name: "alpha".to_string(),
             path: PathBuf::from("/alpha.ts"),
@@ -2769,8 +2786,8 @@ fn test_get_grouped_results_empty_filter_grouped_view() {
             shortcut: None,
             ..Default::default()
         },
-    ];
-    let scriptlets: Vec<Scriptlet> = vec![];
+    ]);
+    let scriptlets: Vec<Arc<Scriptlet>> = wrap_scriptlets(vec![]);
     let builtins: Vec<BuiltInEntry> = vec![];
     let apps: Vec<AppInfo> = vec![];
     let frecency_store = FrecencyStore::new();
@@ -2800,7 +2817,7 @@ fn test_get_grouped_results_empty_filter_grouped_view() {
 
 #[test]
 fn test_get_grouped_results_with_frecency() {
-    let scripts = vec![
+    let scripts = wrap_scripts(vec![
         Script {
             name: "alpha".to_string(),
             path: PathBuf::from("/alpha.ts"),
@@ -2831,8 +2848,8 @@ fn test_get_grouped_results_with_frecency() {
             shortcut: None,
             ..Default::default()
         },
-    ];
-    let scriptlets: Vec<Scriptlet> = vec![];
+    ]);
+    let scriptlets: Vec<Arc<Scriptlet>> = wrap_scriptlets(vec![]);
     let builtins: Vec<BuiltInEntry> = vec![];
     let apps: Vec<AppInfo> = vec![];
 
@@ -2880,7 +2897,7 @@ fn test_get_grouped_results_frecency_script_appears_before_builtins() {
     // Bug scenario: User frequently uses "test-script", but Clipboard History
     // still appears as the first choice when opening Script Kit.
 
-    let scripts = vec![
+    let scripts = wrap_scripts(vec![
         Script {
             name: "test-script".to_string(),
             path: PathBuf::from("/test-script.ts"),
@@ -2901,8 +2918,8 @@ fn test_get_grouped_results_frecency_script_appears_before_builtins() {
             shortcut: None,
             ..Default::default()
         },
-    ];
-    let scriptlets: Vec<Scriptlet> = vec![];
+    ]);
+    let scriptlets: Vec<Arc<Scriptlet>> = wrap_scriptlets(vec![]);
     let builtins = create_test_builtins(); // Includes Clipboard History and App Launcher
     let apps: Vec<AppInfo> = vec![];
 
@@ -3011,7 +3028,7 @@ fn test_get_grouped_results_builtin_with_frecency_vs_script_frecency() {
     // Bug: Clipboard History appears first even when user scripts have
     // higher/more recent frecency scores.
 
-    let scripts = vec![Script {
+    let scripts = wrap_scripts(vec![Script {
         name: "my-frequent-script".to_string(),
         path: PathBuf::from("/my-frequent-script.ts"),
         extension: "ts".to_string(),
@@ -3020,8 +3037,8 @@ fn test_get_grouped_results_builtin_with_frecency_vs_script_frecency() {
         alias: None,
         shortcut: None,
         ..Default::default()
-    }];
-    let scriptlets: Vec<Scriptlet> = vec![];
+    }]);
+    let scriptlets: Vec<Arc<Scriptlet>> = wrap_scriptlets(vec![]);
     let builtins = create_test_builtins(); // Clipboard History, App Launcher
     let apps: Vec<AppInfo> = vec![];
 
@@ -3093,7 +3110,7 @@ fn test_get_grouped_results_selection_priority_with_frecency() {
     // frecency script, which means selected_index=0 should point to
     // the frecency script when we skip headers.
 
-    let scripts = vec![
+    let scripts = wrap_scripts(vec![
         Script {
             name: "alpha-script".to_string(),
             path: PathBuf::from("/alpha-script.ts"),
@@ -3114,8 +3131,8 @@ fn test_get_grouped_results_selection_priority_with_frecency() {
             shortcut: None,
             ..Default::default()
         },
-    ];
-    let scriptlets: Vec<Scriptlet> = vec![];
+    ]);
+    let scriptlets: Vec<Arc<Scriptlet>> = wrap_scriptlets(vec![]);
     let builtins = create_test_builtins(); // Clipboard History, App Launcher
     let apps: Vec<AppInfo> = vec![];
 
@@ -3192,7 +3209,7 @@ fn test_get_grouped_results_no_frecency_items_in_type_sections() {
     // Items are sorted alphabetically within each section.
     // Sections appear in order: SCRIPTS, SCRIPTLETS, COMMANDS, APPS
 
-    let scripts = vec![
+    let scripts = wrap_scripts(vec![
         Script {
             name: "alpha-script".to_string(),
             path: PathBuf::from("/alpha-script.ts"),
@@ -3213,8 +3230,8 @@ fn test_get_grouped_results_no_frecency_items_in_type_sections() {
             shortcut: None,
             ..Default::default()
         },
-    ];
-    let scriptlets: Vec<Scriptlet> = vec![];
+    ]);
+    let scriptlets: Vec<Arc<Scriptlet>> = wrap_scriptlets(vec![]);
     let builtins = create_test_builtins(); // Clipboard History, App Launcher
     let apps: Vec<AppInfo> = vec![];
 
@@ -3267,8 +3284,8 @@ fn test_get_grouped_results_no_frecency_items_in_type_sections() {
 
 #[test]
 fn test_get_grouped_results_empty_inputs() {
-    let scripts: Vec<Script> = vec![];
-    let scriptlets: Vec<Scriptlet> = vec![];
+    let scripts: Vec<Arc<Script>> = wrap_scripts(vec![]);
+    let scriptlets: Vec<Arc<Scriptlet>> = wrap_scriptlets(vec![]);
     let builtins: Vec<BuiltInEntry> = vec![];
     let apps: Vec<AppInfo> = vec![];
     let frecency_store = FrecencyStore::new();
@@ -3292,7 +3309,7 @@ fn test_get_grouped_results_empty_inputs() {
 
 #[test]
 fn test_get_grouped_results_items_reference_correct_indices() {
-    let scripts = vec![
+    let scripts = wrap_scripts(vec![
         Script {
             name: "first".to_string(),
             path: PathBuf::from("/first.ts"),
@@ -3313,8 +3330,8 @@ fn test_get_grouped_results_items_reference_correct_indices() {
             shortcut: None,
             ..Default::default()
         },
-    ];
-    let scriptlets: Vec<Scriptlet> = vec![];
+    ]);
+    let scriptlets: Vec<Arc<Scriptlet>> = wrap_scriptlets(vec![]);
     let builtins: Vec<BuiltInEntry> = vec![];
     let apps: Vec<AppInfo> = vec![];
     let frecency_store = FrecencyStore::new();
@@ -3351,7 +3368,7 @@ fn test_get_grouped_results_items_reference_correct_indices() {
 #[test]
 fn test_fuzzy_search_scripts_by_file_extension() {
     // Users should be able to search by typing ".ts" to find TypeScript scripts
-    let scripts = vec![
+    let scripts = wrap_scripts(vec![
         Script {
             name: "My Script".to_string(),
             path: PathBuf::from("/home/user/.sk/kit/scripts/my-script.ts"),
@@ -3372,7 +3389,7 @@ fn test_fuzzy_search_scripts_by_file_extension() {
             shortcut: None,
             ..Default::default()
         },
-    ];
+    ]);
 
     let results = fuzzy_search_scripts(&scripts, ".ts");
     assert_eq!(results.len(), 1, "Should find scripts by file extension");
@@ -3384,7 +3401,7 @@ fn test_fuzzy_search_scripts_by_file_extension() {
 #[test]
 fn test_fuzzy_search_scripts_by_filename() {
     // Users should be able to search by filename
-    let scripts = vec![
+    let scripts = wrap_scripts(vec![
         Script {
             name: "Open File".to_string(), // Name differs from filename
             path: PathBuf::from("/scripts/open-file-dialog.ts"),
@@ -3405,7 +3422,7 @@ fn test_fuzzy_search_scripts_by_filename() {
             shortcut: None,
             ..Default::default()
         },
-    ];
+    ]);
 
     // Search by filename (not matching the name "Open File")
     let results = fuzzy_search_scripts(&scripts, "dialog");
@@ -3416,7 +3433,7 @@ fn test_fuzzy_search_scripts_by_filename() {
 
 #[test]
 fn test_fuzzy_search_scripts_filename_returns_correct_filename() {
-    let scripts = vec![Script {
+    let scripts = wrap_scripts(vec![Script {
         name: "Test".to_string(),
         path: PathBuf::from("/path/to/my-test-script.ts"),
         extension: "ts".to_string(),
@@ -3425,7 +3442,7 @@ fn test_fuzzy_search_scripts_filename_returns_correct_filename() {
         alias: None,
         shortcut: None,
         ..Default::default()
-    }];
+    }]);
 
     let results = fuzzy_search_scripts(&scripts, "test");
     assert_eq!(results.len(), 1);
@@ -3438,7 +3455,7 @@ fn test_fuzzy_search_scripts_filename_returns_correct_filename() {
 #[test]
 fn test_fuzzy_search_scripts_name_match_higher_priority_than_filename() {
     // Name match should score higher than filename-only match
-    let scripts = vec![
+    let scripts = wrap_scripts(vec![
         Script {
             name: "open".to_string(),               // Name matches query
             path: PathBuf::from("/scripts/foo.ts"), // Filename doesn't match
@@ -3459,7 +3476,7 @@ fn test_fuzzy_search_scripts_name_match_higher_priority_than_filename() {
             shortcut: None,
             ..Default::default()
         },
-    ];
+    ]);
 
     let results = fuzzy_search_scripts(&scripts, "open");
     assert_eq!(results.len(), 2);
@@ -3473,7 +3490,7 @@ fn test_fuzzy_search_scripts_name_match_higher_priority_than_filename() {
 
 #[test]
 fn test_fuzzy_search_scripts_match_indices_for_name() {
-    let scripts = vec![Script {
+    let scripts = wrap_scripts(vec![Script {
         name: "openfile".to_string(),
         path: PathBuf::from("/scripts/test.ts"),
         extension: "ts".to_string(),
@@ -3482,7 +3499,7 @@ fn test_fuzzy_search_scripts_match_indices_for_name() {
         alias: None,
         shortcut: None,
         ..Default::default()
-    }];
+    }]);
 
     let results = fuzzy_search_scripts(&scripts, "opf");
     assert_eq!(results.len(), 1);
@@ -3499,7 +3516,7 @@ fn test_fuzzy_search_scripts_match_indices_for_name() {
 
 #[test]
 fn test_fuzzy_search_scripts_match_indices_for_filename() {
-    let scripts = vec![Script {
+    let scripts = wrap_scripts(vec![Script {
         name: "Other Name".to_string(), // Name doesn't match
         path: PathBuf::from("/scripts/my-test.ts"),
         extension: "ts".to_string(),
@@ -3508,7 +3525,7 @@ fn test_fuzzy_search_scripts_match_indices_for_filename() {
         alias: None,
         shortcut: None,
         ..Default::default()
-    }];
+    }]);
 
     let results = fuzzy_search_scripts(&scripts, "mts");
     assert_eq!(results.len(), 1);
@@ -3526,7 +3543,7 @@ fn test_fuzzy_search_scripts_match_indices_for_filename() {
 #[test]
 fn test_fuzzy_search_scriptlets_by_file_path() {
     // Users should be able to search by ".md" to find scriptlets
-    let scriptlets = vec![
+    let scriptlets = wrap_scriptlets(vec![
         Scriptlet {
             name: "Open GitHub".to_string(),
             description: Some("Opens GitHub in browser".to_string()),
@@ -3551,7 +3568,7 @@ fn test_fuzzy_search_scriptlets_by_file_path() {
             command: Some("copy-text".to_string()),
             alias: None,
         },
-    ];
+    ]);
 
     let results = fuzzy_search_scriptlets(&scriptlets, ".md");
     assert_eq!(results.len(), 2, "Should find scriptlets by .md extension");
@@ -3560,7 +3577,7 @@ fn test_fuzzy_search_scriptlets_by_file_path() {
 #[test]
 fn test_fuzzy_search_scriptlets_by_anchor() {
     // Users should be able to search by anchor slug
-    let scriptlets = vec![
+    let scriptlets = wrap_scriptlets(vec![
         Scriptlet {
             name: "Open GitHub".to_string(),
             description: None,
@@ -3585,7 +3602,7 @@ fn test_fuzzy_search_scriptlets_by_anchor() {
             command: Some("close-tab".to_string()),
             alias: None,
         },
-    ];
+    ]);
 
     let results = fuzzy_search_scriptlets(&scriptlets, "github");
     assert_eq!(results.len(), 1, "Should find scriptlet by anchor slug");
@@ -3595,7 +3612,7 @@ fn test_fuzzy_search_scriptlets_by_anchor() {
 #[test]
 fn test_fuzzy_search_scriptlets_display_file_path() {
     // display_file_path should be the filename#anchor format
-    let scriptlets = vec![Scriptlet {
+    let scriptlets = wrap_scriptlets(vec![Scriptlet {
         name: "Test".to_string(),
         description: None,
         code: "code".to_string(),
@@ -3606,7 +3623,7 @@ fn test_fuzzy_search_scriptlets_display_file_path() {
         file_path: Some("/home/user/.sk/kit/scriptlets/urls.md#test-slug".to_string()),
         command: Some("test-slug".to_string()),
         alias: None,
-    }];
+    }]);
 
     let results = fuzzy_search_scriptlets(&scriptlets, "");
     assert_eq!(results.len(), 1);
@@ -3619,7 +3636,7 @@ fn test_fuzzy_search_scriptlets_display_file_path() {
 
 #[test]
 fn test_fuzzy_search_scriptlets_match_indices() {
-    let scriptlets = vec![Scriptlet {
+    let scriptlets = wrap_scriptlets(vec![Scriptlet {
         name: "Other".to_string(), // Name doesn't match
         description: None,
         code: "code".to_string(),
@@ -3630,7 +3647,7 @@ fn test_fuzzy_search_scriptlets_match_indices() {
         file_path: Some("/path/urls.md#test".to_string()),
         command: None,
         alias: None,
-    }];
+    }]);
 
     let results = fuzzy_search_scriptlets(&scriptlets, "url");
     assert_eq!(results.len(), 1);
@@ -3700,12 +3717,12 @@ fn test_extract_scriptlet_display_path() {
 #[test]
 fn test_fuzzy_search_scripts_empty_query_has_filename() {
     // Even with empty query, filename should be populated
-    let scripts = vec![Script {
+    let scripts = wrap_scripts(vec![Script {
         name: "Test".to_string(),
         path: PathBuf::from("/path/my-script.ts"),
         extension: "ts".to_string(),
         ..Default::default()
-    }];
+    }]);
 
     let results = fuzzy_search_scripts(&scripts, "");
     assert_eq!(results.len(), 1);
@@ -3997,28 +4014,32 @@ fn bench_get_grouped_results_repeated_calls() {
     use std::time::Instant;
 
     // Create realistic test data
-    let scripts: Vec<Script> = (0..100)
-        .map(|i| Script {
-            name: format!("script-{:03}", i),
-            path: PathBuf::from(format!("/test/scripts/script-{:03}.ts", i)),
-            extension: "ts".to_string(),
-            description: Some(format!("Description for script {}", i)),
-            ..Default::default()
+    let scripts: Vec<Arc<Script>> = (0..100)
+        .map(|i| {
+            Arc::new(Script {
+                name: format!("script-{:03}", i),
+                path: PathBuf::from(format!("/test/scripts/script-{:03}.ts", i)),
+                extension: "ts".to_string(),
+                description: Some(format!("Description for script {}", i)),
+                ..Default::default()
+            })
         })
         .collect();
 
-    let scriptlets: Vec<Scriptlet> = (0..50)
-        .map(|i| Scriptlet {
-            name: format!("snippet-{:02}", i),
-            file_path: Some(format!("/test/scriptlets/snippet-{:02}.md", i)),
-            tool: "ts".to_string(),
-            code: format!("console.log('snippet {}')", i),
-            description: Some(format!("Snippet {} description", i)),
-            shortcut: None,
-            expand: None,
-            group: None,
-            command: None,
-            alias: None,
+    let scriptlets: Vec<Arc<Scriptlet>> = (0..50)
+        .map(|i| {
+            Arc::new(Scriptlet {
+                name: format!("snippet-{:02}", i),
+                file_path: Some(format!("/test/scriptlets/snippet-{:02}.md", i)),
+                tool: "ts".to_string(),
+                code: format!("console.log('snippet {}')", i),
+                description: Some(format!("Snippet {} description", i)),
+                shortcut: None,
+                expand: None,
+                group: None,
+                command: None,
+                alias: None,
+            })
         })
         .collect();
 
@@ -4213,7 +4234,7 @@ fn test_fuzzy_match_with_indices_ascii_empty_pattern() {
 #[test]
 fn test_compute_match_indices_for_script_result() {
     let script_match = ScriptMatch {
-        script: Script {
+        script: Arc::new(Script {
             name: "OpenFile".to_string(),
             path: PathBuf::from("/openfile.ts"),
             extension: "ts".to_string(),
@@ -4222,7 +4243,7 @@ fn test_compute_match_indices_for_script_result() {
             alias: None,
             shortcut: None,
             ..Default::default()
-        },
+        }),
         score: 100,
         filename: "openfile.ts".to_string(),
         match_indices: MatchIndices::default(),
@@ -4237,7 +4258,7 @@ fn test_compute_match_indices_for_script_result() {
 #[test]
 fn test_compute_match_indices_for_scriptlet_result() {
     let scriptlet_match = ScriptletMatch {
-        scriptlet: test_scriptlet("Copy Text", "ts", "copy()"),
+        scriptlet: Arc::new(test_scriptlet("Copy Text", "ts", "copy()")),
         score: 100,
         display_file_path: Some("copy.md#copy-text".to_string()),
         match_indices: MatchIndices::default(),
@@ -4252,7 +4273,7 @@ fn test_compute_match_indices_for_scriptlet_result() {
 #[test]
 fn test_compute_match_indices_empty_query() {
     let script_match = ScriptMatch {
-        script: Script {
+        script: Arc::new(Script {
             name: "Test".to_string(),
             path: PathBuf::from("/test.ts"),
             extension: "ts".to_string(),
@@ -4261,7 +4282,7 @@ fn test_compute_match_indices_empty_query() {
             alias: None,
             shortcut: None,
             ..Default::default()
-        },
+        }),
         score: 0,
         filename: "test.ts".to_string(),
         match_indices: MatchIndices::default(),
@@ -4277,7 +4298,11 @@ fn test_compute_match_indices_empty_query() {
 fn test_scriptlet_code_search_gated_by_length() {
     // Code search only happens when query >= 4 chars and score == 0
     // Use a name that doesn't contain any of the search characters
-    let scriptlets = vec![test_scriptlet("Utility", "ts", "contains_xyz_function()")];
+    let scriptlets = wrap_scriptlets(vec![test_scriptlet(
+        "Utility",
+        "ts",
+        "contains_xyz_function()",
+    )]);
 
     // Short query - should NOT search code (even if it would match)
     let results = fuzzy_search_scriptlets(&scriptlets, "xyz");
@@ -4292,7 +4317,11 @@ fn test_scriptlet_code_search_gated_by_length() {
 #[test]
 fn test_scriptlet_code_search_skipped_when_name_matches() {
     // If name matches, code search is skipped (score > 0)
-    let scriptlets = vec![test_scriptlet("special_snippet", "ts", "unrelated_code()")];
+    let scriptlets = wrap_scriptlets(vec![test_scriptlet(
+        "special_snippet",
+        "ts",
+        "unrelated_code()",
+    )]);
 
     // Should match on name, not search code
     let results = fuzzy_search_scriptlets(&scriptlets, "special");
@@ -4338,12 +4367,12 @@ fn test_get_grouped_results_respects_frecency_ordering() {
     let mut frecency_store = FrecencyStore::with_path(temp_file.path().to_path_buf());
 
     // Create test scripts
-    let scripts = vec![
+    let scripts = wrap_scripts(vec![
         test_script_with_path("Alpha Script", "/test/alpha.ts"),
         test_script_with_path("Beta Script", "/test/beta.ts"),
         test_script_with_path("Gamma Script", "/test/gamma.ts"),
-    ];
-    let scriptlets: Vec<Scriptlet> = vec![];
+    ]);
+    let scriptlets: Vec<Arc<Scriptlet>> = wrap_scriptlets(vec![]);
     let builtins: Vec<BuiltInEntry> = vec![];
     let apps: Vec<crate::app_launcher::AppInfo> = vec![];
 
@@ -4428,11 +4457,11 @@ fn test_get_grouped_results_updates_after_frecency_change() {
     let mut frecency_store = FrecencyStore::with_path(temp_file.path().to_path_buf());
 
     // Create test scripts
-    let scripts = vec![
+    let scripts = wrap_scripts(vec![
         test_script_with_path("First Script", "/test/first.ts"),
         test_script_with_path("Second Script", "/test/second.ts"),
-    ];
-    let scriptlets: Vec<Scriptlet> = vec![];
+    ]);
+    let scriptlets: Vec<Arc<Scriptlet>> = wrap_scriptlets(vec![]);
     let builtins: Vec<BuiltInEntry> = vec![];
     let apps: Vec<crate::app_launcher::AppInfo> = vec![];
 
@@ -4531,11 +4560,11 @@ fn test_frecency_cache_invalidation_required() {
     let mut frecency_store = FrecencyStore::with_path(temp_file.path().to_path_buf());
 
     // Create test scripts
-    let scripts = vec![
+    let scripts = wrap_scripts(vec![
         test_script_with_path("ScriptA", "/test/a.ts"),
         test_script_with_path("ScriptB", "/test/b.ts"),
-    ];
-    let scriptlets: Vec<Scriptlet> = vec![];
+    ]);
+    let scriptlets: Vec<Arc<Scriptlet>> = wrap_scriptlets(vec![]);
     let builtins: Vec<BuiltInEntry> = vec![];
     let apps: Vec<crate::app_launcher::AppInfo> = vec![];
 
@@ -4706,11 +4735,11 @@ fn test_frecency_change_invalidates_cache() {
     let temp_file = NamedTempFile::new().unwrap();
     let mut frecency_store = FrecencyStore::with_path(temp_file.path().to_path_buf());
 
-    let scripts = vec![
+    let scripts = wrap_scripts(vec![
         test_script_with_path("AlphaScript", "/test/alpha.ts"),
         test_script_with_path("BetaScript", "/test/beta.ts"),
-    ];
-    let scriptlets: Vec<Scriptlet> = vec![];
+    ]);
+    let scriptlets: Vec<Arc<Scriptlet>> = wrap_scriptlets(vec![]);
     let builtins: Vec<BuiltInEntry> = vec![];
     let apps: Vec<crate::app_launcher::AppInfo> = vec![];
 
@@ -4735,8 +4764,8 @@ fn test_frecency_change_invalidates_cache() {
         /// Simulates get_grouped_results_cached() from main.rs
         fn get_cached(
             &mut self,
-            scripts: &[Script],
-            scriptlets: &[Scriptlet],
+            scripts: &[Arc<Script>],
+            scriptlets: &[Arc<Scriptlet>],
             builtins: &[BuiltInEntry],
             apps: &[crate::app_launcher::AppInfo],
             frecency_store: &FrecencyStore,

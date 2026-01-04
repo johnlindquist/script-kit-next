@@ -23,6 +23,7 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::sync::Arc;
 
 use crate::mcp_kit_tools::ToolDefinition;
 use crate::scripts::Script;
@@ -125,10 +126,10 @@ pub fn generate_script_tool(script: &Script) -> Option<ScriptTool> {
 
 /// Get all tool definitions from a list of scripts
 /// Only returns scripts that have schema.input defined
-pub fn get_script_tool_definitions(scripts: &[Script]) -> Vec<ToolDefinition> {
+pub fn get_script_tool_definitions(scripts: &[Arc<Script>]) -> Vec<ToolDefinition> {
     scripts
         .iter()
-        .filter_map(generate_tool_from_script)
+        .filter_map(|s| generate_tool_from_script(s.as_ref()))
         .collect()
 }
 
@@ -139,7 +140,10 @@ pub fn is_script_tool(name: &str) -> bool {
 
 /// Find a script by its tool name
 /// Returns None if tool is not in scripts/* namespace or script not found
-pub fn find_script_by_tool_name<'a>(scripts: &'a [Script], tool_name: &str) -> Option<&'a Script> {
+pub fn find_script_by_tool_name<'a>(
+    scripts: &'a [Arc<Script>],
+    tool_name: &str,
+) -> Option<&'a Arc<Script>> {
     if !is_script_tool(tool_name) {
         return None;
     }
@@ -156,7 +160,7 @@ pub fn find_script_by_tool_name<'a>(scripts: &'a [Script], tool_name: &str) -> O
 /// This validates the tool exists and returns a placeholder result.
 /// Actual script execution should be handled by the caller using the script path.
 pub fn handle_script_tool_call(
-    scripts: &[Script],
+    scripts: &[Arc<Script>],
     tool_name: &str,
     arguments: &Value,
 ) -> ScriptToolResult {
@@ -560,10 +564,10 @@ mod tests {
         let schema1 = simple_input_schema("x", FieldType::String, false);
         let schema2 = simple_input_schema("y", FieldType::Number, true);
 
-        let scripts = vec![
-            test_script_with_schema("Script One", None, schema1),
-            test_script_without_schema("Script Two"), // No schema
-            test_script_with_schema("Script Three", None, schema2),
+        let scripts: Vec<Arc<Script>> = vec![
+            Arc::new(test_script_with_schema("Script One", None, schema1)),
+            Arc::new(test_script_without_schema("Script Two")), // No schema
+            Arc::new(test_script_with_schema("Script Three", None, schema2)),
         ];
 
         let tools = get_script_tool_definitions(&scripts);
@@ -580,9 +584,9 @@ mod tests {
     #[test]
     fn test_find_script_by_tool_name() {
         let schema = simple_input_schema("x", FieldType::String, false);
-        let scripts = vec![
-            test_script_with_schema("Create Note", None, schema.clone()),
-            test_script_with_schema("Git Commit", None, schema.clone()),
+        let scripts: Vec<Arc<Script>> = vec![
+            Arc::new(test_script_with_schema("Create Note", None, schema.clone())),
+            Arc::new(test_script_with_schema("Git Commit", None, schema.clone())),
         ];
 
         // Should find by tool name
@@ -607,11 +611,11 @@ mod tests {
     #[test]
     fn test_handle_script_tool_call_success() {
         let schema = simple_input_schema("title", FieldType::String, true);
-        let scripts = vec![test_script_with_schema(
+        let scripts: Vec<Arc<Script>> = vec![Arc::new(test_script_with_schema(
             "Create Note",
             Some("Creates notes"),
             schema,
-        )];
+        ))];
 
         let result = handle_script_tool_call(
             &scripts,
@@ -632,7 +636,7 @@ mod tests {
 
     #[test]
     fn test_handle_script_tool_call_not_found() {
-        let scripts = vec![];
+        let scripts: Vec<Arc<Script>> = vec![];
 
         let result = handle_script_tool_call(&scripts, "scripts/unknown", &serde_json::json!({}));
 

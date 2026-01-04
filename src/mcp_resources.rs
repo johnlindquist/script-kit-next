@@ -9,6 +9,7 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::sync::Arc;
 
 use crate::scripts::Script;
 use crate::scripts::Scriptlet;
@@ -161,8 +162,8 @@ pub fn get_resource_definitions() -> Vec<McpResource> {
 /// * `Err(String)` - Error message if resource not found
 pub fn read_resource(
     uri: &str,
-    scripts: &[Script],
-    scriptlets: &[Scriptlet],
+    scripts: &[Arc<Script>],
+    scriptlets: &[Arc<Scriptlet>],
     app_state: Option<&AppStateResource>,
 ) -> Result<ResourceContent, String> {
     match uri {
@@ -187,8 +188,11 @@ fn read_state_resource(app_state: Option<&AppStateResource>) -> Result<ResourceC
 }
 
 /// Read scripts:// resource
-fn read_scripts_resource(scripts: &[Script]) -> Result<ResourceContent, String> {
-    let entries: Vec<ScriptResourceEntry> = scripts.iter().map(ScriptResourceEntry::from).collect();
+fn read_scripts_resource(scripts: &[Arc<Script>]) -> Result<ResourceContent, String> {
+    let entries: Vec<ScriptResourceEntry> = scripts
+        .iter()
+        .map(|s| ScriptResourceEntry::from(s.as_ref()))
+        .collect();
     let json = serde_json::to_string_pretty(&entries)
         .map_err(|e| format!("Failed to serialize scripts: {}", e))?;
 
@@ -200,10 +204,10 @@ fn read_scripts_resource(scripts: &[Script]) -> Result<ResourceContent, String> 
 }
 
 /// Read scriptlets:// resource
-fn read_scriptlets_resource(scriptlets: &[Scriptlet]) -> Result<ResourceContent, String> {
+fn read_scriptlets_resource(scriptlets: &[Arc<Scriptlet>]) -> Result<ResourceContent, String> {
     let entries: Vec<ScriptletResourceEntry> = scriptlets
         .iter()
-        .map(ScriptletResourceEntry::from)
+        .map(|s| ScriptletResourceEntry::from(s.as_ref()))
         .collect();
     let json = serde_json::to_string_pretty(&entries)
         .map_err(|e| format!("Failed to serialize scriptlets: {}", e))?;
@@ -238,6 +242,17 @@ pub fn resource_list_to_value(resources: &[McpResource]) -> Value {
 mod tests {
     use super::*;
     use std::path::PathBuf;
+    use std::sync::Arc;
+
+    /// Helper to wrap Vec<Script> into Vec<Arc<Script>> for tests
+    fn wrap_scripts(scripts: Vec<Script>) -> Vec<Arc<Script>> {
+        scripts.into_iter().map(Arc::new).collect()
+    }
+
+    /// Helper to wrap Vec<Scriptlet> into Vec<Arc<Scriptlet>> for tests
+    fn wrap_scriptlets(scriptlets: Vec<Scriptlet>) -> Vec<Arc<Scriptlet>> {
+        scriptlets.into_iter().map(Arc::new).collect()
+    }
 
     // =======================================================
     // TDD Tests - Written FIRST per spec requirements
@@ -306,10 +321,10 @@ mod tests {
     #[test]
     fn test_scripts_resource_read() {
         // REQUIREMENT: scripts:// returns array of script metadata
-        let scripts = vec![
+        let scripts = wrap_scripts(vec![
             test_script("My Script", Some("Does something")),
             test_script("Another Script", None),
-        ];
+        ]);
 
         let result = read_resource("scripts://", &scripts, &[], None);
         assert!(result.is_ok(), "Should successfully read scripts resource");
@@ -332,10 +347,10 @@ mod tests {
     #[test]
     fn test_scriptlets_resource_read() {
         // REQUIREMENT: scriptlets:// returns array of scriptlet metadata
-        let scriptlets = vec![
+        let scriptlets = wrap_scriptlets(vec![
             test_scriptlet("Open URL", "open", Some("Opens a URL")),
             test_scriptlet("Paste Text", "paste", None),
-        ];
+        ]);
 
         let result = read_resource("scriptlets://", &[], &scriptlets, None);
         assert!(

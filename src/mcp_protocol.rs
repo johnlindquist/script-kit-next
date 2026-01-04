@@ -17,6 +17,7 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::sync::Arc;
 
 use crate::mcp_kit_tools;
 use crate::mcp_resources;
@@ -273,17 +274,22 @@ pub fn handle_request(request: JsonRpcRequest) -> JsonRpcResponse {
 
 /// Handle an MCP JSON-RPC request with script context
 /// This allows script tools to be dynamically included based on loaded scripts
-pub fn handle_request_with_scripts(request: JsonRpcRequest, scripts: &[Script]) -> JsonRpcResponse {
+pub fn handle_request_with_scripts(
+    request: JsonRpcRequest,
+    scripts: &[std::sync::Arc<Script>],
+) -> JsonRpcResponse {
     // Use empty scriptlets list for backwards compatibility
     handle_request_with_context(request, scripts, &[], None)
 }
 
 /// Handle an MCP JSON-RPC request with full context
 /// This allows script tools and resources to be dynamically included
+///
+/// H1 Optimization: Accepts Arc<Script> and Arc<Scriptlet> to work with Arc storage.
 pub fn handle_request_with_context(
     request: JsonRpcRequest,
-    scripts: &[Script],
-    scriptlets: &[Scriptlet],
+    scripts: &[std::sync::Arc<Script>],
+    scriptlets: &[std::sync::Arc<Scriptlet>],
     app_state: Option<&mcp_resources::AppStateResource>,
 ) -> JsonRpcResponse {
     // Check for valid jsonrpc version
@@ -345,9 +351,11 @@ fn handle_tools_list(request: JsonRpcRequest) -> JsonRpcResponse {
 
 /// Handle tools/list request with script context
 /// This allows including dynamically loaded script tools
+///
+/// H1 Optimization: Accepts Arc<Script> to work with Arc storage.
 pub fn handle_tools_list_with_scripts(
     request: JsonRpcRequest,
-    scripts: &[Script],
+    scripts: &[std::sync::Arc<Script>],
 ) -> JsonRpcResponse {
     // Get kit/* namespace tools
     let mut all_tools = mcp_kit_tools::get_kit_tool_definitions();
@@ -376,9 +384,11 @@ fn handle_tools_call(request: JsonRpcRequest) -> JsonRpcResponse {
 
 /// Handle tools/call request with script context
 /// This allows handling scripts/* namespace tool calls
+///
+/// H1 Optimization: Accepts Arc<Script> to work with Arc storage.
 pub fn handle_tools_call_with_scripts(
     request: JsonRpcRequest,
-    scripts: &[Script],
+    scripts: &[std::sync::Arc<Script>],
 ) -> JsonRpcResponse {
     // Validate params
     let params = request.params.as_object();
@@ -451,8 +461,8 @@ fn handle_resources_read(request: JsonRpcRequest) -> JsonRpcResponse {
 /// Handle resources/read request with full context
 fn handle_resources_read_with_context(
     request: JsonRpcRequest,
-    scripts: &[Script],
-    scriptlets: &[Scriptlet],
+    scripts: &[Arc<Script>],
+    scriptlets: &[Arc<Scriptlet>],
     app_state: Option<&mcp_resources::AppStateResource>,
 ) -> JsonRpcResponse {
     // Validate params
@@ -491,6 +501,17 @@ fn handle_resources_read_with_context(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
+
+    /// Helper to wrap Vec<Script> into Vec<Arc<Script>> for tests
+    fn wrap_scripts(scripts: Vec<Script>) -> Vec<Arc<Script>> {
+        scripts.into_iter().map(Arc::new).collect()
+    }
+
+    /// Helper to wrap Vec<Scriptlet> into Vec<Arc<Scriptlet>> for tests
+    fn wrap_scriptlets(scriptlets: Vec<Scriptlet>) -> Vec<Arc<Scriptlet>> {
+        scriptlets.into_iter().map(Arc::new).collect()
+    }
 
     // =======================================================
     // TDD Tests - Written FIRST per spec requirements
@@ -1044,10 +1065,10 @@ mod tests {
 
         #[test]
         fn test_tools_list_includes_script_tools() {
-            let scripts = vec![
+            let scripts = wrap_scripts(vec![
                 test_script_with_schema("Create Note", Some("Creates a new note")),
                 test_script_with_schema("Git Commit", Some("Commits changes")),
-            ];
+            ]);
 
             let request = JsonRpcRequest {
                 jsonrpc: "2.0".to_string(),
@@ -1085,10 +1106,10 @@ mod tests {
 
         #[test]
         fn test_tools_list_script_tool_has_correct_schema() {
-            let scripts = vec![test_script_with_schema(
+            let scripts = wrap_scripts(vec![test_script_with_schema(
                 "Test Script",
                 Some("Test description"),
-            )];
+            )]);
 
             let request = JsonRpcRequest {
                 jsonrpc: "2.0".to_string(),
@@ -1124,10 +1145,10 @@ mod tests {
 
         #[test]
         fn test_tools_call_script_tool() {
-            let scripts = vec![test_script_with_schema(
+            let scripts = wrap_scripts(vec![test_script_with_schema(
                 "Create Note",
                 Some("Creates notes"),
-            )];
+            )]);
 
             let request = JsonRpcRequest {
                 jsonrpc: "2.0".to_string(),
@@ -1152,7 +1173,7 @@ mod tests {
 
         #[test]
         fn test_tools_call_unknown_script_tool() {
-            let scripts = vec![test_script_with_schema("Create Note", None)];
+            let scripts = wrap_scripts(vec![test_script_with_schema("Create Note", None)]);
 
             let request = JsonRpcRequest {
                 jsonrpc: "2.0".to_string(),
@@ -1223,10 +1244,10 @@ mod tests {
                 schema: None, // No schema!
             };
 
-            let scripts = vec![
+            let scripts = wrap_scripts(vec![
                 script_no_schema,
                 test_script_with_schema("With Schema", Some("Has schema")),
-            ];
+            ]);
 
             let request = JsonRpcRequest {
                 jsonrpc: "2.0".to_string(),
@@ -1300,10 +1321,10 @@ mod tests {
 
         #[test]
         fn test_resources_read_scripts() {
-            let scripts = vec![
+            let scripts = wrap_scripts(vec![
                 test_script("Script One", Some("First script")),
                 test_script("Script Two", None),
-            ];
+            ]);
 
             let request = JsonRpcRequest {
                 jsonrpc: "2.0".to_string(),
@@ -1338,10 +1359,10 @@ mod tests {
 
         #[test]
         fn test_resources_read_scriptlets() {
-            let scriptlets = vec![
+            let scriptlets = wrap_scriptlets(vec![
                 test_scriptlet("Open URL", "open"),
                 test_scriptlet("Paste", "paste"),
-            ];
+            ]);
 
             let request = JsonRpcRequest {
                 jsonrpc: "2.0".to_string(),
@@ -1424,8 +1445,8 @@ mod tests {
 
         #[test]
         fn test_resources_read_with_full_context() {
-            let scripts = vec![test_script("Test Script", None)];
-            let scriptlets = vec![test_scriptlet("Test Snippet", "bash")];
+            let scripts = wrap_scripts(vec![test_script("Test Script", None)]);
+            let scriptlets = wrap_scriptlets(vec![test_scriptlet("Test Snippet", "bash")]);
             let app_state = mcp_resources::AppStateResource {
                 visible: true,
                 focused: false,

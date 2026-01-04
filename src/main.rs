@@ -551,8 +551,10 @@ enum PromptMessage {
 }
 
 struct ScriptListApp {
-    scripts: Vec<scripts::Script>,
-    scriptlets: Vec<scripts::Scriptlet>,
+    /// H1 Optimization: Arc-wrapped scripts for cheap cloning during filter operations
+    scripts: Vec<std::sync::Arc<scripts::Script>>,
+    /// H1 Optimization: Arc-wrapped scriptlets for cheap cloning during filter operations
+    scriptlets: Vec<std::sync::Arc<scripts::Scriptlet>>,
     builtin_entries: Vec<builtins::BuiltInEntry>,
     /// Cached list of installed applications for main search
     apps: Vec<app_launcher::AppInfo>,
@@ -697,10 +699,9 @@ struct ScriptListApp {
 
 /// Result of alias matching - either a Script or Scriptlet
 #[derive(Clone, Debug)]
-#[allow(clippy::large_enum_variant)]
 enum AliasMatch {
-    Script(scripts::Script),
-    Scriptlet(scripts::Scriptlet),
+    Script(Arc<scripts::Script>),
+    Scriptlet(Arc<scripts::Scriptlet>),
 }
 
 // Core ScriptListApp implementation extracted to app_impl.rs
