@@ -15,10 +15,20 @@ use super::message::Message;
 const MAX_RAW_LOG_PREVIEW: usize = 200;
 
 /// Get a truncated preview of raw JSON for logging
+///
+/// # Safety
+/// This function handles UTF-8 correctly by finding a valid char boundary
+/// when truncating. It will never panic on multi-byte UTF-8 characters.
 pub fn log_preview(raw: &str) -> (&str, usize) {
     let len = raw.len();
     if len > MAX_RAW_LOG_PREVIEW {
-        (&raw[..MAX_RAW_LOG_PREVIEW], len)
+        // Find a valid UTF-8 char boundary at or before MAX_RAW_LOG_PREVIEW
+        // This prevents panics on multi-byte characters (emoji, CJK, etc.)
+        let mut end = MAX_RAW_LOG_PREVIEW;
+        while end > 0 && !raw.is_char_boundary(end) {
+            end -= 1;
+        }
+        (&raw[..end], len)
     } else {
         (raw, len)
     }
@@ -31,11 +41,18 @@ pub fn log_preview(raw: &str) -> (&str, usize) {
 ///
 /// # Returns
 /// * `Result<Message, serde_json::Error>` - Parsed message or deserialization error
+///
+/// # Security
+/// Raw JSON is truncated to 200 chars in error logs to prevent leaking sensitive data
+/// (base64 screenshots, clipboard content, etc.)
 pub fn parse_message(line: &str) -> Result<Message, serde_json::Error> {
     serde_json::from_str(line).map_err(|e| {
-        // Log the raw input and error for debugging
+        // SECURITY: Use truncated preview to avoid logging sensitive data
+        // (base64 screenshots, clipboard content, user text, etc.)
+        let (preview, raw_len) = log_preview(line);
         warn!(
-            raw_input = %line,
+            raw_preview = %preview,
+            raw_len = raw_len,
             error = %e,
             "Failed to parse JSONL message"
         );
@@ -401,6 +418,42 @@ mod tests {
     }
 
     #[test]
+    fn test_log_preview_utf8_safety() {
+        // Test with multi-byte UTF-8 characters (emoji)
+        // Each emoji is 4 bytes, so 60 emoji = 240 bytes
+        let emoji_string = "🎉".repeat(60);
+        let (preview, len) = log_preview(&emoji_string);
+
+        // Should not panic and should be valid UTF-8
+        assert!(preview.is_char_boundary(preview.len()));
+        assert_eq!(len, 240); // 60 * 4 bytes
+
+        // Preview should be <= 200 bytes AND at a valid char boundary
+        // Since each emoji is 4 bytes, max is 200/4 = 50 emoji = 200 bytes
+        assert!(preview.len() <= MAX_RAW_LOG_PREVIEW);
+        // Should be exactly 200 bytes (50 emoji * 4 bytes each)
+        assert_eq!(preview.len(), 200);
+        assert_eq!(preview.chars().count(), 50);
+
+        // Test with mixed content ending in multi-byte char
+        let mixed = format!("{}{}", "a".repeat(198), "🎉"); // 198 + 4 = 202 bytes
+        let (preview, len) = log_preview(&mixed);
+        assert_eq!(len, 202);
+        // Should truncate before the emoji since 198 + 4 > 200
+        assert!(preview.len() <= MAX_RAW_LOG_PREVIEW);
+
+        // Test with CJK characters (3 bytes each)
+        let cjk = "中文字符测试内容".repeat(10); // 8 chars * 3 bytes * 10 = 240 bytes
+        let (preview, len) = log_preview(&cjk);
+        assert!(preview.len() <= MAX_RAW_LOG_PREVIEW);
+        assert_eq!(len, 240);
+        // Verify it's valid UTF-8 by iterating chars
+        for c in preview.chars() {
+            assert!(c.is_alphabetic() || c.is_numeric());
+        }
+    }
+
+    #[test]
     fn test_parse_message_graceful_known_type() {
         let json = r#"{"type":"arg","id":"1","placeholder":"Pick","choices":[]}"#;
         match parse_message_graceful(json) {
@@ -549,6 +602,45 @@ mod tests {
             }
             other => panic!("Expected ParseResult::Ok with ShowGrid, got {:?}", other),
         }
+    }
+
+    #[test]
+    fn test_grid_options_default_matches_serde_default() {
+        use crate::protocol::types::GridOptions;
+
+        // GridOptions::default() should match deserializing an empty showGrid message
+        let rust_default = GridOptions::default();
+
+        // Deserialize from JSON with no fields (just the type)
+        let json = r#"{"type":"showGrid"}"#;
+        let serde_default = match parse_message_graceful(json) {
+            ParseResult::Ok(Message::ShowGrid { options }) => options,
+            other => panic!("Expected ShowGrid, got {:?}", other),
+        };
+
+        // Both should have grid_size = 8, not 0
+        assert_eq!(
+            rust_default.grid_size, 8,
+            "Rust default grid_size should be 8"
+        );
+        assert_eq!(
+            serde_default.grid_size, 8,
+            "Serde default grid_size should be 8"
+        );
+        assert_eq!(
+            rust_default.grid_size, serde_default.grid_size,
+            "Rust Default and serde default must match for grid_size"
+        );
+
+        // Verify all other fields match too
+        assert_eq!(rust_default.show_bounds, serde_default.show_bounds);
+        assert_eq!(rust_default.show_box_model, serde_default.show_box_model);
+        assert_eq!(
+            rust_default.show_alignment_guides,
+            serde_default.show_alignment_guides
+        );
+        assert_eq!(rust_default.show_dimensions, serde_default.show_dimensions);
+        assert_eq!(rust_default.color_scheme, serde_default.color_scheme);
     }
 
     #[test]

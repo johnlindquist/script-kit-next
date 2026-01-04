@@ -38,37 +38,53 @@ pub fn generate_semantic_id_named(element_type: &str, name: &str) -> String {
 ///
 /// - Converts to lowercase
 /// - Replaces spaces and underscores with hyphens
-/// - Removes non-alphanumeric characters (except hyphens)
+/// - **Restricts to ASCII alphanumeric only** (a-z, 0-9, hyphen)
+/// - Non-ASCII characters (emoji, CJK, accented chars) become hyphens
 /// - Collapses multiple hyphens to single
-/// - Truncates to 20 characters
+/// - Truncates to 20 **characters** (not bytes)
 /// - Removes leading/trailing hyphens
+///
+/// # Why ASCII-only?
+/// Semantic IDs are used in:
+/// - CSS selectors (limited charset)
+/// - Log files (needs to be safe across platforms)
+/// - URL fragments (should be URL-safe)
+/// - AI agent targeting (predictable format helps agents)
+///
+/// By restricting to ASCII, we ensure IDs are consistent and safe
+/// across all contexts.
 pub fn value_to_slug(value: &str) -> String {
-    let slug: String = value
-        .to_lowercase()
-        .chars()
-        .map(|c| match c {
-            ' ' | '_' => '-',
-            c if c.is_alphanumeric() || c == '-' => c,
-            _ => '-',
-        })
-        .collect();
-
-    // Collapse multiple hyphens and trim
+    // Collapse multiple hyphens and trim, using char-based truncation
     let mut result = String::with_capacity(20);
     let mut prev_hyphen = false;
+    let mut char_count = 0;
 
-    for c in slug.chars() {
-        if c == '-' {
+    for c in value.chars() {
+        // Convert to lowercase and check if ASCII alphanumeric
+        let lower = c.to_ascii_lowercase();
+        let mapped = match lower {
+            ' ' | '_' => '-',
+            // ASCII alphanumeric only (a-z, 0-9)
+            c if c.is_ascii_alphanumeric() => c,
+            '-' => '-',
+            // Non-ASCII (emoji, CJK, accented) -> hyphen
+            _ => '-',
+        };
+
+        if mapped == '-' {
             if !prev_hyphen && !result.is_empty() {
                 result.push('-');
+                char_count += 1;
             }
             prev_hyphen = true;
         } else {
-            result.push(c);
+            result.push(mapped);
+            char_count += 1;
             prev_hyphen = false;
         }
 
-        if result.len() >= 20 {
+        // Truncate by character count, not bytes
+        if char_count >= 20 {
             break;
         }
     }
@@ -124,6 +140,35 @@ mod tests {
         assert_eq!(value_to_slug(""), "item");
         assert_eq!(value_to_slug("   "), "item");
         assert_eq!(value_to_slug("@#$%"), "item"); // all special chars
+    }
+
+    #[test]
+    fn test_value_to_slug_non_ascii() {
+        // Emoji become hyphens, then collapse
+        assert_eq!(value_to_slug("🎉party🎉"), "party");
+
+        // CJK characters become hyphens, then collapse
+        assert_eq!(value_to_slug("文件"), "item"); // all non-ASCII -> empty -> "item"
+
+        // Mixed ASCII and non-ASCII
+        assert_eq!(value_to_slug("hello世界"), "hello");
+        assert_eq!(value_to_slug("café"), "caf"); // 'é' is non-ASCII, becomes hyphen, then trimmed
+
+        // Accented characters are replaced
+        assert_eq!(value_to_slug("naïve"), "na-ve");
+    }
+
+    #[test]
+    fn test_value_to_slug_truncation_by_chars_not_bytes() {
+        // Even with multi-byte characters, truncation should be by character count
+        // 20 characters max, but some chars are multi-byte
+        let mixed = "a🎉b🎉c🎉d🎉e🎉f🎉g🎉h🎉i🎉j"; // 10 ASCII + 9 emoji
+        let slug = value_to_slug(mixed);
+        // Each emoji becomes a hyphen, so: a-b-c-d-e-f-g-h-i-j
+        // That's 19 characters (10 letters + 9 hyphens), which fits in 20
+        assert!(slug.chars().count() <= 20);
+        // Result should be ASCII only
+        assert!(slug.is_ascii());
     }
 
     #[test]

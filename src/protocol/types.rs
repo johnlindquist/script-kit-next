@@ -282,6 +282,11 @@ pub struct FileSearchResultEntry {
 }
 
 /// Element type for UI element querying (getElements)
+///
+/// # Forward Compatibility
+/// The `Unknown` variant with `#[serde(other)]` ensures forward compatibility:
+/// if a newer protocol version adds new element types, older receivers
+/// will deserialize them as `Unknown` instead of failing entirely.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum ElementType {
@@ -290,6 +295,10 @@ pub enum ElementType {
     Button,
     Panel,
     List,
+    /// Unknown element type (forward compatibility fallback)
+    /// When deserializing, any unrecognized type string becomes Unknown
+    #[serde(other)]
+    Unknown,
 }
 
 /// Information about a UI element returned by getElements
@@ -614,7 +623,12 @@ impl ScriptletData {
 ///
 /// Used with ShowGrid message to configure the visual debugging overlay
 /// that displays grid lines, component bounds, and alignment guides.
-#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+///
+/// # Note on Default
+/// The `Default` implementation manually matches the serde defaults to ensure
+/// consistency between `GridOptions::default()` (Rust code) and deserialized
+/// defaults (from JSON with missing fields).
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct GridOptions {
     /// Grid line spacing in pixels (8 or 16)
@@ -651,6 +665,23 @@ pub struct GridOptions {
 
 fn default_grid_size() -> u32 {
     8
+}
+
+/// Manual Default implementation to match serde defaults exactly.
+/// This ensures GridOptions::default() produces the same values as
+/// deserializing an empty JSON object {}.
+impl Default for GridOptions {
+    fn default() -> Self {
+        Self {
+            grid_size: default_grid_size(), // 8, not 0
+            show_bounds: false,
+            show_box_model: false,
+            show_alignment_guides: false,
+            show_dimensions: false,
+            depth: GridDepthOption::default(),
+            color_scheme: None,
+        }
+    }
 }
 
 /// Depth option for grid bounds display
@@ -875,6 +906,11 @@ pub struct LayoutBounds {
 }
 
 /// Component type for categorization
+///
+/// # Forward Compatibility
+/// The `Unknown` variant with `#[serde(other)]` ensures forward compatibility:
+/// if a newer protocol version adds new component types, older receivers
+/// will deserialize them as `Unknown` instead of failing entirely.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum LayoutComponentType {
@@ -888,6 +924,10 @@ pub enum LayoutComponentType {
     Container,
     Panel,
     Other,
+    /// Unknown component type (forward compatibility fallback)
+    /// When deserializing, any unrecognized type string becomes Unknown
+    #[serde(other)]
+    Unknown,
 }
 
 /// Information about a single component in the layout tree
