@@ -1,3 +1,735 @@
+🧩 Packing 6 file(s)...
+📝 Files selected:
+  • src/notes/model.rs
+  • src/notes/storage.rs
+  • src/notes/mod.rs
+  • src/notes/window.rs
+  • src/notes/actions_panel.rs
+  • src/notes/browse_panel.rs
+This file is a merged representation of the filtered codebase, combined into a single document by packx.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of filtered repository contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<usage_guidelines>
+- Treat this file as a snapshot of the repository's state
+- Be aware that this file may contain sensitive information
+</usage_guidelines>
+
+<notes>
+- Files were filtered by packx based on content and extension matching
+- Total files included: 6
+</notes>
+</file_summary>
+
+<directory_structure>
+src/notes/model.rs
+src/notes/storage.rs
+src/notes/mod.rs
+src/notes/window.rs
+src/notes/actions_panel.rs
+src/notes/browse_panel.rs
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="src/notes/model.rs">
+//! Notes Data Model
+//!
+//! Core data structures for the Notes feature.
+
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
+
+/// Unique identifier for a note
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct NoteId(pub Uuid);
+
+impl NoteId {
+    /// Create a new random NoteId
+    pub fn new() -> Self {
+        Self(Uuid::new_v4())
+    }
+
+    /// Create a NoteId from a UUID string
+    pub fn parse(s: &str) -> Option<Self> {
+        Uuid::parse_str(s).ok().map(Self)
+    }
+
+    /// Get the UUID as a string
+    pub fn as_str(&self) -> String {
+        self.0.to_string()
+    }
+}
+
+impl Default for NoteId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl std::fmt::Display for NoteId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+/// A single note
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Note {
+    /// Unique identifier
+    pub id: NoteId,
+
+    /// Note title (first line or user-defined)
+    pub title: String,
+
+    /// Full markdown content
+    pub content: String,
+
+    /// When the note was created
+    pub created_at: DateTime<Utc>,
+
+    /// When the note was last modified
+    pub updated_at: DateTime<Utc>,
+
+    /// When the note was soft-deleted (None = not deleted)
+    pub deleted_at: Option<DateTime<Utc>>,
+
+    /// Whether the note is pinned to the top
+    pub is_pinned: bool,
+
+    /// Sort order within pinned/unpinned groups
+    pub sort_order: i32,
+}
+
+impl Note {
+    /// Create a new empty note
+    pub fn new() -> Self {
+        let now = Utc::now();
+        Self {
+            id: NoteId::new(),
+            title: String::new(),
+            content: String::new(),
+            created_at: now,
+            updated_at: now,
+            deleted_at: None,
+            is_pinned: false,
+            sort_order: 0,
+        }
+    }
+
+    /// Create a note with initial content
+    pub fn with_content(content: impl Into<String>) -> Self {
+        let content = content.into();
+        let title = Self::extract_title(&content);
+        let now = Utc::now();
+
+        Self {
+            id: NoteId::new(),
+            title,
+            content,
+            created_at: now,
+            updated_at: now,
+            deleted_at: None,
+            is_pinned: false,
+            sort_order: 0,
+        }
+    }
+
+    /// Update the content and refresh title/timestamp
+    pub fn set_content(&mut self, content: impl Into<String>) {
+        self.content = content.into();
+        self.title = Self::extract_title(&self.content);
+        self.updated_at = Utc::now();
+    }
+
+    /// Extract title from content (first non-empty line, stripped of markdown)
+    fn extract_title(content: &str) -> String {
+        content
+            .lines()
+            .find(|line| !line.trim().is_empty())
+            .map(|line| {
+                // Strip markdown heading markers
+                let trimmed = line.trim();
+                if trimmed.starts_with('#') {
+                    trimmed.trim_start_matches('#').trim().to_string()
+                } else {
+                    trimmed.to_string()
+                }
+            })
+            .unwrap_or_else(|| "Untitled Note".to_string())
+    }
+
+    /// Check if this note is in the trash
+    pub fn is_deleted(&self) -> bool {
+        self.deleted_at.is_some()
+    }
+
+    /// Soft delete the note
+    pub fn soft_delete(&mut self) {
+        self.deleted_at = Some(Utc::now());
+    }
+
+    /// Restore the note from trash
+    pub fn restore(&mut self) {
+        self.deleted_at = None;
+    }
+
+    /// Get a preview of the content (first ~100 chars, excluding title line)
+    pub fn preview(&self) -> String {
+        self.content
+            .lines()
+            .skip(1) // Skip title line
+            .filter(|line| !line.trim().is_empty())
+            .take(3)
+            .collect::<Vec<_>>()
+            .join(" ")
+            .chars()
+            .take(100)
+            .collect()
+    }
+
+    /// Get word count
+    pub fn word_count(&self) -> usize {
+        self.content.split_whitespace().count()
+    }
+
+    /// Get character count
+    pub fn char_count(&self) -> usize {
+        self.content.chars().count()
+    }
+}
+
+impl Default for Note {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Export format for notes
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExportFormat {
+    /// Plain text (.txt)
+    PlainText,
+    /// Markdown (.md)
+    Markdown,
+    /// HTML (.html)
+    Html,
+}
+
+impl ExportFormat {
+    /// Get the file extension for this format
+    pub fn extension(&self) -> &'static str {
+        match self {
+            ExportFormat::PlainText => "txt",
+            ExportFormat::Markdown => "md",
+            ExportFormat::Html => "html",
+        }
+    }
+
+    /// Get the MIME type for this format
+    pub fn mime_type(&self) -> &'static str {
+        match self {
+            ExportFormat::PlainText => "text/plain",
+            ExportFormat::Markdown => "text/markdown",
+            ExportFormat::Html => "text/html",
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_note_creation() {
+        let note = Note::new();
+        assert!(!note.id.0.is_nil());
+        assert!(note.title.is_empty());
+        assert!(note.content.is_empty());
+        assert!(!note.is_deleted());
+    }
+
+    #[test]
+    fn test_note_with_content() {
+        let note = Note::with_content("# My Title\n\nSome content here.");
+        assert_eq!(note.title, "My Title");
+        assert!(!note.content.is_empty());
+    }
+
+    #[test]
+    fn test_title_extraction() {
+        let mut note = Note::new();
+
+        note.set_content("First line as title");
+        assert_eq!(note.title, "First line as title");
+
+        note.set_content("# Heading Title\nBody");
+        assert_eq!(note.title, "Heading Title");
+
+        note.set_content("## Second Level\nBody");
+        assert_eq!(note.title, "Second Level");
+
+        note.set_content("\n\n  Spaced Title  \n");
+        assert_eq!(note.title, "Spaced Title");
+
+        note.set_content("");
+        assert_eq!(note.title, "Untitled Note");
+    }
+
+    #[test]
+    fn test_soft_delete_and_restore() {
+        let mut note = Note::new();
+        assert!(!note.is_deleted());
+
+        note.soft_delete();
+        assert!(note.is_deleted());
+
+        note.restore();
+        assert!(!note.is_deleted());
+    }
+
+    #[test]
+    fn test_word_count() {
+        let note = Note::with_content("Hello world, this is a test.");
+        assert_eq!(note.word_count(), 6);
+    }
+}
+
+</file>
+
+<file path="src/notes/storage.rs">
+//! Notes Storage Layer
+//!
+//! SQLite-backed persistence for notes with CRUD operations.
+//! Follows the same patterns as clipboard_history.rs for consistency.
+
+use anyhow::{Context, Result};
+use chrono::{DateTime, Utc};
+use rusqlite::{params, Connection, OptionalExtension};
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex, OnceLock};
+use tracing::{debug, info};
+
+use super::model::{Note, NoteId};
+
+/// Global database connection for notes
+static NOTES_DB: OnceLock<Arc<Mutex<Connection>>> = OnceLock::new();
+
+/// Get the path to the notes database
+fn get_notes_db_path() -> PathBuf {
+    let kit_dir = dirs::home_dir()
+        .map(|h| h.join(".sk/kit"))
+        .unwrap_or_else(|| PathBuf::from(".sk/kit"));
+
+    kit_dir.join("db").join("notes.sqlite")
+}
+
+/// Initialize the notes database
+///
+/// This function is idempotent - it's safe to call multiple times.
+/// If the database is already initialized, it returns Ok(()) immediately.
+pub fn init_notes_db() -> Result<()> {
+    // Check if already initialized - this is the common case after first init
+    if NOTES_DB.get().is_some() {
+        debug!("Notes database already initialized, skipping");
+        return Ok(());
+    }
+
+    let db_path = get_notes_db_path();
+
+    // Ensure directory exists
+    if let Some(parent) = db_path.parent() {
+        std::fs::create_dir_all(parent).context("Failed to create notes db directory")?;
+    }
+
+    let conn = Connection::open(&db_path).context("Failed to open notes database")?;
+
+    // Create tables
+    conn.execute_batch(
+        r#"
+        CREATE TABLE IF NOT EXISTS notes (
+            id TEXT PRIMARY KEY,
+            title TEXT NOT NULL DEFAULT '',
+            content TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            deleted_at TEXT,
+            is_pinned INTEGER NOT NULL DEFAULT 0,
+            sort_order INTEGER NOT NULL DEFAULT 0
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_notes_updated_at ON notes(updated_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_notes_deleted_at ON notes(deleted_at);
+        CREATE INDEX IF NOT EXISTS idx_notes_is_pinned ON notes(is_pinned);
+
+        -- Full-text search support
+        CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
+            title,
+            content,
+            content='notes',
+            content_rowid='rowid'
+        );
+
+        -- Triggers to keep FTS in sync
+        CREATE TRIGGER IF NOT EXISTS notes_ai AFTER INSERT ON notes BEGIN
+            INSERT INTO notes_fts(rowid, title, content) 
+            VALUES (NEW.rowid, NEW.title, NEW.content);
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS notes_ad AFTER DELETE ON notes BEGIN
+            INSERT INTO notes_fts(notes_fts, rowid, title, content) 
+            VALUES('delete', OLD.rowid, OLD.title, OLD.content);
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS notes_au AFTER UPDATE ON notes BEGIN
+            INSERT INTO notes_fts(notes_fts, rowid, title, content) 
+            VALUES('delete', OLD.rowid, OLD.title, OLD.content);
+            INSERT INTO notes_fts(rowid, title, content) 
+            VALUES (NEW.rowid, NEW.title, NEW.content);
+        END;
+        "#,
+    )
+    .context("Failed to create notes tables")?;
+
+    info!(db_path = %db_path.display(), "Notes database initialized");
+
+    // Use get_or_init pattern to handle race condition where another thread
+    // might have initialized the DB between our check and set
+    let _ = NOTES_DB.get_or_init(|| Arc::new(Mutex::new(conn)));
+
+    Ok(())
+}
+
+/// Get a reference to the notes database connection
+fn get_db() -> Result<Arc<Mutex<Connection>>> {
+    NOTES_DB
+        .get()
+        .cloned()
+        .ok_or_else(|| anyhow::anyhow!("Notes database not initialized"))
+}
+
+/// Save a note (insert or update)
+pub fn save_note(note: &Note) -> Result<()> {
+    let db = get_db()?;
+    let conn = db
+        .lock()
+        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+
+    conn.execute(
+        r#"
+        INSERT INTO notes (id, title, content, created_at, updated_at, deleted_at, is_pinned, sort_order)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+        ON CONFLICT(id) DO UPDATE SET
+            title = excluded.title,
+            content = excluded.content,
+            updated_at = excluded.updated_at,
+            deleted_at = excluded.deleted_at,
+            is_pinned = excluded.is_pinned,
+            sort_order = excluded.sort_order
+        "#,
+        params![
+            note.id.as_str(),
+            note.title,
+            note.content,
+            note.created_at.to_rfc3339(),
+            note.updated_at.to_rfc3339(),
+            note.deleted_at.map(|dt| dt.to_rfc3339()),
+            note.is_pinned as i32,
+            note.sort_order,
+        ],
+    )
+    .context("Failed to save note")?;
+
+    debug!(note_id = %note.id, title = %note.title, "Note saved");
+    Ok(())
+}
+
+/// Get a note by ID
+pub fn get_note(id: NoteId) -> Result<Option<Note>> {
+    let db = get_db()?;
+    let conn = db
+        .lock()
+        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+
+    let mut stmt = conn
+        .prepare(
+            r#"
+            SELECT id, title, content, created_at, updated_at, deleted_at, is_pinned, sort_order
+            FROM notes
+            WHERE id = ?1
+            "#,
+        )
+        .context("Failed to prepare get_note query")?;
+
+    let result = stmt
+        .query_row(params![id.as_str()], row_to_note)
+        .optional()
+        .context("Failed to get note")?;
+
+    Ok(result)
+}
+
+/// Get all active notes (not deleted), sorted by pinned first then updated_at desc
+pub fn get_all_notes() -> Result<Vec<Note>> {
+    let db = get_db()?;
+    let conn = db
+        .lock()
+        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+
+    let mut stmt = conn
+        .prepare(
+            r#"
+            SELECT id, title, content, created_at, updated_at, deleted_at, is_pinned, sort_order
+            FROM notes
+            WHERE deleted_at IS NULL
+            ORDER BY is_pinned DESC, updated_at DESC
+            "#,
+        )
+        .context("Failed to prepare get_all_notes query")?;
+
+    let notes = stmt
+        .query_map([], row_to_note)
+        .context("Failed to query notes")?
+        .collect::<Result<Vec<_>, _>>()
+        .context("Failed to collect notes")?;
+
+    debug!(count = notes.len(), "Retrieved all notes");
+    Ok(notes)
+}
+
+/// Get notes in trash (soft-deleted)
+pub fn get_deleted_notes() -> Result<Vec<Note>> {
+    let db = get_db()?;
+    let conn = db
+        .lock()
+        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+
+    let mut stmt = conn
+        .prepare(
+            r#"
+            SELECT id, title, content, created_at, updated_at, deleted_at, is_pinned, sort_order
+            FROM notes
+            WHERE deleted_at IS NOT NULL
+            ORDER BY deleted_at DESC
+            "#,
+        )
+        .context("Failed to prepare get_deleted_notes query")?;
+
+    let notes = stmt
+        .query_map([], row_to_note)
+        .context("Failed to query deleted notes")?
+        .collect::<Result<Vec<_>, _>>()
+        .context("Failed to collect deleted notes")?;
+
+    debug!(count = notes.len(), "Retrieved deleted notes");
+    Ok(notes)
+}
+
+/// Search notes using full-text search
+pub fn search_notes(query: &str) -> Result<Vec<Note>> {
+    if query.trim().is_empty() {
+        return get_all_notes();
+    }
+
+    let db = get_db()?;
+    let conn = db
+        .lock()
+        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+
+    // FTS5 search with highlight
+    let mut stmt = conn
+        .prepare(
+            r#"
+            SELECT n.id, n.title, n.content, n.created_at, n.updated_at, 
+                   n.deleted_at, n.is_pinned, n.sort_order
+            FROM notes n
+            INNER JOIN notes_fts fts ON n.rowid = fts.rowid
+            WHERE notes_fts MATCH ?1 AND n.deleted_at IS NULL
+            ORDER BY rank
+            "#,
+        )
+        .context("Failed to prepare search query")?;
+
+    let notes = stmt
+        .query_map(params![query], row_to_note)
+        .context("Failed to search notes")?
+        .collect::<Result<Vec<_>, _>>()
+        .context("Failed to collect search results")?;
+
+    debug!(query = %query, count = notes.len(), "Search completed");
+    Ok(notes)
+}
+
+/// Permanently delete a note
+pub fn delete_note_permanently(id: NoteId) -> Result<()> {
+    let db = get_db()?;
+    let conn = db
+        .lock()
+        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+
+    conn.execute("DELETE FROM notes WHERE id = ?1", params![id.as_str()])
+        .context("Failed to delete note")?;
+
+    info!(note_id = %id, "Note permanently deleted");
+    Ok(())
+}
+
+/// Prune notes deleted more than `days` ago
+pub fn prune_old_deleted_notes(days: u32) -> Result<usize> {
+    let db = get_db()?;
+    let conn = db
+        .lock()
+        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+
+    let cutoff = Utc::now() - chrono::Duration::days(days as i64);
+
+    let count = conn
+        .execute(
+            "DELETE FROM notes WHERE deleted_at IS NOT NULL AND deleted_at < ?1",
+            params![cutoff.to_rfc3339()],
+        )
+        .context("Failed to prune old deleted notes")?;
+
+    if count > 0 {
+        info!(count, days, "Pruned old deleted notes");
+    }
+
+    Ok(count)
+}
+
+/// Get total note count (active only)
+pub fn get_note_count() -> Result<usize> {
+    let db = get_db()?;
+    let conn = db
+        .lock()
+        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+
+    let count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM notes WHERE deleted_at IS NULL",
+            [],
+            |row| row.get(0),
+        )
+        .context("Failed to count notes")?;
+
+    Ok(count as usize)
+}
+
+/// Convert a database row to a Note
+fn row_to_note(row: &rusqlite::Row) -> rusqlite::Result<Note> {
+    let id_str: String = row.get(0)?;
+    let title: String = row.get(1)?;
+    let content: String = row.get(2)?;
+    let created_at_str: String = row.get(3)?;
+    let updated_at_str: String = row.get(4)?;
+    let deleted_at_str: Option<String> = row.get(5)?;
+    let is_pinned: i32 = row.get(6)?;
+    let sort_order: i32 = row.get(7)?;
+
+    let id = NoteId::parse(&id_str).unwrap_or_default();
+
+    let created_at = DateTime::parse_from_rfc3339(&created_at_str)
+        .map(|dt| dt.with_timezone(&Utc))
+        .unwrap_or_else(|_| Utc::now());
+
+    let updated_at = DateTime::parse_from_rfc3339(&updated_at_str)
+        .map(|dt| dt.with_timezone(&Utc))
+        .unwrap_or_else(|_| Utc::now());
+
+    let deleted_at = deleted_at_str.and_then(|s| {
+        DateTime::parse_from_rfc3339(&s)
+            .map(|dt| dt.with_timezone(&Utc))
+            .ok()
+    });
+
+    Ok(Note {
+        id,
+        title,
+        content,
+        created_at,
+        updated_at,
+        deleted_at,
+        is_pinned: is_pinned != 0,
+        sort_order,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_db_path() {
+        let path = get_notes_db_path();
+        assert!(path.to_string_lossy().contains("notes.sqlite"));
+    }
+}
+
+</file>
+
+<file path="src/notes/mod.rs">
+//! Notes Module - Raycast Notes Feature Parity
+//!
+//! A separate floating notes window built with gpui-component library.
+//!
+//! ## Features
+//! - Floating notes window with global hotkey access
+//! - Markdown/rich text editing with live preview
+//! - Multiple notes management with sidebar list
+//! - Quick capture from anywhere
+//! - Auto-sizing window that grows with content
+//! - Persistent storage (local SQLite)
+//! - Formatting toolbar with keyboard shortcuts
+//! - Search across all notes
+//! - Export (plain text, markdown, HTML)
+//! - Menu bar integration
+//! - Recently deleted notes (soft delete with recovery)
+//!
+//! ## Architecture
+//! The Notes feature runs in a completely separate window from the main Script Kit
+//! launcher. It uses gpui-component for UI components (Input, Sidebar, Button, etc.)
+//! and follows the Root wrapper pattern required by gpui-component.
+//!
+
+// Allow dead code in this module - many functions are designed for future use
+#![allow(dead_code)]
+
+mod actions_panel;
+mod browse_panel;
+mod model;
+mod storage;
+mod window;
+
+// Re-export actions panel types for use by window.rs
+#[allow(unused_imports)]
+pub use actions_panel::{NotesAction, NotesActionCallback, NotesActionItem, NotesActionsPanel};
+
+// Re-export browse panel types for use by window.rs
+#[allow(unused_imports)]
+pub use browse_panel::{BrowsePanel, NoteAction, NoteListItem};
+
+// Re-export key types - suppress unused warnings since these are public API
+#[allow(unused_imports)]
+pub use model::*;
+#[allow(unused_imports)]
+pub use storage::*;
+#[allow(unused_imports)]
+pub use window::{
+    close_notes_window, is_notes_window_open, open_notes_window, quick_capture, NotesApp,
+};
+
+</file>
+
+<file path="src/notes/window.rs">
 //! Notes Window
 //!
 //! A separate floating window for notes, built with gpui-component.
@@ -5,9 +737,9 @@
 
 use anyhow::Result;
 use gpui::{
-    div, hsla, point, prelude::*, px, size, App, BoxShadow, Context, Entity, FocusHandle,
-    Focusable, IntoElement, KeyDownEvent, ParentElement, Render, Styled, Subscription, Window,
-    WindowBounds, WindowOptions,
+    div, hsla, point, prelude::*, px, rgb, size, App, BoxShadow, Context, Entity, FocusHandle,
+    Focusable, Hsla, IntoElement, KeyDownEvent, ParentElement, Render, Styled, Subscription,
+    Window, WindowBounds, WindowOptions,
 };
 
 #[cfg(target_os = "macos")]
@@ -17,7 +749,7 @@ use cocoa::base::{id, nil};
 use gpui_component::{
     button::{Button, ButtonVariants},
     input::{Input, InputEvent, InputState, Search},
-    theme::ActiveTheme,
+    theme::{ActiveTheme, Theme as GpuiTheme, ThemeColor, ThemeMode},
     IconName, Root, Sizable,
 };
 #[cfg(target_os = "macos")]
@@ -1952,3 +2684,1392 @@ fn configure_notes_as_floating_panel() {
 fn configure_notes_as_floating_panel() {
     // No-op on non-macOS platforms
 }
+
+</file>
+
+<file path="src/notes/actions_panel.rs">
+//! Notes Actions Panel
+//!
+//! Modal overlay panel triggered by Cmd+K in the Notes window.
+//! Provides searchable action list for note operations.
+//!
+//! ## Actions
+//! - New Note (⌘N) - Create a new note
+//! - Duplicate Note (⌘D) - Create a copy of the current note
+//! - Browse Notes (⌘P) - Open note browser/picker
+//! - Find in Note (⌘F) - Search within current note
+//! - Copy Note As... (⇧⌘C) - Copy note in a chosen format
+//! - Copy Deeplink (⇧⌘D) - Copy a deeplink to the note
+//! - Create Quicklink (⇧⌘L) - Copy a quicklink to the note
+//! - Export... (⇧⌘E) - Export note content
+//! - Move List Item Up (⌃⌘↑) - Reorder notes list (disabled)
+//! - Move List Item Down (⌃⌘↓) - Reorder notes list (disabled)
+//! - Format... (⇧⌘T) - Formatting commands
+//!
+//! ## Keyboard Navigation
+//! - Arrow Up/Down: Navigate actions
+//! - Enter: Execute selected action
+//! - Escape: Close panel
+//! - Type to search/filter actions
+
+use crate::designs::icon_variations::IconName;
+use gpui::{
+    div, point, prelude::*, px, svg, uniform_list, App, BoxShadow, Context, FocusHandle, Focusable,
+    Hsla, MouseButton, Render, ScrollStrategy, SharedString, UniformListScrollHandle, Window,
+};
+use gpui_component::theme::{ActiveTheme, Theme};
+use std::sync::Arc;
+use tracing::debug;
+
+/// Callback type for action execution
+/// The String parameter is the action ID
+pub type NotesActionCallback = Arc<dyn Fn(NotesAction) + Send + Sync>;
+
+/// Available actions in the Notes actions panel
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NotesAction {
+    /// Create a new note
+    NewNote,
+    /// Duplicate the current note
+    DuplicateNote,
+    /// Open the note browser/picker
+    BrowseNotes,
+    /// Search within the current note
+    FindInNote,
+    /// Copy note content as a formatted export
+    CopyNoteAs,
+    /// Copy deeplink to the current note
+    CopyDeeplink,
+    /// Copy quicklink to the current note
+    CreateQuicklink,
+    /// Export note content
+    Export,
+    /// Move list item up (disabled placeholder)
+    MoveListItemUp,
+    /// Move list item down (disabled placeholder)
+    MoveListItemDown,
+    /// Open formatting commands
+    Format,
+    /// Enable auto-sizing (window grows/shrinks with content)
+    EnableAutoSizing,
+    /// Panel was cancelled (Escape pressed)
+    Cancel,
+}
+
+impl NotesAction {
+    /// Get all available actions (excluding Cancel)
+    pub fn all() -> &'static [NotesAction] {
+        &[
+            NotesAction::NewNote,
+            NotesAction::DuplicateNote,
+            NotesAction::BrowseNotes,
+            NotesAction::FindInNote,
+            NotesAction::CopyNoteAs,
+            NotesAction::CopyDeeplink,
+            NotesAction::CreateQuicklink,
+            NotesAction::Export,
+            NotesAction::MoveListItemUp,
+            NotesAction::MoveListItemDown,
+            NotesAction::Format,
+        ]
+    }
+
+    /// Get the display label for this action
+    pub fn label(&self) -> &'static str {
+        match self {
+            NotesAction::NewNote => "New Note",
+            NotesAction::DuplicateNote => "Duplicate Note",
+            NotesAction::BrowseNotes => "Browse Notes",
+            NotesAction::FindInNote => "Find in Note",
+            NotesAction::CopyNoteAs => "Copy Note As...",
+            NotesAction::CopyDeeplink => "Copy Deeplink",
+            NotesAction::CreateQuicklink => "Create Quicklink",
+            NotesAction::Export => "Export...",
+            NotesAction::MoveListItemUp => "Move List Item Up",
+            NotesAction::MoveListItemDown => "Move List Item Down",
+            NotesAction::Format => "Format...",
+            NotesAction::EnableAutoSizing => "Enable Auto-Sizing",
+            NotesAction::Cancel => "Cancel",
+        }
+    }
+
+    /// Get the keyboard shortcut key (without modifier)
+    pub fn shortcut_key(&self) -> &'static str {
+        match self {
+            NotesAction::NewNote => "N",
+            NotesAction::DuplicateNote => "D",
+            NotesAction::BrowseNotes => "P",
+            NotesAction::FindInNote => "F",
+            NotesAction::CopyNoteAs => "C",
+            NotesAction::CopyDeeplink => "D",
+            NotesAction::CreateQuicklink => "L",
+            NotesAction::Export => "E",
+            NotesAction::MoveListItemUp => "↑",
+            NotesAction::MoveListItemDown => "↓",
+            NotesAction::Format => "T",
+            NotesAction::EnableAutoSizing => "A",
+            NotesAction::Cancel => "Esc",
+        }
+    }
+
+    /// Get shortcut keys for keycap rendering
+    pub fn shortcut_keys(&self) -> &'static [&'static str] {
+        const CMD_N: [&str; 2] = ["⌘", "N"];
+        const CMD_D: [&str; 2] = ["⌘", "D"];
+        const CMD_P: [&str; 2] = ["⌘", "P"];
+        const CMD_F: [&str; 2] = ["⌘", "F"];
+        const SHIFT_CMD_C: [&str; 3] = ["⇧", "⌘", "C"];
+        const SHIFT_CMD_D: [&str; 3] = ["⇧", "⌘", "D"];
+        const SHIFT_CMD_L: [&str; 3] = ["⇧", "⌘", "L"];
+        const SHIFT_CMD_E: [&str; 3] = ["⇧", "⌘", "E"];
+        const CTRL_CMD_UP: [&str; 3] = ["⌃", "⌘", "↑"];
+        const CTRL_CMD_DOWN: [&str; 3] = ["⌃", "⌘", "↓"];
+        const SHIFT_CMD_T: [&str; 3] = ["⇧", "⌘", "T"];
+        const CMD_A: [&str; 2] = ["⌘", "A"];
+        const ESC: [&str; 1] = ["Esc"];
+
+        match self {
+            NotesAction::NewNote => &CMD_N,
+            NotesAction::DuplicateNote => &CMD_D,
+            NotesAction::BrowseNotes => &CMD_P,
+            NotesAction::FindInNote => &CMD_F,
+            NotesAction::CopyNoteAs => &SHIFT_CMD_C,
+            NotesAction::CopyDeeplink => &SHIFT_CMD_D,
+            NotesAction::CreateQuicklink => &SHIFT_CMD_L,
+            NotesAction::Export => &SHIFT_CMD_E,
+            NotesAction::MoveListItemUp => &CTRL_CMD_UP,
+            NotesAction::MoveListItemDown => &CTRL_CMD_DOWN,
+            NotesAction::Format => &SHIFT_CMD_T,
+            NotesAction::EnableAutoSizing => &CMD_A,
+            NotesAction::Cancel => &ESC,
+        }
+    }
+
+    /// Get the formatted shortcut display string
+    pub fn shortcut_display(&self) -> String {
+        if self.shortcut_keys().is_empty() {
+            return String::new();
+        }
+
+        self.shortcut_keys().join("")
+    }
+
+    /// Get the icon for this action (uses local IconName from designs module)
+    pub fn icon(&self) -> IconName {
+        match self {
+            NotesAction::NewNote => IconName::Plus,
+            NotesAction::DuplicateNote => IconName::Copy,
+            NotesAction::BrowseNotes => IconName::FolderOpen,
+            NotesAction::FindInNote => IconName::MagnifyingGlass,
+            NotesAction::CopyNoteAs => IconName::Copy,
+            NotesAction::CopyDeeplink => IconName::ArrowRight,
+            NotesAction::CreateQuicklink => IconName::Star,
+            NotesAction::Export => IconName::ArrowRight,
+            NotesAction::MoveListItemUp => IconName::ArrowUp,
+            NotesAction::MoveListItemDown => IconName::ArrowDown,
+            NotesAction::Format => IconName::Code,
+            NotesAction::EnableAutoSizing => IconName::ArrowRight,
+            NotesAction::Cancel => IconName::Close,
+        }
+    }
+
+    /// Get action ID for lookup
+    pub fn id(&self) -> &'static str {
+        match self {
+            NotesAction::NewNote => "new_note",
+            NotesAction::DuplicateNote => "duplicate_note",
+            NotesAction::BrowseNotes => "browse_notes",
+            NotesAction::FindInNote => "find_in_note",
+            NotesAction::CopyNoteAs => "copy_note_as",
+            NotesAction::CopyDeeplink => "copy_deeplink",
+            NotesAction::CreateQuicklink => "create_quicklink",
+            NotesAction::Export => "export",
+            NotesAction::MoveListItemUp => "move_list_item_up",
+            NotesAction::MoveListItemDown => "move_list_item_down",
+            NotesAction::Format => "format",
+            NotesAction::EnableAutoSizing => "enable_auto_sizing",
+            NotesAction::Cancel => "cancel",
+        }
+    }
+}
+
+/// Action list sections for visual grouping
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum NotesActionSection {
+    Primary,
+    Actions,
+    Move,
+    Format,
+    Utility,
+}
+
+impl NotesActionSection {
+    fn for_action(action: NotesAction) -> Self {
+        match action {
+            NotesAction::NewNote | NotesAction::DuplicateNote | NotesAction::BrowseNotes => {
+                NotesActionSection::Primary
+            }
+            NotesAction::FindInNote
+            | NotesAction::CopyNoteAs
+            | NotesAction::CopyDeeplink
+            | NotesAction::CreateQuicklink
+            | NotesAction::Export => NotesActionSection::Actions,
+            NotesAction::MoveListItemUp | NotesAction::MoveListItemDown => NotesActionSection::Move,
+            NotesAction::Format => NotesActionSection::Format,
+            NotesAction::EnableAutoSizing | NotesAction::Cancel => NotesActionSection::Utility,
+        }
+    }
+}
+
+/// Action entry with enabled state
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NotesActionItem {
+    pub action: NotesAction,
+    pub enabled: bool,
+}
+
+impl NotesActionItem {
+    fn section(&self) -> NotesActionSection {
+        NotesActionSection::for_action(self.action)
+    }
+}
+
+/// Panel dimensions and styling constants (matches main ActionsDialog)
+pub const PANEL_WIDTH: f32 = 320.0;
+pub const PANEL_MAX_HEIGHT: f32 = 580.0;
+pub const PANEL_CORNER_RADIUS: f32 = 12.0;
+pub const ACTION_ITEM_HEIGHT: f32 = 44.0;
+pub const PANEL_SEARCH_HEIGHT: f32 = 44.0;
+pub const PANEL_BORDER_HEIGHT: f32 = 2.0;
+/// Horizontal inset for action rows (creates rounded pill appearance)
+pub const ACTION_ROW_INSET: f32 = 6.0;
+/// Corner radius for selected row background
+pub const SELECTION_RADIUS: f32 = 8.0;
+
+pub fn panel_height_for_rows(row_count: usize) -> f32 {
+    let items_height = (row_count as f32 * ACTION_ITEM_HEIGHT)
+        .min(PANEL_MAX_HEIGHT - (PANEL_SEARCH_HEIGHT + 16.0));
+    items_height + PANEL_SEARCH_HEIGHT + PANEL_BORDER_HEIGHT
+}
+
+/// Notes Actions Panel - Modal overlay for note operations
+pub struct NotesActionsPanel {
+    /// Available actions
+    actions: Vec<NotesActionItem>,
+    /// Filtered action indices
+    filtered_indices: Vec<usize>,
+    /// Currently selected index (within filtered)
+    selected_index: usize,
+    /// Search text
+    search_text: String,
+    /// Focus handle
+    focus_handle: FocusHandle,
+    /// Callback for action selection
+    on_action: NotesActionCallback,
+    /// Scroll handle for virtualization
+    scroll_handle: UniformListScrollHandle,
+    /// Cursor blink visibility
+    cursor_visible: bool,
+}
+
+impl NotesActionsPanel {
+    /// Create a new NotesActionsPanel
+    pub fn new(
+        focus_handle: FocusHandle,
+        actions: Vec<NotesActionItem>,
+        on_action: NotesActionCallback,
+    ) -> Self {
+        let filtered_indices: Vec<usize> = (0..actions.len()).collect();
+        let selected_index = actions.iter().position(|item| item.enabled).unwrap_or(0);
+
+        debug!(action_count = actions.len(), "Notes actions panel created");
+
+        Self {
+            actions,
+            filtered_indices,
+            selected_index,
+            search_text: String::new(),
+            focus_handle,
+            on_action,
+            scroll_handle: UniformListScrollHandle::new(),
+            cursor_visible: true,
+        }
+    }
+
+    /// Set cursor visibility (for blink animation)
+    pub fn set_cursor_visible(&mut self, visible: bool) {
+        self.cursor_visible = visible;
+    }
+
+    pub fn focus_handle(&self) -> FocusHandle {
+        self.focus_handle.clone()
+    }
+
+    /// Handle character input
+    pub fn handle_char(&mut self, ch: char, cx: &mut Context<Self>) {
+        self.search_text.push(ch);
+        self.refilter();
+        cx.notify();
+    }
+
+    /// Handle backspace
+    pub fn handle_backspace(&mut self, cx: &mut Context<Self>) {
+        if !self.search_text.is_empty() {
+            self.search_text.pop();
+            self.refilter();
+            cx.notify();
+        }
+    }
+
+    /// Move selection up
+    pub fn move_up(&mut self, cx: &mut Context<Self>) {
+        self.move_selection(-1, cx);
+    }
+
+    /// Move selection down
+    pub fn move_down(&mut self, cx: &mut Context<Self>) {
+        self.move_selection(1, cx);
+    }
+
+    /// Submit the selected action
+    pub fn submit_selected(&mut self) {
+        if let Some(&action_idx) = self.filtered_indices.get(self.selected_index) {
+            if let Some(action) = self.actions.get(action_idx) {
+                if action.enabled {
+                    debug!(action = ?action.action, "Notes action selected");
+                    (self.on_action)(action.action);
+                }
+            }
+        }
+    }
+
+    /// Cancel and close
+    pub fn cancel(&mut self) {
+        debug!("Notes actions panel cancelled");
+        (self.on_action)(NotesAction::Cancel);
+    }
+
+    /// Get currently selected action
+    pub fn get_selected_action(&self) -> Option<NotesAction> {
+        self.filtered_indices
+            .get(self.selected_index)
+            .and_then(|&idx| self.actions.get(idx))
+            .and_then(|item| {
+                if item.enabled {
+                    Some(item.action)
+                } else {
+                    None
+                }
+            })
+    }
+
+    /// Refilter actions based on search text
+    fn refilter(&mut self) {
+        if self.search_text.is_empty() {
+            self.filtered_indices = (0..self.actions.len()).collect();
+        } else {
+            let search_lower = self.search_text.to_lowercase();
+            self.filtered_indices = self
+                .actions
+                .iter()
+                .enumerate()
+                .filter(|(_, action)| action.action.label().to_lowercase().contains(&search_lower))
+                .map(|(idx, _)| idx)
+                .collect();
+        }
+
+        self.ensure_valid_selection();
+
+        // Scroll to keep selection visible
+        if !self.filtered_indices.is_empty() {
+            self.scroll_handle
+                .scroll_to_item(self.selected_index, ScrollStrategy::Nearest);
+        }
+    }
+
+    fn ensure_valid_selection(&mut self) {
+        if self.filtered_indices.is_empty() {
+            self.selected_index = 0;
+            return;
+        }
+
+        if self.selected_index >= self.filtered_indices.len()
+            || !self.is_selectable(self.selected_index)
+        {
+            if let Some(index) =
+                (0..self.filtered_indices.len()).find(|&idx| self.is_selectable(idx))
+            {
+                self.selected_index = index;
+            } else {
+                self.selected_index = 0;
+            }
+        }
+    }
+
+    fn is_selectable(&self, filtered_idx: usize) -> bool {
+        self.filtered_indices
+            .get(filtered_idx)
+            .and_then(|&idx| self.actions.get(idx))
+            .map(|item| item.enabled)
+            .unwrap_or(false)
+    }
+
+    fn move_selection(&mut self, delta: i32, cx: &mut Context<Self>) {
+        let filtered_len = self.filtered_indices.len();
+        if filtered_len == 0 {
+            return;
+        }
+
+        let mut next_index = self.selected_index as i32;
+        loop {
+            next_index += delta;
+            if next_index < 0 || next_index >= filtered_len as i32 {
+                break;
+            }
+
+            let next = next_index as usize;
+            if self.is_selectable(next) {
+                self.selected_index = next;
+                self.scroll_handle
+                    .scroll_to_item(self.selected_index, ScrollStrategy::Nearest);
+                cx.notify();
+                return;
+            }
+        }
+    }
+
+    /// Create box shadow for the overlay
+    fn create_shadow() -> Vec<BoxShadow> {
+        vec![
+            BoxShadow {
+                color: Hsla {
+                    h: 0.0,
+                    s: 0.0,
+                    l: 0.0,
+                    a: 0.3,
+                },
+                offset: point(px(0.0), px(4.0)),
+                blur_radius: px(16.0),
+                spread_radius: px(0.0),
+            },
+            BoxShadow {
+                color: Hsla {
+                    h: 0.0,
+                    s: 0.0,
+                    l: 0.0,
+                    a: 0.15,
+                },
+                offset: point(px(0.0), px(8.0)),
+                blur_radius: px(32.0),
+                spread_radius: px(-4.0),
+            },
+        ]
+    }
+}
+
+impl Focusable for NotesActionsPanel {
+    fn focus_handle(&self, _cx: &App) -> FocusHandle {
+        self.focus_handle.clone()
+    }
+}
+
+impl Render for NotesActionsPanel {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = cx.theme();
+
+        // Colors from gpui-component theme
+        let bg_color = theme.background;
+        let border_color = theme.border;
+        let text_primary = theme.foreground;
+        let text_muted = theme.muted_foreground;
+        let accent_color = theme.accent;
+
+        // Search display
+        let search_display = if self.search_text.is_empty() {
+            SharedString::from("Search for actions...")
+        } else {
+            SharedString::from(self.search_text.clone())
+        };
+
+        // Build search input row - Raycast style: no search icon, just placeholder with cursor
+        let search_input = div()
+            .w_full()
+            .h(px(PANEL_SEARCH_HEIGHT))
+            .px(px(12.0))
+            .py(px(8.0))
+            .bg(theme.secondary)
+            .border_b_1()
+            .border_color(border_color)
+            .flex()
+            .flex_row()
+            .items_center()
+            // Search field - full width, no icon
+            .child(
+                div()
+                    .flex_1()
+                    .h(px(28.0))
+                    .px(px(8.0))
+                    .bg(theme.input)
+                    .rounded(px(4.0))
+                    .border_1()
+                    .border_color(if self.search_text.is_empty() {
+                        border_color
+                    } else {
+                        accent_color
+                    })
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .text_sm()
+                    .text_color(if self.search_text.is_empty() {
+                        text_muted
+                    } else {
+                        text_primary
+                    })
+                    // Cursor when empty
+                    .when(self.search_text.is_empty(), |d| {
+                        d.child(
+                            div()
+                                .w(px(2.))
+                                .h(px(16.))
+                                .mr(px(2.))
+                                .rounded(px(1.))
+                                .when(self.cursor_visible, |d| d.bg(accent_color)),
+                        )
+                    })
+                    .child(search_display)
+                    // Cursor when has text
+                    .when(!self.search_text.is_empty(), |d| {
+                        d.child(
+                            div()
+                                .w(px(2.))
+                                .h(px(16.))
+                                .ml(px(2.))
+                                .rounded(px(1.))
+                                .when(self.cursor_visible, |d| d.bg(accent_color)),
+                        )
+                    }),
+            );
+
+        // Build actions list
+        let selected_index = self.selected_index;
+        let filtered_len = self.filtered_indices.len();
+
+        let actions_list = if self.filtered_indices.is_empty() {
+            div()
+                .flex_1()
+                .w_full()
+                .py(px(16.0))
+                .px(px(12.0))
+                .text_color(text_muted)
+                .text_sm()
+                .child("No actions match your search")
+                .into_any_element()
+        } else {
+            uniform_list(
+                "notes-actions-list",
+                filtered_len,
+                cx.processor(
+                    move |this: &mut NotesActionsPanel, visible_range, _window, cx| {
+                        let theme = cx.theme();
+                        let mut items = Vec::new();
+
+                        for idx in visible_range {
+                            if let Some(&action_idx) = this.filtered_indices.get(idx) {
+                                if let Some(action) = this.actions.get(action_idx) {
+                                    let action: &NotesActionItem = action;
+                                    let is_enabled = action.enabled;
+                                    let is_selected = idx == selected_index && is_enabled;
+                                    let is_section_start = if idx > 0 {
+                                        this.filtered_indices
+                                            .get(idx - 1)
+                                            .and_then(|&prev_idx| this.actions.get(prev_idx))
+                                            .map(|prev: &NotesActionItem| {
+                                                prev.section() != action.section()
+                                            })
+                                            .unwrap_or(false)
+                                    } else {
+                                        false
+                                    };
+
+                                    // Transparent Hsla for unselected state
+                                    let transparent = Hsla {
+                                        h: 0.0,
+                                        s: 0.0,
+                                        l: 0.0,
+                                        a: 0.0,
+                                    };
+
+                                    // Raycast-style: rounded pill selection, no left accent bar
+                                    // Outer wrapper provides horizontal inset for the rounded background
+                                    let action_row = div()
+                                        .id(idx)
+                                        .w_full()
+                                        .h(px(ACTION_ITEM_HEIGHT))
+                                        .px(px(ACTION_ROW_INSET))
+                                        .flex()
+                                        .flex_col()
+                                        .justify_center()
+                                        // Section divider as top border
+                                        .when(is_section_start, |d| {
+                                            d.border_t_1().border_color(theme.border)
+                                        })
+                                        // Inner row with rounded background
+                                        .child(
+                                            div()
+                                                .w_full()
+                                                .h(px(ACTION_ITEM_HEIGHT - 8.0))
+                                                .flex()
+                                                .flex_row()
+                                                .items_center()
+                                                .px(px(8.0))
+                                                .rounded(px(SELECTION_RADIUS))
+                                                .bg(if is_selected {
+                                                    theme.list_active
+                                                } else {
+                                                    transparent
+                                                })
+                                                .when(is_enabled, |d| {
+                                                    d.hover(|s| s.bg(theme.list_hover))
+                                                })
+                                                .when(is_enabled, |d| d.cursor_pointer())
+                                                .when(!is_enabled, |d| d.opacity(0.5))
+                                                // Content row: icon + label + shortcuts
+                                                .child(
+                                                    div()
+                                                        .flex_1()
+                                                        .flex()
+                                                        .flex_row()
+                                                        .items_center()
+                                                        .justify_between()
+                                                        // Left: icon + label
+                                                        .child(
+                                                            div()
+                                                                .flex()
+                                                                .flex_row()
+                                                                .items_center()
+                                                                .gap(px(10.0))
+                                                                // Icon
+                                                                .child(
+                                                                    svg()
+                                                                        .external_path(action.action.icon().external_path())
+                                                                        .size(px(16.))
+                                                                        .text_color(if is_enabled {
+                                                                            theme.foreground
+                                                                        } else {
+                                                                            theme.muted_foreground
+                                                                        }),
+                                                                )
+                                                                // Label
+                                                                .child(
+                                                                    div()
+                                                                        .text_sm()
+                                                                        .text_color(if is_enabled {
+                                                                            theme.foreground
+                                                                        } else {
+                                                                            theme.muted_foreground
+                                                                        })
+                                                                        .font_weight(
+                                                                            if is_selected {
+                                                                                gpui::FontWeight::MEDIUM
+                                                                            } else {
+                                                                                gpui::FontWeight::NORMAL
+                                                                            },
+                                                                        )
+                                                                        .child(action.action.label()),
+                                                                ),
+                                                        )
+                                                        // Right: shortcut badge
+                                                        .child(render_shortcut_keys(
+                                                            action.action.shortcut_keys(),
+                                                            theme,
+                                                        )),
+                                                ),
+                                        )
+                                        .when(is_enabled, |d| {
+                                            d.on_mouse_down(
+                                                MouseButton::Left,
+                                                cx.listener(move |this, _, _, cx| {
+                                                    this.selected_index = idx;
+                                                    this.submit_selected();
+                                                    cx.notify();
+                                                }),
+                                            )
+                                        });
+
+                                    items.push(action_row);
+                                }
+                            }
+                        }
+                        items
+                    },
+                ),
+            )
+            .flex_1()
+            .w_full()
+            .track_scroll(&self.scroll_handle)
+            .into_any_element()
+        };
+
+        // Calculate dynamic height
+        let items_height = (filtered_len as f32 * ACTION_ITEM_HEIGHT)
+            .min(PANEL_MAX_HEIGHT - (PANEL_SEARCH_HEIGHT + 16.0));
+        let total_height = items_height + PANEL_SEARCH_HEIGHT + PANEL_BORDER_HEIGHT;
+
+        // Main container
+        div()
+            .flex()
+            .flex_col()
+            .w(px(PANEL_WIDTH))
+            .h(px(total_height))
+            .bg(bg_color)
+            .rounded(px(PANEL_CORNER_RADIUS))
+            .shadow(Self::create_shadow())
+            .border_1()
+            .border_color(border_color)
+            .overflow_hidden()
+            .track_focus(&self.focus_handle)
+            .child(search_input)
+            .child(actions_list)
+    }
+}
+
+fn render_shortcut_keys(keys: &[&'static str], theme: &Theme) -> impl IntoElement {
+    if keys.is_empty() {
+        return div().into_any_element();
+    }
+
+    let mut row = div().flex().flex_row().items_center().gap(px(4.0));
+
+    for key in keys {
+        row = row.child(
+            div()
+                .min_w(px(18.0))
+                .px(px(6.0))
+                .py(px(2.0))
+                .bg(theme.muted)
+                .border_1()
+                .border_color(theme.border)
+                .rounded(px(5.0))
+                .text_xs()
+                .text_color(theme.muted_foreground)
+                .child(*key),
+        );
+    }
+
+    row.into_any_element()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_notes_action_labels() {
+        assert_eq!(NotesAction::NewNote.label(), "New Note");
+        assert_eq!(NotesAction::DuplicateNote.label(), "Duplicate Note");
+        assert_eq!(NotesAction::BrowseNotes.label(), "Browse Notes");
+        assert_eq!(NotesAction::FindInNote.label(), "Find in Note");
+        assert_eq!(NotesAction::CopyNoteAs.label(), "Copy Note As...");
+        assert_eq!(NotesAction::CopyDeeplink.label(), "Copy Deeplink");
+        assert_eq!(NotesAction::CreateQuicklink.label(), "Create Quicklink");
+        assert_eq!(NotesAction::Export.label(), "Export...");
+        assert_eq!(NotesAction::MoveListItemUp.label(), "Move List Item Up");
+        assert_eq!(NotesAction::MoveListItemDown.label(), "Move List Item Down");
+        assert_eq!(NotesAction::Format.label(), "Format...");
+    }
+
+    #[test]
+    fn test_notes_action_shortcuts() {
+        assert_eq!(NotesAction::NewNote.shortcut_display(), "⌘N");
+        assert_eq!(NotesAction::DuplicateNote.shortcut_display(), "⌘D");
+        assert_eq!(NotesAction::BrowseNotes.shortcut_display(), "⌘P");
+        assert_eq!(NotesAction::FindInNote.shortcut_display(), "⌘F");
+        assert_eq!(NotesAction::CopyNoteAs.shortcut_display(), "⇧⌘C");
+        assert_eq!(NotesAction::CopyDeeplink.shortcut_display(), "⇧⌘D");
+        assert_eq!(NotesAction::CreateQuicklink.shortcut_display(), "⇧⌘L");
+        assert_eq!(NotesAction::Export.shortcut_display(), "⇧⌘E");
+        assert_eq!(NotesAction::MoveListItemUp.shortcut_display(), "⌃⌘↑");
+        assert_eq!(NotesAction::MoveListItemDown.shortcut_display(), "⌃⌘↓");
+        assert_eq!(NotesAction::Format.shortcut_display(), "⇧⌘T");
+    }
+
+    #[test]
+    fn test_notes_action_all() {
+        let all = NotesAction::all();
+        assert_eq!(all.len(), 11);
+        assert!(all.contains(&NotesAction::NewNote));
+        assert!(all.contains(&NotesAction::DuplicateNote));
+        assert!(all.contains(&NotesAction::BrowseNotes));
+        assert!(all.contains(&NotesAction::FindInNote));
+        assert!(all.contains(&NotesAction::CopyNoteAs));
+        assert!(all.contains(&NotesAction::CopyDeeplink));
+        assert!(all.contains(&NotesAction::CreateQuicklink));
+        assert!(all.contains(&NotesAction::Export));
+        assert!(all.contains(&NotesAction::MoveListItemUp));
+        assert!(all.contains(&NotesAction::MoveListItemDown));
+        assert!(all.contains(&NotesAction::Format));
+    }
+
+    #[test]
+    fn test_notes_action_ids() {
+        assert_eq!(NotesAction::NewNote.id(), "new_note");
+        assert_eq!(NotesAction::DuplicateNote.id(), "duplicate_note");
+        assert_eq!(NotesAction::BrowseNotes.id(), "browse_notes");
+        assert_eq!(NotesAction::FindInNote.id(), "find_in_note");
+        assert_eq!(NotesAction::CopyNoteAs.id(), "copy_note_as");
+        assert_eq!(NotesAction::CopyDeeplink.id(), "copy_deeplink");
+        assert_eq!(NotesAction::CreateQuicklink.id(), "create_quicklink");
+        assert_eq!(NotesAction::Export.id(), "export");
+        assert_eq!(NotesAction::MoveListItemUp.id(), "move_list_item_up");
+        assert_eq!(NotesAction::MoveListItemDown.id(), "move_list_item_down");
+        assert_eq!(NotesAction::Format.id(), "format");
+    }
+
+    #[test]
+    fn test_panel_constants() {
+        // Verify panel matches Raycast-style dimensions
+        assert_eq!(PANEL_WIDTH, 320.0);
+        assert_eq!(PANEL_MAX_HEIGHT, 580.0);
+        assert_eq!(PANEL_CORNER_RADIUS, 12.0);
+        assert_eq!(ACTION_ITEM_HEIGHT, 44.0);
+        assert_eq!(ACTION_ROW_INSET, 6.0);
+        assert_eq!(SELECTION_RADIUS, 8.0);
+    }
+}
+
+</file>
+
+<file path="src/notes/browse_panel.rs">
+//! Browse Panel for Notes
+//!
+//! A modal overlay component triggered by Cmd+P that displays a searchable list
+//! of notes. Follows Raycast's browse panel design pattern.
+//!
+//! ## Features
+//! - Search input at top with "Search for notes..." placeholder
+//! - "Notes" section header
+//! - Note rows showing: current indicator (red dot), title, character count
+//! - Hover reveals pin/delete action icons
+//! - Keyboard navigation (arrow keys, enter to select, escape to close)
+//! - Filter notes as user types in search
+
+use gpui::{
+    div, prelude::*, px, rgb, App, Context, Entity, FocusHandle, Focusable, IntoElement,
+    KeyDownEvent, MouseButton, ParentElement, Render, Styled, Subscription, Window,
+};
+use gpui_component::{
+    button::{Button, ButtonVariants},
+    input::{Input, InputEvent, InputState},
+    theme::ActiveTheme,
+    IconName, Sizable,
+};
+
+use super::model::{Note, NoteId};
+
+/// Lightweight note data for display in the browse panel
+#[derive(Debug, Clone)]
+pub struct NoteListItem {
+    /// Note identifier
+    pub id: NoteId,
+    /// Note title (or "Untitled Note" if empty)
+    pub title: String,
+    /// Character count
+    pub char_count: usize,
+    /// Whether this is the currently selected note
+    pub is_current: bool,
+    /// Whether this note is pinned
+    pub is_pinned: bool,
+}
+
+impl NoteListItem {
+    /// Create a NoteListItem from a Note
+    pub fn from_note(note: &Note, is_current: bool) -> Self {
+        Self {
+            id: note.id,
+            title: if note.title.is_empty() {
+                "Untitled Note".to_string()
+            } else {
+                note.title.clone()
+            },
+            char_count: note.char_count(),
+            is_current,
+            is_pinned: note.is_pinned,
+        }
+    }
+}
+
+/// Callback type for note selection
+pub type OnSelectNote = Box<dyn Fn(NoteId) + 'static>;
+
+/// Callback type for panel close
+pub type OnClose = Box<dyn Fn() + 'static>;
+
+/// Callback type for note actions (pin, delete)
+pub type OnNoteAction = Box<dyn Fn(NoteId, NoteAction) + 'static>;
+
+/// Actions that can be performed on a note from the browse panel
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NoteAction {
+    /// Toggle pin status
+    TogglePin,
+    /// Delete the note
+    Delete,
+}
+
+/// Browse Panel - modal overlay for browsing and selecting notes
+///
+/// This component is designed to be rendered as an overlay on top of the
+/// main notes window. It handles:
+/// - Search input with filtering
+/// - Arrow key navigation
+/// - Enter to select, Escape to close
+/// - Pin/delete actions on hover
+pub struct BrowsePanel {
+    /// All notes (filtered by search)
+    notes: Vec<NoteListItem>,
+    /// Original unfiltered notes
+    all_notes: Vec<NoteListItem>,
+    /// Currently highlighted index in the list
+    selected_index: usize,
+    /// Search input state
+    search_state: Entity<InputState>,
+    /// Focus handle for keyboard events
+    focus_handle: FocusHandle,
+    /// Index of note row being hovered (for showing action icons)
+    hovered_index: Option<usize>,
+    /// Callback when a note is selected
+    on_select: Option<OnSelectNote>,
+    /// Callback when panel should close
+    on_close: Option<OnClose>,
+    /// Callback for note actions
+    on_action: Option<OnNoteAction>,
+    /// Subscriptions to keep alive
+    _subscriptions: Vec<Subscription>,
+}
+
+impl BrowsePanel {
+    /// Create a new BrowsePanel with the given notes
+    ///
+    /// # Arguments
+    /// * `notes` - List of notes to display
+    /// * `window` - Window reference for input state
+    /// * `cx` - Context for creating entities
+    pub fn new(notes: Vec<NoteListItem>, window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let search_state =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Search for notes..."));
+
+        let focus_handle = cx.focus_handle();
+
+        // Subscribe to search input changes
+        let search_sub = cx.subscribe_in(&search_state, window, {
+            move |this, _, ev: &InputEvent, _window, cx| {
+                if matches!(ev, InputEvent::Change) {
+                    this.on_search_change(cx);
+                }
+            }
+        });
+
+        Self {
+            notes: notes.clone(),
+            all_notes: notes,
+            selected_index: 0,
+            search_state,
+            focus_handle,
+            hovered_index: None,
+            on_select: None,
+            on_close: None,
+            on_action: None,
+            _subscriptions: vec![search_sub],
+        }
+    }
+
+    /// Set the callback for note selection
+    pub fn on_select(mut self, callback: impl Fn(NoteId) + 'static) -> Self {
+        self.on_select = Some(Box::new(callback));
+        self
+    }
+
+    /// Set the callback for panel close
+    pub fn on_close(mut self, callback: impl Fn() + 'static) -> Self {
+        self.on_close = Some(Box::new(callback));
+        self
+    }
+
+    /// Set the callback for note actions
+    pub fn on_action(mut self, callback: impl Fn(NoteId, NoteAction) + 'static) -> Self {
+        self.on_action = Some(Box::new(callback));
+        self
+    }
+
+    /// Update the notes list
+    pub fn set_notes(&mut self, notes: Vec<NoteListItem>, cx: &mut Context<Self>) {
+        self.all_notes = notes.clone();
+        self.notes = notes;
+        self.selected_index = 0;
+        cx.notify();
+    }
+
+    /// Handle search input changes
+    fn on_search_change(&mut self, cx: &mut Context<Self>) {
+        let query = self
+            .search_state
+            .read(cx)
+            .value()
+            .to_string()
+            .to_lowercase();
+
+        if query.is_empty() {
+            self.notes = self.all_notes.clone();
+        } else {
+            self.notes = self
+                .all_notes
+                .iter()
+                .filter(|note| note.title.to_lowercase().contains(&query))
+                .cloned()
+                .collect();
+        }
+
+        // Reset selection to first item
+        self.selected_index = 0;
+        cx.notify();
+    }
+
+    /// Move selection up
+    pub fn move_up(&mut self, cx: &mut Context<Self>) {
+        if !self.notes.is_empty() {
+            self.selected_index = self.selected_index.saturating_sub(1);
+            cx.notify();
+        }
+    }
+
+    /// Move selection down
+    pub fn move_down(&mut self, cx: &mut Context<Self>) {
+        if !self.notes.is_empty() {
+            self.selected_index = (self.selected_index + 1).min(self.notes.len() - 1);
+            cx.notify();
+        }
+    }
+
+    /// Select the current note
+    fn select_current(&mut self, _cx: &mut Context<Self>) {
+        if let Some(note) = self.notes.get(self.selected_index) {
+            if let Some(ref on_select) = self.on_select {
+                on_select(note.id);
+            }
+        }
+    }
+
+    /// Get the currently selected note ID (for parent window keyboard handling)
+    pub fn get_selected_note_id(&self) -> Option<NoteId> {
+        self.notes.get(self.selected_index).map(|n| n.id)
+    }
+
+    /// Close the panel
+    fn close(&self) {
+        if let Some(ref on_close) = self.on_close {
+            on_close();
+        }
+    }
+
+    /// Handle note action (pin/delete)
+    fn handle_action(&self, id: NoteId, action: NoteAction) {
+        if let Some(ref on_action) = self.on_action {
+            on_action(id, action);
+        }
+    }
+
+    /// Render the search input
+    fn render_search(&self, _cx: &mut Context<Self>) -> impl IntoElement {
+        div()
+            .w_full()
+            .px_3()
+            .py_2()
+            .child(Input::new(&self.search_state).w_full().small())
+    }
+
+    /// Render the section header
+    fn render_header(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        div()
+            .w_full()
+            .px_3()
+            .py_1()
+            .text_xs()
+            .font_weight(gpui::FontWeight::MEDIUM)
+            .text_color(cx.theme().muted_foreground)
+            .child("Notes")
+    }
+
+    /// Render a single note row
+    fn render_note_row(
+        &self,
+        index: usize,
+        note: &NoteListItem,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let is_selected = index == self.selected_index;
+        let is_hovered = self.hovered_index == Some(index);
+        let note_id = note.id;
+
+        // Row background based on state
+        let bg_color = if is_selected {
+            cx.theme().list_active
+        } else if is_hovered {
+            cx.theme().list_hover
+        } else {
+            gpui::transparent_black()
+        };
+
+        div()
+            .id(("note-row", index))
+            .w_full()
+            .h(px(36.))
+            .px_3()
+            .flex()
+            .items_center()
+            .gap_2()
+            .bg(bg_color)
+            .rounded_sm()
+            .cursor_pointer()
+            .on_mouse_move(cx.listener(move |this, _, _, cx| {
+                if this.hovered_index != Some(index) {
+                    this.hovered_index = Some(index);
+                    cx.notify();
+                }
+            }))
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(move |this, _, _, cx| {
+                    this.selected_index = index;
+                    this.select_current(cx);
+                }),
+            )
+            // Current note indicator (red dot)
+            .child(
+                div()
+                    .w(px(8.))
+                    .h(px(8.))
+                    .rounded_full()
+                    .when(note.is_current, |d| d.bg(rgb(0xff4444)))
+                    .when(!note.is_current, |d| d.bg(gpui::transparent_black())),
+            )
+            // Title
+            .child(
+                div()
+                    .flex_1()
+                    .overflow_hidden()
+                    .text_ellipsis()
+                    .text_sm()
+                    .text_color(cx.theme().foreground)
+                    .child(note.title.clone()),
+            )
+            // Character count
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(cx.theme().muted_foreground)
+                    .child(format!(
+                        "{} character{}",
+                        note.char_count,
+                        if note.char_count == 1 { "" } else { "s" }
+                    )),
+            )
+            // Action buttons (visible on hover)
+            .when(is_hovered, |d| {
+                d.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_1()
+                        .child(
+                            Button::new(("pin", index))
+                                .ghost()
+                                .xsmall()
+                                .icon(IconName::Star)
+                                .on_click(cx.listener(move |this, _, _, _cx| {
+                                    this.handle_action(note_id, NoteAction::TogglePin);
+                                })),
+                        )
+                        .child(
+                            Button::new(("delete", index))
+                                .ghost()
+                                .xsmall()
+                                .icon(IconName::Delete)
+                                .on_click(cx.listener(move |this, _, _, _cx| {
+                                    this.handle_action(note_id, NoteAction::Delete);
+                                })),
+                        ),
+                )
+            })
+    }
+
+    /// Render the notes list
+    fn render_list(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        if self.notes.is_empty() {
+            return div()
+                .w_full()
+                .py_8()
+                .flex()
+                .items_center()
+                .justify_center()
+                .text_sm()
+                .text_color(cx.theme().muted_foreground)
+                .child("No notes found")
+                .into_any_element();
+        }
+
+        let mut list = div().w_full().flex().flex_col().gap_px();
+
+        for (index, note) in self.notes.iter().enumerate() {
+            list = list.child(self.render_note_row(index, note, cx));
+        }
+
+        list.into_any_element()
+    }
+}
+
+impl Focusable for BrowsePanel {
+    fn focus_handle(&self, _cx: &App) -> FocusHandle {
+        self.focus_handle.clone()
+    }
+}
+
+impl Render for BrowsePanel {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        // Modal backdrop (semi-transparent overlay)
+        div()
+            .id("browse-panel-backdrop")
+            .absolute()
+            .inset_0()
+            .bg(gpui::rgba(0x00000080)) // 50% opacity black
+            .flex()
+            .items_center()
+            .justify_center()
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, _, _, _cx| {
+                    this.close();
+                }),
+            )
+            // Panel container
+            .child(
+                div()
+                    .id("browse-panel")
+                    .w(px(500.))
+                    .max_h(px(400.))
+                    .bg(cx.theme().background)
+                    .border_1()
+                    .border_color(cx.theme().border)
+                    .rounded_lg()
+                    .shadow_lg()
+                    .flex()
+                    .flex_col()
+                    .overflow_hidden()
+                    .track_focus(&self.focus_handle)
+                    .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+                        let key = event.keystroke.key.as_str();
+                        match key {
+                            "up" | "arrowup" => this.move_up(cx),
+                            "down" | "arrowdown" => this.move_down(cx),
+                            "enter" => this.select_current(cx),
+                            "escape" => this.close(),
+                            _ => {}
+                        }
+                    }))
+                    // Prevent backdrop click from closing when clicking panel
+                    .on_mouse_down(MouseButton::Left, |_, _, _| {})
+                    // Search input
+                    .child(self.render_search(cx))
+                    // Section header
+                    .child(self.render_header(cx))
+                    // Notes list (scrollable)
+                    .child(
+                        div()
+                            .flex_1()
+                            .overflow_hidden()
+                            .px_1()
+                            .py_1()
+                            .on_mouse_move(cx.listener(|this, _, _, cx| {
+                                // Clear hover when mouse leaves list area without entering a row
+                                if this.hovered_index.is_some() {
+                                    // This will be overridden by row hover handlers
+                                }
+                                let _ = cx;
+                            }))
+                            .child(self.render_list(cx)),
+                    ),
+            )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_note_list_item_from_note() {
+        use chrono::Utc;
+
+        let note = Note {
+            id: NoteId::new(),
+            title: "Test Note".to_string(),
+            content: "Hello, world!".to_string(),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            deleted_at: None,
+            is_pinned: false,
+            sort_order: 0,
+        };
+
+        let item = NoteListItem::from_note(&note, true);
+        assert_eq!(item.title, "Test Note");
+        assert_eq!(item.char_count, 13);
+        assert!(item.is_current);
+        assert!(!item.is_pinned);
+    }
+
+    #[test]
+    fn test_note_list_item_untitled() {
+        use chrono::Utc;
+
+        let note = Note {
+            id: NoteId::new(),
+            title: "".to_string(),
+            content: "Some content".to_string(),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            deleted_at: None,
+            is_pinned: true,
+            sort_order: 0,
+        };
+
+        let item = NoteListItem::from_note(&note, false);
+        assert_eq!(item.title, "Untitled Note");
+        assert!(!item.is_current);
+        assert!(item.is_pinned);
+    }
+}
+
+</file>
+
+</files>
+📊 Pack Summary:
+────────────────
+  Total Files: 6 files
+  Search Mode: ripgrep (fast)
+  Total Tokens: ~29.9K (29,897 exact)
+  Total Chars: 144,628 chars
+       Output: -
+
+📁 Extensions Found:
+────────────────────
+  .rs
+
+📂 Top 10 Files (by tokens):
+──────────────────────────
+     15.1K - src/notes/window.rs
+      6.7K - src/notes/actions_panel.rs
+      3.5K - src/notes/browse_panel.rs
+      2.8K - src/notes/storage.rs
+      1.6K - src/notes/model.rs
+       377 - src/notes/mod.rs
