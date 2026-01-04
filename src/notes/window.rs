@@ -1792,11 +1792,16 @@ pub fn open_notes_window(cx: &mut App) -> Result<()> {
         let _ = handle.update(cx, |_root, window, cx| {
             window.activate_window();
 
-            // Focus the NotesApp's editor input
+            // Focus the NotesApp's editor input and move cursor to end
             notes_app.update(cx, |app, cx| {
-                // Call the InputState's focus method which handles both focus handle and internal state
+                // Get content length for cursor positioning
+                let content_len = app.editor_state.read(cx).value().len();
+
+                // Call the InputState's focus method and move cursor to end
                 app.editor_state.update(cx, |state, inner_cx| {
                     state.focus(window, inner_cx);
+                    // Move cursor to end of text (same as select_note behavior)
+                    state.set_selection(content_len, content_len, window, inner_cx);
                 });
 
                 if std::env::var("SCRIPT_KIT_TEST_NOTES_HOVERED")
