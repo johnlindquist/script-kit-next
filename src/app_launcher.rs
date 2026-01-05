@@ -553,7 +553,9 @@ pub fn scan_applications() -> Vec<AppInfo> {
             );
 
             // Start background scan for updates
-            let cache_arc = Arc::new(Mutex::new(cached_apps.clone()));
+            // IMPORTANT: Create ONE Arc and return it. The background thread gets a clone
+            // of the same Arc so its updates are visible to callers.
+            let cache_arc = Arc::new(Mutex::new(cached_apps));
             let cache_for_thread = Arc::clone(&cache_arc);
 
             std::thread::spawn(move || {
@@ -562,15 +564,16 @@ pub fn scan_applications() -> Vec<AppInfo> {
                 let scan_start = Instant::now();
                 let fresh_apps = scan_all_directories_with_db_update();
                 let scan_duration = scan_start.elapsed().as_millis();
+                let app_count = fresh_apps.len();
 
-                // Update the in-memory cache
+                // Update the in-memory cache (this Arc is shared with APP_CACHE)
                 if let Ok(mut guard) = cache_for_thread.lock() {
-                    *guard = fresh_apps.clone();
+                    *guard = fresh_apps;
                 }
 
                 let (db_count, db_size) = get_apps_db_stats();
                 info!(
-                    app_count = fresh_apps.len(),
+                    app_count,
                     duration_ms = scan_duration,
                     db_apps = db_count,
                     db_icon_size_kb = db_size / 1024,
@@ -580,7 +583,8 @@ pub fn scan_applications() -> Vec<AppInfo> {
                 set_loading_state(AppLoadingState::Ready);
             });
 
-            return Arc::new(Mutex::new(cached_apps));
+            // Return the same Arc that the background thread will update
+            return cache_arc;
         }
 
         // No SQLite cache - do a full synchronous scan
