@@ -69,7 +69,7 @@ const ICON_LOG_OUT: &str = r#"<svg width="16" height="16" viewBox="0 0 16 16" fi
 </svg>"#;
 
 /// Menu item identifiers for matching events
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TrayMenuAction {
     OpenScriptKit,
     OpenNotes,
@@ -81,6 +81,59 @@ pub enum TrayMenuAction {
     Settings,
     LaunchAtLogin,
     Quit,
+}
+
+impl TrayMenuAction {
+    /// Returns a stable string ID for this action.
+    /// Used with `with_id()` when creating menu items.
+    pub const fn id(self) -> &'static str {
+        match self {
+            Self::OpenScriptKit => "tray.open_script_kit",
+            Self::OpenNotes => "tray.open_notes",
+            Self::OpenAiChat => "tray.open_ai_chat",
+            Self::OpenOnGitHub => "tray.open_github",
+            Self::OpenManual => "tray.open_manual",
+            Self::JoinCommunity => "tray.join_community",
+            Self::FollowUs => "tray.follow_us",
+            Self::Settings => "tray.settings",
+            Self::LaunchAtLogin => "tray.launch_at_login",
+            Self::Quit => "tray.quit",
+        }
+    }
+
+    /// Looks up a TrayMenuAction from its string ID.
+    /// Returns None if the ID is not recognized.
+    pub fn from_id(id: &str) -> Option<Self> {
+        match id {
+            "tray.open_script_kit" => Some(Self::OpenScriptKit),
+            "tray.open_notes" => Some(Self::OpenNotes),
+            "tray.open_ai_chat" => Some(Self::OpenAiChat),
+            "tray.open_github" => Some(Self::OpenOnGitHub),
+            "tray.open_manual" => Some(Self::OpenManual),
+            "tray.join_community" => Some(Self::JoinCommunity),
+            "tray.follow_us" => Some(Self::FollowUs),
+            "tray.settings" => Some(Self::Settings),
+            "tray.launch_at_login" => Some(Self::LaunchAtLogin),
+            "tray.quit" => Some(Self::Quit),
+            _ => None,
+        }
+    }
+
+    /// Returns all TrayMenuAction variants for iteration.
+    pub const fn all() -> &'static [Self] {
+        &[
+            Self::OpenScriptKit,
+            Self::OpenNotes,
+            Self::OpenAiChat,
+            Self::OpenOnGitHub,
+            Self::OpenManual,
+            Self::JoinCommunity,
+            Self::FollowUs,
+            Self::Settings,
+            Self::LaunchAtLogin,
+            Self::Quit,
+        ]
+    }
 }
 
 /// Manages the system tray icon and menu
@@ -398,5 +451,74 @@ impl TrayManager {
     #[allow(dead_code)]
     pub fn quit_id(&self) -> &str {
         &self.quit_id
+    }
+}
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_tray_menu_action_id_roundtrip() {
+        // Every action should roundtrip through id() and from_id()
+        for action in TrayMenuAction::all() {
+            let id = action.id();
+            let recovered = TrayMenuAction::from_id(id);
+            assert_eq!(
+                recovered,
+                Some(*action),
+                "Action {:?} with id '{}' should roundtrip",
+                action,
+                id
+            );
+        }
+    }
+
+    #[test]
+    fn test_tray_menu_action_ids_are_unique() {
+        let all = TrayMenuAction::all();
+        for (i, a) in all.iter().enumerate() {
+            for (j, b) in all.iter().enumerate() {
+                if i != j {
+                    assert_ne!(
+                        a.id(),
+                        b.id(),
+                        "Actions {:?} and {:?} have duplicate IDs",
+                        a,
+                        b
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_tray_menu_action_ids_are_prefixed() {
+        // All IDs should start with "tray." for namespacing
+        for action in TrayMenuAction::all() {
+            assert!(
+                action.id().starts_with("tray."),
+                "Action {:?} ID '{}' should start with 'tray.'",
+                action,
+                action.id()
+            );
+        }
+    }
+
+    #[test]
+    fn test_tray_menu_action_from_id_unknown() {
+        assert_eq!(TrayMenuAction::from_id("unknown"), None);
+        assert_eq!(TrayMenuAction::from_id(""), None);
+        assert_eq!(TrayMenuAction::from_id("tray.nonexistent"), None);
+    }
+
+    #[test]
+    fn test_tray_menu_action_all_count() {
+        // Verify all() returns all variants
+        assert_eq!(TrayMenuAction::all().len(), 10);
     }
 }
