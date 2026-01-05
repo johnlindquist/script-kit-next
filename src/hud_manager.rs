@@ -15,10 +15,19 @@ use gpui::{
 use parking_lot::Mutex;
 use std::collections::VecDeque;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::logging;
+
+/// Counter for generating unique HUD IDs
+static NEXT_HUD_ID: AtomicU64 = AtomicU64::new(1);
+
+/// Generate a unique HUD ID
+fn next_hud_id() -> u64 {
+    NEXT_HUD_ID.fetch_add(1, Ordering::Relaxed)
+}
 
 /// Default HUD duration in milliseconds
 const DEFAULT_HUD_DURATION_MS: u64 = 2000;
@@ -200,6 +209,8 @@ impl Render for HudView {
 
 /// Tracks an active HUD window
 struct ActiveHud {
+    /// Unique identifier for this HUD
+    id: u64,
     #[allow(dead_code)]
     window: WindowHandle<HudView>,
     /// The bounds used to identify this HUD window for closing
@@ -339,6 +350,9 @@ pub fn show_hud(text: String, duration_ms: Option<u64>, cx: &mut App) {
             // Configure the window as a floating overlay
             configure_hud_window_by_bounds(expected_bounds);
 
+            // Generate unique ID for this HUD
+            let hud_id = next_hud_id();
+
             // Clone window handle for the cleanup timer
             let window_for_cleanup = window_handle;
 
@@ -347,6 +361,7 @@ pub fn show_hud(text: String, duration_ms: Option<u64>, cx: &mut App) {
                 let manager = get_hud_manager();
                 let mut state = manager.lock();
                 state.active_huds.push(ActiveHud {
+                    id: hud_id,
                     window: window_handle,
                     bounds: expected_bounds,
                     created_at: Instant::now(),
@@ -354,19 +369,16 @@ pub fn show_hud(text: String, duration_ms: Option<u64>, cx: &mut App) {
                 });
             }
 
-            // Schedule cleanup after duration - close HUD windows directly via NSWindow
+            // Schedule cleanup after duration - use ID for dismissal
             let duration_duration = Duration::from_millis(duration);
-            let cleanup_bounds = expected_bounds;
             cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                 Timer::after(duration_duration).await;
 
                 // IMPORTANT: All AppKit calls must happen on the main thread.
                 // cx.update() ensures we're on the main thread.
                 let _ = cx.update(|cx| {
-                    // Close the NSWindow directly (don't use window_handle to avoid borrow issues)
-                    close_hud_window_by_bounds(cleanup_bounds);
-                    // Then clean up the tracking state
-                    cleanup_expired_huds(cx);
+                    // Dismiss by ID - this is more reliable than bounds matching
+                    dismiss_hud_by_id(hud_id, cx);
                 });
 
                 // Drop the window handle reference
@@ -480,6 +492,9 @@ pub fn show_hud_with_action(
             // Configure the window as a floating overlay
             configure_hud_window_by_bounds(expected_bounds);
 
+            // Generate unique ID for this HUD
+            let hud_id = next_hud_id();
+
             // Clone window handle for the cleanup timer
             let window_for_cleanup = window_handle;
 
@@ -488,6 +503,7 @@ pub fn show_hud_with_action(
                 let manager = get_hud_manager();
                 let mut state = manager.lock();
                 state.active_huds.push(ActiveHud {
+                    id: hud_id,
                     window: window_handle,
                     bounds: expected_bounds,
                     created_at: Instant::now(),
@@ -495,19 +511,16 @@ pub fn show_hud_with_action(
                 });
             }
 
-            // Schedule cleanup after duration
+            // Schedule cleanup after duration - use ID for dismissal
             let duration_duration = Duration::from_millis(duration);
-            let cleanup_bounds = expected_bounds;
             cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                 Timer::after(duration_duration).await;
 
                 // IMPORTANT: All AppKit calls must happen on the main thread.
                 // cx.update() ensures we're on the main thread.
                 let _ = cx.update(|cx| {
-                    // Close the NSWindow directly
-                    close_hud_window_by_bounds(cleanup_bounds);
-                    // Then clean up the tracking state
-                    cleanup_expired_huds(cx);
+                    // Dismiss by ID - this is more reliable than bounds matching
+                    dismiss_hud_by_id(hud_id, cx);
                 });
 
                 // Drop the window handle reference
@@ -709,6 +722,40 @@ fn configure_hud_window_by_bounds(_expected_bounds: gpui::Bounds<Pixels>) {
     );
 }
 
+/// Dismiss a specific HUD by its ID
+///
+/// This is more reliable than bounds matching for timer-based dismissal,
+/// as it avoids race conditions where bounds might match the wrong window.
+fn dismiss_hud_by_id(hud_id: u64, cx: &mut App) {
+    let manager = get_hud_manager();
+
+    // Find and remove the HUD with matching ID, getting its bounds for window close
+    let bounds_to_close: Option<gpui::Bounds<Pixels>> = {
+        let mut state = manager.lock();
+        if let Some(idx) = state.active_huds.iter().position(|h| h.id == hud_id) {
+            let hud = state.active_huds.swap_remove(idx);
+            Some(hud.bounds)
+        } else {
+            None
+        }
+    };
+
+    // Close the window if we found it
+    if let Some(bounds) = bounds_to_close {
+        close_hud_window_by_bounds(bounds);
+        logging::log("HUD", &format!("Dismissed HUD id={}", hud_id));
+
+        // Show any pending HUDs
+        cleanup_expired_huds(cx);
+    } else {
+        // HUD was already dismissed (possibly manually) - this is OK
+        logging::log(
+            "HUD",
+            &format!("HUD id={} already dismissed, skipping", hud_id),
+        );
+    }
+}
+
 /// Clean up expired HUD windows and show pending ones
 fn cleanup_expired_huds(cx: &mut App) {
     let manager = get_hud_manager();
@@ -852,5 +899,18 @@ mod tests {
             action: Some(HudAction::OpenUrl("https://example.com".to_string())),
         };
         assert!(notif_with_action.has_action());
+    }
+
+    #[test]
+    fn test_hud_id_generation() {
+        // IDs should be unique and increasing
+        let id1 = next_hud_id();
+        let id2 = next_hud_id();
+        let id3 = next_hud_id();
+
+        assert!(id2 > id1, "IDs should be strictly increasing");
+        assert!(id3 > id2, "IDs should be strictly increasing");
+        assert_ne!(id1, id2, "IDs should be unique");
+        assert_ne!(id2, id3, "IDs should be unique");
     }
 }
