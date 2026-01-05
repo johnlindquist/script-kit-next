@@ -745,6 +745,8 @@ pub fn migrate_from_kenv() -> bool {
 /// │       ├── scripts/
 /// │       ├── extensions/
 /// │       └── agents/
+/// │   ├── package.json           # Node.js module config (type: module for top-level await)
+/// │   └── tsconfig.json          # TypeScript path mappings
 /// ├── sdk/                       # Runtime SDK (kit-sdk.ts)
 /// ├── db/                        # Databases
 /// ├── logs/                      # Application logs
@@ -752,7 +754,6 @@ pub fn migrate_from_kenv() -> bool {
 /// │   └── app-icons/             # Cached application icons
 /// ├── config.ts                  # User configuration (created from template if missing)
 /// ├── theme.json                 # Theme configuration (created from example if missing)
-/// ├── tsconfig.json              # TypeScript path mappings
 /// └── .gitignore                 # Ignore transient files
 /// ```
 ///
@@ -833,16 +834,18 @@ pub fn ensure_kit_setup() -> SetupResult {
         "theme.json",
     );
 
-    // App-managed: tsconfig.json path mappings (merge-safe)
-    ensure_tsconfig_paths(&kit_dir.join("tsconfig.json"), &mut warnings);
+    // App-managed: tsconfig.json path mappings in kit/ directory (merge-safe)
+    // Located at ~/.scriptkit/kit/tsconfig.json to be alongside user scripts
+    ensure_tsconfig_paths(&kit_dir.join("kit").join("tsconfig.json"), &mut warnings);
 
-    // App-managed: package.json for top-level await support
-    let package_json_path = kit_dir.join("package.json");
+    // App-managed: package.json for top-level await support in kit/ directory
+    // The "type": "module" allows scripts in kit/main/scripts/*.ts to use top-level await
+    let package_json_path = kit_dir.join("kit").join("package.json");
     write_string_if_missing(
         &package_json_path,
         EMBEDDED_PACKAGE_JSON,
         &mut warnings,
-        "package.json",
+        "kit/package.json",
     );
 
     // User guide: AGENTS.md for AI agents writing scripts
@@ -867,7 +870,7 @@ pub fn ensure_kit_setup() -> SetupResult {
 # =============================================================================
 # Node.js / Bun dependencies
 # =============================================================================
-# Root node_modules (for package.json at ~/.scriptkit/)
+# Root node_modules (for package.json at ~/.scriptkit/kit/)
 node_modules/
 
 # Kit-specific node_modules (e.g., main/node_modules, examples/node_modules)
@@ -1064,10 +1067,12 @@ fn write_string_if_changed(path: &Path, contents: &str, warnings: &mut Vec<Strin
 }
 
 /// Ensure tsconfig.json has the @scriptkit/sdk path mapping (merge-safe)
+/// The tsconfig lives at ~/.scriptkit/kit/tsconfig.json, SDK at ~/.scriptkit/sdk/
 fn ensure_tsconfig_paths(tsconfig_path: &Path, warnings: &mut Vec<String>) {
     use serde_json::{json, Value};
 
-    let kit_path = json!(["./sdk/kit-sdk.ts"]);
+    // Path is relative from kit/ to sdk/: ../sdk/kit-sdk.ts
+    let kit_path = json!(["../sdk/kit-sdk.ts"]);
 
     let mut config: Value = if tsconfig_path.exists() {
         match fs::read_to_string(tsconfig_path) {
@@ -1333,17 +1338,18 @@ Welcome to Script Kit! This directory contains your scripts, configuration, and 
 ```
 ~/.scriptkit/
 ├── kit/                    # All kits (version control friendly)
-│   └── main/               # Your default kit
-│       ├── scripts/        # TypeScript/JavaScript scripts (.ts, .js)
-│       ├── extensions/     # Markdown extension files (.md)
-│       └── agents/         # AI agent definitions (.md)
+│   ├── main/               # Your default kit
+│   │   ├── scripts/        # TypeScript/JavaScript scripts (.ts, .js)
+│   │   ├── extensions/     # Markdown extension files (.md)
+│   │   └── agents/         # AI agent definitions (.md)
+│   ├── package.json        # Node.js module config (enables top-level await)
+│   └── tsconfig.json       # TypeScript path mappings
 ├── sdk/                    # Runtime SDK (managed by app)
 ├── db/                     # Databases (clipboard history, etc.)
 ├── logs/                   # Application logs
 ├── cache/                  # Cached data (app icons, etc.)
 ├── config.ts               # Your configuration
 ├── theme.json              # Theme customization
-├── tsconfig.json           # TypeScript path mappings
 └── README.md               # This file
 ```
 
