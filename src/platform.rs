@@ -28,6 +28,36 @@ use objc::{class, msg_send, sel, sel_impl};
 use crate::window_manager;
 
 // ============================================================================
+// Thread Safety
+// ============================================================================
+
+/// Assert that the current thread is the main thread.
+///
+/// AppKit APIs (NSApp, NSWindow, NSScreen, etc.) are NOT thread-safe and MUST
+/// be called from the main thread. This function provides a cheap debug assertion
+/// that will panic in debug builds if called from a background thread.
+///
+/// # Panics (debug builds only)
+///
+/// Panics if called from a thread other than the main thread.
+///
+/// # Safety
+///
+/// Uses Objective-C message sending to query NSThread.isMainThread.
+#[cfg(target_os = "macos")]
+fn debug_assert_main_thread() {
+    unsafe {
+        let is_main: bool = msg_send![class!(NSThread), isMainThread];
+        debug_assert!(
+            is_main,
+            "AppKit calls must run on the main thread. \
+             This function was called from a background thread, which can cause \
+             crashes, undefined behavior, or silent failures."
+        );
+    }
+}
+
+// ============================================================================
 // Application Activation Policy
 // ============================================================================
 
@@ -52,6 +82,7 @@ use crate::window_manager;
 /// No-op on non-macOS platforms.
 #[cfg(target_os = "macos")]
 pub fn configure_as_accessory_app() {
+    debug_assert_main_thread();
     unsafe {
         let app: id = NSApp();
         // NSApplicationActivationPolicyAccessory = 1
@@ -95,6 +126,7 @@ pub fn configure_as_accessory_app() {
 #[cfg(target_os = "macos")]
 #[allow(dead_code)]
 pub fn ensure_move_to_active_space() {
+    debug_assert_main_thread();
     unsafe {
         // Use WindowManager to get the main window (not keyWindow, which may not exist yet)
         let window = match window_manager::get_main_window() {
@@ -162,6 +194,7 @@ pub fn ensure_move_to_active_space() {
 ///
 #[cfg(target_os = "macos")]
 pub fn configure_as_floating_panel() {
+    debug_assert_main_thread();
     unsafe {
         let app: id = NSApp();
 
@@ -236,6 +269,7 @@ pub fn configure_as_floating_panel() {
 /// No-op on non-macOS platforms.
 #[cfg(target_os = "macos")]
 pub fn hide_main_window() {
+    debug_assert_main_thread();
     unsafe {
         // Use WindowManager to get the main window
         let window = match window_manager::get_main_window() {
@@ -281,6 +315,7 @@ pub fn hide_main_window() {
 #[cfg(target_os = "macos")]
 #[allow(dead_code)]
 pub fn is_app_active() -> bool {
+    debug_assert_main_thread();
     unsafe {
         let app: id = NSApp();
         let is_active: bool = msg_send![app, isActive];
@@ -302,6 +337,7 @@ pub fn is_app_active() -> bool {
 /// (e.g., when switching focus to Notes/AI windows).
 #[cfg(target_os = "macos")]
 pub fn is_main_window_focused() -> bool {
+    debug_assert_main_thread();
     unsafe {
         let window = match window_manager::get_main_window() {
             Some(window) => window,
@@ -388,6 +424,7 @@ use cocoa::foundation::NSRect;
 /// correct origins for secondary displays.
 #[cfg(target_os = "macos")]
 pub fn get_macos_displays() -> Vec<DisplayBounds> {
+    debug_assert_main_thread();
     unsafe {
         let screens: id = msg_send![class!(NSScreen), screens];
         let count: usize = msg_send![screens, count];
@@ -448,6 +485,7 @@ use cocoa::foundation::{NSPoint, NSSize};
 /// at its bottom-left corner. Secondary displays have their own position in this space.
 #[cfg(target_os = "macos")]
 pub fn move_first_window_to(x: f64, y: f64, width: f64, height: f64) {
+    debug_assert_main_thread();
     unsafe {
         // Use WindowManager to get the main window reliably
         let window = match window_manager::get_main_window() {
@@ -957,10 +995,67 @@ pub fn open_path_with_system_default(path: &str) {
 mod tests {
     use super::*;
 
+    // =========================================================================
+    // Main Thread Assertion Tests
+    // =========================================================================
+
+    /// Test that debug_assert_main_thread returns correct value via NSThread.isMainThread.
+    /// Note: Rust test harness does NOT run tests on the main thread - it uses a thread pool.
+    /// This test verifies that our assertion correctly detects we're NOT on the main thread.
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn test_debug_assert_main_thread_detects_non_main_thread() {
+        // Rust tests run on thread pool workers, NOT the main thread.
+        // Verify that NSThread.isMainThread returns false (as expected)
+        unsafe {
+            let is_main: bool = msg_send![class!(NSThread), isMainThread];
+            // In tests, we should NOT be on the main thread
+            assert!(
+                !is_main,
+                "Expected test to run on non-main thread (Rust test harness behavior)"
+            );
+        }
+    }
+
+    /// Test that debug_assert_main_thread would panic on a background thread.
+    /// Note: This test only runs in debug mode since debug_assert is used.
+    #[cfg(all(target_os = "macos", debug_assertions))]
+    #[test]
+    fn test_debug_assert_main_thread_panics_on_background_thread() {
+        use std::sync::mpsc;
+        use std::thread;
+
+        let (tx, rx) = mpsc::channel();
+
+        thread::spawn(move || {
+            // Catch the panic from debug_assert_main_thread
+            let result = std::panic::catch_unwind(|| {
+                debug_assert_main_thread();
+            });
+            tx.send(result.is_err()).unwrap();
+        })
+        .join()
+        .unwrap();
+
+        let panicked = rx.recv().unwrap();
+        assert!(
+            panicked,
+            "debug_assert_main_thread should panic on background thread"
+        );
+    }
+
+    // =========================================================================
+    // Characterization Tests (AppKit functions)
+    // =========================================================================
+    // NOTE: These tests are ignored on macOS because they require the main thread.
+    // Rust's test harness runs tests on thread pool workers, not the main thread.
+    // In production, these functions are called from GPUI's main thread event loop.
+
     /// Test that ensure_move_to_active_space can be called without panicking.
     /// This is a characterization test - it verifies the function doesn't crash.
     /// On non-macOS, this is a no-op. On macOS without a window, it logs a warning.
     #[test]
+    #[cfg_attr(target_os = "macos", ignore = "requires main thread (run via GPUI)")]
     fn test_ensure_move_to_active_space_does_not_panic() {
         // Should not panic even without a window registered
         ensure_move_to_active_space();
@@ -970,6 +1065,7 @@ mod tests {
     /// This is a characterization test - it verifies the function doesn't crash.
     /// On non-macOS, this is a no-op. On macOS without NSApp/keyWindow, it handles gracefully.
     #[test]
+    #[cfg_attr(target_os = "macos", ignore = "requires main thread (run via GPUI)")]
     fn test_configure_as_floating_panel_does_not_panic() {
         // Should not panic even without an app running
         configure_as_floating_panel();
@@ -987,6 +1083,7 @@ mod tests {
     /// This mirrors the typical usage pattern in main.rs where both are called
     /// during window setup.
     #[test]
+    #[cfg_attr(target_os = "macos", ignore = "requires main thread (run via GPUI)")]
     fn test_functions_can_be_called_in_sequence() {
         // This is the typical call order in main.rs
         ensure_move_to_active_space();
@@ -996,6 +1093,7 @@ mod tests {
 
     /// Test that functions are idempotent - can be called multiple times safely.
     #[test]
+    #[cfg_attr(target_os = "macos", ignore = "requires main thread (run via GPUI)")]
     fn test_functions_are_idempotent() {
         for _ in 0..3 {
             ensure_move_to_active_space();
@@ -1054,6 +1152,7 @@ mod tests {
 
     /// Test get_macos_displays returns at least one display (or fallback).
     #[test]
+    #[cfg_attr(target_os = "macos", ignore = "requires main thread (run via GPUI)")]
     fn test_get_macos_displays_returns_at_least_one() {
         let displays = get_macos_displays();
         assert!(!displays.is_empty(), "Should return at least one display");
@@ -1061,6 +1160,7 @@ mod tests {
 
     /// Test get_macos_displays returns displays with valid dimensions.
     #[test]
+    #[cfg_attr(target_os = "macos", ignore = "requires main thread (run via GPUI)")]
     fn test_get_macos_displays_valid_dimensions() {
         let displays = get_macos_displays();
         for display in displays {
@@ -1075,6 +1175,7 @@ mod tests {
 
     /// Test move_first_window_to does not panic without a window.
     #[test]
+    #[cfg_attr(target_os = "macos", ignore = "requires main thread (run via GPUI)")]
     fn test_move_first_window_to_does_not_panic() {
         // Should not panic even without a registered window
         move_first_window_to(100.0, 100.0, 800.0, 600.0);
@@ -1082,6 +1183,7 @@ mod tests {
 
     /// Test move_first_window_to_bounds wrapper function.
     #[test]
+    #[cfg_attr(target_os = "macos", ignore = "requires main thread (run via GPUI)")]
     fn test_move_first_window_to_bounds_does_not_panic() {
         use gpui::size;
         let bounds = Bounds {
@@ -1098,6 +1200,7 @@ mod tests {
 
     /// Test calculate_eye_line_bounds returns valid bounds.
     #[test]
+    #[cfg_attr(target_os = "macos", ignore = "requires main thread (run via GPUI)")]
     fn test_calculate_eye_line_bounds_returns_valid() {
         use gpui::size;
         let window_size = size(px(750.0), px(500.0));
@@ -1110,6 +1213,7 @@ mod tests {
 
     /// Test eye-line calculation positions window in upper portion of screen.
     #[test]
+    #[cfg_attr(target_os = "macos", ignore = "requires main thread (run via GPUI)")]
     fn test_calculate_eye_line_bounds_upper_portion() {
         use gpui::size;
         let window_size = size(px(750.0), px(500.0));
