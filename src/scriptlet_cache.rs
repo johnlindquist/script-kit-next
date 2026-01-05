@@ -28,12 +28,46 @@
 //! }
 //! ```
 
+use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 // Re-export validation types from scriptlets module for convenience
 pub use crate::scriptlets::{ScriptletParseResult, ScriptletValidationError};
+
+/// File fingerprint for robust staleness detection.
+///
+/// Using both mtime AND size catches more real changes than mtime alone:
+/// - mtime alone can miss edits within the same timestamp quantum (filesystem resolution)
+/// - mtime alone misses changes from `cp -p` or sync tools that preserve timestamps
+/// - Size changes almost always indicate content changes
+///
+/// This is a "cheap win" without requiring content hashing.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FileFingerprint {
+    /// Last modification time
+    pub mtime: SystemTime,
+    /// File size in bytes
+    pub size: u64,
+}
+
+impl FileFingerprint {
+    /// Create a new fingerprint from mtime and size
+    pub fn new(mtime: SystemTime, size: u64) -> Self {
+        Self { mtime, size }
+    }
+
+    /// Create a fingerprint from filesystem metadata
+    ///
+    /// Returns None if metadata cannot be read (file doesn't exist, permissions, etc.)
+    pub fn from_path(path: impl AsRef<Path>) -> Option<Self> {
+        let metadata = std::fs::metadata(path.as_ref()).ok()?;
+        let mtime = metadata.modified().ok()?;
+        let size = metadata.len();
+        Some(Self { mtime, size })
+    }
+}
 
 /// Lightweight struct tracking scriptlet registration metadata.
 /// This is a subset of the full Scriptlet struct, containing only
@@ -71,19 +105,21 @@ impl CachedScriptlet {
     }
 }
 
-/// Per-file cache entry tracking scriptlets and modification time.
+/// Per-file cache entry tracking scriptlets and staleness metadata.
 #[derive(Clone, Debug)]
 pub struct CachedScriptletFile {
-    /// Absolute path to the markdown file
+    /// Absolute path to the markdown file (NOTE: redundant with map key, kept for convenience)
     pub path: PathBuf,
-    /// Last modification time when the file was cached
+    /// Last modification time when the file was cached (legacy, prefer fingerprint)
     pub mtime: SystemTime,
+    /// Full fingerprint for robust staleness detection (mtime + size)
+    pub fingerprint: Option<FileFingerprint>,
     /// Scriptlets extracted from this file
     pub scriptlets: Vec<CachedScriptlet>,
 }
 
 impl CachedScriptletFile {
-    /// Create a new CachedScriptletFile
+    /// Create a new CachedScriptletFile (legacy mtime-only API)
     pub fn new(
         path: impl Into<PathBuf>,
         mtime: SystemTime,
@@ -92,6 +128,21 @@ impl CachedScriptletFile {
         Self {
             path: path.into(),
             mtime,
+            fingerprint: None,
+            scriptlets,
+        }
+    }
+
+    /// Create a new CachedScriptletFile with full fingerprint
+    pub fn with_fingerprint(
+        path: impl Into<PathBuf>,
+        fingerprint: FileFingerprint,
+        scriptlets: Vec<CachedScriptlet>,
+    ) -> Self {
+        Self {
+            path: path.into(),
+            mtime: fingerprint.mtime,
+            fingerprint: Some(fingerprint),
             scriptlets,
         }
     }
@@ -167,6 +218,87 @@ impl ScriptletCache {
     pub fn clear(&mut self) {
         self.files.clear();
     }
+
+    // =========================================================================
+    // New fingerprint-based API (preferred over mtime-only)
+    // =========================================================================
+
+    /// Check if a file is stale using full fingerprint (mtime + size).
+    ///
+    /// This is more robust than mtime-only because it catches:
+    /// - Edits within the same timestamp quantum
+    /// - Files replaced with `cp -p` or sync tools preserving timestamps
+    pub fn is_stale_fingerprint(&self, path: impl AsRef<Path>, current: FileFingerprint) -> bool {
+        match self.files.get(path.as_ref()) {
+            Some(cached) => match cached.fingerprint {
+                Some(fp) => fp != current,
+                // Fallback to mtime-only comparison if no fingerprint stored
+                None => cached.mtime != current.mtime,
+            },
+            None => true, // Not in cache means stale
+        }
+    }
+
+    /// Update or insert a file using fingerprint (preferred API)
+    pub fn update_file_with_fingerprint(
+        &mut self,
+        path: impl Into<PathBuf>,
+        fingerprint: FileFingerprint,
+        scriptlets: Vec<CachedScriptlet>,
+    ) {
+        let path = path.into();
+        self.files.insert(
+            path.clone(),
+            CachedScriptletFile::with_fingerprint(path, fingerprint, scriptlets),
+        );
+    }
+
+    /// Upsert a file and return the diff (atomic operation).
+    ///
+    /// This is the preferred API because it:
+    /// 1. Computes diff before replacing old scriptlets (no need to clone first)
+    /// 2. Returns the diff so callers can correctly unregister/register
+    /// 3. Ensures callers can't "forget" to handle changes
+    pub fn upsert_file(
+        &mut self,
+        path: PathBuf,
+        fingerprint: FileFingerprint,
+        scriptlets: Vec<CachedScriptlet>,
+    ) -> ScriptletDiff {
+        match self.files.entry(path.clone()) {
+            Entry::Vacant(v) => {
+                // New file - all scriptlets are "added"
+                let diff = ScriptletDiff {
+                    added: scriptlets.clone(),
+                    ..Default::default()
+                };
+                v.insert(CachedScriptletFile::with_fingerprint(path, fingerprint, scriptlets));
+                diff
+            }
+            Entry::Occupied(mut o) => {
+                // Existing file - compute diff then replace
+                let old_scriptlets = &o.get().scriptlets;
+                let diff = diff_scriptlets(old_scriptlets, &scriptlets);
+                // Replace with new content
+                let entry = o.get_mut();
+                entry.mtime = fingerprint.mtime;
+                entry.fingerprint = Some(fingerprint);
+                entry.scriptlets = scriptlets;
+                diff
+            }
+        }
+    }
+
+    /// Remove a file and return its scriptlets (for unregistration).
+    ///
+    /// This is preferred over `remove_file()` when you need to unregister
+    /// hotkeys/expands for the removed scriptlets.
+    pub fn remove_file_with_scriptlets(
+        &mut self,
+        path: impl AsRef<Path>,
+    ) -> Option<Vec<CachedScriptlet>> {
+        self.files.remove(path.as_ref()).map(|f| f.scriptlets)
+    }
 }
 
 /// Represents a change to a scriptlet's shortcut
@@ -196,6 +328,17 @@ pub struct AliasChange {
     pub new: Option<String>,
 }
 
+/// Represents a change to a scriptlet's file_path (anchor changed but name stayed same)
+///
+/// This is critical for hotkey registrations: if the anchor changes, the registration
+/// must be updated to point to the new location, even if the shortcut itself didn't change.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FilePathChange {
+    pub name: String,
+    pub old: String,
+    pub new: String,
+}
+
 /// Diff result identifying what changed between old and new scriptlets.
 /// Used to update hotkey and expand registrations incrementally.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -210,6 +353,8 @@ pub struct ScriptletDiff {
     pub expand_changes: Vec<ExpandChange>,
     /// Scriptlets whose alias changed
     pub alias_changes: Vec<AliasChange>,
+    /// Scriptlets whose file_path/anchor changed (critical for re-registration)
+    pub file_path_changes: Vec<FilePathChange>,
 }
 
 impl ScriptletDiff {
@@ -220,6 +365,7 @@ impl ScriptletDiff {
             && self.shortcut_changes.is_empty()
             && self.expand_changes.is_empty()
             && self.alias_changes.is_empty()
+            && self.file_path_changes.is_empty()
     }
 
     /// Get total number of changes
@@ -229,6 +375,7 @@ impl ScriptletDiff {
             + self.shortcut_changes.len()
             + self.expand_changes.len()
             + self.alias_changes.len()
+            + self.file_path_changes.len()
     }
 }
 
@@ -237,7 +384,11 @@ impl ScriptletDiff {
 /// Scriptlets are matched by name. A scriptlet is considered:
 /// - **Added**: Present in new but not in old
 /// - **Removed**: Present in old but not in new
-/// - **Changed**: Present in both but with different shortcut/expand/alias
+/// - **Changed**: Present in both but with different shortcut/expand/alias/file_path
+///
+/// CRITICAL: file_path changes are now detected. If the anchor changes but the name
+/// stays the same, this is reported in `file_path_changes`. Without this, hotkey
+/// registrations can silently point to stale paths.
 pub fn diff_scriptlets(old: &[CachedScriptlet], new: &[CachedScriptlet]) -> ScriptletDiff {
     let mut diff = ScriptletDiff::default();
 
@@ -251,7 +402,7 @@ pub fn diff_scriptlets(old: &[CachedScriptlet], new: &[CachedScriptlet]) -> Scri
     for new_scriptlet in new {
         match old_by_name.get(new_scriptlet.name.as_str()) {
             Some(old_scriptlet) => {
-                // Check for changes
+                // Check for shortcut changes
                 if old_scriptlet.shortcut != new_scriptlet.shortcut {
                     diff.shortcut_changes.push(ShortcutChange {
                         name: new_scriptlet.name.clone(),
@@ -260,6 +411,7 @@ pub fn diff_scriptlets(old: &[CachedScriptlet], new: &[CachedScriptlet]) -> Scri
                         new: new_scriptlet.shortcut.clone(),
                     });
                 }
+                // Check for expand changes
                 if old_scriptlet.expand != new_scriptlet.expand {
                     diff.expand_changes.push(ExpandChange {
                         name: new_scriptlet.name.clone(),
@@ -268,12 +420,23 @@ pub fn diff_scriptlets(old: &[CachedScriptlet], new: &[CachedScriptlet]) -> Scri
                         new: new_scriptlet.expand.clone(),
                     });
                 }
+                // Check for alias changes
                 if old_scriptlet.alias != new_scriptlet.alias {
                     diff.alias_changes.push(AliasChange {
                         name: new_scriptlet.name.clone(),
                         file_path: new_scriptlet.file_path.clone(),
                         old: old_scriptlet.alias.clone(),
                         new: new_scriptlet.alias.clone(),
+                    });
+                }
+                // CRITICAL: Check for file_path/anchor changes
+                // This catches the case where the anchor changed but the name stayed the same,
+                // which would otherwise cause hotkey registrations to point to stale paths.
+                if old_scriptlet.file_path != new_scriptlet.file_path {
+                    diff.file_path_changes.push(FilePathChange {
+                        name: new_scriptlet.name.clone(),
+                        old: old_scriptlet.file_path.clone(),
+                        new: new_scriptlet.file_path.clone(),
                     });
                 }
             }
@@ -408,7 +571,8 @@ pub fn scriptlet_to_cached(
     scriptlet: &crate::scriptlets::Scriptlet,
     file_path: &Path,
 ) -> CachedScriptlet {
-    // Create file_path with anchor from scriptlet name
+    // Create file_path with anchor from scriptlet.command (the kebab-case identifier)
+    // Note: This uses `command` not `name` - command is the stable identifier for anchors
     let anchor = scriptlet.command.clone();
     let full_path = format!("{}#{}", file_path.display(), anchor);
 
@@ -1186,5 +1350,293 @@ mod tests {
         assert_eq!(summary.error_count, 1);
         assert!(!summary.hud_message.is_empty());
         assert!(summary.log_file_path.ends_with("script-kit-gpui.jsonl"));
+    }
+
+    // -------------------------------------------------------------------------
+    // Bug fix tests: file_path change detection (TDD)
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_diff_file_path_changed_same_name() {
+        // BUG: When a scriptlet's anchor/file_path changes but name stays the same,
+        // the diff should detect this. Otherwise hotkey registrations point to stale paths.
+        let old = vec![CachedScriptlet::new(
+            "My Snippet",
+            Some("cmd+1".to_string()),
+            None,
+            None,
+            "/path/to/file.md#old-anchor", // Old anchor
+        )];
+
+        let new = vec![CachedScriptlet::new(
+            "My Snippet",
+            Some("cmd+1".to_string()),
+            None,
+            None,
+            "/path/to/file.md#new-anchor", // New anchor - this should be detected!
+        )];
+
+        let diff = diff_scriptlets(&old, &new);
+
+        // This is the critical assertion: file_path changes MUST be detected
+        assert!(
+            !diff.file_path_changes.is_empty(),
+            "file_path change should be detected when anchor changes"
+        );
+        assert_eq!(diff.file_path_changes.len(), 1);
+        assert_eq!(diff.file_path_changes[0].name, "My Snippet");
+        assert_eq!(
+            diff.file_path_changes[0].old,
+            "/path/to/file.md#old-anchor"
+        );
+        assert_eq!(
+            diff.file_path_changes[0].new,
+            "/path/to/file.md#new-anchor"
+        );
+    }
+
+    #[test]
+    fn test_diff_file_path_no_change() {
+        // When file_path is the same, no file_path_change should be reported
+        let old = vec![CachedScriptlet::new(
+            "My Snippet",
+            Some("cmd+1".to_string()),
+            None,
+            None,
+            "/path/to/file.md#same-anchor",
+        )];
+
+        let new = vec![CachedScriptlet::new(
+            "My Snippet",
+            Some("cmd+2".to_string()), // Shortcut changed, but file_path same
+            None,
+            None,
+            "/path/to/file.md#same-anchor",
+        )];
+
+        let diff = diff_scriptlets(&old, &new);
+
+        assert!(
+            diff.file_path_changes.is_empty(),
+            "No file_path change when paths are identical"
+        );
+        assert_eq!(diff.shortcut_changes.len(), 1); // But shortcut did change
+    }
+
+    #[test]
+    fn test_diff_is_empty_includes_file_path_changes() {
+        // is_empty() should return false when there are file_path changes
+        let old = vec![CachedScriptlet::new(
+            "Snippet",
+            None,
+            None,
+            None,
+            "/path/to/file.md#old",
+        )];
+
+        let new = vec![CachedScriptlet::new(
+            "Snippet",
+            None,
+            None,
+            None,
+            "/path/to/file.md#new",
+        )];
+
+        let diff = diff_scriptlets(&old, &new);
+
+        assert!(
+            !diff.is_empty(),
+            "Diff with file_path changes should not be empty"
+        );
+        assert!(
+            diff.change_count() > 0,
+            "change_count should include file_path changes"
+        );
+    }
+
+    // -------------------------------------------------------------------------
+    // Bug fix tests: FileFingerprint staleness detection (TDD)
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_fingerprint_equality() {
+        let fp1 = FileFingerprint {
+            mtime: test_mtime(1000),
+            size: 1024,
+        };
+        let fp2 = FileFingerprint {
+            mtime: test_mtime(1000),
+            size: 1024,
+        };
+        let fp3 = FileFingerprint {
+            mtime: test_mtime(1000),
+            size: 2048, // Different size
+        };
+        let fp4 = FileFingerprint {
+            mtime: test_mtime(2000), // Different mtime
+            size: 1024,
+        };
+
+        assert_eq!(fp1, fp2, "Same mtime and size should be equal");
+        assert_ne!(fp1, fp3, "Different size should not be equal");
+        assert_ne!(fp1, fp4, "Different mtime should not be equal");
+    }
+
+    #[test]
+    fn test_cache_staleness_with_fingerprint() {
+        let mut cache = ScriptletCache::new();
+        let path = PathBuf::from("/path/to/file.md");
+        let fp_old = FileFingerprint {
+            mtime: test_mtime(1000),
+            size: 1024,
+        };
+        let fp_same_mtime_diff_size = FileFingerprint {
+            mtime: test_mtime(1000),
+            size: 2048, // Same mtime but different size
+        };
+
+        // Add to cache with fingerprint
+        cache.update_file_with_fingerprint(&path, fp_old, vec![]);
+
+        // Same fingerprint = not stale
+        assert!(
+            !cache.is_stale_fingerprint(&path, fp_old),
+            "Same fingerprint should not be stale"
+        );
+
+        // Same mtime but different size = stale (this is the bug fix!)
+        assert!(
+            cache.is_stale_fingerprint(&path, fp_same_mtime_diff_size),
+            "Same mtime but different size should be stale"
+        );
+    }
+
+    // -------------------------------------------------------------------------
+    // API improvement tests: upsert_file returning diff (TDD)
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_upsert_file_returns_diff_for_new_file() {
+        let mut cache = ScriptletCache::new();
+        let path = PathBuf::from("/path/to/file.md");
+        let fp = FileFingerprint {
+            mtime: test_mtime(1000),
+            size: 1024,
+        };
+
+        let scriptlets = vec![CachedScriptlet::new(
+            "New Snippet",
+            Some("cmd+1".to_string()),
+            None,
+            None,
+            "/path/to/file.md#new-snippet",
+        )];
+
+        let diff = cache.upsert_file(path.clone(), fp, scriptlets);
+
+        // New file means all scriptlets are "added"
+        assert_eq!(diff.added.len(), 1);
+        assert_eq!(diff.added[0].name, "New Snippet");
+        assert!(diff.removed.is_empty());
+        assert!(diff.shortcut_changes.is_empty());
+
+        // File should now be in cache
+        assert_eq!(cache.len(), 1);
+    }
+
+    #[test]
+    fn test_upsert_file_returns_diff_for_existing_file() {
+        let mut cache = ScriptletCache::new();
+        let path = PathBuf::from("/path/to/file.md");
+        let fp1 = FileFingerprint {
+            mtime: test_mtime(1000),
+            size: 1024,
+        };
+        let fp2 = FileFingerprint {
+            mtime: test_mtime(2000),
+            size: 2048,
+        };
+
+        // Initial insert
+        let initial = vec![
+            CachedScriptlet::new(
+                "Snippet A",
+                Some("cmd+1".to_string()),
+                None,
+                None,
+                "/path/to/file.md#snippet-a",
+            ),
+            CachedScriptlet::new(
+                "Snippet B",
+                Some("cmd+2".to_string()),
+                None,
+                None,
+                "/path/to/file.md#snippet-b",
+            ),
+        ];
+        cache.upsert_file(path.clone(), fp1, initial);
+
+        // Update: change shortcut, remove B, add C
+        let updated = vec![
+            CachedScriptlet::new(
+                "Snippet A",
+                Some("cmd+9".to_string()), // Changed shortcut
+                None,
+                None,
+                "/path/to/file.md#snippet-a",
+            ),
+            CachedScriptlet::new(
+                "Snippet C",
+                Some("cmd+3".to_string()),
+                None,
+                None,
+                "/path/to/file.md#snippet-c",
+            ),
+        ];
+
+        let diff = cache.upsert_file(path.clone(), fp2, updated);
+
+        // Verify diff captures all changes
+        assert_eq!(diff.added.len(), 1);
+        assert_eq!(diff.added[0].name, "Snippet C");
+
+        assert_eq!(diff.removed.len(), 1);
+        assert_eq!(diff.removed[0].name, "Snippet B");
+
+        assert_eq!(diff.shortcut_changes.len(), 1);
+        assert_eq!(diff.shortcut_changes[0].name, "Snippet A");
+        assert_eq!(diff.shortcut_changes[0].old, Some("cmd+1".to_string()));
+        assert_eq!(diff.shortcut_changes[0].new, Some("cmd+9".to_string()));
+
+        // Cache should have updated content
+        let cached = cache.get_scriptlets(&path).unwrap();
+        assert_eq!(cached.len(), 2);
+    }
+
+    #[test]
+    fn test_remove_file_returns_removed_scriptlets() {
+        let mut cache = ScriptletCache::new();
+        let path = PathBuf::from("/path/to/file.md");
+        let fp = FileFingerprint {
+            mtime: test_mtime(1000),
+            size: 1024,
+        };
+
+        let scriptlets = vec![
+            CachedScriptlet::new("A", None, None, None, "/path/to/file.md#a"),
+            CachedScriptlet::new("B", None, None, None, "/path/to/file.md#b"),
+        ];
+        cache.upsert_file(path.clone(), fp, scriptlets);
+
+        // Remove returns the scriptlets that were removed (for unregistration)
+        let removed = cache.remove_file_with_scriptlets(&path);
+        assert!(removed.is_some());
+        let removed = removed.unwrap();
+        assert_eq!(removed.len(), 2);
+        assert!(removed.iter().any(|s| s.name == "A"));
+        assert!(removed.iter().any(|s| s.name == "B"));
+
+        // Cache should be empty
+        assert!(cache.is_empty());
     }
 }
