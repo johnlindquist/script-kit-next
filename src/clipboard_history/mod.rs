@@ -25,6 +25,7 @@ mod change_detection;
 mod clipboard;
 mod config;
 mod database;
+mod db_worker;
 mod image;
 mod monitor;
 mod types;
@@ -39,6 +40,10 @@ pub use types::{
     classify_timestamp, group_entries_by_time, ClipboardEntry, ClipboardEntryMeta, ContentType,
     TimeGroup,
 };
+
+// DB Worker (new architecture - message passing instead of global mutex)
+#[allow(unused_imports)]
+pub use db_worker::{get_db_sender, start_db_worker, DbRequest};
 
 // Config
 #[allow(unused_imports)]
