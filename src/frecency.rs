@@ -153,10 +153,16 @@ pub struct FrecencyStore {
     revision: u64,
 }
 
-/// Raw data format for JSON serialization
+/// Raw data format for JSON serialization (owned, for deserialization)
 #[derive(Debug, Serialize, Deserialize)]
 struct FrecencyData {
     entries: HashMap<String, FrecencyEntry>,
+}
+
+/// Raw data format for JSON serialization (borrowed, for serialization without cloning)
+#[derive(Serialize)]
+struct FrecencyDataRef<'a> {
+    entries: &'a HashMap<String, FrecencyEntry>,
 }
 
 impl FrecencyStore {
@@ -265,7 +271,9 @@ impl FrecencyStore {
         Ok(())
     }
 
-    /// Save frecency data to disk
+    /// Save frecency data to disk using atomic write (write temp + rename)
+    ///
+    /// Uses compact JSON for performance and atomic rename for crash safety.
     #[instrument(name = "frecency_save", skip(self))]
     pub fn save(&mut self) -> Result<()> {
         if !self.dirty {
@@ -279,16 +287,23 @@ impl FrecencyStore {
                 .with_context(|| format!("Failed to create directory: {}", parent.display()))?;
         }
 
-        let data = FrecencyData {
-            entries: self.entries.clone(),
-        };
-
+        // Serialize directly from reference to avoid cloning the entire map
         let json =
-            serde_json::to_string_pretty(&data).context("Failed to serialize frecency data")?;
+            serde_json::to_string(&FrecencyDataRef { entries: &self.entries })
+                .context("Failed to serialize frecency data")?;
 
-        std::fs::write(&self.file_path, json).with_context(|| {
+        // Atomic write: write to temp file, then rename
+        let temp_path = self.file_path.with_extension("json.tmp");
+
+        // Write to temp file
+        std::fs::write(&temp_path, &json).with_context(|| {
+            format!("Failed to write temp frecency file: {}", temp_path.display())
+        })?;
+
+        // Atomic rename (on Unix, this is atomic; on Windows, it's best-effort)
+        std::fs::rename(&temp_path, &self.file_path).with_context(|| {
             format!(
-                "Failed to write frecency file: {}",
+                "Failed to rename temp file to {}",
                 self.file_path.display()
             )
         })?;
@@ -296,7 +311,8 @@ impl FrecencyStore {
         info!(
             path = %self.file_path.display(),
             entry_count = self.entries.len(),
-            "Saved frecency data"
+            bytes = json.len(),
+            "Saved frecency data (atomic)"
         );
 
         self.dirty = false;
@@ -1194,6 +1210,84 @@ mod tests {
             recent[0].0, "/aaa.ts",
             "Alphabetically first path should win final tie-breaker"
         );
+        cleanup_temp_file(&path);
+    }
+
+    // ========================================
+    // Atomic save tests
+    // ========================================
+
+    #[test]
+    fn test_save_creates_valid_json() {
+        let (mut store, path) = create_test_store();
+        store.record_use("/test.ts");
+        store.save().unwrap();
+
+        // Verify the file exists and contains valid JSON
+        let content = fs::read_to_string(&path).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
+        assert!(parsed.get("entries").is_some());
+
+        cleanup_temp_file(&path);
+    }
+
+    #[test]
+    fn test_save_no_temp_file_left_behind() {
+        let (mut store, path) = create_test_store();
+        store.record_use("/test.ts");
+        store.save().unwrap();
+
+        // Verify no temp file is left behind
+        let temp_path = path.with_extension("json.tmp");
+        assert!(
+            !temp_path.exists(),
+            "Temp file should be cleaned up after save"
+        );
+
+        cleanup_temp_file(&path);
+    }
+
+    #[test]
+    fn test_save_preserves_data_integrity() {
+        let (mut store, path) = create_test_store();
+
+        // Add multiple entries
+        store.record_use("/a.ts");
+        store.record_use("/a.ts");
+        store.record_use("/b.ts");
+        store.save().unwrap();
+
+        // Load into new store and verify data
+        let mut loaded = FrecencyStore::with_path(path.clone());
+        loaded.load().unwrap();
+
+        assert_eq!(loaded.len(), 2);
+        assert!(loaded.get_score("/a.ts") > 0.0);
+        assert!(loaded.get_score("/b.ts") > 0.0);
+
+        cleanup_temp_file(&path);
+    }
+
+    #[test]
+    fn test_save_uses_compact_json() {
+        // Verify we're not using pretty-print (for performance)
+        let (mut store, path) = create_test_store();
+        store.record_use("/test.ts");
+        store.save().unwrap();
+
+        let content = fs::read_to_string(&path).unwrap();
+
+        // Compact JSON should not have excessive newlines
+        // Pretty JSON has newlines after every field
+        let newline_count = content.matches('\n').count();
+        // Compact JSON has at most a few newlines (maybe 0-2)
+        // Pretty JSON with 1 entry would have ~5+ newlines
+        assert!(
+            newline_count <= 2,
+            "Expected compact JSON with few newlines, got {} newlines",
+            newline_count
+        );
+
         cleanup_temp_file(&path);
     }
 }
