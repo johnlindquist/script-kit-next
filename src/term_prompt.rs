@@ -204,6 +204,19 @@ impl TermPrompt {
         (col, row)
     }
 
+    /// Clamp cell coordinates to the visible viewport to prevent out-of-bounds access.
+    ///
+    /// Mouse clicks can produce coordinates beyond the terminal grid (click far right,
+    /// far bottom, or during resize races). This function ensures coordinates are always
+    /// within valid bounds before passing to selection APIs.
+    fn clamp_to_viewport(&self, col: usize, row: usize) -> (usize, usize) {
+        let (cols, rows) = self.last_size;
+        // Clamp to last column/row (0-indexed, so max is size - 1)
+        let max_col = cols.saturating_sub(1) as usize;
+        let max_row = rows.saturating_sub(1) as usize;
+        (col.min(max_col), row.min(max_row))
+    }
+
     /// Calculate terminal dimensions from pixel size with padding (uses default cell dimensions)
     /// This version uses the base font size dimensions, suitable for tests and static calculations.
     #[cfg(test)]
@@ -392,50 +405,30 @@ impl TermPrompt {
         .detach();
     }
 
-    /// Convert a Ctrl+key press to the corresponding control character byte
-    /// Returns None if the key is not a valid control character
+    /// Convert a Ctrl+key press to the corresponding control character byte.
+    ///
+    /// Uses the canonical ASCII control character transform: `byte & 0x1F`.
+    /// This works for A-Z (gives 0x01-0x1A) and special chars `[ \ ] ^ _`.
+    ///
+    /// Control character mapping:
+    /// - Ctrl+A = 0x01, Ctrl+B = 0x02, ..., Ctrl+Z = 0x1A
+    /// - Ctrl+C = 0x03 (SIGINT), Ctrl+D = 0x04 (EOF), Ctrl+Z = 0x1A (SIGTSTP)
+    /// - Ctrl+[ = 0x1B (ESC), Ctrl+\ = 0x1C (SIGQUIT)
+    ///
+    /// Returns None if the key is not a valid control character.
     fn ctrl_key_to_byte(key: &str) -> Option<u8> {
-        // Control characters are ASCII 0x00-0x1F
-        // Ctrl+A = 0x01, Ctrl+B = 0x02, ..., Ctrl+Z = 0x1A
-        // Special cases:
-        // Ctrl+C = 0x03 (SIGINT)
-        // Ctrl+D = 0x04 (EOF)
-        // Ctrl+Z = 0x1A (SIGTSTP)
-        // Ctrl+L = 0x0C (form feed / clear)
-        // Ctrl+[ = 0x1B (ESC)
-        // Ctrl+\ = 0x1C (SIGQUIT)
-        match key.to_lowercase().as_str() {
-            "a" => Some(0x01),
-            "b" => Some(0x02),
-            "c" => Some(0x03), // SIGINT
-            "d" => Some(0x04), // EOF
-            "e" => Some(0x05),
-            "f" => Some(0x06),
-            "g" => Some(0x07), // BEL
-            "h" => Some(0x08), // BS
-            "i" => Some(0x09), // TAB
-            "j" => Some(0x0A), // LF
-            "k" => Some(0x0B), // VT
-            "l" => Some(0x0C), // FF (clear)
-            "m" => Some(0x0D), // CR
-            "n" => Some(0x0E),
-            "o" => Some(0x0F),
-            "p" => Some(0x10),
-            "q" => Some(0x11), // XON
-            "r" => Some(0x12),
-            "s" => Some(0x13), // XOFF
-            "t" => Some(0x14),
-            "u" => Some(0x15), // NAK (kill line)
-            "v" => Some(0x16),
-            "w" => Some(0x17), // kill word
-            "x" => Some(0x18),
-            "y" => Some(0x19),
-            "z" => Some(0x1A),  // SIGTSTP
-            "[" => Some(0x1B),  // ESC
-            "\\" => Some(0x1C), // SIGQUIT
-            "]" => Some(0x1D),
-            "^" => Some(0x1E),
-            "_" => Some(0x1F),
+        // Must be a single ASCII character
+        if key.len() != 1 {
+            return None;
+        }
+
+        let byte = key.as_bytes()[0].to_ascii_uppercase();
+
+        // Valid control chars: @ through _ (0x40-0x5F)
+        // This covers A-Z (0x41-0x5A) and [ \ ] ^ _ (0x5B-0x5F)
+        // We exclude @ (0x40) which would give 0x00 (NUL)
+        match byte {
+            b'A'..=b'_' => Some(byte & 0x1F),
             _ => None,
         }
     }
@@ -624,47 +617,14 @@ impl Render for TermPrompt {
         let effective_height = self.content_height.unwrap_or(window_bounds.size.height);
         self.resize_if_needed(window_bounds.size.width, effective_height);
 
-        // Process terminal events - minimal polling since timer handles most updates
-        // 2 iterations catches any output that arrived since last timer tick
-        // Auto-scroll: Track if we're at the bottom before processing
-        if !self.exited {
-            let was_at_bottom = self.terminal.display_offset() == 0;
-            let mut had_output = false;
-
-            for _ in 0..2 {
-                let events = self.terminal.process();
-                if !events.is_empty() {
-                    had_output = true;
-                }
-                for event in events {
-                    match event {
-                        TerminalEvent::Exit(code) => {
-                            self.handle_exit(code);
-                            break;
-                        }
-                        TerminalEvent::Bell => {
-                            self.bell_flash_until = Some(
-                                Instant::now() + Duration::from_millis(BELL_FLASH_DURATION_MS),
-                            );
-                            debug!("Terminal bell triggered, flashing border");
-                        }
-                        TerminalEvent::Title(title) => {
-                            self.title = if title.is_empty() { None } else { Some(title) };
-                            debug!(title = ?self.title, "Terminal title updated");
-                        }
-                        TerminalEvent::Output(_) => { /* handled by content() */ }
-                    }
-                }
-                if self.exited {
-                    break;
-                }
-            }
-
-            // Auto-scroll: If we were at bottom and got new output, stay at bottom
-            if was_at_bottom && had_output {
-                self.terminal.scroll_to_bottom();
-            }
-        }
+        // NOTE: Terminal event processing is centralized in the refresh timer.
+        // We do NOT call terminal.process() here to avoid:
+        // 1. Processing the same data twice (timer already handles it)
+        // 2. State changes during selection (causes selection bugs)
+        // 3. Wasted CPU cycles
+        //
+        // The timer runs at 30fps and calls process() with event handling.
+        // Render just reads the current terminal state.
 
         // Get terminal content
         let content = self.terminal.content();
@@ -719,7 +679,40 @@ impl Render for TermPrompt {
                     }
                 }
 
-                // Check if terminal is still running before sending input
+                // Handle Cmd+C copy BEFORE the "terminal running" check
+                // Copy should work even after terminal exits (for reviewing scrollback)
+                // MUST always return to prevent inserting 'c' character
+                if has_meta && key_str == "c" {
+                    // Try to copy selection if one exists
+                    if let Some(selected_text) = this
+                        .terminal
+                        .selection_to_string()
+                        .filter(|t| !t.is_empty())
+                    {
+                        use arboard::Clipboard;
+                        if let Ok(mut clipboard) = Clipboard::new() {
+                            if clipboard.set_text(&selected_text).is_ok() {
+                                debug!(
+                                    text_len = selected_text.len(),
+                                    "Copied selection to clipboard"
+                                );
+                            }
+                        }
+                        // Clear selection after copy (common terminal behavior)
+                        this.terminal.clear_selection();
+                        return;
+                    }
+
+                    // No selection - send SIGINT (Ctrl+C) if terminal is still running
+                    if this.terminal.is_running() && !this.exited {
+                        debug!("Cmd+C with no selection - sending SIGINT");
+                        let _ = this.terminal.input(&[0x03]); // ETX / SIGINT
+                    }
+                    // Always return to prevent inserting 'c' character
+                    return;
+                }
+
+                // Check if terminal is still running before sending other input
                 if this.exited || !this.terminal.is_running() {
                     trace!(key = %key_str, "Terminal exited, ignoring key input");
                     return;
@@ -748,28 +741,6 @@ impl Render for TermPrompt {
                         }
                     }
                     return;
-                }
-
-                // Handle Cmd+C copy (when there's a selection)
-                // If no selection exists, fall through to send Ctrl+C (SIGINT) to the terminal
-                if has_meta && key_str == "c" {
-                    if let Some(selected_text) = this.terminal.selection_to_string() {
-                        if !selected_text.is_empty() {
-                            use arboard::Clipboard;
-                            if let Ok(mut clipboard) = Clipboard::new() {
-                                if clipboard.set_text(&selected_text).is_ok() {
-                                    debug!(
-                                        text_len = selected_text.len(),
-                                        "Copied selection to clipboard"
-                                    );
-                                }
-                            }
-                            // Clear selection after copy (common terminal behavior)
-                            this.terminal.clear_selection();
-                            return;
-                        }
-                    }
-                    // No selection - fall through to let Ctrl+C logic handle SIGINT
                 }
 
                 // Handle Ctrl+key combinations first
@@ -845,11 +816,17 @@ impl Render for TermPrompt {
         // Get padding from config
         let padding = self.config.get_padding();
 
-        // Check if bell is flashing
-        let is_bell_flashing = self
-            .bell_flash_until
-            .map(|until| Instant::now() < until)
-            .unwrap_or(false);
+        // Check if bell is flashing and clear expired state
+        // This ensures bell flash doesn't stick if timer has stopped (e.g., after terminal exit)
+        let is_bell_flashing = match self.bell_flash_until {
+            Some(until) if Instant::now() < until => true,
+            Some(_) => {
+                // Flash expired - clear the state
+                self.bell_flash_until = None;
+                false
+            }
+            None => false,
+        };
 
         // Log slow renders
         let elapsed = start.elapsed().as_millis();
@@ -880,6 +857,8 @@ impl Render for TermPrompt {
                 MouseButton::Left,
                 cx.listener(|this, event: &MouseDownEvent, _window, _cx| {
                     let (col, row) = this.pixel_to_cell(event.position);
+                    // Clamp to viewport to prevent out-of-bounds access
+                    let (col, row) = this.clamp_to_viewport(col, row);
                     let now = Instant::now();
                     let multi_click_threshold = Duration::from_millis(500);
 
@@ -925,6 +904,8 @@ impl Render for TermPrompt {
             .on_mouse_move(cx.listener(|this, event: &MouseMoveEvent, _window, _cx| {
                 if this.is_selecting {
                     let (col, row) = this.pixel_to_cell(event.position);
+                    // Clamp to viewport to prevent out-of-bounds access
+                    let (col, row) = this.clamp_to_viewport(col, row);
                     this.terminal.update_selection(col, row);
                 }
             }))
@@ -933,6 +914,8 @@ impl Render for TermPrompt {
                 cx.listener(|this, event: &MouseUpEvent, _window, _cx| {
                     if this.is_selecting {
                         let (col, row) = this.pixel_to_cell(event.position);
+                        // Clamp to viewport to prevent out-of-bounds access
+                        let (col, row) = this.clamp_to_viewport(col, row);
                         debug!(col, row, "Mouse up at cell - finalizing selection");
                         this.terminal.update_selection(col, row);
                         this.is_selecting = false;
