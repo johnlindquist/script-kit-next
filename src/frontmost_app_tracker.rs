@@ -59,8 +59,13 @@ struct TrackerState {
     last_real_app: Option<TrackedApp>,
     /// Cached menu bar items for the last real app
     cached_menu_items: Vec<MenuBarItem>,
-    /// Whether menu items are currently being fetched
-    fetching_menu: bool,
+    /// Bundle ID currently being fetched, if any.
+    /// Using Option<String> instead of a boolean flag avoids race conditions:
+    /// - Thread A starts fetching for "com.app.A", sets fetching_bundle_id = Some("com.app.A")
+    /// - Thread B starts fetching for "com.app.B", sets fetching_bundle_id = Some("com.app.B")
+    /// - Thread A finishes first: only clears if still "com.app.A" (which it isn't)
+    /// - Thread B finishes: clears correctly since it's still "com.app.B"
+    fetching_bundle_id: Option<String>,
 }
 
 /// Global tracker state, protected by RwLock for concurrent access
@@ -126,7 +131,14 @@ pub fn get_cached_menu_items() -> Vec<MenuBarItem> {
 /// Check if menu items are currently being fetched in the background.
 #[allow(dead_code)] // Public API for future use
 pub fn is_fetching_menu() -> bool {
-    TRACKER_STATE.read().fetching_menu
+    TRACKER_STATE.read().fetching_bundle_id.is_some()
+}
+
+/// Get the bundle ID currently being fetched, if any.
+/// This is more informative than `is_fetching_menu()` for debugging.
+#[allow(dead_code)] // Public API for future use
+pub fn get_fetching_bundle_id() -> Option<String> {
+    TRACKER_STATE.read().fetching_bundle_id.clone()
 }
 
 /// Capture the current frontmost app (used at startup and for manual refresh)
@@ -341,10 +353,10 @@ fn setup_workspace_observer() {
 /// Fetch menu items asynchronously for the given app
 #[cfg(target_os = "macos")]
 fn fetch_menu_items_async(pid: i32, bundle_id: String) {
-    // Mark as fetching
+    // Mark which bundle we're fetching for (replaces boolean flag to avoid race)
     {
         let mut state = TRACKER_STATE.write();
-        state.fetching_menu = true;
+        state.fetching_bundle_id = Some(bundle_id.clone());
     }
 
     std::thread::spawn(move || {
@@ -372,7 +384,11 @@ fn fetch_menu_items_async(pid: i32, bundle_id: String) {
                 if state.last_real_app.as_ref().map(|a| &a.bundle_id) == Some(&bundle_id) {
                     state.cached_menu_items = items;
                 }
-                state.fetching_menu = false;
+                // Only clear fetching state if we're still the one fetching
+                // (avoids race where a newer fetch started for a different app)
+                if state.fetching_bundle_id.as_ref() == Some(&bundle_id) {
+                    state.fetching_bundle_id = None;
+                }
             }
             Err(e) => {
                 logging::log(
@@ -381,7 +397,10 @@ fn fetch_menu_items_async(pid: i32, bundle_id: String) {
                 );
 
                 let mut state = TRACKER_STATE.write();
-                state.fetching_menu = false;
+                // Only clear fetching state if we're still the one fetching
+                if state.fetching_bundle_id.as_ref() == Some(&bundle_id) {
+                    state.fetching_bundle_id = None;
+                }
             }
         }
     });
@@ -427,7 +446,46 @@ mod tests {
         let state = TrackerState::default();
         assert!(state.last_real_app.is_none());
         assert!(state.cached_menu_items.is_empty());
-        assert!(!state.fetching_menu);
+        assert!(state.fetching_bundle_id.is_none());
+    }
+
+    #[test]
+    fn test_fetching_bundle_id_race_condition_fix() {
+        // Test that the bundle_id tracking correctly handles concurrent fetches
+        // Scenario: Thread A starts fetching for "com.app.A", then Thread B
+        // starts for "com.app.B". Thread A finishes first - should NOT clear
+        // the fetching state since B is now the active fetch.
+
+        // Simulate Thread A starting fetch
+        let mut state = TrackerState {
+            fetching_bundle_id: Some("com.app.A".to_string()),
+            ..Default::default()
+        };
+        assert_eq!(state.fetching_bundle_id.as_deref(), Some("com.app.A"));
+
+        // Thread B starts fetching (overwrites A)
+        state.fetching_bundle_id = Some("com.app.B".to_string());
+        assert_eq!(state.fetching_bundle_id.as_deref(), Some("com.app.B"));
+
+        // Thread A finishes - should NOT clear state (it's for B now)
+        if state.fetching_bundle_id.as_deref() == Some("com.app.A") {
+            state.fetching_bundle_id = None;
+        }
+        // State should still show B as fetching
+        assert_eq!(
+            state.fetching_bundle_id.as_deref(),
+            Some("com.app.B"),
+            "Thread A should not clear B's fetch state"
+        );
+
+        // Thread B finishes - should clear state
+        if state.fetching_bundle_id.as_deref() == Some("com.app.B") {
+            state.fetching_bundle_id = None;
+        }
+        assert!(
+            state.fetching_bundle_id.is_none(),
+            "Thread B should clear its own fetch state"
+        );
     }
 
     #[test]
