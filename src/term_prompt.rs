@@ -50,6 +50,20 @@ const MIN_ROWS: u16 = 5;
 /// Duration for bell visual flash
 const BELL_FLASH_DURATION_MS: u64 = 150;
 
+/// Truncate a string to at most `max_bytes` bytes, ensuring the result is valid UTF-8.
+/// Truncates at a character boundary, never in the middle of a multibyte character.
+fn truncate_str(s: &str, max_bytes: usize) -> &str {
+    if s.len() <= max_bytes {
+        return s;
+    }
+    // Find the last valid character boundary at or before max_bytes
+    let mut end = max_bytes;
+    while end > 0 && !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    &s[..end]
+}
+
 /// Terminal prompt GPUI component
 pub struct TermPrompt {
     pub id: String,
@@ -314,16 +328,35 @@ impl TermPrompt {
                             // Auto-scroll: Track if we're at the bottom before processing
                             let was_at_bottom = term_prompt.terminal.display_offset() == 0;
                             let mut had_output = false;
+                            let mut needs_render = false;
 
                             for _ in 0..2 {
                                 let events = term_prompt.terminal.process();
                                 if !events.is_empty() {
                                     had_output = true;
+                                    needs_render = true;
                                 }
                                 for event in events {
-                                    if let TerminalEvent::Exit(code) = event {
-                                        term_prompt.handle_exit(code);
-                                        return true;
+                                    match event {
+                                        TerminalEvent::Exit(code) => {
+                                            term_prompt.handle_exit(code);
+                                            return true;
+                                        }
+                                        TerminalEvent::Bell => {
+                                            term_prompt.bell_flash_until = Some(
+                                                Instant::now()
+                                                    + Duration::from_millis(BELL_FLASH_DURATION_MS),
+                                            );
+                                            debug!("Terminal bell triggered (timer), flashing border");
+                                            needs_render = true;
+                                        }
+                                        TerminalEvent::Title(title) => {
+                                            term_prompt.title =
+                                                if title.is_empty() { None } else { Some(title) };
+                                            debug!(title = ?term_prompt.title, "Terminal title updated (timer)");
+                                            needs_render = true;
+                                        }
+                                        TerminalEvent::Output(_) => { /* handled by had_output */ }
                                     }
                                 }
                             }
@@ -333,7 +366,18 @@ impl TermPrompt {
                                 term_prompt.terminal.scroll_to_bottom();
                             }
 
-                            cx.notify(); // Trigger re-render
+                            // Check if bell flash period ended - need to clear the border
+                            if let Some(until) = term_prompt.bell_flash_until {
+                                if Instant::now() >= until {
+                                    term_prompt.bell_flash_until = None;
+                                    needs_render = true;
+                                }
+                            }
+
+                            // Only trigger re-render if something actually changed
+                            if needs_render {
+                                cx.notify();
+                            }
                             false
                         })
                         .unwrap_or(true)
@@ -406,6 +450,12 @@ impl TermPrompt {
         let cursor_bg = rgb(colors.accent.selected);
         let selection_bg = rgb(colors.accent.selected_subtle);
         let default_fg = rgb(colors.text.primary);
+
+        // Convert theme defaults to u32 for comparison with cell colors.
+        // This fixes the "default vs explicit black" bug: we compare against
+        // actual theme colors instead of hardcoded 0x000000.
+        let theme_default_fg = colors.text.primary;
+        let theme_default_bg = colors.background.main;
 
         // Get dynamic font sizing
         let font_size = self.font_size();
@@ -486,6 +536,12 @@ impl TermPrompt {
 
                 let batch_width = (batch_end - batch_start) as f32 * cell_width;
 
+                // Check if colors match theme defaults (proper default detection)
+                // This fixes the bug where 0x000000 was used as a sentinel,
+                // breaking light themes and explicit black colors.
+                let is_default_fg = fg_u32 == theme_default_fg;
+                let is_default_bg = bg_u32 == theme_default_bg;
+
                 // Determine colors - priority: cursor > selection > custom bg > default
                 let (fg_color, bg_color) = if is_cursor_start {
                     // Cursor inverts colors
@@ -493,19 +549,19 @@ impl TermPrompt {
                 } else if is_selected_start {
                     // Selection uses selection background with original foreground
                     (
-                        if fg_u32 == 0 { default_fg } else { rgb(fg_u32) },
+                        if is_default_fg { default_fg } else { rgb(fg_u32) },
                         selection_bg,
                     )
-                } else if bg_u32 != 0x000000 {
-                    // Custom background
+                } else if !is_default_bg {
+                    // Custom background (cell has explicit non-default background)
                     (
-                        if fg_u32 == 0 { default_fg } else { rgb(fg_u32) },
+                        if is_default_fg { default_fg } else { rgb(fg_u32) },
                         rgb(bg_u32),
                     )
                 } else {
-                    // Default
+                    // Default colors from theme
                     (
-                        if fg_u32 == 0 { default_fg } else { rgb(fg_u32) },
+                        if is_default_fg { default_fg } else { rgb(fg_u32) },
                         default_bg,
                     )
                 };
@@ -551,8 +607,10 @@ impl Render for TermPrompt {
         self.start_refresh_timer(cx);
 
         // Get window bounds and resize terminal if needed
+        // Use content_height if set (for constrained layouts), otherwise use window height
         let window_bounds = window.bounds();
-        self.resize_if_needed(window_bounds.size.width, window_bounds.size.height);
+        let effective_height = self.content_height.unwrap_or(window_bounds.size.height);
+        self.resize_if_needed(window_bounds.size.width, effective_height);
 
         // Process terminal events - minimal polling since timer handles most updates
         // 2 iterations catches any output that arrived since last timer tick
@@ -886,7 +944,7 @@ impl Render for TermPrompt {
                         // Log the selected text if any
                         if let Some(text) = this.terminal.selection_to_string() {
                             let preview = if text.len() > 50 {
-                                format!("{}...", &text[..50])
+                                format!("{}...", truncate_str(&text, 50))
                             } else {
                                 text.clone()
                             };
@@ -1452,5 +1510,70 @@ mod tests {
             "Bug caused 1 extra row, leading to {:.1}px cutoff",
             CELL_HEIGHT
         );
+    }
+
+    // ========================================================================
+    // UTF-8 Safe Truncation Tests
+    // ========================================================================
+
+    #[test]
+    fn test_truncate_str_ascii_under_limit() {
+        let text = "hello";
+        let result = truncate_str(text, 50);
+        assert_eq!(result, "hello");
+    }
+
+    #[test]
+    fn test_truncate_str_ascii_at_limit() {
+        let text = "12345678901234567890123456789012345678901234567890"; // exactly 50 chars
+        let result = truncate_str(text, 50);
+        assert_eq!(result.len(), 50);
+        assert_eq!(result, text);
+    }
+
+    #[test]
+    fn test_truncate_str_ascii_over_limit() {
+        let text = "123456789012345678901234567890123456789012345678901234567890"; // 60 chars
+        let result = truncate_str(text, 50);
+        assert!(result.len() <= 50);
+        assert!(result.starts_with("12345678901234567890"));
+    }
+
+    #[test]
+    fn test_truncate_str_utf8_multibyte() {
+        // Each emoji is 4 bytes. 15 emoji = 60 bytes
+        let text = "🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉";
+        let result = truncate_str(text, 50);
+        // Should not panic and should be valid UTF-8
+        assert!(result.len() <= 50);
+        assert!(result.is_char_boundary(result.len()));
+        // Each emoji is 4 bytes, so 50/4 = 12 emoji max
+        assert!(result.chars().count() <= 12);
+    }
+
+    #[test]
+    fn test_truncate_str_utf8_mixed() {
+        // Mix of ASCII and multibyte
+        let text = "Hello 世界! This is a test with UTF-8: émojis 🎉🎉🎉";
+        let result = truncate_str(text, 50);
+        // Should not panic and should be valid UTF-8
+        assert!(result.len() <= 50);
+        assert!(result.is_char_boundary(result.len()));
+    }
+
+    #[test]
+    fn test_truncate_str_empty() {
+        let text = "";
+        let result = truncate_str(text, 50);
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_truncate_str_exactly_at_char_boundary() {
+        // "Hello 世界" where 世 starts at byte 6 and ends at byte 9
+        let text = "Hello 世界!";
+        let result = truncate_str(text, 9);
+        // Should truncate at a valid boundary
+        assert!(result.is_char_boundary(result.len()));
     }
 }
