@@ -3,29 +3,36 @@
 //! Provides a searchable action menu as a compact overlay popup for quick access
 //! to script management and global actions (edit, create, settings, quit, etc.)
 //!
-//! The dialog renders as a floating overlay popup with:
-//! - Fixed dimensions (320x400px max)
-//! - Rounded corners and box shadow
-//! - Semi-transparent background
-//! - Context-aware actions based on focused script
+//! The dialog can be rendered in two ways:
+//! 1. As an inline overlay within the main window (legacy)
+//! 2. As a separate floating window with its own vibrancy blur (preferred)
 //!
 //! ## Module Structure
 //! - `types`: Core types (Action, ActionCategory, ScriptInfo)
 //! - `builders`: Factory functions for creating action lists
 //! - `constants`: Popup dimensions and styling constants
 //! - `dialog`: ActionsDialog struct and implementation
+//! - `window`: Separate vibrancy window for actions panel
 
 mod builders;
 mod constants;
 mod dialog;
 mod types;
+mod window;
 
 // Re-export only the public API that is actually used externally:
 // - ScriptInfo: used by main.rs for action context
 // - ActionsDialog: the main dialog component
+// - Window functions for separate vibrancy window
 
 pub use dialog::ActionsDialog;
 pub use types::ScriptInfo;
+
+// Window functions for separate vibrancy window (prepared but not yet integrated)
+#[allow(unused_imports)]
+pub use window::{
+    close_actions_window, get_actions_window_handle, is_actions_window_open, open_actions_window,
+};
 
 #[cfg(test)]
 mod tests {

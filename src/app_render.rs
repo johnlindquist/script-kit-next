@@ -62,15 +62,18 @@ impl ScriptListApp {
         let border_radius = visual.radius_md;
         let font_family = typography.font_family;
 
-        // Get opacity for vibrancy support
+        // Get opacity for vibrancy support from theme
         let opacity = self.theme.get_opacity();
-        let bg_with_alpha = self.hex_to_rgba_with_opacity(bg_main, opacity.main);
 
         // Preview panel container with left border separator
+        // Uses theme.opacity.preview to control background opacity (default 0 = transparent)
+        let preview_alpha = (opacity.preview * 255.0) as u32;
         let mut panel = div()
             .w_full()
             .h_full()
-            .bg(rgba(bg_with_alpha))
+            .when(preview_alpha > 0, |d| {
+                d.bg(rgba((bg_main << 8) | preview_alpha))
+            })
             .border_l_1()
             .border_color(rgba((ui_border << 8) | 0x80))
             .p(px(spacing.padding_lg))

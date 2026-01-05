@@ -633,7 +633,6 @@ impl ScriptListApp {
         } else {
             design_colors.background
         };
-        let _bg_with_alpha = self.hex_to_rgba_with_opacity(bg_hex, opacity.main);
 
         // Create box shadows from theme
         let box_shadows = self.create_box_shadows();
@@ -659,10 +658,15 @@ impl ScriptListApp {
             design_typography.font_family
         };
 
+        // VIBRANCY: Remove background from content div - let gpui-component Root's
+        // semi-transparent background handle vibrancy effect. Content areas should NOT
+        // have their own backgrounds to allow blur to show through.
+        let _bg_with_alpha = self.hex_to_rgba_with_opacity(bg_hex, opacity.main);
+
         let mut main_div = div()
             .flex()
             .flex_col()
-            .bg(gpui::transparent_black()) // TEST: completely transparent
+            // Removed: .bg(rgba(bg_with_alpha)) - let vibrancy show through from Root
             .shadow(box_shadows)
             .w_full()
             .h_full()
@@ -845,10 +849,10 @@ impl ScriptListApp {
                                             .items_center()
                                             .px(px(8.)) // Comfortable horizontal padding
                                             .rounded(px(4.)) // Match button border radius
-                                            // ALWAYS show background - just vary intensity
+                                            // Use theme opacity for vibrancy support
                                             .bg(rgba(
                                                 (theme.colors.background.search_box << 8)
-                                                    | if search_is_empty { 0x40 } else { 0x80 },
+                                                    | ((opacity.input * 255.0) as u32),
                                             ))
                                             .border_1()
                                             // ALWAYS show border - just vary intensity
@@ -989,16 +993,20 @@ impl ScriptListApp {
                                         cx.notify();
                                     });
 
+                                    // Get backdrop opacity from theme (reuse panel opacity)
+                                    let backdrop_alpha = (opacity.panel * 255.0 * 2.0).min(255.0) as u32; // 2x panel for better obscuring
+                                    
                                     d.child(
                                         div()
                                             .absolute()
                                             .inset_0() // Cover entire preview area
-                                            // Backdrop layer - captures clicks outside the dialog
+                                            // Backdrop layer - semi-transparent to obscure content behind dialog
                                             .child(
                                                 div()
                                                     .id("actions-backdrop")
                                                     .absolute()
                                                     .inset_0()
+                                                    .bg(rgba(backdrop_alpha)) // Dark overlay (black with alpha)
                                                     .on_click(backdrop_click)
                                             )
                                             // Dialog container - positioned at top-right

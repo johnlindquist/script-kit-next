@@ -1203,7 +1203,7 @@ impl NotesApp {
             .px_3()
             .relative() // For absolute positioning of icons
             // Vibrancy-aware background - semi-transparent for blur effect
-            .bg(gpui::transparent_black()) // TEST
+            .bg(Self::get_vibrancy_title_bar_background(cx))
             // Only show titlebar elements when window is hovered
             .on_hover(cx.listener(|this, hovered, _, cx| {
                 if this.force_hovered {
@@ -1329,7 +1329,7 @@ impl NotesApp {
             .h(px(24.))
             .px_3()
             // Vibrancy-aware background for footer
-            .bg(gpui::transparent_black()) // TEST
+            .bg(Self::get_vibrancy_background(cx))
             // Hide when window not hovered
             .when(!window_hovered, |d| d.opacity(0.))
             .child(
@@ -1359,7 +1359,7 @@ impl NotesApp {
             .flex()
             .flex_col()
             .h_full()
-            .bg(gpui::transparent_black()) // TEST // Vibrancy-aware background
+            .bg(Self::get_vibrancy_background(cx))
             .child(titlebar)
             // Toolbar hidden by default - only show when pinned
             .when(!is_trash && has_selection && show_toolbar, |d| {
@@ -1369,7 +1369,7 @@ impl NotesApp {
                 div()
                     .flex_1()
                     .p_3()
-                    .bg(gpui::transparent_black()) // TEST // Vibrancy-aware background
+                    .bg(Self::get_vibrancy_background(cx))
                     // Use a styled input that blends with background
                     .child(
                         Input::new(&self.editor_state).h_full().appearance(false), // No input styling - blends with background
@@ -1452,7 +1452,7 @@ impl NotesApp {
                     div()
                         .w(px(500.))
                         .max_h(px(400.))
-                        .bg(gpui::transparent_black()) // TEST
+                        .bg(Self::get_vibrancy_background(cx)) // Semi-transparent for vibrancy
                         .border_1()
                         .border_color(cx.theme().border)
                         .rounded_lg()
@@ -1635,7 +1635,7 @@ impl Render for NotesApp {
             .flex_col()
             .size_full()
             .relative()
-            .bg(gpui::transparent_black()) // TEST: completely transparent
+            .bg(Self::get_vibrancy_background(cx)) // Semi-transparent for vibrancy
             .shadow(box_shadows)
             .text_color(cx.theme().foreground)
             .track_focus(&self.focus_handle)

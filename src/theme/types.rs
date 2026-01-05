@@ -18,27 +18,104 @@ use super::hex_color::{hex_color_serde, HexColor};
 /// Values range from 0.0 (fully transparent) to 1.0 (fully opaque)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BackgroundOpacity {
-    /// Main background opacity (default: 0.60)
+    /// Main background opacity (default: 0.30)
     pub main: f32,
-    /// Title bar opacity (default: 0.65)
+    /// Title bar opacity (default: 0.30)
     pub title_bar: f32,
-    /// Search box opacity (default: 0.70)
+    /// Search box/input opacity (default: 0.40)
     pub search_box: f32,
-    /// Log panel opacity (default: 0.55)
+    /// Log panel opacity (default: 0.40)
     pub log_panel: f32,
+    /// Selected list item background opacity (default: 0.15)
+    #[serde(default = "default_selected_opacity")]
+    pub selected: f32,
+    /// Hovered list item background opacity (default: 0.08)
+    #[serde(default = "default_hover_opacity")]
+    pub hover: f32,
+    /// Preview panel background opacity (default: 0.0)
+    #[serde(default = "default_preview_opacity")]
+    pub preview: f32,
+    /// Dialog/popup background opacity (default: 0.60)
+    #[serde(default = "default_dialog_opacity")]
+    pub dialog: f32,
+    /// Input field background opacity (default: 0.30)
+    #[serde(default = "default_input_opacity")]
+    pub input: f32,
+    /// Panel/container background opacity (default: 0.20)
+    #[serde(default = "default_panel_opacity")]
+    pub panel: f32,
+    /// Input field inactive/empty state background opacity (default: 0.25)
+    #[serde(default = "default_input_inactive_opacity")]
+    pub input_inactive: f32,
+    /// Input field active/filled state background opacity (default: 0.50)
+    #[serde(default = "default_input_active_opacity")]
+    pub input_active: f32,
+    /// Border inactive/empty state opacity (default: 0.125)
+    #[serde(default = "default_border_inactive_opacity")]
+    pub border_inactive: f32,
+    /// Border active/filled state opacity (default: 0.25)
+    #[serde(default = "default_border_active_opacity")]
+    pub border_active: f32,
+}
+
+fn default_selected_opacity() -> f32 {
+    0.15
+}
+
+fn default_hover_opacity() -> f32 {
+    0.08
+}
+
+fn default_preview_opacity() -> f32 {
+    0.0
+}
+
+fn default_dialog_opacity() -> f32 {
+    0.92 // High opacity to obscure text, vibrancy colors still show through
+}
+
+fn default_input_opacity() -> f32 {
+    0.30
+}
+
+fn default_panel_opacity() -> f32 {
+    0.20
+}
+
+fn default_input_inactive_opacity() -> f32 {
+    0.25 // 0x40 / 255 ≈ 0.25
+}
+
+fn default_input_active_opacity() -> f32 {
+    0.50 // 0x80 / 255 ≈ 0.50
+}
+
+fn default_border_inactive_opacity() -> f32 {
+    0.125 // 0x20 / 255 ≈ 0.125
+}
+
+fn default_border_active_opacity() -> f32 {
+    0.25 // 0x40 / 255 ≈ 0.25
 }
 
 impl BackgroundOpacity {
     /// Clamp all opacity values to the valid 0.0-1.0 range
-    ///
-    /// This prevents invalid opacity values from config files from causing
-    /// rendering issues. Values below 0.0 become 0.0, values above 1.0 become 1.0.
     pub fn clamped(self) -> Self {
         Self {
             main: self.main.clamp(0.0, 1.0),
             title_bar: self.title_bar.clamp(0.0, 1.0),
             search_box: self.search_box.clamp(0.0, 1.0),
             log_panel: self.log_panel.clamp(0.0, 1.0),
+            selected: self.selected.clamp(0.0, 1.0),
+            hover: self.hover.clamp(0.0, 1.0),
+            preview: self.preview.clamp(0.0, 1.0),
+            dialog: self.dialog.clamp(0.0, 1.0),
+            input: self.input.clamp(0.0, 1.0),
+            panel: self.panel.clamp(0.0, 1.0),
+            input_inactive: self.input_inactive.clamp(0.0, 1.0),
+            input_active: self.input_active.clamp(0.0, 1.0),
+            border_inactive: self.border_inactive.clamp(0.0, 1.0),
+            border_active: self.border_active.clamp(0.0, 1.0),
         }
     }
 }
@@ -47,11 +124,20 @@ impl Default for BackgroundOpacity {
     fn default() -> Self {
         BackgroundOpacity {
             // Lower opacity values to allow vibrancy blur to show through
-            // Values below ~0.7 will show more blur effect
-            main: 0.60,       // Was 0.85 - lower for more vibrancy
-            title_bar: 0.65,  // Was 0.9
-            search_box: 0.70, // Was 0.92
-            log_panel: 0.55,  // Was 0.8
+            main: 0.30,             // Root wrapper background
+            title_bar: 0.30,        // Title bar areas
+            search_box: 0.40,       // Search input backgrounds
+            log_panel: 0.40,        // Log/terminal panels
+            selected: 0.15,         // Selected list item highlight
+            hover: 0.08,            // Hovered list item highlight
+            preview: 0.0,           // Preview panel (0 = fully transparent)
+            dialog: 0.92,           // Dialogs/popups - high opacity to obscure text behind
+            input: 0.30,            // Input fields
+            panel: 0.20,            // Panels/containers
+            input_inactive: 0.25,   // Input fields when empty/inactive
+            input_active: 0.50,     // Input fields when has text/active
+            border_inactive: 0.125, // Borders when inactive
+            border_active: 0.25,    // Borders when active
         }
     }
 }
@@ -812,6 +898,16 @@ impl Theme {
                 title_bar: (base.title_bar * 0.9).clamp(0.0, 1.0),
                 search_box: (base.search_box * 0.9).clamp(0.0, 1.0),
                 log_panel: (base.log_panel * 0.9).clamp(0.0, 1.0),
+                selected: (base.selected * 0.9).clamp(0.0, 1.0),
+                hover: (base.hover * 0.9).clamp(0.0, 1.0),
+                preview: (base.preview * 0.9).clamp(0.0, 1.0),
+                dialog: (base.dialog * 0.9).clamp(0.0, 1.0),
+                input: (base.input * 0.9).clamp(0.0, 1.0),
+                panel: (base.panel * 0.9).clamp(0.0, 1.0),
+                input_inactive: (base.input_inactive * 0.9).clamp(0.0, 1.0),
+                input_active: (base.input_active * 0.9).clamp(0.0, 1.0),
+                border_inactive: (base.border_inactive * 0.9).clamp(0.0, 1.0),
+                border_active: (base.border_active * 0.9).clamp(0.0, 1.0),
             }
         }
     }

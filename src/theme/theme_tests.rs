@@ -74,10 +74,20 @@ fn test_light_theme_serialization() {
 #[test]
 fn test_opacity_defaults() {
     let opacity = BackgroundOpacity::default();
-    assert_eq!(opacity.main, 0.60);
-    assert_eq!(opacity.title_bar, 0.65);
-    assert_eq!(opacity.search_box, 0.70);
-    assert_eq!(opacity.log_panel, 0.55);
+    assert_eq!(opacity.main, 0.30);
+    assert_eq!(opacity.title_bar, 0.30);
+    assert_eq!(opacity.search_box, 0.40);
+    assert_eq!(opacity.log_panel, 0.40);
+    assert_eq!(opacity.selected, 0.15);
+    assert_eq!(opacity.hover, 0.08);
+    assert_eq!(opacity.preview, 0.0);
+    assert_eq!(opacity.dialog, 0.92);
+    assert_eq!(opacity.input, 0.30);
+    assert_eq!(opacity.panel, 0.20);
+    assert_eq!(opacity.input_inactive, 0.25);
+    assert_eq!(opacity.input_active, 0.50);
+    assert_eq!(opacity.border_inactive, 0.125);
+    assert_eq!(opacity.border_active, 0.25);
 }
 
 #[test]
@@ -118,6 +128,16 @@ fn test_opacity_clamping_valid_values() {
         title_bar: 0.7,
         search_box: 0.8,
         log_panel: 0.3,
+        selected: 0.15,
+        hover: 0.08,
+        preview: 0.0,
+        dialog: 0.40,
+        input: 0.30,
+        panel: 0.20,
+        input_inactive: 0.25,
+        input_active: 0.50,
+        border_inactive: 0.125,
+        border_active: 0.25,
     };
     let clamped = opacity.clamped();
     assert_eq!(clamped.main, 0.5);
@@ -133,6 +153,16 @@ fn test_opacity_clamping_overflow() {
         title_bar: 1.5,   // Should clamp to 1.0
         search_box: -0.5, // Should clamp to 0.0
         log_panel: 100.0, // Should clamp to 1.0
+        selected: 0.15,
+        hover: 0.08,
+        preview: 0.0,
+        dialog: 0.40,
+        input: 0.30,
+        panel: 0.20,
+        input_inactive: 0.25,
+        input_active: 0.50,
+        border_inactive: 0.125,
+        border_active: 0.25,
     };
     let clamped = opacity.clamped();
     assert_eq!(clamped.main, 1.0);

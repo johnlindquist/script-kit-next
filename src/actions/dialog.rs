@@ -548,29 +548,20 @@ impl ActionsDialog {
     }
 
     /// Create box shadow for the overlay popup
+    /// Uses very subtle shadow - just enough to separate from background
     pub(super) fn create_popup_shadow() -> Vec<BoxShadow> {
         vec![
+            // Single very subtle shadow
             BoxShadow {
                 color: Hsla {
                     h: 0.0,
                     s: 0.0,
                     l: 0.0,
-                    a: 0.3,
+                    a: 0.05, // Very subtle
                 },
-                offset: point(px(0.0), px(4.0)),
-                blur_radius: px(16.0),
+                offset: point(px(0.0), px(1.0)),
+                blur_radius: px(4.0),
                 spread_radius: px(0.0),
-            },
-            BoxShadow {
-                color: Hsla {
-                    h: 0.0,
-                    s: 0.0,
-                    l: 0.0,
-                    a: 0.15,
-                },
-                offset: point(px(0.0), px(8.0)),
-                blur_radius: px(32.0),
-                spread_radius: px(-4.0),
             },
         ]
     }
@@ -581,11 +572,15 @@ impl ActionsDialog {
         &self,
         colors: &crate::designs::DesignColors,
     ) -> (gpui::Rgba, gpui::Rgba, gpui::Rgba, gpui::Rgba, gpui::Rgba) {
+        // Use theme opacity for input background to support vibrancy
+        let opacity = self.theme.get_opacity();
+        let input_alpha = (opacity.input * 255.0) as u8;
+
         if self.design_variant == DesignVariant::Default {
             (
                 rgba(hex_with_alpha(
                     self.theme.colors.background.search_box,
-                    0xcc,
+                    input_alpha,
                 )),
                 rgba(hex_with_alpha(self.theme.colors.ui.border, 0x80)),
                 rgb(self.theme.colors.text.muted),
@@ -594,7 +589,7 @@ impl ActionsDialog {
             )
         } else {
             (
-                rgba(hex_with_alpha(colors.background_secondary, 0xcc)),
+                rgba(hex_with_alpha(colors.background_secondary, input_alpha)),
                 rgba(hex_with_alpha(colors.border, 0x80)),
                 rgb(colors.text_muted),
                 rgb(colors.text_dimmed),
@@ -609,15 +604,22 @@ impl ActionsDialog {
         &self,
         colors: &crate::designs::DesignColors,
     ) -> (gpui::Rgba, gpui::Rgba, gpui::Rgba) {
+        // Use theme opacity for dialog background to support vibrancy
+        let opacity = self.theme.get_opacity();
+        let dialog_alpha = (opacity.dialog * 255.0) as u8;
+
         if self.design_variant == DesignVariant::Default {
             (
-                rgba(hex_with_alpha(self.theme.colors.background.main, 0xe6)),
+                rgba(hex_with_alpha(
+                    self.theme.colors.background.main,
+                    dialog_alpha,
+                )),
                 rgba(hex_with_alpha(self.theme.colors.ui.border, 0x80)),
                 rgb(self.theme.colors.text.secondary),
             )
         } else {
             (
-                rgba(hex_with_alpha(colors.background, 0xe6)),
+                rgba(hex_with_alpha(colors.background, dialog_alpha)),
                 rgba(hex_with_alpha(colors.border, 0x80)),
                 rgb(colors.text_secondary),
             )
@@ -860,23 +862,30 @@ impl Render for ActionsDialog {
                         let item_spacing = item_tokens.spacing();
                         let item_visual = item_tokens.visual();
 
-                        // Extract colors for list items - MATCH main list styling exactly
-                        // Uses accent_selected_subtle with 0x80 alpha (same as ListItem)
+                        // Extract colors for list items - use theme opacity for vibrancy
+                        let theme_opacity = this.theme.get_opacity();
+                        let selected_alpha = (theme_opacity.selected * 255.0) as u32;
+                        let hover_alpha = (theme_opacity.hover * 255.0) as u32;
+
                         let (selected_bg, hover_bg, primary_text, secondary_text, dimmed_text) =
                             if design_variant == DesignVariant::Default {
                                 (
-                                    // Selected: subtle background with 50% opacity (matches ListItem)
-                                    rgba((this.theme.colors.accent.selected_subtle << 8) | 0x80),
-                                    // Hover: subtle background with 25% opacity (matches ListItem)
-                                    rgba((this.theme.colors.accent.selected_subtle << 8) | 0x40),
+                                    rgba(
+                                        (this.theme.colors.accent.selected_subtle << 8)
+                                            | selected_alpha,
+                                    ),
+                                    rgba(
+                                        (this.theme.colors.accent.selected_subtle << 8)
+                                            | hover_alpha,
+                                    ),
                                     rgb(this.theme.colors.text.primary),
                                     rgb(this.theme.colors.text.secondary),
                                     rgb(this.theme.colors.text.dimmed),
                                 )
                             } else {
                                 (
-                                    rgba((item_colors.background_selected << 8) | 0x80),
-                                    rgba((item_colors.background_selected << 8) | 0x40),
+                                    rgba((item_colors.background_selected << 8) | selected_alpha),
+                                    rgba((item_colors.background_selected << 8) | hover_alpha),
                                     rgb(item_colors.text_primary),
                                     rgb(item_colors.text_secondary),
                                     rgb(item_colors.text_dimmed),
@@ -1015,15 +1024,19 @@ impl Render for ActionsDialog {
 
                                     // Right side: keyboard shortcut with pill background
                                     let content = if let Some(shortcut) = shortcut_opt {
-                                        // Get subtle background color for shortcut pill
+                                        // Get subtle background color for shortcut pill - use panel opacity
+                                        let panel_alpha = (theme_opacity.panel * 255.0) as u32;
                                         let shortcut_bg =
                                             if design_variant == DesignVariant::Default {
                                                 rgba(
                                                     (this.theme.colors.background.search_box << 8)
-                                                        | 0x80,
+                                                        | panel_alpha,
                                                 )
                                             } else {
-                                                rgba((item_colors.background_tertiary << 8) | 0x80)
+                                                rgba(
+                                                    (item_colors.background_tertiary << 8)
+                                                        | panel_alpha,
+                                                )
                                             };
 
                                         content.child(

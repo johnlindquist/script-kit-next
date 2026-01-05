@@ -1113,7 +1113,7 @@ impl AiApp {
                 .flex_col()
                 .w(px(48.))
                 .h_full()
-                .bg(gpui::transparent_black()) // TEST: completely transparent
+                .bg(Self::get_vibrancy_sidebar_background()) // Semi-transparent sidebar
                 .border_r_1()
                 .border_color(cx.theme().sidebar_border)
                 .items_center()
@@ -1153,7 +1153,7 @@ impl AiApp {
             .flex_col()
             .w(px(240.))
             .h_full()
-            .bg(gpui::transparent_black()) // TEST: completely transparent
+            .bg(Self::get_vibrancy_sidebar_background()) // Semi-transparent sidebar
             .border_r_1()
             .border_color(cx.theme().sidebar_border)
             // Top row - sidebar toggle aligned with traffic lights (right side of that row)
@@ -1514,7 +1514,7 @@ impl AiApp {
             .justify_between()
             .h(px(36.))
             .px_3()
-            .bg(gpui::transparent_black()) // TEST: completely transparent
+            .bg(Self::get_vibrancy_sidebar_background()) // Semi-transparent sidebar
             .border_b_1()
             .border_color(cx.theme().border)
             .child(
@@ -1562,7 +1562,7 @@ impl AiApp {
             .flex()
             .flex_col()
             .w_full()
-            .bg(gpui::transparent_black()) // TEST: completely transparent
+            .bg(Self::get_vibrancy_sidebar_background()) // Semi-transparent sidebar
             .px_3()
             .pt_3()
             .pb_2() // Reduced bottom padding
@@ -1852,7 +1852,7 @@ impl Render for AiApp {
             .flex()
             .flex_row()
             .size_full()
-            .bg(gpui::transparent_black()) // TEST: completely transparent to verify vibrancy works
+            .bg(Self::get_vibrancy_background()) // Semi-transparent for vibrancy
             .shadow(box_shadows)
             .text_color(cx.theme().foreground)
             .track_focus(&self.focus_handle)

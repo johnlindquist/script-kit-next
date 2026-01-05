@@ -164,6 +164,17 @@ pub fn sync_gpui_component_theme(cx: &mut App) {
     theme.colors = custom_colors;
     theme.mode = ThemeMode::Dark; // Script Kit uses dark mode by default
 
+    // Debug: Log the background color to verify vibrancy is applied
+    tracing_info!(
+        background_h = custom_colors.background.h,
+        background_s = custom_colors.background.s,
+        background_l = custom_colors.background.l,
+        background_alpha = custom_colors.background.a,
+        vibrancy_enabled = sk_theme.is_vibrancy_enabled(),
+        opacity_main = sk_theme.get_opacity().main,
+        "Theme background HSLA set"
+    );
+
     // Set monospace font for code editor (used by InputState in code_editor mode)
     theme.mono_font_family = fonts.mono_family.clone().into();
     theme.mono_font_size = gpui::px(fonts.mono_size);

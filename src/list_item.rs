@@ -226,11 +226,16 @@ pub struct ListItemColors {
     pub accent_selected_subtle: u32,
     pub background: u32,
     pub background_selected: u32,
+    /// Opacity for selected item background (from theme.opacity.selected)
+    pub selected_opacity: f32,
+    /// Opacity for hovered item background (from theme.opacity.hover)
+    pub hover_opacity: f32,
 }
 
 impl ListItemColors {
     /// Create from theme reference
     pub fn from_theme(theme: &crate::theme::Theme) -> Self {
+        let opacity = theme.get_opacity();
         Self {
             text_primary: theme.colors.text.primary,
             text_secondary: theme.colors.text.secondary,
@@ -240,11 +245,14 @@ impl ListItemColors {
             accent_selected_subtle: theme.colors.accent.selected_subtle,
             background: theme.colors.background.main,
             background_selected: theme.colors.accent.selected_subtle,
+            selected_opacity: opacity.selected,
+            hover_opacity: opacity.hover,
         }
     }
 
     /// Create from design colors for GLOBAL theming support
     pub fn from_design(colors: &crate::designs::DesignColors) -> Self {
+        // Design colors use default opacity values
         Self {
             text_primary: colors.text_primary,
             text_secondary: colors.text_secondary,
@@ -254,6 +262,8 @@ impl ListItemColors {
             accent_selected_subtle: colors.background_selected,
             background: colors.background,
             background_selected: colors.background_selected,
+            selected_opacity: 0.20, // Default
+            hover_opacity: 0.10,    // Default
         }
     }
 }
@@ -431,9 +441,12 @@ impl RenderOnce for ListItem {
         let on_hover_callback = self.on_hover;
         let semantic_id = self.semantic_id;
 
-        // Selection colors with alpha
-        let selected_bg = rgba((colors.accent_selected_subtle << 8) | 0x80);
-        let hover_bg = rgba((colors.accent_selected_subtle << 8) | 0x40);
+        // Selection colors with alpha from theme opacity settings
+        // This allows vibrancy blur to show through selected/hovered items
+        let selected_alpha = (colors.selected_opacity * 255.0) as u32;
+        let hover_alpha = (colors.hover_opacity * 255.0) as u32;
+        let selected_bg = rgba((colors.accent_selected_subtle << 8) | selected_alpha);
+        let hover_bg = rgba((colors.accent_selected_subtle << 8) | hover_alpha);
 
         // Icon element (if present) - displayed on the left
         // Supports both emoji strings and PNG image data
