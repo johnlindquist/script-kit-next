@@ -73,6 +73,9 @@ pub mod menu_cache;
 #[cfg(target_os = "macos")]
 pub mod frontmost_app_tracker;
 
+// Action helpers - centralized path extraction, SDK action routing, pbcopy
+pub mod action_helpers;
+
 // Built-in features registry
 pub mod app_launcher;
 pub mod builtins;
