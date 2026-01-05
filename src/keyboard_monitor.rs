@@ -26,6 +26,8 @@ use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
+use core_foundation::base::TCFType;
+use core_foundation::mach_port::CFMachPortRef;
 use core_foundation::runloop::{kCFRunLoopCommonModes, kCFRunLoopDefaultMode, CFRunLoop};
 use core_graphics::event::{
     CGEvent, CGEventTap, CGEventTapLocation, CGEventTapOptions, CGEventTapPlacement, CGEventType,
@@ -88,6 +90,16 @@ pub struct KeyEvent {
 /// Callback type for receiving keyboard events
 /// Must be Send + Sync since it's shared across threads via Arc
 pub type KeyEventCallback = Box<dyn Fn(KeyEvent) + Send + Sync + 'static>;
+
+/// Wrapper for CFMachPortRef that is Send + Sync
+/// SAFETY: The mach port is only accessed from within the event tap callback
+/// and the event loop thread. The closure and event loop run on the same thread.
+struct SendableMachPortRef(Option<CFMachPortRef>);
+
+// SAFETY: CFMachPortRef is a thread-safe Core Foundation object reference.
+// We only access it from the same thread (event loop thread).
+unsafe impl Send for SendableMachPortRef {}
+unsafe impl Sync for SendableMachPortRef {}
 
 /// Global keyboard monitor using macOS CGEventTap
 ///
@@ -238,6 +250,12 @@ impl KeyboardMonitor {
             *guard = Some(current_run_loop.clone());
         }
 
+        // Shared storage for the mach port ref, so callback can re-enable tap if disabled
+        // SAFETY: This is set immediately after tap creation, before any callbacks can fire
+        let mach_port_ref: Arc<std::sync::Mutex<SendableMachPortRef>> =
+            Arc::new(std::sync::Mutex::new(SendableMachPortRef(None)));
+        let mach_port_for_callback = Arc::clone(&mach_port_ref);
+
         // Create event tap for key down events
         debug!("Creating CGEventTap with HID location for KeyDown events");
         let event_tap_result = CGEventTap::new(
@@ -245,16 +263,41 @@ impl KeyboardMonitor {
             CGEventTapPlacement::HeadInsertEventTap,
             CGEventTapOptions::ListenOnly, // We only observe, don't modify
             vec![CGEventType::KeyDown],
-            move |_proxy, _event_type, event: &CGEvent| {
-                debug!("CGEventTap callback invoked - key event received!");
+            move |_proxy, event_type, event: &CGEvent| {
+                // CRITICAL: Check for tap disabled events first
+                // When a tap is disabled (timeout or user), macOS sends a special event
+                // We must re-enable the tap to continue receiving events
+                match event_type {
+                    CGEventType::TapDisabledByTimeout => {
+                        warn!("CGEventTap disabled by timeout - re-enabling");
+                        Self::reenable_tap(&mach_port_for_callback);
+                        return None;
+                    }
+                    CGEventType::TapDisabledByUserInput => {
+                        warn!("CGEventTap disabled by user input - re-enabling");
+                        Self::reenable_tap(&mach_port_for_callback);
+                        return None;
+                    }
+                    _ => {}
+                }
+
+                // Only process KeyDown events (filter out any other event types)
+                if !matches!(event_type, CGEventType::KeyDown) {
+                    return None;
+                }
+
+                debug!("CGEventTap callback invoked - key event received");
 
                 // Extract key event information
                 let key_event = Self::extract_key_event(event);
 
+                // NOTE: We intentionally do NOT log key_event.character for privacy
+                // This is a global keystroke monitor - logging typed characters
+                // would capture passwords, private messages, etc.
                 debug!(
-                    character = ?key_event.character,
                     key_code = key_event.key_code,
-                    "Extracted key event"
+                    is_repeat = key_event.is_repeat,
+                    "Key event captured"
                 );
 
                 // Invoke callback
@@ -275,6 +318,11 @@ impl KeyboardMonitor {
                 return;
             }
         };
+
+        // Store the mach port ref so the callback can re-enable if disabled
+        if let Ok(mut guard) = mach_port_ref.lock() {
+            guard.0 = Some(event_tap.mach_port.as_concrete_TypeRef());
+        }
 
         // Create run loop source from the event tap
         let run_loop_source = match event_tap.mach_port.create_runloop_source(0) {
@@ -326,6 +374,26 @@ impl KeyboardMonitor {
         }
     }
 
+    /// Re-enable an event tap that was disabled by timeout or user input
+    fn reenable_tap(mach_port_ref: &Arc<std::sync::Mutex<SendableMachPortRef>>) {
+        extern "C" {
+            fn CGEventTapEnable(tap: CFMachPortRef, enable: bool);
+        }
+
+        if let Ok(guard) = mach_port_ref.lock() {
+            if let Some(port) = guard.0 {
+                unsafe {
+                    CGEventTapEnable(port, true);
+                }
+                info!("CGEventTap re-enabled successfully");
+            } else {
+                error!("Cannot re-enable tap: mach port ref not set");
+            }
+        } else {
+            error!("Cannot re-enable tap: failed to acquire lock");
+        }
+    }
+
     /// Extract key event information from a CGEvent
     fn extract_key_event(event: &CGEvent) -> KeyEvent {
         use core_graphics::event::CGEventFlags;
@@ -374,17 +442,29 @@ impl KeyboardMonitor {
             );
         }
 
-        let mut buffer: [u16; 4] = [0; 4];
+        // Buffer size of 32 UTF-16 code units handles:
+        // - Simple characters (1 code unit)
+        // - BMP characters including most CJK (1 code unit)
+        // - Emoji and surrogate pairs (2 code units)
+        // - Complex emoji sequences with ZWJ (up to ~15 code units)
+        // - IME composed characters
+        const BUFFER_SIZE: usize = 32;
+        let mut buffer: [u16; BUFFER_SIZE] = [0; BUFFER_SIZE];
         let mut actual_len: libc::c_ulong = 0;
 
         unsafe {
             use foreign_types::ForeignType;
             // Get raw pointer to the CGEvent for FFI call
             let event_ptr = event.as_ptr();
-            CGEventKeyboardGetUnicodeString(event_ptr, 4, &mut actual_len, buffer.as_mut_ptr());
+            CGEventKeyboardGetUnicodeString(
+                event_ptr,
+                BUFFER_SIZE as libc::c_ulong,
+                &mut actual_len,
+                buffer.as_mut_ptr(),
+            );
         }
 
-        if actual_len > 0 {
+        if actual_len > 0 && (actual_len as usize) <= BUFFER_SIZE {
             String::from_utf16(&buffer[..actual_len as usize]).ok()
         } else {
             None
