@@ -173,9 +173,46 @@ fn generate_mock_response(user_message: &str) -> String {
 static AI_WINDOW: std::sync::OnceLock<std::sync::Mutex<Option<gpui::WindowHandle<Root>>>> =
     std::sync::OnceLock::new();
 
-/// Global handle to the AiApp entity (for updating state from outside)
-static AI_APP_ENTITY: std::sync::OnceLock<std::sync::Mutex<Option<Entity<AiApp>>>> =
+/// Global flag to request input focus in the AI window.
+/// This replaces the problematic AI_APP_ENTITY which caused memory leaks.
+/// The flag is checked in AiApp::render() and cleared after use.
+static AI_FOCUS_REQUESTED: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+/// Pending commands for the AI window (for testing via stdin).
+/// These are processed in AiApp::render() to avoid needing a global entity reference.
+static AI_PENDING_COMMANDS: std::sync::OnceLock<std::sync::Mutex<Vec<AiCommand>>> =
     std::sync::OnceLock::new();
+
+/// Commands that can be sent to the AI window (for testing)
+#[derive(Clone)]
+enum AiCommand {
+    SetSearch(String),
+    SetInput { text: String, submit: bool },
+}
+
+fn get_pending_commands() -> &'static std::sync::Mutex<Vec<AiCommand>> {
+    AI_PENDING_COMMANDS.get_or_init(|| std::sync::Mutex::new(Vec::new()))
+}
+
+fn push_ai_command(cmd: AiCommand) {
+    if let Ok(mut cmds) = get_pending_commands().lock() {
+        cmds.push(cmd);
+    }
+}
+
+fn take_ai_commands() -> Vec<AiCommand> {
+    get_pending_commands()
+        .lock()
+        .ok()
+        .map(|mut cmds| std::mem::take(&mut *cmds))
+        .unwrap_or_default()
+}
+
+// NOTE: AI_APP_ENTITY was removed to prevent memory leaks.
+// The entity was being kept alive by this global reference and by theme watcher tasks,
+// causing the AiApp to never be dropped even after the window closed.
+// Instead, we use AI_FOCUS_REQUESTED (AtomicBool) which AiApp checks in render().
 
 /// The main AI chat application view
 pub struct AiApp {
@@ -230,6 +267,11 @@ pub struct AiApp {
 
     /// Cached box shadows from theme (avoid reloading theme on every render)
     cached_box_shadows: Vec<BoxShadow>,
+
+    /// Flag to request input focus on next render.
+    /// This replaces the need for a global AI_APP_ENTITY reference.
+    /// Set this flag via window.update() and AiApp will process it on render.
+    needs_focus_input: bool,
 }
 
 impl AiApp {
@@ -337,6 +379,7 @@ impl AiApp {
             current_messages,
             messages_scroll_handle: ScrollHandle::new(),
             cached_box_shadows,
+            needs_focus_input: false,
         }
     }
 
@@ -352,6 +395,15 @@ impl AiApp {
             state.focus(window, cx);
         });
         info!("AI input focused for immediate typing");
+    }
+
+    /// Request focus on next render cycle.
+    /// This is used when bringing an existing window to front - the caller
+    /// sets this flag via window.update() and the flag is processed in render().
+    /// This pattern avoids the need for a global Entity<AiApp> reference.
+    pub fn request_focus(&mut self, cx: &mut Context<Self>) {
+        self.needs_focus_input = true;
+        cx.notify(); // Trigger re-render to process the flag
     }
 
     /// Handle model selection change
@@ -1605,7 +1657,39 @@ impl Drop for AiApp {
 }
 
 impl Render for AiApp {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        // Process focus request flag (set by open_ai_window when bringing existing window to front)
+        // Check both the instance flag and the global atomic flag
+        if self.needs_focus_input
+            || AI_FOCUS_REQUESTED.swap(false, std::sync::atomic::Ordering::SeqCst)
+        {
+            self.needs_focus_input = false;
+            self.focus_input(window, cx);
+        }
+
+        // Process pending commands (for testing via stdin)
+        for cmd in take_ai_commands() {
+            match cmd {
+                AiCommand::SetSearch(query) => {
+                    self.search_state.update(cx, |state, cx| {
+                        state.set_value(query.clone(), window, cx);
+                    });
+                    self.on_search_change(cx);
+                    crate::logging::log("AI", &format!("Search filter set to: {}", query));
+                }
+                AiCommand::SetInput { text, submit } => {
+                    self.input_state.update(cx, |state, cx| {
+                        state.set_value(text.clone(), window, cx);
+                    });
+                    crate::logging::log("AI", &format!("Input set to: {}", text));
+                    if submit {
+                        self.submit_message(window, cx);
+                        crate::logging::log("AI", "Message submitted - streaming started");
+                    }
+                }
+            }
+        }
+
         let box_shadows = self.create_box_shadows();
 
         div()
@@ -1685,19 +1769,15 @@ pub fn open_ai_window(cx: &mut App) -> Result<()> {
             // Activate the app to ensure the window can receive focus
             cx.activate(true);
 
-            // Focus the input field so user can start typing immediately
-            // Get AiApp entity (release lock before calling update)
-            let ai_app_entity = {
-                let holder = AI_APP_ENTITY.get_or_init(|| std::sync::Mutex::new(None));
-                holder.lock().ok().and_then(|g| g.clone())
-            };
-            if let Some(ai_app) = ai_app_entity {
-                let _ = handle.update(cx, |_root, window, cx| {
-                    ai_app.update(cx, |app, cx| {
-                        app.focus_input(window, cx);
-                    });
-                });
-            }
+            // Request focus on the input field via the global flag.
+            // AiApp checks this flag in render() and focuses if set.
+            // This avoids the need for a global Entity<AiApp> reference which caused memory leaks.
+            AI_FOCUS_REQUESTED.store(true, std::sync::atomic::Ordering::SeqCst);
+
+            // Notify to trigger re-render which will process the focus request
+            let _ = handle.update(cx, |_root, _window, cx| {
+                cx.notify();
+            });
 
             return Ok(());
         }
@@ -1742,25 +1822,18 @@ pub fn open_ai_window(cx: &mut App) -> Result<()> {
         ..Default::default()
     };
 
-    // Create a holder for the AiApp entity so we can store it
+    // Create a holder for the AiApp entity so we can focus it after window creation.
+    // NOTE: This is a LOCAL holder, not stored globally, to avoid memory leaks.
     let ai_app_holder: std::sync::Arc<std::sync::Mutex<Option<Entity<AiApp>>>> =
         std::sync::Arc::new(std::sync::Mutex::new(None));
     let ai_app_holder_clone = ai_app_holder.clone();
 
     let handle = cx.open_window(window_options, |window, cx| {
         let view = cx.new(|cx| AiApp::new(window, cx));
-        // Store the AiApp entity for later access
+        // Store the AiApp entity temporarily for immediate focus after window creation
         *ai_app_holder_clone.lock().unwrap() = Some(view.clone());
         cx.new(|cx| Root::new(view, window, cx))
     })?;
-
-    // Store the AiApp entity globally (release lock immediately)
-    {
-        let app_entity_holder = AI_APP_ENTITY.get_or_init(|| std::sync::Mutex::new(None));
-        if let Ok(mut guard) = app_entity_holder.lock() {
-            *guard = ai_app_holder.lock().ok().and_then(|mut h| h.take());
-        }
-    }
 
     // Activate the app and window so user can immediately start typing
     cx.activate(true);
@@ -1768,13 +1841,9 @@ pub fn open_ai_window(cx: &mut App) -> Result<()> {
         window.activate_window();
     });
 
-    // Focus the input field so user can start typing immediately
-    // Get entity reference (release lock before calling update)
-    let ai_app_entity = {
-        let holder = AI_APP_ENTITY.get_or_init(|| std::sync::Mutex::new(None));
-        holder.lock().ok().and_then(|g| g.clone())
-    };
-    if let Some(ai_app) = ai_app_entity {
+    // Focus the input field immediately after window creation
+    // Use the local entity reference (not stored globally to avoid leaks)
+    if let Some(ai_app) = ai_app_holder.lock().ok().and_then(|mut h| h.take()) {
         let _ = handle.update(cx, |_root, window, cx| {
             ai_app.update(cx, |app, cx| {
                 app.focus_input(window, cx);
@@ -1795,35 +1864,43 @@ pub fn open_ai_window(cx: &mut App) -> Result<()> {
 
     // Theme hot-reload watcher for AI window
     // Spawns a background task that watches ~/.scriptkit/kit/theme.json for changes
-    // NOTE: This captures Entity<AiApp> which keeps it alive - this is a known issue
-    // that will be addressed by the ThemeService refactor (script-kit-gpui-dar.4)
-    let ai_app_entity_for_theme = {
-        let holder = AI_APP_ENTITY.get_or_init(|| std::sync::Mutex::new(None));
-        holder.lock().ok().and_then(|g| g.clone())
-    };
-    if let Some(ai_app_for_theme) = ai_app_entity_for_theme {
-        cx.spawn(async move |cx: &mut gpui::AsyncApp| {
-            let (mut theme_watcher, theme_rx) = ThemeWatcher::new();
-            if theme_watcher.start().is_err() {
-                return;
-            }
-            loop {
-                gpui::Timer::after(std::time::Duration::from_millis(200)).await;
-                if theme_rx.try_recv().is_ok() {
-                    info!("AI window: theme.json changed, reloading");
-                    let _ = cx.update(|cx| {
-                        // Re-sync gpui-component theme with updated Script Kit theme
-                        crate::theme::sync_gpui_component_theme(cx);
-                        // Notify the AI window to re-render with new colors
-                        ai_app_for_theme.update(cx, |_app, cx| {
+    // NOTE: Uses window handle (not entity) to avoid memory leaks - the entity reference
+    // would keep AiApp alive even after window closes. This pattern matches Notes window.
+    // TODO: Consolidate into a single ThemeService (script-kit-gpui-dar.4)
+    cx.spawn(async move |cx: &mut gpui::AsyncApp| {
+        let (mut theme_watcher, theme_rx) = ThemeWatcher::new();
+        if theme_watcher.start().is_err() {
+            return;
+        }
+        loop {
+            gpui::Timer::after(std::time::Duration::from_millis(200)).await;
+            if theme_rx.try_recv().is_ok() {
+                info!("AI window: theme.json changed, reloading");
+                let update_result = cx.update(|cx| {
+                    // Re-sync gpui-component theme with updated Script Kit theme
+                    crate::theme::sync_gpui_component_theme(cx);
+
+                    // Notify the AI window to re-render with new colors (if open)
+                    // SAFETY: Release lock BEFORE calling handle.update() to prevent deadlock
+                    let handle = {
+                        let slot = AI_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
+                        slot.lock().ok().and_then(|g| *g)
+                    };
+                    if let Some(handle) = handle {
+                        let _ = handle.update(cx, |_root, _window, cx| {
                             cx.notify();
                         });
-                    });
+                    }
+                });
+
+                // If the update failed, the app may be shutting down
+                if update_result.is_err() {
+                    break;
                 }
             }
-        })
-        .detach();
-    }
+        }
+    })
+    .detach();
 
     Ok(())
 }
@@ -1844,11 +1921,8 @@ pub fn close_ai_window(cx: &mut App) {
         });
     }
 
-    // Also clear the AiApp entity reference
-    let app_entity_holder = AI_APP_ENTITY.get_or_init(|| std::sync::Mutex::new(None));
-    if let Ok(mut guard) = app_entity_holder.lock() {
-        *guard = None;
-    }
+    // Clear the focus request flag (no longer needed after window closes)
+    AI_FOCUS_REQUESTED.store(false, std::sync::atomic::Ordering::SeqCst);
 }
 
 /// Check if the AI window is currently open
@@ -1867,30 +1941,19 @@ pub fn is_ai_window_open() -> bool {
 pub fn set_ai_search(cx: &mut App, query: &str) {
     use crate::logging;
 
-    // SAFETY: Release locks BEFORE calling handle.update() to prevent deadlock
-    // WindowHandle is Copy, Entity must be cloned
-    let (handle, app_entity) = {
-        let window_slot = AI_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
-        let app_slot = AI_APP_ENTITY.get_or_init(|| std::sync::Mutex::new(None));
-        (
-            window_slot.lock().ok().and_then(|g| *g),
-            app_slot.lock().ok().and_then(|g| g.clone()),
-        )
+    // Queue the command and notify the window to process it in render()
+    // This avoids the need for a global Entity<AiApp> reference which caused memory leaks.
+    push_ai_command(AiCommand::SetSearch(query.to_string()));
+
+    // Notify the window to process the command
+    let handle = {
+        let slot = AI_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
+        slot.lock().ok().and_then(|g| *g)
     };
 
-    if let (Some(handle), Some(app_entity)) = (handle, app_entity) {
-        let query_owned = query.to_string();
-
-        let _ = handle.update(cx, |_root, window, cx| {
-            app_entity.update(cx, |app, cx| {
-                // Set the search input value
-                app.search_state.update(cx, |state, cx| {
-                    state.set_value(query_owned.clone(), window, cx);
-                });
-                // Trigger the search change handler
-                app.on_search_change(cx);
-                logging::log("AI", &format!("Search filter set to: {}", query_owned));
-            });
+    if let Some(handle) = handle {
+        let _ = handle.update(cx, |_root, _window, cx| {
+            cx.notify();
         });
     } else {
         logging::log("AI", "Cannot set search - AI window not open");
@@ -1902,34 +1965,22 @@ pub fn set_ai_search(cx: &mut App, query: &str) {
 pub fn set_ai_input(cx: &mut App, text: &str, submit: bool) {
     use crate::logging;
 
-    // SAFETY: Release locks BEFORE calling handle.update() to prevent deadlock
-    // WindowHandle is Copy, Entity must be cloned
-    let (handle, app_entity) = {
-        let window_slot = AI_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
-        let app_slot = AI_APP_ENTITY.get_or_init(|| std::sync::Mutex::new(None));
-        (
-            window_slot.lock().ok().and_then(|g| *g),
-            app_slot.lock().ok().and_then(|g| g.clone()),
-        )
+    // Queue the command and notify the window to process it in render()
+    // This avoids the need for a global Entity<AiApp> reference which caused memory leaks.
+    push_ai_command(AiCommand::SetInput {
+        text: text.to_string(),
+        submit,
+    });
+
+    // Notify the window to process the command
+    let handle = {
+        let slot = AI_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
+        slot.lock().ok().and_then(|g| *g)
     };
 
-    if let (Some(handle), Some(app_entity)) = (handle, app_entity) {
-        let text_owned = text.to_string();
-
-        let _ = handle.update(cx, |_root, window, cx| {
-            app_entity.update(cx, |app, cx| {
-                // Set the input value
-                app.input_state.update(cx, |state, cx| {
-                    state.set_value(text_owned.clone(), window, cx);
-                });
-                logging::log("AI", &format!("Input set to: {}", text_owned));
-
-                // Optionally submit the message (triggers streaming)
-                if submit {
-                    app.submit_message(window, cx);
-                    logging::log("AI", "Message submitted - streaming started");
-                }
-            });
+    if let Some(handle) = handle {
+        let _ = handle.update(cx, |_root, _window, cx| {
+            cx.notify();
         });
     } else {
         logging::log("AI", "Cannot set input - AI window not open");
