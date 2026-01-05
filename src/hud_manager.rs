@@ -242,6 +242,22 @@ fn get_hud_manager() -> &'static Arc<Mutex<HudManagerState>> {
     HUD_MANAGER.get_or_init(|| Arc::new(Mutex::new(HudManagerState::new())))
 }
 
+/// Internal helper to show a HUD notification from a HudNotification struct.
+/// This preserves all fields including action_label and action.
+fn show_notification(notif: HudNotification, cx: &mut App) {
+    if notif.has_action() {
+        show_hud_with_action(
+            notif.text,
+            Some(notif.duration_ms),
+            notif.action_label.unwrap(),
+            notif.action.unwrap(),
+            cx,
+        );
+    } else {
+        show_hud(notif.text, Some(notif.duration_ms), cx);
+    }
+}
+
 /// Show a HUD notification
 ///
 /// This creates a new floating window positioned at the bottom-center of the
@@ -693,9 +709,10 @@ fn cleanup_expired_huds(cx: &mut App) {
     // Show pending HUDs if we have room
     while state.active_huds.len() < MAX_SIMULTANEOUS_HUDS {
         if let Some(pending) = state.pending_queue.pop_front() {
-            // Drop lock before showing HUD (show_hud will acquire it)
+            // Drop lock before showing HUD (show_notification will acquire it)
             drop(state);
-            show_hud(pending.text, Some(pending.duration_ms), cx);
+            // Use show_notification to preserve action_label and action
+            show_notification(pending, cx);
             // Re-acquire for next iteration
             state = manager.lock();
         } else {
