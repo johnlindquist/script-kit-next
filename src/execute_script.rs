@@ -64,12 +64,13 @@ impl ScriptListApp {
                 // The buffer is used for post-mortem error reporting when script exits non-zero
                 // FIX: Previously we consumed stderr in a thread but passed None to reader,
                 // which meant stderr was never available for error messages. Now we use
-                // spawn_stderr_reader which returns a buffer handle for later retrieval.
-                let stderr_buffer = stderr_handle
+                // spawn_stderr_reader which returns a StderrCapture containing both the buffer
+                // AND a JoinHandle so we can wait for stderr to fully drain before reading.
+                let stderr_capture = stderr_handle
                     .map(|stderr| executor::spawn_stderr_reader(stderr, script_path_for_errors.clone()));
-                
-                // Clone for reader thread access
-                let stderr_buffer_for_reader = stderr_buffer.clone();
+
+                // Move the capture into the reader thread - it owns both buffer and join handle
+                // The reader thread will wait for stderr to drain before reading contents
 
                 // Channel for sending responses from UI to writer thread
                 // FIX: Use bounded channel to prevent OOM from slow script/blocked stdin
@@ -190,9 +191,10 @@ impl ScriptListApp {
                     // These variables keep the process alive - they're dropped when the thread exits
                     let _keep_alive_handle = _process_handle;
                     let mut keep_alive_child = _child;
-                    // FIX: Use the stderr buffer instead of raw stderr handle
-                    // The buffer is populated by the stderr reader thread
-                    let stderr_buffer = stderr_buffer_for_reader;
+                    // FIX: Use the stderr capture which includes both buffer and join handle
+                    // The buffer is populated by the stderr reader thread, and we wait for it
+                    // to complete (with timeout) before reading to prevent partial captures.
+                    let stderr_capture = stderr_capture;
                     let script_path = script_path_clone;
 
                     loop {
@@ -1132,12 +1134,13 @@ impl ScriptListApp {
                                 // If non-zero exit code, capture stderr and send error
                                 if let Some(code) = exit_code {
                                     if code != 0 {
-                                        // FIX: Read from stderr buffer (tee'd from real-time reader)
-                                        // Previously we tried to read from stderr_handle here, but
-                                        // it was already consumed by the stderr reader thread.
-                                        let stderr_output = stderr_buffer
+                                        // FIX: Wait for stderr reader to complete (with timeout)
+                                        // before reading buffer. This prevents partial error captures
+                                        // when stderr flushes late after bun exits.
+                                        // 100ms timeout is generous - stderr should drain quickly.
+                                        let stderr_output = stderr_capture
                                             .as_ref()
-                                            .map(|buf| buf.get_contents())
+                                            .map(|cap| cap.get_contents_with_timeout(std::time::Duration::from_millis(100)))
                                             .filter(|s| !s.is_empty());
 
                                         if let Some(ref stderr_text) = stderr_output {
@@ -1193,10 +1196,10 @@ impl ScriptListApp {
                             Err(e) => {
                                 logging::log("EXEC", &format!("Error reading from script: {}", e));
 
-                                // FIX: Read from stderr buffer instead of raw handle
-                                let stderr_output = stderr_buffer
+                                // FIX: Wait for stderr reader to complete before reading
+                                let stderr_output = stderr_capture
                                     .as_ref()
-                                    .map(|buf| buf.get_contents())
+                                    .map(|cap| cap.get_contents_with_timeout(std::time::Duration::from_millis(100)))
                                     .filter(|s| !s.is_empty());
 
                                 if let Some(ref stderr_text) = stderr_output {

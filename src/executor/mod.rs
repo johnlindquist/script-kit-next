@@ -52,7 +52,7 @@ pub use selected_text::{handle_selected_text_message, SelectedTextHandleResult};
 
 // Allow unused - these are public API exports for future use
 #[allow(unused_imports)]
-pub use stderr_buffer::{spawn_stderr_reader, StderrBuffer};
+pub use stderr_buffer::{spawn_stderr_reader, StderrBuffer, StderrCapture};
 
 // Re-export tool_extension only for tests
 #[cfg(test)]

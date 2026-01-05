@@ -19,7 +19,8 @@
 use std::collections::VecDeque;
 use std::io::{BufRead, BufReader, Read};
 use std::sync::{Arc, Mutex};
-use std::thread;
+use std::thread::{self, JoinHandle};
+use std::time::Duration;
 use tracing::{debug, warn};
 
 /// Default maximum number of lines to buffer
@@ -123,17 +124,72 @@ impl StderrBuffer {
     }
 }
 
+/// Stderr capture handle containing both buffer and thread handle
+///
+/// This struct bundles the stderr buffer with the thread's JoinHandle,
+/// allowing callers to wait for the stderr reader to complete before
+/// snapshotting the buffer contents. This prevents the race condition
+/// where stderr is read before all error output has been buffered.
+#[derive(Debug)]
+pub struct StderrCapture {
+    /// The stderr ring buffer
+    pub buffer: StderrBuffer,
+    /// Handle to wait for the reader thread to complete
+    pub join_handle: JoinHandle<()>,
+}
+
+impl StderrCapture {
+    /// Wait for the stderr reader thread to complete, with timeout
+    ///
+    /// Returns true if the thread completed within the timeout, false otherwise.
+    /// This should be called before reading the buffer to ensure all stderr
+    /// has been captured.
+    pub fn wait_with_timeout(&self, timeout: Duration) -> bool {
+        // We can't join without consuming, so we poll is_finished
+        let start = std::time::Instant::now();
+        let poll_interval = Duration::from_millis(10);
+
+        while start.elapsed() < timeout {
+            if self.join_handle.is_finished() {
+                return true;
+            }
+            std::thread::sleep(poll_interval);
+        }
+
+        self.join_handle.is_finished()
+    }
+
+    /// Get buffer contents after waiting for reader to complete
+    ///
+    /// Waits up to the specified timeout for the stderr reader to finish,
+    /// then returns the buffer contents. This is the recommended way to
+    /// read stderr after script exit.
+    pub fn get_contents_with_timeout(&self, timeout: Duration) -> String {
+        self.wait_with_timeout(timeout);
+        self.buffer.get_contents()
+    }
+}
+
 /// Spawn a stderr reader thread that tees output to both logging and a buffer
 ///
-/// Returns the buffer handle for later retrieval of stderr contents.
+/// Returns a StderrCapture containing both the buffer handle and thread JoinHandle.
+/// The JoinHandle allows callers to wait for the reader to complete before
+/// snapshotting the buffer, preventing partial error captures.
+///
+/// # Example
+/// ```ignore
+/// let capture = spawn_stderr_reader(stderr, script_path);
+/// // ... wait for process to exit ...
+/// let stderr_text = capture.get_contents_with_timeout(Duration::from_millis(100));
+/// ```
 pub fn spawn_stderr_reader<R: Read + Send + 'static>(
     stderr: R,
     script_path: String,
-) -> StderrBuffer {
+) -> StderrCapture {
     let buffer = StderrBuffer::default();
     let buffer_clone = buffer.clone();
 
-    thread::spawn(move || {
+    let join_handle = thread::spawn(move || {
         let reader = BufReader::new(stderr);
         for line_result in reader.lines() {
             match line_result {
@@ -152,7 +208,10 @@ pub fn spawn_stderr_reader<R: Read + Send + 'static>(
         debug!(target: "SCRIPT", "stderr reader exiting");
     });
 
-    buffer
+    StderrCapture {
+        buffer,
+        join_handle,
+    }
 }
 
 #[cfg(test)]
@@ -318,5 +377,102 @@ mod tests {
         assert!(contents.contains("文件未找到"));
         assert!(contents.contains("🚀"));
         assert!(contents.contains("Привет"));
+    }
+
+    // ============================================================
+    // StderrCapture Tests
+    // ============================================================
+
+    #[test]
+    fn test_spawn_stderr_reader_returns_capture_with_buffer() {
+        use std::io::Cursor;
+
+        // Create mock stderr with test content
+        let stderr_content = "Error line 1\nError line 2\nStack trace here\n";
+        let mock_stderr = Cursor::new(stderr_content.as_bytes().to_vec());
+
+        // Spawn the reader
+        let capture = spawn_stderr_reader(mock_stderr, "/test/script.ts".to_string());
+
+        // Wait for reader to complete (should be fast for small input)
+        let completed = capture.wait_with_timeout(Duration::from_millis(500));
+        assert!(completed, "Reader should complete quickly for small input");
+
+        // Buffer should contain all lines
+        let contents = capture.buffer.get_contents();
+        assert!(contents.contains("Error line 1"), "Should contain first error line");
+        assert!(contents.contains("Error line 2"), "Should contain second error line");
+        assert!(contents.contains("Stack trace here"), "Should contain stack trace");
+    }
+
+    #[test]
+    fn test_get_contents_with_timeout_waits_for_completion() {
+        use std::io::Cursor;
+
+        // Create mock stderr
+        let stderr_content = "Test error output\n";
+        let mock_stderr = Cursor::new(stderr_content.as_bytes().to_vec());
+
+        let capture = spawn_stderr_reader(mock_stderr, "/test/script.ts".to_string());
+
+        // get_contents_with_timeout should wait and return content
+        let contents = capture.get_contents_with_timeout(Duration::from_millis(500));
+        assert!(contents.contains("Test error output"), "Should contain error output");
+    }
+
+    #[test]
+    fn test_stderr_capture_empty_stderr() {
+        use std::io::Cursor;
+
+        // Create empty mock stderr
+        let mock_stderr = Cursor::new(Vec::<u8>::new());
+
+        let capture = spawn_stderr_reader(mock_stderr, "/test/script.ts".to_string());
+
+        // Wait for completion
+        let completed = capture.wait_with_timeout(Duration::from_millis(100));
+        assert!(completed, "Reader should complete for empty input");
+
+        // Buffer should be empty
+        let contents = capture.buffer.get_contents();
+        assert!(contents.is_empty(), "Empty stderr should produce empty buffer");
+    }
+
+    #[test]
+    fn test_stderr_capture_large_output() {
+        use std::io::Cursor;
+
+        // Create large stderr content
+        let mut stderr_content = String::new();
+        for i in 0..100 {
+            stderr_content.push_str(&format!("Error line {}\n", i));
+        }
+        let mock_stderr = Cursor::new(stderr_content.as_bytes().to_vec());
+
+        let capture = spawn_stderr_reader(mock_stderr, "/test/script.ts".to_string());
+
+        // Wait for reader to complete
+        let completed = capture.wait_with_timeout(Duration::from_millis(1000));
+        assert!(completed, "Reader should complete for large input");
+
+        // Buffer should have content (may be truncated due to limits)
+        let contents = capture.buffer.get_contents();
+        assert!(!contents.is_empty(), "Should have captured some output");
+    }
+
+    #[test]
+    fn test_wait_with_timeout_returns_true_when_finished() {
+        use std::io::Cursor;
+
+        let mock_stderr = Cursor::new(b"quick\n".to_vec());
+        let capture = spawn_stderr_reader(mock_stderr, "/test/script.ts".to_string());
+
+        // Give it plenty of time
+        let completed = capture.wait_with_timeout(Duration::from_secs(1));
+        assert!(completed, "Should return true when thread finished");
+
+        // Subsequent calls should still return true
+        let completed2 = capture.wait_with_timeout(Duration::from_millis(1));
+        assert!(completed2, "Should return true immediately if already finished");
     }
 }
