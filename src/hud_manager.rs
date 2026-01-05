@@ -206,9 +206,15 @@ struct ActiveHud {
     duration_ms: u64,
 }
 
+/// Check if a duration has elapsed (used for HUD expiry)
+/// Returns true when elapsed >= duration (inclusive boundary)
+fn is_duration_expired(created_at: Instant, duration: Duration) -> bool {
+    created_at.elapsed() >= duration
+}
+
 impl ActiveHud {
     fn is_expired(&self) -> bool {
-        self.created_at.elapsed().as_millis() as u64 > self.duration_ms
+        is_duration_expired(self.created_at, Duration::from_millis(self.duration_ms))
     }
 }
 
@@ -735,5 +741,67 @@ mod tests {
         let state = HudManagerState::new();
         assert!(state.active_huds.is_empty());
         assert!(state.pending_queue.is_empty());
+    }
+
+    #[test]
+    fn test_is_duration_expired_boundary_condition() {
+        // HUD should be expired when elapsed == duration (not just >)
+        // This tests the fix for the boundary condition bug
+
+        // Create timestamp from 100ms ago
+        let created_at = Instant::now() - Duration::from_millis(100);
+        let duration = Duration::from_millis(100);
+
+        // When elapsed >= duration, should be expired
+        assert!(
+            is_duration_expired(created_at, duration),
+            "Should be expired when elapsed >= duration"
+        );
+    }
+
+    #[test]
+    fn test_is_duration_expired_definitely_expired() {
+        // Create timestamp from 200ms ago with 100ms duration
+        let created_at = Instant::now() - Duration::from_millis(200);
+        let duration = Duration::from_millis(100);
+
+        // When elapsed > duration, definitely expired
+        assert!(
+            is_duration_expired(created_at, duration),
+            "Should be expired when elapsed > duration"
+        );
+    }
+
+    #[test]
+    fn test_is_duration_expired_not_expired_yet() {
+        // Create timestamp from now with a long duration
+        let created_at = Instant::now();
+        let duration = Duration::from_millis(10000); // 10 seconds
+
+        assert!(
+            !is_duration_expired(created_at, duration),
+            "Should not be expired immediately after creation"
+        );
+    }
+
+    #[test]
+    fn test_hud_notification_has_action() {
+        let notif_without_action = HudNotification {
+            text: "Test".to_string(),
+            duration_ms: 2000,
+            created_at: Instant::now(),
+            action_label: None,
+            action: None,
+        };
+        assert!(!notif_without_action.has_action());
+
+        let notif_with_action = HudNotification {
+            text: "Test".to_string(),
+            duration_ms: 2000,
+            created_at: Instant::now(),
+            action_label: Some("Open".to_string()),
+            action: Some(HudAction::OpenUrl("https://example.com".to_string())),
+        };
+        assert!(notif_with_action.has_action());
     }
 }
