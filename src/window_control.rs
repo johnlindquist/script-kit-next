@@ -665,28 +665,139 @@ pub fn get_menu_bar_owner_pid() -> Result<i32> {
 /// Since Script Kit is an LSUIElement (accessory app), it doesn't take menu bar
 /// ownership. The menu bar owner is the previously active app.
 ///
+/// # Window Selection Strategy
+///
+/// 1. First try AXFocusedWindow - the actual focused window of the app
+/// 2. If that fails, try AXMainWindow - the app's designated "main" window
+/// 3. Fall back to first window in AXWindows array if neither works
+///
+/// This is more accurate than just picking the first window with matching pid,
+/// which can return the wrong window if the app has multiple windows open.
+///
 /// # Returns
-/// The first (frontmost) window of the menu bar owning application, or None if
+/// The focused/main window of the menu bar owning application, or None if
 /// no windows are found.
 #[instrument]
 pub fn get_frontmost_window_of_previous_app() -> Result<Option<WindowInfo>> {
     let target_pid = get_menu_bar_owner_pid()?;
-    let windows = list_windows()?;
 
-    let target_window = windows.into_iter().find(|w| w.pid == target_pid);
+    unsafe {
+        // Create AX element for the target application
+        let ax_app = AXUIElementCreateApplication(target_pid);
+        if ax_app.is_null() {
+            warn!(target_pid, "Failed to create AXUIElement for app");
+            return Ok(None);
+        }
 
-    if let Some(ref w) = target_window {
-        info!(
-            window_id = w.id,
-            app = %w.app,
-            title = %w.title,
-            "Found frontmost window of previous app"
-        );
-    } else {
-        warn!(target_pid, "No windows found for menu bar owner");
+        // Strategy 1: Try to get the focused window (most accurate)
+        let focused_window = get_ax_attribute(ax_app as AXUIElementRef, "AXFocusedWindow")
+            .ok()
+            .filter(|&w| !w.is_null());
+
+        // Strategy 2: Fall back to main window
+        let target_window = focused_window.or_else(|| {
+            get_ax_attribute(ax_app as AXUIElementRef, "AXMainWindow")
+                .ok()
+                .filter(|&w| !w.is_null())
+        });
+
+        // Strategy 3: Fall back to first window in AXWindows list
+        let target_window = target_window.or_else(|| {
+            if let Ok(windows_value) = get_ax_attribute(ax_app as AXUIElementRef, "AXWindows") {
+                let count = CFArrayGetCount(windows_value as CFArrayRef);
+                if count > 0 {
+                    let window = CFArrayGetValueAtIndex(windows_value as CFArrayRef, 0);
+                    // Retain the window ref since CFArrayGetValueAtIndex returns borrowed
+                    let retained = cf_retain(window);
+                    cf_release(windows_value);
+                    Some(retained)
+                } else {
+                    cf_release(windows_value);
+                    None
+                }
+            } else {
+                None
+            }
+        });
+
+        // Release ax_app - we're done with it
+        cf_release(ax_app);
+
+        // If we found a target window, build WindowInfo for it
+        if let Some(window_ref) = target_window {
+            let ax_window = window_ref as AXUIElementRef;
+
+            // Get window attributes
+            let title = get_window_string_attribute(ax_window, "AXTitle").unwrap_or_default();
+            let (x, y) = get_window_position(ax_window).unwrap_or((0, 0));
+            let (width, height) = get_window_size(ax_window).unwrap_or((0, 0));
+
+            // Get app name for logging
+            let app_name = get_app_name_for_pid(target_pid);
+
+            // Create a window ID (focused window uses index 0)
+            let window_id = (target_pid as u32) << 16;
+
+            // Cache the window reference for subsequent operations
+            cache_window(window_id, ax_window);
+
+            let window_info = WindowInfo {
+                id: window_id,
+                app: app_name.clone(),
+                title: title.clone(),
+                bounds: Bounds::new(x, y, width, height),
+                pid: target_pid,
+                ax_window: Some(window_ref as usize),
+            };
+
+            info!(
+                window_id = window_info.id,
+                app = %app_name,
+                title = %title,
+                "Found focused/main window of previous app via AX"
+            );
+
+            Ok(Some(window_info))
+        } else {
+            warn!(target_pid, "No focused or main window found for menu bar owner");
+            Ok(None)
+        }
     }
+}
 
-    Ok(target_window)
+/// Get the localized app name for a given PID.
+fn get_app_name_for_pid(pid: i32) -> String {
+    unsafe {
+        use objc::runtime::{Class, Object};
+        use objc::{msg_send, sel, sel_impl};
+
+        if let Some(workspace_class) = Class::get("NSWorkspace") {
+            let workspace: *mut Object = msg_send![workspace_class, sharedWorkspace];
+            let running_apps: *mut Object = msg_send![workspace, runningApplications];
+            let app_count: usize = msg_send![running_apps, count];
+
+            for i in 0..app_count {
+                let app: *mut Object = msg_send![running_apps, objectAtIndex: i];
+                let app_pid: i32 = msg_send![app, processIdentifier];
+
+                if app_pid == pid {
+                    let app_name: *mut Object = msg_send![app, localizedName];
+                    if !app_name.is_null() {
+                        let utf8: *const i8 = msg_send![app_name, UTF8String];
+                        if !utf8.is_null() {
+                            return std::ffi::CStr::from_ptr(utf8)
+                                .to_str()
+                                .unwrap_or("Unknown")
+                                .to_string();
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+
+        "Unknown".to_string()
+    }
 }
 
 /// Move a window to a new position.
