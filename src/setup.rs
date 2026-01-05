@@ -929,13 +929,16 @@ pub fn migrate_from_kenv() -> bool {
 /// │       └── agents/
 /// │   ├── package.json           # Node.js module config (type: module for top-level await)
 /// │   └── tsconfig.json          # TypeScript path mappings
+/// │   ├── config.ts              # User configuration (created from template if missing)
+/// │   ├── theme.json             # Theme configuration (created from example if missing)
+/// │   ├── AGENTS.md              # AI agent guide (SDK documentation)
+/// │   └── CLAUDE.md              # Claude-specific instructions
 /// ├── sdk/                       # Runtime SDK (kit-sdk.ts)
 /// ├── db/                        # Databases
 /// ├── logs/                      # Application logs
 /// ├── cache/
 /// │   └── app-icons/             # Cached application icons
-/// ├── config.ts                  # User configuration (created from template if missing)
-/// ├── theme.json                 # Theme configuration (created from example if missing)
+/// ├── GUIDE.md                   # User guide
 /// └── .gitignore                 # Ignore transient files
 /// ```
 ///
@@ -1868,6 +1871,145 @@ mod tests {
         let path = get_kit_path();
         assert!(!path.to_string_lossy().contains("~"));
         assert!(path.to_string_lossy().contains(".config/kit"));
+        std::env::remove_var(SK_PATH_ENV);
+    }
+
+    /// Comprehensive setup verification test
+    /// Verifies the complete directory structure matches documentation:
+    /// ```
+    /// ~/.scriptkit/
+    /// ├── kit/
+    /// │   ├── main/
+    /// │   │   ├── scripts/
+    /// │   │   ├── extensions/
+    /// │   │   └── agents/
+    /// │   ├── config.ts
+    /// │   ├── theme.json
+    /// │   ├── package.json
+    /// │   ├── tsconfig.json
+    /// │   ├── AGENTS.md
+    /// │   └── CLAUDE.md
+    /// ├── sdk/
+    /// │   └── kit-sdk.ts
+    /// ├── db/
+    /// ├── logs/
+    /// ├── cache/
+    /// └── GUIDE.md
+    /// ```
+    #[test]
+    fn test_complete_setup_structure() {
+        let temp_dir = TempDir::new().unwrap();
+        // Use a subdirectory that definitely doesn't exist for fresh install detection
+        let kit_root = temp_dir.path().join("scriptkit-test");
+
+        std::env::set_var(SK_PATH_ENV, kit_root.to_str().unwrap());
+
+        let result = ensure_kit_setup();
+        // Don't assert is_fresh_install - just verify the structure is correct
+        assert!(result.warnings.is_empty() || !result.warnings.iter().any(|w| w.contains("Failed")));
+
+        // Verify kit/ subdirectory structure
+        let kit_dir = kit_root.join("kit");
+        assert!(kit_dir.exists(), "kit/ directory should exist");
+
+        // Verify main kit directories
+        let main_dir = kit_dir.join("main");
+        assert!(main_dir.join("scripts").exists(), "kit/main/scripts/ should exist");
+        assert!(main_dir.join("extensions").exists(), "kit/main/extensions/ should exist");
+        assert!(main_dir.join("agents").exists(), "kit/main/agents/ should exist");
+
+        // Verify user config files in kit/
+        assert!(kit_dir.join("config.ts").exists(), "kit/config.ts should exist");
+        assert!(kit_dir.join("theme.json").exists(), "kit/theme.json should exist");
+        assert!(kit_dir.join("package.json").exists(), "kit/package.json should exist");
+        assert!(kit_dir.join("tsconfig.json").exists(), "kit/tsconfig.json should exist");
+        assert!(kit_dir.join("AGENTS.md").exists(), "kit/AGENTS.md should exist");
+        assert!(kit_dir.join("CLAUDE.md").exists(), "kit/CLAUDE.md should exist");
+
+        // Verify SDK directory
+        assert!(kit_root.join("sdk").join("kit-sdk.ts").exists(), "sdk/kit-sdk.ts should exist");
+
+        // Verify other directories
+        assert!(kit_root.join("db").exists(), "db/ directory should exist");
+        assert!(kit_root.join("logs").exists(), "logs/ directory should exist");
+        assert!(kit_root.join("cache").exists(), "cache/ directory should exist");
+
+        // Verify GUIDE.md at root
+        assert!(kit_root.join("GUIDE.md").exists(), "GUIDE.md should exist at root");
+
+        // Verify sample script on fresh install
+        let hello_script = main_dir.join("scripts").join("hello-world.ts");
+        assert!(hello_script.exists(), "hello-world.ts sample script should exist");
+
+        // Verify config.ts content
+        let config_content = fs::read_to_string(kit_dir.join("config.ts")).unwrap();
+        assert!(config_content.contains("@scriptkit/sdk"), "config.ts should import @scriptkit/sdk");
+        assert!(config_content.contains("hotkey"), "config.ts should have hotkey config");
+
+        // Verify package.json has correct name and type
+        let package_content = fs::read_to_string(kit_dir.join("package.json")).unwrap();
+        assert!(package_content.contains("@scriptkit/kit"), "package.json should have @scriptkit/kit name");
+        assert!(package_content.contains("\"type\": \"module\""), "package.json should enable ESM");
+
+        // Verify AGENTS.md content
+        let agents_content = fs::read_to_string(kit_dir.join("AGENTS.md")).unwrap();
+        assert!(agents_content.contains("Script Kit"), "AGENTS.md should mention Script Kit");
+        assert!(agents_content.contains("~/.scriptkit/kit/config.ts"), "AGENTS.md should have correct config path");
+
+        // Verify CLAUDE.md content
+        let claude_content = fs::read_to_string(kit_dir.join("CLAUDE.md")).unwrap();
+        assert!(claude_content.contains("Script Kit GPUI"), "CLAUDE.md should mention Script Kit GPUI");
+        assert!(claude_content.contains("NOT the original Script Kit"), "CLAUDE.md should warn about v1 vs v2");
+
+        std::env::remove_var(SK_PATH_ENV);
+    }
+
+    /// Test that paths in AGENTS.md match actual setup paths
+    #[test]
+    fn test_agents_md_paths_match_setup() {
+        let temp_dir = TempDir::new().unwrap();
+        let kit_root = temp_dir.path().to_path_buf();
+
+        std::env::set_var(SK_PATH_ENV, kit_root.to_str().unwrap());
+        let _ = ensure_kit_setup();
+
+        let agents_content = fs::read_to_string(kit_root.join("kit").join("AGENTS.md")).unwrap();
+
+        // Verify documented paths actually exist
+        let documented_paths = [
+            ("kit/main/scripts", "~/.scriptkit/kit/main/scripts/"),
+            ("kit/main/extensions", "~/.scriptkit/kit/main/extensions/"),
+            ("kit/config.ts", "~/.scriptkit/kit/config.ts"),
+            ("kit/theme.json", "~/.scriptkit/kit/theme.json"),
+            ("sdk/kit-sdk.ts", "~/.scriptkit/sdk/"),
+        ];
+
+        for (relative_path, doc_path) in documented_paths {
+            assert!(
+                agents_content.contains(doc_path),
+                "AGENTS.md should document path: {}",
+                doc_path
+            );
+
+            let actual_path = kit_root.join(relative_path);
+            // For directories, check they exist; for files, check the parent exists
+            if relative_path.contains('.') {
+                assert!(
+                    actual_path.exists(),
+                    "Documented path {} should exist as file: {:?}",
+                    doc_path,
+                    actual_path
+                );
+            } else {
+                assert!(
+                    actual_path.exists(),
+                    "Documented path {} should exist as directory: {:?}",
+                    doc_path,
+                    actual_path
+                );
+            }
+        }
+
         std::env::remove_var(SK_PATH_ENV);
     }
 }
