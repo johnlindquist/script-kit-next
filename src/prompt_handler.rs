@@ -55,7 +55,7 @@ impl ScriptListApp {
                 self.focused_input = FocusedInput::ArgPrompt;
                 // Request focus via pending_focus mechanism (will be applied on next render)
                 self.pending_focus = Some(FocusTarget::AppRoot); // ArgPrompt uses parent focus
-                // Resize window based on number of choices
+                                                                 // Resize window based on number of choices
                 let view_type = if choice_count == 0 {
                     ViewType::ArgPromptNoChoices
                 } else {
@@ -90,10 +90,16 @@ impl ScriptListApp {
                             match sender.try_send(response) {
                                 Ok(()) => {}
                                 Err(std::sync::mpsc::TrySendError::Full(_)) => {
-                                    logging::log("WARN", "Response channel full - div response dropped");
+                                    logging::log(
+                                        "WARN",
+                                        "Response channel full - div response dropped",
+                                    );
                                 }
                                 Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
-                                    logging::log("UI", "Response channel disconnected - script exited");
+                                    logging::log(
+                                        "UI",
+                                        "Response channel disconnected - script exited",
+                                    );
                                 }
                             }
                         }
@@ -187,10 +193,16 @@ impl ScriptListApp {
                             match sender.try_send(response) {
                                 Ok(()) => {}
                                 Err(std::sync::mpsc::TrySendError::Full(_)) => {
-                                    logging::log("WARN", "Response channel full - terminal response dropped");
+                                    logging::log(
+                                        "WARN",
+                                        "Response channel full - terminal response dropped",
+                                    );
                                 }
                                 Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
-                                    logging::log("UI", "Response channel disconnected - script exited");
+                                    logging::log(
+                                        "UI",
+                                        "Response channel disconnected - script exited",
+                                    );
                                 }
                             }
                         }
@@ -253,10 +265,16 @@ impl ScriptListApp {
                             match sender.try_send(response) {
                                 Ok(()) => {}
                                 Err(std::sync::mpsc::TrySendError::Full(_)) => {
-                                    logging::log("WARN", "Response channel full - editor response dropped");
+                                    logging::log(
+                                        "WARN",
+                                        "Response channel full - editor response dropped",
+                                    );
                                 }
                                 Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
-                                    logging::log("UI", "Response channel disconnected - script exited");
+                                    logging::log(
+                                        "UI",
+                                        "Response channel disconnected - script exited",
+                                    );
                                 }
                             }
                         }
@@ -834,6 +852,26 @@ impl ScriptListApp {
                             None,
                         )
                     }
+                    AppView::ScratchPadView { .. } => (
+                        "scratchPad".to_string(),
+                        Some("scratch-pad".to_string()),
+                        None,
+                        String::new(),
+                        0,
+                        0,
+                        -1,
+                        None,
+                    ),
+                    AppView::QuickTerminalView { .. } => (
+                        "quickTerminal".to_string(),
+                        Some("quick-terminal".to_string()),
+                        None,
+                        String::new(),
+                        0,
+                        0,
+                        -1,
+                        None,
+                    ),
                 };
 
                 // Focus state: we use focused_input as a proxy since we don't have Window access here.
@@ -982,10 +1020,16 @@ impl ScriptListApp {
                             match sender.try_send(response) {
                                 Ok(()) => {}
                                 Err(std::sync::mpsc::TrySendError::Full(_)) => {
-                                    logging::log("WARN", "Response channel full - path response dropped");
+                                    logging::log(
+                                        "WARN",
+                                        "Response channel full - path response dropped",
+                                    );
                                 }
                                 Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
-                                    logging::log("UI", "Response channel disconnected - script exited");
+                                    logging::log(
+                                        "UI",
+                                        "Response channel disconnected - script exited",
+                                    );
                                 }
                             }
                         }
@@ -1013,8 +1057,9 @@ impl ScriptListApp {
 
                 // Subscribe to PathPrompt events for actions dialog control
                 // This replaces the mutex-polling pattern with event-driven handling
-                cx.subscribe(&entity, |this, _entity, event: &PathPromptEvent, cx| {
-                    match event {
+                cx.subscribe(
+                    &entity,
+                    |this, _entity, event: &PathPromptEvent, cx| match event {
                         PathPromptEvent::ShowActions(path_info) => {
                             logging::log(
                                 "UI",
@@ -1029,8 +1074,8 @@ impl ScriptListApp {
                             logging::log("UI", "PathPromptEvent::CloseActions received");
                             this.handle_close_path_actions(cx);
                         }
-                    }
-                })
+                    },
+                )
                 .detach();
 
                 self.current_view = AppView::PathPrompt {
@@ -1074,10 +1119,16 @@ impl ScriptListApp {
                             match sender.try_send(response) {
                                 Ok(()) => {}
                                 Err(std::sync::mpsc::TrySendError::Full(_)) => {
-                                    logging::log("WARN", "Response channel full - env response dropped");
+                                    logging::log(
+                                        "WARN",
+                                        "Response channel full - env response dropped",
+                                    );
                                 }
                                 Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
-                                    logging::log("UI", "Response channel disconnected - script exited");
+                                    logging::log(
+                                        "UI",
+                                        "Response channel disconnected - script exited",
+                                    );
                                 }
                             }
                         }
@@ -1135,10 +1186,16 @@ impl ScriptListApp {
                             match sender.try_send(response) {
                                 Ok(()) => {}
                                 Err(std::sync::mpsc::TrySendError::Full(_)) => {
-                                    logging::log("WARN", "Response channel full - drop response dropped");
+                                    logging::log(
+                                        "WARN",
+                                        "Response channel full - drop response dropped",
+                                    );
                                 }
                                 Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
-                                    logging::log("UI", "Response channel disconnected - script exited");
+                                    logging::log(
+                                        "UI",
+                                        "Response channel disconnected - script exited",
+                                    );
                                 }
                             }
                         }
@@ -1183,10 +1240,16 @@ impl ScriptListApp {
                             match sender.try_send(response) {
                                 Ok(()) => {}
                                 Err(std::sync::mpsc::TrySendError::Full(_)) => {
-                                    logging::log("WARN", "Response channel full - template response dropped");
+                                    logging::log(
+                                        "WARN",
+                                        "Response channel full - template response dropped",
+                                    );
                                 }
                                 Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
-                                    logging::log("UI", "Response channel disconnected - script exited");
+                                    logging::log(
+                                        "UI",
+                                        "Response channel disconnected - script exited",
+                                    );
                                 }
                             }
                         }
@@ -1243,10 +1306,16 @@ impl ScriptListApp {
                             match sender.try_send(response) {
                                 Ok(()) => {}
                                 Err(std::sync::mpsc::TrySendError::Full(_)) => {
-                                    logging::log("WARN", "Response channel full - select response dropped");
+                                    logging::log(
+                                        "WARN",
+                                        "Response channel full - select response dropped",
+                                    );
                                 }
                                 Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
-                                    logging::log("UI", "Response channel disconnected - script exited");
+                                    logging::log(
+                                        "UI",
+                                        "Response channel disconnected - script exited",
+                                    );
                                 }
                             }
                         }

@@ -416,7 +416,12 @@ impl ScriptListApp {
                 }
             }
             FocusTarget::EditorPrompt => {
-                if let AppView::EditorPrompt { entity, .. } = &self.current_view {
+                let entity = match &self.current_view {
+                    AppView::EditorPrompt { entity, .. } => Some(entity),
+                    AppView::ScratchPadView { entity, .. } => Some(entity),
+                    _ => None,
+                };
+                if let Some(entity) = entity {
                     entity.update(cx, |editor, cx| {
                         editor.focus(window, cx);
                     });
@@ -469,7 +474,12 @@ impl ScriptListApp {
                 }
             }
             FocusTarget::TermPrompt => {
-                if let AppView::TermPrompt { entity, .. } = &self.current_view {
+                let entity = match &self.current_view {
+                    AppView::TermPrompt { entity, .. } => Some(entity),
+                    AppView::QuickTerminalView { entity, .. } => Some(entity),
+                    _ => None,
+                };
+                if let Some(entity) = entity {
                     let fh = entity.read(cx).focus_handle.clone();
                     window.focus(&fh, cx);
                     // Terminal handles its own cursor
@@ -1374,6 +1384,12 @@ impl ScriptListApp {
                 };
                 (ViewType::ScriptList, filtered_count)
             }
+            AppView::ScratchPadView { .. } => {
+                (ViewType::EditorPrompt, 0)
+            }
+            AppView::QuickTerminalView { .. } => {
+                (ViewType::TermPrompt, 0)
+            }
         };
 
         let target_height = height_for_view(view_type, item_count);
@@ -2253,7 +2269,10 @@ impl ScriptListApp {
     fn is_dismissable_view(&self) -> bool {
         !matches!(
             self.current_view,
-            AppView::TermPrompt { .. } | AppView::EditorPrompt { .. }
+            AppView::TermPrompt { .. }
+                | AppView::EditorPrompt { .. }
+                | AppView::ScratchPadView { .. }
+                | AppView::QuickTerminalView { .. }
         )
     }
 
@@ -2448,6 +2467,8 @@ impl ScriptListApp {
             AppView::AppLauncherView { .. } => "AppLauncherView",
             AppView::WindowSwitcherView { .. } => "WindowSwitcherView",
             AppView::DesignGalleryView { .. } => "DesignGalleryView",
+            AppView::ScratchPadView { .. } => "ScratchPadView",
+            AppView::QuickTerminalView { .. } => "QuickTerminalView",
         };
 
         let old_focused_input = self.focused_input;
@@ -2552,6 +2573,8 @@ impl ScriptListApp {
                 | AppView::AppLauncherView { .. }
                 | AppView::WindowSwitcherView { .. }
                 | AppView::DesignGalleryView { .. }
+                | AppView::ScratchPadView { .. }
+                | AppView::QuickTerminalView { .. }
         )
     }
 

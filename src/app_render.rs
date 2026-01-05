@@ -487,6 +487,9 @@ impl ScriptListApp {
                             builtins::BuiltInFeature::FrecencyCommand(_) => {
                                 "Suggested Items".to_string()
                             }
+                            builtins::BuiltInFeature::UtilityCommand(_) => {
+                                "Quick Utility".to_string()
+                            }
                         };
                         panel = panel.child(
                             div()

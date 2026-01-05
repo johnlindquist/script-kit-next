@@ -660,6 +660,27 @@ impl ScriptListApp {
                     }
                 }
             }
+
+            // =========================================================================
+            // Utility Commands (Scratch Pad, Quick Terminal)
+            // =========================================================================
+            builtins::BuiltInFeature::UtilityCommand(cmd_type) => {
+                logging::log(
+                    "EXEC",
+                    &format!("Executing utility command: {:?}", cmd_type),
+                );
+
+                use builtins::UtilityCommandType;
+
+                match cmd_type {
+                    UtilityCommandType::ScratchPad => {
+                        self.open_scratch_pad(cx);
+                    }
+                    UtilityCommandType::QuickTerminal => {
+                        self.open_quick_terminal(cx);
+                    }
+                }
+            }
         }
     }
 
@@ -704,6 +725,182 @@ impl ScriptListApp {
         } else {
             logging::log("EXEC", &format!("Focused window: {}", window.title));
             self.close_and_reset_window(cx);
+        }
+    }
+
+    /// Get the scratch pad file path
+    fn get_scratch_pad_path() -> std::path::PathBuf {
+        setup::get_kit_path().join("scratch-pad.md")
+    }
+
+    /// Open the scratch pad editor with auto-save functionality
+    fn open_scratch_pad(&mut self, cx: &mut Context<Self>) {
+        logging::log("EXEC", "Opening Scratch Pad");
+
+        // Get or create scratch pad file path
+        let scratch_path = Self::get_scratch_pad_path();
+
+        // Ensure parent directory exists
+        if let Some(parent) = scratch_path.parent() {
+            if let Err(e) = std::fs::create_dir_all(parent) {
+                logging::log("ERROR", &format!("Failed to create scratch pad directory: {}", e));
+                self.toast_manager.push(
+                    components::toast::Toast::error(
+                        format!("Failed to create directory: {}", e),
+                        &self.theme,
+                    )
+                    .duration_ms(Some(5000)),
+                );
+                cx.notify();
+                return;
+            }
+        }
+
+        // Load existing content or create empty file
+        let content = match std::fs::read_to_string(&scratch_path) {
+            Ok(content) => content,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                // Create empty file
+                if let Err(write_err) = std::fs::write(&scratch_path, "") {
+                    logging::log("ERROR", &format!("Failed to create scratch pad file: {}", write_err));
+                }
+                String::new()
+            }
+            Err(e) => {
+                logging::log("ERROR", &format!("Failed to read scratch pad: {}", e));
+                self.toast_manager.push(
+                    components::toast::Toast::error(
+                        format!("Failed to read scratch pad: {}", e),
+                        &self.theme,
+                    )
+                    .duration_ms(Some(5000)),
+                );
+                cx.notify();
+                return;
+            }
+        };
+
+        logging::log("EXEC", &format!("Loaded scratch pad with {} bytes", content.len()));
+
+        // Create editor focus handle
+        let editor_focus_handle = cx.focus_handle();
+
+        // Create submit callback that saves and closes
+        let scratch_path_clone = scratch_path.clone();
+        let submit_callback: std::sync::Arc<dyn Fn(String, Option<String>) + Send + Sync> =
+            std::sync::Arc::new(move |_id: String, value: Option<String>| {
+                if let Some(content) = value {
+                    // Save the content to disk
+                    if let Err(e) = std::fs::write(&scratch_path_clone, &content) {
+                        tracing::error!(error = %e, "Failed to save scratch pad on submit");
+                    } else {
+                        tracing::info!(bytes = content.len(), "Scratch pad saved on submit");
+                    }
+                }
+            });
+
+        // Get the target height for editor view
+        let editor_height = window_resize::layout::MAX_HEIGHT;
+
+        // Create the editor prompt
+        let editor_prompt = EditorPrompt::with_height(
+            "scratch-pad".to_string(),
+            content,
+            "markdown".to_string(), // Use markdown for nice highlighting
+            editor_focus_handle.clone(),
+            submit_callback,
+            std::sync::Arc::new(self.theme.clone()),
+            std::sync::Arc::new(self.config.clone()),
+            Some(editor_height),
+        );
+
+        let entity = cx.new(|_| editor_prompt);
+
+        // Set up auto-save timer using weak reference
+        let scratch_path_for_save = scratch_path;
+        let entity_weak = entity.downgrade();
+        cx.spawn(async move |_this, cx| {
+            loop {
+                // Auto-save every 2 seconds
+                gpui::Timer::after(std::time::Duration::from_secs(2)).await;
+
+                // Try to save the current content
+                let save_result = cx.update(|cx| {
+                    if let Some(entity) = entity_weak.upgrade() {
+                        // Use update on the entity to get the correct Context<EditorPrompt>
+                        let content: String = entity.update(cx, |editor, cx| editor.content(cx));
+                        if let Err(e) = std::fs::write(&scratch_path_for_save, &content) {
+                            tracing::warn!(error = %e, "Auto-save failed");
+                        } else {
+                            tracing::debug!(bytes = content.len(), "Auto-saved scratch pad");
+                        }
+                        true // Entity still exists
+                    } else {
+                        false // Entity dropped, stop the task
+                    }
+                });
+
+                match save_result {
+                    Ok(true) => continue,
+                    Ok(false) | Err(_) => break, // Entity gone or context invalid
+                }
+            }
+        })
+        .detach();
+
+        self.current_view = AppView::ScratchPadView {
+            entity,
+            focus_handle: editor_focus_handle,
+        };
+        self.focused_input = FocusedInput::None;
+        self.pending_focus = Some(FocusTarget::EditorPrompt);
+
+        defer_resize_to_view(ViewType::EditorPrompt, 0, cx);
+        cx.notify();
+    }
+
+    /// Open the quick terminal
+    fn open_quick_terminal(&mut self, cx: &mut Context<Self>) {
+        logging::log("EXEC", "Opening Quick Terminal");
+
+        // Create submit callback that just closes on exit/escape
+        let submit_callback: std::sync::Arc<dyn Fn(String, Option<String>) + Send + Sync> =
+            std::sync::Arc::new(move |_id: String, _value: Option<String>| {
+                // Terminal exited - nothing special to do
+            });
+
+        // Get the target height for terminal view
+        let term_height = window_resize::layout::MAX_HEIGHT;
+
+        // Create terminal without a specific command (opens default shell)
+        match term_prompt::TermPrompt::with_height(
+            "quick-terminal".to_string(),
+            None, // No command - opens default shell
+            self.focus_handle.clone(),
+            submit_callback,
+            std::sync::Arc::new(self.theme.clone()),
+            std::sync::Arc::new(self.config.clone()),
+            Some(term_height),
+        ) {
+            Ok(term_prompt) => {
+                let entity = cx.new(|_| term_prompt);
+                self.current_view = AppView::QuickTerminalView { entity };
+                self.focused_input = FocusedInput::None;
+                self.pending_focus = Some(FocusTarget::TermPrompt);
+                defer_resize_to_view(ViewType::TermPrompt, 0, cx);
+                cx.notify();
+            }
+            Err(e) => {
+                logging::log("ERROR", &format!("Failed to create quick terminal: {}", e));
+                self.toast_manager.push(
+                    components::toast::Toast::error(
+                        format!("Failed to open terminal: {}", e),
+                        &self.theme,
+                    )
+                    .duration_ms(Some(5000)),
+                );
+                cx.notify();
+            }
         }
     }
 }

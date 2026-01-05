@@ -52,6 +52,8 @@ impl ScriptListApp {
             AppView::AppLauncherView { .. } => "AppLauncher",
             AppView::WindowSwitcherView { .. } => "WindowSwitcher",
             AppView::DesignGalleryView { .. } => "DesignGallery",
+            AppView::ScratchPadView { .. } => "ScratchPad",
+            AppView::QuickTerminalView { .. } => "QuickTerminal",
             AppView::ActionsDialog => "ActionsDialog",
         };
 
@@ -513,6 +515,8 @@ impl ScriptListApp {
             AppView::AppLauncherView { .. } => "appLauncher",
             AppView::WindowSwitcherView { .. } => "windowSwitcher",
             AppView::DesignGalleryView { .. } => "designGallery",
+            AppView::ScratchPadView { .. } => "scratchPad",
+            AppView::QuickTerminalView { .. } => "quickTerminal",
             AppView::ActionsDialog => "actionsDialog",
         };
 

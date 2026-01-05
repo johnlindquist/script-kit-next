@@ -527,6 +527,16 @@ enum AppView {
         filter: String,
         selected_index: usize,
     },
+    /// Showing scratch pad editor (auto-saves to disk)
+    ScratchPadView {
+        entity: Entity<EditorPrompt>,
+        #[allow(dead_code)]
+        focus_handle: FocusHandle,
+    },
+    /// Showing quick terminal
+    QuickTerminalView {
+        entity: Entity<term_prompt::TermPrompt>,
+    },
 }
 
 /// Wrapper to hold a script session that can be shared across async boundaries
@@ -1019,6 +1029,12 @@ impl Render for ScriptListApp {
             } => self
                 .render_design_gallery(filter, selected_index, cx)
                 .into_any_element(),
+            AppView::ScratchPadView { entity, .. } => {
+                self.render_editor_prompt(entity, cx).into_any_element()
+            }
+            AppView::QuickTerminalView { entity, .. } => {
+                self.render_term_prompt(entity, cx).into_any_element()
+            }
         };
 
         // Wrap content in a container that can have the debug grid overlay

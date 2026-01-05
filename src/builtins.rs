@@ -122,6 +122,15 @@ pub enum FrecencyCommandType {
     ClearSuggested,
 }
 
+/// Utility command types for quick access tools
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UtilityCommandType {
+    /// Open scratch pad - auto-saving editor
+    ScratchPad,
+    /// Open quick terminal for running commands
+    QuickTerminal,
+}
+
 /// Menu bar action details for executing menu commands
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MenuBarActionInfo {
@@ -182,6 +191,8 @@ pub enum BuiltInFeature {
     PermissionCommand(PermissionCommandType),
     /// Frecency/suggested items commands
     FrecencyCommand(FrecencyCommandType),
+    /// Utility commands (scratch pad, quick terminal)
+    UtilityCommand(UtilityCommandType),
 }
 
 /// A built-in feature entry that appears in the main search
@@ -835,6 +846,40 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ],
         BuiltInFeature::FrecencyCommand(FrecencyCommandType::ClearSuggested),
         "🧹",
+    ));
+
+    // =========================================================================
+    // Utility Commands
+    // =========================================================================
+
+    entries.push(BuiltInEntry::new_with_icon(
+        "builtin-scratch-pad",
+        "Scratch Pad",
+        "Quick editor for notes and code - auto-saves to disk",
+        vec![
+            "scratch",
+            "pad",
+            "scratchpad",
+            "notes",
+            "editor",
+            "write",
+            "text",
+            "quick",
+            "jot",
+        ],
+        BuiltInFeature::UtilityCommand(UtilityCommandType::ScratchPad),
+        "📝",
+    ));
+
+    entries.push(BuiltInEntry::new_with_icon(
+        "builtin-quick-terminal",
+        "Quick Terminal",
+        "Open a terminal for running quick commands",
+        vec![
+            "terminal", "term", "shell", "bash", "zsh", "command", "quick", "console", "cli",
+        ],
+        BuiltInFeature::UtilityCommand(UtilityCommandType::QuickTerminal),
+        "💻",
     ));
 
     debug!(count = entries.len(), "Built-in entries loaded");
