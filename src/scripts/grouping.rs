@@ -164,10 +164,23 @@ pub fn get_grouped_results(
     let mut apps_indices: Vec<usize> = Vec::new();
     let mut agents_indices: Vec<usize> = Vec::new();
 
+    // Get excluded commands for filtering builtins from SUGGESTED section
+    let excluded_commands = &suggested_config.excluded_commands;
+
     for (idx, result) in results.iter().enumerate() {
         if let Some(path) = get_result_path(result) {
             let score = frecency_store.get_score(&path);
-            if score >= min_score && suggested_paths.contains(&path) {
+
+            // Check if this builtin should be excluded from SUGGESTED
+            // (e.g., "Quit Script Kit" shouldn't appear in suggested even if it has frecency)
+            let is_excluded_builtin = match result {
+                SearchResult::BuiltIn(bm) => {
+                    bm.entry.should_exclude_from_frecency(excluded_commands)
+                }
+                _ => false,
+            };
+
+            if score >= min_score && suggested_paths.contains(&path) && !is_excluded_builtin {
                 suggested_indices.push((idx, score));
             } else {
                 // Categorize by SearchResult variant
