@@ -13,13 +13,13 @@ use gpui::{
     div, prelude::*, px, App, Bounds, Context, Entity, FocusHandle, Focusable, Pixels, Point,
     Render, Size, Window, WindowBounds, WindowHandle, WindowKind, WindowOptions,
 };
-use gpui_component::Root;
 use std::sync::{Mutex, OnceLock};
 
 use super::dialog::ActionsDialog;
 
 /// Global singleton for the actions window handle
-static ACTIONS_WINDOW: OnceLock<Mutex<Option<WindowHandle<Root>>>> = OnceLock::new();
+/// NOTE: Uses ActionsWindow directly (not Root) to avoid Root's opaque background
+static ACTIONS_WINDOW: OnceLock<Mutex<Option<WindowHandle<ActionsWindow>>>> = OnceLock::new();
 
 /// Actions window dimensions
 const ACTIONS_WINDOW_WIDTH: f32 = 320.0;
@@ -77,7 +77,7 @@ pub fn open_actions_window(
     cx: &mut App,
     main_window_bounds: Bounds<Pixels>,
     dialog_entity: Entity<ActionsDialog>,
-) -> anyhow::Result<WindowHandle<Root>> {
+) -> anyhow::Result<WindowHandle<ActionsWindow>> {
     // Close any existing actions window first
     close_actions_window(cx);
 
@@ -127,12 +127,11 @@ pub fn open_actions_window(
     };
 
     // Create the window with the shared dialog entity
-    let handle = cx.open_window(window_options, |window, cx| {
-        // Create the window wrapper with the shared dialog
-        let actions_window = cx.new(|cx| ActionsWindow::new(dialog_entity, cx));
-
-        // Wrap in Root for gpui-component theming
-        cx.new(|cx| Root::new(actions_window, window, cx))
+    // NOTE: We don't use Root wrapper here because Root has .bg(theme.background).size_full()
+    // which creates an opaque background for the entire window. Instead, we render the
+    // ActionsWindow directly - the ActionsDialog handles its own styling.
+    let handle = cx.open_window(window_options, |_window, cx| {
+        cx.new(|cx| ActionsWindow::new(dialog_entity, cx))
     })?;
 
     // Configure the window as non-movable on macOS
@@ -195,7 +194,7 @@ pub fn is_actions_window_open() -> bool {
 }
 
 /// Get the actions window handle if it exists
-pub fn get_actions_window_handle() -> Option<WindowHandle<Root>> {
+pub fn get_actions_window_handle() -> Option<WindowHandle<ActionsWindow>> {
     if let Some(window_storage) = ACTIONS_WINDOW.get() {
         if let Ok(guard) = window_storage.lock() {
             return *guard;
