@@ -2339,7 +2339,17 @@ fn main() {
 
                     // Check for menu events
                     if let Ok(event) = tray_mgr.menu_event_receiver().try_recv() {
-                        match tray_mgr.match_menu_event(&event) {
+                        // Convert event to action using type-safe IDs (pure function)
+                        let action = TrayManager::action_from_event(&event);
+
+                        // Handle side effects for LaunchAtLogin before the match
+                        if let Some(TrayMenuAction::LaunchAtLogin) = action {
+                            if let Err(e) = tray_mgr.handle_action(TrayMenuAction::LaunchAtLogin) {
+                                logging::log("TRAY", &format!("Failed to toggle login item: {}", e));
+                            }
+                        }
+
+                        match action {
                             Some(TrayMenuAction::OpenScriptKit) => {
                                 logging::log("TRAY", "Open Script Kit menu item clicked");
                                 let window_inner = window_for_tray;
@@ -2371,7 +2381,7 @@ fn main() {
                                 });
                             }
                             Some(TrayMenuAction::LaunchAtLogin) => {
-                                // Toggle is handled inside match_menu_event
+                                // Side effects (toggle + checkbox update) handled above
                                 logging::log("TRAY", "Launch at Login toggled");
                             }
                             Some(TrayMenuAction::Settings) => {

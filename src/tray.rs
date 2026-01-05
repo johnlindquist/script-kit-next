@@ -8,8 +8,8 @@ use anyhow::{bail, Context, Result};
 use tracing::warn;
 use tray_icon::{
     menu::{
-        CheckMenuItem, Icon as MenuIcon, IconMenuItem, Menu, MenuEvent, MenuEventReceiver,
-        MenuItem, PredefinedMenuItem,
+        CheckMenuItem, ContextMenu, Icon as MenuIcon, IconMenuItem, MenuEvent, MenuEventReceiver,
+        MenuItem, PredefinedMenuItem, Submenu,
     },
     Icon, TrayIcon, TrayIconBuilder,
 };
@@ -172,6 +172,7 @@ impl TrayMenuAction {
     }
 
     /// Returns all TrayMenuAction variants for iteration.
+    #[cfg(test)]
     pub const fn all() -> &'static [Self] {
         &[
             Self::OpenScriptKit,
@@ -192,22 +193,12 @@ impl TrayMenuAction {
 pub struct TrayManager {
     #[allow(dead_code)]
     tray_icon: TrayIcon,
-    open_script_kit_id: String,
-    open_notes_id: String,
-    open_ai_chat_id: String,
-    open_on_github_id: String,
-    open_manual_id: String,
-    join_community_id: String,
-    follow_us_id: String,
-    settings_id: String,
+    /// The "Launch at Login" checkbox, stored for updating its checked state
     launch_at_login_item: CheckMenuItem,
-    #[allow(dead_code)]
-    version_id: String,
-    quit_id: String,
 }
 
 impl TrayManager {
-    /// Creates a new TrayManager with the Script Kit logo and menu
+    /// Creates a new TrayManager with the Script Kit logo and menu.
     ///
     /// # Errors
     /// Returns an error if:
@@ -216,42 +207,24 @@ impl TrayManager {
     /// - Tray icon creation fails
     pub fn new() -> Result<Self> {
         let icon = Self::create_icon_from_svg()?;
-        let (
-            menu,
-            open_id,
-            open_notes_id,
-            open_ai_chat_id,
-            open_on_github_id,
-            open_manual_id,
-            join_community_id,
-            follow_us_id,
-            settings_id,
-            launch_at_login_item,
-            version_id,
-            quit_id,
-        ) = Self::create_menu()?;
+        let (menu, launch_at_login_item) = Self::create_menu()?;
 
-        let tray_icon = TrayIconBuilder::new()
+        let mut builder = TrayIconBuilder::new()
             .with_icon(icon)
             .with_tooltip("Script Kit")
-            .with_menu(Box::new(menu))
-            .with_icon_as_template(true) // macOS: adapt to light/dark menu bar
-            .build()
-            .context("Failed to create tray icon")?;
+            .with_menu(menu);
+
+        // Template mode is macOS-only; adapts icon to light/dark menu bar
+        #[cfg(target_os = "macos")]
+        {
+            builder = builder.with_icon_as_template(true);
+        }
+
+        let tray_icon = builder.build().context("Failed to create tray icon")?;
 
         Ok(Self {
             tray_icon,
-            open_script_kit_id: open_id,
-            open_notes_id,
-            open_ai_chat_id,
-            open_on_github_id,
-            open_manual_id,
-            join_community_id,
-            follow_us_id,
-            settings_id,
             launch_at_login_item,
-            version_id,
-            quit_id,
         })
     }
 
@@ -288,7 +261,11 @@ impl TrayManager {
         }
     }
 
-    /// Creates the tray menu with standard items
+    /// Creates the tray menu with standard items.
+    ///
+    /// Uses `Submenu` as the root context menu for cross-platform compatibility.
+    /// On macOS, `Menu::append` only allows `Submenu`, but `Submenu::append`
+    /// allows any menu item type.
     ///
     /// Menu structure (Raycast-style):
     /// 1. Open Script Kit
@@ -304,27 +281,15 @@ impl TrayManager {
     /// 11. Settings
     /// 12. ---
     /// 13. Launch at Login (checkmark)
-    /// 14. Version 0.1.0 (disabled)
+    /// 14. Version X.Y.Z (disabled)
     /// 15. ---
     /// 16. Quit Script Kit
-    #[allow(clippy::type_complexity)]
-    fn create_menu() -> Result<(
-        Menu,
-        String,
-        String,
-        String,
-        String,
-        String,
-        String,
-        String,
-        String,
-        CheckMenuItem,
-        String,
-        String,
-    )> {
-        let menu = Menu::new();
+    fn create_menu() -> Result<(Box<dyn ContextMenu>, CheckMenuItem)> {
+        // Use Submenu as context menu root - works cross-platform
+        // (Menu::append only allows Submenu on macOS, but Submenu::append allows any item)
+        let menu = Submenu::with_id("tray.root", "Script Kit", true);
 
-        // Create menu icons from embedded SVGs (black/white outline style)
+        // Create menu icons from embedded SVGs
         let icon_home = Self::create_menu_icon_from_svg(ICON_HOME);
         let icon_edit = Self::create_menu_icon_from_svg(ICON_EDIT);
         let icon_message = Self::create_menu_icon_from_svg(ICON_MESSAGE);
@@ -335,22 +300,71 @@ impl TrayManager {
         let icon_settings = Self::create_menu_icon_from_svg(ICON_SETTINGS);
         let icon_log_out = Self::create_menu_icon_from_svg(ICON_LOG_OUT);
 
-        // Create menu items with custom SVG icons
-        let open_item = IconMenuItem::new("Open Script Kit", true, icon_home, None);
-        let open_notes_item = IconMenuItem::new("Open Notes", true, icon_edit, None);
-        let open_ai_chat_item = IconMenuItem::new("Open AI Chat", true, icon_message, None);
+        // Create menu items with stable IDs from TrayMenuAction
+        let open_item = IconMenuItem::with_id(
+            TrayMenuAction::OpenScriptKit.id(),
+            "Open Script Kit",
+            true,
+            icon_home,
+            None,
+        );
+        let open_notes_item = IconMenuItem::with_id(
+            TrayMenuAction::OpenNotes.id(),
+            "Open Notes",
+            true,
+            icon_edit,
+            None,
+        );
+        let open_ai_chat_item = IconMenuItem::with_id(
+            TrayMenuAction::OpenAiChat.id(),
+            "Open AI Chat",
+            true,
+            icon_message,
+            None,
+        );
 
         // External links
-        let open_on_github_item = IconMenuItem::new("Open on GitHub", true, icon_github, None);
-        let open_manual_item = IconMenuItem::new("Manual", true, icon_book, None);
-        let join_community_item = IconMenuItem::new("Join Community", true, icon_discord, None);
-        let follow_us_item = IconMenuItem::new("Follow Us", true, icon_at_sign, None);
+        let open_on_github_item = IconMenuItem::with_id(
+            TrayMenuAction::OpenOnGitHub.id(),
+            "Open on GitHub",
+            true,
+            icon_github,
+            None,
+        );
+        let open_manual_item = IconMenuItem::with_id(
+            TrayMenuAction::OpenManual.id(),
+            "Manual",
+            true,
+            icon_book,
+            None,
+        );
+        let join_community_item = IconMenuItem::with_id(
+            TrayMenuAction::JoinCommunity.id(),
+            "Join Community",
+            true,
+            icon_discord,
+            None,
+        );
+        let follow_us_item = IconMenuItem::with_id(
+            TrayMenuAction::FollowUs.id(),
+            "Follow Us",
+            true,
+            icon_at_sign,
+            None,
+        );
 
         // Settings
-        let settings_item = IconMenuItem::new("Settings", true, icon_settings, None);
+        let settings_item = IconMenuItem::with_id(
+            TrayMenuAction::Settings.id(),
+            "Settings",
+            true,
+            icon_settings,
+            None,
+        );
 
         // Create check menu item for Launch at Login with current state
-        let launch_at_login_item = CheckMenuItem::new(
+        let launch_at_login_item = CheckMenuItem::with_id(
+            TrayMenuAction::LaunchAtLogin.id(),
             "Launch at Login",
             true, // enabled
             login_item::is_login_item_enabled(),
@@ -358,21 +372,19 @@ impl TrayManager {
         );
 
         // Version display (disabled, informational only)
-        let version_item = MenuItem::new("Version 0.1.0", false, None);
+        let version_item = MenuItem::new(
+            format!("Version {}", env!("CARGO_PKG_VERSION")),
+            false,
+            None,
+        );
 
-        let quit_item = IconMenuItem::new("Quit Script Kit", true, icon_log_out, None);
-
-        // Store IDs for event matching
-        let open_id = open_item.id().0.clone();
-        let open_notes_id = open_notes_item.id().0.clone();
-        let open_ai_chat_id = open_ai_chat_item.id().0.clone();
-        let open_on_github_id = open_on_github_item.id().0.clone();
-        let open_manual_id = open_manual_item.id().0.clone();
-        let join_community_id = join_community_item.id().0.clone();
-        let follow_us_id = follow_us_item.id().0.clone();
-        let settings_id = settings_item.id().0.clone();
-        let version_id = version_item.id().0.clone();
-        let quit_id = quit_item.id().0.clone();
+        let quit_item = IconMenuItem::with_id(
+            TrayMenuAction::Quit.id(),
+            "Quit Script Kit",
+            true,
+            icon_log_out,
+            None,
+        );
 
         // Add items to menu in Raycast-style order
         // Section 1: Main action
@@ -417,78 +429,51 @@ impl TrayManager {
         // Section 6: Quit
         menu.append(&quit_item).context("Failed to add Quit item")?;
 
-        Ok((
-            menu,
-            open_id,
-            open_notes_id,
-            open_ai_chat_id,
-            open_on_github_id,
-            open_manual_id,
-            join_community_id,
-            follow_us_id,
-            settings_id,
-            launch_at_login_item,
-            version_id,
-            quit_id,
-        ))
+        Ok((Box::new(menu), launch_at_login_item))
     }
 
-    /// Returns the menu event receiver for handling menu clicks
+    /// Returns the menu event receiver for handling menu clicks.
     pub fn menu_event_receiver(&self) -> &MenuEventReceiver {
         MenuEvent::receiver()
     }
 
-    /// Matches a menu event to a TrayMenuAction
+    /// Converts a menu event to a `TrayMenuAction` (pure function).
     ///
     /// Returns `Some(action)` if the event matches a known menu item,
     /// or `None` if the event is from an unknown source.
-    pub fn match_menu_event(&self, event: &MenuEvent) -> Option<TrayMenuAction> {
-        let id = &event.id.0;
-        if id == &self.open_script_kit_id {
-            Some(TrayMenuAction::OpenScriptKit)
-        } else if id == &self.open_notes_id {
-            Some(TrayMenuAction::OpenNotes)
-        } else if id == &self.open_ai_chat_id {
-            Some(TrayMenuAction::OpenAiChat)
-        } else if id == &self.open_on_github_id {
-            Some(TrayMenuAction::OpenOnGitHub)
-        } else if id == &self.open_manual_id {
-            Some(TrayMenuAction::OpenManual)
-        } else if id == &self.join_community_id {
-            Some(TrayMenuAction::JoinCommunity)
-        } else if id == &self.follow_us_id {
-            Some(TrayMenuAction::FollowUs)
-        } else if id == &self.settings_id {
-            Some(TrayMenuAction::Settings)
-        } else if id == &self.launch_at_login_item.id().0 {
-            // Toggle login item and update checkmark
-            if let Ok(new_state) = login_item::toggle_login_item() {
-                self.launch_at_login_item.set_checked(new_state);
-            }
-            Some(TrayMenuAction::LaunchAtLogin)
-        } else if id == &self.quit_id {
-            Some(TrayMenuAction::Quit)
-        } else {
-            None
+    ///
+    /// This is a pure function with no side effects - use `handle_action()`
+    /// separately to perform the associated action.
+    pub fn action_from_event(event: &MenuEvent) -> Option<TrayMenuAction> {
+        TrayMenuAction::from_id(&event.id.0)
+    }
+
+    /// Handles any side effects for a menu action.
+    ///
+    /// Currently only `LaunchAtLogin` has side effects (toggling the OS setting
+    /// and updating the checkbox).
+    ///
+    /// # Errors
+    /// Returns an error if the action's side effect fails (e.g., login item toggle).
+    pub fn handle_action(&self, action: TrayMenuAction) -> Result<()> {
+        if action == TrayMenuAction::LaunchAtLogin {
+            // Toggle login item then re-read state from OS (never trust "intended" state)
+            login_item::toggle_login_item().context("Failed to toggle login item")?;
+            self.refresh_launch_at_login_checkmark();
         }
+        // Other actions have no side effects in TrayManager
+        Ok(())
     }
 
-    /// Returns the menu item ID for "Open Script Kit"
-    #[allow(dead_code)]
-    pub fn open_script_kit_id(&self) -> &str {
-        &self.open_script_kit_id
-    }
-
-    /// Returns the menu item ID for "Settings"
-    #[allow(dead_code)]
-    pub fn settings_id(&self) -> &str {
-        &self.settings_id
-    }
-
-    /// Returns the menu item ID for "Quit"
-    #[allow(dead_code)]
-    pub fn quit_id(&self) -> &str {
-        &self.quit_id
+    /// Refreshes the "Launch at Login" checkbox to match OS state.
+    ///
+    /// Call this:
+    /// - After toggling the login item
+    /// - When the tray menu is about to be shown
+    /// - On app startup
+    pub fn refresh_launch_at_login_checkmark(&self) {
+        let enabled = login_item::is_login_item_enabled();
+        self.launch_at_login_item.set_checked(enabled);
     }
 }
 
