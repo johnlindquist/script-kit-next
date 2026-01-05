@@ -115,8 +115,12 @@ impl ScriptListApp {
                 Timer::after(std::time::Duration::from_millis(530)).await;
                 let _ = cx.update(|cx| {
                     this.update(cx, |app, cx| {
-                        // Skip cursor blink when window is hidden or no input is focused
+                        // Skip cursor blink when:
+                        // 1. Window is hidden (no visual feedback needed)
+                        // 2. Window is not focused (prevents wasted work + incorrect UX)
+                        // 3. No input is focused (no cursor to blink)
                         if !script_kit_gpui::is_main_window_visible()
+                            || !platform::is_main_window_focused()
                             || app.focused_input == FocusedInput::None
                         {
                             return;
