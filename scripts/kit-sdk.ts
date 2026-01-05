@@ -1816,6 +1816,18 @@ function send(msg: object): void {
   process.stdout.write(`${JSON.stringify(msg)}\n`);
 }
 
+// =============================================================================
+// SDK Test Mode Configuration
+// =============================================================================
+// When SDK_TEST_AUTOSUBMIT=1 is set, prompts automatically resolve with defaults
+// This allows SDK tests to run without GPUI interaction
+const SDK_TEST_AUTOSUBMIT = process.env.SDK_TEST_AUTOSUBMIT === '1';
+const SDK_TEST_AUTOSUBMIT_DELAY = parseInt(process.env.SDK_TEST_AUTOSUBMIT_DELAY || '10', 10);
+
+if (SDK_TEST_AUTOSUBMIT) {
+  console.error('[SDK] Auto-submit mode enabled - prompts will auto-resolve');
+}
+
 // Use raw stdin reading instead of readline interface
 // This works better with bun's --preload mode
 let stdinBuffer = '';
@@ -1824,7 +1836,7 @@ console.error('[SDK] Setting up stdin handler...');
 
 // Set up raw stdin handling
 process.stdin.setEncoding('utf8');
-// Resume stdin to start receiving data - it may be paused by default  
+// Resume stdin to start receiving data - it may be paused by default
 process.stdin.resume();
 // Unref stdin so it doesn't keep the process alive when script completes
 // This allows the process to exit naturally when all async work is done
@@ -1834,7 +1846,16 @@ console.error('[SDK] stdin resumed, readable:', process.stdin.readable);
 // Helper to manage stdin ref counting for pending operations
 // When there are pending operations waiting for stdin responses, we need to
 // keep stdin referenced so the process doesn't exit prematurely
-function addPending(id: string, resolver: (msg: any) => void): void {
+function addPending(id: string, resolver: (msg: any) => void, autoSubmitValue?: any): void {
+  // In auto-submit mode, immediately resolve after a short delay
+  if (SDK_TEST_AUTOSUBMIT) {
+    setTimeout(() => {
+      console.error(`[SDK] Auto-submitting id=${id} with value:`, autoSubmitValue);
+      resolver(autoSubmitValue);
+    }, SDK_TEST_AUTOSUBMIT_DELAY);
+    return;
+  }
+
   const wasEmpty = pending.size === 0;
   // Note: This is the internal call in addPending, don't change to addPending
   pending.set(id, resolver);
@@ -2760,6 +2781,11 @@ globalThis.arg = async function arg(
     await Promise.resolve(config.onInit());
   }
 
+  // Determine auto-submit value: first choice's value, or empty string
+  const autoSubmitValue = normalizedChoices.length > 0
+    ? { value: normalizedChoices[0].value }
+    : { value: '' };
+
   return new Promise((resolve) => {
     addPending(id, async (msg: SubmitMessage) => {
       // If user pressed Escape (value is null), exit the script
@@ -2767,15 +2793,15 @@ globalThis.arg = async function arg(
         process.exit(0);
       }
       const value = msg.value ?? '';
-      
+
       // Call onSubmit callback if provided
       if (config?.onSubmit) {
         await Promise.resolve(config.onSubmit(value));
       }
-      
+
       resolve(value);
-    });
-    
+    }, autoSubmitValue);
+
     const message: ArgMessage = {
       type: 'arg',
       id,
@@ -2855,8 +2881,8 @@ globalThis.div = async function div(
   return new Promise((resolve) => {
     addPending(id, (value?: any) => {
       resolve(value);
-    });
-    
+    }, undefined); // Auto-submit: div just dismisses, no value needed
+
     const message: DivMessage = {
       type: 'div',
       id,
@@ -2994,14 +3020,17 @@ globalThis.editor = async function editor(
     }
   }
 
+  // Auto-submit value for editor: return the original content
+  const autoSubmitValue = { value: content ?? '' };
+
   return new Promise((resolve) => {
-    pending.set(id, (msg: SubmitMessage) => {
+    addPending(id, (msg: SubmitMessage) => {
       // If user pressed Escape (value is null), exit the script
       if (msg.value === null) {
         process.exit(0);
       }
       resolve(msg.value ?? '');
-    });
+    }, autoSubmitValue);
 
     const message: EditorMessage = {
       type: 'editor',
@@ -3028,14 +3057,19 @@ globalThis.mini = async function mini(
     return c;
   });
 
+  // Auto-submit value: first choice or empty
+  const autoSubmitValue = normalizedChoices.length > 0
+    ? { value: normalizedChoices[0].value }
+    : { value: '' };
+
   return new Promise((resolve) => {
-    pending.set(id, (msg: SubmitMessage) => {
+    addPending(id, (msg: SubmitMessage) => {
       // If user pressed Escape (value is null), exit the script
       if (msg.value === null) {
         process.exit(0);
       }
       resolve(msg.value ?? '');
-    });
+    }, autoSubmitValue);
 
     const message: MiniMessage = {
       type: 'mini',
@@ -3061,14 +3095,19 @@ globalThis.micro = async function micro(
     return c;
   });
 
+  // Auto-submit value: first choice or empty
+  const autoSubmitValue = normalizedChoices.length > 0
+    ? { value: normalizedChoices[0].value }
+    : { value: '' };
+
   return new Promise((resolve) => {
-    pending.set(id, (msg: SubmitMessage) => {
+    addPending(id, (msg: SubmitMessage) => {
       // If user pressed Escape (value is null), exit the script
       if (msg.value === null) {
         process.exit(0);
       }
       resolve(msg.value ?? '');
-    });
+    }, autoSubmitValue);
 
     const message: MicroMessage = {
       type: 'micro',
@@ -3094,8 +3133,13 @@ globalThis.select = async function select(
     return c;
   });
 
+  // Auto-submit value: first choice selected as array
+  const autoSubmitValue = normalizedChoices.length > 0
+    ? { value: JSON.stringify([normalizedChoices[0].value]) }
+    : { value: '[]' };
+
   return new Promise((resolve) => {
-    pending.set(id, (msg: SubmitMessage) => {
+    addPending(id, (msg: SubmitMessage) => {
       // If user pressed Escape (value is null), exit the script
       if (msg.value === null) {
         process.exit(0);
@@ -3108,7 +3152,7 @@ globalThis.select = async function select(
       } catch {
         resolve([]);
       }
-    });
+    }, autoSubmitValue);
 
     const message: SelectMessage = {
       type: 'select',
@@ -3164,8 +3208,13 @@ globalThis.fields = async function fields(
     }
   }
 
+  // Auto-submit value: array of empty strings matching field count
+  const autoSubmitValue = {
+    value: JSON.stringify(normalizedFields.map(f => f.value ?? '')),
+  };
+
   return new Promise((resolve) => {
-    pending.set(id, (msg: SubmitMessage) => {
+    addPending(id, (msg: SubmitMessage) => {
       // If user pressed Escape (value is null), exit the script
       if (msg.value === null) {
         process.exit(0);
@@ -3178,7 +3227,7 @@ globalThis.fields = async function fields(
       } catch {
         resolve([]);
       }
-    });
+    }, autoSubmitValue);
 
     const message: FieldsMessage = {
       type: 'fields',
@@ -3226,8 +3275,11 @@ globalThis.form = async function form(
     }
   }
 
+  // Auto-submit value: empty object
+  const autoSubmitValue = { value: '{}' };
+
   return new Promise((resolve) => {
-    pending.set(id, (msg: SubmitMessage) => {
+    addPending(id, (msg: SubmitMessage) => {
       // If user pressed Escape (value is null), exit the script
       if (msg.value === null) {
         process.exit(0);
@@ -3240,7 +3292,7 @@ globalThis.form = async function form(
       } catch {
         resolve({});
       }
-    });
+    }, autoSubmitValue);
 
     const message: FormMessage = {
       type: 'form',
@@ -3258,14 +3310,17 @@ globalThis.path = async function path(
 ): Promise<string> {
   const id = nextId();
 
+  // Auto-submit value: mock path for testing
+  const autoSubmitValue = { value: options?.startPath || '/tmp/test-selected-file.txt' };
+
   return new Promise((resolve) => {
-    pending.set(id, (msg: SubmitMessage) => {
+    addPending(id, (msg: SubmitMessage) => {
       // If user pressed Escape (value is null), exit the script
       if (msg.value === null) {
         process.exit(0);
       }
       resolve(msg.value ?? '');
-    });
+    }, autoSubmitValue);
 
     const message: PathMessage = {
       type: 'path',
@@ -3283,8 +3338,21 @@ globalThis.hotkey = async function hotkey(
 ): Promise<HotkeyInfo> {
   const id = nextId();
 
+  // Auto-submit value: mock hotkey (Escape key)
+  const autoSubmitValue = {
+    value: JSON.stringify({
+      key: 'Escape',
+      command: false,
+      shift: false,
+      option: false,
+      control: false,
+      shortcut: 'Escape',
+      keyCode: 'Escape',
+    }),
+  };
+
   return new Promise((resolve) => {
-    pending.set(id, (msg: SubmitMessage) => {
+    addPending(id, (msg: SubmitMessage) => {
       // If user pressed Escape (value is null), exit the script
       if (msg.value === null) {
         process.exit(0);
@@ -3313,7 +3381,7 @@ globalThis.hotkey = async function hotkey(
           keyCode: '',
         });
       }
-    });
+    }, autoSubmitValue);
 
     const message: HotkeyMessage = {
       type: 'hotkey',
@@ -3328,8 +3396,11 @@ globalThis.hotkey = async function hotkey(
 globalThis.drop = async function drop(): Promise<FileInfo[]> {
   const id = nextId();
 
+  // Auto-submit value: empty file array
+  const autoSubmitValue = { value: '[]' };
+
   return new Promise((resolve) => {
-    pending.set(id, (msg: SubmitMessage) => {
+    addPending(id, (msg: SubmitMessage) => {
       // If user pressed Escape (value is null), exit the script
       if (msg.value === null) {
         process.exit(0);
@@ -3350,7 +3421,7 @@ globalThis.drop = async function drop(): Promise<FileInfo[]> {
       } catch {
         resolve([]);
       }
-    });
+    }, autoSubmitValue);
 
     const message: DropMessage = {
       type: 'drop',
@@ -3396,13 +3467,17 @@ globalThis.template = async function template(
   }
   
   const id = nextId();
+
+  // Auto-submit value: return the processed template
+  const autoSubmitValue = { value: processed };
+
   return new Promise((resolve) => {
-    pending.set(id, (msg: SubmitMessage) => {
+    addPending(id, (msg: SubmitMessage) => {
       if (msg.value === null) {
         process.exit(0);  // Escape pressed
       }
       resolve(msg.value ?? '');
-    });
+    }, autoSubmitValue);
     send({
       type: 'editor',
       id,
@@ -3432,8 +3507,11 @@ globalThis.env = async function env(
   // Otherwise, send a message to GPUI to prompt for the value
   const id = nextId();
 
+  // Auto-submit value: empty string (user would type something)
+  const autoSubmitValue = { value: '' };
+
   return new Promise((resolve) => {
-    pending.set(id, (msg: SubmitMessage) => {
+    addPending(id, (msg: SubmitMessage) => {
       // If user pressed Escape (value is null), exit the script
       if (msg.value === null) {
         process.exit(0);
@@ -3441,13 +3519,13 @@ globalThis.env = async function env(
       const value = msg.value ?? '';
       process.env[key] = value;
       resolve(value);
-    });
+    }, autoSubmitValue);
 
     const message: EnvMessage = {
       type: 'env',
       id,
       key,
-      secret: key.toLowerCase().includes('secret') || 
+      secret: key.toLowerCase().includes('secret') ||
               key.toLowerCase().includes('password') ||
               key.toLowerCase().includes('token') ||
               key.toLowerCase().includes('key'),
@@ -3589,17 +3667,17 @@ globalThis.setInput = function setInput(text: string): void {
  */
 globalThis.setSelectedText = async function setSelectedText(text: string): Promise<void> {
   const id = nextId();
-  
+
   return new Promise((resolve, reject) => {
-    pending.set(id, (msg: SubmitMessage) => {
+    addPending(id, (msg: SubmitMessage) => {
       // Check if there was an error
       if (msg.value && msg.value.startsWith('ERROR:')) {
         reject(new Error(msg.value.substring(6).trim()));
       } else {
         resolve();
       }
-    });
-    
+    }, { value: '' }); // Auto-submit: success
+
     const message: SetSelectedTextMessage = { type: 'setSelectedText', requestId: id, text };
     send(message);
   });
@@ -3609,7 +3687,7 @@ globalThis.setSelectedText = async function setSelectedText(text: string): Promi
  * Get the currently selected text from the focused application.
  * Uses macOS Accessibility APIs for reliability (95%+ of apps).
  * Falls back to clipboard simulation for apps that block accessibility.
- * 
+ *
  * @returns The selected text, or empty string if nothing selected
  * @throws If accessibility permission not granted
  */
@@ -3617,22 +3695,22 @@ globalThis.getSelectedText = async function getSelectedText(): Promise<string> {
   // Auto-hide the Script Kit window so the previous app regains focus
   // and its text selection becomes accessible
   await globalThis.hide();
-  
+
   // Small delay to ensure focus has transferred to the previous app
   await new Promise(resolve => setTimeout(resolve, 50));
-  
+
   const id = nextId();
-  
+
   return new Promise((resolve, reject) => {
-    pending.set(id, (msg: SubmitMessage) => {
+    addPending(id, (msg: SubmitMessage) => {
       // Check if there was an error
       if (msg.value && msg.value.startsWith('ERROR:')) {
         reject(new Error(msg.value.substring(6).trim()));
       } else {
         resolve(msg.value ?? '');
       }
-    });
-    
+    }, { value: '' }); // Auto-submit: empty selection
+
     const message: GetSelectedTextMessage = { type: 'getSelectedText', requestId: id };
     send(message);
   });
@@ -3641,17 +3719,17 @@ globalThis.getSelectedText = async function getSelectedText(): Promise<string> {
 /**
  * Check if accessibility permission is granted.
  * Required for getSelectedText and setSelectedText to work reliably.
- * 
+ *
  * @returns true if permission granted, false otherwise
  */
 globalThis.hasAccessibilityPermission = async function hasAccessibilityPermission(): Promise<boolean> {
   const id = nextId();
-  
+
   return new Promise((resolve) => {
-    pending.set(id, (msg: SubmitMessage) => {
+    addPending(id, (msg: SubmitMessage) => {
       resolve(msg.value === 'true');
-    });
-    
+    }, { value: 'true' }); // Auto-submit: permission granted
+
     const message: CheckAccessibilityMessage = { type: 'checkAccessibility', requestId: id };
     send(message);
   });
@@ -3660,17 +3738,17 @@ globalThis.hasAccessibilityPermission = async function hasAccessibilityPermissio
 /**
  * Request accessibility permission (opens System Preferences).
  * User must manually grant permission in System Preferences > Privacy & Security > Accessibility.
- * 
+ *
  * @returns true if permission was granted after request, false otherwise
  */
 globalThis.requestAccessibilityPermission = async function requestAccessibilityPermission(): Promise<boolean> {
   const id = nextId();
-  
+
   return new Promise((resolve) => {
-    pending.set(id, (msg: SubmitMessage) => {
+    addPending(id, (msg: SubmitMessage) => {
       resolve(msg.value === 'true');
-    });
-    
+    }, { value: 'true' }); // Auto-submit: permission granted
+
     const message: RequestAccessibilityMessage = { type: 'requestAccessibility', requestId: id };
     send(message);
   });
@@ -3680,12 +3758,12 @@ globalThis.requestAccessibilityPermission = async function requestAccessibilityP
 globalThis.clipboard = {
   async readText(): Promise<string> {
     const id = nextId();
-    
+
     return new Promise((resolve) => {
-      pending.set(id, (msg: SubmitMessage) => {
+      addPending(id, (msg: SubmitMessage) => {
         resolve(msg.value ?? '');
-      });
-      
+      }, { value: '' }); // Auto-submit: empty clipboard
+
       const message: ClipboardMessage = {
         type: 'clipboard',
         id,
@@ -3695,15 +3773,15 @@ globalThis.clipboard = {
       send(message);
     });
   },
-  
+
   async writeText(text: string): Promise<void> {
     const id = nextId();
-    
+
     return new Promise((resolve) => {
-      pending.set(id, () => {
+      addPending(id, () => {
         resolve();
-      });
-      
+      }, undefined); // Auto-submit: void return
+
       const message: ClipboardMessage = {
         type: 'clipboard',
         id,
@@ -3714,17 +3792,17 @@ globalThis.clipboard = {
       send(message);
     });
   },
-  
+
   async readImage(): Promise<Buffer> {
     const id = nextId();
-    
+
     return new Promise((resolve) => {
-      pending.set(id, (msg: SubmitMessage) => {
+      addPending(id, (msg: SubmitMessage) => {
         // Value comes back as base64-encoded string
         const base64 = msg.value ?? '';
         resolve(Buffer.from(base64, 'base64'));
-      });
-      
+      }, { value: '' }); // Auto-submit: empty image
+
       const message: ClipboardMessage = {
         type: 'clipboard',
         id,
@@ -3734,15 +3812,15 @@ globalThis.clipboard = {
       send(message);
     });
   },
-  
+
   async writeImage(buffer: Buffer): Promise<void> {
     const id = nextId();
-    
+
     return new Promise((resolve) => {
-      pending.set(id, () => {
+      addPending(id, () => {
         resolve();
-      });
-      
+      }, undefined); // Auto-submit: void return
+
       const message: ClipboardMessage = {
         type: 'clipboard',
         id,
@@ -3848,15 +3926,18 @@ const chatFn = async function chat(options?: ChatOptions): Promise<string> {
     await options.onInit();
   }
 
+  // Auto-submit value: empty string (user would type something)
+  const autoSubmitValue = { value: '' };
+
   // Wait for user submission
   return new Promise((resolve) => {
-    pending.set(id, (msg: SubmitMessage) => {
+    addPending(id, (msg: SubmitMessage) => {
       // If user pressed Escape (value is null), exit the script
       if (msg.value === null) {
         process.exit(0);
       }
       const value = msg.value ?? '';
-      
+
       // Call onSubmit if provided
       if (options?.onSubmit) {
         options.onSubmit(value).then(() => {
@@ -3865,9 +3946,9 @@ const chatFn = async function chat(options?: ChatOptions): Promise<string> {
       } else {
         resolve(value);
       }
-      
+
       currentChatId = null;
-    });
+    }, autoSubmitValue);
   });
 };
 
@@ -4067,14 +4148,17 @@ globalThis.term = async function term(command?: string, actionsInput?: Action[])
     }
   }
 
+  // Auto-submit: empty string
+  const autoSubmitValue = { value: '' };
+
   return new Promise((resolve) => {
-    pending.set(id, (msg: SubmitMessage) => {
+    addPending(id, (msg: SubmitMessage) => {
       // If user pressed Escape (value is null), exit the script
       if (msg.value === null) {
         process.exit(0);
       }
       resolve(msg.value ?? '');
-    });
+    }, autoSubmitValue);
 
     const message: TermMessage = {
       type: 'term',
@@ -4091,11 +4175,11 @@ globalThis.webcam = async function webcam(): Promise<Buffer> {
   const id = nextId();
 
   return new Promise((resolve) => {
-    pending.set(id, (msg: SubmitMessage) => {
+    addPending(id, (msg: SubmitMessage) => {
       // Value comes back as base64-encoded string
       const base64 = msg.value ?? '';
       resolve(Buffer.from(base64, 'base64'));
-    });
+    }, { value: '' }); // Auto-submit: empty buffer
 
     const message: WebcamMessage = {
       type: 'webcam',
@@ -4110,11 +4194,11 @@ globalThis.mic = async function mic(): Promise<Buffer> {
   const id = nextId();
 
   return new Promise((resolve) => {
-    pending.set(id, (msg: SubmitMessage) => {
+    addPending(id, (msg: SubmitMessage) => {
       // Value comes back as base64-encoded string
       const base64 = msg.value ?? '';
       resolve(Buffer.from(base64, 'base64'));
-    });
+    }, { value: '' }); // Auto-submit: empty buffer
 
     const message: MicMessage = {
       type: 'mic',
@@ -4128,8 +4212,20 @@ globalThis.mic = async function mic(): Promise<Buffer> {
 globalThis.eyeDropper = async function eyeDropper(): Promise<ColorInfo> {
   const id = nextId();
 
+  // Auto-submit: black color
+  const autoSubmitValue = {
+    value: JSON.stringify({
+      sRGBHex: '#000000',
+      rgb: 'rgb(0, 0, 0)',
+      rgba: 'rgba(0, 0, 0, 1)',
+      hsl: 'hsl(0, 0%, 0%)',
+      hsla: 'hsla(0, 0%, 0%, 1)',
+      cmyk: 'cmyk(0%, 0%, 0%, 100%)',
+    }),
+  };
+
   return new Promise((resolve) => {
-    pending.set(id, (msg: SubmitMessage) => {
+    addPending(id, (msg: SubmitMessage) => {
       // Value comes back as JSON with color info
       const value = msg.value ?? '{}';
       try {
@@ -4152,7 +4248,7 @@ globalThis.eyeDropper = async function eyeDropper(): Promise<ColorInfo> {
           cmyk: 'cmyk(0%, 0%, 0%, 100%)',
         });
       }
-    });
+    }, autoSubmitValue);
 
     const message: EyeDropperMessage = {
       type: 'eyeDropper',
@@ -4170,13 +4266,13 @@ globalThis.find = async function find(
   const id = nextId();
 
   return new Promise((resolve) => {
-    pending.set(id, (msg: SubmitMessage) => {
+    addPending(id, (msg: SubmitMessage) => {
       // If user pressed Escape (value is null), exit the script
       if (msg.value === null) {
         process.exit(0);
       }
       resolve(msg.value ?? '');
-    });
+    }, { value: '' }); // Auto-submit: empty string
 
     const message: FindMessage = {
       type: 'find',
@@ -4236,9 +4332,14 @@ globalThis.blur = async function blur(): Promise<void> {
  */
 globalThis.getWindowBounds = async function getWindowBounds(): Promise<WindowBounds> {
   const id = nextId();
-  
+
+  // Auto-submit: mock window bounds
+  const autoSubmitValue = {
+    value: JSON.stringify({ x: 100, y: 100, width: 800, height: 600 }),
+  };
+
   return new Promise((resolve) => {
-    pending.set(id, (msg: SubmitMessage) => {
+    addPending(id, (msg: SubmitMessage) => {
       // Value comes back as JSON with window bounds
       const value = msg.value ?? '{}';
       try {
@@ -4257,13 +4358,13 @@ globalThis.getWindowBounds = async function getWindowBounds(): Promise<WindowBou
           height: 0,
         });
       }
-    });
-    
+    }, autoSubmitValue);
+
     const message: GetWindowBoundsMessage = {
       type: 'getWindowBounds',
       requestId: id,
     };
-    
+
     send(message);
   });
 };
@@ -4280,7 +4381,15 @@ globalThis.captureScreenshot = async function captureScreenshot(
   options?: ScreenshotOptions
 ): Promise<ScreenshotData> {
   const requestId = nextId();
-  
+
+  // Mock screenshot data for auto-submit mode
+  const mockScreenshotResult = {
+    type: 'screenshotResult',
+    data: '', // Empty base64 data
+    width: 800,
+    height: 600,
+  };
+
   return new Promise((resolve) => {
     addPending(requestId, (msg: ResponseMessage) => {
       // Handle screenshotResult message type
@@ -4293,15 +4402,15 @@ globalThis.captureScreenshot = async function captureScreenshot(
         });
         return;
       }
-      
-      // Fallback for unexpected message type
+
+      // Fallback for unexpected message type (or auto-submit)
       resolve({
-        data: '',
-        width: 0,
-        height: 0,
+        data: (msg as any).data ?? '',
+        width: (msg as any).width ?? 0,
+        height: (msg as any).height ?? 0,
       });
-    });
-    
+    }, mockScreenshotResult);
+
     const message: CaptureScreenshotMessage = {
       type: 'captureScreenshot',
       requestId,
@@ -4341,7 +4450,17 @@ globalThis.captureScreenshot = async function captureScreenshot(
  */
 globalThis.getLayoutInfo = async function getLayoutInfo(): Promise<LayoutInfo> {
   const requestId = nextId();
-  
+
+  // Mock layout info for auto-submit mode
+  const mockLayoutResult = {
+    type: 'layoutInfoResult',
+    windowWidth: 800,
+    windowHeight: 600,
+    promptType: 'test',
+    components: [],
+    timestamp: new Date().toISOString(),
+  };
+
   return new Promise((resolve) => {
     addPending(requestId, (msg: ResponseMessage) => {
       // Handle layoutInfoResult message type
@@ -4356,22 +4475,22 @@ globalThis.getLayoutInfo = async function getLayoutInfo(): Promise<LayoutInfo> {
         });
         return;
       }
-      
-      // Fallback for unexpected message type
+
+      // Fallback for unexpected message type (or auto-submit)
       resolve({
-        windowWidth: 0,
-        windowHeight: 0,
-        promptType: 'unknown',
-        components: [],
-        timestamp: new Date().toISOString(),
+        windowWidth: (msg as any).windowWidth ?? 0,
+        windowHeight: (msg as any).windowHeight ?? 0,
+        promptType: (msg as any).promptType ?? 'unknown',
+        components: (msg as any).components ?? [],
+        timestamp: (msg as any).timestamp ?? new Date().toISOString(),
       });
-    });
-    
+    }, mockLayoutResult);
+
     const message: GetLayoutInfoMessage = {
       type: 'getLayoutInfo',
       requestId,
     };
-    
+
     send(message);
   });
 };
@@ -4517,9 +4636,9 @@ globalThis.editFile = async function editFile(filePath: string): Promise<void> {
 
 globalThis.run = async function run(scriptName: string, ...args: string[]): Promise<unknown> {
   const id = nextId();
-  
+
   return new Promise((resolve) => {
-    pending.set(id, (msg: SubmitMessage) => {
+    addPending(id, (msg: SubmitMessage) => {
       const value = msg.value;
       if (value === undefined || value === null || value === '') {
         resolve(undefined);
@@ -4530,15 +4649,15 @@ globalThis.run = async function run(scriptName: string, ...args: string[]): Prom
           resolve(value);
         }
       }
-    });
-    
+    }, { value: '' }); // Auto-submit: empty result
+
     const message: RunMessage = {
       type: 'run',
       id,
       scriptName,
       args,
     };
-    
+
     send(message);
   });
 };
@@ -4554,9 +4673,12 @@ globalThis.inspect = async function inspect(data: unknown): Promise<void> {
 
 globalThis.clipboardHistory = async function clipboardHistory(): Promise<ClipboardHistoryEntry[]> {
   const id = nextId();
-  
+
+  // Auto-submit: empty clipboard history
+  const autoSubmitValue = { type: 'clipboardHistoryList', entries: [] };
+
   return new Promise((resolve) => {
-    pending.set(id, (msg: ResponseMessage) => {
+    addPending(id, (msg: ResponseMessage) => {
       // Handle clipboardHistoryList message type (sent by Rust for list requests)
       if (msg.type === 'clipboardHistoryList') {
         const listMsg = msg as ClipboardHistoryListMessage;
@@ -4569,7 +4691,7 @@ globalThis.clipboardHistory = async function clipboardHistory(): Promise<Clipboa
         })));
         return;
       }
-      
+
       // Fallback to submit message handling (backwards compatibility)
       const submitMsg = msg as SubmitMessage;
       const value = submitMsg.value ?? '[]';
@@ -4597,23 +4719,26 @@ globalThis.clipboardHistory = async function clipboardHistory(): Promise<Clipboa
       } catch {
         resolve([]);
       }
-    });
-    
+    }, autoSubmitValue);
+
     const message: ClipboardHistoryMessage = {
       type: 'clipboardHistory',
       requestId: id,
       action: 'list',
     };
-    
+
     send(message);
   });
 };
 
 globalThis.clipboardHistoryPin = async function clipboardHistoryPin(entryId: string): Promise<void> {
   const id = nextId();
-  
+
+  // Auto-submit: success
+  const autoSubmitValue = { type: 'clipboardHistoryResult', success: true };
+
   return new Promise((resolve, reject) => {
-    pending.set(id, (msg: ResponseMessage) => {
+    addPending(id, (msg: ResponseMessage) => {
       if (msg.type === 'clipboardHistoryResult') {
         const resultMsg = msg as ClipboardHistoryResultMessage;
         if (resultMsg.success) {
@@ -4624,24 +4749,27 @@ globalThis.clipboardHistoryPin = async function clipboardHistoryPin(entryId: str
       } else {
         resolve(); // Fallback
       }
-    });
-    
+    }, autoSubmitValue);
+
     const message: ClipboardHistoryMessage = {
       type: 'clipboardHistory',
       requestId: id,
       action: 'pin',
       entryId,
     };
-    
+
     send(message);
   });
 };
 
 globalThis.clipboardHistoryUnpin = async function clipboardHistoryUnpin(entryId: string): Promise<void> {
   const id = nextId();
-  
+
+  // Auto-submit: success
+  const autoSubmitValue = { type: 'clipboardHistoryResult', success: true };
+
   return new Promise((resolve, reject) => {
-    pending.set(id, (msg: ResponseMessage) => {
+    addPending(id, (msg: ResponseMessage) => {
       if (msg.type === 'clipboardHistoryResult') {
         const resultMsg = msg as ClipboardHistoryResultMessage;
         if (resultMsg.success) {
@@ -4652,7 +4780,7 @@ globalThis.clipboardHistoryUnpin = async function clipboardHistoryUnpin(entryId:
       } else {
         resolve(); // Fallback
       }
-    });
+    }, autoSubmitValue);
     
     const message: ClipboardHistoryMessage = {
       type: 'clipboardHistory',
@@ -4667,9 +4795,11 @@ globalThis.clipboardHistoryUnpin = async function clipboardHistoryUnpin(entryId:
 
 globalThis.clipboardHistoryRemove = async function clipboardHistoryRemove(entryId: string): Promise<void> {
   const id = nextId();
-  
+
+  const autoSubmitValue = { type: 'clipboardHistoryResult', success: true };
+
   return new Promise((resolve, reject) => {
-    pending.set(id, (msg: ResponseMessage) => {
+    addPending(id, (msg: ResponseMessage) => {
       if (msg.type === 'clipboardHistoryResult') {
         const resultMsg = msg as ClipboardHistoryResultMessage;
         if (resultMsg.success) {
@@ -4680,24 +4810,26 @@ globalThis.clipboardHistoryRemove = async function clipboardHistoryRemove(entryI
       } else {
         resolve(); // Fallback
       }
-    });
-    
+    }, autoSubmitValue);
+
     const message: ClipboardHistoryMessage = {
       type: 'clipboardHistory',
       requestId: id,
       action: 'remove',
       entryId,
     };
-    
+
     send(message);
   });
 };
 
 globalThis.clipboardHistoryClear = async function clipboardHistoryClear(): Promise<void> {
   const id = nextId();
-  
+
+  const autoSubmitValue = { type: 'clipboardHistoryResult', success: true };
+
   return new Promise((resolve, reject) => {
-    pending.set(id, (msg: ResponseMessage) => {
+    addPending(id, (msg: ResponseMessage) => {
       if (msg.type === 'clipboardHistoryResult') {
         const resultMsg = msg as ClipboardHistoryResultMessage;
         if (resultMsg.success) {
@@ -4708,23 +4840,25 @@ globalThis.clipboardHistoryClear = async function clipboardHistoryClear(): Promi
       } else {
         resolve();
       }
-    });
-    
+    }, autoSubmitValue);
+
     const message: ClipboardHistoryMessage = {
       type: 'clipboardHistory',
       requestId: id,
       action: 'clear',
     };
-    
+
     send(message);
   });
 };
 
 globalThis.clipboardHistoryTrimOversize = async function clipboardHistoryTrimOversize(): Promise<void> {
   const id = nextId();
-  
+
+  const autoSubmitValue = { type: 'clipboardHistoryResult', success: true };
+
   return new Promise((resolve, reject) => {
-    pending.set(id, (msg: ResponseMessage) => {
+    addPending(id, (msg: ResponseMessage) => {
       if (msg.type === 'clipboardHistoryResult') {
         const resultMsg = msg as ClipboardHistoryResultMessage;
         if (resultMsg.success) {
@@ -4735,14 +4869,14 @@ globalThis.clipboardHistoryTrimOversize = async function clipboardHistoryTrimOve
       } else {
         resolve();
       }
-    });
-    
+    }, autoSubmitValue);
+
     const message: ClipboardHistoryMessage = {
       type: 'clipboardHistory',
       requestId: id,
       action: 'trimOversize',
     };
-    
+
     send(message);
   });
 };
@@ -4753,9 +4887,11 @@ globalThis.clipboardHistoryTrimOversize = async function clipboardHistoryTrimOve
 
 globalThis.getWindows = async function getWindows(): Promise<SystemWindowInfo[]> {
   const id = nextId();
-  
+
+  const autoSubmitValue = { type: 'windowListResult', windows: [] };
+
   return new Promise((resolve) => {
-    pending.set(id, (msg: ResponseMessage) => {
+    addPending(id, (msg: ResponseMessage) => {
       // Handle WindowListResult message type
       if (msg.type === 'windowListResult') {
         const resultMsg = msg as WindowListResultMessage;
@@ -4769,7 +4905,7 @@ globalThis.getWindows = async function getWindows(): Promise<SystemWindowInfo[]>
         })));
         return;
       }
-      
+
       // Fallback to submit message handling (backwards compatibility)
       const submitMsg = msg as SubmitMessage;
       const value = submitMsg.value ?? '[]';
@@ -4801,121 +4937,121 @@ globalThis.getWindows = async function getWindows(): Promise<SystemWindowInfo[]>
       } catch {
         resolve([]);
       }
-    });
-    
+    }, autoSubmitValue);
+
     const message: WindowListMessage = {
       type: 'windowList',
       requestId: id,
     };
-    
+
     send(message);
   });
 };
 
 globalThis.focusWindow = async function focusWindow(windowId: number): Promise<void> {
   const id = nextId();
-  
+
   return new Promise((resolve, reject) => {
-    pending.set(id, (msg: SubmitMessage) => {
+    addPending(id, (msg: SubmitMessage) => {
       if (msg.value && msg.value.startsWith('ERROR:')) {
         reject(new Error(msg.value.substring(6).trim()));
       } else {
         resolve();
       }
-    });
-    
+    }, { value: '' });
+
     const message: WindowActionMessage = {
       type: 'windowAction',
       requestId: id,
       action: 'focus',
       windowId,
     };
-    
+
     send(message);
   });
 };
 
 globalThis.closeWindow = async function closeWindow(windowId: number): Promise<void> {
   const id = nextId();
-  
+
   return new Promise((resolve, reject) => {
-    pending.set(id, (msg: SubmitMessage) => {
+    addPending(id, (msg: SubmitMessage) => {
       if (msg.value && msg.value.startsWith('ERROR:')) {
         reject(new Error(msg.value.substring(6).trim()));
       } else {
         resolve();
       }
-    });
-    
+    }, { value: '' });
+
     const message: WindowActionMessage = {
       type: 'windowAction',
       requestId: id,
       action: 'close',
       windowId,
     };
-    
+
     send(message);
   });
 };
 
 globalThis.minimizeWindow = async function minimizeWindow(windowId: number): Promise<void> {
   const id = nextId();
-  
+
   return new Promise((resolve, reject) => {
-    pending.set(id, (msg: SubmitMessage) => {
+    addPending(id, (msg: SubmitMessage) => {
       if (msg.value && msg.value.startsWith('ERROR:')) {
         reject(new Error(msg.value.substring(6).trim()));
       } else {
         resolve();
       }
-    });
-    
+    }, { value: '' });
+
     const message: WindowActionMessage = {
       type: 'windowAction',
       requestId: id,
       action: 'minimize',
       windowId,
     };
-    
+
     send(message);
   });
 };
 
 globalThis.maximizeWindow = async function maximizeWindow(windowId: number): Promise<void> {
   const id = nextId();
-  
+
   return new Promise((resolve, reject) => {
-    pending.set(id, (msg: SubmitMessage) => {
+    addPending(id, (msg: SubmitMessage) => {
       if (msg.value && msg.value.startsWith('ERROR:')) {
         reject(new Error(msg.value.substring(6).trim()));
       } else {
         resolve();
       }
-    });
-    
+    }, { value: '' });
+
     const message: WindowActionMessage = {
       type: 'windowAction',
       requestId: id,
       action: 'maximize',
       windowId,
     };
-    
+
     send(message);
   });
 };
 
 globalThis.moveWindow = async function moveWindow(windowId: number, x: number, y: number): Promise<void> {
   const id = nextId();
-  
+
   return new Promise((resolve, reject) => {
-    pending.set(id, (msg: SubmitMessage) => {
+    addPending(id, (msg: SubmitMessage) => {
       if (msg.value && msg.value.startsWith('ERROR:')) {
         reject(new Error(msg.value.substring(6).trim()));
       } else {
         resolve();
       }
-    });
-    
+    }, { value: '' });
+
     const message: WindowActionMessage = {
       type: 'windowAction',
       requestId: id,
@@ -4923,23 +5059,23 @@ globalThis.moveWindow = async function moveWindow(windowId: number, x: number, y
       windowId,
       bounds: { x, y, width: 0, height: 0 },
     };
-    
+
     send(message);
   });
 };
 
 globalThis.resizeWindow = async function resizeWindow(windowId: number, width: number, height: number): Promise<void> {
   const id = nextId();
-  
+
   return new Promise((resolve, reject) => {
-    pending.set(id, (msg: SubmitMessage) => {
+    addPending(id, (msg: SubmitMessage) => {
       if (msg.value && msg.value.startsWith('ERROR:')) {
         reject(new Error(msg.value.substring(6).trim()));
       } else {
         resolve();
       }
-    });
-    
+    }, { value: '' });
+
     const message: WindowActionMessage = {
       type: 'windowAction',
       requestId: id,
@@ -4947,7 +5083,7 @@ globalThis.resizeWindow = async function resizeWindow(windowId: number, width: n
       windowId,
       bounds: { x: 0, y: 0, width, height },
     };
-    
+
     send(message);
   });
 };
@@ -4999,18 +5135,18 @@ globalThis.tileWindow = async function tileWindow(windowId: number, position: Ti
   const screenHeight = 1080;
   
   const bounds = calculateTileBounds(position, screenWidth, screenHeight);
-  
+
   const id = nextId();
-  
+
   return new Promise((resolve, reject) => {
-    pending.set(id, (msg: SubmitMessage) => {
+    addPending(id, (msg: SubmitMessage) => {
       if (msg.value && msg.value.startsWith('ERROR:')) {
         reject(new Error(msg.value.substring(6).trim()));
       } else {
         resolve();
       }
-    });
-    
+    }, { value: '' });
+
     // Combine move and resize into a single action
     const message: WindowActionMessage = {
       type: 'windowAction',
@@ -5019,7 +5155,7 @@ globalThis.tileWindow = async function tileWindow(windowId: number, position: Ti
       windowId,
       bounds,
     };
-    
+
     send(message);
   });
 };
@@ -5030,9 +5166,11 @@ globalThis.tileWindow = async function tileWindow(windowId: number, position: Ti
 
 globalThis.fileSearch = async function fileSearch(query: string, options?: FindOptions): Promise<FileSearchResult[]> {
   const id = nextId();
-  
+
+  const autoSubmitValue = { type: 'fileSearchResult', files: [] };
+
   return new Promise((resolve) => {
-    pending.set(id, (msg: ResponseMessage) => {
+    addPending(id, (msg: ResponseMessage) => {
       // Handle FileSearchResult message type
       if (msg.type === 'fileSearchResult') {
         const resultMsg = msg as FileSearchResultMessage;
@@ -5045,7 +5183,7 @@ globalThis.fileSearch = async function fileSearch(query: string, options?: FindO
         })));
         return;
       }
-      
+
       // Fallback to submit message handling (backwards compatibility)
       const submitMsg = msg as SubmitMessage;
       const value = submitMsg.value ?? '[]';
@@ -5073,15 +5211,15 @@ globalThis.fileSearch = async function fileSearch(query: string, options?: FindO
       } catch {
         resolve([]);
       }
-    });
-    
+    }, autoSubmitValue);
+
     const message: FileSearchMessage = {
       type: 'fileSearch',
       requestId: id,
       query,
       onlyin: options?.onlyin,
     };
-    
+
     send(message);
   });
 };
@@ -5112,16 +5250,22 @@ globalThis.fileSearch = async function fileSearch(query: string, options?: FindO
  */
 globalThis.getMenuBar = async function getMenuBar(bundleId?: string): Promise<MenuBarItem[]> {
   const id = nextId();
-  
+
   return new Promise((resolve) => {
-    pending.set(id, (msg: ResponseMessage) => {
+    const resolver = (msg: ResponseMessage) => {
       // Handle MenuBarResult message type
       if (msg.type === 'menuBarResult') {
         const resultMsg = msg as MenuBarResultMessage;
         resolve(resultMsg.items);
         return;
       }
-      
+
+      // Handle auto-submit (msg will be the auto-submit value directly)
+      if (Array.isArray(msg)) {
+        resolve(msg as MenuBarItem[]);
+        return;
+      }
+
       // Fallback to submit message handling (backwards compatibility)
       const submitMsg = msg as SubmitMessage;
       const value = submitMsg.value ?? '[]';
@@ -5135,14 +5279,16 @@ globalThis.getMenuBar = async function getMenuBar(bundleId?: string): Promise<Me
       } catch {
         resolve([]);
       }
-    });
-    
+    };
+
+    addPending(id, resolver, []);
+
     const message: GetMenuBarMessage = {
       type: 'getMenuBar',
       requestId: id,
       bundleId,
     };
-    
+
     send(message);
   });
 };
@@ -5173,9 +5319,9 @@ globalThis.executeMenuAction = async function executeMenuAction(
   menuPath: string[]
 ): Promise<void> {
   const id = nextId();
-  
+
   return new Promise((resolve, reject) => {
-    pending.set(id, (msg: ResponseMessage) => {
+    const resolver = (msg: ResponseMessage) => {
       // Handle MenuActionResult message type
       if (msg.type === 'menuActionResult') {
         const resultMsg = msg as MenuActionResultMessage;
@@ -5186,7 +5332,13 @@ globalThis.executeMenuAction = async function executeMenuAction(
         }
         return;
       }
-      
+
+      // Handle auto-submit (msg will be undefined for void)
+      if (msg === undefined) {
+        resolve();
+        return;
+      }
+
       // Fallback to submit message handling (backwards compatibility)
       const submitMsg = msg as SubmitMessage;
       if (submitMsg.value && submitMsg.value.startsWith('ERROR:')) {
@@ -5194,15 +5346,17 @@ globalThis.executeMenuAction = async function executeMenuAction(
       } else {
         resolve();
       }
-    });
-    
+    };
+
+    addPending(id, resolver, undefined);
+
     const message: ExecuteMenuActionMessage = {
       type: 'executeMenuAction',
       requestId: id,
       bundleId,
       path: menuPath,
     };
-    
+
     send(message);
   });
 };

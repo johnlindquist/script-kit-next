@@ -111,7 +111,7 @@ interface RunnerSummary {
 const PROJECT_ROOT = resolve(import.meta.dir, '..');
 const SDK_PATH = join(PROJECT_ROOT, 'scripts', 'kit-sdk.ts');
 const TESTS_DIR = join(PROJECT_ROOT, 'tests', 'sdk');
-const TIMEOUT_MS = parseInt(process.env.SDK_TEST_TIMEOUT || '30', 10) * 1000;
+const TIMEOUT_MS = parseInt(process.env.SDK_TEST_TIMEOUT || '5', 10) * 1000;
 const VERBOSE = process.env.SDK_TEST_VERBOSE === 'true';
 const JSON_ONLY = process.argv.includes('--json');
 const PARALLEL = process.argv.includes('--parallel');
@@ -224,13 +224,17 @@ async function runTestFile(filePath: string): Promise<TestFileResult> {
   
   try {
     // Run the test file with SDK preload
-    // Note: For automated testing, we simulate user input by providing stdin
+    // SDK_TEST_AUTOSUBMIT=1 enables auto-resolution of prompts for CI testing
     const proc = spawn({
       cmd: ['bun', 'run', '--preload', SDK_PATH, filePath],
       cwd: PROJECT_ROOT,
       stdout: 'pipe',
       stderr: 'pipe',
       stdin: 'pipe',
+      env: {
+        ...process.env,
+        SDK_TEST_AUTOSUBMIT: '1',
+      },
     });
     
     // Collect stdout (JSONL test results)
