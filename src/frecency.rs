@@ -66,14 +66,15 @@ impl Default for FrecencyEntry {
     }
 }
 
-/// Calculate frecency score using exponential decay
+/// Calculate frecency score using exponential decay with true half-life
 ///
-/// Formula: score = count * e^(-days_since_use / half_life_days)
+/// Formula: score = count * 2^(-days_since_use / half_life_days)
+///        = count * e^(-ln(2) * days_since_use / half_life_days)
 ///
 /// This means (with default 7-day half-life):
-/// - After 7 days (half_life), the score is reduced to ~50%
-/// - After 14 days, the score is reduced to ~25%
-/// - After 21 days, the score is reduced to ~12.5%
+/// - After 7 days (half_life), the score is reduced to exactly 50%
+/// - After 14 days, the score is reduced to exactly 25%
+/// - After 21 days, the score is reduced to exactly 12.5%
 ///
 /// With a shorter half-life (e.g., 1 day), recent items dominate.
 /// With a longer half-life (e.g., 30 days), frequently used items dominate.
@@ -82,8 +83,12 @@ fn calculate_score(count: u32, last_used: u64, half_life_days: f64) -> f64 {
     let seconds_since_use = now.saturating_sub(last_used);
     let days_since_use = seconds_since_use as f64 / SECONDS_PER_DAY;
 
-    // Exponential decay: count * e^(-days / half_life)
-    let decay_factor = (-days_since_use / half_life_days).exp();
+    // Guard against nonsense config (zero or negative half-life)
+    let hl = half_life_days.max(0.001);
+
+    // True half-life decay: 2^(-days/hl) == e^(-ln(2) * days/hl)
+    // At days == hl: decay_factor = 2^(-1) = 0.5 (exactly 50%)
+    let decay_factor = (-std::f64::consts::LN_2 * days_since_use / hl).exp();
     count as f64 * decay_factor
 }
 
@@ -388,7 +393,7 @@ mod tests {
     }
 
     #[test]
-    fn test_calculate_score_with_decay() {
+    fn test_calculate_score_with_decay_true_half_life() {
         let now = current_timestamp();
         let count = 10;
 
@@ -396,10 +401,32 @@ mod tests {
         let one_half_life_ago = now - (HALF_LIFE_DAYS * SECONDS_PER_DAY) as u64;
         let score = calculate_score(count, one_half_life_ago, HALF_LIFE_DAYS);
 
-        // Should be approximately count/2 (half due to decay)
-        // e^(-7/7) = e^(-1) ≈ 0.368
-        let expected = count as f64 * (-1.0_f64).exp();
-        assert!((score - expected).abs() < 0.01);
+        // With TRUE half-life, score should be exactly count/2 (50% decay at one half-life)
+        // Formula: count * 2^(-days/half_life) = count * 2^(-1) = count/2
+        let expected = count as f64 * 0.5;
+        assert!(
+            (score - expected).abs() < 0.01,
+            "Expected ~{} (50% of {}), got {} - half-life formula should give 50% decay at half-life",
+            expected, count, score
+        );
+    }
+
+    #[test]
+    fn test_calculate_score_two_half_lives() {
+        let now = current_timestamp();
+        let count = 100;
+
+        // Two half-lives ago (14 days)
+        let two_half_lives_ago = now - (2.0 * HALF_LIFE_DAYS * SECONDS_PER_DAY) as u64;
+        let score = calculate_score(count, two_half_lives_ago, HALF_LIFE_DAYS);
+
+        // After 2 half-lives, should be 25% (0.5^2 = 0.25)
+        let expected = count as f64 * 0.25;
+        assert!(
+            (score - expected).abs() < 0.1,
+            "Expected ~{} (25% of {}), got {} - two half-lives should give 25% remaining",
+            expected, count, score
+        );
     }
 
     #[test]
@@ -407,12 +434,21 @@ mod tests {
         let now = current_timestamp();
         let count = 100;
 
-        // 30 days ago (about 4+ half-lives)
+        // 30 days ago (about 4.3 half-lives with 7-day half-life)
         let thirty_days_ago = now - (30 * SECONDS_PER_DAY as u64);
         let score = calculate_score(count, thirty_days_ago, HALF_LIFE_DAYS);
 
-        // Should be heavily decayed
-        assert!(score < 2.0); // Much less than original 100
+        // With true half-life: 100 * 0.5^(30/7) = 100 * 0.5^4.28 ≈ 5.15
+        // Should be heavily decayed but still detectable
+        let expected = count as f64 * 0.5_f64.powf(30.0 / HALF_LIFE_DAYS);
+        assert!(
+            (score - expected).abs() < 0.5,
+            "Expected ~{:.2}, got {:.2}",
+            expected,
+            score
+        );
+        // Verify it's indeed heavily decayed (less than 10% of original)
+        assert!(score < 10.0, "Should be heavily decayed, got {}", score);
     }
 
     #[test]
