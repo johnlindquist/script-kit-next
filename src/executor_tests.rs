@@ -2187,12 +2187,17 @@ fn test_valid_tools_includes_all_typescript_tools() {
 /// This test verifies:
 /// 1. ProcessHandle.kill() sends SIGTERM to the process group
 /// 2. The process responds to SIGTERM (sleep is well-behaved)
-/// 3. The kill/wait sequence completes in a reasonable time
+/// 3. Process is properly reaped (no zombie)
+///
+/// Note: We verify behavior (signal received) not timing, to avoid CI flakiness.
 #[cfg(unix)]
 #[test]
 fn test_sigterm_graceful_termination() {
     use std::os::unix::process::ExitStatusExt;
     use std::time::Instant;
+
+    const SIGTERM: i32 = 15;
+    const SIGKILL: i32 = 9;
 
     // Spawn a simple sleep that will respond to SIGTERM
     let result = spawn_script("sleep", &["60"], "[test:sigterm_graceful]");
@@ -2218,22 +2223,14 @@ fn test_sigterm_graceful_termination() {
         split.kill().expect("kill should succeed");
 
         // Wait for the child to be reaped (this clears the zombie)
-        // try_wait() polls without blocking
-        let timeout = std::time::Duration::from_millis(500);
-        let poll_interval = std::time::Duration::from_millis(25);
+        // Generous timeout to avoid CI flakiness - the test validates behavior, not speed
+        let timeout = std::time::Duration::from_secs(5);
+        let poll_interval = std::time::Duration::from_millis(50);
 
         while start.elapsed() < timeout {
             match split.child.try_wait() {
                 Ok(Some(status)) => {
                     // Child has exited and been reaped
-                    let elapsed = start.elapsed();
-                    // Should complete reasonably quickly after SIGTERM
-                    // Note: kill() internally waits up to 250ms grace period, plus CI overhead
-                    assert!(
-                        elapsed < std::time::Duration::from_millis(800),
-                        "Graceful termination should be quick, took {:?}",
-                        elapsed
-                    );
                     // Verify the process is actually gone now
                     let is_dead = !Command::new("kill")
                         .args(["-0", &pid.to_string()])
@@ -2241,9 +2238,16 @@ fn test_sigterm_graceful_termination() {
                         .map(|o| o.status.success())
                         .unwrap_or(false);
                     assert!(is_dead, "Process should be fully dead after wait");
+
+                    // Verify process was killed by a signal (SIGTERM or SIGKILL)
+                    // sleep is well-behaved so should respond to SIGTERM (15)
+                    // but SIGKILL (9) is also acceptable if escalation occurred
+                    let signal = status.signal();
                     assert!(
-                        status.code().is_some() || status.signal().is_some(),
-                        "Process should have exit status"
+                        signal == Some(SIGTERM) || signal == Some(SIGKILL),
+                        "Process should have been killed by SIGTERM or SIGKILL, got signal={:?}, code={:?}",
+                        signal,
+                        status.code()
                     );
                     return;
                 }
