@@ -118,6 +118,23 @@ fn decode_legacy_rgba(content: &str) -> Option<arboard::ImageData<'static>> {
     let height: usize = parts[2].parse().ok()?;
     let bytes = BASE64.decode(parts[3]).ok()?;
 
+    // Validate byte length with overflow-safe math
+    // expected = width * height * 4 (RGBA = 4 bytes per pixel)
+    let expected = (width as u64)
+        .checked_mul(height as u64)?
+        .checked_mul(4)?;
+
+    if bytes.len() != expected as usize {
+        warn!(
+            width,
+            height,
+            expected,
+            actual = bytes.len(),
+            "Legacy RGBA image byte length mismatch"
+        );
+        return None;
+    }
+
     Some(arboard::ImageData {
         width,
         height,
@@ -399,5 +416,41 @@ mod tests {
         let png_encoded = encode_image_as_png(&original).expect("Should encode as PNG");
         let dims = get_image_dimensions(&png_encoded).expect("Should get PNG dimensions");
         assert_eq!(dims, (100, 50));
+    }
+
+    #[test]
+    fn test_decode_legacy_rgba_rejects_wrong_byte_count() {
+        // Create RGBA string with wrong byte count (too few bytes)
+        let bad_data = format!(
+            "rgba:2:2:{}",
+            BASE64.encode(&[0u8; 8]) // Should be 16 bytes for 2x2
+        );
+        let result = decode_base64_image(&bad_data);
+        assert!(result.is_none(), "Should reject RGBA with wrong byte count");
+
+        // Create RGBA string with too many bytes
+        let bad_data = format!(
+            "rgba:2:2:{}",
+            BASE64.encode(&[0u8; 32]) // Should be 16 bytes for 2x2
+        );
+        let result = decode_base64_image(&bad_data);
+        assert!(result.is_none(), "Should reject RGBA with too many bytes");
+    }
+
+    #[test]
+    fn test_decode_legacy_rgba_rejects_overflow_dimensions() {
+        // Create RGBA string with dimensions that would overflow when multiplied
+        // Using u32::MAX-ish values that would overflow
+        let bad_data = format!(
+            "rgba:{}:{}:{}",
+            u32::MAX,
+            u32::MAX,
+            BASE64.encode(&[0u8; 16])
+        );
+        let result = decode_base64_image(&bad_data);
+        assert!(
+            result.is_none(),
+            "Should reject RGBA with overflow dimensions"
+        );
     }
 }
