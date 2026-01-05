@@ -1486,7 +1486,7 @@ impl ScriptListApp {
             // while keeping keyboard focus in main window for routing to actions dialog
             self.focus_handle.focus(window, cx);
             self.gpui_input_focused = false;
-            self.focused_input = FocusedInput::None;
+            self.focused_input = FocusedInput::ActionsSearch;
 
             let script_info = self.get_focused_script_info();
 
