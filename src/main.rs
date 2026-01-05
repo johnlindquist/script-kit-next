@@ -277,40 +277,40 @@ fn show_main_window_helper(
     cx: &mut App,
 ) {
     logging::log("VISIBILITY", "show_main_window_helper called");
-    
+
     // 1. Set visibility state
     set_main_window_visible(true);
-    
+
     // 2. Move to active space (macOS)
     platform::ensure_move_to_active_space();
-    
+
     // 3. Position at eye-line on mouse display
     let window_size = gpui::size(px(750.), initial_window_height());
     let bounds = platform::calculate_eye_line_bounds_on_mouse_display(window_size);
     platform::move_first_window_to_bounds(&bounds);
-    
+
     // 4. Configure as floating panel (first time only)
     if !PANEL_CONFIGURED.load(Ordering::SeqCst) {
         platform::configure_as_floating_panel();
         PANEL_CONFIGURED.store(true, Ordering::SeqCst);
     }
-    
+
     // 5. Activate window
     cx.activate(true);
     let _ = window.update(cx, |_root, win, _cx| {
         win.activate_window();
     });
-    
+
     // 6. Focus input, reset resize debounce, and handle NEEDS_RESET
     app_entity.update(cx, |view, ctx| {
         let focus_handle = view.focus_handle(ctx);
         let _ = window.update(ctx, |_root, win, _cx| {
             win.focus(&focus_handle, _cx);
         });
-        
+
         // Reset resize debounce to ensure proper window sizing
         reset_resize_debounce();
-        
+
         // Handle NEEDS_RESET: if set (e.g., script completed while hidden),
         // reset to script list. Otherwise, ensure window size is correct.
         if NEEDS_RESET
@@ -327,7 +327,7 @@ fn show_main_window_helper(
             view.update_window_size();
         }
     });
-    
+
     logging::log("VISIBILITY", "Main window shown and focused");
 }
 
@@ -345,10 +345,10 @@ fn show_main_window_helper(
 /// * `cx` - The application context
 fn hide_main_window_helper(app_entity: Entity<ScriptListApp>, cx: &mut App) {
     logging::log("VISIBILITY", "hide_main_window_helper called");
-    
+
     // 1. Set visibility state
     set_main_window_visible(false);
-    
+
     // 2. Check secondary windows BEFORE the update closure
     let notes_open = notes::is_notes_window_open();
     let ai_open = ai::is_ai_window_open();
@@ -359,7 +359,7 @@ fn hide_main_window_helper(app_entity: Entity<ScriptListApp>, cx: &mut App) {
             notes_open, ai_open
         ),
     );
-    
+
     // 3. Cancel prompt and reset UI
     app_entity.update(cx, |view, ctx| {
         if view.is_in_prompt() {
@@ -368,7 +368,7 @@ fn hide_main_window_helper(app_entity: Entity<ScriptListApp>, cx: &mut App) {
         }
         view.reset_to_script_list(ctx);
     });
-    
+
     // 4. Hide appropriately based on secondary windows
     if notes_open || ai_open {
         logging::log(
@@ -380,7 +380,7 @@ fn hide_main_window_helper(app_entity: Entity<ScriptListApp>, cx: &mut App) {
         logging::log("VISIBILITY", "Using cx.hide() - no secondary windows");
         cx.hide();
     }
-    
+
     logging::log("VISIBILITY", "Main window hidden");
 }
 
@@ -1511,9 +1511,9 @@ fn main() {
         cx.spawn(async move |cx: &mut gpui::AsyncApp| {
             // Wait 500ms for hotkey registration to complete (it runs in a separate thread)
             Timer::after(std::time::Duration::from_millis(500)).await;
-            
+
             let hotkey_ok = hotkeys::is_main_hotkey_registered();
-            
+
             if !hotkey_ok && !tray_ok {
                 logging::log("APP", "");
                 logging::log("APP", "╔════════════════════════════════════════════════════════════════════════════╗");
@@ -1522,7 +1522,7 @@ fn main() {
                 logging::log("APP", "║  Check logs for specific errors.                                          ║");
                 logging::log("APP", "╚════════════════════════════════════════════════════════════════════════════╝");
                 logging::log("APP", "");
-                
+
                 // Show window using the centralized helper
                 let _ = cx.update(|cx| {
                     show_main_window_helper(window_for_fallback, app_entity_for_fallback, cx);
@@ -1739,7 +1739,7 @@ fn main() {
                     logging::log("SCHEDULER", "Shutdown requested, exiting scheduler event handler");
                     break;
                 }
-                
+
                 // Use recv_timeout to periodically check for events without blocking forever
                 match scheduler_rx.recv_timeout(std::time::Duration::from_secs(1)) {
                     Ok(event) => {
@@ -1750,7 +1750,7 @@ fn main() {
                                     logging::log("SCHEDULER", &format!("Skipping scheduled script (shutdown in progress): {}", path.display()));
                                     continue;
                                 }
-                                
+
                                 logging::log("SCHEDULER", &format!("Executing scheduled script: {}", path.display()));
 
                                 // Execute the script using the existing executor infrastructure
@@ -1924,14 +1924,14 @@ fn main() {
                             ExternalCommand::Run { ref path, ref request_id } => {
                                 let rid = request_id.as_deref().unwrap_or("-");
                                 logging::log("STDIN", &format!("[{}] Executing script: {}", rid, path));
-                                
+
                                 // NOTE: This is a simplified show path for script execution.
                                 // We show the window, then immediately run the script.
                                 // The core logic matches show_main_window_helper().
-                                
+
                                 script_kit_gpui::set_main_window_visible(true);
                                 platform::ensure_move_to_active_space();
-                                
+
                                 let window_size = gpui::size(px(750.), initial_window_height());
                                 let bounds = platform::calculate_eye_line_bounds_on_mouse_display(window_size);
                                 platform::move_first_window_to_bounds(&bounds);
@@ -1957,10 +1957,10 @@ fn main() {
                                 // Unlike the hotkey handler, we don't need NEEDS_RESET handling
                                 // because this is an explicit show (not a toggle).
                                 // The core logic matches show_main_window_helper().
-                                
+
                                 script_kit_gpui::set_main_window_visible(true);
                                 platform::ensure_move_to_active_space();
-                                
+
                                 let window_size = gpui::size(px(750.), initial_window_height());
                                 let bounds = platform::calculate_eye_line_bounds_on_mouse_display(window_size);
                                 platform::move_first_window_to_bounds(&bounds);
@@ -1979,11 +1979,11 @@ fn main() {
                                 let rid = request_id.as_deref().unwrap_or("-");
                                 logging::log("STDIN", &format!("[{}] Hiding main window", rid));
                                 script_kit_gpui::set_main_window_visible(false);
-                                
+
                                 // Check if Notes or AI windows are open
                                 let notes_open = notes::is_notes_window_open();
                                 let ai_open = ai::is_ai_window_open();
-                                
+
                                 // CRITICAL: Only hide main window if Notes/AI are open
                                 // ctx.hide() hides the ENTIRE app (all windows)
                                 if notes_open || ai_open {
@@ -2446,7 +2446,7 @@ fn main() {
                                 // Set shutdown flag FIRST - prevents new script spawns
                                 // and triggers the shutdown monitor task for unified cleanup
                                 SHUTDOWN_REQUESTED.store(true, Ordering::SeqCst);
-                                
+
                                 // Clean up processes and PID file before quitting
                                 PROCESS_MANAGER.kill_all_processes();
                                 PROCESS_MANAGER.remove_main_pid();
