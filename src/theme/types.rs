@@ -18,14 +18,29 @@ use super::hex_color::{hex_color_serde, HexColor};
 /// Values range from 0.0 (fully transparent) to 1.0 (fully opaque)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BackgroundOpacity {
-    /// Main background opacity (default: 0.85)
+    /// Main background opacity (default: 0.60)
     pub main: f32,
-    /// Title bar opacity (default: 0.9)
+    /// Title bar opacity (default: 0.65)
     pub title_bar: f32,
-    /// Search box opacity (default: 0.92)
+    /// Search box opacity (default: 0.70)
     pub search_box: f32,
-    /// Log panel opacity (default: 0.8)
+    /// Log panel opacity (default: 0.55)
     pub log_panel: f32,
+}
+
+impl BackgroundOpacity {
+    /// Clamp all opacity values to the valid 0.0-1.0 range
+    ///
+    /// This prevents invalid opacity values from config files from causing
+    /// rendering issues. Values below 0.0 become 0.0, values above 1.0 become 1.0.
+    pub fn clamped(self) -> Self {
+        Self {
+            main: self.main.clamp(0.0, 1.0),
+            title_bar: self.title_bar.clamp(0.0, 1.0),
+            search_box: self.search_box.clamp(0.0, 1.0),
+            log_panel: self.log_panel.clamp(0.0, 1.0),
+        }
+    }
 }
 
 impl Default for BackgroundOpacity {
@@ -41,28 +56,59 @@ impl Default for BackgroundOpacity {
     }
 }
 
+/// Vibrancy material type for macOS window backgrounds
+///
+/// Different materials provide different levels of blur and background interaction.
+/// Maps to NSVisualEffectMaterial values on macOS.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum VibrancyMaterial {
+    /// Dark, high contrast material (like HUD windows)
+    Hud,
+    /// Light blur, used in popovers (default)
+    #[default]
+    Popover,
+    /// Similar to system menus
+    Menu,
+    /// Sidebar-style blur
+    Sidebar,
+    /// Content background blur
+    Content,
+}
+
+impl std::fmt::Display for VibrancyMaterial {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Hud => write!(f, "hud"),
+            Self::Popover => write!(f, "popover"),
+            Self::Menu => write!(f, "menu"),
+            Self::Sidebar => write!(f, "sidebar"),
+            Self::Content => write!(f, "content"),
+        }
+    }
+}
+
 /// Vibrancy/blur effect settings for the window background
 /// This creates the native macOS translucent effect like Spotlight/Raycast
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VibrancySettings {
     /// Whether vibrancy is enabled (default: true)
     pub enabled: bool,
-    /// Vibrancy material type: "hud", "popover", "menu", "sidebar", "content"
-    /// - "hud": Dark, high contrast (like HUD windows)
-    /// - "popover": Light blur, used in popovers
-    /// - "menu": Similar to system menus
-    /// - "sidebar": Sidebar-style blur
-    /// - "content": Content background blur
-    ///
-    /// Default: "popover" for a subtle, native feel
-    pub material: String,
+    /// Vibrancy material type
+    /// - `hud`: Dark, high contrast (like HUD windows)
+    /// - `popover`: Light blur, used in popovers (default)
+    /// - `menu`: Similar to system menus
+    /// - `sidebar`: Sidebar-style blur
+    /// - `content`: Content background blur
+    #[serde(default)]
+    pub material: VibrancyMaterial,
 }
 
 impl Default for VibrancySettings {
     fn default() -> Self {
         VibrancySettings {
             enabled: true,
-            material: "popover".to_string(),
+            material: VibrancyMaterial::default(),
         }
     }
 }
@@ -85,6 +131,20 @@ pub struct DropShadow {
     pub color: HexColor,
     /// Shadow opacity (default: 0.25)
     pub opacity: f32,
+}
+
+impl DropShadow {
+    /// Clamp opacity value to the valid 0.0-1.0 range
+    ///
+    /// This prevents invalid opacity values from config files from causing
+    /// rendering issues.
+    #[allow(dead_code)]
+    pub fn clamped(self) -> Self {
+        Self {
+            opacity: self.opacity.clamp(0.0, 1.0),
+            ..self
+        }
+    }
 }
 
 impl Default for DropShadow {
@@ -662,6 +722,32 @@ impl Default for Theme {
     }
 }
 
+/// Background role for selecting the appropriate color and opacity
+///
+/// Use this enum with `Theme::background_rgba()` to get the correct
+/// color with opacity applied for each UI region. This is the preferred
+/// way to set background colors for vibrancy support.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
+pub enum BackgroundRole {
+    /// Main window background
+    Main,
+    /// Title bar background
+    TitleBar,
+    /// Search box / input field background
+    SearchBox,
+    /// Log panel background
+    LogPanel,
+}
+
+/// Convert a HexColor to RGBA components (0.0-1.0 range)
+fn hex_to_rgba_components(hex: HexColor, alpha: f32) -> (f32, f32, f32, f32) {
+    let r = ((hex >> 16) & 0xFF) as f32 / 255.0;
+    let g = ((hex >> 8) & 0xFF) as f32 / 255.0;
+    let b = (hex & 0xFF) as f32 / 255.0;
+    (r, g, b, alpha.clamp(0.0, 1.0))
+}
+
 #[allow(dead_code)]
 impl Theme {
     /// Get the appropriate color scheme based on window focus state
@@ -752,6 +838,42 @@ impl Theme {
     pub fn get_fonts(&self) -> FontConfig {
         self.fonts.clone().unwrap_or_default()
     }
+
+    /// Get background RGBA color for a specific role
+    ///
+    /// This is the single correct way to get background colors with opacity applied.
+    /// It combines the color from the color scheme with the appropriate opacity value,
+    /// ensuring consistent vibrancy support across the UI.
+    ///
+    /// # Arguments
+    /// * `role` - The background role (Main, TitleBar, SearchBox, LogPanel)
+    /// * `is_focused` - Whether the window is currently focused
+    ///
+    /// # Returns
+    /// A tuple of (r, g, b, a) with values in the 0.0-1.0 range
+    ///
+    /// # Example
+    /// ```ignore
+    /// let (r, g, b, a) = theme.background_rgba(BackgroundRole::Main, true);
+    /// div().bg(rgba(r, g, b, a))
+    /// ```
+    pub fn background_rgba(&self, role: BackgroundRole, is_focused: bool) -> (f32, f32, f32, f32) {
+        let colors = self.get_colors(is_focused);
+        let opacity = self.get_opacity_for_focus(is_focused).clamped();
+
+        match role {
+            BackgroundRole::Main => hex_to_rgba_components(colors.background.main, opacity.main),
+            BackgroundRole::TitleBar => {
+                hex_to_rgba_components(colors.background.title_bar, opacity.title_bar)
+            }
+            BackgroundRole::SearchBox => {
+                hex_to_rgba_components(colors.background.search_box, opacity.search_box)
+            }
+            BackgroundRole::LogPanel => {
+                hex_to_rgba_components(colors.background.log_panel, opacity.log_panel)
+            }
+        }
+    }
 }
 
 /// Detect system appearance preference on macOS
@@ -760,13 +882,28 @@ impl Theme {
 /// On non-macOS systems or if detection fails, defaults to true (dark mode).
 ///
 /// Uses the `defaults read -g AppleInterfaceStyle` command to detect the system appearance.
+/// Note: On macOS in light mode, the command exits with non-zero status because the
+/// AppleInterfaceStyle key doesn't exist, so we check exit status explicitly.
 pub fn detect_system_appearance() -> bool {
+    // Default to dark mode if detection fails or we're not on macOS
+    const DEFAULT_DARK: bool = true;
+
     // Try to detect macOS dark mode using system defaults
     match Command::new("defaults")
         .args(["read", "-g", "AppleInterfaceStyle"])
         .output()
     {
         Ok(output) => {
+            // In light mode, the AppleInterfaceStyle key typically doesn't exist,
+            // causing the command to exit with non-zero status
+            if !output.status.success() {
+                info!(
+                    appearance = "light",
+                    "System appearance detected (key not present)"
+                );
+                return false; // light mode
+            }
+
             // If the command succeeds and returns "Dark", we're in dark mode
             let stdout = String::from_utf8_lossy(&output.stdout);
             let is_dark = stdout.to_lowercase().contains("dark");
@@ -776,12 +913,14 @@ pub fn detect_system_appearance() -> bool {
             );
             is_dark
         }
-        Err(_) => {
-            // Command failed or not available (e.g., light mode on macOS returns error)
+        Err(e) => {
+            // Command failed to execute (e.g., not on macOS, or `defaults` not found)
             debug!(
-                "System appearance detection failed or light mode detected, defaulting to light"
+                error = %e,
+                default = DEFAULT_DARK,
+                "System appearance detection failed, using default"
             );
-            false
+            DEFAULT_DARK
         }
     }
 }

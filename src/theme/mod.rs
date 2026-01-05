@@ -36,8 +36,10 @@ pub use gpui_integration::sync_gpui_component_theme;
 pub use hex_color::{hex_color_serde, HexColor};
 
 #[cfg(test)]
+#[allow(unused_imports)]
 pub use types::{
-    detect_system_appearance, BackgroundOpacity, DropShadow, FontConfig, VibrancySettings,
+    detect_system_appearance, BackgroundOpacity, BackgroundRole, DropShadow, FontConfig,
+    VibrancyMaterial, VibrancySettings,
 };
 
 #[cfg(test)]

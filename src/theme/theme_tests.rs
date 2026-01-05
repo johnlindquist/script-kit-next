@@ -96,7 +96,7 @@ fn test_drop_shadow_defaults() {
 fn test_vibrancy_defaults() {
     let vibrancy = VibrancySettings::default();
     assert!(vibrancy.enabled);
-    assert_eq!(vibrancy.material, "popover");
+    assert!(matches!(vibrancy.material, VibrancyMaterial::Popover));
 }
 
 #[test]
@@ -105,6 +105,194 @@ fn test_detect_system_appearance() {
     // The result will vary based on the system's actual appearance setting
     let _is_dark = detect_system_appearance();
     // Don't assert a specific value, just ensure it doesn't panic
+}
+
+// ========================================================================
+// Opacity Clamping Tests
+// ========================================================================
+
+#[test]
+fn test_opacity_clamping_valid_values() {
+    let opacity = BackgroundOpacity {
+        main: 0.5,
+        title_bar: 0.7,
+        search_box: 0.8,
+        log_panel: 0.3,
+    };
+    let clamped = opacity.clamped();
+    assert_eq!(clamped.main, 0.5);
+    assert_eq!(clamped.title_bar, 0.7);
+    assert_eq!(clamped.search_box, 0.8);
+    assert_eq!(clamped.log_panel, 0.3);
+}
+
+#[test]
+fn test_opacity_clamping_overflow() {
+    let opacity = BackgroundOpacity {
+        main: 2.0,        // Should clamp to 1.0
+        title_bar: 1.5,   // Should clamp to 1.0
+        search_box: -0.5, // Should clamp to 0.0
+        log_panel: 100.0, // Should clamp to 1.0
+    };
+    let clamped = opacity.clamped();
+    assert_eq!(clamped.main, 1.0);
+    assert_eq!(clamped.title_bar, 1.0);
+    assert_eq!(clamped.search_box, 0.0);
+    assert_eq!(clamped.log_panel, 1.0);
+}
+
+#[test]
+fn test_drop_shadow_opacity_clamping() {
+    let shadow = DropShadow {
+        enabled: true,
+        blur_radius: 20.0,
+        spread_radius: 0.0,
+        offset_x: 0.0,
+        offset_y: 8.0,
+        color: 0x000000,
+        opacity: 2.5, // Should clamp to 1.0
+    };
+    let clamped = shadow.clamped();
+    assert_eq!(clamped.opacity, 1.0);
+}
+
+#[test]
+fn test_drop_shadow_opacity_negative_clamping() {
+    let shadow = DropShadow {
+        enabled: true,
+        blur_radius: 20.0,
+        spread_radius: 0.0,
+        offset_x: 0.0,
+        offset_y: 8.0,
+        color: 0x000000,
+        opacity: -0.5, // Should clamp to 0.0
+    };
+    let clamped = shadow.clamped();
+    assert_eq!(clamped.opacity, 0.0);
+}
+
+// ========================================================================
+// VibrancyMaterial Enum Tests
+// ========================================================================
+
+#[test]
+fn test_vibrancy_material_default() {
+    use super::types::VibrancyMaterial;
+    let material = VibrancyMaterial::default();
+    assert!(matches!(material, VibrancyMaterial::Popover));
+}
+
+#[test]
+fn test_vibrancy_material_serialization() {
+    use super::types::VibrancyMaterial;
+
+    // Test each variant serializes correctly
+    assert_eq!(
+        serde_json::to_string(&VibrancyMaterial::Hud).unwrap(),
+        "\"hud\""
+    );
+    assert_eq!(
+        serde_json::to_string(&VibrancyMaterial::Popover).unwrap(),
+        "\"popover\""
+    );
+    assert_eq!(
+        serde_json::to_string(&VibrancyMaterial::Menu).unwrap(),
+        "\"menu\""
+    );
+    assert_eq!(
+        serde_json::to_string(&VibrancyMaterial::Sidebar).unwrap(),
+        "\"sidebar\""
+    );
+    assert_eq!(
+        serde_json::to_string(&VibrancyMaterial::Content).unwrap(),
+        "\"content\""
+    );
+}
+
+#[test]
+fn test_vibrancy_material_deserialization() {
+    use super::types::VibrancyMaterial;
+
+    // Test each variant deserializes correctly
+    assert!(matches!(
+        serde_json::from_str::<VibrancyMaterial>("\"hud\"").unwrap(),
+        VibrancyMaterial::Hud
+    ));
+    assert!(matches!(
+        serde_json::from_str::<VibrancyMaterial>("\"popover\"").unwrap(),
+        VibrancyMaterial::Popover
+    ));
+    assert!(matches!(
+        serde_json::from_str::<VibrancyMaterial>("\"menu\"").unwrap(),
+        VibrancyMaterial::Menu
+    ));
+    assert!(matches!(
+        serde_json::from_str::<VibrancyMaterial>("\"sidebar\"").unwrap(),
+        VibrancyMaterial::Sidebar
+    ));
+    assert!(matches!(
+        serde_json::from_str::<VibrancyMaterial>("\"content\"").unwrap(),
+        VibrancyMaterial::Content
+    ));
+}
+
+#[test]
+fn test_vibrancy_settings_with_material_enum() {
+    let json = r#"{"enabled": true, "material": "hud"}"#;
+    let settings: VibrancySettings = serde_json::from_str(json).unwrap();
+    assert!(settings.enabled);
+    assert!(matches!(
+        settings.material,
+        super::types::VibrancyMaterial::Hud
+    ));
+}
+
+// ========================================================================
+// BackgroundRole and background_rgba API Tests
+// ========================================================================
+
+#[test]
+fn test_background_role_main() {
+    use super::types::BackgroundRole;
+    let theme = Theme::default();
+    let rgba = theme.background_rgba(BackgroundRole::Main, true);
+
+    // Should have the correct RGB from colors.background.main (0x1e1e1e)
+    // and apply opacity from BackgroundOpacity.main (0.60)
+    assert!(rgba.3 > 0.0 && rgba.3 <= 1.0); // Alpha should be valid
+}
+
+#[test]
+fn test_background_role_unfocused_reduces_opacity() {
+    use super::types::BackgroundRole;
+    let theme = Theme::default();
+
+    let focused = theme.background_rgba(BackgroundRole::Main, true);
+    let unfocused = theme.background_rgba(BackgroundRole::Main, false);
+
+    // Unfocused should have lower alpha (10% reduction)
+    assert!(unfocused.3 < focused.3);
+}
+
+#[test]
+fn test_background_role_all_variants() {
+    use super::types::BackgroundRole;
+    let theme = Theme::default();
+
+    // All variants should return valid rgba values
+    for role in [
+        BackgroundRole::Main,
+        BackgroundRole::TitleBar,
+        BackgroundRole::SearchBox,
+        BackgroundRole::LogPanel,
+    ] {
+        let rgba = theme.background_rgba(role, true);
+        // RGB values should be in 0-1 range
+        assert!(rgba.0 >= 0.0 && rgba.0 <= 1.0);
+        assert!(rgba.1 >= 0.0 && rgba.1 <= 1.0);
+        assert!(rgba.2 >= 0.0 && rgba.2 <= 1.0);
+        assert!(rgba.3 >= 0.0 && rgba.3 <= 1.0);
+    }
 }
 
 // ========================================================================
