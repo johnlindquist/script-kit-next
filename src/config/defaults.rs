@@ -43,3 +43,7 @@ pub const DEFAULT_CONFIRMATION_COMMANDS: &[&str] = &[
     "builtin-quit-script-kit",
     "builtin-test-confirmation", // Dev test item
 ];
+
+/// Commands that should be excluded from frecency/suggested tracking.
+/// These are commands that don't make sense to suggest (e.g., quit).
+pub const DEFAULT_FRECENCY_EXCLUDED_COMMANDS: &[&str] = &["builtin-quit-script-kit"];

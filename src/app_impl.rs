@@ -931,26 +931,37 @@ impl ScriptListApp {
 
         if let Some(idx) = result_idx {
             if let Some(result) = flat_results.get(idx).cloned() {
-                // Record frecency usage before executing
-                let frecency_path = match &result {
+                // Record frecency usage before executing (unless excluded)
+                let frecency_path: Option<String> = match &result {
                     scripts::SearchResult::Script(sm) => {
-                        sm.script.path.to_string_lossy().to_string()
+                        Some(sm.script.path.to_string_lossy().to_string())
                     }
-                    scripts::SearchResult::App(am) => am.app.path.to_string_lossy().to_string(),
-                    scripts::SearchResult::BuiltIn(bm) => format!("builtin:{}", bm.entry.name),
+                    scripts::SearchResult::App(am) => {
+                        Some(am.app.path.to_string_lossy().to_string())
+                    }
+                    scripts::SearchResult::BuiltIn(bm) => {
+                        // Skip frecency tracking for excluded builtins (e.g., "Quit Script Kit")
+                        if bm.entry.should_exclude_from_frecency() {
+                            None
+                        } else {
+                            Some(format!("builtin:{}", bm.entry.name))
+                        }
+                    }
                     scripts::SearchResult::Scriptlet(sm) => {
-                        format!("scriptlet:{}", sm.scriptlet.name)
+                        Some(format!("scriptlet:{}", sm.scriptlet.name))
                     }
                     scripts::SearchResult::Window(wm) => {
-                        format!("window:{}:{}", wm.window.app, wm.window.title)
+                        Some(format!("window:{}:{}", wm.window.app, wm.window.title))
                     }
                     scripts::SearchResult::Agent(am) => {
-                        format!("agent:{}", am.agent.path.to_string_lossy())
+                        Some(format!("agent:{}", am.agent.path.to_string_lossy()))
                     }
                 };
-                self.frecency_store.record_use(&frecency_path);
-                self.frecency_store.save().ok(); // Best-effort save
-                self.invalidate_grouped_cache(); // Invalidate cache so next show reflects frecency
+                if let Some(path) = frecency_path {
+                    self.frecency_store.record_use(&path);
+                    self.frecency_store.save().ok(); // Best-effort save
+                    self.invalidate_grouped_cache(); // Invalidate cache so next show reflects frecency
+                }
 
                 match result {
                     scripts::SearchResult::Script(script_match) => {
