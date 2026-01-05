@@ -11,7 +11,10 @@ use std::sync::{Arc, Mutex, OnceLock};
 use tracing::{debug, error, info};
 use uuid::Uuid;
 
-use super::cache::{clear_all_caches, evict_image_cache, refresh_entry_cache};
+use super::cache::{
+    clear_all_caches, evict_image_cache, refresh_entry_cache, remove_entry_from_cache,
+    update_pin_status_in_cache, upsert_entry_in_cache,
+};
 use super::config::{get_max_text_content_len, get_retention_days, is_text_over_limit};
 use super::image::get_image_dimensions;
 use super::types::{ClipboardEntry, ClipboardEntryMeta, ContentType};
@@ -276,15 +279,20 @@ pub fn add_entry(content: &str, content_type: ContentType) -> Result<String> {
     let content_hash = compute_content_hash(content);
 
     // Check if entry with same hash exists (O(1) dedup via index)
-    let existing: Option<String> = conn
+    // Also fetch pinned status to preserve it in cache update
+    let existing: Option<(String, bool)> = conn
         .query_row(
-            "SELECT id FROM history WHERE content_type = ? AND content_hash = ?",
+            "SELECT id, pinned FROM history WHERE content_type = ? AND content_hash = ?",
             params![content_type.as_str(), &content_hash],
-            |row| row.get(0),
+            |row| Ok((row.get(0)?, row.get::<_, i64>(1)? != 0)),
         )
         .ok();
 
-    if let Some(existing_id) = existing {
+    // Extract metadata for efficient list queries (done before lock for update case)
+    let (text_preview, image_width, image_height, byte_size) =
+        extract_metadata(content, content_type.clone());
+
+    if let Some((existing_id, existing_pinned)) = existing {
         conn.execute(
             "UPDATE history SET timestamp = ? WHERE id = ?",
             params![timestamp, &existing_id],
@@ -292,13 +300,23 @@ pub fn add_entry(content: &str, content_type: ContentType) -> Result<String> {
         .context("Failed to update existing entry timestamp")?;
         debug!(id = %existing_id, "Updated existing clipboard entry timestamp");
         drop(conn);
-        refresh_entry_cache();
+
+        // Incremental cache update instead of full refresh
+        // Preserve the existing pinned status from the database
+        upsert_entry_in_cache(ClipboardEntryMeta {
+            id: existing_id.clone(),
+            content_type: content_type.clone(),
+            timestamp,
+            pinned: existing_pinned,
+            text_preview: text_preview.unwrap_or_default(),
+            image_width,
+            image_height,
+            byte_size,
+            ocr_text: None,
+        });
+
         return Ok(existing_id);
     }
-
-    // Extract metadata for efficient list queries
-    let (text_preview, image_width, image_height, byte_size) =
-        extract_metadata(content, content_type.clone());
 
     let id = Uuid::new_v4().to_string();
     conn.execute(
@@ -311,7 +329,19 @@ pub fn add_entry(content: &str, content_type: ContentType) -> Result<String> {
     debug!(id = %id, content_type = content_type.as_str(), "Added clipboard entry");
 
     drop(conn);
-    refresh_entry_cache();
+
+    // Incremental cache update instead of full refresh
+    upsert_entry_in_cache(ClipboardEntryMeta {
+        id: id.clone(),
+        content_type,
+        timestamp,
+        pinned: false,
+        text_preview: text_preview.unwrap_or_default(),
+        image_width,
+        image_height,
+        byte_size,
+        ocr_text: None,
+    });
 
     Ok(id)
 }
@@ -571,7 +601,9 @@ pub fn pin_entry(id: &str) -> Result<()> {
     info!(id = %id, "Pinned clipboard entry");
 
     drop(conn);
-    refresh_entry_cache();
+
+    // Incremental cache update instead of full refresh
+    update_pin_status_in_cache(id, true);
 
     Ok(())
 }
@@ -594,7 +626,9 @@ pub fn unpin_entry(id: &str) -> Result<()> {
     info!(id = %id, "Unpinned clipboard entry");
 
     drop(conn);
-    refresh_entry_cache();
+
+    // Incremental cache update instead of full refresh
+    update_pin_status_in_cache(id, false);
 
     Ok(())
 }
@@ -619,7 +653,8 @@ pub fn remove_entry(id: &str) -> Result<()> {
     drop(conn);
 
     evict_image_cache(id);
-    refresh_entry_cache();
+    // Incremental cache update instead of full refresh
+    remove_entry_from_cache(id);
 
     Ok(())
 }
