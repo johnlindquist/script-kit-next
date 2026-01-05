@@ -332,19 +332,14 @@ mod gcd {
 
 /// Dispatch the Notes hotkey handler to the main thread.
 ///
-/// Strategy:
-/// 1. Send to channel (wakes any async waiters)
-/// 2. Dispatch a no-op to main thread via GCD (ensures GPUI event loop processes)
+/// Strategy (mutually exclusive to prevent double-fire):
+/// - If a handler is registered: use it directly via GCD dispatch
+/// - Otherwise: send to channel for async polling
 ///
 /// This works even before the main window is activated because GCD dispatch
 /// directly integrates with the NSApplication run loop that GPUI uses.
 fn dispatch_notes_hotkey() {
-    // Send to channel - this wakes any async task waiting on recv()
-    if notes_hotkey_channel().0.try_send(()).is_err() {
-        logging::log("HOTKEY", "Notes hotkey channel full/closed");
-    }
-
-    // Also try the handler approach for immediate execution
+    // Check if a direct handler is registered (takes priority over channel)
     let handler = NOTES_HANDLER
         .get_or_init(|| std::sync::Mutex::new(None))
         .lock()
@@ -352,10 +347,15 @@ fn dispatch_notes_hotkey() {
         .clone();
 
     if let Some(handler) = handler {
+        // Handler is set - use direct GCD dispatch (skip channel to avoid double-fire)
         gcd::dispatch_to_main(move || {
             handler();
         });
     } else {
+        // No handler - use channel approach for async polling
+        if notes_hotkey_channel().0.try_send(()).is_err() {
+            logging::log("HOTKEY", "Notes hotkey channel full/closed");
+        }
         // Dispatch an empty closure to wake GPUI's event loop
         // This ensures the channel message gets processed even if GPUI was idle
         gcd::dispatch_to_main(|| {
@@ -365,14 +365,12 @@ fn dispatch_notes_hotkey() {
 }
 
 /// Dispatch the AI hotkey handler to the main thread.
-/// Same strategy as Notes hotkey.
+///
+/// Strategy (mutually exclusive to prevent double-fire):
+/// - If a handler is registered: use it directly via GCD dispatch
+/// - Otherwise: send to channel for async polling
 fn dispatch_ai_hotkey() {
-    // Send to channel - this wakes any async task waiting on recv()
-    if ai_hotkey_channel().0.try_send(()).is_err() {
-        logging::log("HOTKEY", "AI hotkey channel full/closed");
-    }
-
-    // Also try the handler approach for immediate execution
+    // Check if a direct handler is registered (takes priority over channel)
     let handler = AI_HANDLER
         .get_or_init(|| std::sync::Mutex::new(None))
         .lock()
@@ -380,10 +378,15 @@ fn dispatch_ai_hotkey() {
         .clone();
 
     if let Some(handler) = handler {
+        // Handler is set - use direct GCD dispatch (skip channel to avoid double-fire)
         gcd::dispatch_to_main(move || {
             handler();
         });
     } else {
+        // No handler - use channel approach for async polling
+        if ai_hotkey_channel().0.try_send(()).is_err() {
+            logging::log("HOTKEY", "AI hotkey channel full/closed");
+        }
         // Dispatch an empty closure to wake GPUI's event loop
         gcd::dispatch_to_main(|| {
             // Empty closure - just wakes the run loop
