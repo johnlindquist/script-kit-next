@@ -1182,7 +1182,7 @@ impl ScriptListApp {
                     let filter_lower = filter.to_lowercase();
                     entries
                         .iter()
-                        .filter(|e| e.content.to_lowercase().contains(&filter_lower))
+                        .filter(|e| e.text_preview.to_lowercase().contains(&filter_lower))
                         .count()
                 };
                 (ViewType::ScriptList, filtered_count)

@@ -68,7 +68,7 @@ impl TimeGroup {
     }
 }
 
-/// A single clipboard history entry
+/// A single clipboard history entry (full, includes content)
 #[derive(Debug, Clone)]
 pub struct ClipboardEntry {
     pub id: String,
@@ -79,6 +79,55 @@ pub struct ClipboardEntry {
     /// OCR text extracted from images (None for text entries or pending OCR)
     #[allow(dead_code)] // Used by downstream subtasks (OCR, UI)
     pub ocr_text: Option<String>,
+}
+
+/// Lightweight clipboard entry metadata for list views (no payload)
+///
+/// This struct contains everything needed for displaying entries in a list
+/// without loading the full content (which can be megabytes for images).
+/// Use `get_entry_content()` to fetch the full content when needed.
+#[derive(Debug, Clone)]
+pub struct ClipboardEntryMeta {
+    pub id: String,
+    pub content_type: ContentType,
+    pub timestamp: i64,
+    pub pinned: bool,
+    /// First 100 chars of text content (for list preview), or "[Image]" for images
+    pub text_preview: String,
+    /// Image width in pixels (None for text)
+    pub image_width: Option<u32>,
+    /// Image height in pixels (None for text)
+    pub image_height: Option<u32>,
+    /// Content size in bytes (useful for displaying file sizes)
+    #[allow(dead_code)]
+    pub byte_size: usize,
+    /// OCR text extracted from images (None for text entries or pending OCR)
+    #[allow(dead_code)]
+    pub ocr_text: Option<String>,
+}
+
+impl ClipboardEntryMeta {
+    /// Get a display-friendly preview string for list items
+    pub fn display_preview(&self) -> String {
+        match self.content_type {
+            ContentType::Image => {
+                if let (Some(w), Some(h)) = (self.image_width, self.image_height) {
+                    format!("{}×{} image", w, h)
+                } else {
+                    "[Image]".to_string()
+                }
+            }
+            ContentType::Text => {
+                // Replace newlines with spaces for single-line display
+                let sanitized = self.text_preview.replace(['\n', '\r'], " ");
+                if sanitized.len() > 50 {
+                    format!("{}…", sanitized.chars().take(50).collect::<String>())
+                } else {
+                    sanitized
+                }
+            }
+        }
+    }
 }
 
 /// Classify a Unix timestamp (milliseconds) into a TimeGroup using local timezone

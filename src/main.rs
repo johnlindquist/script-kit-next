@@ -505,7 +505,7 @@ enum AppView {
     },
     /// Showing clipboard history
     ClipboardHistoryView {
-        entries: Vec<clipboard_history::ClipboardEntry>,
+        entries: Vec<clipboard_history::ClipboardEntryMeta>,
         filter: String,
         selected_index: usize,
     },

@@ -35,7 +35,8 @@ mod types;
 // Types
 #[allow(unused_imports)]
 pub use types::{
-    classify_timestamp, group_entries_by_time, ClipboardEntry, ContentType, TimeGroup,
+    classify_timestamp, group_entries_by_time, ClipboardEntry, ClipboardEntryMeta, ContentType,
+    TimeGroup,
 };
 
 // Config
@@ -50,13 +51,13 @@ pub use cache::{cache_image, get_cached_entries, get_cached_image};
 // Database operations
 #[allow(unused_imports)]
 pub use database::{
-    clear_history, get_clipboard_history, get_clipboard_history_page, get_entry_by_id,
-    get_total_entry_count, pin_entry, remove_entry, trim_oversize_text_entries, unpin_entry,
-    update_ocr_text,
+    clear_history, get_clipboard_history, get_clipboard_history_meta, get_clipboard_history_page,
+    get_entry_by_id, get_entry_content, get_total_entry_count, pin_entry, remove_entry,
+    trim_oversize_text_entries, unpin_entry, update_ocr_text,
 };
 
 // Image operations
-pub use image::{decode_to_render_image, get_image_dimensions};
+pub use image::decode_to_render_image;
 
 // Monitor/Init
 #[allow(unused_imports)]

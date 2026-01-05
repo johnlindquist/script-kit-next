@@ -16,8 +16,8 @@ use super::cache::{
 };
 use super::config::{get_max_text_content_len, get_retention_days, is_text_over_limit};
 use super::database::{
-    add_entry, get_connection, prune_old_entries, run_incremental_vacuum, run_wal_checkpoint,
-    trim_oversize_text_entries,
+    add_entry, get_connection, get_entry_content, prune_old_entries, run_incremental_vacuum,
+    run_wal_checkpoint, trim_oversize_text_entries,
 };
 use super::image::{compute_image_hash, decode_to_render_image, encode_image_as_png};
 use super::types::ContentType;
@@ -278,7 +278,10 @@ fn background_prune_loop(stop_flag: Arc<AtomicBool>) {
     }
 }
 
-/// Pre-warm the image cache by decoding all cached image entries
+/// Pre-warm the image cache by decoding cached image entries
+///
+/// This fetches content on-demand for each image entry to avoid
+/// keeping all image payloads in memory during normal list views.
 fn prewarm_image_cache() {
     let entries = get_cached_entries(100);
     let mut decoded_count = 0;
@@ -290,10 +293,12 @@ fn prewarm_image_cache() {
                 continue;
             }
 
-            // Decode and cache
-            if let Some(render_image) = decode_to_render_image(&entry.content) {
-                cache_image(&entry.id, render_image);
-                decoded_count += 1;
+            // Fetch content on-demand and decode
+            if let Some(content) = get_entry_content(&entry.id) {
+                if let Some(render_image) = decode_to_render_image(&content) {
+                    cache_image(&entry.id, render_image);
+                    decoded_count += 1;
+                }
             }
         }
     }

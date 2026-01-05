@@ -6,7 +6,7 @@ impl ScriptListApp {
     /// Render clipboard history view
     fn render_clipboard_history(
         &mut self,
-        entries: Vec<clipboard_history::ClipboardEntry>,
+        entries: Vec<clipboard_history::ClipboardEntryMeta>,
         filter: String,
         selected_index: usize,
         cx: &mut Context<Self>,
@@ -26,21 +26,23 @@ impl ScriptListApp {
 
         // Use global image cache from clipboard_history module
         // Images are pre-decoded in the background monitor thread, so this is fast
-        // Only decode if not already in the global cache (fallback)
+        // Only decode if not already in the global cache (fallback with on-demand fetch)
         for entry in &entries {
             if entry.content_type == clipboard_history::ContentType::Image {
                 // Check global cache first, then local cache
                 if clipboard_history::get_cached_image(&entry.id).is_none()
                     && !self.clipboard_image_cache.contains_key(&entry.id)
                 {
-                    // Fallback: decode now if not pre-cached
-                    if let Some(render_image) =
-                        clipboard_history::decode_to_render_image(&entry.content)
-                    {
-                        // Store in global cache for future use
-                        clipboard_history::cache_image(&entry.id, render_image.clone());
-                        self.clipboard_image_cache
-                            .insert(entry.id.clone(), render_image);
+                    // Fallback: fetch content on-demand and decode if not pre-cached
+                    if let Some(content) = clipboard_history::get_entry_content(&entry.id) {
+                        if let Some(render_image) =
+                            clipboard_history::decode_to_render_image(&content)
+                        {
+                            // Store in global cache for future use
+                            clipboard_history::cache_image(&entry.id, render_image.clone());
+                            self.clipboard_image_cache
+                                .insert(entry.id.clone(), render_image);
+                        }
                     }
                 } else if let Some(cached) = clipboard_history::get_cached_image(&entry.id) {
                     // Copy from global cache to local cache for this render
@@ -62,7 +64,7 @@ impl ScriptListApp {
             entries
                 .iter()
                 .enumerate()
-                .filter(|(_, e)| e.content.to_lowercase().contains(&filter_lower))
+                .filter(|(_, e)| e.text_preview.to_lowercase().contains(&filter_lower))
                 .collect()
         };
         let filtered_len = filtered_entries.len();
@@ -95,7 +97,7 @@ impl ScriptListApp {
                         entries
                             .iter()
                             .enumerate()
-                            .filter(|(_, e)| e.content.to_lowercase().contains(&filter_lower))
+                            .filter(|(_, e)| e.text_preview.to_lowercase().contains(&filter_lower))
                             .collect()
                     };
                     let filtered_len = filtered_entries.len();
@@ -237,34 +239,12 @@ impl ScriptListApp {
                                     None
                                 };
 
-                                // Truncate content for display (show dimensions for images)
-                                let display_content = match entry.content_type {
-                                    clipboard_history::ContentType::Image => {
-                                        // Show image dimensions instead of "[Image]"
-                                        if let Some((w, h)) =
-                                            clipboard_history::get_image_dimensions(&entry.content)
-                                        {
-                                            format!("{}×{} image", w, h)
-                                        } else {
-                                            "Image".to_string()
-                                        }
-                                    }
-                                    clipboard_history::ContentType::Text => {
-                                        // Replace newlines with spaces to prevent multi-line list items
-                                        let sanitized = entry.content.replace(['\n', '\r'], " ");
-                                        let truncated: String =
-                                            sanitized.chars().take(50).collect();
-                                        if sanitized.len() > 50 {
-                                            format!("{}...", truncated)
-                                        } else {
-                                            truncated
-                                        }
-                                    }
-                                };
+                                // Use display_preview() from ClipboardEntryMeta
+                                let display_content = entry.display_preview();
 
-                                // Format relative time
-                                let now = chrono::Utc::now().timestamp();
-                                let age_secs = now - entry.timestamp;
+                                // Format relative time (entry.timestamp is in milliseconds)
+                                let now_ms = chrono::Utc::now().timestamp_millis();
+                                let age_secs = (now_ms - entry.timestamp) / 1000;
                                 let relative_time = if age_secs < 60 {
                                     "just now".to_string()
                                 } else if age_secs < 3600 {
@@ -436,7 +416,7 @@ impl ScriptListApp {
     /// Render the preview panel for clipboard history
     fn render_clipboard_preview_panel(
         &self,
-        selected_entry: &Option<clipboard_history::ClipboardEntry>,
+        selected_entry: &Option<clipboard_history::ClipboardEntryMeta>,
         image_cache: &std::collections::HashMap<String, Arc<gpui::RenderImage>>,
         colors: &designs::DesignColors,
         spacing: &designs::DesignSpacing,
@@ -544,8 +524,9 @@ impl ScriptListApp {
 
                 match entry.content_type {
                     clipboard_history::ContentType::Text => {
-                        // Show full text content in a code-like container
-                        let content = entry.content.clone();
+                        // Fetch full content on-demand for preview
+                        let content = clipboard_history::get_entry_content(&entry.id)
+                            .unwrap_or_else(|| entry.text_preview.clone());
                         let char_count = content.chars().count();
                         let line_count = content.lines().count();
 
@@ -576,10 +557,9 @@ impl ScriptListApp {
                             );
                     }
                     clipboard_history::ContentType::Image => {
-                        // Get image dimensions
-                        let (width, height) =
-                            clipboard_history::get_image_dimensions(&entry.content)
-                                .unwrap_or((0, 0));
+                        // Get image dimensions from metadata
+                        let width = entry.image_width.unwrap_or(0);
+                        let height = entry.image_height.unwrap_or(0);
 
                         // Try to get cached render image
                         let cached_image = image_cache.get(&entry.id).cloned();

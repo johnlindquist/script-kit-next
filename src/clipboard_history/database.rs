@@ -13,7 +13,8 @@ use uuid::Uuid;
 
 use super::cache::{clear_all_caches, evict_image_cache, refresh_entry_cache};
 use super::config::{get_max_text_content_len, get_retention_days, is_text_over_limit};
-use super::types::{ClipboardEntry, ContentType};
+use super::image::get_image_dimensions;
+use super::types::{ClipboardEntry, ClipboardEntryMeta, ContentType};
 
 /// Global database connection (thread-safe)
 static DB_CONNECTION: OnceLock<Arc<Mutex<Connection>>> = OnceLock::new();
@@ -133,6 +134,34 @@ pub fn get_connection() -> Result<Arc<Mutex<Connection>>> {
         );
     }
 
+    // Migration: Add metadata columns for memory-efficient list views
+    // These columns store pre-computed metadata so we don't need to load full content
+    let has_text_preview: bool = conn
+        .query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('history') WHERE name='text_preview'",
+            [],
+            |row| row.get::<_, i32>(0),
+        )
+        .map(|count| count > 0)
+        .unwrap_or(false);
+
+    if !has_text_preview {
+        // Add metadata columns
+        conn.execute("ALTER TABLE history ADD COLUMN text_preview TEXT", [])
+            .context("Failed to add text_preview column")?;
+        conn.execute("ALTER TABLE history ADD COLUMN image_width INTEGER", [])
+            .context("Failed to add image_width column")?;
+        conn.execute("ALTER TABLE history ADD COLUMN image_height INTEGER", [])
+            .context("Failed to add image_height column")?;
+        conn.execute("ALTER TABLE history ADD COLUMN byte_size INTEGER DEFAULT 0", [])
+            .context("Failed to add byte_size column")?;
+
+        info!("Migrated clipboard history: added metadata columns");
+
+        // Populate metadata for existing entries (in batches)
+        populate_existing_metadata(&conn)?;
+    }
+
     // Create indexes for faster queries
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_timestamp ON history(timestamp DESC)",
@@ -159,6 +188,66 @@ pub fn get_connection() -> Result<Arc<Mutex<Connection>>> {
     }
 
     Ok(conn)
+}
+
+/// Populate metadata for existing entries (migration helper)
+fn populate_existing_metadata(conn: &Connection) -> Result<()> {
+    // Get all entries that need metadata populated
+    let mut stmt = conn.prepare(
+        "SELECT id, content, content_type FROM history WHERE text_preview IS NULL OR byte_size = 0",
+    )?;
+
+    let entries: Vec<(String, String, String)> = stmt
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    let total = entries.len();
+    if total == 0 {
+        return Ok(());
+    }
+
+    info!(count = total, "Populating metadata for existing entries");
+
+    for (id, content, content_type_str) in entries {
+        let content_type = ContentType::from_str(&content_type_str);
+        let byte_size = content.len();
+
+        let (text_preview, image_width, image_height) = match content_type {
+            ContentType::Text => {
+                let preview: String = content.chars().take(100).collect();
+                (Some(preview), None, None)
+            }
+            ContentType::Image => {
+                let dims = get_image_dimensions(&content);
+                (None, dims.map(|(w, _)| w), dims.map(|(_, h)| h))
+            }
+        };
+
+        conn.execute(
+            "UPDATE history SET text_preview = ?1, image_width = ?2, image_height = ?3, byte_size = ?4 WHERE id = ?5",
+            params![text_preview, image_width, image_height, byte_size as i64, id],
+        )?;
+    }
+
+    info!(count = total, "Metadata population complete");
+    Ok(())
+}
+
+/// Extract metadata from content for efficient storage
+fn extract_metadata(content: &str, content_type: ContentType) -> (Option<String>, Option<u32>, Option<u32>, usize) {
+    let byte_size = content.len();
+
+    match content_type {
+        ContentType::Text => {
+            let preview: String = content.chars().take(100).collect();
+            (Some(preview), None, None, byte_size)
+        }
+        ContentType::Image => {
+            let dims = get_image_dimensions(content);
+            (None, dims.map(|(w, _)| w), dims.map(|(_, h)| h), byte_size)
+        }
+    }
 }
 
 /// Add a new entry to clipboard history
@@ -201,10 +290,14 @@ pub fn add_entry(content: &str, content_type: ContentType) -> Result<String> {
         return Ok(existing_id);
     }
 
+    // Extract metadata for efficient list queries
+    let (text_preview, image_width, image_height, byte_size) = extract_metadata(content, content_type.clone());
+
     let id = Uuid::new_v4().to_string();
     conn.execute(
-        "INSERT INTO history (id, content, content_hash, content_type, timestamp, pinned, ocr_text) VALUES (?1, ?2, ?3, ?4, ?5, 0, NULL)",
-        params![&id, content, &content_hash, content_type.as_str(), timestamp],
+        "INSERT INTO history (id, content, content_hash, content_type, timestamp, pinned, ocr_text, text_preview, image_width, image_height, byte_size)
+         VALUES (?1, ?2, ?3, ?4, ?5, 0, NULL, ?6, ?7, ?8, ?9)",
+        params![&id, content, &content_hash, content_type.as_str(), timestamp, text_preview, image_width, image_height, byte_size as i64],
     )
     .context("Failed to insert clipboard entry")?;
 
@@ -374,6 +467,83 @@ pub fn get_total_entry_count() -> usize {
 /// Get clipboard history entries (convenience wrapper)
 pub fn get_clipboard_history(limit: usize) -> Vec<ClipboardEntry> {
     get_clipboard_history_page(limit, 0)
+}
+
+/// Get paginated clipboard history metadata (NO content payload)
+///
+/// This is memory-efficient for list views - doesn't load full content.
+/// Use `get_entry_content()` to fetch content when needed.
+pub fn get_clipboard_history_meta(limit: usize, offset: usize) -> Vec<ClipboardEntryMeta> {
+    let conn = match get_connection() {
+        Ok(c) => c,
+        Err(e) => {
+            error!(error = %e, "Failed to get database connection");
+            return Vec::new();
+        }
+    };
+
+    let conn = match conn.lock() {
+        Ok(c) => c,
+        Err(e) => {
+            error!(error = %e, "Failed to lock database connection");
+            return Vec::new();
+        }
+    };
+
+    // Query only metadata columns - NO content column
+    let mut stmt = match conn.prepare(
+        "SELECT id, content_type, timestamp, pinned, text_preview, image_width, image_height, byte_size, ocr_text
+         FROM history
+         ORDER BY pinned DESC, timestamp DESC
+         LIMIT ? OFFSET ?",
+    ) {
+        Ok(s) => s,
+        Err(e) => {
+            error!(error = %e, "Failed to prepare metadata query");
+            return Vec::new();
+        }
+    };
+
+    let entries = stmt
+        .query_map(params![limit, offset], |row| {
+            Ok(ClipboardEntryMeta {
+                id: row.get(0)?,
+                content_type: ContentType::from_str(&row.get::<_, String>(1)?),
+                timestamp: row.get(2)?,
+                pinned: row.get::<_, i64>(3)? != 0,
+                text_preview: row.get::<_, Option<String>>(4)?.unwrap_or_default(),
+                image_width: row.get::<_, Option<i64>>(5)?.map(|v| v as u32),
+                image_height: row.get::<_, Option<i64>>(6)?.map(|v| v as u32),
+                byte_size: row.get::<_, Option<i64>>(7)?.unwrap_or(0) as usize,
+                ocr_text: row.get(8)?,
+            })
+        })
+        .map(|rows| rows.filter_map(|r| r.ok()).collect())
+        .unwrap_or_else(|e| {
+            error!(error = %e, "Failed to query clipboard history metadata");
+            Vec::new()
+        });
+
+    debug!(
+        count = entries.len(),
+        limit, offset, "Retrieved clipboard history metadata"
+    );
+    entries
+}
+
+/// Get just the content for an entry (for copy/preview operations)
+///
+/// Returns None if entry doesn't exist.
+pub fn get_entry_content(id: &str) -> Option<String> {
+    let conn = get_connection().ok()?;
+    let conn = conn.lock().ok()?;
+
+    conn.query_row(
+        "SELECT content FROM history WHERE id = ?",
+        params![id],
+        |row| row.get(0),
+    )
+    .ok()
 }
 
 /// Pin a clipboard entry to prevent LRU eviction

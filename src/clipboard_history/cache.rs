@@ -1,6 +1,6 @@
 //! Clipboard history caching
 //!
-//! LRU caching for decoded images and clipboard entries.
+//! LRU caching for decoded images and entry metadata.
 
 use gpui::RenderImage;
 use lru::LruCache;
@@ -8,8 +8,8 @@ use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex, OnceLock};
 use tracing::debug;
 
-use super::database::get_clipboard_history_page;
-use super::types::ClipboardEntry;
+use super::database::get_clipboard_history_meta;
+use super::types::ClipboardEntryMeta;
 
 /// Maximum number of decoded images to keep in memory (LRU eviction)
 /// Each image can be 1-4MB, so 100 images = ~100-400MB max memory
@@ -23,9 +23,10 @@ pub const MAX_CACHED_ENTRIES: usize = 500;
 /// Uses LRU eviction to cap memory usage at ~100-400MB (100 images max)
 static IMAGE_CACHE: OnceLock<Mutex<LruCache<String, Arc<RenderImage>>>> = OnceLock::new();
 
-/// Cached clipboard entries to avoid re-fetching from SQLite on each view open
-/// Updated whenever a new entry is added
-static ENTRY_CACHE: OnceLock<Mutex<Vec<ClipboardEntry>>> = OnceLock::new();
+/// Cached clipboard entry metadata (NO content payload) for list views
+/// Updated whenever a new entry is added. This is memory-efficient because
+/// it doesn't include the full content field (which can be megabytes for images).
+static ENTRY_CACHE: OnceLock<Mutex<Vec<ClipboardEntryMeta>>> = OnceLock::new();
 
 /// Timestamp of last cache update
 static CACHE_UPDATED: OnceLock<Mutex<i64>> = OnceLock::new();
@@ -39,7 +40,7 @@ pub fn get_image_cache() -> &'static Mutex<LruCache<String, Arc<RenderImage>>> {
 }
 
 /// Get the global entry cache, initializing if needed
-pub fn get_entry_cache() -> &'static Mutex<Vec<ClipboardEntry>> {
+pub fn get_entry_cache() -> &'static Mutex<Vec<ClipboardEntryMeta>> {
     ENTRY_CACHE.get_or_init(|| Mutex::new(Vec::new()))
 }
 
@@ -72,22 +73,22 @@ pub fn cache_image(id: &str, image: Arc<RenderImage>) {
     }
 }
 
-/// Get cached clipboard entries (faster than querying SQLite)
+/// Get cached clipboard entry metadata (faster than querying SQLite)
 /// Falls back to SQLite if cache is empty
-pub fn get_cached_entries(limit: usize) -> Vec<ClipboardEntry> {
+pub fn get_cached_entries(limit: usize) -> Vec<ClipboardEntryMeta> {
     if let Ok(cache) = get_entry_cache().lock() {
         if !cache.is_empty() {
             let result: Vec<_> = cache.iter().take(limit).cloned().collect();
             debug!(
                 count = result.len(),
                 cached = true,
-                "Retrieved clipboard entries from cache"
+                "Retrieved clipboard entry metadata from cache"
             );
             return result;
         }
     }
-    // Fall back to database
-    get_clipboard_history_page(limit, 0)
+    // Fall back to database (metadata-only query)
+    get_clipboard_history_meta(limit, 0)
 }
 
 /// Invalidate the entry cache (called when entries change)
@@ -97,12 +98,13 @@ pub fn invalidate_entry_cache() {
     }
 }
 
-/// Refresh the entry cache from database
+/// Refresh the entry cache from database (metadata only, no content payload)
 pub fn refresh_entry_cache() {
-    let entries = get_clipboard_history_page(MAX_CACHED_ENTRIES, 0);
+    // Use metadata-only query to avoid loading full content
+    let entries = get_clipboard_history_meta(MAX_CACHED_ENTRIES, 0);
     if let Ok(mut cache) = get_entry_cache().lock() {
         *cache = entries;
-        debug!(count = cache.len(), "Refreshed entry cache");
+        debug!(count = cache.len(), "Refreshed entry metadata cache");
     }
     if let Some(updated) = CACHE_UPDATED.get() {
         if let Ok(mut ts) = updated.lock() {

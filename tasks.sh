@@ -31,7 +31,7 @@ for task_file in "${task_files[@]}"; do
         prompt="$(cat "$task_file")$SUFFIX"
 
         # Run x with the prompt
-        x -p "$prompt"
+        x -p "$prompt" --verbose
 
         # Delete the prompt file after completion
         rm "$task_file"
