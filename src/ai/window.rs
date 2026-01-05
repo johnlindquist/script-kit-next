@@ -345,6 +345,15 @@ impl AiApp {
         // TODO: Handle input changes (e.g., streaming, auto-complete)
     }
 
+    /// Focus the main chat input
+    /// Called when the window is opened to allow immediate typing
+    pub fn focus_input(&self, window: &mut Window, cx: &mut Context<Self>) {
+        self.input_state.update(cx, |state, cx| {
+            state.focus(window, cx);
+        });
+        info!("AI input focused for immediate typing");
+    }
+
     /// Handle model selection change
     fn on_model_change(&mut self, index: usize, cx: &mut Context<Self>) {
         if let Some(model) = self.available_models.get(index) {
@@ -1579,6 +1588,18 @@ pub fn open_ai_window(cx: &mut App) -> Result<()> {
             logging::log("AI", "AI window exists - bringing to front and focusing");
             // Activate the app to ensure the window can receive focus
             cx.activate(true);
+
+            // Focus the input field so user can start typing immediately
+            let app_entity_holder = AI_APP_ENTITY.get_or_init(|| std::sync::Mutex::new(None));
+            if let Some(ai_app) = app_entity_holder.lock().unwrap().as_ref() {
+                let ai_app_clone = ai_app.clone();
+                let _ = handle.update(cx, |_root, window, cx| {
+                    ai_app_clone.update(cx, |app, cx| {
+                        app.focus_input(window, cx);
+                    });
+                });
+            }
+
             return Ok(());
         }
 
@@ -1640,6 +1661,16 @@ pub fn open_ai_window(cx: &mut App) -> Result<()> {
     let _ = handle.update(cx, |_root, window, _cx| {
         window.activate_window();
     });
+
+    // Focus the input field so user can start typing immediately
+    if let Some(ai_app) = app_entity_holder.lock().unwrap().as_ref() {
+        let ai_app_clone = ai_app.clone();
+        let _ = handle.update(cx, |_root, window, cx| {
+            ai_app_clone.update(cx, |app, cx| {
+                app.focus_input(window, cx);
+            });
+        });
+    }
 
     *guard = Some(handle);
 
