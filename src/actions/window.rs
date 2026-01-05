@@ -9,21 +9,22 @@
 
 use crate::panel::HEADER_TOTAL_HEIGHT;
 use crate::platform;
+use crate::theme;
 use gpui::{
     div, prelude::*, px, App, Bounds, Context, Entity, FocusHandle, Focusable, Pixels, Point,
     Render, Size, Window, WindowBounds, WindowHandle, WindowKind, WindowOptions,
 };
+use gpui_component::Root;
 use std::sync::{Mutex, OnceLock};
 
+use super::constants::{ACTION_ITEM_HEIGHT, POPUP_MAX_HEIGHT};
 use super::dialog::ActionsDialog;
 
 /// Global singleton for the actions window handle
-/// NOTE: Uses ActionsWindow directly (not Root) to avoid Root's opaque background
-static ACTIONS_WINDOW: OnceLock<Mutex<Option<WindowHandle<ActionsWindow>>>> = OnceLock::new();
+static ACTIONS_WINDOW: OnceLock<Mutex<Option<WindowHandle<Root>>>> = OnceLock::new();
 
-/// Actions window dimensions
+/// Actions window width (height is calculated dynamically based on content)
 const ACTIONS_WINDOW_WIDTH: f32 = 320.0;
-const ACTIONS_WINDOW_HEIGHT: f32 = 400.0;
 /// Margin from main window edges
 const ACTIONS_MARGIN: f32 = 8.0;
 
@@ -77,20 +78,30 @@ pub fn open_actions_window(
     cx: &mut App,
     main_window_bounds: Bounds<Pixels>,
     dialog_entity: Entity<ActionsDialog>,
-) -> anyhow::Result<WindowHandle<ActionsWindow>> {
+) -> anyhow::Result<WindowHandle<Root>> {
     // Close any existing actions window first
     close_actions_window(cx);
 
-    // Use transparent window background - the dialog renders its own
-    // vibrancy/blur styling. This prevents unused window area from showing
-    // as a dark rectangle when the content is smaller than max height.
-    let window_background = gpui::WindowBackgroundAppearance::Transparent;
+    // Load theme for vibrancy settings
+    let theme = theme::load_theme();
+    let window_background = if theme.is_vibrancy_enabled() {
+        gpui::WindowBackgroundAppearance::Blurred
+    } else {
+        gpui::WindowBackgroundAppearance::Opaque
+    };
+
+    // Calculate dynamic window height based on number of actions
+    // This ensures the window fits the content without empty dark space
+    let num_actions = dialog_entity.read(cx).filtered_actions.len();
+    let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT).min(POPUP_MAX_HEIGHT);
+    let border_height = 2.0; // top + bottom border
+    let dynamic_height = items_height + border_height;
 
     // Calculate window position:
     // - X: Right edge of main window, minus actions width, minus margin
     // - Y: Below the header (HEADER_TOTAL_HEIGHT), plus margin
     let window_width = px(ACTIONS_WINDOW_WIDTH);
-    let window_height = px(ACTIONS_WINDOW_HEIGHT);
+    let window_height = px(dynamic_height);
 
     let window_x = main_window_bounds.origin.x + main_window_bounds.size.width
         - window_width
@@ -127,11 +138,10 @@ pub fn open_actions_window(
     };
 
     // Create the window with the shared dialog entity
-    // NOTE: We don't use Root wrapper here because Root has .bg(theme.background).size_full()
-    // which creates an opaque background for the entire window. Instead, we render the
-    // ActionsWindow directly - the ActionsDialog handles its own styling.
-    let handle = cx.open_window(window_options, |_window, cx| {
-        cx.new(|cx| ActionsWindow::new(dialog_entity, cx))
+    let handle = cx.open_window(window_options, |window, cx| {
+        let actions_window = cx.new(|cx| ActionsWindow::new(dialog_entity, cx));
+        // Wrap in Root for gpui-component theming and vibrancy
+        cx.new(|cx| Root::new(actions_window, window, cx))
     })?;
 
     // Configure the window as non-movable on macOS
@@ -194,7 +204,7 @@ pub fn is_actions_window_open() -> bool {
 }
 
 /// Get the actions window handle if it exists
-pub fn get_actions_window_handle() -> Option<WindowHandle<ActionsWindow>> {
+pub fn get_actions_window_handle() -> Option<WindowHandle<Root>> {
     if let Some(window_storage) = ACTIONS_WINDOW.get() {
         if let Ok(guard) = window_storage.lock() {
             return *guard;
