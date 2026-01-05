@@ -21,9 +21,12 @@ const EMBEDDED_THEME_EXAMPLE: &str = include_str!("../kit-init/theme.example.jso
 /// Embedded package.json template for user's kit directory
 /// The "type": "module" enables top-level await in all .ts scripts
 const EMBEDDED_PACKAGE_JSON: &str = r#"{
-  "name": "scriptkit-user",
+  "name": "@scriptkit/kit",
   "type": "module",
-  "private": true
+  "private": true,
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  }
 }
 "#;
 
@@ -1066,13 +1069,22 @@ fn write_string_if_changed(path: &Path, contents: &str, warnings: &mut Vec<Strin
     }
 }
 
-/// Ensure tsconfig.json has the @scriptkit/sdk path mapping (merge-safe)
+/// Ensure tsconfig.json has proper TypeScript/Bun settings (merge-safe)
 /// The tsconfig lives at ~/.scriptkit/kit/tsconfig.json, SDK at ~/.scriptkit/sdk/
+///
+/// Sets essential options while preserving user customizations:
+/// - target: ESNext (for top-level await and modern features)
+/// - module: ESNext (ES modules)
+/// - moduleResolution: Bundler (optimal for Bun)
+/// - paths: @scriptkit/sdk mapping
+/// - noEmit: true (Bun runs .ts directly)
+/// - skipLibCheck: true (faster)
+/// - esModuleInterop: true (CommonJS compat)
 fn ensure_tsconfig_paths(tsconfig_path: &Path, warnings: &mut Vec<String>) {
     use serde_json::{json, Value};
 
     // Path is relative from kit/ to sdk/: ../sdk/kit-sdk.ts
-    let kit_path = json!(["../sdk/kit-sdk.ts"]);
+    let expected_sdk_path = json!(["../sdk/kit-sdk.ts"]);
 
     let mut config: Value = if tsconfig_path.exists() {
         match fs::read_to_string(tsconfig_path) {
@@ -1083,21 +1095,53 @@ fn ensure_tsconfig_paths(tsconfig_path: &Path, warnings: &mut Vec<String>) {
         json!({})
     };
 
+    // Ensure compilerOptions exists
     if config.get("compilerOptions").is_none() {
         config["compilerOptions"] = json!({});
     }
-    if config["compilerOptions"].get("paths").is_none() {
-        config["compilerOptions"]["paths"] = json!({});
+
+    let compiler_options = config["compilerOptions"].as_object_mut().unwrap();
+    let mut changed = false;
+
+    // Essential settings for Bun/TypeScript scripts (set if missing)
+    let defaults = [
+        ("target", json!("ESNext")),
+        ("module", json!("ESNext")),
+        ("moduleResolution", json!("Bundler")),
+        ("noEmit", json!(true)),
+        ("skipLibCheck", json!(true)),
+        ("esModuleInterop", json!(true)),
+        ("allowImportingTsExtensions", json!(true)),
+        ("verbatimModuleSyntax", json!(true)),
+    ];
+
+    for (key, value) in defaults {
+        if !compiler_options.contains_key(key) {
+            compiler_options.insert(key.to_string(), value);
+            changed = true;
+        }
     }
 
-    // Check if already has the correct @scriptkit/sdk path
-    let current_kit_path = config["compilerOptions"]["paths"].get("@scriptkit/sdk");
-    if current_kit_path == Some(&kit_path) {
+    // Ensure paths exists
+    if !compiler_options.contains_key("paths") {
+        compiler_options.insert("paths".to_string(), json!({}));
+        changed = true;
+    }
+
+    // Always ensure @scriptkit/sdk path is correct
+    let paths = compiler_options
+        .get_mut("paths")
+        .unwrap()
+        .as_object_mut()
+        .unwrap();
+    if paths.get("@scriptkit/sdk") != Some(&expected_sdk_path) {
+        paths.insert("@scriptkit/sdk".to_string(), expected_sdk_path);
+        changed = true;
+    }
+
+    if !changed {
         return;
     }
-
-    // Set the @scriptkit/sdk path
-    config["compilerOptions"]["paths"]["@scriptkit/sdk"] = kit_path;
 
     match serde_json::to_string_pretty(&config) {
         Ok(json_str) => {
@@ -1109,7 +1153,7 @@ fn ensure_tsconfig_paths(tsconfig_path: &Path, warnings: &mut Vec<String>) {
                 ));
                 warn!(error = %e, "Failed to write tsconfig.json");
             } else {
-                info!("Updated tsconfig.json with @scriptkit/sdk path mapping");
+                info!("Updated tsconfig.json with TypeScript/Bun settings");
             }
         }
         Err(e) => {
