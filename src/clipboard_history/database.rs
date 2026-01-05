@@ -104,6 +104,29 @@ pub fn get_connection() -> Result<Arc<Mutex<Connection>>> {
         info!("Migrated clipboard history: added content_hash column");
     }
 
+    // Migration: Convert seconds timestamps to milliseconds
+    // Timestamps < 100_000_000_000 (year ~5138 in seconds, year ~1973 in ms) are seconds
+    // We multiply by 1000 to convert to milliseconds
+    let needs_migration: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM history WHERE timestamp < 100000000000 AND timestamp > 0",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+
+    if needs_migration > 0 {
+        conn.execute(
+            "UPDATE history SET timestamp = timestamp * 1000 WHERE timestamp < 100000000000 AND timestamp > 0",
+            [],
+        )
+        .context("Failed to migrate timestamps to milliseconds")?;
+        info!(
+            migrated_count = needs_migration,
+            "Migrated clipboard history timestamps from seconds to milliseconds"
+        );
+    }
+
     // Create indexes for faster queries
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_timestamp ON history(timestamp DESC)",
@@ -148,7 +171,7 @@ pub fn add_entry(content: &str, content_type: ContentType) -> Result<String> {
         .lock()
         .map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
 
-    let timestamp = chrono::Utc::now().timestamp();
+    let timestamp = chrono::Utc::now().timestamp_millis();
     let content_hash = compute_content_hash(content);
 
     // Check if entry with same hash exists (O(1) dedup via index)
@@ -197,7 +220,9 @@ pub fn prune_old_entries() -> Result<usize> {
         .map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
 
     let retention_days = get_retention_days();
-    let cutoff_timestamp = chrono::Utc::now().timestamp() - (retention_days as i64 * 24 * 60 * 60);
+    // Cutoff is in milliseconds (retention_days * 24 * 60 * 60 * 1000)
+    let cutoff_timestamp =
+        chrono::Utc::now().timestamp_millis() - (retention_days as i64 * 24 * 60 * 60 * 1000);
 
     let deleted = conn
         .execute(
@@ -597,5 +622,23 @@ mod tests {
         {
         }
         assert_returns_result_string(add_entry);
+    }
+
+    #[test]
+    fn test_timestamp_is_milliseconds() {
+        // Current timestamp in milliseconds should be > 1_700_000_000_000 (Oct 2023+)
+        // Seconds-resolution timestamps are < 2_000_000_000 (year 2033)
+        let now_ms = chrono::Utc::now().timestamp_millis();
+        assert!(
+            now_ms > 1_700_000_000_000,
+            "Timestamp should be in milliseconds, got {}",
+            now_ms
+        );
+        // Verify the function we use returns milliseconds
+        let ts = chrono::Utc::now().timestamp_millis();
+        assert!(
+            ts > 1_700_000_000_000,
+            "timestamp_millis should return milliseconds"
+        );
     }
 }

@@ -106,7 +106,7 @@ pub fn refresh_entry_cache() {
     }
     if let Some(updated) = CACHE_UPDATED.get() {
         if let Ok(mut ts) = updated.lock() {
-            *ts = chrono::Utc::now().timestamp();
+            *ts = chrono::Utc::now().timestamp_millis();
         }
     }
 }

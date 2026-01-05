@@ -60,7 +60,7 @@ pub fn copy_entry_to_clipboard(id: &str) -> Result<()> {
     let conn = conn
         .lock()
         .map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
-    let timestamp = chrono::Utc::now().timestamp();
+    let timestamp = chrono::Utc::now().timestamp_millis();
     conn.execute(
         "UPDATE history SET timestamp = ? WHERE id = ?",
         params![timestamp, id],

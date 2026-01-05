@@ -81,20 +81,23 @@ pub struct ClipboardEntry {
     pub ocr_text: Option<String>,
 }
 
-/// Classify a Unix timestamp into a TimeGroup using local timezone
+/// Classify a Unix timestamp (milliseconds) into a TimeGroup using local timezone
 #[allow(dead_code)] // Used by downstream subtasks (UI)
-pub fn classify_timestamp(timestamp: i64) -> TimeGroup {
-    classify_timestamp_with_now(timestamp, Local::now())
+pub fn classify_timestamp(timestamp_ms: i64) -> TimeGroup {
+    classify_timestamp_with_now(timestamp_ms, Local::now())
 }
 
 /// Internal testable version of classify_timestamp that accepts a "now" parameter
 /// This avoids DST-related flakiness in tests by allowing fixed reference times
+/// Timestamp is in MILLISECONDS (not seconds).
 pub fn classify_timestamp_with_now<Tz: chrono::TimeZone>(
-    timestamp: i64,
+    timestamp_ms: i64,
     now: chrono::DateTime<Tz>,
 ) -> TimeGroup {
     let today = now.date_naive();
-    let entry_date = match Local.timestamp_opt(timestamp, 0) {
+    // Convert milliseconds to seconds for chrono (which expects seconds)
+    let timestamp_secs = timestamp_ms / 1000;
+    let entry_date = match Local.timestamp_opt(timestamp_secs, 0) {
         chrono::LocalResult::Single(dt) => dt.date_naive(),
         _ => return TimeGroup::Older,
     };
@@ -197,10 +200,11 @@ mod tests {
     fn test_classify_timestamp_today() {
         // Use a fixed reference date (Wed, Jan 15, 2025 at noon UTC) to avoid DST flakiness
         let fixed_now = chrono::Utc.with_ymd_and_hms(2025, 1, 15, 12, 0, 0).unwrap();
-        let same_day_timestamp = fixed_now.timestamp();
+        // Timestamps are now in milliseconds
+        let same_day_timestamp_ms = fixed_now.timestamp_millis();
 
         assert_eq!(
-            classify_timestamp_with_now(same_day_timestamp, fixed_now),
+            classify_timestamp_with_now(same_day_timestamp_ms, fixed_now),
             TimeGroup::Today
         );
     }
@@ -208,13 +212,13 @@ mod tests {
     #[test]
     fn test_classify_timestamp_yesterday() {
         let fixed_now = chrono::Utc.with_ymd_and_hms(2025, 1, 15, 12, 0, 0).unwrap();
-        let yesterday_timestamp = chrono::Utc
+        let yesterday_timestamp_ms = chrono::Utc
             .with_ymd_and_hms(2025, 1, 14, 12, 0, 0)
             .unwrap()
-            .timestamp();
+            .timestamp_millis();
 
         assert_eq!(
-            classify_timestamp_with_now(yesterday_timestamp, fixed_now),
+            classify_timestamp_with_now(yesterday_timestamp_ms, fixed_now),
             TimeGroup::Yesterday
         );
     }
@@ -222,13 +226,13 @@ mod tests {
     #[test]
     fn test_classify_timestamp_very_old() {
         let fixed_now = chrono::Utc.with_ymd_and_hms(2025, 1, 15, 12, 0, 0).unwrap();
-        let old_timestamp = chrono::Utc
+        let old_timestamp_ms = chrono::Utc
             .with_ymd_and_hms(2024, 10, 7, 12, 0, 0)
             .unwrap()
-            .timestamp();
+            .timestamp_millis();
 
         assert_eq!(
-            classify_timestamp_with_now(old_timestamp, fixed_now),
+            classify_timestamp_with_now(old_timestamp_ms, fixed_now),
             TimeGroup::Older
         );
     }
@@ -236,13 +240,13 @@ mod tests {
     #[test]
     fn test_classify_timestamp_this_week() {
         let fixed_now = chrono::Utc.with_ymd_and_hms(2025, 1, 17, 12, 0, 0).unwrap();
-        let this_week_timestamp = chrono::Utc
+        let this_week_timestamp_ms = chrono::Utc
             .with_ymd_and_hms(2025, 1, 15, 12, 0, 0)
             .unwrap()
-            .timestamp();
+            .timestamp_millis();
 
         assert_eq!(
-            classify_timestamp_with_now(this_week_timestamp, fixed_now),
+            classify_timestamp_with_now(this_week_timestamp_ms, fixed_now),
             TimeGroup::ThisWeek
         );
     }
@@ -250,13 +254,13 @@ mod tests {
     #[test]
     fn test_classify_timestamp_last_week() {
         let fixed_now = chrono::Utc.with_ymd_and_hms(2025, 1, 15, 12, 0, 0).unwrap();
-        let last_week_timestamp = chrono::Utc
+        let last_week_timestamp_ms = chrono::Utc
             .with_ymd_and_hms(2025, 1, 8, 12, 0, 0)
             .unwrap()
-            .timestamp();
+            .timestamp_millis();
 
         assert_eq!(
-            classify_timestamp_with_now(last_week_timestamp, fixed_now),
+            classify_timestamp_with_now(last_week_timestamp_ms, fixed_now),
             TimeGroup::LastWeek
         );
     }
@@ -264,38 +268,39 @@ mod tests {
     #[test]
     fn test_classify_timestamp_this_month() {
         let fixed_now = chrono::Utc.with_ymd_and_hms(2025, 1, 15, 12, 0, 0).unwrap();
-        let this_month_timestamp = chrono::Utc
+        let this_month_timestamp_ms = chrono::Utc
             .with_ymd_and_hms(2025, 1, 2, 12, 0, 0)
             .unwrap()
-            .timestamp();
+            .timestamp_millis();
 
         assert_eq!(
-            classify_timestamp_with_now(this_month_timestamp, fixed_now),
+            classify_timestamp_with_now(this_month_timestamp_ms, fixed_now),
             TimeGroup::ThisMonth
         );
     }
 
     #[test]
     fn test_group_entries_by_time() {
-        let today_ts = chrono::Utc
+        // Timestamps are now in milliseconds
+        let today_ts_ms = chrono::Utc
             .with_ymd_and_hms(2025, 1, 15, 12, 0, 0)
             .unwrap()
-            .timestamp();
-        let yesterday_ts = chrono::Utc
+            .timestamp_millis();
+        let yesterday_ts_ms = chrono::Utc
             .with_ymd_and_hms(2025, 1, 14, 12, 0, 0)
             .unwrap()
-            .timestamp();
-        let old_ts = chrono::Utc
+            .timestamp_millis();
+        let old_ts_ms = chrono::Utc
             .with_ymd_and_hms(2024, 10, 7, 12, 0, 0)
             .unwrap()
-            .timestamp();
+            .timestamp_millis();
 
         let entries = vec![
             ClipboardEntry {
                 id: "1".to_string(),
                 content: "today".to_string(),
                 content_type: ContentType::Text,
-                timestamp: today_ts,
+                timestamp: today_ts_ms,
                 pinned: false,
                 ocr_text: None,
             },
@@ -303,7 +308,7 @@ mod tests {
                 id: "2".to_string(),
                 content: "yesterday".to_string(),
                 content_type: ContentType::Text,
-                timestamp: yesterday_ts,
+                timestamp: yesterday_ts_ms,
                 pinned: false,
                 ocr_text: None,
             },
@@ -311,7 +316,7 @@ mod tests {
                 id: "3".to_string(),
                 content: "old".to_string(),
                 content_type: ContentType::Text,
-                timestamp: old_ts,
+                timestamp: old_ts_ms,
                 pinned: false,
                 ocr_text: None,
             },
