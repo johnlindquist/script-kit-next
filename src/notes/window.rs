@@ -1851,12 +1851,18 @@ pub fn open_notes_window(cx: &mut App) -> Result<()> {
     logging::log("PANEL", "Notes window not open - creating new (toggle ON)");
     info!("Opening new notes window");
 
-    // Calculate position: top-right corner of the display containing the mouse
+    // Calculate position: try saved position first, then top-right default
     let window_width = 350.0_f32;
     let window_height = 280.0_f32;
     let padding = 20.0_f32; // Padding from screen edges
 
-    let bounds = calculate_top_right_bounds(window_width, window_height, padding);
+    let default_bounds = calculate_top_right_bounds(window_width, window_height, padding);
+    let displays = crate::platform::get_macos_displays();
+    let bounds = crate::window_state::get_initial_bounds(
+        crate::window_state::WindowRole::Notes,
+        default_bounds,
+        &displays,
+    );
 
     // Load theme to determine window background appearance (vibrancy)
     let theme = crate::theme::load_theme();
@@ -2025,6 +2031,9 @@ pub fn close_notes_window(cx: &mut App) {
 
     if let Some(handle) = handle {
         let _ = handle.update(cx, |_, window, _| {
+            // Save window bounds before closing
+            let wb = window.window_bounds();
+            crate::window_state::save_window_from_gpui(crate::window_state::WindowRole::Notes, wb);
             window.remove_window();
         });
     }

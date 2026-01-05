@@ -122,6 +122,13 @@ pub enum FrecencyCommandType {
     ClearSuggested,
 }
 
+/// Settings command types for app configuration
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SettingsCommandType {
+    /// Reset all window positions to defaults
+    ResetWindowPositions,
+}
+
 /// Utility command types for quick access tools
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UtilityCommandType {
@@ -191,6 +198,8 @@ pub enum BuiltInFeature {
     PermissionCommand(PermissionCommandType),
     /// Frecency/suggested items commands
     FrecencyCommand(FrecencyCommandType),
+    /// Settings commands (window positions, etc.)
+    SettingsCommand(SettingsCommandType),
     /// Utility commands (scratch pad, quick terminal)
     UtilityCommand(UtilityCommandType),
 }
@@ -847,6 +856,24 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         BuiltInFeature::FrecencyCommand(FrecencyCommandType::ClearSuggested),
         "🧹",
     ));
+
+    // =========================================================================
+    // Settings Commands
+    // =========================================================================
+
+    // Only show reset if there are custom positions
+    if crate::window_state::has_custom_positions() {
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-reset-window-positions",
+            "Reset Window Positions",
+            "Restore all windows to default positions",
+            vec![
+                "reset", "window", "position", "default", "restore", "layout", "location",
+            ],
+            BuiltInFeature::SettingsCommand(SettingsCommandType::ResetWindowPositions),
+            "🔄",
+        ));
+    }
 
     // =========================================================================
     // Utility Commands

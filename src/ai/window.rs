@@ -1917,12 +1917,17 @@ pub fn open_ai_window(cx: &mut App) -> Result<()> {
         gpui::WindowBackgroundAppearance::Opaque
     };
 
+    // Calculate position: try saved position first, then centered default
+    let default_bounds = gpui::Bounds::centered(None, size(px(900.), px(700.)), cx);
+    let displays = crate::platform::get_macos_displays();
+    let bounds = crate::window_state::get_initial_bounds(
+        crate::window_state::WindowRole::Ai,
+        default_bounds,
+        &displays,
+    );
+
     let window_options = WindowOptions {
-        window_bounds: Some(WindowBounds::Windowed(gpui::Bounds::centered(
-            None,
-            size(px(900.), px(700.)),
-            cx,
-        ))),
+        window_bounds: Some(WindowBounds::Windowed(bounds)),
         titlebar: Some(gpui::TitlebarOptions {
             title: Some("Script Kit AI".into()),
             appears_transparent: true,
@@ -2032,6 +2037,9 @@ pub fn close_ai_window(cx: &mut App) {
 
     if let Some(handle) = handle {
         let _ = handle.update(cx, |_, window, _| {
+            // Save window bounds before closing
+            let wb = window.window_bounds();
+            crate::window_state::save_window_from_gpui(crate::window_state::WindowRole::Ai, wb);
             window.remove_window();
         });
     }
@@ -2174,12 +2182,12 @@ mod tests {
     #[test]
     fn test_streaming_generation_guard_logic() {
         // Simulate the guard check logic used in streaming updates
-        let streaming_chat_id: Option<ChatId> = Some(ChatId::new());
+        let update_chat_id = ChatId::new();
+        let streaming_chat_id: Option<ChatId> = Some(update_chat_id);
         let streaming_generation: u64 = 5;
 
         // Scenario 1: Matching generation and chat - should NOT be stale
         let update_generation = 5;
-        let update_chat_id = streaming_chat_id.unwrap();
         let is_stale =
             streaming_generation != update_generation || streaming_chat_id != Some(update_chat_id);
         assert!(

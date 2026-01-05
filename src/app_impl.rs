@@ -2177,6 +2177,14 @@ impl ScriptListApp {
     fn close_and_reset_window(&mut self, cx: &mut Context<Self>) {
         logging::log("VISIBILITY", "=== Close and reset window ===");
 
+        // Save window position BEFORE hiding (main window is hidden, not closed)
+        if let Some((x, y, w, h)) = crate::platform::get_main_window_bounds() {
+            crate::window_state::save_window_bounds(
+                crate::window_state::WindowRole::Main,
+                crate::window_state::PersistedWindowBounds::new(x, y, w, h),
+            );
+        }
+
         // Update visibility state FIRST to prevent race conditions
         script_kit_gpui::set_main_window_visible(false);
         logging::log("VISIBILITY", "WINDOW_VISIBLE set to: false");

@@ -2458,6 +2458,59 @@ fn test_fuzzy_search_builtins_no_match() {
     assert!(results.is_empty());
 }
 
+/// Test that name matches are prioritized over keyword matches
+/// This is critical: when searching "scr", "Scratch Pad" (name starts with "Scr")
+/// should rank higher than "Lock Screen" (keyword "screen" contains "scr")
+#[test]
+fn test_fuzzy_search_builtins_name_priority_over_keywords() {
+    use crate::builtins::{BuiltInFeature, BuiltInGroup, UtilityCommandType};
+
+    let builtins = vec![
+        BuiltInEntry {
+            id: "builtin-lock-screen".to_string(),
+            name: "Lock Screen".to_string(),
+            description: "Lock the screen".to_string(),
+            keywords: vec![
+                "lock".to_string(),
+                "screen".to_string(),
+                "security".to_string(),
+            ],
+            feature: BuiltInFeature::ClipboardHistory, // Feature doesn't matter for this test
+            icon: Some("🔒".to_string()),
+            group: BuiltInGroup::Core,
+        },
+        BuiltInEntry {
+            id: "builtin-scratch-pad".to_string(),
+            name: "Scratch Pad".to_string(),
+            description: "Quick editor for notes".to_string(),
+            keywords: vec![
+                "scratch".to_string(),
+                "pad".to_string(),
+                "notes".to_string(),
+            ],
+            feature: BuiltInFeature::UtilityCommand(UtilityCommandType::ScratchPad),
+            icon: Some("📝".to_string()),
+            group: BuiltInGroup::Core,
+        },
+    ];
+
+    // When searching "scr", Scratch Pad should rank first because its name starts with "Scr"
+    // Lock Screen has "screen" as a keyword which contains "scr", but name matches should win
+    let results = fuzzy_search_builtins(&builtins, "scr");
+
+    assert!(results.len() >= 2, "Both items should match 'scr'");
+    assert_eq!(
+        results[0].entry.name, "Scratch Pad",
+        "Scratch Pad (name starts with 'Scr') should rank higher than Lock Screen (keyword 'screen')"
+    );
+    assert!(
+        results[0].score > results[1].score,
+        "Scratch Pad score ({}) should be higher than Lock Screen score ({})",
+        results[0].score,
+        results[1].score
+    );
+}
+
 #[test]
 fn test_builtin_match_struct() {
     use crate::builtins::{BuiltInFeature, BuiltInGroup};
@@ -2604,7 +2657,9 @@ fn test_builtin_keyword_matching_priority() {
     let results = fuzzy_search_builtins(&builtins, "copy");
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].entry.name, "Clipboard History");
-    assert!(results[0].score >= 75); // Keyword match gives 75 points
+    // Keyword match gives 40 points (reduced from 75 to prioritize name matches)
+    // Plus nucleo fuzzy score on name/description if they also match
+    assert!(results[0].score >= 40);
 }
 
 #[test]

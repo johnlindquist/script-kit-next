@@ -299,6 +299,35 @@ pub fn hide_main_window() {
     // No-op on non-macOS platforms
 }
 
+/// Get the current main window bounds in canonical top-left coordinates.
+/// Returns (x, y, width, height) or None if window not available.
+#[cfg(target_os = "macos")]
+pub fn get_main_window_bounds() -> Option<(f64, f64, f64, f64)> {
+    debug_assert_main_thread();
+    unsafe {
+        let window = window_manager::get_main_window()?;
+        let frame: NSRect = msg_send![window, frame];
+
+        // Get primary screen height for coordinate conversion
+        let primary_height = primary_screen_height()?;
+
+        // Convert from AppKit bottom-left origin to our top-left canonical space
+        let top_left_y = flip_y(primary_height, frame.origin.y, frame.size.height);
+
+        Some((
+            frame.origin.x,
+            top_left_y,
+            frame.size.width,
+            frame.size.height,
+        ))
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn get_main_window_bounds() -> Option<(f64, f64, f64, f64)> {
+    None
+}
+
 // ============================================================================
 // App Active State Detection
 // ============================================================================
@@ -422,6 +451,35 @@ pub struct DisplayBounds {
 #[cfg(target_os = "macos")]
 use cocoa::foundation::NSRect;
 
+/// Get the height of the primary (main) screen for coordinate conversion.
+/// macOS uses bottom-left origin; we convert to top-left origin.
+#[cfg(target_os = "macos")]
+pub fn primary_screen_height() -> Option<f64> {
+    debug_assert_main_thread();
+    unsafe {
+        let main_screen: id = msg_send![class!(NSScreen), mainScreen];
+        if main_screen == nil {
+            return None;
+        }
+        let frame: NSRect = msg_send![main_screen, frame];
+        Some(frame.size.height)
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn primary_screen_height() -> Option<f64> {
+    // Fallback for non-macOS
+    Some(1080.0)
+}
+
+/// Convert Y coordinate from top-left origin (y increases down) to
+/// AppKit bottom-left origin (y increases up).
+/// Same formula both directions (mirror transform).
+#[allow(dead_code)]
+pub fn flip_y(primary_height: f64, y: f64, height: f64) -> f64 {
+    primary_height - y - height
+}
+
 /// Get all displays with their actual bounds in macOS global coordinates.
 /// This uses NSScreen directly because GPUI's display.bounds() doesn't return
 /// correct origins for secondary displays.
@@ -434,7 +492,18 @@ pub fn get_macos_displays() -> Vec<DisplayBounds> {
 
         // Get primary screen height for coordinate flipping
         // macOS coordinates: Y=0 at bottom of primary screen
-        let main_screen: id = msg_send![screens, firstObject];
+        // CRITICAL: Use mainScreen, not firstObject - they can differ when display arrangement changes
+        let main_screen: id = msg_send![class!(NSScreen), mainScreen];
+        let main_screen = if main_screen == nil {
+            // Fallback to firstObject if mainScreen is nil (shouldn't happen but be safe)
+            logging::log(
+                "POSITION",
+                "WARNING: mainScreen returned nil, falling back to firstObject",
+            );
+            msg_send![screens, firstObject]
+        } else {
+            main_screen
+        };
         let main_frame: NSRect = msg_send![main_screen, frame];
         let primary_height = main_frame.size.height;
 
@@ -503,8 +572,15 @@ pub fn move_first_window_to(x: f64, y: f64, width: f64, height: f64) {
         };
 
         // Get the PRIMARY screen's height for coordinate conversion
-        let screens: id = msg_send![class!(NSScreen), screens];
-        let main_screen: id = msg_send![screens, firstObject];
+        // CRITICAL: Use mainScreen, not firstObject - they can differ when display arrangement changes
+        let main_screen: id = msg_send![class!(NSScreen), mainScreen];
+        let main_screen = if main_screen == nil {
+            // Fallback to firstObject if mainScreen is nil (shouldn't happen but be safe)
+            let screens: id = msg_send![class!(NSScreen), screens];
+            msg_send![screens, firstObject]
+        } else {
+            main_screen
+        };
         let main_screen_frame: NSRect = msg_send![main_screen, frame];
         let primary_screen_height = main_screen_frame.size.height;
 

@@ -490,6 +490,9 @@ impl ScriptListApp {
                             builtins::BuiltInFeature::UtilityCommand(_) => {
                                 "Quick Utility".to_string()
                             }
+                            builtins::BuiltInFeature::SettingsCommand(_) => {
+                                "Settings".to_string()
+                            }
                         };
                         panel = panel.child(
                             div()

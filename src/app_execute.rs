@@ -662,6 +662,39 @@ impl ScriptListApp {
             }
 
             // =========================================================================
+            // Settings Commands (Reset Window Positions, etc.)
+            // =========================================================================
+            builtins::BuiltInFeature::SettingsCommand(cmd_type) => {
+                logging::log(
+                    "EXEC",
+                    &format!("Executing settings command: {:?}", cmd_type),
+                );
+
+                use builtins::SettingsCommandType;
+
+                match cmd_type {
+                    SettingsCommandType::ResetWindowPositions => {
+                        // Reset all window positions to defaults
+                        crate::window_state::reset_all_positions();
+                        logging::log("EXEC", "Reset all window positions to defaults");
+
+                        // Show toast confirmation
+                        self.toast_manager.push(
+                            components::toast::Toast::success(
+                                "Window positions reset - takes effect next open",
+                                &self.theme,
+                            )
+                            .duration_ms(Some(3000)),
+                        );
+
+                        // Reset window state
+                        self.reset_to_script_list(cx);
+                        cx.notify();
+                    }
+                }
+            }
+
+            // =========================================================================
             // Utility Commands (Scratch Pad, Quick Terminal)
             // =========================================================================
             builtins::BuiltInFeature::UtilityCommand(cmd_type) => {

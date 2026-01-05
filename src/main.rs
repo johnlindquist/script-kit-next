@@ -67,6 +67,9 @@ mod warning_banner;
 mod watcher;
 mod window_manager;
 mod window_resize;
+mod window_state;
+#[cfg(test)]
+mod window_state_persistence_tests;
 mod windows;
 
 // Phase 1 system API modules
@@ -1423,9 +1426,15 @@ fn main() {
             }
         };
 
-        // Calculate window bounds: centered on display with mouse, at eye-line height
+        // Calculate window bounds: try saved position first, then eye-line
         let window_size = size(px(750.), initial_window_height());
-        let bounds = calculate_eye_line_bounds_on_mouse_display(window_size);
+        let default_bounds = calculate_eye_line_bounds_on_mouse_display(window_size);
+        let displays = platform::get_macos_displays();
+        let bounds = window_state::get_initial_bounds(
+            window_state::WindowRole::Main,
+            default_bounds,
+            &displays,
+        );
 
         // Load theme to determine window background appearance (vibrancy)
         let initial_theme = theme::load_theme();
