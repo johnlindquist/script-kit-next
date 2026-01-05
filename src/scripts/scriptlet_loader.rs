@@ -1,7 +1,7 @@
 //! Scriptlet loading and parsing
 //!
 //! This module provides functions for loading scriptlets from markdown files
-//! in the ~/.scriptkit/*/scriptlets/ directories.
+//! in the ~/.scriptkit/kit/*/extensions/ directories.
 
 use std::cmp::Ordering;
 use std::fs;
@@ -134,7 +134,7 @@ pub(crate) fn parse_scriptlet_section(
     })
 }
 
-/// Reads scriptlets from all *.md files in ~/.scriptkit/*/scriptlets/
+/// Reads scriptlets from all *.md files in ~/.scriptkit/kit/*/extensions/
 /// Returns a sorted list of Arc-wrapped Scriptlet structs parsed from markdown
 /// Returns empty vec if directory doesn't exist or is inaccessible
 ///
@@ -143,19 +143,19 @@ pub(crate) fn parse_scriptlet_section(
 pub fn read_scriptlets() -> Vec<Arc<Scriptlet>> {
     let kit_path = get_kit_path();
 
-    // Default to main kit for backwards compatibility
-    let scriptlets_dir = kit_path.join("main").join("scriptlets");
+    // Default to main kit (under kit/ subdirectory)
+    let extensions_dir = kit_path.join("kit").join("main").join("extensions");
 
     // Check if directory exists
-    if !scriptlets_dir.exists() {
-        debug!(path = %scriptlets_dir.display(), "Scriptlets directory does not exist");
+    if !extensions_dir.exists() {
+        debug!(path = %extensions_dir.display(), "Extensions directory does not exist");
         return vec![];
     }
 
     let mut scriptlets = Vec::new();
 
     // Read all .md files in the scriptlets directory
-    match fs::read_dir(&scriptlets_dir) {
+    match fs::read_dir(&extensions_dir) {
         Ok(entries) => {
             for entry in entries.flatten() {
                 let path = entry.path();
@@ -213,7 +213,7 @@ pub fn read_scriptlets() -> Vec<Arc<Scriptlet>> {
         Err(e) => {
             warn!(
                 error = %e,
-                path = %scriptlets_dir.display(),
+                path = %extensions_dir.display(),
                 "Failed to read scriptlets directory"
             );
             return vec![];
@@ -233,7 +233,7 @@ pub fn read_scriptlets() -> Vec<Arc<Scriptlet>> {
 /// Load scriptlets from markdown files using the comprehensive parser
 ///
 /// Globs:
-/// - ~/.scriptkit/*/scriptlets/*.md (all kits)
+/// - ~/.scriptkit/kit/*/extensions/*.md (all kits)
 ///
 /// Uses `crate::scriptlets::parse_markdown_as_scriptlets` for parsing.
 /// Returns Arc-wrapped scriptlets sorted by group then by name.
@@ -245,8 +245,8 @@ pub fn load_scriptlets() -> Vec<Arc<Scriptlet>> {
 
     let mut scriptlets = Vec::new();
 
-    // Glob pattern to search all kits
-    let patterns = [kit_path.join("*/scriptlets/*.md")];
+    // Glob pattern to search all kits (under kit/ subdirectory)
+    let patterns = [kit_path.join("kit/*/extensions/*.md")];
 
     for pattern in patterns {
         let pattern_str = pattern.to_string_lossy().to_string();
@@ -336,17 +336,23 @@ pub fn load_scriptlets() -> Vec<Arc<Scriptlet>> {
 }
 
 /// Extract kit name from a kit path
-/// e.g., ~/.scriptkit/my-kit/scriptlets/file.md -> Some("my-kit")
+/// e.g., ~/.scriptkit/kit/my-kit/extensions/file.md -> Some("my-kit")
 pub(crate) fn extract_kit_from_path(path: &Path, kit_root: &Path) -> Option<String> {
     let kit_prefix = format!("{}/", kit_root.to_string_lossy());
     let path_str = path.to_string_lossy().to_string();
 
     if path_str.starts_with(&kit_prefix) {
         // Extract the kit name from the path
+        // Path structure is: kit/<kit-name>/extensions/...
         let relative = &path_str[kit_prefix.len()..];
-        // Find the first slash to get kit name
-        if let Some(slash_pos) = relative.find('/') {
-            return Some(relative[..slash_pos].to_string());
+        let parts: Vec<&str> = relative.split('/').collect();
+
+        // Skip "kit" directory and get the actual kit name
+        if parts.len() >= 2 && parts[0] == "kit" {
+            return Some(parts[1].to_string());
+        } else if !parts.is_empty() {
+            // Fallback for old structure
+            return Some(parts[0].to_string());
         }
     }
     None

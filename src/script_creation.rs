@@ -27,11 +27,11 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use tracing::{info, instrument, warn};
 
-/// Scripts directory under ~/.scriptkit/
-const SCRIPTS_DIR: &str = "~/.scriptkit/scripts";
+/// Scripts directory under ~/.scriptkit/kit/main/
+const SCRIPTS_DIR: &str = "~/.scriptkit/kit/main/scripts";
 
-/// Scriptlets directory under ~/.scriptkit/
-const SCRIPTLETS_DIR: &str = "~/.scriptkit/scriptlets";
+/// Extensions directory under ~/.scriptkit/kit/main/
+const EXTENSIONS_DIR: &str = "~/.scriptkit/kit/main/extensions";
 
 /// Sanitize a script name for use as a filename.
 ///
@@ -120,21 +120,21 @@ console.log(result);
     )
 }
 
-/// Generate the scriptlet template using the global metadata format.
+/// Generate the extension template as markdown with embedded code.
 ///
-/// Scriptlets are simpler scripts that can use template variables.
-fn generate_scriptlet_template(name: &str) -> String {
+/// Extensions are markdown files with code blocks that can be executed.
+fn generate_extension_template(name: &str) -> String {
     let title = name_to_title(name);
     format!(
-        r#"import "@scriptkit/sdk";
+        r#"# {title}
 
-export const metadata = {{
-  name: "{title}",
-  description: "",
-}};
+Commands for {title}.
 
-// Scriptlet implementation
-await div(`<h1>{title}</h1>`);
+## Hello World
+
+```bash
+echo "Hello from {title}!"
+```
 "#
     )
 }
@@ -194,63 +194,63 @@ pub fn create_new_script(name: &str) -> Result<PathBuf> {
     Ok(script_path)
 }
 
-/// Create a new scriptlet file in ~/.scriptkit/scriptlets/
+/// Create a new extension file in ~/.scriptkit/kit/main/extensions/
 ///
 /// # Arguments
 ///
-/// * `name` - The name of the scriptlet (will be sanitized for filename)
+/// * `name` - The name of the extension (will be sanitized for filename)
 ///
 /// # Returns
 ///
-/// The path to the created scriptlet file.
+/// The path to the created extension file.
 ///
 /// # Errors
 ///
 /// Returns an error if:
-/// - The scriptlets directory cannot be created
-/// - A scriptlet with the same name already exists
+/// - The extensions directory cannot be created
+/// - An extension with the same name already exists
 /// - The file cannot be written
-#[instrument(name = "create_new_scriptlet", skip_all, fields(name = %name))]
-pub fn create_new_scriptlet(name: &str) -> Result<PathBuf> {
+#[instrument(name = "create_new_extension", skip_all, fields(name = %name))]
+pub fn create_new_extension(name: &str) -> Result<PathBuf> {
     let sanitized_name = sanitize_name(name);
     if sanitized_name.is_empty() {
-        anyhow::bail!("Scriptlet name cannot be empty after sanitization");
+        anyhow::bail!("Extension name cannot be empty after sanitization");
     }
 
-    let scriptlets_dir = PathBuf::from(shellexpand::tilde(SCRIPTLETS_DIR).as_ref());
+    let extensions_dir = PathBuf::from(shellexpand::tilde(EXTENSIONS_DIR).as_ref());
 
-    // Ensure the scriptlets directory exists
-    fs::create_dir_all(&scriptlets_dir).with_context(|| {
+    // Ensure the extensions directory exists
+    fs::create_dir_all(&extensions_dir).with_context(|| {
         format!(
-            "Failed to create scriptlets directory: {}",
-            scriptlets_dir.display()
+            "Failed to create extensions directory: {}",
+            extensions_dir.display()
         )
     })?;
 
-    let filename = format!("{}.ts", sanitized_name);
-    let scriptlet_path = scriptlets_dir.join(&filename);
+    let filename = format!("{}.md", sanitized_name);
+    let extension_path = extensions_dir.join(&filename);
 
-    // Check if scriptlet already exists
-    if scriptlet_path.exists() {
-        anyhow::bail!("Scriptlet already exists: {}", scriptlet_path.display());
+    // Check if extension already exists
+    if extension_path.exists() {
+        anyhow::bail!("Extension already exists: {}", extension_path.display());
     }
 
     // Generate and write the template
-    let template = generate_scriptlet_template(&sanitized_name);
-    fs::write(&scriptlet_path, &template).with_context(|| {
+    let template = generate_extension_template(&sanitized_name);
+    fs::write(&extension_path, &template).with_context(|| {
         format!(
-            "Failed to write scriptlet file: {}",
-            scriptlet_path.display()
+            "Failed to write extension file: {}",
+            extension_path.display()
         )
     })?;
 
     info!(
-        path = %scriptlet_path.display(),
+        path = %extension_path.display(),
         name = %sanitized_name,
-        "Created new scriptlet"
+        "Created new extension"
     );
 
-    Ok(scriptlet_path)
+    Ok(extension_path)
 }
 
 /// Open a file in the configured editor.
@@ -353,12 +353,11 @@ mod tests {
     }
 
     #[test]
-    fn test_generate_scriptlet_template() {
-        let template = generate_scriptlet_template("my-scriptlet");
-        assert!(template.contains("import \"@scriptkit/sdk\";"));
-        assert!(template.contains("export const metadata = {"));
-        assert!(template.contains("name: \"My Scriptlet\""));
-        assert!(template.contains("await div("));
+    fn test_generate_extension_template() {
+        let template = generate_extension_template("my-extension");
+        assert!(template.contains("# My Extension"));
+        assert!(template.contains("Commands for My Extension"));
+        assert!(template.contains("```bash"));
     }
 
     #[test]
@@ -382,8 +381,8 @@ mod tests {
     }
 
     #[test]
-    fn test_create_new_scriptlet_empty_name() {
-        let result = create_new_scriptlet("");
+    fn test_create_new_extension_empty_name() {
+        let result = create_new_extension("");
         assert!(result.is_err());
         assert!(result
             .unwrap_err()
@@ -419,26 +418,25 @@ mod tests {
     }
 
     #[test]
-    fn test_create_scriptlet_integration() {
+    fn test_create_extension_integration() {
         let temp_dir = tempdir().unwrap();
-        let scriptlets_dir = temp_dir.path().join("scriptlets");
-        fs::create_dir_all(&scriptlets_dir).unwrap();
+        let extensions_dir = temp_dir.path().join("extensions");
+        fs::create_dir_all(&extensions_dir).unwrap();
 
-        let sanitized_name = sanitize_name("test-scriptlet");
-        let filename = format!("{}.ts", sanitized_name);
-        let scriptlet_path = scriptlets_dir.join(&filename);
+        let sanitized_name = sanitize_name("test-extension");
+        let filename = format!("{}.md", sanitized_name);
+        let extension_path = extensions_dir.join(&filename);
 
-        let template = generate_scriptlet_template(&sanitized_name);
-        fs::write(&scriptlet_path, &template).unwrap();
+        let template = generate_extension_template(&sanitized_name);
+        fs::write(&extension_path, &template).unwrap();
 
         // Verify the file was created
-        assert!(scriptlet_path.exists());
+        assert!(extension_path.exists());
 
-        // Verify the content
-        let content = fs::read_to_string(&scriptlet_path).unwrap();
-        assert!(content.contains("export const metadata"));
-        assert!(content.contains("Test Scriptlet"));
-        assert!(content.contains("await div"));
+        // Verify the content is markdown with a code block
+        let content = fs::read_to_string(&extension_path).unwrap();
+        assert!(content.contains("# Test Extension"));
+        assert!(content.contains("```bash"));
     }
 
     #[test]

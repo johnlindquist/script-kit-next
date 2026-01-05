@@ -23,8 +23,8 @@ use super::types::Script;
 pub fn read_scripts() -> Vec<Arc<Script>> {
     let kit_path = get_kit_path();
 
-    // Glob pattern to find scripts in all kits
-    let pattern = kit_path.join("*/scripts");
+    // Glob pattern to find scripts in all kits (under kit/ subdirectory)
+    let pattern = kit_path.join("kit/*/scripts");
     let pattern_str = pattern.to_string_lossy().to_string();
 
     let mut scripts = Vec::new();

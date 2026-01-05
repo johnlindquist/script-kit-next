@@ -25,8 +25,8 @@ use super::metadata::extract_schedule_metadata_from_file;
 pub fn register_scheduled_scripts(scheduler: &Scheduler) -> usize {
     let kit_path = get_kit_path();
 
-    // Glob pattern to find scripts in all kits
-    let pattern = kit_path.join("*/scripts");
+    // Glob pattern to find scripts in all kits (under kit/ subdirectory)
+    let pattern = kit_path.join("kit/*/scripts");
     let pattern_str = pattern.to_string_lossy().to_string();
 
     // Find all kit script directories

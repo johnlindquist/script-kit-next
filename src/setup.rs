@@ -273,7 +273,7 @@ const w = await widget(`<h1>Floating Widget</h1>`, {
 
 ## Scriptlet Format
 
-Scriptlets are markdown files with embedded code blocks. They live in `~/.scriptkit/main/scriptlets/`.
+Extensions are markdown files with embedded commands. They live in `~/.scriptkit/kit/main/extensions/`.
 
 ### Basic Scriptlet
 
@@ -376,7 +376,7 @@ export default {
 
 ```bash
 # Using bun directly
-bun run ~/.scriptkit/main/scripts/my-script.ts
+bun run ~/.scriptkit/kit/main/scripts/my-script.ts
 
 # With the kit CLI (if installed)
 kit run my-script
@@ -537,8 +537,8 @@ if (files.length === 0) {
 
 | Path | Purpose |
 |------|---------|
-| `~/.scriptkit/main/scripts/` | Your scripts |
-| `~/.scriptkit/main/scriptlets/` | Your scriptlets |
+| `~/.scriptkit/kit/main/scripts/` | Your scripts |
+| `~/.scriptkit/kit/main/extensions/` | Your extensions |
 | `~/.scriptkit/config.ts` | Configuration |
 | `~/.scriptkit/theme.json` | Theme customization |
 | `~/.scriptkit/sdk/` | SDK (managed by app) |
@@ -583,8 +583,8 @@ pub fn get_kit_path() -> PathBuf {
 ///
 /// This function handles one-time migration from the old directory structure:
 /// - Moves ~/.kenv contents to ~/.scriptkit
-/// - Moves ~/.kenv/scripts to ~/.scriptkit/main/scripts  
-/// - Moves ~/.kenv/scriptlets to ~/.scriptkit/main/scriptlets
+/// - Moves ~/.kenv/scripts to ~/.scriptkit/kit/main/scripts
+/// - Moves ~/.kenv/scriptlets to ~/.scriptkit/kit/main/extensions
 /// - Creates a symlink ~/.kenv -> ~/.scriptkit for backwards compatibility
 ///
 /// Returns true if migration was performed, false if not needed
@@ -609,21 +609,21 @@ pub fn migrate_from_kenv() -> bool {
         "Migrating from ~/.kenv to ~/.scriptkit"
     );
 
-    // Create the new structure
-    let main_scripts = new_scriptkit.join("main").join("scripts");
-    let main_scriptlets = new_scriptkit.join("main").join("scriptlets");
+    // Create the new structure (under kit/ subdirectory)
+    let main_scripts = new_scriptkit.join("kit").join("main").join("scripts");
+    let main_extensions = new_scriptkit.join("kit").join("main").join("extensions");
 
     if let Err(e) = fs::create_dir_all(&main_scripts) {
         warn!(error = %e, "Failed to create main/scripts directory");
         return false;
     }
 
-    if let Err(e) = fs::create_dir_all(&main_scriptlets) {
-        warn!(error = %e, "Failed to create main/scriptlets directory");
+    if let Err(e) = fs::create_dir_all(&main_extensions) {
+        warn!(error = %e, "Failed to create main/extensions directory");
         return false;
     }
 
-    // Move scripts from ~/.kenv/scripts to ~/.scriptkit/main/scripts
+    // Move scripts from ~/.kenv/scripts to ~/.scriptkit/kit/main/scripts
     let old_scripts = old_kenv.join("scripts");
     if old_scripts.exists() && old_scripts.is_dir() {
         if let Ok(entries) = fs::read_dir(&old_scripts) {
@@ -644,14 +644,14 @@ pub fn migrate_from_kenv() -> bool {
         }
     }
 
-    // Move scriptlets from ~/.kenv/scriptlets to ~/.scriptkit/main/scriptlets
+    // Move scriptlets from ~/.kenv/scriptlets to ~/.scriptkit/kit/main/extensions
     let old_scriptlets = old_kenv.join("scriptlets");
     if old_scriptlets.exists() && old_scriptlets.is_dir() {
         if let Ok(entries) = fs::read_dir(&old_scriptlets) {
             for entry in entries.flatten() {
                 let old_path = entry.path();
                 let file_name = old_path.file_name().unwrap_or_default();
-                let new_path = main_scriptlets.join(file_name);
+                let new_path = main_extensions.join(file_name);
 
                 if let Err(e) = fs::rename(&old_path, &new_path) {
                     warn!(
@@ -736,21 +736,24 @@ pub fn migrate_from_kenv() -> bool {
 /// # Directory Structure Created
 /// ```text
 /// ~/.scriptkit/                  # Root (can be overridden via SK_PATH)
-/// ├── main/                   # Default user kit
-/// │   ├── scripts/            # User scripts (.ts, .js files)
-/// │   └── scriptlets/         # Markdown scriptlet files
-/// ├── examples/               # Example kit (created on fresh install)
-/// │   ├── scripts/
-/// │   └── scriptlets/
-/// ├── sdk/                    # Runtime SDK (kit-sdk.ts)
-/// ├── db/                     # Databases
-/// ├── logs/                   # Application logs
+/// ├── kit/                       # All kits container (for easy version control)
+/// │   ├── main/                  # Default user kit
+/// │   │   ├── scripts/           # User scripts (.ts, .js files)
+/// │   │   ├── extensions/         # Markdown extension files
+/// │   │   └── agents/             # AI agent definitions (.md)
+/// │   └── custom-kit/            # Additional custom kits
+/// │       ├── scripts/
+/// │       ├── extensions/
+/// │       └── agents/
+/// ├── sdk/                       # Runtime SDK (kit-sdk.ts)
+/// ├── db/                        # Databases
+/// ├── logs/                      # Application logs
 /// ├── cache/
-/// │   └── app-icons/          # Cached application icons
-/// ├── config.ts               # User configuration (created from template if missing)
-/// ├── theme.json              # Theme configuration (created from example if missing)
-/// ├── tsconfig.json           # TypeScript path mappings
-/// └── .gitignore              # Ignore transient files
+/// │   └── app-icons/             # Cached application icons
+/// ├── config.ts                  # User configuration (created from template if missing)
+/// ├── theme.json                 # Theme configuration (created from example if missing)
+/// ├── tsconfig.json              # TypeScript path mappings
+/// └── .gitignore                 # Ignore transient files
 /// ```
 ///
 /// # Environment Variables
@@ -792,10 +795,12 @@ pub fn ensure_kit_setup() -> SetupResult {
     }
 
     // Required directory structure
-    // Note: main/scripts and main/scriptlets are the default user workspace
+    // Note: kit/main/scripts and kit/main/extensions are the default user workspace
+    // All kits live under kit/ for easier version control
     let required_dirs = [
-        kit_dir.join("main").join("scripts"),
-        kit_dir.join("main").join("scriptlets"),
+        kit_dir.join("kit").join("main").join("scripts"),
+        kit_dir.join("kit").join("main").join("extensions"),
+        kit_dir.join("kit").join("main").join("agents"),
         kit_dir.join("sdk"),
         kit_dir.join("db"),
         kit_dir.join("logs"),
@@ -1143,9 +1148,10 @@ fn bun_exe_name() -> &'static str {
 }
 
 fn create_sample_files(kit_dir: &Path, warnings: &mut Vec<String>) {
-    // Create sample files in the main kit
-    let main_scripts_dir = kit_dir.join("main").join("scripts");
-    let main_scriptlets_dir = kit_dir.join("main").join("scriptlets");
+    // Create sample files in the main kit (under kit/ subdirectory)
+    let main_scripts_dir = kit_dir.join("kit").join("main").join("scripts");
+    let main_extensions_dir = kit_dir.join("kit").join("main").join("extensions");
+    let main_agents_dir = kit_dir.join("kit").join("main").join("agents");
 
     // Create hello-world.ts script
     let hello_script_path = main_scripts_dir.join("hello-world.ts");
@@ -1200,10 +1206,10 @@ await div(`
         }
     }
 
-    // Create hello-world.md scriptlet
-    let hello_scriptlet_path = main_scriptlets_dir.join("hello-world.md");
-    if !hello_scriptlet_path.exists() {
-        let hello_scriptlet = r#"# Hello World Scriptlets
+    // Create hello-world.md extension
+    let hello_extension_path = main_extensions_dir.join("hello-world.md");
+    if !hello_extension_path.exists() {
+        let hello_extension = r#"# Hello World Extensions
 
 Quick shell commands you can run from Script Kit.
 Each code block is a separate scriptlet that appears in the menu.
@@ -1275,14 +1281,43 @@ echo "OS: $(sw_vers -productName) $(sw_vers -productVersion)"
 echo "Shell: $SHELL"
 ```
 "#;
-        if let Err(e) = fs::write(&hello_scriptlet_path, hello_scriptlet) {
+        if let Err(e) = fs::write(&hello_extension_path, hello_extension) {
             warnings.push(format!(
-                "Failed to create sample scriptlet {}: {}",
-                hello_scriptlet_path.display(),
+                "Failed to create sample extension {}: {}",
+                hello_extension_path.display(),
                 e
             ));
         } else {
-            info!(path = %hello_scriptlet_path.display(), "Created sample scriptlet");
+            info!(path = %hello_extension_path.display(), "Created sample extension");
+        }
+    }
+
+    // Create hello-world.claude.md agent
+    let hello_agent_path = main_agents_dir.join("hello-world.claude.md");
+    if !hello_agent_path.exists() {
+        let hello_agent = r#"---
+_sk_name: Hello World Assistant
+_sk_description: A friendly assistant that helps with simple tasks
+_sk_interactive: true
+---
+
+You are a friendly, helpful assistant. Keep responses concise and practical.
+
+When the user asks for help:
+1. Understand their request clearly
+2. Provide a direct, actionable answer
+3. Offer to help with follow-up questions
+
+Be conversational but efficient. Focus on solving the user's immediate needs.
+"#;
+        if let Err(e) = fs::write(&hello_agent_path, hello_agent) {
+            warnings.push(format!(
+                "Failed to create sample agent {}: {}",
+                hello_agent_path.display(),
+                e
+            ));
+        } else {
+            info!(path = %hello_agent_path.display(), "Created sample agent");
         }
     }
 
@@ -1297,9 +1332,11 @@ Welcome to Script Kit! This directory contains your scripts, configuration, and 
 
 ```
 ~/.scriptkit/
-├── main/                   # Your default kit (scripts & scriptlets)
-│   ├── scripts/            # TypeScript/JavaScript scripts (.ts, .js)
-│   └── scriptlets/         # Markdown scriptlet files (.md)
+├── kit/                    # All kits (version control friendly)
+│   └── main/               # Your default kit
+│       ├── scripts/        # TypeScript/JavaScript scripts (.ts, .js)
+│       ├── extensions/     # Markdown extension files (.md)
+│       └── agents/         # AI agent definitions (.md)
 ├── sdk/                    # Runtime SDK (managed by app)
 ├── db/                     # Databases (clipboard history, etc.)
 ├── logs/                   # Application logs
@@ -1319,7 +1356,7 @@ Script Kit watches these files and reloads automatically:
 | `config.ts` | Reloads configuration (hotkeys, settings) |
 | `theme.json` | Applies new theme colors immediately |
 | `main/scripts/*.ts` | Updates script list and metadata |
-| `main/scriptlets/*.md` | Updates scriptlet list |
+| `main/extensions/*.md` | Updates extension list |
 
 ## Scripts
 
@@ -1482,6 +1519,75 @@ Happy scripting! 🚀
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempfile::TempDir;
+
+    /// Test that kit directory structure uses kit/ subdirectory
+    /// Expected structure: ~/.scriptkit/kit/main/scripts, ~/.scriptkit/kit/main/extensions
+    #[test]
+    fn test_kit_directory_uses_kit_subdirectory() {
+        let temp_dir = TempDir::new().unwrap();
+        let kit_root = temp_dir.path().to_path_buf();
+
+        // Set SK_PATH to our temp directory
+        std::env::set_var(SK_PATH_ENV, kit_root.to_str().unwrap());
+
+        // Run setup
+        let result = ensure_kit_setup();
+
+        // Verify the kit/ subdirectory structure exists
+        let kit_main_scripts = kit_root.join("kit").join("main").join("scripts");
+        let kit_main_extensions = kit_root.join("kit").join("main").join("extensions");
+
+        assert!(
+            kit_main_scripts.exists(),
+            "Expected kit/main/scripts to exist at {:?}",
+            kit_main_scripts
+        );
+        assert!(
+            kit_main_extensions.exists(),
+            "Expected kit/main/extensions to exist at {:?}",
+            kit_main_extensions
+        );
+
+        // The old structure should NOT exist
+        let old_main_scripts = kit_root.join("main").join("scripts");
+        assert!(
+            !old_main_scripts.exists(),
+            "Old structure main/scripts should NOT exist at {:?}",
+            old_main_scripts
+        );
+
+        // Cleanup
+        std::env::remove_var(SK_PATH_ENV);
+        assert!(!result.warnings.iter().any(|w| w.contains("Failed")));
+    }
+
+    /// Test that sample files are created in kit/main/scripts
+    #[test]
+    fn test_sample_files_in_kit_subdirectory() {
+        let temp_dir = TempDir::new().unwrap();
+        let kit_root = temp_dir.path().to_path_buf();
+
+        std::env::set_var(SK_PATH_ENV, kit_root.to_str().unwrap());
+
+        let result = ensure_kit_setup();
+
+        // On fresh install, sample hello-world.ts should be in kit/main/scripts
+        if result.is_fresh_install {
+            let hello_script = kit_root
+                .join("kit")
+                .join("main")
+                .join("scripts")
+                .join("hello-world.ts");
+            assert!(
+                hello_script.exists(),
+                "Expected hello-world.ts at {:?}",
+                hello_script
+            );
+        }
+
+        std::env::remove_var(SK_PATH_ENV);
+    }
 
     #[test]
     fn test_bun_is_discoverable() {

@@ -337,7 +337,7 @@ fn is_relevant_script_file(path: &std::path::Path) -> bool {
     )
 }
 
-/// Watches ~/.scriptkit/scripts and ~/.scriptkit/scriptlets directories for changes and emits reload events
+/// Watches ~/.scriptkit/kit/*/scripts and ~/.scriptkit/kit/*/extensions directories for changes and emits reload events
 pub struct ScriptWatcher {
     tx: Option<Sender<ScriptReloadEvent>>,
     watcher_thread: Option<thread::JoinHandle<()>>,
@@ -379,9 +379,9 @@ impl ScriptWatcher {
 
     /// Internal watch loop running in background thread
     fn watch_loop(tx: Sender<ScriptReloadEvent>) -> NotifyResult<()> {
-        // Expand the scripts and scriptlets paths
-        let scripts_path = PathBuf::from(shellexpand::tilde("~/.scriptkit/scripts").as_ref());
-        let scriptlets_path = PathBuf::from(shellexpand::tilde("~/.scriptkit/scriptlets").as_ref());
+        // Expand the scripts and extensions paths (under kit/ subdirectory)
+        let scripts_path = PathBuf::from(shellexpand::tilde("~/.scriptkit/kit/main/scripts").as_ref());
+        let extensions_path = PathBuf::from(shellexpand::tilde("~/.scriptkit/kit/main/extensions").as_ref());
 
         // Track pending events for debouncing (path -> (event_type, timestamp))
         let pending_events: Arc<
@@ -405,11 +405,11 @@ impl ScriptWatcher {
         // Watch the scripts directory recursively
         watcher.watch(&scripts_path, RecursiveMode::Recursive)?;
 
-        // Watch the scriptlets directory recursively (for *.md files)
-        if scriptlets_path.exists() {
-            watcher.watch(&scriptlets_path, RecursiveMode::Recursive)?;
+        // Watch the extensions directory recursively (for *.md files)
+        if extensions_path.exists() {
+            watcher.watch(&extensions_path, RecursiveMode::Recursive)?;
             info!(
-                path = %scriptlets_path.display(),
+                path = %extensions_path.display(),
                 recursive = true,
                 "Scriptlets watcher started"
             );

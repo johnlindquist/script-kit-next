@@ -488,8 +488,8 @@ impl ScriptListApp {
                         (script_creation::create_new_script("untitled"), "script")
                     }
                     ScriptCommandType::NewScriptlet => (
-                        script_creation::create_new_scriptlet("untitled"),
-                        "scriptlet",
+                        script_creation::create_new_extension("untitled"),
+                        "extension",
                     ),
                 };
 
