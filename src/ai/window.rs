@@ -355,6 +355,9 @@ impl AiApp {
     }
 
     /// Handle model selection change
+    ///
+    /// Updates both the UI state and persists the model change to the current chat
+    /// so that BYOK per-chat is maintained.
     fn on_model_change(&mut self, index: usize, cx: &mut Context<Self>) {
         if let Some(model) = self.available_models.get(index) {
             info!(
@@ -364,7 +367,45 @@ impl AiApp {
                 "Model selected"
             );
             self.selected_model = Some(model.clone());
+
+            // Update the current chat's model in storage (BYOK per-chat)
+            if let Some(chat_id) = self.selected_chat_id {
+                if let Some(chat) = self.chats.iter_mut().find(|c| c.id == chat_id) {
+                    chat.model_id = model.id.clone();
+                    chat.provider = model.provider.clone();
+                    chat.touch(); // Update updated_at
+
+                    // Persist to database
+                    if let Err(e) = storage::update_chat(chat) {
+                        tracing::error!(error = %e, chat_id = %chat_id, "Failed to persist model change to chat");
+                    }
+                }
+            }
+
             cx.notify();
+        }
+    }
+
+    /// Update a chat's timestamp and move it to the top of the list
+    ///
+    /// Called after message activity to keep the chat list sorted by recency.
+    fn touch_and_reorder_chat(&mut self, chat_id: ChatId) {
+        // Find the chat and update its timestamp
+        if let Some(chat) = self.chats.iter_mut().find(|c| c.id == chat_id) {
+            chat.touch(); // Updates updated_at to now
+
+            // Persist the timestamp update to storage
+            if let Err(e) = storage::update_chat(chat) {
+                tracing::error!(error = %e, chat_id = %chat_id, "Failed to persist chat timestamp");
+            }
+        }
+
+        // Reorder: move the active chat to the top
+        if let Some(pos) = self.chats.iter().position(|c| c.id == chat_id) {
+            if pos > 0 {
+                let chat = self.chats.remove(pos);
+                self.chats.insert(0, chat);
+            }
         }
     }
 
@@ -458,6 +499,27 @@ impl AiApp {
         // Load messages for this chat
         self.current_messages = storage::get_chat_messages(&id).unwrap_or_default();
 
+        // Sync selected_model with the chat's stored model (BYOK per chat)
+        if let Some(chat) = self.chats.iter().find(|c| c.id == id) {
+            // Find the model in available_models that matches the chat's model_id
+            self.selected_model = self
+                .available_models
+                .iter()
+                .find(|m| m.id == chat.model_id)
+                .cloned();
+
+            if self.selected_model.is_none() && !chat.model_id.is_empty() {
+                // Chat has a model_id but it's not in our available models
+                // (provider may not be configured). Log for debugging.
+                tracing::debug!(
+                    chat_id = %id,
+                    model_id = %chat.model_id,
+                    provider = %chat.provider,
+                    "Chat's model not found in available models (provider may not be configured)"
+                );
+            }
+        }
+
         // Scroll to bottom to show latest messages
         self.messages_scroll_handle.scroll_to_bottom();
 
@@ -476,9 +538,19 @@ impl AiApp {
                 return;
             }
 
-            // Remove from visible list and select next
+            // Remove from visible list
             self.chats.retain(|c| c.id != id);
+
+            // Select next chat and load its messages (or clear if no chats remain)
             self.selected_chat_id = self.chats.first().map(|c| c.id);
+            self.current_messages = self
+                .selected_chat_id
+                .and_then(|new_id| storage::get_chat_messages(&new_id).ok())
+                .unwrap_or_default();
+
+            // Clear streaming state
+            self.is_streaming = false;
+            self.streaming_content.clear();
 
             cx.notify();
         }
@@ -544,6 +616,9 @@ impl AiApp {
             preview
         };
         self.message_previews.insert(chat_id, preview);
+
+        // Update chat timestamp and move to top of list
+        self.touch_and_reorder_chat(chat_id);
 
         // Clear the input
         self.input_state.update(cx, |state, cx| {
@@ -786,6 +861,9 @@ impl AiApp {
                 preview
             };
             self.message_previews.insert(chat_id, preview);
+
+            // Update chat timestamp and move to top of list
+            self.touch_and_reorder_chat(chat_id);
 
             info!(
                 chat_id = %chat_id,

@@ -25,7 +25,16 @@ fn get_ai_db_path() -> PathBuf {
 }
 
 /// Initialize the AI chats database
+///
+/// This function is idempotent - calling it multiple times is safe and will
+/// succeed if the database is already initialized.
 pub fn init_ai_db() -> Result<()> {
+    // Check if already initialized - return early (idempotent behavior)
+    if AI_DB.get().is_some() {
+        debug!("AI database already initialized, skipping");
+        return Ok(());
+    }
+
     let db_path = get_ai_db_path();
 
     // Ensure directory exists
@@ -122,9 +131,11 @@ pub fn init_ai_db() -> Result<()> {
 
     info!(db_path = %db_path.display(), "AI chats database initialized");
 
-    AI_DB
-        .set(Arc::new(Mutex::new(conn)))
-        .map_err(|_| anyhow::anyhow!("AI database already initialized"))?;
+    // Try to set the global connection. If another thread beat us to it
+    // (race condition), that's fine - just return success (idempotent).
+    if AI_DB.set(Arc::new(Mutex::new(conn))).is_err() {
+        debug!("AI database was initialized by another thread, using existing connection");
+    }
 
     Ok(())
 }
@@ -356,7 +367,21 @@ pub fn delete_chat_permanently(chat_id: &ChatId) -> Result<()> {
     Ok(())
 }
 
+/// Sanitize a query string for FTS5 MATCH.
+/// FTS5 has special characters that can cause parse errors.
+/// This escapes or removes problematic characters.
+fn sanitize_fts_query(query: &str) -> String {
+    // FTS5 special characters that need escaping: * " ' ( ) : - ^
+    // For simplicity, we'll wrap the query in double quotes for phrase matching
+    // and escape any internal double quotes.
+    let escaped = query.replace('"', "\"\"");
+    format!("\"{}\"", escaped)
+}
+
 /// Search chats by title or message content
+///
+/// Searches both chat titles and message content using FTS5 when possible,
+/// with a fallback to LIKE queries for robustness.
 pub fn search_chats(query: &str) -> Result<Vec<Chat>> {
     if query.trim().is_empty() {
         return get_all_chats();
@@ -367,31 +392,66 @@ pub fn search_chats(query: &str) -> Result<Vec<Chat>> {
         .lock()
         .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
 
-    // Search in chat titles
-    let mut stmt = conn
-        .prepare(
+    // Try FTS search first, fall back to LIKE on error
+    let sanitized_query = sanitize_fts_query(query);
+
+    // Attempt FTS search with corrected aliases
+    let fts_result: rusqlite::Result<Vec<Chat>> = (|| {
+        let mut stmt = conn.prepare(
             r#"
-            SELECT DISTINCT c.id, c.title, c.created_at, c.updated_at, 
+            SELECT DISTINCT c.id, c.title, c.created_at, c.updated_at,
                    c.deleted_at, c.model_id, c.provider
             FROM chats c
             LEFT JOIN chats_fts fts ON c.rowid = fts.rowid
             LEFT JOIN messages m ON c.id = m.chat_id
             LEFT JOIN messages_fts mfts ON m.rowid = mfts.rowid
-            WHERE c.deleted_at IS NULL 
-              AND (chats_fts MATCH ?1 OR messages_fts MATCH ?1)
+            WHERE c.deleted_at IS NULL
+              AND (fts MATCH ?1 OR mfts MATCH ?1)
             ORDER BY c.updated_at DESC
             "#,
-        )
-        .context("Failed to prepare search query")?;
+        )?;
 
-    let chats = stmt
-        .query_map(params![query], row_to_chat)
-        .context("Failed to search chats")?
-        .collect::<Result<Vec<_>, _>>()
-        .context("Failed to collect search results")?;
+        let chats = stmt
+            .query_map(params![sanitized_query], row_to_chat)?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(chats)
+    })();
 
-    debug!(query = %query, count = chats.len(), "Chat search completed");
-    Ok(chats)
+    match fts_result {
+        Ok(chats) => {
+            debug!(query = %query, count = chats.len(), method = "fts", "Chat search completed");
+            Ok(chats)
+        }
+        Err(e) => {
+            // FTS failed (possibly due to special characters or other issues)
+            // Fall back to simple LIKE search on title
+            debug!(error = %e, query = %query, "FTS search failed, falling back to LIKE");
+
+            let like_pattern = format!("%{}%", query);
+            let mut stmt = conn
+                .prepare(
+                    r#"
+                    SELECT DISTINCT c.id, c.title, c.created_at, c.updated_at,
+                           c.deleted_at, c.model_id, c.provider
+                    FROM chats c
+                    LEFT JOIN messages m ON c.id = m.chat_id
+                    WHERE c.deleted_at IS NULL
+                      AND (c.title LIKE ?1 OR m.content LIKE ?1)
+                    ORDER BY c.updated_at DESC
+                    "#,
+                )
+                .context("Failed to prepare LIKE search query")?;
+
+            let chats = stmt
+                .query_map(params![like_pattern], row_to_chat)
+                .context("Failed to execute LIKE search")?
+                .collect::<Result<Vec<_>, _>>()
+                .context("Failed to collect LIKE search results")?;
+
+            debug!(query = %query, count = chats.len(), method = "like", "Chat search completed (fallback)");
+            Ok(chats)
+        }
+    }
 }
 
 // ============================================================================
@@ -1185,5 +1245,57 @@ mod tests {
         let path = get_ai_db_path();
         assert!(path.to_string_lossy().contains("ai-chats.sqlite"));
         assert!(path.to_string_lossy().contains(".sk/kit/db"));
+    }
+
+    #[test]
+    fn test_init_ai_db_is_idempotent() {
+        // First call should succeed (may already be initialized from other tests)
+        let result1 = init_ai_db();
+        // If it fails, it should only be because it's already initialized (which is OK)
+        if let Err(ref e) = result1 {
+            // This is the old behavior we're fixing - it shouldn't error
+            panic!(
+                "init_ai_db() should be idempotent but got error: {}",
+                e
+            );
+        }
+
+        // Second call should also succeed (idempotent)
+        let result2 = init_ai_db();
+        assert!(
+            result2.is_ok(),
+            "init_ai_db() should be idempotent, second call failed: {:?}",
+            result2.err()
+        );
+
+        // Third call for good measure
+        let result3 = init_ai_db();
+        assert!(
+            result3.is_ok(),
+            "init_ai_db() should be idempotent, third call failed: {:?}",
+            result3.err()
+        );
+    }
+
+    #[test]
+    fn test_search_chats_does_not_error() {
+        // Ensure DB is initialized
+        let _ = init_ai_db();
+
+        // Empty search should return all chats (not error)
+        let result = search_chats("");
+        assert!(result.is_ok(), "Empty search should not error: {:?}", result.err());
+
+        // Simple text search should not error (even if no results)
+        let result = search_chats("test");
+        assert!(result.is_ok(), "Simple text search should not error: {:?}", result.err());
+
+        // Search with special characters should not crash
+        // (FTS MATCH is fragile with special characters - should fall back gracefully)
+        let result = search_chats("test@example.com");
+        assert!(result.is_ok(), "Search with @ should not error: {:?}", result.err());
+
+        let result = search_chats("foo*bar");
+        assert!(result.is_ok(), "Search with * should not error: {:?}", result.err());
     }
 }
