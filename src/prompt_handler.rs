@@ -991,31 +991,6 @@ impl ScriptListApp {
                         }
                     });
 
-                // Clone the pending_path_action Arc for the callback
-                let pending_path_action_clone = self.pending_path_action.clone();
-
-                let show_actions_callback: std::sync::Arc<dyn Fn(PathInfo) + Send + Sync> =
-                    std::sync::Arc::new(move |path_info| {
-                        logging::log(
-                            "UI",
-                            &format!("Path actions requested for: {}", path_info.path),
-                        );
-                        if let Ok(mut guard) = pending_path_action_clone.lock() {
-                            *guard = Some(path_info);
-                        }
-                    });
-
-                // Clone the close_path_actions Arc for the close callback
-                let close_path_actions_clone = self.close_path_actions.clone();
-
-                let close_actions_callback: std::sync::Arc<dyn Fn() + Send + Sync> =
-                    std::sync::Arc::new(move || {
-                        logging::log("UI", "Path close actions callback triggered");
-                        if let Ok(mut guard) = close_path_actions_clone.lock() {
-                            *guard = true;
-                        }
-                    });
-
                 // Clone the path_actions_showing and search_text Arcs for header display
                 let path_actions_showing = self.path_actions_showing.clone();
                 let path_actions_search_text = self.path_actions_search_text.clone();
@@ -1029,12 +1004,35 @@ impl ScriptListApp {
                     submit_callback,
                     std::sync::Arc::new(self.theme.clone()),
                 )
-                .with_show_actions(show_actions_callback)
-                .with_close_actions(close_actions_callback)
+                // Note: Legacy callbacks are no longer needed - we use events now
+                // But we still pass the shared state for header display
                 .with_actions_showing(path_actions_showing)
                 .with_actions_search_text(path_actions_search_text);
 
                 let entity = cx.new(|_| path_prompt);
+
+                // Subscribe to PathPrompt events for actions dialog control
+                // This replaces the mutex-polling pattern with event-driven handling
+                cx.subscribe(&entity, |this, _entity, event: &PathPromptEvent, cx| {
+                    match event {
+                        PathPromptEvent::ShowActions(path_info) => {
+                            logging::log(
+                                "UI",
+                                &format!(
+                                    "PathPromptEvent::ShowActions received for: {}",
+                                    path_info.path
+                                ),
+                            );
+                            this.handle_show_path_actions(path_info.clone(), cx);
+                        }
+                        PathPromptEvent::CloseActions => {
+                            logging::log("UI", "PathPromptEvent::CloseActions received");
+                            this.handle_close_path_actions(cx);
+                        }
+                    }
+                })
+                .detach();
+
                 self.current_view = AppView::PathPrompt {
                     id,
                     entity,
@@ -1043,10 +1041,7 @@ impl ScriptListApp {
                 self.focused_input = FocusedInput::None;
                 self.pending_focus = Some(FocusTarget::PathPrompt);
 
-                // Clear any previous pending action and reset showing state
-                if let Ok(mut guard) = self.pending_path_action.lock() {
-                    *guard = None;
-                }
+                // Reset showing state (no more mutex polling needed)
                 if let Ok(mut guard) = self.path_actions_showing.lock() {
                     *guard = false;
                 }

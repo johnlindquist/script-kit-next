@@ -5,9 +5,13 @@
 //! - Filter files/folders by name
 //! - Navigate with keyboard
 //! - Submit selected path
+//!
+//! Uses GPUI EventEmitter pattern for actions dialog communication:
+//! - Parent subscribes to PathPromptEvent::ShowActions / CloseActions
+//! - No mutex polling in render - events trigger immediate handling
 
 use gpui::{
-    div, prelude::*, uniform_list, Context, FocusHandle, Focusable, Render,
+    div, prelude::*, uniform_list, Context, EventEmitter, FocusHandle, Focusable, Render,
     UniformListScrollHandle, Window,
 };
 use std::path::Path;
@@ -25,6 +29,16 @@ use crate::theme;
 /// Callback for prompt submission
 /// Signature: (id: String, value: Option<String>)
 pub type SubmitCallback = Arc<dyn Fn(String, Option<String>) + Send + Sync>;
+
+/// Events emitted by PathPrompt for parent handling
+/// Uses GPUI's EventEmitter pattern instead of mutex polling
+#[derive(Debug, Clone)]
+pub enum PathPromptEvent {
+    /// Request to show actions dialog for the given path
+    ShowActions(PathInfo),
+    /// Request to close actions dialog
+    CloseActions,
+}
 
 /// Information about a file/folder path for context-aware actions
 /// Used for path-specific actions in the actions dialog
@@ -286,31 +300,38 @@ impl PathPrompt {
     }
 
     /// Show actions dialog for the selected entry
+    /// Emits PathPromptEvent::ShowActions for parent to handle
     fn show_actions(&mut self, cx: &mut Context<Self>) {
         if let Some(entry) = self.filtered_entries.get(self.selected_index) {
+            let path_info = PathInfo::new(entry.name.clone(), entry.path.clone(), entry.is_dir);
+            logging::log(
+                "PROMPTS",
+                &format!(
+                    "PathPrompt emitting ShowActions for: {} (is_dir={})",
+                    path_info.path, path_info.is_dir
+                ),
+            );
+            // Emit event for parent to handle (GPUI pattern)
+            cx.emit(PathPromptEvent::ShowActions(path_info.clone()));
+            // Also call legacy callback if present (backwards compatibility)
             if let Some(ref callback) = self.on_show_actions {
-                let path_info = PathInfo::new(entry.name.clone(), entry.path.clone(), entry.is_dir);
-                logging::log(
-                    "PROMPTS",
-                    &format!(
-                        "PathPrompt showing actions for: {} (is_dir={})",
-                        path_info.path, path_info.is_dir
-                    ),
-                );
                 (callback)(path_info);
-                // Trigger re-render to show ActionsDialog
-                cx.notify();
             }
+            cx.notify();
         }
     }
 
     /// Close actions dialog (for toggle behavior)
+    /// Emits PathPromptEvent::CloseActions for parent to handle
     fn close_actions(&mut self, cx: &mut Context<Self>) {
+        logging::log("PROMPTS", "PathPrompt emitting CloseActions");
+        // Emit event for parent to handle (GPUI pattern)
+        cx.emit(PathPromptEvent::CloseActions);
+        // Also call legacy callback if present (backwards compatibility)
         if let Some(ref callback) = self.on_close_actions {
-            logging::log("PROMPTS", "PathPrompt closing actions dialog");
             (callback)();
-            cx.notify();
         }
+        cx.notify();
     }
 
     /// Toggle actions dialog - show if hidden, close if showing
@@ -459,6 +480,8 @@ impl Focusable for PathPrompt {
         self.focus_handle.clone()
     }
 }
+
+impl EventEmitter<PathPromptEvent> for PathPrompt {}
 
 impl Render for PathPrompt {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {

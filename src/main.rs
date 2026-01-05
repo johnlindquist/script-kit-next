@@ -161,7 +161,7 @@ use components::ToastVariant;
 use editor::EditorPrompt;
 use prompts::{
     ContainerOptions, ContainerPadding, DivPrompt, DropPrompt, EnvPrompt, PathInfo, PathPrompt,
-    SelectPrompt, TemplatePrompt,
+    PathPromptEvent, SelectPrompt, TemplatePrompt,
 };
 use tray::{TrayManager, TrayMenuAction};
 use warning_banner::{WarningBanner, WarningBannerColors};
@@ -830,8 +830,9 @@ struct ScriptListApp {
     // Shared state: current search text in path actions dialog
     // Used by PathPrompt to display search in header (like main menu does)
     path_actions_search_text: Arc<Mutex<String>>,
-    // Pending path action result - when set, execute this action on the stored path
-    // Tuple of (action_id, path_info) to handle the action
+    // DEPRECATED: These mutexes were used for polling in render before event-based refactor.
+    // Kept for reset_to_script_list cleanup. Will be removed in future cleanup pass.
+    #[allow(dead_code)]
     pending_path_action_result: Arc<Mutex<Option<(String, PathInfo)>>>,
     /// Alias registry: lowercase_alias -> script_path (for O(1) lookup)
     /// Conflict rule: first-registered wins

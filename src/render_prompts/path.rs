@@ -2,6 +2,50 @@
 // This file is included via include!() macro in main.rs
 
 impl ScriptListApp {
+    /// Handle showing path actions dialog - called from PathPrompt callback.
+    /// This method is called directly instead of polling a mutex in render.
+    fn handle_show_path_actions(&mut self, path_info: PathInfo, cx: &mut Context<Self>) {
+        logging::log(
+            "UI",
+            &format!(
+                "handle_show_path_actions: {} (is_dir={})",
+                path_info.path, path_info.is_dir
+            ),
+        );
+
+        // Create ActionsDialog for this path
+        let theme_arc = std::sync::Arc::new(self.theme.clone());
+        let dialog = cx.new(|cx| {
+            // Use a no-op callback - action execution is handled directly in key handler
+            let noop_callback: std::sync::Arc<dyn Fn(String) + Send + Sync> =
+                std::sync::Arc::new(|_| {});
+            let focus_handle = cx.focus_handle();
+            let mut dialog = ActionsDialog::with_path(focus_handle, noop_callback, &path_info, theme_arc);
+            // Hide search in the dialog - we show it in the header instead
+            dialog.set_hide_search(true);
+            dialog
+        });
+
+        self.actions_dialog = Some(dialog);
+        self.show_actions_popup = true;
+        // Update shared showing state for toggle behavior
+        if let Ok(mut showing_guard) = self.path_actions_showing.lock() {
+            *showing_guard = true;
+        }
+        cx.notify();
+    }
+
+    /// Close path actions dialog - called from PathPrompt callback or key handler.
+    fn handle_close_path_actions(&mut self, cx: &mut Context<Self>) {
+        logging::log("UI", "handle_close_path_actions called");
+        self.show_actions_popup = false;
+        self.actions_dialog = None;
+        if let Ok(mut showing_guard) = self.path_actions_showing.lock() {
+            *showing_guard = false;
+        }
+        cx.notify();
+    }
+
     fn render_path_prompt(
         &mut self,
         entity: Entity<PathPrompt>,
@@ -18,90 +62,19 @@ impl ScriptListApp {
         let bg_with_alpha = self.hex_to_rgba_with_opacity(bg_hex, opacity.main);
         let box_shadows = self.create_box_shadows();
 
-        // Check if we should close the actions dialog
-        if let Ok(mut close_guard) = self.close_path_actions.lock() {
-            if *close_guard {
-                *close_guard = false;
-                self.show_actions_popup = false;
-                self.actions_dialog = None;
-                // Update shared showing state for toggle behavior
-                if let Ok(mut showing_guard) = self.path_actions_showing.lock() {
-                    *showing_guard = false;
-                }
-                logging::log("UI", "Closed path actions dialog");
-            }
-        }
+        // NOTE: No side-effects in render! Dialog creation and action execution
+        // are handled by handle_show_path_actions() and execute_path_action()
+        // which are called from callbacks and key handlers.
 
-        // Check for pending path action result and execute it
-        // Extract data first, then drop the lock, then execute
-        let pending_action = self
-            .pending_path_action_result
-            .lock()
-            .ok()
-            .and_then(|mut guard| guard.take());
-
-        if let Some((action_id, path_info)) = pending_action {
-            self.execute_path_action(&action_id, &path_info, &entity, cx);
-        }
-
-        // Check for pending path action and create ActionsDialog if needed
-        let actions_dialog = if let Ok(mut guard) = self.pending_path_action.lock() {
-            if let Some(path_info) = guard.take() {
-                // Create ActionsDialog for this path
-                let theme_arc = std::sync::Arc::new(self.theme.clone());
-                let close_signal = self.close_path_actions.clone();
-                let action_result_signal = self.pending_path_action_result.clone();
-                let path_info_for_callback = path_info.clone();
-                let action_callback: std::sync::Arc<dyn Fn(String) + Send + Sync> =
-                    std::sync::Arc::new(move |action_id| {
-                        logging::log(
-                            "UI",
-                            &format!(
-                                "Path action selected: {} for path: {}",
-                                action_id, path_info_for_callback.path
-                            ),
-                        );
-                        // Store the action result for execution
-                        if action_id != "__cancel__" {
-                            if let Ok(mut guard) = action_result_signal.lock() {
-                                *guard = Some((action_id.clone(), path_info_for_callback.clone()));
-                            }
-                        }
-                        // Signal to close dialog on cancel or action selection
-                        if let Ok(mut guard) = close_signal.lock() {
-                            *guard = true;
-                        }
-                    });
-                let dialog = cx.new(|cx| {
-                    let focus_handle = cx.focus_handle();
-                    let mut dialog = ActionsDialog::with_path(
-                        focus_handle,
-                        action_callback,
-                        &path_info,
-                        theme_arc,
-                    );
-                    // Hide search in the dialog - we show it in the header instead
-                    dialog.set_hide_search(true);
-                    dialog
-                });
-                self.actions_dialog = Some(dialog.clone());
-                self.show_actions_popup = true;
-                // Update shared showing state for toggle behavior
-                if let Ok(mut showing_guard) = self.path_actions_showing.lock() {
-                    *showing_guard = true;
-                }
-                Some(dialog)
-            } else if self.show_actions_popup {
-                self.actions_dialog.clone()
-            } else {
-                None
-            }
+        // Get actions dialog if showing
+        let actions_dialog = if self.show_actions_popup {
+            self.actions_dialog.clone()
         } else {
             None
         };
 
         // Sync the actions search text from the dialog to the shared state
-        // This allows PathPrompt to display the search text in its header
+        // This is a read-only operation (safe in render)
         if let Some(ref dialog) = actions_dialog {
             let search_text = dialog.read(cx).search_text.clone();
             if let Ok(mut guard) = self.path_actions_search_text.lock() {
