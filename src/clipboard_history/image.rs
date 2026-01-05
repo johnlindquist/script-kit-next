@@ -6,7 +6,7 @@
 use anyhow::{Context, Result};
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use gpui::RenderImage;
-use smallvec::SmallVec;
+use smallvec::smallvec;
 use std::sync::Arc;
 use tracing::{debug, warn};
 
@@ -159,7 +159,9 @@ fn decode_blob_to_render_image(content: &str) -> Option<Arc<RenderImage>> {
     let img_height = rgba.height();
 
     let frame = image::Frame::new(rgba);
-    let render_image = RenderImage::new(SmallVec::from_elem(frame, 1));
+    // Use smallvec! macro to avoid cloning the frame buffer
+    // (SmallVec::from_elem clones the element, which would duplicate megabytes of pixel data)
+    let render_image = RenderImage::new(smallvec![frame]);
 
     debug!(
         width = img_width,
@@ -181,7 +183,9 @@ fn decode_png_to_render_image(content: &str) -> Option<Arc<RenderImage>> {
     let img_height = rgba.height();
 
     let frame = image::Frame::new(rgba);
-    let render_image = RenderImage::new(SmallVec::from_elem(frame, 1));
+    // Use smallvec! macro to avoid cloning the frame buffer
+    // (SmallVec::from_elem clones the element, which would duplicate megabytes of pixel data)
+    let render_image = RenderImage::new(smallvec![frame]);
 
     debug!(
         width = img_width,
@@ -216,7 +220,9 @@ fn decode_rgba_to_render_image(content: &str) -> Option<Arc<RenderImage>> {
 
     let rgba_image = image::RgbaImage::from_raw(width, height, rgba_bytes)?;
     let frame = image::Frame::new(rgba_image);
-    let render_image = RenderImage::new(SmallVec::from_elem(frame, 1));
+    // Use smallvec! macro to avoid cloning the frame buffer
+    // (SmallVec::from_elem clones the element, which would duplicate megabytes of pixel data)
+    let render_image = RenderImage::new(smallvec![frame]);
 
     debug!(
         width,
