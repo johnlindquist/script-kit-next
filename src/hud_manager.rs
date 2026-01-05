@@ -620,7 +620,8 @@ fn configure_hud_window_by_bounds(expected_bounds: gpui::Bounds<Pixels>) {
                 // Found it! Configure as HUD overlay
 
                 // Set window level very high (NSPopUpMenuWindowLevel = 101)
-                let hud_level: i32 = 101;
+                // Use i64 (NSInteger) for proper ABI compatibility on 64-bit macOS
+                let hud_level: i64 = 101;
                 let _: () = msg_send![window, setLevel: hud_level];
 
                 // Collection behaviors for HUD:

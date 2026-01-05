@@ -1926,12 +1926,15 @@ fn configure_ai_as_floating_panel() {
                         // Found the AI window - configure it
 
                         // NSFloatingWindowLevel = 3
-                        let floating_level: i32 = 3;
+                        // Use i64 (NSInteger) for proper ABI compatibility on 64-bit macOS
+                        let floating_level: i64 = 3;
                         let _: () = msg_send![window, setLevel:floating_level];
 
-                        // NSWindowCollectionBehaviorMoveToActiveSpace = 2
-                        let collection_behavior: u64 = 2;
-                        let _: () = msg_send![window, setCollectionBehavior:collection_behavior];
+                        // Get current collection behavior to preserve existing flags
+                        let current: u64 = msg_send![window, collectionBehavior];
+                        // OR in MoveToActiveSpace (2) + FullScreenAuxiliary (256)
+                        let desired: u64 = current | 2 | 256;
+                        let _: () = msg_send![window, setCollectionBehavior:desired];
 
                         // Disable window restoration
                         let _: () = msg_send![window, setRestorable:false];
