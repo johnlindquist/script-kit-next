@@ -1204,7 +1204,7 @@ mod tests {
 
     #[test]
     fn test_category_to_code_config() {
-        // From: "Successfully loaded config from ~/.scriptkit/config.ts"
+        // From: "Successfully loaded config from ~/.scriptkit/kit/config.ts"
         assert_eq!(category_to_code("CONFIG"), 'N');
         assert_eq!(category_to_code("config"), 'N');
         assert_eq!(category_to_code("Config"), 'N');

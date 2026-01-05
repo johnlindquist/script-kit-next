@@ -68,7 +68,7 @@ The global hotkey opens the Script Kit launcher from anywhere:
 | Windows  | `Ctrl+;`       |
 | Linux    | `Ctrl+;`       |
 
-You can customize this in `~/.scriptkit/config.ts` (see [Configuration](#configuration-configts)).
+You can customize this in `~/.scriptkit/kit/config.ts` (see [Configuration](#configuration-configts)).
 
 ---
 
@@ -83,8 +83,12 @@ Script Kit stores all its data in `~/.scriptkit/`. Here's the layout:
 │   │   ├── scripts/         # Your script files (.ts, .js)
 │   │   ├── extensions/      # Markdown extension files (.md)
 │   │   └── agents/          # AI agent definitions (.md)
+│   ├── config.ts            # Your configuration
+│   ├── theme.json           # Your theme customization
 │   ├── package.json         # Node.js module config (enables top-level await)
-│   └── tsconfig.json        # TypeScript path mappings
+│   ├── tsconfig.json        # TypeScript path mappings
+│   ├── AGENTS.md            # SDK docs for AI agents
+│   └── CLAUDE.md            # Claude-specific instructions
 ├── sdk/                     # SDK runtime (auto-managed)
 │   └── kit-sdk.ts           # The Script Kit SDK
 ├── db/                      # Databases
@@ -93,8 +97,7 @@ Script Kit stores all its data in `~/.scriptkit/`. Here's the layout:
 ├── logs/                    # Application logs
 │   └── script-kit-gpui.jsonl
 ├── cache/                   # Cached data (frecency, etc.)
-├── config.ts                # Your configuration
-└── theme.json               # Your theme customization
+└── GUIDE.md                 # This user guide
 ```
 
 ### Key Directories
@@ -536,7 +539,7 @@ tags: utility, shell
 
 ## Configuration (config.ts)
 
-Create `~/.scriptkit/config.ts` to customize Script Kit:
+Create `~/.scriptkit/kit/config.ts` to customize Script Kit:
 
 ```typescript
 import type { Config } from "@scriptkit/sdk";
@@ -629,7 +632,7 @@ Common key codes:
 
 ## Themes (theme.json)
 
-Customize the look and feel with `~/.scriptkit/theme.json`:
+Customize the look and feel with `~/.scriptkit/kit/theme.json`:
 
 ```json
 {
@@ -847,7 +850,7 @@ Set one of these environment variables:
 ### Configuring the Hotkey
 
 ```typescript
-// ~/.scriptkit/config.ts
+// ~/.scriptkit/kit/config.ts
 aiHotkey: {
   modifiers: ["meta", "shift"],
   key: "Space"
@@ -882,7 +885,7 @@ A floating notes window with Markdown support for quick note-taking.
 ### Configuring the Hotkey
 
 ```typescript
-// ~/.scriptkit/config.ts
+// ~/.scriptkit/kit/config.ts
 notesHotkey: {
   modifiers: ["meta", "shift"],
   key: "KeyN"
@@ -906,8 +909,8 @@ Script Kit automatically watches for changes and reloads:
 | `kit/main/scripts/*.ts` | Scripts reload in launcher |
 | `kit/main/scripts/*.js` | Scripts reload in launcher |
 | `kit/main/extensions/*.md` | Extensions reload in launcher |
-| `config.ts` | Configuration reloads (requires restart) |
-| `theme.json` | Theme reloads live (no restart) |
+| `kit/config.ts` | Configuration reloads (requires restart) |
+| `kit/theme.json` | Theme reloads live (no restart) |
 
 ### Auto-Reload Behavior
 

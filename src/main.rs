@@ -1619,7 +1619,7 @@ fn main() {
             }).detach();
         }
 
-        // Config reload watcher - watches ~/.scriptkit/config.ts for changes
+        // Config reload watcher - watches ~/.scriptkit/kit/config.ts for changes
         // Only spawn if watcher started successfully
         if config_watcher_ok {
             let app_entity_for_config = app_entity.clone();
@@ -2402,7 +2402,7 @@ fn main() {
                                 logging::log("TRAY", "Settings menu item clicked");
                                 // Open config file in editor
                                 let editor = config_for_tray.get_editor();
-                                let config_path = shellexpand::tilde("~/.scriptkit/config.ts").to_string();
+                                let config_path = shellexpand::tilde("~/.scriptkit/kit/config.ts").to_string();
 
                                 logging::log("TRAY", &format!("Opening {} in editor '{}'", config_path, editor));
                                 match std::process::Command::new(&editor)

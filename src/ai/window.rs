@@ -1770,7 +1770,7 @@ pub fn open_ai_window(cx: &mut App) -> Result<()> {
     // that can go behind other windows
 
     // Theme hot-reload watcher for AI window
-    // Spawns a background task that watches ~/.scriptkit/theme.json for changes
+    // Spawns a background task that watches ~/.scriptkit/kit/theme.json for changes
     let app_entity_holder_ref = AI_APP_ENTITY.get_or_init(|| std::sync::Mutex::new(None));
     if let Some(ai_app) = app_entity_holder_ref.lock().unwrap().clone() {
         let ai_app_for_theme = ai_app.clone();

@@ -1940,7 +1940,7 @@ pub fn open_notes_window(cx: &mut App) -> Result<()> {
     configure_notes_as_floating_panel();
 
     // Theme hot-reload watcher for Notes window
-    // Spawns a background task that watches ~/.scriptkit/theme.json for changes
+    // Spawns a background task that watches ~/.scriptkit/kit/theme.json for changes
     // Only spawns once to prevent task leaks across window open/close cycles
     if !NOTES_THEME_WATCHER_RUNNING.swap(true, std::sync::atomic::Ordering::SeqCst) {
         cx.spawn(async move |cx: &mut gpui::AsyncApp| {

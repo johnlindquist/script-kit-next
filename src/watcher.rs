@@ -43,7 +43,7 @@ pub enum AppearanceChangeEvent {
     Light,
 }
 
-/// Watches ~/.scriptkit/config.ts for changes and emits reload events
+/// Watches ~/.scriptkit/kit/config.ts for changes and emits reload events
 pub struct ConfigWatcher {
     tx: Option<Sender<ConfigReloadEvent>>,
     watcher_thread: Option<thread::JoinHandle<()>>,
@@ -65,7 +65,7 @@ impl ConfigWatcher {
 
     /// Start watching the config file for changes
     ///
-    /// This spawns a background thread that watches ~/.scriptkit/config.ts and sends
+    /// This spawns a background thread that watches ~/.scriptkit/kit/config.ts and sends
     /// reload events through the receiver when changes are detected.
     pub fn start(&mut self) -> NotifyResult<()> {
         let tx = self
@@ -86,7 +86,7 @@ impl ConfigWatcher {
     /// Internal watch loop running in background thread
     fn watch_loop(tx: Sender<ConfigReloadEvent>) -> NotifyResult<()> {
         // Expand the config path
-        let config_path = PathBuf::from(shellexpand::tilde("~/.scriptkit/config.ts").as_ref());
+        let config_path = PathBuf::from(shellexpand::tilde("~/.scriptkit/kit/config.ts").as_ref());
 
         // Get the parent directory to watch
         let watch_path = config_path
@@ -182,7 +182,7 @@ impl Drop for ConfigWatcher {
     }
 }
 
-/// Watches ~/.scriptkit/theme.json for changes and emits reload events
+/// Watches ~/.scriptkit/kit/theme.json for changes and emits reload events
 pub struct ThemeWatcher {
     tx: Option<Sender<ThemeReloadEvent>>,
     watcher_thread: Option<thread::JoinHandle<()>>,
@@ -204,7 +204,7 @@ impl ThemeWatcher {
 
     /// Start watching the theme file for changes
     ///
-    /// This spawns a background thread that watches ~/.scriptkit/theme.json and sends
+    /// This spawns a background thread that watches ~/.scriptkit/kit/theme.json and sends
     /// reload events through the receiver when changes are detected.
     pub fn start(&mut self) -> NotifyResult<()> {
         let tx = self
@@ -225,7 +225,7 @@ impl ThemeWatcher {
     /// Internal watch loop running in background thread
     fn watch_loop(tx: Sender<ThemeReloadEvent>) -> NotifyResult<()> {
         // Expand the theme path
-        let theme_path = PathBuf::from(shellexpand::tilde("~/.scriptkit/theme.json").as_ref());
+        let theme_path = PathBuf::from(shellexpand::tilde("~/.scriptkit/kit/theme.json").as_ref());
 
         // Get the parent directory to watch
         let watch_path = theme_path

@@ -8,7 +8,7 @@ use tracing::{info, instrument, warn};
 
 use super::types::Config;
 
-/// Load configuration from ~/.scriptkit/config.ts
+/// Load configuration from ~/.scriptkit/kit/config.ts
 ///
 /// This function:
 /// 1. Checks if the config file exists
@@ -19,7 +19,7 @@ use super::types::Config;
 /// Returns Config::default() if any step fails.
 #[instrument(name = "load_config")]
 pub fn load_config() -> Config {
-    let config_path = PathBuf::from(shellexpand::tilde("~/.scriptkit/config.ts").as_ref());
+    let config_path = PathBuf::from(shellexpand::tilde("~/.scriptkit/kit/config.ts").as_ref());
 
     // Check if config file exists
     if !config_path.exists() {
