@@ -9,7 +9,6 @@
 
 use crate::panel::HEADER_TOTAL_HEIGHT;
 use crate::platform;
-use crate::theme;
 use gpui::{
     div, prelude::*, px, App, Bounds, Context, Entity, FocusHandle, Focusable, Pixels, Point,
     Render, Size, Window, WindowBounds, WindowHandle, WindowKind, WindowOptions,
@@ -54,8 +53,10 @@ impl Focusable for ActionsWindow {
 
 impl Render for ActionsWindow {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        // Render the shared dialog entity - it handles its own styling
-        div().size_full().child(self.dialog.clone())
+        // Render the shared dialog entity - it handles its own sizing
+        // Don't use size_full() - the dialog calculates its own dynamic height
+        // This prevents unused window space from showing as a dark area
+        div().child(self.dialog.clone())
     }
 }
 
@@ -80,13 +81,10 @@ pub fn open_actions_window(
     // Close any existing actions window first
     close_actions_window(cx);
 
-    // Load theme for vibrancy settings
-    let theme = theme::load_theme();
-    let window_background = if theme.is_vibrancy_enabled() {
-        gpui::WindowBackgroundAppearance::Blurred
-    } else {
-        gpui::WindowBackgroundAppearance::Opaque
-    };
+    // Use transparent window background - the dialog renders its own
+    // vibrancy/blur styling. This prevents unused window area from showing
+    // as a dark rectangle when the content is smaller than max height.
+    let window_background = gpui::WindowBackgroundAppearance::Transparent;
 
     // Calculate window position:
     // - X: Right edge of main window, minus actions width, minus margin
