@@ -171,9 +171,9 @@ pub fn ensure_move_to_active_space() {
 // Floating Panel Configuration
 // ============================================================================
 
-/// Configure the current key window as a floating macOS panel.
+/// Configure the main window as a floating macOS panel.
 ///
-/// This function configures the key window (most recently activated window) with:
+/// This function configures the main window (via WindowManager) with:
 /// - Floating window level (NSFloatingWindowLevel = 3) - appears above normal windows
 /// - MoveToActiveSpace collection behavior - moves to current space when shown
 /// - Disabled window restoration - prevents macOS from remembering window position
@@ -181,8 +181,9 @@ pub fn ensure_move_to_active_space() {
 ///
 /// # macOS Behavior
 ///
-/// Uses NSApp to get the keyWindow and applies all configurations. If no key window
-/// is found (e.g., during app startup), logs a warning and returns.
+/// Uses WindowManager to get the main window (more reliable than NSApp.keyWindow,
+/// which is timing-sensitive and can return nil during startup or the wrong window
+/// in multi-window scenarios). If no main window is registered, logs a warning.
 ///
 /// # Other Platforms
 ///
@@ -196,51 +197,53 @@ pub fn ensure_move_to_active_space() {
 pub fn configure_as_floating_panel() {
     debug_assert_main_thread();
     unsafe {
-        let app: id = NSApp();
+        // Use WindowManager to get the main window (more reliable than keyWindow)
+        // keyWindow is timing-sensitive and can return nil during startup,
+        // or the wrong window (Notes/AI) in multi-window scenarios.
+        let window = match window_manager::get_main_window() {
+            Some(w) => w,
+            None => {
+                logging::log(
+                    "PANEL",
+                    "WARNING: Main window not registered, cannot configure as floating panel",
+                );
+                return;
+            }
+        };
 
-        // Get the key window (the most recently activated window)
-        let window: id = msg_send![app, keyWindow];
+        // NSFloatingWindowLevel = 3
+        // This makes the window float above normal windows
+        // Use i64 (NSInteger) for proper ABI compatibility on 64-bit macOS
+        let _: () = msg_send![window, setLevel:NS_FLOATING_WINDOW_LEVEL];
 
-        if window != nil {
-            // NSFloatingWindowLevel = 3
-            // This makes the window float above normal windows
-            // Use i64 (NSInteger) for proper ABI compatibility on 64-bit macOS
-            let _: () = msg_send![window, setLevel:NS_FLOATING_WINDOW_LEVEL];
+        // Get current collection behavior to preserve existing flags set by GPUI/AppKit
+        let current: u64 = msg_send![window, collectionBehavior];
 
-            // Get current collection behavior to preserve existing flags set by GPUI/AppKit
-            let current: u64 = msg_send![window, collectionBehavior];
+        // OR in our desired flags instead of replacing:
+        // - MoveToActiveSpace: window moves to current space when shown
+        // - FullScreenAuxiliary: window can show over fullscreen apps without disrupting
+        let desired = current
+            | NS_WINDOW_COLLECTION_BEHAVIOR_MOVE_TO_ACTIVE_SPACE
+            | NS_WINDOW_COLLECTION_BEHAVIOR_FULL_SCREEN_AUXILIARY;
 
-            // OR in our desired flags instead of replacing:
-            // - MoveToActiveSpace: window moves to current space when shown
-            // - FullScreenAuxiliary: window can show over fullscreen apps without disrupting
-            let desired = current
-                | NS_WINDOW_COLLECTION_BEHAVIOR_MOVE_TO_ACTIVE_SPACE
-                | NS_WINDOW_COLLECTION_BEHAVIOR_FULL_SCREEN_AUXILIARY;
+        let _: () = msg_send![window, setCollectionBehavior:desired];
 
-            let _: () = msg_send![window, setCollectionBehavior:desired];
+        // CRITICAL: Disable macOS window state restoration
+        // This prevents macOS from remembering and restoring the window position
+        // when the app is relaunched or the window is shown again
+        let _: () = msg_send![window, setRestorable:false];
 
-            // CRITICAL: Disable macOS window state restoration
-            // This prevents macOS from remembering and restoring the window position
-            // when the app is relaunched or the window is shown again
-            let _: () = msg_send![window, setRestorable:false];
+        // Also disable the window's autosave frame name which can cause position caching
+        let empty_string: id = msg_send![class!(NSString), string];
+        let _: () = msg_send![window, setFrameAutosaveName:empty_string];
 
-            // Also disable the window's autosave frame name which can cause position caching
-            let empty_string: id = msg_send![class!(NSString), string];
-            let _: () = msg_send![window, setFrameAutosaveName:empty_string];
-
-            logging::log(
-                "PANEL",
-                &format!(
-                    "Configured window as floating panel (level={}, behavior={}->{}, restorable=false)",
-                    NS_FLOATING_WINDOW_LEVEL, current, desired
-                ),
-            );
-        } else {
-            logging::log(
-                "PANEL",
-                "Warning: No key window found to configure as panel",
-            );
-        }
+        logging::log(
+            "PANEL",
+            &format!(
+                "Configured window as floating panel (level={}, behavior={}->{}, restorable=false)",
+                NS_FLOATING_WINDOW_LEVEL, current, desired
+            ),
+        );
     }
 }
 
