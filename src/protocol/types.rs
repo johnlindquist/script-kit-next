@@ -16,13 +16,21 @@ use super::semantic_id::{generate_semantic_id, generate_semantic_id_named};
 ///
 /// Supports Script Kit API: name, value, and optional description.
 /// Semantic IDs are generated for AI-driven UX targeting.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Choice {
     pub name: String,
     pub value: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
-    /// Semantic ID for AI targeting. Format: choice:{index}:{value_slug}
+    /// Optional stable key for deterministic semantic ID generation.
+    /// When provided, this takes precedence over index-based IDs.
+    /// Useful when list order may change (filtering, sorting, ranking).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub key: Option<String>,
+    /// Semantic ID for AI targeting.
+    /// - With key: `choice:{key}`
+    /// - Without key: `choice:{index}:{value_slug}`
+    ///
     /// This field is typically generated at render time, not provided by scripts.
     #[serde(skip_serializing_if = "Option::is_none", rename = "semanticId")]
     pub semantic_id: Option<String>,
@@ -34,6 +42,7 @@ impl Choice {
             name,
             value,
             description: None,
+            key: None,
             semantic_id: None,
         }
     }
@@ -43,20 +52,36 @@ impl Choice {
             name,
             value,
             description: Some(description),
+            key: None,
             semantic_id: None,
         }
     }
 
+    /// Set a stable key for this choice.
+    /// When present, semantic ID generation will use this key instead of index.
+    pub fn with_key(mut self, key: String) -> Self {
+        self.key = Some(key);
+        self
+    }
+
     /// Generate and set the semantic ID for this choice.
-    /// Format: choice:{index}:{value_slug}
     ///
-    /// The value_slug is created by:
+    /// If `key` is set, generates: `choice:{key}`
+    /// Otherwise, generates: `choice:{index}:{value_slug}`
+    ///
+    /// The value_slug (when used) is created by:
     /// - Converting to lowercase
     /// - Replacing spaces and underscores with hyphens
     /// - Removing non-alphanumeric characters (except hyphens)
     /// - Truncating to 20 characters
     pub fn with_semantic_id(mut self, index: usize) -> Self {
-        self.semantic_id = Some(generate_semantic_id("choice", index, &self.value));
+        self.semantic_id = Some(if let Some(ref key) = self.key {
+            // Stable key takes precedence - use named ID format
+            generate_semantic_id_named("choice", key)
+        } else {
+            // Fallback to index-based ID
+            generate_semantic_id("choice", index, &self.value)
+        });
         self
     }
 
@@ -66,8 +91,14 @@ impl Choice {
     }
 
     /// Generate the semantic ID without setting it (for external use)
+    ///
+    /// Prefers key-based ID if key is set, otherwise uses index-based ID.
     pub fn generate_id(&self, index: usize) -> String {
-        generate_semantic_id("choice", index, &self.value)
+        if let Some(ref key) = self.key {
+            generate_semantic_id_named("choice", key)
+        } else {
+            generate_semantic_id("choice", index, &self.value)
+        }
     }
 }
 
@@ -178,9 +209,52 @@ pub enum WindowActionType {
     Move,
 }
 
-/// Mouse event data for the mouse action
+/// Mouse data for mouse actions
 ///
 /// Contains coordinates and optional button for click events.
+/// The `action` field in the Mouse message determines the semantics
+/// (move, click, setPosition), so we use a single flat struct here
+/// rather than an untagged enum (which would cause ambiguity since
+/// move and setPosition have identical shapes).
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct MouseData {
+    /// X coordinate
+    pub x: f64,
+    /// Y coordinate
+    pub y: f64,
+    /// Mouse button for click actions (e.g., "left", "right", "middle")
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub button: Option<String>,
+}
+
+impl MouseData {
+    /// Create new mouse data with coordinates
+    pub fn new(x: f64, y: f64) -> Self {
+        MouseData { x, y, button: None }
+    }
+
+    /// Create new mouse data with coordinates and button
+    pub fn with_button(x: f64, y: f64, button: String) -> Self {
+        MouseData {
+            x,
+            y,
+            button: Some(button),
+        }
+    }
+
+    /// Get coordinates as (x, y) tuple
+    pub fn coordinates(&self) -> (f64, f64) {
+        (self.x, self.y)
+    }
+}
+
+/// Deprecated: Use MouseData instead
+///
+/// This enum had a bug where Move and SetPosition had identical shapes,
+/// making SetPosition unreachable due to #[serde(untagged)].
+/// Kept for backwards compatibility during transition.
+#[deprecated(since = "0.2.0", note = "Use MouseData struct instead")]
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(untagged)]
 pub enum MouseEventData {
@@ -193,10 +267,11 @@ pub enum MouseEventData {
         #[serde(skip_serializing_if = "Option::is_none")]
         button: Option<String>,
     },
-    /// Set absolute position
+    /// Set absolute position (unreachable due to untagged - use MouseData instead)
     SetPosition { x: f64, y: f64 },
 }
 
+#[allow(deprecated)]
 impl MouseEventData {
     /// Get coordinates as (x, y) tuple
     pub fn coordinates(&self) -> (f64, f64) {
@@ -206,11 +281,25 @@ impl MouseEventData {
             MouseEventData::SetPosition { x, y } => (*x, *y),
         }
     }
+
+    /// Convert to the new MouseData struct
+    pub fn to_mouse_data(&self) -> MouseData {
+        match self {
+            MouseEventData::Move { x, y } => MouseData::new(*x, *y),
+            MouseEventData::Click { x, y, button } => MouseData {
+                x: *x,
+                y: *y,
+                button: button.clone(),
+            },
+            MouseEventData::SetPosition { x, y } => MouseData::new(*x, *y),
+        }
+    }
 }
 
 /// Exec command options
 ///
 /// Options for the exec command including working directory, environment, and timeout.
+/// Unknown fields are captured in `extra` for forward-compatibility.
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ExecOptions {
@@ -229,6 +318,11 @@ pub struct ExecOptions {
     /// Whether to capture stderr
     #[serde(skip_serializing_if = "Option::is_none")]
     pub capture_stderr: Option<bool>,
+    /// Forward-compatibility: captures unknown fields from newer SDK versions.
+    /// This allows older app versions to preserve and pass through new options
+    /// without losing them.
+    #[serde(flatten, default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub extra: std::collections::BTreeMap<String, serde_json::Value>,
 }
 
 /// Window bounds for window management (integer-based for system windows)
@@ -1124,5 +1218,148 @@ impl MenuBarItemData {
     pub fn with_menu_path(mut self, path: Vec<String>) -> Self {
         self.menu_path = path;
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ============================================================
+    // MouseData Tests
+    // ============================================================
+
+    #[test]
+    fn test_mouse_data_with_coordinates() {
+        let data = MouseData { x: 100.5, y: 200.5, button: None };
+        assert_eq!(data.x, 100.5);
+        assert_eq!(data.y, 200.5);
+        assert!(data.button.is_none());
+    }
+
+    #[test]
+    fn test_mouse_data_with_button() {
+        let data = MouseData { x: 50.0, y: 75.0, button: Some("left".to_string()) };
+        assert_eq!(data.button, Some("left".to_string()));
+    }
+
+    #[test]
+    fn test_mouse_data_serialization() {
+        let data = MouseData { x: 10.0, y: 20.0, button: None };
+        let json = serde_json::to_string(&data).unwrap();
+        // Without button, should not include button field due to skip_serializing_if
+        assert!(json.contains("\"x\":10"));
+        assert!(json.contains("\"y\":20"));
+        assert!(!json.contains("button"));
+    }
+
+    #[test]
+    fn test_mouse_data_with_button_serialization() {
+        let data = MouseData { x: 10.0, y: 20.0, button: Some("right".to_string()) };
+        let json = serde_json::to_string(&data).unwrap();
+        assert!(json.contains("\"button\":\"right\""));
+    }
+
+    #[test]
+    fn test_mouse_data_deserialization() {
+        // Coordinates only (common case)
+        let json = r#"{"x":100,"y":200}"#;
+        let data: MouseData = serde_json::from_str(json).unwrap();
+        assert_eq!(data.x, 100.0);
+        assert_eq!(data.y, 200.0);
+        assert!(data.button.is_none());
+    }
+
+    #[test]
+    fn test_mouse_data_deserialization_with_button() {
+        let json = r#"{"x":50,"y":75,"button":"left"}"#;
+        let data: MouseData = serde_json::from_str(json).unwrap();
+        assert_eq!(data.x, 50.0);
+        assert_eq!(data.y, 75.0);
+        assert_eq!(data.button, Some("left".to_string()));
+    }
+
+    #[test]
+    fn test_mouse_data_roundtrip() {
+        let original = MouseData { x: 123.456, y: 789.012, button: Some("middle".to_string()) };
+        let json = serde_json::to_string(&original).unwrap();
+        let restored: MouseData = serde_json::from_str(&json).unwrap();
+        assert_eq!(original, restored);
+    }
+
+    // ============================================================
+    // Choice Tests (with key field for stable semantic IDs)
+    // ============================================================
+
+    #[test]
+    fn test_choice_with_key() {
+        let choice = Choice::new("Apple".to_string(), "apple".to_string())
+            .with_key("fruit-apple".to_string());
+        assert_eq!(choice.key, Some("fruit-apple".to_string()));
+    }
+
+    #[test]
+    fn test_choice_semantic_id_prefers_key() {
+        let choice = Choice::new("Apple".to_string(), "apple".to_string())
+            .with_key("stable-key".to_string())
+            .with_semantic_id(5); // index 5 should be ignored when key exists
+
+        // When key is present, semantic_id should use key, not index
+        assert!(choice.semantic_id.as_ref().unwrap().contains("stable-key"));
+    }
+
+    #[test]
+    fn test_choice_semantic_id_falls_back_to_index() {
+        let choice = Choice::new("Banana".to_string(), "banana".to_string())
+            .with_semantic_id(3);
+
+        // Without key, semantic_id should use index
+        assert!(choice.semantic_id.as_ref().unwrap().contains("3"));
+        assert!(choice.semantic_id.as_ref().unwrap().contains("banana"));
+    }
+
+    #[test]
+    fn test_choice_key_serialization() {
+        let choice = Choice::new("Test".to_string(), "test".to_string())
+            .with_key("my-key".to_string());
+        let json = serde_json::to_string(&choice).unwrap();
+        assert!(json.contains("\"key\":\"my-key\""));
+    }
+
+    #[test]
+    fn test_choice_key_deserialization() {
+        let json = r#"{"name":"Apple","value":"apple","key":"fruit-apple"}"#;
+        let choice: Choice = serde_json::from_str(json).unwrap();
+        assert_eq!(choice.key, Some("fruit-apple".to_string()));
+    }
+
+    // ============================================================
+    // ExecOptions Tests (with extra field for forward-compatibility)
+    // ============================================================
+
+    #[test]
+    fn test_exec_options_extra_fields_preserved() {
+        // JSON with unknown future field
+        let json = r#"{"cwd":"/tmp","timeout":5000,"futureField":"someValue","anotherNew":123}"#;
+        let opts: ExecOptions = serde_json::from_str(json).unwrap();
+
+        // Known fields work
+        assert_eq!(opts.cwd, Some("/tmp".to_string()));
+        assert_eq!(opts.timeout, Some(5000));
+
+        // Extra fields are preserved
+        assert!(opts.extra.contains_key("futureField"));
+        assert!(opts.extra.contains_key("anotherNew"));
+    }
+
+    #[test]
+    fn test_exec_options_extra_roundtrip() {
+        let json = r#"{"cwd":"/home","newField":"preserved"}"#;
+        let opts: ExecOptions = serde_json::from_str(json).unwrap();
+        let serialized = serde_json::to_string(&opts).unwrap();
+
+        // newField should still be in the output
+        assert!(serialized.contains("newField"));
+        assert!(serialized.contains("preserved"));
     }
 }

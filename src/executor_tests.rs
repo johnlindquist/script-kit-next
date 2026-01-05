@@ -574,18 +574,21 @@ fn test_auto_submit_config_get_arg_value() {
             name: "Apple".to_string(),
             value: "apple".to_string(),
             description: None,
+            key: None,
             semantic_id: None,
         },
         Choice {
             name: "Banana".to_string(),
             value: "banana".to_string(),
             description: None,
+            key: None,
             semantic_id: None,
         },
         Choice {
             name: "Cherry".to_string(),
             value: "cherry".to_string(),
             description: None,
+            key: None,
             semantic_id: None,
         },
     ];
@@ -704,12 +707,14 @@ fn test_auto_submit_config_get_select_value() {
             name: "Apple".to_string(),
             value: "apple".to_string(),
             description: None,
+            key: None,
             semantic_id: None,
         },
         Choice {
             name: "Banana".to_string(),
             value: "banana".to_string(),
             description: None,
+            key: None,
             semantic_id: None,
         },
     ];

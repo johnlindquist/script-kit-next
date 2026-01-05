@@ -316,11 +316,14 @@ pub enum Message {
     },
 
     /// Mouse control
+    ///
+    /// The `action` field determines the semantics (move, click, setPosition).
+    /// The `data` field contains coordinates and optional button.
     #[serde(rename = "mouse")]
     Mouse {
         action: MouseAction,
         #[serde(skip_serializing_if = "Option::is_none")]
-        data: Option<serde_json::Value>,
+        data: Option<MouseData>,
     },
 
     /// Show window
@@ -1296,8 +1299,36 @@ impl Message {
     }
 
     /// Create a mouse message
-    pub fn mouse(action: MouseAction, data: Option<serde_json::Value>) -> Self {
+    pub fn mouse(action: MouseAction, data: Option<MouseData>) -> Self {
         Message::Mouse { action, data }
+    }
+
+    /// Create a mouse move message
+    pub fn mouse_move(x: f64, y: f64) -> Self {
+        Message::Mouse {
+            action: MouseAction::Move,
+            data: Some(MouseData::new(x, y)),
+        }
+    }
+
+    /// Create a mouse click message
+    pub fn mouse_click(x: f64, y: f64, button: Option<String>) -> Self {
+        Message::Mouse {
+            action: MouseAction::Click,
+            data: Some(MouseData {
+                x,
+                y,
+                button,
+            }),
+        }
+    }
+
+    /// Create a mouse set position message
+    pub fn mouse_set_position(x: f64, y: f64) -> Self {
+        Message::Mouse {
+            action: MouseAction::SetPosition,
+            data: Some(MouseData::new(x, y)),
+        }
     }
 
     /// Create a show message
