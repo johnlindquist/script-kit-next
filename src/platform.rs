@@ -108,14 +108,24 @@ pub fn ensure_move_to_active_space() {
             }
         };
 
-        // NSWindowCollectionBehaviorMoveToActiveSpace = (1 << 1) = 2
-        // This makes the window MOVE to the current active space when shown
-        let collection_behavior: u64 = 2;
-        let _: () = msg_send![window, setCollectionBehavior:collection_behavior];
+        // Get current collection behavior to preserve existing flags
+        let current: u64 = msg_send![window, collectionBehavior];
+
+        // OR in our desired flags:
+        // - MoveToActiveSpace: window moves to current space when shown
+        // - FullScreenAuxiliary: window can show over fullscreen apps without disrupting
+        let desired = current
+            | NS_WINDOW_COLLECTION_BEHAVIOR_MOVE_TO_ACTIVE_SPACE
+            | NS_WINDOW_COLLECTION_BEHAVIOR_FULL_SCREEN_AUXILIARY;
+
+        let _: () = msg_send![window, setCollectionBehavior:desired];
 
         logging::log(
             "PANEL",
-            "Set MoveToActiveSpace collection behavior (before activation)",
+            &format!(
+                "Set collection behavior: {} -> {} (MoveToActiveSpace + FullScreenAuxiliary)",
+                current, desired
+            ),
         );
     }
 }
@@ -161,14 +171,20 @@ pub fn configure_as_floating_panel() {
         if window != nil {
             // NSFloatingWindowLevel = 3
             // This makes the window float above normal windows
-            let floating_level: i32 = 3;
-            let _: () = msg_send![window, setLevel:floating_level];
+            // Use i64 (NSInteger) for proper ABI compatibility on 64-bit macOS
+            let _: () = msg_send![window, setLevel:NS_FLOATING_WINDOW_LEVEL];
 
-            // NSWindowCollectionBehaviorMoveToActiveSpace = (1 << 1)
-            // This makes the window MOVE to the current active space when shown
-            // (instead of forcing user back to the space where window was last visible)
-            let collection_behavior: u64 = 2;
-            let _: () = msg_send![window, setCollectionBehavior:collection_behavior];
+            // Get current collection behavior to preserve existing flags set by GPUI/AppKit
+            let current: u64 = msg_send![window, collectionBehavior];
+
+            // OR in our desired flags instead of replacing:
+            // - MoveToActiveSpace: window moves to current space when shown
+            // - FullScreenAuxiliary: window can show over fullscreen apps without disrupting
+            let desired = current
+                | NS_WINDOW_COLLECTION_BEHAVIOR_MOVE_TO_ACTIVE_SPACE
+                | NS_WINDOW_COLLECTION_BEHAVIOR_FULL_SCREEN_AUXILIARY;
+
+            let _: () = msg_send![window, setCollectionBehavior:desired];
 
             // CRITICAL: Disable macOS window state restoration
             // This prevents macOS from remembering and restoring the window position
@@ -181,7 +197,10 @@ pub fn configure_as_floating_panel() {
 
             logging::log(
                 "PANEL",
-                "Configured window as floating panel (level=3, MoveToActiveSpace, restorable=false, no autosave)",
+                &format!(
+                    "Configured window as floating panel (level={}, behavior={}->{}, restorable=false)",
+                    NS_FLOATING_WINDOW_LEVEL, current, desired
+                ),
             );
         } else {
             logging::log(
@@ -309,13 +328,19 @@ pub fn is_main_window_focused() -> bool {
 /// Windows at this level float above normal windows but below modal dialogs.
 #[cfg(target_os = "macos")]
 #[allow(dead_code)]
-pub const NS_FLOATING_WINDOW_LEVEL: i32 = 3;
+pub const NS_FLOATING_WINDOW_LEVEL: i64 = 3;
 
 /// NSWindowCollectionBehaviorMoveToActiveSpace constant value (1 << 1 = 2)
 /// When set, the window moves to the currently active space when shown.
 #[cfg(target_os = "macos")]
 #[allow(dead_code)]
-pub const NS_WINDOW_COLLECTION_BEHAVIOR_MOVE_TO_ACTIVE_SPACE: u64 = 2;
+pub const NS_WINDOW_COLLECTION_BEHAVIOR_MOVE_TO_ACTIVE_SPACE: u64 = 1 << 1;
+
+/// NSWindowCollectionBehaviorFullScreenAuxiliary constant value (1 << 8 = 256)
+/// Allows the window to be shown over fullscreen apps without disrupting their space.
+#[cfg(target_os = "macos")]
+#[allow(dead_code)]
+pub const NS_WINDOW_COLLECTION_BEHAVIOR_FULL_SCREEN_AUXILIARY: u64 = 1 << 8;
 
 // ============================================================================
 // Mouse Position
