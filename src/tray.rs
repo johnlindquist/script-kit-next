@@ -4,7 +4,8 @@
 //! The icon uses the Script Kit logo rendered as a template image for proper
 //! light/dark mode adaptation.
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
+use tracing::warn;
 use tray_icon::{
     menu::{
         CheckMenuItem, Icon as MenuIcon, IconMenuItem, Menu, MenuEvent, MenuEventReceiver,
@@ -14,6 +15,57 @@ use tray_icon::{
 };
 
 use crate::login_item;
+
+/// Renders an SVG string to RGBA pixel data with validation.
+///
+/// # Arguments
+/// * `svg` - The SVG string to render
+/// * `width` - Target width in pixels
+/// * `height` - Target height in pixels
+///
+/// # Errors
+/// Returns an error if:
+/// - SVG parsing fails
+/// - Pixmap creation fails
+/// - The rendered output is completely transparent (likely a rendering failure)
+///
+/// # Returns
+/// RGBA pixel data as a `Vec<u8>` (length = width * height * 4)
+fn render_svg_to_rgba(svg: &str, width: u32, height: u32) -> Result<Vec<u8>> {
+    // Parse SVG
+    let opts = usvg::Options::default();
+    let tree = usvg::Tree::from_str(svg, &opts).context("Failed to parse SVG")?;
+
+    // Create pixmap for rendering
+    let mut pixmap = tiny_skia::Pixmap::new(width, height).context("Failed to create pixmap")?;
+
+    // Calculate scale to fit SVG into target dimensions
+    let size = tree.size();
+    let scale_x = width as f32 / size.width();
+    let scale_y = height as f32 / size.height();
+    let scale = scale_x.min(scale_y);
+
+    let transform = tiny_skia::Transform::from_scale(scale, scale);
+
+    // Render SVG to pixmap
+    resvg::render(&tree, transform, &mut pixmap.as_mut());
+
+    // Take ownership of pixel data
+    let rgba = pixmap.take();
+
+    // Validate: check that at least some pixels have non-zero alpha
+    // This catches "failed silently" scenarios where nothing was rendered
+    let has_visible_content = rgba.chunks_exact(4).any(|px| px[3] != 0);
+    if !has_visible_content {
+        bail!(
+            "SVG rendered to fully transparent image ({}x{}) - likely a rendering failure",
+            width,
+            height
+        );
+    }
+
+    Ok(rgba)
+}
 
 /// Menu icon size (32x32 for Retina display quality)
 const MENU_ICON_SIZE: u32 = 32;
@@ -203,51 +255,37 @@ impl TrayManager {
         })
     }
 
-    /// Converts the embedded SVG logo to a PNG icon
+    /// Converts the embedded SVG logo to a tray icon.
+    ///
+    /// Uses `render_svg_to_rgba` for validated rendering.
     fn create_icon_from_svg() -> Result<Icon> {
-        // Parse SVG
+        // Get dimensions from SVG (logo is 32x32)
         let opts = usvg::Options::default();
-        let tree = usvg::Tree::from_str(LOGO_SVG, &opts).context("Failed to parse SVG")?;
-
-        // Create pixmap for rendering (32x32)
+        let tree = usvg::Tree::from_str(LOGO_SVG, &opts).context("Failed to parse logo SVG")?;
         let size = tree.size();
         let width = size.width() as u32;
         let height = size.height() as u32;
 
-        let mut pixmap =
-            tiny_skia::Pixmap::new(width, height).context("Failed to create pixmap")?;
-
-        // Render SVG to pixmap (white color for template image)
-        // Fill with white since template images on macOS use the alpha channel
-        // and the system will colorize based on menu bar appearance
-        resvg::render(&tree, tiny_skia::Transform::default(), &mut pixmap.as_mut());
-
-        // Convert to RGBA bytes
-        let rgba = pixmap.take();
+        // Render with validation
+        let rgba = render_svg_to_rgba(LOGO_SVG, width, height)
+            .context("Failed to render tray logo SVG")?;
 
         // Create tray icon from RGBA data
-        Icon::from_rgba(rgba, width, height).context("Failed to create icon from RGBA data")
+        Icon::from_rgba(rgba, width, height).context("Failed to create tray icon from RGBA data")
     }
 
-    /// Creates a menu icon from an SVG string
-    /// Icons are rendered as black/white for template mode on macOS
+    /// Creates a menu icon from an SVG string.
+    ///
+    /// Returns `None` if rendering fails (logs a warning).
+    /// This allows the menu to still function even if an icon fails to render.
     fn create_menu_icon_from_svg(svg: &str) -> Option<MenuIcon> {
-        let opts = usvg::Options::default();
-        let tree = usvg::Tree::from_str(svg, &opts).ok()?;
-
-        let mut pixmap = tiny_skia::Pixmap::new(MENU_ICON_SIZE, MENU_ICON_SIZE)?;
-
-        // Scale SVG to fit menu icon size
-        let size = tree.size();
-        let scale_x = MENU_ICON_SIZE as f32 / size.width();
-        let scale_y = MENU_ICON_SIZE as f32 / size.height();
-        let scale = scale_x.min(scale_y);
-
-        let transform = tiny_skia::Transform::from_scale(scale, scale);
-        resvg::render(&tree, transform, &mut pixmap.as_mut());
-
-        let rgba = pixmap.take();
-        MenuIcon::from_rgba(rgba, MENU_ICON_SIZE, MENU_ICON_SIZE).ok()
+        match render_svg_to_rgba(svg, MENU_ICON_SIZE, MENU_ICON_SIZE) {
+            Ok(rgba) => MenuIcon::from_rgba(rgba, MENU_ICON_SIZE, MENU_ICON_SIZE).ok(),
+            Err(e) => {
+                warn!("Failed to render menu icon SVG: {}", e);
+                None
+            }
+        }
     }
 
     /// Creates the tray menu with standard items
@@ -520,5 +558,76 @@ mod tests {
     fn test_tray_menu_action_all_count() {
         // Verify all() returns all variants
         assert_eq!(TrayMenuAction::all().len(), 10);
+    }
+
+    // ========================================================================
+    // SVG rendering tests
+    // ========================================================================
+
+    #[test]
+    fn test_render_svg_to_rgba_valid_svg() {
+        // A simple valid SVG with visible content
+        let svg = r#"<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16">
+            <rect x="0" y="0" width="16" height="16" fill="white"/>
+        </svg>"#;
+
+        let result = render_svg_to_rgba(svg, 16, 16);
+        assert!(result.is_ok(), "Valid SVG should render: {:?}", result);
+
+        let rgba = result.unwrap();
+        assert_eq!(rgba.len(), 16 * 16 * 4, "RGBA data should be width*height*4 bytes");
+    }
+
+    #[test]
+    fn test_render_svg_to_rgba_invalid_svg() {
+        let svg = "not valid svg at all";
+
+        let result = render_svg_to_rgba(svg, 16, 16);
+        assert!(result.is_err(), "Invalid SVG should fail");
+        assert!(
+            result.unwrap_err().to_string().contains("parse"),
+            "Error should mention parsing"
+        );
+    }
+
+    #[test]
+    fn test_render_svg_to_rgba_empty_svg() {
+        // An SVG with no visible content (all transparent)
+        let svg = r#"<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"></svg>"#;
+
+        let result = render_svg_to_rgba(svg, 16, 16);
+        assert!(result.is_err(), "Empty SVG should fail validation");
+        assert!(
+            result.unwrap_err().to_string().contains("transparent"),
+            "Error should mention transparency"
+        );
+    }
+
+    #[test]
+    fn test_render_svg_to_rgba_logo_renders() {
+        // Test that our actual logo SVG renders successfully
+        let result = render_svg_to_rgba(LOGO_SVG, 32, 32);
+        assert!(result.is_ok(), "Logo SVG should render: {:?}", result);
+    }
+
+    #[test]
+    fn test_render_svg_to_rgba_menu_icons_render() {
+        // Test all menu icon SVGs render successfully
+        let icons = [
+            ("ICON_HOME", ICON_HOME),
+            ("ICON_EDIT", ICON_EDIT),
+            ("ICON_MESSAGE", ICON_MESSAGE),
+            ("ICON_GITHUB", ICON_GITHUB),
+            ("ICON_BOOK", ICON_BOOK),
+            ("ICON_DISCORD", ICON_DISCORD),
+            ("ICON_AT_SIGN", ICON_AT_SIGN),
+            ("ICON_SETTINGS", ICON_SETTINGS),
+            ("ICON_LOG_OUT", ICON_LOG_OUT),
+        ];
+
+        for (name, svg) in icons {
+            let result = render_svg_to_rgba(svg, MENU_ICON_SIZE, MENU_ICON_SIZE);
+            assert!(result.is_ok(), "{} should render: {:?}", name, result);
+        }
     }
 }
