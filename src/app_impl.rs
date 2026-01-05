@@ -2330,6 +2330,7 @@ impl ScriptListApp {
     /// # Handled shortcuts
     /// - Cmd+W: Always closes window and resets to default state
     /// - Escape: Only closes window if `is_dismissable` is true AND actions popup is not showing
+    /// - Cmd+Shift+M: Cycle vibrancy material (for debugging)
     fn handle_global_shortcut_with_options(
         &mut self,
         event: &gpui::KeyDownEvent,
@@ -2338,11 +2339,21 @@ impl ScriptListApp {
     ) -> bool {
         let key_str = event.keystroke.key.to_lowercase();
         let has_cmd = event.keystroke.modifiers.platform;
+        let has_shift = event.keystroke.modifiers.shift;
 
         // Cmd+W always closes window
         if has_cmd && key_str == "w" {
             logging::log("KEY", "Cmd+W - closing window");
             self.close_and_reset_window(cx);
+            return true;
+        }
+
+        // Cmd+Shift+M cycles vibrancy material (for debugging)
+        if has_cmd && has_shift && key_str == "m" {
+            let result = crate::platform::cycle_vibrancy_material();
+            logging::log("KEY", &format!("Cmd+Shift+M - {}", result));
+            // Show HUD with the material name
+            self.show_hud(result, None, cx);
             return true;
         }
 

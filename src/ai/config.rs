@@ -15,7 +15,7 @@
 use std::env;
 
 /// Represents a detected AI provider configuration.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ProviderConfig {
     /// Unique identifier for the provider (e.g., "openai", "anthropic")
     pub provider_id: String,
@@ -60,6 +60,17 @@ impl ProviderConfig {
     /// Check if this provider has a valid (non-empty) API key.
     pub fn has_valid_key(&self) -> bool {
         !self.api_key.is_empty()
+    }
+}
+
+impl std::fmt::Debug for ProviderConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ProviderConfig")
+            .field("provider_id", &self.provider_id)
+            .field("display_name", &self.display_name)
+            .field("api_key", &"<redacted>")
+            .field("base_url", &self.base_url)
+            .finish()
     }
 }
 
@@ -109,16 +120,42 @@ pub mod env_vars {
     pub const GROQ_API_KEY: &str = "SCRIPT_KIT_GROQ_API_KEY";
     /// OpenRouter API key environment variable
     pub const OPENROUTER_API_KEY: &str = "SCRIPT_KIT_OPENROUTER_API_KEY";
+    /// Vercel API key environment variable
+    pub const VERCEL_API_KEY: &str = "SCRIPT_KIT_VERCEL_API_KEY";
+}
+
+/// Read an environment variable, trimming whitespace and filtering empty values.
+///
+/// Returns `None` if the variable is not set, is empty after trimming, or contains only whitespace.
+fn read_env_nonempty(name: &str) -> Option<String> {
+    env::var(name)
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
 }
 
 /// Detected API keys from environment.
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct DetectedKeys {
     pub openai: Option<String>,
     pub anthropic: Option<String>,
     pub google: Option<String>,
     pub groq: Option<String>,
     pub openrouter: Option<String>,
+    pub vercel: Option<String>,
+}
+
+impl std::fmt::Debug for DetectedKeys {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DetectedKeys")
+            .field("openai", &self.openai.is_some())
+            .field("anthropic", &self.anthropic.is_some())
+            .field("google", &self.google.is_some())
+            .field("groq", &self.groq.is_some())
+            .field("openrouter", &self.openrouter.is_some())
+            .field("vercel", &self.vercel.is_some())
+            .finish()
+    }
 }
 
 impl DetectedKeys {
@@ -127,21 +164,12 @@ impl DetectedKeys {
     /// Looks for the `SCRIPT_KIT_*_API_KEY` pattern and collects all found keys.
     pub fn from_environment() -> Self {
         Self {
-            openai: env::var(env_vars::OPENAI_API_KEY)
-                .ok()
-                .filter(|s| !s.is_empty()),
-            anthropic: env::var(env_vars::ANTHROPIC_API_KEY)
-                .ok()
-                .filter(|s| !s.is_empty()),
-            google: env::var(env_vars::GOOGLE_API_KEY)
-                .ok()
-                .filter(|s| !s.is_empty()),
-            groq: env::var(env_vars::GROQ_API_KEY)
-                .ok()
-                .filter(|s| !s.is_empty()),
-            openrouter: env::var(env_vars::OPENROUTER_API_KEY)
-                .ok()
-                .filter(|s| !s.is_empty()),
+            openai: read_env_nonempty(env_vars::OPENAI_API_KEY),
+            anthropic: read_env_nonempty(env_vars::ANTHROPIC_API_KEY),
+            google: read_env_nonempty(env_vars::GOOGLE_API_KEY),
+            groq: read_env_nonempty(env_vars::GROQ_API_KEY),
+            openrouter: read_env_nonempty(env_vars::OPENROUTER_API_KEY),
+            vercel: read_env_nonempty(env_vars::VERCEL_API_KEY),
         }
     }
 
@@ -152,6 +180,7 @@ impl DetectedKeys {
             || self.google.is_some()
             || self.groq.is_some()
             || self.openrouter.is_some()
+            || self.vercel.is_some()
     }
 
     /// Get a summary of which providers are available (for logging).
@@ -174,6 +203,9 @@ impl DetectedKeys {
         }
         if self.openrouter.is_some() {
             providers.push("OpenRouter");
+        }
+        if self.vercel.is_some() {
+            providers.push("Vercel");
         }
         providers
     }
@@ -322,6 +354,7 @@ mod tests {
             google: None,
             groq: None,
             openrouter: None,
+            vercel: None,
         };
         assert!(keys.has_any());
         assert_eq!(keys.available_providers(), vec!["OpenAI"]);
@@ -336,5 +369,83 @@ mod tests {
         let anthropic_models = default_models::anthropic();
         assert!(!anthropic_models.is_empty());
         assert!(anthropic_models.iter().any(|m| m.id.contains("claude")));
+    }
+
+    #[test]
+    fn test_provider_config_debug_redacts_api_key() {
+        let config = ProviderConfig::new("openai", "OpenAI", "sk-super-secret-key-12345");
+        let debug_output = format!("{:?}", config);
+
+        // The API key should NOT appear in debug output
+        assert!(!debug_output.contains("sk-super-secret-key-12345"));
+        // Instead, it should show <redacted>
+        assert!(debug_output.contains("<redacted>"));
+        // Other fields should still be visible
+        assert!(debug_output.contains("openai"));
+        assert!(debug_output.contains("OpenAI"));
+    }
+
+    #[test]
+    fn test_detected_keys_debug_shows_only_presence() {
+        let keys = DetectedKeys {
+            openai: Some("sk-secret-openai-key".to_string()),
+            anthropic: Some("sk-ant-secret-key".to_string()),
+            google: None,
+            groq: None,
+            openrouter: None,
+            vercel: Some("vk-vercel-key".to_string()),
+        };
+        let debug_output = format!("{:?}", keys);
+
+        // Actual key values should NOT appear
+        assert!(!debug_output.contains("sk-secret-openai-key"));
+        assert!(!debug_output.contains("sk-ant-secret-key"));
+        assert!(!debug_output.contains("vk-vercel-key"));
+        // Should show boolean presence indicators
+        assert!(debug_output.contains("openai: true"));
+        assert!(debug_output.contains("anthropic: true"));
+        assert!(debug_output.contains("google: false"));
+        assert!(debug_output.contains("vercel: true"));
+    }
+
+    #[test]
+    fn test_read_env_nonempty_trims_whitespace() {
+        // Set up test env var with whitespace
+        std::env::set_var("TEST_READ_ENV_WHITESPACE", "  test-value  ");
+        let result = read_env_nonempty("TEST_READ_ENV_WHITESPACE");
+        assert_eq!(result, Some("test-value".to_string()));
+        std::env::remove_var("TEST_READ_ENV_WHITESPACE");
+    }
+
+    #[test]
+    fn test_read_env_nonempty_filters_empty() {
+        // Set up test env var that's empty
+        std::env::set_var("TEST_READ_ENV_EMPTY", "");
+        let result = read_env_nonempty("TEST_READ_ENV_EMPTY");
+        assert_eq!(result, None);
+        std::env::remove_var("TEST_READ_ENV_EMPTY");
+    }
+
+    #[test]
+    fn test_read_env_nonempty_filters_whitespace_only() {
+        // Set up test env var with only whitespace
+        std::env::set_var("TEST_READ_ENV_WS_ONLY", "   ");
+        let result = read_env_nonempty("TEST_READ_ENV_WS_ONLY");
+        assert_eq!(result, None);
+        std::env::remove_var("TEST_READ_ENV_WS_ONLY");
+    }
+
+    #[test]
+    fn test_detected_keys_with_vercel() {
+        let keys = DetectedKeys {
+            openai: None,
+            anthropic: None,
+            google: None,
+            groq: None,
+            openrouter: None,
+            vercel: Some("vk-test".to_string()),
+        };
+        assert!(keys.has_any());
+        assert_eq!(keys.available_providers(), vec!["Vercel"]);
     }
 }

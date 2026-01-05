@@ -43,10 +43,17 @@ pub fn map_scriptkit_to_gpui_theme(sk_theme: &Theme) -> ThemeColor {
         }
     };
 
-    // Main background - MUST be transparent for vibrancy to work!
-    // The gpui-component Root wrapper applies this background, so if it's opaque,
-    // it will block the NSVisualEffectView blur from showing through.
-    theme_color.background = with_vibrancy(colors.background.main, opacity.main);
+    // Background opacity for vibrancy effect
+    // GPUI hides the CAChameleonLayer (tint), so we must add our own dark tint
+    // Need 70-80% opacity to stay dark over light backgrounds while still showing blur
+    let main_bg = if vibrancy_enabled {
+        let tint_alpha = opacity.main.clamp(0.70, 0.85);
+        with_vibrancy(colors.background.main, tint_alpha)
+    } else {
+        hex_to_hsla(colors.background.main) // Fully opaque when vibrancy disabled
+    };
+
+    theme_color.background = main_bg;
     theme_color.foreground = hex_to_hsla(colors.text.primary);
 
     // Accent colors (Script Kit yellow/gold) - keep opaque for visibility
@@ -57,16 +64,16 @@ pub fn map_scriptkit_to_gpui_theme(sk_theme: &Theme) -> ThemeColor {
     theme_color.border = hex_to_hsla(colors.ui.border);
     theme_color.input = with_vibrancy(colors.ui.border, opacity.search_box);
 
-    // List/sidebar colors - make transparent for vibrancy
-    theme_color.list = with_vibrancy(colors.background.main, opacity.main);
+    // List/sidebar colors - same high opacity as main background
+    theme_color.list = main_bg;
     theme_color.list_active = hex_to_hsla(colors.accent.selected_subtle); // Keep selection visible
     theme_color.list_active_border = hex_to_hsla(colors.accent.selected);
     theme_color.list_hover = hex_to_hsla(colors.accent.selected_subtle); // Keep hover visible
-    theme_color.list_even = with_vibrancy(colors.background.main, opacity.main);
-    theme_color.list_head = with_vibrancy(colors.background.title_bar, opacity.title_bar);
+    theme_color.list_even = main_bg;
+    theme_color.list_head = main_bg;
 
-    // Sidebar - make transparent for vibrancy
-    theme_color.sidebar = with_vibrancy(colors.background.title_bar, opacity.title_bar);
+    // Sidebar - same high opacity
+    theme_color.sidebar = main_bg;
     theme_color.sidebar_foreground = hex_to_hsla(colors.text.primary);
     theme_color.sidebar_border = hex_to_hsla(colors.ui.border);
     theme_color.sidebar_accent = hex_to_hsla(colors.accent.selected_subtle);
@@ -80,22 +87,22 @@ pub fn map_scriptkit_to_gpui_theme(sk_theme: &Theme) -> ThemeColor {
     theme_color.primary_hover = hex_to_hsla(colors.accent.selected);
     theme_color.primary_active = hex_to_hsla(colors.accent.selected);
 
-    // Secondary (muted buttons) - make transparent
-    theme_color.secondary = with_vibrancy(colors.background.search_box, opacity.search_box);
+    // Secondary (muted buttons) - keep some visibility but less opaque
+    theme_color.secondary = with_vibrancy(colors.background.search_box, 0.15);
     theme_color.secondary_foreground = hex_to_hsla(colors.text.primary);
-    theme_color.secondary_hover = with_vibrancy(colors.background.title_bar, opacity.title_bar);
-    theme_color.secondary_active = with_vibrancy(colors.background.title_bar, opacity.title_bar);
+    theme_color.secondary_hover = with_vibrancy(colors.background.title_bar, 0.2);
+    theme_color.secondary_active = with_vibrancy(colors.background.title_bar, 0.25);
 
-    // Muted (disabled states, subtle elements) - make transparent
-    theme_color.muted = with_vibrancy(colors.background.search_box, opacity.search_box);
+    // Muted (disabled states, subtle elements) - very subtle
+    theme_color.muted = with_vibrancy(colors.background.search_box, 0.1);
     theme_color.muted_foreground = hex_to_hsla(colors.text.muted);
 
-    // Title bar - make transparent for vibrancy
-    theme_color.title_bar = with_vibrancy(colors.background.title_bar, opacity.title_bar);
+    // Title bar - same high opacity
+    theme_color.title_bar = main_bg;
     theme_color.title_bar_border = hex_to_hsla(colors.ui.border);
 
-    // Popover - make transparent for vibrancy
-    theme_color.popover = with_vibrancy(colors.background.main, opacity.main);
+    // Popover - same high opacity
+    theme_color.popover = main_bg;
     theme_color.popover_foreground = hex_to_hsla(colors.text.primary);
 
     // Status colors

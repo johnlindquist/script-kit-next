@@ -15,8 +15,74 @@ use anyhow::{Context, Result};
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader};
 use std::sync::Arc;
+use std::time::Duration;
 
 use super::config::{default_models, DetectedKeys, ModelInfo, ProviderConfig};
+
+/// Default timeouts for API requests
+const CONNECT_TIMEOUT_SECS: u64 = 10;
+const READ_TIMEOUT_SECS: u64 = 60;
+
+/// Create a ureq::Agent with standard timeouts for API requests.
+fn create_agent() -> ureq::Agent {
+    ureq::Agent::config_builder()
+        .timeout_connect(Some(Duration::from_secs(CONNECT_TIMEOUT_SECS)))
+        .timeout_recv_body(Some(Duration::from_secs(READ_TIMEOUT_SECS)))
+        .build()
+        .new_agent()
+}
+
+/// Parse SSE (Server-Sent Events) stream and process data lines.
+///
+/// This helper handles:
+/// - CRLF line endings (trims trailing \r)
+/// - Multi-line data accumulation
+/// - [DONE] termination marker
+///
+/// # Arguments
+///
+/// * `reader` - A BufRead implementation (typically from response body)
+/// * `on_data` - Callback invoked for each complete data payload; returns true to continue, false to stop
+fn stream_sse_lines<R: BufRead>(
+    reader: R,
+    mut on_data: impl FnMut(&str) -> Result<bool>,
+) -> Result<()> {
+    let mut data_buf = String::new();
+
+    for line in reader.lines() {
+        let mut line = line.context("Failed to read SSE line")?;
+        // Handle CRLF endings
+        if line.ends_with('\r') {
+            line.pop();
+        }
+
+        // Blank line: end of event
+        if line.is_empty() {
+            if data_buf.is_empty() {
+                continue;
+            }
+            if data_buf == "[DONE]" {
+                break;
+            }
+
+            // on_data returns true to continue, false to stop
+            if !on_data(&data_buf)? {
+                break;
+            }
+            data_buf.clear();
+            continue;
+        }
+
+        // Collect data lines
+        if let Some(d) = line.strip_prefix("data: ") {
+            if !data_buf.is_empty() {
+                data_buf.push('\n');
+            }
+            data_buf.push_str(d);
+        }
+    }
+    Ok(())
+}
 
 /// Message for AI provider API calls.
 #[derive(Debug, Clone)]
@@ -109,6 +175,7 @@ pub trait AiProvider: Send + Sync {
 /// OpenAI provider implementation with real API calls.
 pub struct OpenAiProvider {
     config: ProviderConfig,
+    agent: ureq::Agent,
 }
 
 /// OpenAI API constants
@@ -119,6 +186,7 @@ impl OpenAiProvider {
     pub fn new(api_key: impl Into<String>) -> Self {
         Self {
             config: ProviderConfig::new("openai", "OpenAI", api_key),
+            agent: create_agent(),
         }
     }
 
@@ -126,6 +194,7 @@ impl OpenAiProvider {
     pub fn with_base_url(api_key: impl Into<String>, base_url: impl Into<String>) -> Self {
         Self {
             config: ProviderConfig::new("openai", "OpenAI", api_key).with_base_url(base_url),
+            agent: create_agent(),
         }
     }
 
@@ -210,7 +279,9 @@ impl AiProvider for OpenAiProvider {
             "Sending non-streaming request to OpenAI"
         );
 
-        let response = ureq::post(self.api_url())
+        let response = self
+            .agent
+            .post(self.api_url())
             .header("Content-Type", "application/json")
             .header(
                 "Authorization",
@@ -258,7 +329,9 @@ impl AiProvider for OpenAiProvider {
             "Starting streaming request to OpenAI"
         );
 
-        let response = ureq::post(self.api_url())
+        let response = self
+            .agent
+            .post(self.api_url())
             .header("Content-Type", "application/json")
             .header(
                 "Authorization",
@@ -268,22 +341,25 @@ impl AiProvider for OpenAiProvider {
             .send_json(&body)
             .context("Failed to send streaming request to OpenAI API")?;
 
-        // Read the SSE stream
+        // Read the SSE stream using the helper
         let reader = BufReader::new(response.into_body().into_reader());
 
-        for line in reader.lines() {
-            let line = line.context("Failed to read SSE line")?;
-
-            // Skip empty lines
-            if line.is_empty() {
-                continue;
+        stream_sse_lines(reader, |data| {
+            // Parse OpenAI streaming format
+            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(data) {
+                if let Some(content) = parsed
+                    .get("choices")
+                    .and_then(|c| c.as_array())
+                    .and_then(|arr| arr.first())
+                    .and_then(|choice| choice.get("delta"))
+                    .and_then(|delta| delta.get("content"))
+                    .and_then(|c| c.as_str())
+                {
+                    on_chunk(content.to_string());
+                }
             }
-
-            // Parse and extract content delta
-            if let Some(text) = Self::parse_sse_line(&line) {
-                on_chunk(text);
-            }
-        }
+            Ok(true) // continue processing
+        })?;
 
         tracing::debug!("Completed streaming response from OpenAI");
 
@@ -294,6 +370,7 @@ impl AiProvider for OpenAiProvider {
 /// Anthropic provider implementation with real API calls.
 pub struct AnthropicProvider {
     config: ProviderConfig,
+    agent: ureq::Agent,
 }
 
 /// Anthropic API constants
@@ -306,7 +383,21 @@ impl AnthropicProvider {
     pub fn new(api_key: impl Into<String>) -> Self {
         Self {
             config: ProviderConfig::new("anthropic", "Anthropic", api_key),
+            agent: create_agent(),
         }
+    }
+
+    /// Create with a custom base URL (for proxies).
+    pub fn with_base_url(api_key: impl Into<String>, base_url: impl Into<String>) -> Self {
+        Self {
+            config: ProviderConfig::new("anthropic", "Anthropic", api_key).with_base_url(base_url),
+            agent: create_agent(),
+        }
+    }
+
+    /// Get the API URL (uses custom base_url if set)
+    fn api_url(&self) -> &str {
+        self.config.base_url.as_deref().unwrap_or(ANTHROPIC_API_URL)
     }
 
     /// Build the request body for Anthropic API
@@ -402,7 +493,9 @@ impl AiProvider for AnthropicProvider {
             "Sending non-streaming request to Anthropic"
         );
 
-        let response = ureq::post(ANTHROPIC_API_URL)
+        let response = self
+            .agent
+            .post(self.api_url())
             .header("Content-Type", "application/json")
             .header("x-api-key", self.config.api_key())
             .header("anthropic-version", ANTHROPIC_VERSION)
@@ -414,16 +507,18 @@ impl AiProvider for AnthropicProvider {
             .read_json()
             .context("Failed to parse Anthropic response")?;
 
-        // Extract content from response
-        // Response format: {"content": [{"type": "text", "text": "..."}], ...}
+        // Extract content from response - join ALL content blocks, not just first
+        // Response format: {"content": [{"type": "text", "text": "..."}, ...], ...}
         let content = response_json
             .get("content")
             .and_then(|c| c.as_array())
-            .and_then(|arr| arr.first())
-            .and_then(|block| block.get("text"))
-            .and_then(|t| t.as_str())
-            .unwrap_or("")
-            .to_string();
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|b| b.get("text").and_then(|t| t.as_str()))
+                    .collect::<Vec<_>>()
+                    .join("")
+            })
+            .unwrap_or_default();
 
         tracing::debug!(
             content_len = content.len(),
@@ -447,7 +542,9 @@ impl AiProvider for AnthropicProvider {
             "Starting streaming request to Anthropic"
         );
 
-        let response = ureq::post(ANTHROPIC_API_URL)
+        let response = self
+            .agent
+            .post(self.api_url())
             .header("Content-Type", "application/json")
             .header("x-api-key", self.config.api_key())
             .header("anthropic-version", ANTHROPIC_VERSION)
@@ -455,22 +552,26 @@ impl AiProvider for AnthropicProvider {
             .send_json(&body)
             .context("Failed to send streaming request to Anthropic API")?;
 
-        // Read the SSE stream
+        // Read the SSE stream using the helper
         let reader = BufReader::new(response.into_body().into_reader());
 
-        for line in reader.lines() {
-            let line = line.context("Failed to read SSE line")?;
-
-            // Skip empty lines (SSE uses blank lines as event separators)
-            if line.is_empty() {
-                continue;
+        stream_sse_lines(reader, |data| {
+            // Parse Anthropic streaming format
+            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(data) {
+                // Anthropic streaming format:
+                // content_block_delta events: {"type": "content_block_delta", "delta": {"type": "text_delta", "text": "..."}}
+                if parsed.get("type").and_then(|t| t.as_str()) == Some("content_block_delta") {
+                    if let Some(delta) = parsed.get("delta") {
+                        if delta.get("type").and_then(|t| t.as_str()) == Some("text_delta") {
+                            if let Some(text) = delta.get("text").and_then(|t| t.as_str()) {
+                                on_chunk(text.to_string());
+                            }
+                        }
+                    }
+                }
             }
-
-            // Parse and extract content delta
-            if let Some(text) = Self::parse_sse_line(&line) {
-                on_chunk(text);
-            }
-        }
+            Ok(true) // continue processing
+        })?;
 
         tracing::debug!("Completed streaming response from Anthropic");
 
@@ -596,6 +697,248 @@ impl AiProvider for GroqProvider {
     }
 }
 
+/// Vercel AI Gateway URL
+const VERCEL_GATEWAY_URL: &str = "https://ai-gateway.vercel.sh/v1";
+
+/// Vercel AI Gateway provider implementation.
+///
+/// Routes requests through Vercel's AI Gateway, which supports multiple providers
+/// through namespaced model IDs (e.g., "openai/gpt-4o", "anthropic/claude-sonnet-4.5").
+pub struct VercelGatewayProvider {
+    config: ProviderConfig,
+    agent: ureq::Agent,
+}
+
+impl VercelGatewayProvider {
+    /// Create a new Vercel Gateway provider with the given API key.
+    pub fn new(api_key: impl Into<String>) -> Self {
+        Self {
+            config: ProviderConfig::new("vercel", "Vercel AI Gateway", api_key),
+            agent: create_agent(),
+        }
+    }
+
+    /// Get the chat completions API URL
+    fn api_url(&self) -> String {
+        format!("{}/chat/completions", VERCEL_GATEWAY_URL)
+    }
+
+    /// Normalize a model ID to include provider prefix if missing.
+    ///
+    /// Vercel Gateway expects namespaced model IDs like "openai/gpt-4o".
+    /// If no prefix is provided, defaults to "openai/".
+    fn normalize_model_id(model_id: &str) -> String {
+        if model_id.contains('/') {
+            model_id.to_string()
+        } else {
+            format!("openai/{}", model_id)
+        }
+    }
+
+    /// Build the request body for Vercel Gateway (OpenAI-compatible format)
+    fn build_request_body(
+        &self,
+        messages: &[ProviderMessage],
+        model_id: &str,
+        stream: bool,
+    ) -> serde_json::Value {
+        let api_messages: Vec<serde_json::Value> = messages
+            .iter()
+            .map(|m| {
+                serde_json::json!({
+                    "role": m.role,
+                    "content": m.content
+                })
+            })
+            .collect();
+
+        serde_json::json!({
+            "model": Self::normalize_model_id(model_id),
+            "stream": stream,
+            "messages": api_messages
+        })
+    }
+}
+
+impl AiProvider for VercelGatewayProvider {
+    fn provider_id(&self) -> &str {
+        &self.config.provider_id
+    }
+
+    fn display_name(&self) -> &str {
+        &self.config.display_name
+    }
+
+    fn available_models(&self) -> Vec<ModelInfo> {
+        // Vercel Gateway supports various models from different providers.
+        // These are curated defaults; the full list is available via GET https://ai-gateway.vercel.sh/v1/models
+        // Model IDs are namespaced: provider/model (e.g., "openai/gpt-5", "anthropic/claude-sonnet-4.5")
+        vec![
+            // OpenAI models
+            ModelInfo::new("openai/gpt-5", "GPT-5 (via Vercel)", "vercel", true, 400000),
+            ModelInfo::new(
+                "openai/gpt-5-mini",
+                "GPT-5 mini (via Vercel)",
+                "vercel",
+                true,
+                400000,
+            ),
+            ModelInfo::new(
+                "openai/gpt-4o",
+                "GPT-4o (via Vercel)",
+                "vercel",
+                true,
+                128000,
+            ),
+            ModelInfo::new("openai/o3", "o3 (via Vercel)", "vercel", true, 200000),
+            // Anthropic models
+            ModelInfo::new(
+                "anthropic/claude-sonnet-4.5",
+                "Claude Sonnet 4.5 (via Vercel)",
+                "vercel",
+                true,
+                200000,
+            ),
+            ModelInfo::new(
+                "anthropic/claude-opus-4.5",
+                "Claude Opus 4.5 (via Vercel)",
+                "vercel",
+                true,
+                200000,
+            ),
+            ModelInfo::new(
+                "anthropic/claude-sonnet-4",
+                "Claude Sonnet 4 (via Vercel)",
+                "vercel",
+                true,
+                200000,
+            ),
+            // Google models
+            ModelInfo::new(
+                "google/gemini-3-flash",
+                "Gemini 3 Flash (via Vercel)",
+                "vercel",
+                true,
+                1000000,
+            ),
+            ModelInfo::new(
+                "google/gemini-2.5-pro",
+                "Gemini 2.5 Pro (via Vercel)",
+                "vercel",
+                true,
+                1048576,
+            ),
+            // xAI models
+            ModelInfo::new("xai/grok-4", "Grok 4 (via Vercel)", "vercel", true, 256000),
+            // DeepSeek models
+            ModelInfo::new(
+                "deepseek/deepseek-r1",
+                "DeepSeek R1 (via Vercel)",
+                "vercel",
+                true,
+                160000,
+            ),
+        ]
+    }
+
+    fn send_message(&self, messages: &[ProviderMessage], model_id: &str) -> Result<String> {
+        let body = self.build_request_body(messages, model_id, false);
+
+        tracing::debug!(
+            model = model_id,
+            normalized_model = Self::normalize_model_id(model_id),
+            message_count = messages.len(),
+            "Sending non-streaming request to Vercel Gateway"
+        );
+
+        let response = self
+            .agent
+            .post(&self.api_url())
+            .header("Content-Type", "application/json")
+            .header(
+                "Authorization",
+                &format!("Bearer {}", self.config.api_key()),
+            )
+            .send_json(&body)
+            .context("Failed to send request to Vercel Gateway")?;
+
+        let response_json: serde_json::Value = response
+            .into_body()
+            .read_json()
+            .context("Failed to parse Vercel Gateway response")?;
+
+        // OpenAI-compatible response format
+        let content = response_json
+            .get("choices")
+            .and_then(|c| c.as_array())
+            .and_then(|arr| arr.first())
+            .and_then(|choice| choice.get("message"))
+            .and_then(|msg| msg.get("content"))
+            .and_then(|c| c.as_str())
+            .unwrap_or("")
+            .to_string();
+
+        tracing::debug!(
+            content_len = content.len(),
+            "Received non-streaming response from Vercel Gateway"
+        );
+
+        Ok(content)
+    }
+
+    fn stream_message(
+        &self,
+        messages: &[ProviderMessage],
+        model_id: &str,
+        on_chunk: StreamCallback,
+    ) -> Result<()> {
+        let body = self.build_request_body(messages, model_id, true);
+
+        tracing::debug!(
+            model = model_id,
+            normalized_model = Self::normalize_model_id(model_id),
+            message_count = messages.len(),
+            "Starting streaming request to Vercel Gateway"
+        );
+
+        let response = self
+            .agent
+            .post(&self.api_url())
+            .header("Content-Type", "application/json")
+            .header(
+                "Authorization",
+                &format!("Bearer {}", self.config.api_key()),
+            )
+            .header("Accept", "text/event-stream")
+            .send_json(&body)
+            .context("Failed to send streaming request to Vercel Gateway")?;
+
+        // Read the SSE stream using the helper (OpenAI-compatible format)
+        let reader = BufReader::new(response.into_body().into_reader());
+
+        stream_sse_lines(reader, |data| {
+            // Parse OpenAI-compatible streaming format
+            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(data) {
+                if let Some(content) = parsed
+                    .get("choices")
+                    .and_then(|c| c.as_array())
+                    .and_then(|arr| arr.first())
+                    .and_then(|choice| choice.get("delta"))
+                    .and_then(|delta| delta.get("content"))
+                    .and_then(|c| c.as_str())
+                {
+                    on_chunk(content.to_string());
+                }
+            }
+            Ok(true) // continue processing
+        })?;
+
+        tracing::debug!("Completed streaming response from Vercel Gateway");
+
+        Ok(())
+    }
+}
+
 /// Registry of available AI providers.
 ///
 /// The registry automatically discovers available providers based on
@@ -634,6 +977,10 @@ impl ProviderRegistry {
 
         if let Some(key) = keys.groq {
             registry.register(Arc::new(GroqProvider::new(key)));
+        }
+
+        if let Some(key) = keys.vercel {
+            registry.register(Arc::new(VercelGatewayProvider::new(key)));
         }
 
         // Log which providers are available (without exposing keys)
@@ -904,5 +1251,150 @@ mod tests {
 
         let provider = registry.find_provider_for_model("nonexistent");
         assert!(provider.is_none());
+    }
+
+    #[test]
+    fn test_stream_sse_lines_basic() {
+        use std::io::Cursor;
+
+        // Simulate SSE stream with basic data
+        let sse_data = "data: hello\n\ndata: world\n\n";
+        let reader = Cursor::new(sse_data);
+
+        let mut collected = Vec::new();
+        stream_sse_lines(reader, |data| {
+            collected.push(data.to_string());
+            Ok(true)
+        })
+        .unwrap();
+
+        assert_eq!(collected, vec!["hello", "world"]);
+    }
+
+    #[test]
+    fn test_stream_sse_lines_done_marker() {
+        use std::io::Cursor;
+
+        // [DONE] should stop processing
+        let sse_data = "data: first\n\ndata: [DONE]\n\ndata: should_not_see\n\n";
+        let reader = Cursor::new(sse_data);
+
+        let mut collected = Vec::new();
+        stream_sse_lines(reader, |data| {
+            collected.push(data.to_string());
+            Ok(true)
+        })
+        .unwrap();
+
+        assert_eq!(collected, vec!["first"]);
+    }
+
+    #[test]
+    fn test_stream_sse_lines_crlf() {
+        use std::io::Cursor;
+
+        // Should handle CRLF line endings
+        let sse_data = "data: with_cr\r\n\r\n";
+        let reader = Cursor::new(sse_data);
+
+        let mut collected = Vec::new();
+        stream_sse_lines(reader, |data| {
+            collected.push(data.to_string());
+            Ok(true)
+        })
+        .unwrap();
+
+        assert_eq!(collected, vec!["with_cr"]);
+    }
+
+    #[test]
+    fn test_stream_sse_lines_callback_stop() {
+        use std::io::Cursor;
+
+        // Callback returning false should stop processing
+        let sse_data = "data: first\n\ndata: second\n\ndata: third\n\n";
+        let reader = Cursor::new(sse_data);
+
+        let mut collected = Vec::new();
+        stream_sse_lines(reader, |data| {
+            collected.push(data.to_string());
+            Ok(collected.len() < 2) // Stop after 2 items
+        })
+        .unwrap();
+
+        assert_eq!(collected, vec!["first", "second"]);
+    }
+
+    #[test]
+    fn test_vercel_provider() {
+        let provider = VercelGatewayProvider::new("test-key");
+        assert_eq!(provider.provider_id(), "vercel");
+        assert_eq!(provider.display_name(), "Vercel AI Gateway");
+
+        let models = provider.available_models();
+        assert!(!models.is_empty());
+        assert!(models.iter().any(|m| m.id.contains("openai/")));
+        assert!(models.iter().any(|m| m.id.contains("anthropic/")));
+    }
+
+    #[test]
+    fn test_vercel_normalize_model_id() {
+        // Already prefixed - should not change
+        assert_eq!(
+            VercelGatewayProvider::normalize_model_id("openai/gpt-4o"),
+            "openai/gpt-4o"
+        );
+        assert_eq!(
+            VercelGatewayProvider::normalize_model_id("anthropic/claude-sonnet-4-20250514"),
+            "anthropic/claude-sonnet-4-20250514"
+        );
+
+        // Not prefixed - should add openai/
+        assert_eq!(
+            VercelGatewayProvider::normalize_model_id("gpt-4o"),
+            "openai/gpt-4o"
+        );
+        assert_eq!(
+            VercelGatewayProvider::normalize_model_id("gpt-4o-mini"),
+            "openai/gpt-4o-mini"
+        );
+    }
+
+    #[test]
+    fn test_vercel_request_body_normalizes_model() {
+        let provider = VercelGatewayProvider::new("test-key");
+        let messages = vec![ProviderMessage::user("Hello")];
+
+        // Test with unprefixed model
+        let body = provider.build_request_body(&messages, "gpt-4o", false);
+        assert_eq!(body["model"], "openai/gpt-4o");
+
+        // Test with prefixed model
+        let body =
+            provider.build_request_body(&messages, "anthropic/claude-sonnet-4-20250514", true);
+        assert_eq!(body["model"], "anthropic/claude-sonnet-4-20250514");
+    }
+
+    #[test]
+    fn test_anthropic_api_url_respects_base_url() {
+        // Default URL
+        let provider = AnthropicProvider::new("test-key");
+        assert_eq!(provider.api_url(), ANTHROPIC_API_URL);
+
+        // Custom base URL
+        let provider = AnthropicProvider::with_base_url("test-key", "https://custom.proxy.com/v1");
+        assert_eq!(provider.api_url(), "https://custom.proxy.com/v1");
+    }
+
+    #[test]
+    fn test_registry_with_vercel() {
+        let mut registry = ProviderRegistry::new();
+        registry.register(Arc::new(VercelGatewayProvider::new("test")));
+
+        assert!(registry.has_any_provider());
+        assert!(registry.get_provider("vercel").is_some());
+
+        let models = registry.get_all_models();
+        assert!(models.iter().any(|m| m.provider == "vercel"));
     }
 }

@@ -411,6 +411,399 @@ pub const NS_WINDOW_COLLECTION_BEHAVIOR_MOVE_TO_ACTIVE_SPACE: u64 = 1 << 1;
 pub const NS_WINDOW_COLLECTION_BEHAVIOR_FULL_SCREEN_AUXILIARY: u64 = 1 << 8;
 
 // ============================================================================
+// Window Vibrancy Material Configuration
+// ============================================================================
+
+/// NSVisualEffectMaterial values
+/// See: https://developer.apple.com/documentation/appkit/nsvisualeffectmaterial
+#[cfg(target_os = "macos")]
+#[allow(dead_code)]
+pub mod ns_visual_effect_material {
+    pub const TITLEBAR: isize = 3;
+    pub const SELECTION: isize = 4; // What GPUI uses by default (colorless)
+    pub const MENU: isize = 5;
+    pub const POPOVER: isize = 6;
+    pub const SIDEBAR: isize = 7;
+    pub const HEADER_VIEW: isize = 10;
+    pub const SHEET: isize = 11;
+    pub const WINDOW_BACKGROUND: isize = 12;
+    pub const HUD_WINDOW: isize = 13; // Dark, high contrast - good for dark UIs
+    pub const FULL_SCREEN_UI: isize = 15;
+    pub const TOOL_TIP: isize = 17;
+    pub const CONTENT_BACKGROUND: isize = 18;
+    pub const UNDER_WINDOW_BACKGROUND: isize = 21;
+    pub const UNDER_PAGE_BACKGROUND: isize = 22;
+
+    // Private/undocumented materials that Raycast might use
+    // These provide more control over the appearance
+    pub const DARK: isize = 2; // NSVisualEffectMaterialDark (deprecated but works)
+    pub const MEDIUM_DARK: isize = 8; // Darker variant
+    pub const ULTRA_DARK: isize = 9; // Darkest variant
+
+    /// All materials to cycle through, with names for logging
+    pub const ALL_MATERIALS: &[(isize, &str)] = &[
+        (DARK, "Dark (2) - deprecated"),
+        (TITLEBAR, "Titlebar (3)"),
+        (SELECTION, "Selection (4) - GPUI default"),
+        (MENU, "Menu (5)"),
+        (POPOVER, "Popover (6)"),
+        (SIDEBAR, "Sidebar (7)"),
+        (MEDIUM_DARK, "MediumDark (8) - undocumented"),
+        (ULTRA_DARK, "UltraDark (9) - undocumented"),
+        (HEADER_VIEW, "HeaderView (10)"),
+        (SHEET, "Sheet (11)"),
+        (WINDOW_BACKGROUND, "WindowBackground (12)"),
+        (HUD_WINDOW, "HudWindow (13)"),
+        (FULL_SCREEN_UI, "FullScreenUI (15)"),
+        (TOOL_TIP, "ToolTip (17)"),
+        (CONTENT_BACKGROUND, "ContentBackground (18)"),
+        (UNDER_WINDOW_BACKGROUND, "UnderWindowBackground (21)"),
+        (UNDER_PAGE_BACKGROUND, "UnderPageBackground (22)"),
+    ];
+}
+
+/// Current material index for cycling
+#[cfg(target_os = "macos")]
+static CURRENT_MATERIAL_INDEX: std::sync::atomic::AtomicUsize =
+    std::sync::atomic::AtomicUsize::new(0);
+
+/// Current blending mode (0 = behindWindow, 1 = withinWindow)
+#[cfg(target_os = "macos")]
+static CURRENT_BLENDING_MODE: std::sync::atomic::AtomicUsize =
+    std::sync::atomic::AtomicUsize::new(0);
+
+/// Current appearance index for cycling
+#[cfg(target_os = "macos")]
+static CURRENT_APPEARANCE_INDEX: std::sync::atomic::AtomicUsize =
+    std::sync::atomic::AtomicUsize::new(0);
+
+/// All appearance options to try
+#[cfg(target_os = "macos")]
+const APPEARANCE_OPTIONS: &[&str] = &[
+    "DarkAqua",
+    "VibrantDark",
+    "Aqua",
+    "VibrantLight",
+    "None", // No forced appearance - use system default
+];
+
+// NSAppearance name constants
+#[cfg(target_os = "macos")]
+#[link(name = "AppKit", kind = "framework")]
+extern "C" {
+    static NSAppearanceNameDarkAqua: id;
+    #[allow(dead_code)]
+    static NSAppearanceNameAqua: id;
+    static NSAppearanceNameVibrantDark: id;
+    #[allow(dead_code)]
+    static NSAppearanceNameVibrantLight: id;
+}
+
+/// Configure the vibrancy blur for the main window to look good on ANY background.
+///
+/// The key insight from Raycast/Spotlight/Alfred: they force the window's appearance
+/// to `NSAppearanceNameVibrantDark`, which makes NSVisualEffectView always use its
+/// dark rendering path regardless of system appearance or what's behind the window.
+///
+/// This function:
+/// 1. Forces window appearance to VibrantDark (CRITICAL - this is the main fix)
+/// 2. Sets the blur material to HUD_WINDOW for a dark, high-contrast effect
+/// 3. Ensures the effect is always active and uses behind-window blending
+///
+/// # macOS Behavior
+///
+/// Sets the window's NSAppearance to VibrantDark, then configures the
+/// NSVisualEffectView with appropriate material and state.
+///
+/// # Safety
+///
+/// Uses Objective-C message sending internally.
+#[cfg(target_os = "macos")]
+pub fn configure_window_vibrancy_material() {
+    debug_assert_main_thread();
+    unsafe {
+        let window = match window_manager::get_main_window() {
+            Some(w) => w,
+            None => {
+                logging::log(
+                    "PANEL",
+                    "WARNING: Main window not registered, cannot configure vibrancy material",
+                );
+                return;
+            }
+        };
+
+        // Set window appearance to VibrantDark for consistent blur rendering
+        // VibrantDark provides better vibrancy effects than DarkAqua - this is what
+        // Raycast/Spotlight use for their blur effect
+        let vibrant_dark: id = msg_send![
+            class!(NSAppearance),
+            appearanceNamed: NSAppearanceNameVibrantDark
+        ];
+        if !vibrant_dark.is_null() {
+            let _: () = msg_send![window, setAppearance: vibrant_dark];
+            logging::log("PANEL", "Set window appearance to VibrantDark");
+        }
+
+        // Set window background color to clear - this is CRITICAL for vibrancy
+        // Without this, the window's default background can block the blur effect
+        let clear_color: id = msg_send![class!(NSColor), clearColor];
+        let _: () = msg_send![window, setBackgroundColor: clear_color];
+
+        // Mark window as non-opaque to allow transparency/vibrancy
+        let _: () = msg_send![window, setOpaque: false];
+
+        logging::log(
+            "PANEL",
+            "Set window backgroundColor to clearColor, opaque=false",
+        );
+
+        // Get the content view
+        let content_view: id = msg_send![window, contentView];
+        if content_view.is_null() {
+            logging::log("PANEL", "WARNING: Window has no content view");
+            return;
+        }
+
+        // Recursively find and configure ALL NSVisualEffectViews
+        // Expert feedback: GPUI may nest effect views, so we need to walk the whole tree
+        let mut count = 0;
+        configure_visual_effect_views_recursive(content_view, &mut count);
+
+        if count == 0 {
+            logging::log(
+                "PANEL",
+                "WARNING: No NSVisualEffectView found in window hierarchy",
+            );
+        } else {
+            logging::log(
+                "PANEL",
+                &format!(
+                    "Configured {} NSVisualEffectView(s): VibrantDark + ULTRA_DARK + emphasized",
+                    count
+                ),
+            );
+        }
+    }
+}
+
+/// Recursively walk view hierarchy and configure all NSVisualEffectViews
+#[cfg(target_os = "macos")]
+unsafe fn configure_visual_effect_views_recursive(view: id, count: &mut usize) {
+    // Check if this view is an NSVisualEffectView
+    let is_vev: bool = msg_send![view, isKindOfClass: class!(NSVisualEffectView)];
+    if is_vev {
+        // ULTRA_DARK (9) - undocumented darkest material
+        let _: () = msg_send![view, setMaterial: ns_visual_effect_material::ULTRA_DARK];
+        // Always active (not dependent on window focus)
+        let _: () = msg_send![view, setState: 1isize];
+        // BehindWindow blending
+        let _: () = msg_send![view, setBlendingMode: 0isize];
+        // Emphasized for more contrast
+        let _: () = msg_send![view, setEmphasized: true];
+        *count += 1;
+    }
+
+    // Recurse into subviews
+    let subviews: id = msg_send![view, subviews];
+    if !subviews.is_null() {
+        let subview_count: usize = msg_send![subviews, count];
+        for i in 0..subview_count {
+            let child: id = msg_send![subviews, objectAtIndex: i];
+            configure_visual_effect_views_recursive(child, count);
+        }
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn configure_window_vibrancy_material() {
+    // No-op on non-macOS platforms
+}
+
+/// Cycle through ALL vibrancy options - material, appearance, blending mode, emphasized.
+/// Press Cmd+Shift+M repeatedly to find what works.
+/// Returns a description of the current configuration.
+#[cfg(target_os = "macos")]
+pub fn cycle_vibrancy_material() -> String {
+    use std::sync::atomic::Ordering;
+
+    debug_assert_main_thread();
+
+    let materials = ns_visual_effect_material::ALL_MATERIALS;
+    let appearances = APPEARANCE_OPTIONS;
+
+    // Get current indices
+    let mat_idx = CURRENT_MATERIAL_INDEX.load(Ordering::SeqCst);
+    let app_idx = CURRENT_APPEARANCE_INDEX.load(Ordering::SeqCst);
+    let blend_mode = CURRENT_BLENDING_MODE.load(Ordering::SeqCst);
+
+    // Increment material, wrap around and bump appearance when materials exhausted
+    let new_mat_idx = (mat_idx + 1) % materials.len();
+    CURRENT_MATERIAL_INDEX.store(new_mat_idx, Ordering::SeqCst);
+
+    // When materials wrap, cycle appearance
+    if new_mat_idx == 0 {
+        let new_app_idx = (app_idx + 1) % appearances.len();
+        CURRENT_APPEARANCE_INDEX.store(new_app_idx, Ordering::SeqCst);
+
+        // When appearances wrap, toggle blending mode
+        if new_app_idx == 0 {
+            CURRENT_BLENDING_MODE.store(blend_mode ^ 1, Ordering::SeqCst);
+        }
+    }
+
+    // Get current values after update
+    let mat_idx = CURRENT_MATERIAL_INDEX.load(Ordering::SeqCst);
+    let app_idx = CURRENT_APPEARANCE_INDEX.load(Ordering::SeqCst);
+    let blend_mode = CURRENT_BLENDING_MODE.load(Ordering::SeqCst);
+
+    let (material_value, material_name) = materials[mat_idx];
+    let appearance_name = appearances[app_idx];
+    let blend_name = if blend_mode == 0 { "Behind" } else { "Within" };
+
+    unsafe {
+        let window = match window_manager::get_main_window() {
+            Some(w) => w,
+            None => return "ERROR: No main window".to_string(),
+        };
+
+        // Set window appearance
+        if appearance_name != "None" {
+            let appearance_id: id = match appearance_name {
+                "DarkAqua" => NSAppearanceNameDarkAqua,
+                "VibrantDark" => NSAppearanceNameVibrantDark,
+                "Aqua" => NSAppearanceNameAqua,
+                "VibrantLight" => NSAppearanceNameVibrantLight,
+                _ => nil,
+            };
+            if !appearance_id.is_null() {
+                let appearance: id =
+                    msg_send![class!(NSAppearance), appearanceNamed: appearance_id];
+                if !appearance.is_null() {
+                    let _: () = msg_send![window, setAppearance: appearance];
+                }
+            }
+        } else {
+            // Clear appearance - use system default
+            let _: () = msg_send![window, setAppearance: nil];
+        }
+
+        let content_view: id = msg_send![window, contentView];
+        if content_view.is_null() {
+            return "ERROR: No content view".to_string();
+        }
+
+        let subviews: id = msg_send![content_view, subviews];
+        if subviews.is_null() {
+            return "ERROR: No subviews".to_string();
+        }
+
+        let count: usize = msg_send![subviews, count];
+        for i in 0..count {
+            let subview: id = msg_send![subviews, objectAtIndex: i];
+            let is_visual_effect_view: bool =
+                msg_send![subview, isKindOfClass: class!(NSVisualEffectView)];
+
+            if is_visual_effect_view {
+                // Set material
+                let _: () = msg_send![subview, setMaterial: material_value];
+
+                // Set blending mode
+                let _: () = msg_send![subview, setBlendingMode: blend_mode as isize];
+
+                // Always active
+                let _: () = msg_send![subview, setState: 1isize];
+
+                // Toggle emphasized based on material index (try both)
+                let emphasized = mat_idx.is_multiple_of(2);
+                let _: () = msg_send![subview, setEmphasized: emphasized];
+
+                // Force redraw
+                let _: () = msg_send![subview, setNeedsDisplay: true];
+                let _: () = msg_send![window, display];
+
+                let msg = format!(
+                    "{} | {} | {} | {}",
+                    material_name,
+                    appearance_name,
+                    blend_name,
+                    if emphasized { "Emph" } else { "NoEmph" }
+                );
+                logging::log("VIBRANCY", &msg);
+                return msg;
+            }
+        }
+    }
+
+    "ERROR: No NSVisualEffectView found".to_string()
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn cycle_vibrancy_material() -> String {
+    "Vibrancy cycling not supported on this platform".to_string()
+}
+
+/// Toggle between blending modes (behindWindow vs withinWindow)
+/// Call with Cmd+Shift+B
+#[cfg(target_os = "macos")]
+#[allow(dead_code)]
+pub fn toggle_blending_mode() -> String {
+    use std::sync::atomic::Ordering;
+
+    debug_assert_main_thread();
+
+    // Toggle between 0 (behindWindow) and 1 (withinWindow)
+    let current = CURRENT_BLENDING_MODE.fetch_xor(1, Ordering::SeqCst);
+    let new_mode = current ^ 1;
+    let mode_name = if new_mode == 0 {
+        "BehindWindow"
+    } else {
+        "WithinWindow"
+    };
+
+    unsafe {
+        let window = match window_manager::get_main_window() {
+            Some(w) => w,
+            None => return "ERROR: No main window".to_string(),
+        };
+
+        let content_view: id = msg_send![window, contentView];
+        if content_view.is_null() {
+            return "ERROR: No content view".to_string();
+        }
+
+        let subviews: id = msg_send![content_view, subviews];
+        if subviews.is_null() {
+            return "ERROR: No subviews".to_string();
+        }
+
+        let count: usize = msg_send![subviews, count];
+        for i in 0..count {
+            let subview: id = msg_send![subviews, objectAtIndex: i];
+            let is_visual_effect_view: bool =
+                msg_send![subview, isKindOfClass: class!(NSVisualEffectView)];
+
+            if is_visual_effect_view {
+                let _: () = msg_send![subview, setBlendingMode: new_mode as isize];
+                let _: () = msg_send![subview, setNeedsDisplay: true];
+
+                let msg = format!("Blending: {}", mode_name);
+                logging::log("VIBRANCY", &msg);
+                return msg;
+            }
+        }
+    }
+
+    "ERROR: No NSVisualEffectView found".to_string()
+}
+
+#[cfg(not(target_os = "macos"))]
+#[allow(dead_code)]
+pub fn toggle_blending_mode() -> String {
+    "Blending mode toggle not supported on this platform".to_string()
+}
+
+// ============================================================================
 // Actions Popup Window Configuration
 // ============================================================================
 
@@ -451,8 +844,8 @@ pub unsafe fn configure_actions_popup_window(window: id) {
     // Hide when app deactivates (loses focus to another app)
     let _: () = msg_send![window, setHidesOnDeactivate: true];
 
-    // Disable macOS window shadow (the vibrancy blur provides enough visual separation)
-    let _: () = msg_send![window, setHasShadow: false];
+    // Enable shadow - Raycast/Spotlight use shadow for depth perception
+    let _: () = msg_send![window, setHasShadow: true];
 
     // Disable close animation (NSWindowAnimationBehaviorNone = 2)
     // This prevents the white flash on dismiss

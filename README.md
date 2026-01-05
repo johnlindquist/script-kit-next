@@ -222,6 +222,26 @@ export default {
 };
 ```
 
+### Environment Variables (API Keys)
+
+Set these in your shell profile (`~/.zshrc` or `~/.bashrc`) to enable AI features:
+
+```bash
+# AI Chat providers (at least one required for AI window)
+export SCRIPT_KIT_OPENAI_API_KEY="sk-..."
+export SCRIPT_KIT_ANTHROPIC_API_KEY="sk-ant-..."
+
+# Vercel AI Gateway (routes to multiple providers)
+export SCRIPT_KIT_VERCEL_API_KEY="your-vercel-ai-gateway-key"
+
+# Additional providers
+export SCRIPT_KIT_GOOGLE_API_KEY="..."
+export SCRIPT_KIT_GROQ_API_KEY="..."
+export SCRIPT_KIT_OPENROUTER_API_KEY="..."
+```
+
+After adding, restart your terminal or run `source ~/.zshrc`.
+
 ### `~/.scriptkit/theme.json`
 
 Customize the look and feel:
@@ -303,7 +323,7 @@ cargo bundle --release
 - **Clipboard History** - Access your clipboard history (enable in config)
 - **App Launcher** - Quick launch applications
 - **Notes Window** - Floating notes with Markdown support (`Cmd+Shift+N`)
-- **AI Chat** - BYOK chat interface (`Cmd+Shift+Space`, requires API key)
+- **AI Chat** - BYOK chat interface (`Cmd+Shift+Space`, supports OpenAI, Anthropic, Vercel AI Gateway)
 - **System Tray** - Menu bar icon with quick actions
 - **Global Hotkeys** - Trigger scripts from anywhere
 

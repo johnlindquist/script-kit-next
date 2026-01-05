@@ -70,9 +70,9 @@ cargo check && cargo clippy --all-targets -- -D warnings && cargo test
 - **Logging:** `tracing` JSONL, typed fields, include `correlation_id`, `duration_ms`  
 - **Beads:** `hive_start` → progress → `swarm_complete` (**not** `hive_close`)  
 - **Tests:** `tests/smoke/`=E2E; `tests/sdk/`=SDK; `--features system-tests` for clipboard/accessibility  
-- **SDK preload:** tests import `../../scripts/kit-sdk`; runtime uses embedded SDK extracted to `~/.sk/kit/sdk/`  
+- **SDK preload:** tests import `../../scripts/kit-sdk`; runtime uses embedded SDK extracted to `~/.scriptkit/sdk/`  
 - **Arrow keys:** match both `"up"|"arrowup"`, `"down"|"arrowdown"`, `"left"|"arrowleft"`, `"right"|"arrowright"`  
-- **Config-driven UI:** font sizes/padding from `~/.sk/kit/config.ts`; use `config.get_*()` helpers  
+- **Config-driven UI:** font sizes/padding from `~/.scriptkit/config.ts`; use `config.get_*()` helpers  
 - **Secondary windows:** Notes in `src/notes/` (`openNotes`), AI in `src/ai/` (`openAi`)  
 
 ---
@@ -128,7 +128,7 @@ import '../../scripts/kit-sdk';
 
 ---
 
-## 5. Scriptlet bundle frontmatter (`~/.sk/kit/snippets/*.md`)
+## 5. Scriptlet bundle frontmatter (`~/.scriptkit/snippets/*.md`)
 
 Optional YAML frontmatter (line 1 must be `---`, closed by `---` on its own line):
 ```md
@@ -176,7 +176,7 @@ Troubleshooting:
 - Frontmatter not parsed → must start on line 1 with `---` and have closing `---` on its own line; fix YAML indentation/quotes
 - Icon not showing → verify icon name exists; check `[CACHE]` logs for resolution; use default mapping names
 - HUD validation error → use the reported line number; common fix: quote special chars
-- Metadata not updating → refresh cache by touching file; check `~/.sk/kit/logs/script-kit-gpui.jsonl` for cache logs
+- Metadata not updating → refresh cache by touching file; check `~/.scriptkit/logs/script-kit-gpui.jsonl` for cache logs
 
 ---
 
@@ -194,7 +194,7 @@ Log filtering helpers:
 ```bash
 echo '{"type":"run","path":".../test-editor-height.ts"}' | SCRIPT_KIT_AI_LOG=1 ./target/debug/script-kit-gpui 2>&1 | \
   grep -iE 'RESIZE|editor|height_for_view|700'
-tail -50 ~/.sk/kit/logs/script-kit-gpui.jsonl | grep -i resize
+tail -50 ~/.scriptkit/logs/script-kit-gpui.jsonl | grep -i resize
 ```
 Editor height test “good signs” in logs often include:
 - `height_for_view(EditorPrompt) = 700`
@@ -462,7 +462,7 @@ Best practices:
 ## 15. Logging + observability
 
 Use `tracing` + `tracing-subscriber`:
-- JSONL to `~/.sk/kit/logs/script-kit-gpui.jsonl`
+- JSONL to `~/.scriptkit/logs/script-kit-gpui.jsonl`
 - optional pretty output for humans
 
 JSONL line example:
@@ -490,9 +490,9 @@ Filter by targets (module paths), e.g. `script_kit::ui`, `script_kit::executor`,
 Hot reload: `./dev.sh` (cargo-watch).  
 Triggers:
 - `.rs` → rebuild
-- `~/.sk/kit/theme.json` → live reload
-- `~/.sk/kit/scripts/` → live reload
-- `~/.sk/kit/config.ts` → restart
+- `~/.scriptkit/theme.json` → live reload
+- `~/.scriptkit/scripts/` → live reload
+- `~/.scriptkit/config.ts` → restart
 
 Debug:
 - Logs panel: `Cmd+L`
@@ -519,6 +519,57 @@ Thresholds: P95 key latency <50ms; single key <16.67ms; scroll op <8ms.
 
 ---
 
+## 17b. GPUI Vibrancy Gotcha (CRITICAL - hard to debug)
+
+**Problem:** App looks washed out / too transparent over white backgrounds, even after configuring `NSVisualEffectView` materials correctly.
+
+**Root Cause:** GPUI intentionally hides the macOS `CAChameleonLayer` (the native tint layer that provides dark tinting on top of blur). In the GPUI source code (`~/.cargo/git/checkouts/zed-*/`):
+
+```rust
+// blurred_view_update_layer in GPUI hides the tint:
+if class_name.isEqualToString("CAChameleonLayer") {
+    // Remove the desktop tinting effect.
+    let _: () = msg_send![layer, setHidden: YES];
+}
+```
+
+This means:
+- Changing `NSVisualEffectMaterial` (SIDEBAR, HUD_WINDOW, POPOVER, etc.) has **no visible effect**
+- The material's tint color is never applied because the CAChameleonLayer is hidden
+- Native macOS apps like Raycast/Spotlight get automatic dark tinting; we do not
+
+**The Fix:** Provide our own dark tint via GPUI theme colors at **70-85% opacity**:
+
+```rust
+// src/theme/gpui_integration.rs
+let main_bg = if vibrancy_enabled {
+    // GPUI hides CAChameleonLayer, so we must add our own dark tint
+    // Need 70-85% opacity to stay dark over light backgrounds
+    let tint_alpha = opacity.main.clamp(0.70, 0.85);
+    with_vibrancy(colors.background.main, tint_alpha)
+} else {
+    hex_to_hsla(colors.background.main) // Fully opaque when vibrancy disabled
+};
+```
+
+**What doesn't work (we tried these):**
+- Changing material from SIDEBAR → HUD_WINDOW → ULTRA_DARK → POPOVER
+- Changing appearance from DarkAqua → VibrantDark
+- Setting `window.backgroundColor = clearColor`
+- Setting `window.isOpaque = false`
+- Recursively configuring all NSVisualEffectViews in the view hierarchy
+
+All of these are correct and should be applied, but they **won't produce visible tinting** because GPUI hides the tint layer.
+
+**Key files:**
+- `src/theme/gpui_integration.rs:49-54` - The fix (background alpha 70-85%)
+- `src/platform.rs` - NSVisualEffectView configuration (still useful for blur)
+- `expert-bundles/vibrancy-*.md` - Full documentation of this investigation
+
+**Debug with:** `Cmd+Shift+M` to cycle through material/appearance combinations (won't fix the tint issue, but useful for understanding).
+
+---
+
 ## 18. Repository structure (key modules)
 
 `src/`
@@ -540,7 +591,7 @@ Thresholds: P95 key latency <50ms; single key <16.67ms; scroll op <8ms.
 - `notes/` Notes window module  
 - `ai/` AI chat window module
 
-Logs: `~/.sk/kit/logs/script-kit-gpui.jsonl`
+Logs: `~/.scriptkit/logs/script-kit-gpui.jsonl`
 
 ---
 
@@ -549,10 +600,10 @@ Logs: `~/.sk/kit/logs/script-kit-gpui.jsonl`
 SDK source: `scripts/kit-sdk.ts`
 
 Two-tier deployment:
-1) **Build time (dev):** `build.rs` copies `scripts/kit-sdk.ts` to `~/.sk/kit/sdk/`  
+1) **Build time (dev):** `build.rs` copies `scripts/kit-sdk.ts` to `~/.scriptkit/sdk/`  
 2) **Compile time:** `executor.rs` embeds via `include_str!("../scripts/kit-sdk.ts")`  
-3) **Runtime:** `ensure_sdk_extracted()` writes embedded SDK to `~/.sk/kit/sdk/kit-sdk.ts`  
-4) **Execution:** `bun run --preload ~/.sk/kit/sdk/kit-sdk.ts <script>`
+3) **Runtime:** `ensure_sdk_extracted()` writes embedded SDK to `~/.scriptkit/sdk/kit-sdk.ts`  
+4) **Execution:** `bun run --preload ~/.scriptkit/sdk/kit-sdk.ts <script>`
 
 Tests import `../../scripts/kit-sdk` (repo path). Production scripts use runtime-extracted SDK.
 
@@ -563,7 +614,7 @@ tsconfig mapping:
 
 ---
 
-## 20. User configuration (`~/.sk/kit/config.ts`)
+## 20. User configuration (`~/.scriptkit/config.ts`)
 
 Example:
 ```ts
@@ -596,7 +647,7 @@ Font sizing patterns:
 
 ## 21. Notes window (`src/notes/`)
 
-Separate floating window. gpui-component + SQLite `~/.sk/kit/db/notes.sqlite`. Theme synced from `~/.sk/kit/theme.json`.
+Separate floating window. gpui-component + SQLite `~/.scriptkit/db/notes.sqlite`. Theme synced from `~/.scriptkit/theme.json`.
 
 Files:
 - `window.rs` NotesApp view + open/close + quick_capture
@@ -627,7 +678,7 @@ Single-instance: global `OnceLock<Mutex<Option<WindowHandle<Root>>>>`.
 
 ## 22. AI window (`src/ai/`)
 
-Separate floating BYOK chat window. SQLite `~/.sk/kit/db/ai-chats.sqlite`. Theme synced from Script Kit theme.
+Separate floating BYOK chat window. SQLite `~/.scriptkit/db/ai-chats.sqlite`. Theme synced from Script Kit theme.
 
 Files: `window.rs`, `storage.rs`, `model.rs` (`Chat`, `Message`, `ChatId`, roles), `providers.rs` (Anthropic/OpenAI), `config.rs` (env detection).
 
@@ -636,7 +687,8 @@ Features: streaming responses, markdown rendering, model picker, chat history si
 API keys via env:
 - `SCRIPT_KIT_ANTHROPIC_API_KEY`
 - `SCRIPT_KIT_OPENAI_API_KEY`
-(set in shell profile, `~/.sk/kit/.env`, or system env)
+- `SCRIPT_KIT_VERCEL_API_KEY` (for Vercel AI Gateway)
+(set in shell profile or system env)
 
 Testing: stdin `{"type":"openAi"}`; log filter `grep -i 'ai|chat|PANEL'`.  
 Open methods: hotkey `Cmd+Shift+Space` (configurable `aiHotkey`), tray menu, stdin.  
@@ -754,9 +806,9 @@ Required fields when relevant: `correlation_id`, `duration_ms`, `bead_id`, `agen
 
 Log queries:
 ```bash
-grep '"correlation_id":"abc-123"' ~/.sk/kit/logs/script-kit-gpui.jsonl
-grep '"duration_ms":' ~/.sk/kit/logs/script-kit-gpui.jsonl | jq 'select(.fields.duration_ms > 100)'
-grep '"level":"ERROR"' ~/.sk/kit/logs/script-kit-gpui.jsonl | tail -50
+grep '"correlation_id":"abc-123"' ~/.scriptkit/logs/script-kit-gpui.jsonl
+grep '"duration_ms":' ~/.scriptkit/logs/script-kit-gpui.jsonl | jq 'select(.fields.duration_ms > 100)'
+grep '"level":"ERROR"' ~/.scriptkit/logs/script-kit-gpui.jsonl | tail -50
 ```
 
 ---

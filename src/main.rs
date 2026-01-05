@@ -299,6 +299,9 @@ fn show_main_window_helper(
     // 4. Configure as floating panel (first time only)
     if !PANEL_CONFIGURED.load(Ordering::SeqCst) {
         platform::configure_as_floating_panel();
+        // Configure vibrancy material to HUD_WINDOW for proper dark appearance
+        // This prevents background colors from bleeding through the blur
+        platform::configure_window_vibrancy_material();
         PANEL_CONFIGURED.store(true, Ordering::SeqCst);
     }
 
@@ -1943,6 +1946,7 @@ fn main() {
 
                                 if !PANEL_CONFIGURED.load(std::sync::atomic::Ordering::SeqCst) {
                                     platform::configure_as_floating_panel();
+                                    platform::configure_window_vibrancy_material();
                                     PANEL_CONFIGURED.store(true, std::sync::atomic::Ordering::SeqCst);
                                 }
 
@@ -1972,6 +1976,7 @@ fn main() {
 
                                 if !PANEL_CONFIGURED.load(std::sync::atomic::Ordering::SeqCst) {
                                     platform::configure_as_floating_panel();
+                                    platform::configure_window_vibrancy_material();
                                     PANEL_CONFIGURED.store(true, std::sync::atomic::Ordering::SeqCst);
                                 }
 
