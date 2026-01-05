@@ -179,8 +179,11 @@ pub fn search_files(query: &str, onlyin: Option<&str>, limit: usize) -> Vec<File
     let stdout = String::from_utf8_lossy(&output.stdout);
     let mut results = Vec::new();
 
+    // NOTE: .lines() already strips newline characters (\n, \r\n).
+    // We intentionally do NOT call trim() because macOS paths CAN contain
+    // leading/trailing spaces (rare but valid). Trimming would corrupt such paths.
     for line in stdout.lines().take(limit) {
-        let line = line.trim();
+        // Only skip truly empty lines, not lines with spaces
         if line.is_empty() {
             continue;
         }
