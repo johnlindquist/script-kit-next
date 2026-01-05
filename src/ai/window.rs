@@ -1663,12 +1663,16 @@ pub fn open_ai_window(cx: &mut App) -> Result<()> {
     // Ensure gpui-component theme is initialized before opening window
     ensure_theme_initialized(cx);
 
-    let window_handle = AI_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
-    let mut guard = window_handle.lock().unwrap();
+    // SAFETY: Release lock BEFORE calling handle.update() to prevent deadlock.
+    // WindowHandle is Copy, so we just dereference to get it out.
+    let existing_handle = {
+        let slot = AI_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
+        slot.lock().ok().and_then(|g| *g)
+    };
 
     // Check if window already exists and is valid
-    if let Some(ref handle) = *guard {
-        // Window exists - check if it's valid
+    if let Some(handle) = existing_handle {
+        // Window exists - check if it's valid (lock is released)
         let window_valid = handle
             .update(cx, |_root, window, _cx| {
                 // Window is valid - bring it to front and focus it
@@ -1682,11 +1686,14 @@ pub fn open_ai_window(cx: &mut App) -> Result<()> {
             cx.activate(true);
 
             // Focus the input field so user can start typing immediately
-            let app_entity_holder = AI_APP_ENTITY.get_or_init(|| std::sync::Mutex::new(None));
-            if let Some(ai_app) = app_entity_holder.lock().unwrap().as_ref() {
-                let ai_app_clone = ai_app.clone();
+            // Get AiApp entity (release lock before calling update)
+            let ai_app_entity = {
+                let holder = AI_APP_ENTITY.get_or_init(|| std::sync::Mutex::new(None));
+                holder.lock().ok().and_then(|g| g.clone())
+            };
+            if let Some(ai_app) = ai_app_entity {
                 let _ = handle.update(cx, |_root, window, cx| {
-                    ai_app_clone.update(cx, |app, cx| {
+                    ai_app.update(cx, |app, cx| {
                         app.focus_input(window, cx);
                     });
                 });
@@ -1695,9 +1702,12 @@ pub fn open_ai_window(cx: &mut App) -> Result<()> {
             return Ok(());
         }
 
-        // Window handle was invalid, fall through to create new window
+        // Window handle was invalid, clear it
         logging::log("AI", "AI window handle was invalid - creating new");
-        *guard = None;
+        let slot = AI_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
+        if let Ok(mut g) = slot.lock() {
+            *g = None;
+        }
     }
 
     // Create new window
@@ -1744,9 +1754,13 @@ pub fn open_ai_window(cx: &mut App) -> Result<()> {
         cx.new(|cx| Root::new(view, window, cx))
     })?;
 
-    // Store the AiApp entity globally
-    let app_entity_holder = AI_APP_ENTITY.get_or_init(|| std::sync::Mutex::new(None));
-    *app_entity_holder.lock().unwrap() = ai_app_holder.lock().unwrap().take();
+    // Store the AiApp entity globally (release lock immediately)
+    {
+        let app_entity_holder = AI_APP_ENTITY.get_or_init(|| std::sync::Mutex::new(None));
+        if let Ok(mut guard) = app_entity_holder.lock() {
+            *guard = ai_app_holder.lock().ok().and_then(|mut h| h.take());
+        }
+    }
 
     // Activate the app and window so user can immediately start typing
     cx.activate(true);
@@ -1755,25 +1769,39 @@ pub fn open_ai_window(cx: &mut App) -> Result<()> {
     });
 
     // Focus the input field so user can start typing immediately
-    if let Some(ai_app) = app_entity_holder.lock().unwrap().as_ref() {
-        let ai_app_clone = ai_app.clone();
+    // Get entity reference (release lock before calling update)
+    let ai_app_entity = {
+        let holder = AI_APP_ENTITY.get_or_init(|| std::sync::Mutex::new(None));
+        holder.lock().ok().and_then(|g| g.clone())
+    };
+    if let Some(ai_app) = ai_app_entity {
         let _ = handle.update(cx, |_root, window, cx| {
-            ai_app_clone.update(cx, |app, cx| {
+            ai_app.update(cx, |app, cx| {
                 app.focus_input(window, cx);
             });
         });
     }
 
-    *guard = Some(handle);
+    // Store the window handle (release lock immediately after)
+    {
+        let slot = AI_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
+        if let Ok(mut g) = slot.lock() {
+            *g = Some(handle);
+        }
+    }
 
     // NOTE: We do NOT configure as floating panel - this is a normal window
     // that can go behind other windows
 
     // Theme hot-reload watcher for AI window
     // Spawns a background task that watches ~/.scriptkit/kit/theme.json for changes
-    let app_entity_holder_ref = AI_APP_ENTITY.get_or_init(|| std::sync::Mutex::new(None));
-    if let Some(ai_app) = app_entity_holder_ref.lock().unwrap().clone() {
-        let ai_app_for_theme = ai_app.clone();
+    // NOTE: This captures Entity<AiApp> which keeps it alive - this is a known issue
+    // that will be addressed by the ThemeService refactor (script-kit-gpui-dar.4)
+    let ai_app_entity_for_theme = {
+        let holder = AI_APP_ENTITY.get_or_init(|| std::sync::Mutex::new(None));
+        holder.lock().ok().and_then(|g| g.clone())
+    };
+    if let Some(ai_app_for_theme) = ai_app_entity_for_theme {
         cx.spawn(async move |cx: &mut gpui::AsyncApp| {
             let (mut theme_watcher, theme_rx) = ThemeWatcher::new();
             if theme_watcher.start().is_err() {
@@ -1802,10 +1830,15 @@ pub fn open_ai_window(cx: &mut App) -> Result<()> {
 
 /// Close the AI window
 pub fn close_ai_window(cx: &mut App) {
-    let window_handle = AI_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
-    let mut guard = window_handle.lock().unwrap();
+    // SAFETY: Release lock BEFORE calling handle.update() to prevent deadlock
+    // If handle.update() causes Drop to fire synchronously and tries to acquire
+    // the same lock, we would deadlock. Taking the handle out first avoids this.
+    let handle = {
+        let slot = AI_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
+        slot.lock().ok().and_then(|mut g| g.take())
+    };
 
-    if let Some(handle) = guard.take() {
+    if let Some(handle) = handle {
         let _ = handle.update(cx, |_, window, _| {
             window.remove_window();
         });
@@ -1813,7 +1846,9 @@ pub fn close_ai_window(cx: &mut App) {
 
     // Also clear the AiApp entity reference
     let app_entity_holder = AI_APP_ENTITY.get_or_init(|| std::sync::Mutex::new(None));
-    *app_entity_holder.lock().unwrap() = None;
+    if let Ok(mut guard) = app_entity_holder.lock() {
+        *guard = None;
+    }
 }
 
 /// Check if the AI window is currently open
@@ -1832,20 +1867,22 @@ pub fn is_ai_window_open() -> bool {
 pub fn set_ai_search(cx: &mut App, query: &str) {
     use crate::logging;
 
-    // Get the AI window handle for the window context
-    let window_handle = AI_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
-    let window_guard = window_handle.lock().unwrap();
+    // SAFETY: Release locks BEFORE calling handle.update() to prevent deadlock
+    // WindowHandle is Copy, Entity must be cloned
+    let (handle, app_entity) = {
+        let window_slot = AI_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
+        let app_slot = AI_APP_ENTITY.get_or_init(|| std::sync::Mutex::new(None));
+        (
+            window_slot.lock().ok().and_then(|g| *g),
+            app_slot.lock().ok().and_then(|g| g.clone()),
+        )
+    };
 
-    // Get the AiApp entity
-    let app_entity_holder = AI_APP_ENTITY.get_or_init(|| std::sync::Mutex::new(None));
-    let app_guard = app_entity_holder.lock().unwrap();
-
-    if let (Some(handle), Some(app_entity)) = (window_guard.as_ref(), app_guard.as_ref()) {
+    if let (Some(handle), Some(app_entity)) = (handle, app_entity) {
         let query_owned = query.to_string();
-        let app_entity_clone = app_entity.clone();
 
         let _ = handle.update(cx, |_root, window, cx| {
-            app_entity_clone.update(cx, |app, cx| {
+            app_entity.update(cx, |app, cx| {
                 // Set the search input value
                 app.search_state.update(cx, |state, cx| {
                     state.set_value(query_owned.clone(), window, cx);
@@ -1865,20 +1902,22 @@ pub fn set_ai_search(cx: &mut App, query: &str) {
 pub fn set_ai_input(cx: &mut App, text: &str, submit: bool) {
     use crate::logging;
 
-    // Get the AI window handle for the window context
-    let window_handle = AI_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
-    let window_guard = window_handle.lock().unwrap();
+    // SAFETY: Release locks BEFORE calling handle.update() to prevent deadlock
+    // WindowHandle is Copy, Entity must be cloned
+    let (handle, app_entity) = {
+        let window_slot = AI_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
+        let app_slot = AI_APP_ENTITY.get_or_init(|| std::sync::Mutex::new(None));
+        (
+            window_slot.lock().ok().and_then(|g| *g),
+            app_slot.lock().ok().and_then(|g| g.clone()),
+        )
+    };
 
-    // Get the AiApp entity
-    let app_entity_holder = AI_APP_ENTITY.get_or_init(|| std::sync::Mutex::new(None));
-    let app_guard = app_entity_holder.lock().unwrap();
-
-    if let (Some(handle), Some(app_entity)) = (window_guard.as_ref(), app_guard.as_ref()) {
+    if let (Some(handle), Some(app_entity)) = (handle, app_entity) {
         let text_owned = text.to_string();
-        let app_entity_clone = app_entity.clone();
 
         let _ = handle.update(cx, |_root, window, cx| {
-            app_entity_clone.update(cx, |app, cx| {
+            app_entity.update(cx, |app, cx| {
                 // Set the input value
                 app.input_state.update(cx, |state, cx| {
                     state.set_value(text_owned.clone(), window, cx);

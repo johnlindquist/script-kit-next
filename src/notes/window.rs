@@ -1799,12 +1799,17 @@ pub fn open_notes_window(cx: &mut App) -> Result<()> {
     // Ensure gpui-component theme is initialized before opening window
     ensure_theme_initialized(cx);
 
-    let window_handle = NOTES_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
-    let mut guard = window_handle.lock().unwrap();
+    // SAFETY: Release lock BEFORE calling handle.update() to prevent deadlock.
+    // We clone the handle (it's just an ID) and release the lock immediately.
+    let existing_handle = {
+        let slot = NOTES_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
+        slot.lock().ok().and_then(|g| *g)
+    };
 
     // Check if window already exists and is valid
-    if let Some(ref handle) = *guard {
+    if let Some(handle) = existing_handle {
         // Window exists - check if it's valid and close it (toggle OFF)
+        // Lock is released, safe to call handle.update()
         if handle
             .update(cx, |_, window, _cx| {
                 window.remove_window();
@@ -1812,7 +1817,11 @@ pub fn open_notes_window(cx: &mut App) -> Result<()> {
             .is_ok()
         {
             logging::log("PANEL", "Notes window was open - closing (toggle OFF)");
-            *guard = None;
+            // Clear the stored handle
+            let slot = NOTES_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
+            if let Ok(mut g) = slot.lock() {
+                *g = None;
+            }
 
             // NOTE: We intentionally do NOT call cx.hide() here.
             // Closing Notes should not affect the main window's ability to be shown.
@@ -1897,7 +1906,9 @@ pub fn open_notes_window(cx: &mut App) -> Result<()> {
     crate::platform::hide_main_window();
 
     // Focus the editor input in the Notes window
-    if let Some(notes_app) = notes_app_holder.lock().unwrap().clone() {
+    // Release lock before calling update
+    let notes_app_entity = notes_app_holder.lock().ok().and_then(|mut g| g.take());
+    if let Some(notes_app) = notes_app_entity {
         let _ = handle.update(cx, |_root, window, cx| {
             window.activate_window();
 
@@ -1934,7 +1945,13 @@ pub fn open_notes_window(cx: &mut App) -> Result<()> {
         });
     }
 
-    *guard = Some(handle);
+    // Store the window handle (release lock immediately)
+    {
+        let slot = NOTES_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
+        if let Ok(mut g) = slot.lock() {
+            *g = Some(handle);
+        }
+    }
 
     // Configure as floating panel (always on top) after window is created
     configure_notes_as_floating_panel();
@@ -1959,15 +1976,16 @@ pub fn open_notes_window(cx: &mut App) -> Result<()> {
                         crate::theme::sync_gpui_component_theme(cx);
 
                         // Notify the Notes window to re-render with new colors (if open)
-                        let window_handle =
-                            NOTES_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
-                        if let Ok(guard) = window_handle.lock() {
-                            if let Some(ref handle) = *guard {
-                                let _ = handle.update(cx, |_root, _window, cx| {
-                                    // Notify to trigger re-render with new theme colors
-                                    cx.notify();
-                                });
-                            }
+                        // SAFETY: Release lock BEFORE calling handle.update() to prevent deadlock
+                        let handle = {
+                            let slot = NOTES_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
+                            slot.lock().ok().and_then(|g| *g)
+                        };
+                        if let Some(handle) = handle {
+                            let _ = handle.update(cx, |_root, _window, cx| {
+                                // Notify to trigger re-render with new theme colors
+                                cx.notify();
+                            });
                         }
                     });
 
@@ -1997,10 +2015,15 @@ pub fn quick_capture(cx: &mut App) -> Result<()> {
 
 /// Close the notes window
 pub fn close_notes_window(cx: &mut App) {
-    let window_handle = NOTES_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
-    let mut guard = window_handle.lock().unwrap();
+    // SAFETY: Release lock BEFORE calling handle.update() to prevent deadlock
+    // If handle.update() causes Drop to fire synchronously and tries to acquire
+    // the same lock, we would deadlock. Taking the handle out first avoids this.
+    let handle = {
+        let slot = NOTES_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
+        slot.lock().ok().and_then(|mut g| g.take())
+    };
 
-    if let Some(handle) = guard.take() {
+    if let Some(handle) = handle {
         let _ = handle.update(cx, |_, window, _| {
             window.remove_window();
         });
