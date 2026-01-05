@@ -60,15 +60,10 @@ pub struct FileMetadata {
 /// Default limit for search results
 pub const DEFAULT_LIMIT: usize = 50;
 
-/// Escape a query string for safe use in shell command
-/// Uses single quotes with proper escaping for shell safety
-#[allow(dead_code)]
-fn escape_query(query: &str) -> String {
-    // For mdfind, we wrap in single quotes and escape any single quotes in the query
-    // Single quotes prevent shell expansion of special characters
-    let escaped = query.replace('\'', "'\\''");
-    format!("'{}'", escaped)
-}
+// NOTE: escape_query() was removed because:
+// 1. It was unused dead code
+// 2. Command::new() does NOT use a shell, so shell escaping is irrelevant
+// 3. Arguments passed via .arg() are automatically handled safely
 
 /// Detect file type based on extension
 fn detect_file_type(path: &Path) -> FileType {
@@ -289,25 +284,7 @@ pub fn get_file_metadata(path: &str) -> Option<FileMetadata> {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_escape_query_simple() {
-        assert_eq!(escape_query("hello"), "'hello'");
-    }
-
-    #[test]
-    fn test_escape_query_with_spaces() {
-        assert_eq!(escape_query("hello world"), "'hello world'");
-    }
-
-    #[test]
-    fn test_escape_query_with_single_quote() {
-        assert_eq!(escape_query("it's"), "'it'\\''s'");
-    }
-
-    #[test]
-    fn test_escape_query_with_special_chars() {
-        assert_eq!(escape_query("file*.txt"), "'file*.txt'");
-    }
+    // NOTE: escape_query tests removed along with the function
 
     #[test]
     fn test_detect_file_type_image() {
