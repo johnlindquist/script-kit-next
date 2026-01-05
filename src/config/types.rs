@@ -106,6 +106,10 @@ pub struct SuggestedConfig {
     /// If false, no new usage is recorded but existing data is preserved
     #[serde(default = "default_suggested_track_usage")]
     pub track_usage: bool,
+    /// Commands to exclude from frecency tracking (default: ["builtin-quit-script-kit"])
+    /// These commands won't appear in the Suggested section
+    #[serde(default = "default_suggested_excluded_commands")]
+    pub excluded_commands: Vec<String>,
 }
 
 fn default_suggested_enabled() -> bool {
@@ -123,6 +127,12 @@ fn default_suggested_half_life_days() -> f64 {
 fn default_suggested_track_usage() -> bool {
     DEFAULT_SUGGESTED_TRACK_USAGE
 }
+fn default_suggested_excluded_commands() -> Vec<String> {
+    DEFAULT_FRECENCY_EXCLUDED_COMMANDS
+        .iter()
+        .map(|s| s.to_string())
+        .collect()
+}
 
 impl Default for SuggestedConfig {
     fn default() -> Self {
@@ -132,6 +142,7 @@ impl Default for SuggestedConfig {
             min_score: DEFAULT_SUGGESTED_MIN_SCORE,
             half_life_days: DEFAULT_SUGGESTED_HALF_LIFE_DAYS,
             track_usage: DEFAULT_SUGGESTED_TRACK_USAGE,
+            excluded_commands: default_suggested_excluded_commands(),
         }
     }
 }

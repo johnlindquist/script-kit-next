@@ -941,7 +941,8 @@ impl ScriptListApp {
                     }
                     scripts::SearchResult::BuiltIn(bm) => {
                         // Skip frecency tracking for excluded builtins (e.g., "Quit Script Kit")
-                        if bm.entry.should_exclude_from_frecency() {
+                        let excluded = &self.config.get_suggested().excluded_commands;
+                        if bm.entry.should_exclude_from_frecency(excluded) {
                             None
                         } else {
                             Some(format!("builtin:{}", bm.entry.name))

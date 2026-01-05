@@ -15,7 +15,7 @@
 //! - **Permission Commands**: Accessibility permission management
 //!
 
-use crate::config::{BuiltInConfig, DEFAULT_FRECENCY_EXCLUDED_COMMANDS};
+use crate::config::BuiltInConfig;
 use crate::menu_bar::MenuBarItem;
 use tracing::debug;
 
@@ -269,8 +269,9 @@ impl BuiltInEntry {
 
     /// Check if this built-in should be excluded from frecency/suggested tracking.
     /// Some commands like "Quit Script Kit" don't make sense to suggest.
-    pub fn should_exclude_from_frecency(&self) -> bool {
-        DEFAULT_FRECENCY_EXCLUDED_COMMANDS.contains(&self.id.as_str())
+    /// Uses the user-configurable excluded_commands list from SuggestedConfig.
+    pub fn should_exclude_from_frecency(&self, excluded_commands: &[String]) -> bool {
+        excluded_commands.iter().any(|cmd| cmd == &self.id)
     }
 }
 
