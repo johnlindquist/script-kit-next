@@ -202,6 +202,8 @@ impl Render for HudView {
 struct ActiveHud {
     #[allow(dead_code)]
     window: WindowHandle<HudView>,
+    /// The bounds used to identify this HUD window for closing
+    bounds: gpui::Bounds<Pixels>,
     created_at: Instant,
     duration_ms: u64,
 }
@@ -346,6 +348,7 @@ pub fn show_hud(text: String, duration_ms: Option<u64>, cx: &mut App) {
                 let mut state = manager.lock();
                 state.active_huds.push(ActiveHud {
                     window: window_handle,
+                    bounds: expected_bounds,
                     created_at: Instant::now(),
                     duration_ms: duration,
                 });
@@ -486,6 +489,7 @@ pub fn show_hud_with_action(
                 let mut state = manager.lock();
                 state.active_huds.push(ActiveHud {
                     window: window_handle,
+                    bounds: expected_bounds,
                     created_at: Instant::now(),
                     duration_ms: duration,
                 });
@@ -735,11 +739,26 @@ fn cleanup_expired_huds(cx: &mut App) {
 }
 
 /// Dismiss all active HUDs immediately
+///
+/// This closes all active HUD windows and clears the pending queue.
+/// Must be called on the main thread (i.e., from within App context).
 #[allow(dead_code)]
-pub fn dismiss_all_huds() {
+pub fn dismiss_all_huds(_cx: &mut App) {
     let manager = get_hud_manager();
-    let mut state = manager.lock();
 
+    // Collect bounds first, then close windows
+    let bounds_to_close: Vec<gpui::Bounds<Pixels>> = {
+        let state = manager.lock();
+        state.active_huds.iter().map(|hud| hud.bounds).collect()
+    };
+
+    // Close each window by its bounds
+    for bounds in &bounds_to_close {
+        close_hud_window_by_bounds(*bounds);
+    }
+
+    // Clear tracking state
+    let mut state = manager.lock();
     let count = state.active_huds.len();
     state.active_huds.clear();
     state.pending_queue.clear();
