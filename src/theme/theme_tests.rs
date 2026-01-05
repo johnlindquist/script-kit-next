@@ -81,7 +81,7 @@ fn test_opacity_defaults() {
     assert_eq!(opacity.selected, 0.15);
     assert_eq!(opacity.hover, 0.08);
     assert_eq!(opacity.preview, 0.0);
-    assert_eq!(opacity.dialog, 0.92);
+    assert_eq!(opacity.dialog, 0.35);
     assert_eq!(opacity.input, 0.30);
     assert_eq!(opacity.panel, 0.20);
     assert_eq!(opacity.input_inactive, 0.25);

@@ -516,10 +516,20 @@ impl ScriptListApp {
                         match key_str.as_str() {
                             "up" | "arrowup" => {
                                 dialog.update(cx, |d, cx| d.move_up(cx));
+                                // Notify actions window to re-render
+                                cx.spawn(async move |_this, cx| {
+                                    cx.update(notify_actions_window).ok();
+                                })
+                                .detach();
                                 return;
                             }
                             "down" | "arrowdown" => {
                                 dialog.update(cx, |d, cx| d.move_down(cx));
+                                // Notify actions window to re-render
+                                cx.spawn(async move |_this, cx| {
+                                    cx.update(notify_actions_window).ok();
+                                })
+                                .detach();
                                 return;
                             }
                             "enter" => {
@@ -538,6 +548,11 @@ impl ScriptListApp {
                                     if should_close {
                                         this.show_actions_popup = false;
                                         this.actions_dialog = None;
+                                        // Close the actions window
+                                        cx.spawn(async move |_this, cx| {
+                                            cx.update(close_actions_window).ok();
+                                        })
+                                        .detach();
                                         this.focus_main_filter(window, cx);
                                     }
                                     this.handle_action(action_id, cx);
@@ -547,12 +562,22 @@ impl ScriptListApp {
                             "escape" => {
                                 this.show_actions_popup = false;
                                 this.actions_dialog = None;
+                                // Close the actions window
+                                cx.spawn(async move |_this, cx| {
+                                    cx.update(close_actions_window).ok();
+                                })
+                                .detach();
                                 this.focus_main_filter(window, cx);
                                 cx.notify();
                                 return;
                             }
                             "backspace" => {
                                 dialog.update(cx, |d, cx| d.handle_backspace(cx));
+                                // Notify actions window to re-render
+                                cx.spawn(async move |_this, cx| {
+                                    cx.update(notify_actions_window).ok();
+                                })
+                                .detach();
                                 return;
                             }
                             _ => {
@@ -561,6 +586,11 @@ impl ScriptListApp {
                                     if let Some(ch) = key_char.chars().next() {
                                         if !ch.is_control() {
                                             dialog.update(cx, |d, cx| d.handle_char(ch, cx));
+                                            // Notify actions window to re-render
+                                            cx.spawn(async move |_this, cx| {
+                                                cx.update(notify_actions_window).ok();
+                                            })
+                                            .detach();
                                         }
                                     }
                                 }

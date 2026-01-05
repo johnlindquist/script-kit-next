@@ -411,6 +411,72 @@ pub const NS_WINDOW_COLLECTION_BEHAVIOR_MOVE_TO_ACTIVE_SPACE: u64 = 1 << 1;
 pub const NS_WINDOW_COLLECTION_BEHAVIOR_FULL_SCREEN_AUXILIARY: u64 = 1 << 8;
 
 // ============================================================================
+// Actions Popup Window Configuration
+// ============================================================================
+
+/// Configure the actions popup window as a non-movable child window.
+///
+/// This function configures a popup window with:
+/// - isMovable = false - prevents window dragging
+/// - isMovableByWindowBackground = false - prevents dragging by clicking background
+/// - Same window level as main window (NSFloatingWindowLevel = 3)
+/// - hidesOnDeactivate = true - auto-hides when app loses focus
+/// - hasShadow = false - no macOS window shadow (we use our own subtle shadow)
+/// - Disabled restoration - no position caching
+/// - animationBehavior = NSWindowAnimationBehaviorNone - no animation on close
+///
+/// # Arguments
+/// * `window` - The NSWindow pointer to configure
+///
+/// # Safety
+/// - `window` must be a valid NSWindow pointer
+/// - Must be called on the main thread
+#[cfg(target_os = "macos")]
+pub unsafe fn configure_actions_popup_window(window: id) {
+    if window.is_null() {
+        logging::log(
+            "ACTIONS",
+            "WARNING: Cannot configure null window as actions popup",
+        );
+        return;
+    }
+
+    // Disable window dragging
+    let _: () = msg_send![window, setMovable: false];
+    let _: () = msg_send![window, setMovableByWindowBackground: false];
+
+    // Match main window level (NSFloatingWindowLevel = 3)
+    let _: () = msg_send![window, setLevel: NS_FLOATING_WINDOW_LEVEL];
+
+    // Hide when app deactivates (loses focus to another app)
+    let _: () = msg_send![window, setHidesOnDeactivate: true];
+
+    // Disable macOS window shadow (the vibrancy blur provides enough visual separation)
+    let _: () = msg_send![window, setHasShadow: false];
+
+    // Disable close animation (NSWindowAnimationBehaviorNone = 2)
+    // This prevents the white flash on dismiss
+    let _: () = msg_send![window, setAnimationBehavior: 2i64];
+
+    // Disable restoration
+    let _: () = msg_send![window, setRestorable: false];
+
+    // Disable frame autosave
+    let empty_string: id = msg_send![class!(NSString), string];
+    let _: () = msg_send![window, setFrameAutosaveName: empty_string];
+
+    logging::log(
+        "ACTIONS",
+        "Configured actions popup window (non-movable, no shadow, no animation)",
+    );
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn configure_actions_popup_window(_window: *mut std::ffi::c_void) {
+    // No-op on non-macOS platforms
+}
+
+// ============================================================================
 // Mouse Position
 // ============================================================================
 

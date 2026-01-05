@@ -28,11 +28,11 @@ mod window;
 pub use dialog::ActionsDialog;
 pub use types::ScriptInfo;
 
-// Window functions for separate vibrancy window (prepared but not yet integrated)
-#[allow(unused_imports)]
+// Window functions for separate vibrancy window
 pub use window::{
-    close_actions_window, get_actions_window_handle, is_actions_window_open, open_actions_window,
+    close_actions_window, is_actions_window_open, notify_actions_window, open_actions_window,
 };
+// get_actions_window_handle available but not re-exported (use window:: directly if needed)
 
 #[cfg(test)]
 mod tests {

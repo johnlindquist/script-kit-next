@@ -61,6 +61,18 @@ pub const HEADER_PADDING_Y: f32 = 8.0;
 /// Header gap between input and buttons (px) - matches main menu
 pub const HEADER_GAP: f32 = 12.0;
 
+/// Button height in header (px)
+pub const HEADER_BUTTON_HEIGHT: f32 = 28.0;
+
+/// Divider height below header (px)
+pub const HEADER_DIVIDER_HEIGHT: f32 = 1.0;
+
+/// Total header height including padding and divider (45px)
+/// Calculated as: HEADER_PADDING_Y * 2 + HEADER_BUTTON_HEIGHT + HEADER_DIVIDER_HEIGHT
+/// This is the y-offset where content begins below the header.
+pub const HEADER_TOTAL_HEIGHT: f32 =
+    HEADER_PADDING_Y * 2.0 + HEADER_BUTTON_HEIGHT + HEADER_DIVIDER_HEIGHT;
+
 // ============================================================================
 // Input Placeholder Configuration
 // ============================================================================
