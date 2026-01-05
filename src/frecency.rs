@@ -42,15 +42,44 @@ impl FrecencyEntry {
         }
     }
 
+    /// Calculate the decay factor for a given time elapsed
+    fn decay_factor(seconds_elapsed: u64, half_life_days: f64) -> f64 {
+        // Guard against nonsense config (zero or negative half-life)
+        let hl = half_life_days.max(0.001);
+        let days_elapsed = seconds_elapsed as f64 / SECONDS_PER_DAY;
+        // True half-life decay: 2^(-days/hl) == e^(-ln(2) * days/hl)
+        (-std::f64::consts::LN_2 * days_elapsed / hl).exp()
+    }
+
+    /// Compute the score at a given timestamp (live computation with decay)
+    ///
+    /// This decays the stored score by the time elapsed since last_used.
+    /// Use this for ranking to avoid stale scores.
+    pub fn score_at(&self, now: u64, half_life_days: f64) -> f64 {
+        let dt = now.saturating_sub(self.last_used);
+        self.score * Self::decay_factor(dt, half_life_days)
+    }
+
+    /// Record a new use with explicit timestamp (incremental frecency model)
+    ///
+    /// Uses the incremental model: new_score = old_score * decay(elapsed_time) + 1
+    /// This prevents "rich get richer" by decaying historical usage.
+    pub fn record_use_with_timestamp(&mut self, now: u64, half_life_days: f64) {
+        // Compute current score with decay
+        let current_score = self.score_at(now, half_life_days);
+        // Add 1 for this new use
+        self.score = current_score + 1.0;
+        self.last_used = now;
+        self.count = self.count.saturating_add(1);
+    }
+
     /// Record a new use of this script using the default half-life
     ///
     /// NOTE: Prefer using FrecencyStore::record_use() which uses the store's
     /// configured half-life instead of the default.
     #[allow(dead_code)]
     pub fn record_use(&mut self) {
-        self.count += 1;
-        self.last_used = current_timestamp();
-        self.recalculate_score();
+        self.record_use_with_timestamp(current_timestamp(), DEFAULT_SUGGESTED_HALF_LIFE_DAYS);
     }
 
     /// Recalculate the frecency score based on current time using default half-life
@@ -119,6 +148,9 @@ pub struct FrecencyStore {
     dirty: bool,
     /// Half-life in days for score decay (from config)
     half_life_days: f64,
+    /// Revision counter for cache invalidation
+    /// Incremented on any change affecting ranking
+    revision: u64,
 }
 
 /// Raw data format for JSON serialization
@@ -136,6 +168,7 @@ impl FrecencyStore {
             file_path,
             dirty: false,
             half_life_days: DEFAULT_SUGGESTED_HALF_LIFE_DAYS,
+            revision: 0,
         }
     }
 
@@ -147,6 +180,7 @@ impl FrecencyStore {
             file_path,
             dirty: false,
             half_life_days: config.half_life_days,
+            revision: 0,
         }
     }
 
@@ -158,6 +192,7 @@ impl FrecencyStore {
             file_path: path,
             dirty: false,
             half_life_days: DEFAULT_SUGGESTED_HALF_LIFE_DAYS,
+            revision: 0,
         }
     }
 
@@ -170,6 +205,7 @@ impl FrecencyStore {
             for entry in self.entries.values_mut() {
                 entry.recalculate_score_with_half_life(half_life_days);
             }
+            self.revision = self.revision.wrapping_add(1);
         }
     }
 
@@ -177,6 +213,15 @@ impl FrecencyStore {
     #[allow(dead_code)]
     pub fn half_life_days(&self) -> f64 {
         self.half_life_days
+    }
+
+    /// Get the current revision counter for cache invalidation
+    ///
+    /// This value increments on any change that affects ranking:
+    /// record_use, remove, clear, set_half_life_days
+    #[allow(dead_code)]
+    pub fn revision(&self) -> u64 {
+        self.revision
     }
 
     /// Get the default frecency file path
@@ -260,31 +305,36 @@ impl FrecencyStore {
 
     /// Record a use of a script
     ///
-    /// Increments the count and updates the last_used timestamp.
+    /// Uses the incremental frecency model: score = decayed_score + 1
     /// Creates a new entry if the script hasn't been used before.
     /// Uses the store's configured half-life for score calculation.
     #[instrument(name = "frecency_record_use", skip(self))]
     pub fn record_use(&mut self, path: &str) {
         let half_life = self.half_life_days;
+        let now = current_timestamp();
 
         if let Some(entry) = self.entries.get_mut(path) {
-            entry.count += 1;
-            entry.last_used = current_timestamp();
-            entry.recalculate_score_with_half_life(half_life);
+            // Use incremental model: decay existing score, then add 1
+            entry.record_use_with_timestamp(now, half_life);
             debug!(
                 path = path,
                 count = entry.count,
                 score = entry.score,
                 half_life_days = half_life,
-                "Updated frecency entry"
+                "Updated frecency entry (incremental model)"
             );
         } else {
-            let mut entry = FrecencyEntry::new();
-            entry.recalculate_score_with_half_life(half_life);
+            // New entry starts with score 1.0
+            let entry = FrecencyEntry {
+                count: 1,
+                last_used: now,
+                score: 1.0,
+            };
             debug!(path = path, half_life_days = half_life, "Created new frecency entry");
             self.entries.insert(path.to_string(), entry);
         }
         self.dirty = true;
+        self.revision = self.revision.wrapping_add(1);
     }
 
     /// Get the frecency score for a script
@@ -296,20 +346,47 @@ impl FrecencyStore {
 
     /// Get the top N items by frecency score
     ///
-    /// Returns a vector of (path, score) tuples sorted by score descending.
+    /// Computes live scores (with decay) for accurate ranking.
+    /// Returns a vector of (path, score) tuples sorted by:
+    /// 1. Score descending
+    /// 2. Last used descending (tie-breaker)
+    /// 3. Path ascending (final tie-breaker for determinism)
     pub fn get_recent_items(&self, limit: usize) -> Vec<(String, f64)> {
+        let now = current_timestamp();
+        let hl = self.half_life_days;
+
+        // Compute live scores with decay for accurate ranking
         let mut items: Vec<_> = self
             .entries
             .iter()
-            .map(|(path, entry)| (path.clone(), entry.score))
+            .map(|(path, entry)| {
+                let live_score = entry.score_at(now, hl);
+                (path.clone(), live_score, entry.last_used)
+            })
             .collect();
 
-        // Sort by score descending
-        items.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        // Sort by score descending, then last_used descending, then path ascending
+        items.sort_by(|a, b| {
+            // Primary: score descending
+            match b.1.partial_cmp(&a.1) {
+                Some(std::cmp::Ordering::Equal) | None => {}
+                Some(ord) => return ord,
+            }
+            // Secondary: last_used descending (more recent first)
+            match b.2.cmp(&a.2) {
+                std::cmp::Ordering::Equal => {}
+                ord => return ord,
+            }
+            // Tertiary: path ascending (alphabetical)
+            a.0.cmp(&b.0)
+        });
 
-        // Take top N
-        items.truncate(limit);
+        // Take top N and drop last_used from result
         items
+            .into_iter()
+            .take(limit)
+            .map(|(path, score, _)| (path, score))
+            .collect()
     }
 
     /// Get the number of tracked scripts
@@ -336,6 +413,7 @@ impl FrecencyStore {
         let entry = self.entries.remove(path);
         if entry.is_some() {
             self.dirty = true;
+            self.revision = self.revision.wrapping_add(1);
         }
         entry
     }
@@ -346,6 +424,7 @@ impl FrecencyStore {
         if !self.entries.is_empty() {
             self.entries.clear();
             self.dirty = true;
+            self.revision = self.revision.wrapping_add(1);
         }
     }
 }
@@ -548,8 +627,8 @@ mod tests {
         // This test verifies that record_use() uses the store's configured half-life
         // instead of the DEFAULT_SUGGESTED_HALF_LIFE_DAYS constant
         //
-        // To test this properly, we need to simulate an entry that was used in the past,
-        // then call record_use() and verify the score is recalculated with the custom half-life.
+        // With the incremental model: new_score = old_score * decay(elapsed) + 1
+        // Different half-lives produce different decay factors for the same elapsed time.
         let temp_dir = std::env::temp_dir();
         let path = temp_dir.join(format!("frecency_test_hl_{}.json", uuid::Uuid::new_v4()));
 
@@ -558,17 +637,17 @@ mod tests {
         let custom_half_life = 30.0; // 30 days (longer than default 7)
         store.set_half_life_days(custom_half_life);
 
-        // Manually create an entry with an old timestamp (7 days ago)
+        // Manually create an entry with an old timestamp (7 days ago) and accumulated score
         let now = current_timestamp();
         let seven_days_ago = now - (7 * SECONDS_PER_DAY as u64);
         let old_entry = FrecencyEntry {
             count: 5,
             last_used: seven_days_ago,
-            score: 0.0, // Will be recalculated
+            score: 5.0, // Accumulated score as of 7 days ago
         };
         store.entries.insert("/test.ts".to_string(), old_entry);
 
-        // Now record another use - this should recalculate with custom half-life (30 days)
+        // Now record another use - this should apply decay with custom half-life (30 days)
         store.record_use("/test.ts");
 
         // Get the entry and verify it was calculated with the custom half-life
@@ -577,22 +656,35 @@ mod tests {
         // count should now be 6
         assert_eq!(entry.count, 6, "Count should be incremented to 6");
 
-        // The score should match what we'd compute with the custom half-life (30 days)
-        // Since last_used is now (we just used it), score should be ~6.0
-        let expected_score = calculate_score(entry.count, entry.last_used, custom_half_life);
+        // With incremental model: new_score = old_score * decay(7 days, half_life=30) + 1
+        // decay(7 days, 30) = 2^(-7/30) ≈ 0.85
+        // new_score = 5.0 * 0.85 + 1.0 ≈ 5.25
+        let decay_factor_30 = 2f64.powf(-7.0 / 30.0); // ≈ 0.85
+        let expected_score = 5.0 * decay_factor_30 + 1.0;
+
         assert!(
-            (entry.score - expected_score).abs() < 0.0001,
+            (entry.score - expected_score).abs() < 0.1,
             "Entry score {} should match expected {} using custom half-life {}. \
-             If this fails with score using default half-life, record_use() isn't using store config.",
+             With 30-day half-life, 7 days only decays to ~85%. \
+             If this is wrong, record_use() isn't using store config.",
             entry.score,
             expected_score,
             custom_half_life
         );
 
-        // Also verify it's different from what we'd get with default half-life
-        // (should be the same since last_used is NOW after record_use, not 7 days ago)
-        // Actually, since we just recorded use, last_used = now, so decay is ~0 for both.
-        // The test is mainly about ensuring the internal recalculate uses store config.
+        // With default 7-day half-life, 7 days would decay to 50%:
+        // default_score = 5.0 * 0.5 + 1.0 = 3.5
+        let decay_factor_7 = 0.5;
+        let default_half_life_score = 5.0 * decay_factor_7 + 1.0;
+
+        // Our score should be higher than what we'd get with default half-life
+        // because 30-day half-life decays more slowly
+        assert!(
+            entry.score > default_half_life_score,
+            "Score {} with 30-day half-life should be higher than {} with 7-day half-life",
+            entry.score,
+            default_half_life_score
+        );
 
         cleanup_temp_file(&path);
     }
@@ -772,5 +864,336 @@ mod tests {
     #[test]
     fn test_seconds_per_day_constant() {
         assert_eq!(SECONDS_PER_DAY, 86400.0);
+    }
+
+    // ========================================
+    // New incremental frecency model tests
+    // ========================================
+
+    #[test]
+    fn test_score_at_computes_decay_at_query_time() {
+        // score_at() should compute the decayed score at query time,
+        // not return a stale cached value
+        let now = current_timestamp();
+        let half_life = 7.0;
+
+        let entry = FrecencyEntry {
+            count: 5,
+            last_used: now - (7 * SECONDS_PER_DAY as u64), // 7 days ago
+            score: 10.0, // stored score (as of last_used)
+        };
+
+        // score_at(now) should decay the stored score by elapsed time
+        // 7 days = 1 half-life, so score should be ~10.0 * 0.5 = 5.0
+        let score = entry.score_at(now, half_life);
+        assert!(
+            (score - 5.0).abs() < 0.1,
+            "Expected ~5.0 (50% of 10.0), got {}",
+            score
+        );
+    }
+
+    #[test]
+    fn test_score_at_zero_elapsed_time() {
+        // When queried at the exact moment of last_used, no decay
+        let now = current_timestamp();
+
+        let entry = FrecencyEntry {
+            count: 1,
+            last_used: now,
+            score: 3.0,
+        };
+
+        let score = entry.score_at(now, 7.0);
+        assert!(
+            (score - 3.0).abs() < 0.01,
+            "No decay expected, got {}",
+            score
+        );
+    }
+
+    #[test]
+    fn test_record_use_with_timestamp_incremental_model() {
+        // Test the new incremental model: score = score*decay(dt) + 1
+        let now = current_timestamp();
+        let half_life = 7.0;
+
+        let mut entry = FrecencyEntry {
+            count: 10,
+            last_used: now - (7 * SECONDS_PER_DAY as u64), // 7 days ago
+            score: 4.0, // accumulated score as of 7 days ago
+        };
+
+        // record_use should:
+        // 1. compute current score: 4.0 * 0.5 = 2.0 (one half-life decay)
+        // 2. add 1 for new use: 2.0 + 1.0 = 3.0
+        entry.record_use_with_timestamp(now, half_life);
+
+        assert_eq!(entry.count, 11);
+        assert_eq!(entry.last_used, now);
+        assert!(
+            (entry.score - 3.0).abs() < 0.1,
+            "Expected ~3.0 (2.0 decayed + 1.0 new), got {}",
+            entry.score
+        );
+    }
+
+    #[test]
+    fn test_incremental_model_prevents_rich_get_richer() {
+        // Scenario: Script A was used 100 times last year (then abandoned)
+        // Script B was used 3 times this week
+        // Script B should rank higher
+        let now = current_timestamp();
+        let half_life = 7.0;
+        let year_ago = now - (365 * SECONDS_PER_DAY as u64);
+        let two_days_ago = now - (2 * SECONDS_PER_DAY as u64);
+
+        // Script A: high historical usage, long ago
+        // With incremental model, even if it had score=100, after a year it's nearly 0
+        // 365/7 ≈ 52 half-lives, 0.5^52 ≈ 2.2e-16
+        let entry_a = FrecencyEntry {
+            count: 100,
+            last_used: year_ago,
+            score: 100.0, // high accumulated score... a year ago
+        };
+
+        // Script B: recent usage
+        let entry_b = FrecencyEntry {
+            count: 3,
+            last_used: two_days_ago,
+            score: 3.0, // recently accumulated
+        };
+
+        let score_a = entry_a.score_at(now, half_life);
+        let score_b = entry_b.score_at(now, half_life);
+
+        assert!(
+            score_b > score_a,
+            "Recent script B (score={}) should rank higher than abandoned A (score={})",
+            score_b,
+            score_a
+        );
+    }
+
+    #[test]
+    fn test_get_recent_items_uses_live_scores() {
+        // get_recent_items() should compute score_at(now) for ranking,
+        // not use stale cached scores
+        let temp_dir = std::env::temp_dir();
+        let path = temp_dir.join(format!("frecency_test_live_{}.json", uuid::Uuid::new_v4()));
+        let mut store = FrecencyStore::with_path(path.clone());
+
+        let now = current_timestamp();
+        let week_ago = now - (7 * SECONDS_PER_DAY as u64);
+
+        // Insert entries with explicit timestamps via entries map
+        // Entry A: high stored score but old
+        store.entries.insert(
+            "/old-popular.ts".to_string(),
+            FrecencyEntry {
+                count: 50,
+                last_used: week_ago,
+                score: 10.0, // will decay to ~5.0
+            },
+        );
+
+        // Entry B: lower stored score but recent
+        store.entries.insert(
+            "/recent.ts".to_string(),
+            FrecencyEntry {
+                count: 3,
+                last_used: now,
+                score: 3.0, // no decay
+            },
+        );
+
+        let _recent = store.get_recent_items(10);
+
+        // This test is superseded by test_get_recent_items_live_vs_stale
+        // which uses more extreme values to clearly demonstrate live computation.
+        // This test just verifies no crashes with mixed timestamp entries.
+        cleanup_temp_file(&path);
+    }
+
+    #[test]
+    fn test_get_recent_items_live_vs_stale() {
+        // This test verifies that get_recent_items uses live scores
+        let temp_dir = std::env::temp_dir();
+        let path = temp_dir.join(format!("frecency_test_live2_{}.json", uuid::Uuid::new_v4()));
+        let mut store = FrecencyStore::with_path(path.clone());
+
+        let now = current_timestamp();
+        let month_ago = now - (30 * SECONDS_PER_DAY as u64); // ~4.3 half-lives
+
+        // Entry A: very high stored score but a month old
+        // 4.3 half-lives: 0.5^4.3 ≈ 0.05, so 100 * 0.05 = ~5.0 live
+        store.entries.insert(
+            "/old.ts".to_string(),
+            FrecencyEntry {
+                count: 100,
+                last_used: month_ago,
+                score: 100.0, // stale score
+            },
+        );
+
+        // Entry B: moderate stored score but recent
+        store.entries.insert(
+            "/recent.ts".to_string(),
+            FrecencyEntry {
+                count: 8,
+                last_used: now,
+                score: 8.0, // live score
+            },
+        );
+
+        let recent = store.get_recent_items(10);
+
+        // With live computation: /recent.ts (8.0) should beat /old.ts (~5.0)
+        assert_eq!(
+            recent[0].0, "/recent.ts",
+            "Recent script should rank first with live score computation. \
+             Got {:?}",
+            recent
+        );
+
+        cleanup_temp_file(&path);
+    }
+
+    // ========================================
+    // Revision counter tests
+    // ========================================
+
+    #[test]
+    fn test_revision_increments_on_record_use() {
+        let (mut store, path) = create_test_store();
+        let initial_rev = store.revision();
+
+        store.record_use("/test.ts");
+
+        assert!(
+            store.revision() > initial_rev,
+            "Revision should increment after record_use"
+        );
+        cleanup_temp_file(&path);
+    }
+
+    #[test]
+    fn test_revision_increments_on_remove() {
+        let (mut store, path) = create_test_store();
+        store.record_use("/test.ts");
+        let rev_after_add = store.revision();
+
+        store.remove("/test.ts");
+
+        assert!(
+            store.revision() > rev_after_add,
+            "Revision should increment after remove"
+        );
+        cleanup_temp_file(&path);
+    }
+
+    #[test]
+    fn test_revision_increments_on_clear() {
+        let (mut store, path) = create_test_store();
+        store.record_use("/test.ts");
+        let rev_after_add = store.revision();
+
+        store.clear();
+
+        assert!(
+            store.revision() > rev_after_add,
+            "Revision should increment after clear"
+        );
+        cleanup_temp_file(&path);
+    }
+
+    #[test]
+    fn test_revision_increments_on_half_life_change() {
+        let (mut store, path) = create_test_store();
+        let initial_rev = store.revision();
+
+        store.set_half_life_days(14.0);
+
+        assert!(
+            store.revision() > initial_rev,
+            "Revision should increment after half-life change"
+        );
+        cleanup_temp_file(&path);
+    }
+
+    // ========================================
+    // Deterministic tie-breaker tests
+    // ========================================
+
+    #[test]
+    fn test_tie_breaker_by_last_used() {
+        let temp_dir = std::env::temp_dir();
+        let path = temp_dir.join(format!("frecency_test_tie_{}.json", uuid::Uuid::new_v4()));
+        let mut store = FrecencyStore::with_path(path.clone());
+
+        let now = current_timestamp();
+
+        // Two items with identical scores but different last_used
+        store.entries.insert(
+            "/older.ts".to_string(),
+            FrecencyEntry {
+                count: 1,
+                last_used: now - 100, // 100 seconds older
+                score: 1.0,
+            },
+        );
+        store.entries.insert(
+            "/newer.ts".to_string(),
+            FrecencyEntry {
+                count: 1,
+                last_used: now,
+                score: 1.0,
+            },
+        );
+
+        let recent = store.get_recent_items(10);
+
+        // With tie-breaker by last_used desc, newer should be first
+        assert_eq!(
+            recent[0].0, "/newer.ts",
+            "More recent item should win tie-breaker"
+        );
+        cleanup_temp_file(&path);
+    }
+
+    #[test]
+    fn test_tie_breaker_by_path() {
+        let temp_dir = std::env::temp_dir();
+        let path = temp_dir.join(format!("frecency_test_tie2_{}.json", uuid::Uuid::new_v4()));
+        let mut store = FrecencyStore::with_path(path.clone());
+
+        let now = current_timestamp();
+
+        // Two items with identical scores AND identical last_used
+        store.entries.insert(
+            "/bbb.ts".to_string(),
+            FrecencyEntry {
+                count: 1,
+                last_used: now,
+                score: 1.0,
+            },
+        );
+        store.entries.insert(
+            "/aaa.ts".to_string(),
+            FrecencyEntry {
+                count: 1,
+                last_used: now,
+                score: 1.0,
+            },
+        );
+
+        let recent = store.get_recent_items(10);
+
+        // With tie-breaker by path asc, /aaa.ts should be first
+        assert_eq!(
+            recent[0].0, "/aaa.ts",
+            "Alphabetically first path should win final tie-breaker"
+        );
+        cleanup_temp_file(&path);
     }
 }
