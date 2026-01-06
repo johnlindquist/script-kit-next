@@ -406,9 +406,296 @@ impl ColorSchemeExt for ColorScheme {
     }
 }
 
+// ============================================================================
+// HexColorExt - Extension trait for u32 hex colors
+// ============================================================================
+
+/// Extension trait for u32 hex colors to provide convenient color conversion.
+///
+/// This eliminates the need for manual `rgb(colors.*)` calls and `<< 8 | alpha`
+/// packing throughout the codebase.
+///
+/// # Example
+/// ```ignore
+/// use crate::ui_foundation::HexColorExt;
+///
+/// let colors = theme.colors;
+/// // Instead of: rgb(colors.text.primary)
+/// // Use: colors.text.primary.to_rgb()
+///
+/// // Instead of: rgba((colors.border << 8) | 0x80)
+/// // Use: colors.border.rgba8(0x80)
+///
+/// // Instead of manual opacity calculation:
+/// // Use: colors.background.with_opacity(0.5)
+/// ```
+pub trait HexColorExt {
+    /// Convert hex color to GPUI Hsla (fully opaque).
+    ///
+    /// Replaces `rgb(color)` calls.
+    fn to_rgb(self) -> Hsla;
+
+    /// Convert hex color to GPUI Hsla with alpha byte (0-255).
+    ///
+    /// Replaces `rgba((color << 8) | alpha)` patterns.
+    fn rgba8(self, alpha: u8) -> Hsla;
+
+    /// Convert hex color to GPUI Hsla with opacity float (0.0-1.0).
+    ///
+    /// More readable than manual alpha calculation.
+    fn with_opacity(self, opacity: f32) -> Hsla;
+}
+
+impl HexColorExt for u32 {
+    #[inline]
+    fn to_rgb(self) -> Hsla {
+        gpui::rgb(self).into()
+    }
+
+    #[inline]
+    fn rgba8(self, alpha: u8) -> Hsla {
+        gpui::rgba((self << 8) | alpha as u32).into()
+    }
+
+    #[inline]
+    fn with_opacity(self, opacity: f32) -> Hsla {
+        let alpha = (opacity.clamp(0.0, 1.0) * 255.0) as u8;
+        gpui::rgba((self << 8) | alpha as u32).into()
+    }
+}
+
+// ============================================================================
+// Layout Primitives - Free functions for common patterns
+// ============================================================================
+
+/// Create a vertical stack (flex column).
+///
+/// Replaces `div().flex().flex_col()` pattern.
+#[inline]
+pub fn vstack() -> Div {
+    gpui::div().flex().flex_col()
+}
+
+/// Create a horizontal stack (flex row with centered items).
+///
+/// Replaces `div().flex().flex_row().items_center()` pattern.
+#[inline]
+pub fn hstack() -> Div {
+    gpui::div().flex().flex_row().items_center()
+}
+
+/// Create a centered container (items centered both axes).
+///
+/// Replaces `div().flex().items_center().justify_center()` pattern.
+#[inline]
+pub fn centered() -> Div {
+    gpui::div().flex().items_center().justify_center()
+}
+
+/// Create a flexible spacer that fills available space.
+///
+/// Replaces `div().flex_1()` pattern.
+#[inline]
+pub fn spacer() -> Div {
+    gpui::div().flex_1()
+}
+
+// ============================================================================
+// Key Normalization - Handle platform-specific key names
+// ============================================================================
+
+/// Normalize key names to canonical forms.
+///
+/// GPUI sends different key names on different platforms:
+/// - macOS often sends "up", "down", "left", "right"
+/// - Other platforms may send "arrowup", "arrowdown", etc.
+///
+/// This normalizes to the short form for consistent matching.
+#[inline]
+pub fn normalize_key(key: &str) -> &str {
+    match key.to_lowercase().as_str() {
+        "arrowup" => "up",
+        "arrowdown" => "down",
+        "arrowleft" => "left",
+        "arrowright" => "right",
+        _ => key,
+    }
+}
+
+/// Check if key is an up arrow (handles both formats).
+#[inline]
+pub fn is_key_up(key: &str) -> bool {
+    matches!(key.to_lowercase().as_str(), "up" | "arrowup")
+}
+
+/// Check if key is a down arrow (handles both formats).
+#[inline]
+pub fn is_key_down(key: &str) -> bool {
+    matches!(key.to_lowercase().as_str(), "down" | "arrowdown")
+}
+
+/// Check if key is a left arrow (handles both formats).
+#[inline]
+pub fn is_key_left(key: &str) -> bool {
+    matches!(key.to_lowercase().as_str(), "left" | "arrowleft")
+}
+
+/// Check if key is a right arrow (handles both formats).
+#[inline]
+pub fn is_key_right(key: &str) -> bool {
+    matches!(key.to_lowercase().as_str(), "right" | "arrowright")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ========================================================================
+    // HexColorExt Tests
+    // ========================================================================
+
+    #[test]
+    fn test_hex_color_to_rgb() {
+        // White should convert correctly
+        let white = 0xFFFFFFu32.to_rgb();
+        assert!(
+            (white.l - 1.0).abs() < 0.01,
+            "White should have lightness ~1.0"
+        );
+
+        // Black should convert correctly
+        let black = 0x000000u32.to_rgb();
+        assert!(black.l < 0.01, "Black should have lightness ~0.0");
+
+        // Alpha should be 1.0 (fully opaque)
+        assert!(
+            (white.a - 1.0).abs() < 0.001,
+            "to_rgb should be fully opaque"
+        );
+        assert!(
+            (black.a - 1.0).abs() < 0.001,
+            "to_rgb should be fully opaque"
+        );
+    }
+
+    #[test]
+    fn test_hex_color_rgba8() {
+        // Test with 50% alpha (0x80 = 128)
+        let semi = 0xFFFFFFu32.rgba8(0x80);
+        // Alpha should be approximately 128/255 = 0.502
+        assert!(
+            (semi.a - 0.502).abs() < 0.01,
+            "rgba8(0x80) should have ~50% alpha, got {}",
+            semi.a
+        );
+
+        // Test with 0 alpha
+        let transparent = 0xFFFFFFu32.rgba8(0x00);
+        assert!(
+            transparent.a < 0.01,
+            "rgba8(0x00) should be fully transparent"
+        );
+
+        // Test with full alpha
+        let opaque = 0xFFFFFFu32.rgba8(0xFF);
+        assert!(
+            (opaque.a - 1.0).abs() < 0.01,
+            "rgba8(0xFF) should be fully opaque"
+        );
+    }
+
+    #[test]
+    fn test_hex_color_with_opacity() {
+        // 50% opacity
+        let half = 0xFFFFFFu32.with_opacity(0.5);
+        assert!(
+            (half.a - 0.5).abs() < 0.02,
+            "with_opacity(0.5) should have ~50% alpha, got {}",
+            half.a
+        );
+
+        // 0% opacity
+        let transparent = 0xFFFFFFu32.with_opacity(0.0);
+        assert!(
+            transparent.a < 0.01,
+            "with_opacity(0.0) should be fully transparent"
+        );
+
+        // 100% opacity
+        let opaque = 0xFFFFFFu32.with_opacity(1.0);
+        assert!(
+            (opaque.a - 1.0).abs() < 0.01,
+            "with_opacity(1.0) should be fully opaque"
+        );
+    }
+
+    #[test]
+    fn test_hex_color_opacity_clamping() {
+        // Opacity > 1.0 should clamp to 1.0
+        let over = 0xFFFFFFu32.with_opacity(1.5);
+        assert!(
+            (over.a - 1.0).abs() < 0.01,
+            "with_opacity(1.5) should clamp to 1.0"
+        );
+
+        // Opacity < 0.0 should clamp to 0.0
+        let under = 0xFFFFFFu32.with_opacity(-0.5);
+        assert!(under.a < 0.01, "with_opacity(-0.5) should clamp to 0.0");
+    }
+
+    // ========================================================================
+    // Key Normalization Tests
+    // ========================================================================
+
+    #[test]
+    fn test_normalize_key() {
+        assert_eq!(normalize_key("arrowup"), "up");
+        assert_eq!(normalize_key("ArrowUp"), "up");
+        assert_eq!(normalize_key("ARROWUP"), "up");
+        assert_eq!(normalize_key("up"), "up");
+
+        assert_eq!(normalize_key("arrowdown"), "down");
+        assert_eq!(normalize_key("down"), "down");
+
+        assert_eq!(normalize_key("arrowleft"), "left");
+        assert_eq!(normalize_key("left"), "left");
+
+        assert_eq!(normalize_key("arrowright"), "right");
+        assert_eq!(normalize_key("right"), "right");
+
+        // Non-arrow keys pass through unchanged
+        assert_eq!(normalize_key("enter"), "enter");
+        assert_eq!(normalize_key("escape"), "escape");
+    }
+
+    #[test]
+    fn test_is_key_helpers() {
+        // Up
+        assert!(is_key_up("up"));
+        assert!(is_key_up("arrowup"));
+        assert!(is_key_up("ArrowUp"));
+        assert!(!is_key_up("down"));
+
+        // Down
+        assert!(is_key_down("down"));
+        assert!(is_key_down("arrowdown"));
+        assert!(is_key_down("ArrowDown"));
+        assert!(!is_key_down("up"));
+
+        // Left
+        assert!(is_key_left("left"));
+        assert!(is_key_left("arrowleft"));
+        assert!(!is_key_left("right"));
+
+        // Right
+        assert!(is_key_right("right"));
+        assert!(is_key_right("arrowright"));
+        assert!(!is_key_right("left"));
+    }
+
+    // ========================================================================
+    // Original Tests
+    // ========================================================================
 
     #[test]
     fn test_hex_to_rgba_with_opacity() {

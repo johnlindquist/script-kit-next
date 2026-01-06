@@ -13,6 +13,7 @@ use crate::components::{Button, ButtonColors, ButtonVariant};
 use crate::designs::DesignColors;
 use crate::panel::{CURSOR_GAP_X, CURSOR_HEIGHT_LG, CURSOR_MARGIN_Y, CURSOR_WIDTH};
 use crate::theme::Theme;
+use crate::ui_foundation::{hstack, HexColorExt};
 
 /// Pre-computed colors for PromptHeader rendering
 ///
@@ -245,25 +246,19 @@ impl PromptHeader {
 
         // Text color: muted for placeholder, primary for input
         let text_color = if filter_is_empty {
-            rgb(colors.text_muted)
+            colors.text_muted.to_rgb()
         } else {
-            rgb(colors.text_primary)
+            colors.text_primary.to_rgb()
         };
 
-        // Build input container
-        let mut input = div()
-            .flex_1()
-            .flex()
-            .flex_row()
-            .items_center()
-            .text_lg()
-            .text_color(text_color);
+        // Build input container using hstack() helper
+        let mut input = hstack().flex_1().text_lg().text_color(text_color);
 
         // Path prefix (if present)
         if let Some(ref prefix) = self.config.path_prefix {
             input = input.child(
                 div()
-                    .text_color(rgb(colors.text_muted))
+                    .text_color(colors.text_muted.to_rgb())
                     .child(prefix.clone()),
             );
         }
@@ -281,9 +276,9 @@ impl PromptHeader {
         // Use conditional background instead of .when() to avoid type inference issues
         if filter_is_empty {
             let cursor_bg = if cursor_visible {
-                rgb(colors.text_primary)
+                colors.text_primary.to_rgb()
             } else {
-                rgba(0x00000000)
+                0x000000u32.with_opacity(0.0)
             };
             input = input.child(
                 div()
@@ -310,9 +305,9 @@ impl PromptHeader {
         // Right cursor (when not empty)
         if !filter_is_empty {
             let cursor_bg = if cursor_visible {
-                rgb(colors.text_primary)
+                colors.text_primary.to_rgb()
             } else {
-                rgba(0x00000000)
+                0x000000u32.with_opacity(0.0)
             };
             input = input.child(
                 div()
@@ -342,7 +337,8 @@ impl PromptHeader {
         let on_primary = self.on_primary_click.clone();
         let on_actions = self.on_actions_click.clone();
 
-        let mut container = div().flex().flex_row().items_center().justify_end();
+        // Use hstack() helper for cleaner layout
+        let mut container = hstack().justify_end();
 
         // Primary button
         let mut primary_btn = Button::new(self.config.primary_button_label.clone(), button_colors)
@@ -356,10 +352,11 @@ impl PromptHeader {
             }));
         }
         container = container.child(primary_btn);
+        // Use rgba8() instead of manual << 8 | alpha
         container = container.child(
             div()
                 .mx(rems(0.25))
-                .text_color(rgba((colors.text_dimmed << 8) | 0x60))
+                .text_color(colors.text_dimmed.rgba8(0x60))
                 .text_sm()
                 .child("|"),
         );
@@ -378,10 +375,11 @@ impl PromptHeader {
             }
 
             container = container.child(actions_btn);
+            // Use rgba8() instead of manual << 8 | alpha
             container = container.child(
                 div()
                     .mx(rems(0.25))
-                    .text_color(rgba((colors.text_dimmed << 8) | 0x60))
+                    .text_color(colors.text_dimmed.rgba8(0x60))
                     .text_sm()
                     .child("|"),
             );
@@ -402,15 +400,15 @@ impl PromptHeader {
             self.config.actions_search_text.clone().into()
         };
 
-        // Compute cursor background color
+        // Compute cursor background color using HexColorExt
         let cursor_bg = if cursor_visible {
-            rgb(colors.accent)
+            colors.accent.to_rgb()
         } else {
-            rgba(0x00000000)
+            0x000000u32.with_opacity(0.0)
         };
 
-        // Build the search input element
-        let mut search_input = div()
+        // Build the search input element using hstack() helper
+        let mut search_input = hstack()
             .flex_shrink_0()
             .w(px(130.))
             .min_w(px(130.))
@@ -419,23 +417,23 @@ impl PromptHeader {
             .min_h(rems(1.5))
             .max_h(rems(1.5))
             .overflow_hidden()
-            .flex()
-            .flex_row()
-            .items_center()
             .px(rems(0.5))
             .rounded(px(4.))
-            .bg(rgba(
-                (colors.search_box_bg << 8) | if search_is_empty { 0x40 } else { 0x80 },
-            ))
+            // Use rgba8() instead of manual << 8 | alpha
+            .bg(colors
+                .search_box_bg
+                .rgba8(if search_is_empty { 0x40 } else { 0x80 }))
             .border_1()
-            .border_color(rgba(
-                (colors.accent << 8) | if search_is_empty { 0x20 } else { 0x40 },
-            ))
+            .border_color(
+                colors
+                    .accent
+                    .rgba8(if search_is_empty { 0x20 } else { 0x40 }),
+            )
             .text_sm()
             .text_color(if search_is_empty {
-                rgb(colors.text_muted)
+                colors.text_muted.to_rgb()
             } else {
-                rgb(colors.text_primary)
+                colors.text_primary.to_rgb()
             });
 
         // Cursor before placeholder when empty
@@ -464,16 +462,14 @@ impl PromptHeader {
             );
         }
 
-        div()
-            .flex()
-            .flex_row()
-            .items_center()
+        // Use hstack() helper for container
+        hstack()
             .justify_end()
             .gap(rems(0.5))
             // ⌘K indicator
             .child(
                 div()
-                    .text_color(rgb(colors.text_dimmed))
+                    .text_color(colors.text_dimmed.to_rgb())
                     .text_xs()
                     .child("⌘K"),
             )
@@ -482,7 +478,7 @@ impl PromptHeader {
             .child(
                 div()
                     .mx(rems(0.25))
-                    .text_color(rgba((colors.text_dimmed << 8) | 0x60))
+                    .text_color(colors.text_dimmed.rgba8(0x60))
                     .text_sm()
                     .child("|"),
             )
@@ -493,7 +489,7 @@ impl PromptHeader {
         svg()
             .external_path(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/logo.svg"))
             .size(rems(1.0))
-            .text_color(rgb(self.colors.accent))
+            .text_color(self.colors.accent.to_rgb())
     }
 }
 
@@ -514,13 +510,10 @@ impl RenderOnce for PromptHeader {
             (0., false)
         };
 
-        // Build buttons layer
-        let mut buttons_layer = div()
+        // Build buttons layer using hstack() helper
+        let mut buttons_layer = hstack()
             .absolute()
             .inset_0()
-            .flex()
-            .flex_row()
-            .items_center()
             .justify_end()
             .opacity(buttons_opacity);
 
@@ -529,13 +522,10 @@ impl RenderOnce for PromptHeader {
         }
         buttons_layer = buttons_layer.child(self.render_buttons_area());
 
-        // Build search layer
-        let mut search_layer = div()
+        // Build search layer using hstack() helper
+        let mut search_layer = hstack()
             .absolute()
             .inset_0()
-            .flex()
-            .flex_row()
-            .items_center()
             .justify_end()
             .opacity(search_opacity);
 
@@ -544,13 +534,11 @@ impl RenderOnce for PromptHeader {
         }
         search_layer = search_layer.child(self.render_actions_search());
 
-        div()
+        // Main header using hstack() helper
+        hstack()
             .w_full()
             .px(rems(1.0))
             .py(rems(0.5))
-            .flex()
-            .flex_row()
-            .items_center()
             .gap(rems(0.75))
             // Search input area
             .child(self.render_input_area())
