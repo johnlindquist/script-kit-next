@@ -60,6 +60,18 @@ impl WindowRole {
             WindowRole::AiChat => "AI",
         }
     }
+
+    /// Convert to the persistence WindowRole type.
+    ///
+    /// This provides a clean bridge between the registry's WindowRole (used for handle management)
+    /// and window_state::WindowRole (used for bounds persistence).
+    pub fn to_persist_role(&self) -> crate::window_state::WindowRole {
+        match self {
+            WindowRole::Main => crate::window_state::WindowRole::Main,
+            WindowRole::Notes => crate::window_state::WindowRole::Notes,
+            WindowRole::AiChat => crate::window_state::WindowRole::Ai,
+        }
+    }
 }
 
 /// Internal registry state
@@ -148,6 +160,103 @@ pub fn is_window_open(role: WindowRole) -> bool {
         .unwrap_or(false)
 }
 
+/// Atomically take (remove and return) a window handle.
+///
+/// This is used for close paths where we need to:
+/// 1. Remove the handle from the registry
+/// 2. Perform cleanup operations on it
+///
+/// Returns `None` if no window was registered for this role.
+///
+/// # Arguments
+/// * `role` - The role to take
+pub fn take_window(role: WindowRole) -> Option<WindowHandle<Root>> {
+    registry().lock().ok().and_then(|mut reg| {
+        let handle = reg.handles.remove(&role);
+        if handle.is_some() {
+            crate::logging::log(
+                "WINDOW_REG",
+                &format!("Took window handle: {:?}", role.name()),
+            );
+        }
+        handle
+    })
+}
+
+/// Get a window only if it's valid (update succeeds).
+///
+/// This is safer than `get_window` because it probes the handle to verify
+/// the window still exists. If the handle is stale, it auto-clears from registry.
+///
+/// # Arguments
+/// * `role` - The role to look up
+/// * `cx` - The GPUI App context (needed to probe the handle)
+///
+/// # Returns
+/// The window handle if registered AND valid
+pub fn get_valid_window(role: WindowRole, cx: &mut App) -> Option<WindowHandle<Root>> {
+    let handle = get_window(role)?;
+    // Try to update the window - if it fails, the handle is stale
+    match handle.update(cx, |_, _, _| {}) {
+        Ok(_) => Some(handle),
+        Err(_) => {
+            // Handle is stale, auto-clear from registry
+            crate::logging::log(
+                "WINDOW_REG",
+                &format!("Auto-cleared stale handle for {:?}", role.name()),
+            );
+            clear_window(role);
+            None
+        }
+    }
+}
+
+/// Execute a closure on a window if it exists and is valid.
+///
+/// This is a convenience helper that combines `get_valid_window` with `handle.update()`,
+/// eliminating the need to release locks manually before calling update.
+///
+/// # Arguments
+/// * `role` - The role to look up
+/// * `cx` - The GPUI App context
+/// * `f` - The closure to execute on the window
+///
+/// # Returns
+/// `Some(R)` if the window existed and the closure executed, `None` otherwise
+pub fn with_window<R>(
+    role: WindowRole,
+    cx: &mut App,
+    f: impl FnOnce(&mut Root, &mut gpui::Window, &mut gpui::Context<Root>) -> R,
+) -> Option<R> {
+    let handle = get_valid_window(role, cx)?;
+    handle.update(cx, f).ok()
+}
+
+/// Close a window and save its bounds.
+///
+/// This is the canonical close helper that ensures bounds are saved regardless
+/// of how the window is closed (close_*_window, toggle close, Cmd+W, traffic light).
+///
+/// # Arguments
+/// * `role` - The window role to close
+/// * `cx` - The GPUI App context
+pub fn close_window_with_bounds(role: WindowRole, cx: &mut App) {
+    let Some(handle) = take_window(role) else {
+        return;
+    };
+
+    let _ = handle.update(cx, |_, window, _| {
+        // Save bounds before closing
+        let wb = window.window_bounds();
+        crate::window_state::save_window_from_gpui(role.to_persist_role(), wb);
+        crate::logging::log(
+            "WINDOW_REG",
+            &format!("Saved bounds and closing {:?}", role.name()),
+        );
+        window.remove_window();
+    });
+}
+
 /// Notify all registered windows to re-render.
 ///
 /// This is useful for broadcasting changes like theme updates.
@@ -198,5 +307,37 @@ mod tests {
         let role = WindowRole::Main;
         let role2 = role; // Copy
         assert_eq!(role, role2);
+    }
+
+    #[test]
+    fn test_window_role_to_persist_role() {
+        // Test conversion from WindowRole to window_state::WindowRole
+        let main = WindowRole::Main.to_persist_role();
+        assert!(matches!(main, crate::window_state::WindowRole::Main));
+
+        let notes = WindowRole::Notes.to_persist_role();
+        assert!(matches!(notes, crate::window_state::WindowRole::Notes));
+
+        let ai = WindowRole::AiChat.to_persist_role();
+        assert!(matches!(ai, crate::window_state::WindowRole::Ai));
+    }
+
+    #[test]
+    fn test_take_window_removes_handle() {
+        // Test that take_window atomically removes and returns the handle
+        // Note: Can't test with actual WindowHandle without GPUI context,
+        // so we test the registry state directly
+        let registry = registry();
+        if let Ok(mut reg) = registry.lock() {
+            // Clear any existing state
+            reg.handles.remove(&WindowRole::Notes);
+        }
+
+        // After take on empty, should return None
+        let result = take_window(WindowRole::Notes);
+        assert!(result.is_none());
+
+        // Verify nothing to take
+        assert!(!is_window_open(WindowRole::Notes));
     }
 }
