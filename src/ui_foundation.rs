@@ -501,49 +501,85 @@ pub fn spacer() -> Div {
 }
 
 // ============================================================================
-// Key Normalization - Handle platform-specific key names
+// Key Normalization - Allocation-free key matching
 // ============================================================================
+//
+// IMPORTANT: These helpers use eq_ignore_ascii_case() instead of to_lowercase()
+// to avoid allocations on every keystroke. This is a hot path optimization.
 
-/// Normalize key names to canonical forms.
+/// Check if key is an up arrow (handles both "up" and "arrowup" formats).
 ///
-/// GPUI sends different key names on different platforms:
-/// - macOS often sends "up", "down", "left", "right"
-/// - Other platforms may send "arrowup", "arrowdown", etc.
-///
-/// This normalizes to the short form for consistent matching.
-#[inline]
-pub fn normalize_key(key: &str) -> &str {
-    match key.to_lowercase().as_str() {
-        "arrowup" => "up",
-        "arrowdown" => "down",
-        "arrowleft" => "left",
-        "arrowright" => "right",
-        _ => key,
-    }
-}
-
-/// Check if key is an up arrow (handles both formats).
+/// Uses allocation-free ASCII case-insensitive comparison.
 #[inline]
 pub fn is_key_up(key: &str) -> bool {
-    matches!(key.to_lowercase().as_str(), "up" | "arrowup")
+    key.eq_ignore_ascii_case("up") || key.eq_ignore_ascii_case("arrowup")
 }
 
-/// Check if key is a down arrow (handles both formats).
+/// Check if key is a down arrow (handles both "down" and "arrowdown" formats).
+///
+/// Uses allocation-free ASCII case-insensitive comparison.
 #[inline]
 pub fn is_key_down(key: &str) -> bool {
-    matches!(key.to_lowercase().as_str(), "down" | "arrowdown")
+    key.eq_ignore_ascii_case("down") || key.eq_ignore_ascii_case("arrowdown")
 }
 
-/// Check if key is a left arrow (handles both formats).
+/// Check if key is a left arrow (handles both "left" and "arrowleft" formats).
+///
+/// Uses allocation-free ASCII case-insensitive comparison.
 #[inline]
 pub fn is_key_left(key: &str) -> bool {
-    matches!(key.to_lowercase().as_str(), "left" | "arrowleft")
+    key.eq_ignore_ascii_case("left") || key.eq_ignore_ascii_case("arrowleft")
 }
 
-/// Check if key is a right arrow (handles both formats).
+/// Check if key is a right arrow (handles both "right" and "arrowright" formats).
+///
+/// Uses allocation-free ASCII case-insensitive comparison.
 #[inline]
 pub fn is_key_right(key: &str) -> bool {
-    matches!(key.to_lowercase().as_str(), "right" | "arrowright")
+    key.eq_ignore_ascii_case("right") || key.eq_ignore_ascii_case("arrowright")
+}
+
+/// Check if key is Enter/Return.
+///
+/// Uses allocation-free ASCII case-insensitive comparison.
+#[inline]
+pub fn is_key_enter(key: &str) -> bool {
+    key.eq_ignore_ascii_case("enter") || key.eq_ignore_ascii_case("return")
+}
+
+/// Check if key is Escape.
+///
+/// Uses allocation-free ASCII case-insensitive comparison.
+#[inline]
+pub fn is_key_escape(key: &str) -> bool {
+    key.eq_ignore_ascii_case("escape") || key.eq_ignore_ascii_case("esc")
+}
+
+/// Check if key is Backspace.
+///
+/// Uses allocation-free ASCII case-insensitive comparison.
+#[inline]
+pub fn is_key_backspace(key: &str) -> bool {
+    key.eq_ignore_ascii_case("backspace")
+}
+
+/// Check if key is the "k" key (for Cmd+K shortcut).
+///
+/// Uses allocation-free ASCII case-insensitive comparison.
+#[inline]
+pub fn is_key_k(key: &str) -> bool {
+    key.eq_ignore_ascii_case("k")
+}
+
+/// Extract printable character from a KeyDownEvent's key_char field.
+///
+/// Returns Some(char) if the key_char contains a non-control character,
+/// None otherwise (for special keys like arrows, escape, etc.).
+#[inline]
+pub fn printable_char(key_char: Option<&str>) -> Option<char> {
+    key_char
+        .and_then(|s| s.chars().next())
+        .filter(|ch| !ch.is_control())
 }
 
 #[cfg(test)]
@@ -644,53 +680,111 @@ mod tests {
     }
 
     // ========================================================================
-    // Key Normalization Tests
+    // Key Normalization Tests (Allocation-free helpers)
     // ========================================================================
 
     #[test]
-    fn test_normalize_key() {
-        assert_eq!(normalize_key("arrowup"), "up");
-        assert_eq!(normalize_key("ArrowUp"), "up");
-        assert_eq!(normalize_key("ARROWUP"), "up");
-        assert_eq!(normalize_key("up"), "up");
-
-        assert_eq!(normalize_key("arrowdown"), "down");
-        assert_eq!(normalize_key("down"), "down");
-
-        assert_eq!(normalize_key("arrowleft"), "left");
-        assert_eq!(normalize_key("left"), "left");
-
-        assert_eq!(normalize_key("arrowright"), "right");
-        assert_eq!(normalize_key("right"), "right");
-
-        // Non-arrow keys pass through unchanged
-        assert_eq!(normalize_key("enter"), "enter");
-        assert_eq!(normalize_key("escape"), "escape");
+    fn test_is_key_up() {
+        // All valid forms
+        assert!(is_key_up("up"));
+        assert!(is_key_up("Up"));
+        assert!(is_key_up("UP"));
+        assert!(is_key_up("arrowup"));
+        assert!(is_key_up("ArrowUp"));
+        assert!(is_key_up("ARROWUP"));
+        // Invalid
+        assert!(!is_key_up("down"));
+        assert!(!is_key_up("left"));
+        assert!(!is_key_up("enter"));
     }
 
     #[test]
-    fn test_is_key_helpers() {
-        // Up
-        assert!(is_key_up("up"));
-        assert!(is_key_up("arrowup"));
-        assert!(is_key_up("ArrowUp"));
-        assert!(!is_key_up("down"));
-
-        // Down
+    fn test_is_key_down() {
         assert!(is_key_down("down"));
+        assert!(is_key_down("Down"));
+        assert!(is_key_down("DOWN"));
         assert!(is_key_down("arrowdown"));
         assert!(is_key_down("ArrowDown"));
+        assert!(is_key_down("ARROWDOWN"));
         assert!(!is_key_down("up"));
+        assert!(!is_key_down("right"));
+    }
 
-        // Left
+    #[test]
+    fn test_is_key_left() {
         assert!(is_key_left("left"));
+        assert!(is_key_left("Left"));
         assert!(is_key_left("arrowleft"));
+        assert!(is_key_left("ArrowLeft"));
         assert!(!is_key_left("right"));
+        assert!(!is_key_left("up"));
+    }
 
-        // Right
+    #[test]
+    fn test_is_key_right() {
         assert!(is_key_right("right"));
+        assert!(is_key_right("Right"));
         assert!(is_key_right("arrowright"));
+        assert!(is_key_right("ArrowRight"));
         assert!(!is_key_right("left"));
+        assert!(!is_key_right("down"));
+    }
+
+    #[test]
+    fn test_is_key_enter() {
+        assert!(is_key_enter("enter"));
+        assert!(is_key_enter("Enter"));
+        assert!(is_key_enter("ENTER"));
+        assert!(is_key_enter("return"));
+        assert!(is_key_enter("Return"));
+        assert!(!is_key_enter("escape"));
+        assert!(!is_key_enter("space"));
+    }
+
+    #[test]
+    fn test_is_key_escape() {
+        assert!(is_key_escape("escape"));
+        assert!(is_key_escape("Escape"));
+        assert!(is_key_escape("ESCAPE"));
+        assert!(is_key_escape("esc"));
+        assert!(is_key_escape("Esc"));
+        assert!(!is_key_escape("enter"));
+    }
+
+    #[test]
+    fn test_is_key_backspace() {
+        assert!(is_key_backspace("backspace"));
+        assert!(is_key_backspace("Backspace"));
+        assert!(is_key_backspace("BACKSPACE"));
+        assert!(!is_key_backspace("delete"));
+        assert!(!is_key_backspace("enter"));
+    }
+
+    #[test]
+    fn test_is_key_k() {
+        assert!(is_key_k("k"));
+        assert!(is_key_k("K"));
+        assert!(!is_key_k("j"));
+        assert!(!is_key_k("enter"));
+    }
+
+    #[test]
+    fn test_printable_char() {
+        // Normal printable chars
+        assert_eq!(printable_char(Some("a")), Some('a'));
+        assert_eq!(printable_char(Some("A")), Some('A'));
+        assert_eq!(printable_char(Some("1")), Some('1'));
+        assert_eq!(printable_char(Some("!")), Some('!'));
+        assert_eq!(printable_char(Some(" ")), Some(' '));
+
+        // Control characters should return None
+        assert_eq!(printable_char(Some("\n")), None);
+        assert_eq!(printable_char(Some("\t")), None);
+        assert_eq!(printable_char(Some("\x1b")), None); // ESC
+
+        // Empty/None cases
+        assert_eq!(printable_char(None), None);
+        assert_eq!(printable_char(Some("")), None);
     }
 
     // ========================================================================
