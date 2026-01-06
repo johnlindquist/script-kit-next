@@ -1080,6 +1080,9 @@ struct ScriptListApp {
     // Window focus tracking - for detecting focus lost and auto-dismissing prompts
     // When window loses focus while in a dismissable prompt, close and reset
     was_window_focused: bool,
+    /// Pin state - when true, window stays open on blur (only closes via ESC/Cmd+W)
+    /// Toggle with Cmd+Shift+P
+    is_pinned: bool,
     /// Pending focus target - when set, focus will be applied once on next render
     /// then cleared. This avoids the "perpetually enforce focus in render()" anti-pattern.
     pending_focus: Option<FocusTarget>,
@@ -1145,16 +1148,25 @@ impl Render for ScriptListApp {
 
         // Focus-lost auto-dismiss: Close dismissable prompts when the main window loses focus
         // This includes focus loss to other app windows like Notes/AI.
+        // When is_pinned is true, the window stays open on blur (only closes via ESC/Cmd+W)
         let is_window_focused = platform::is_main_window_focused();
         if self.was_window_focused && !is_window_focused {
             // Window just lost focus (user clicked another window)
-            // Only auto-dismiss if we're in a dismissable view AND window is visible
-            if self.is_dismissable_view() && script_kit_gpui::is_main_window_visible() {
+            // Only auto-dismiss if we're in a dismissable view AND window is visible AND not pinned
+            if self.is_dismissable_view()
+                && script_kit_gpui::is_main_window_visible()
+                && !self.is_pinned
+            {
                 logging::log(
                     "FOCUS",
                     "Main window lost focus while in dismissable view - closing",
                 );
                 self.close_and_reset_window(cx);
+            } else if self.is_pinned {
+                logging::log(
+                    "FOCUS",
+                    "Main window lost focus but is pinned - staying open",
+                );
             }
         }
         self.was_window_focused = is_window_focused;

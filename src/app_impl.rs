@@ -285,6 +285,8 @@ impl ScriptListApp {
             wheel_accum: 0.0,
             // Window focus tracking - for detecting focus lost and auto-dismissing prompts
             was_window_focused: false,
+            // Pin state - when true, window stays open on blur
+            is_pinned: false,
             // Pending focus: start with MainFilter since that's what we want focused initially
             pending_focus: Some(FocusTarget::MainFilter),
             // Scroll stabilization: track last scrolled index for each handle
@@ -2727,6 +2729,9 @@ impl ScriptListApp {
     fn close_and_reset_window(&mut self, cx: &mut Context<Self>) {
         logging::log("VISIBILITY", "=== Close and reset window ===");
 
+        // Reset pin state when window is closed
+        self.is_pinned = false;
+
         // Close actions window FIRST if open (it's a child of main window)
         if self.show_actions_popup || is_actions_window_open() {
             self.show_actions_popup = false;
@@ -2829,6 +2834,20 @@ impl ScriptListApp {
             logging::log("KEY", &format!("Cmd+Shift+M - {}", result));
             // Show HUD with the material name
             self.show_hud(result, None, cx);
+            return true;
+        }
+
+        // Cmd+Shift+P toggles pin mode (window stays open on blur)
+        if has_cmd && has_shift && key_str == "p" {
+            self.is_pinned = !self.is_pinned;
+            let status = if self.is_pinned {
+                "📌 Window Pinned"
+            } else {
+                "📌 Window Unpinned"
+            };
+            logging::log("KEY", &format!("Cmd+Shift+P - {}", status));
+            self.show_hud(status.to_string(), None, cx);
+            cx.notify();
             return true;
         }
 

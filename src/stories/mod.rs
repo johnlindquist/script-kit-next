@@ -3,26 +3,36 @@
 //! This module contains all the story definitions for the storybook.
 //! Stories are manually registered in get_all_stories().
 
+mod arg_prompt_stories;
 mod button_stories;
 mod design_token_stories;
+mod drop_prompt_stories;
+mod env_prompt_stories;
 mod form_field_stories;
 mod header_design_variations;
 mod header_stories;
 mod list_item_stories;
+mod path_prompt_stories;
 mod scrollbar_stories;
+mod select_prompt_stories;
 mod toast_stories;
 
 use crate::storybook::StoryEntry;
 use std::sync::OnceLock;
 
 // Re-export story types
+pub use arg_prompt_stories::ArgPromptStory;
 pub use button_stories::ButtonStory;
 pub use design_token_stories::DesignTokenStory;
+pub use drop_prompt_stories::DropPromptStory;
+pub use env_prompt_stories::EnvPromptStory;
 pub use form_field_stories::FormFieldStory;
 pub use header_design_variations::HeaderDesignVariationsStory;
 pub use header_stories::HeaderVariationsStory;
 pub use list_item_stories::ListItemStory;
+pub use path_prompt_stories::PathPromptStory;
 pub use scrollbar_stories::ScrollbarStory;
+pub use select_prompt_stories::SelectPromptStory;
 pub use toast_stories::ToastStory;
 
 /// Static storage for all stories
@@ -43,6 +53,12 @@ pub fn get_all_stories() -> &'static Vec<StoryEntry> {
             // Layouts
             StoryEntry::new(Box::new(HeaderVariationsStory)),
             StoryEntry::new(Box::new(HeaderDesignVariationsStory)),
+            // Prompts
+            StoryEntry::new(Box::new(ArgPromptStory)),
+            StoryEntry::new(Box::new(DropPromptStory)),
+            StoryEntry::new(Box::new(EnvPromptStory)),
+            StoryEntry::new(Box::new(PathPromptStory)),
+            StoryEntry::new(Box::new(SelectPromptStory)),
         ]
     })
 }
