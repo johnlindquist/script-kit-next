@@ -3010,12 +3010,7 @@ impl ScriptListApp {
         }
     }
 
-    /// Convert hex color to rgba with opacity from theme
-    fn hex_to_rgba_with_opacity(&self, hex: u32, opacity: f32) -> u32 {
-        // Convert opacity (0.0-1.0) to alpha byte (0-255)
-        let alpha = (opacity.clamp(0.0, 1.0) * 255.0) as u32;
-        (hex << 8) | alpha
-    }
+    // NOTE: hex_to_rgba_with_opacity moved to crate::ui_foundation (centralized)
 
     /// Create box shadows from theme configuration
     fn create_box_shadows(&self) -> Vec<BoxShadow> {

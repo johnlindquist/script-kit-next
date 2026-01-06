@@ -371,18 +371,17 @@ impl BrowsePanel {
     // Vibrancy Helper Functions
     // =====================================================
 
-    /// Convert hex color to rgba with opacity
-    fn hex_to_rgba_with_opacity(hex: u32, opacity: f32) -> u32 {
-        let alpha = (opacity.clamp(0.0, 1.0) * 255.0) as u32;
-        (hex << 8) | alpha
-    }
+    // NOTE: hex_to_rgba_with_opacity moved to crate::ui_foundation (centralized)
 
     /// Get background color with vibrancy opacity applied
     fn get_vibrancy_background(_cx: &Context<Self>) -> gpui::Rgba {
         let sk_theme = crate::theme::load_theme();
         let opacity = sk_theme.get_opacity();
         let bg_hex = sk_theme.colors.background.main;
-        rgba(Self::hex_to_rgba_with_opacity(bg_hex, opacity.main))
+        rgba(crate::ui_foundation::hex_to_rgba_with_opacity(
+            bg_hex,
+            opacity.main,
+        ))
     }
 
     /// Render the notes list

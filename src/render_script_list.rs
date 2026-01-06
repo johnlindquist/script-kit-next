@@ -838,7 +838,7 @@ impl ScriptListApp {
         // VIBRANCY: Remove background from content div - let gpui-component Root's
         // semi-transparent background handle vibrancy effect. Content areas should NOT
         // have their own backgrounds to allow blur to show through.
-        let _bg_with_alpha = self.hex_to_rgba_with_opacity(bg_hex, opacity.main);
+        let _bg_with_alpha = crate::ui_foundation::hex_to_rgba_with_opacity(bg_hex, opacity.main);
 
         let mut main_div = div()
             .flex()

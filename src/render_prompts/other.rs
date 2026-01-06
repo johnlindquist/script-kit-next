@@ -16,7 +16,7 @@ impl ScriptListApp {
         // Use design tokens for global theming
         let opacity = self.theme.get_opacity();
         let bg_hex = design_colors.background;
-        let bg_with_alpha = self.hex_to_rgba_with_opacity(bg_hex, opacity.main);
+        let bg_with_alpha = crate::ui_foundation::hex_to_rgba_with_opacity(bg_hex, opacity.main);
         let box_shadows = self.create_box_shadows();
 
         // Key handler for global shortcuts (Cmd+W, ESC)
@@ -60,7 +60,7 @@ impl ScriptListApp {
         // Use design tokens for global theming
         let opacity = self.theme.get_opacity();
         let bg_hex = design_colors.background;
-        let bg_with_alpha = self.hex_to_rgba_with_opacity(bg_hex, opacity.main);
+        let bg_with_alpha = crate::ui_foundation::hex_to_rgba_with_opacity(bg_hex, opacity.main);
         let box_shadows = self.create_box_shadows();
 
         // Key handler for global shortcuts (Cmd+W, ESC)
@@ -104,7 +104,7 @@ impl ScriptListApp {
         // Use design tokens for global theming
         let opacity = self.theme.get_opacity();
         let bg_hex = design_colors.background;
-        let bg_with_alpha = self.hex_to_rgba_with_opacity(bg_hex, opacity.main);
+        let bg_with_alpha = crate::ui_foundation::hex_to_rgba_with_opacity(bg_hex, opacity.main);
         let box_shadows = self.create_box_shadows();
 
         // Key handler for global shortcuts (Cmd+W, ESC)
@@ -148,7 +148,7 @@ impl ScriptListApp {
         // Use design tokens for global theming
         let opacity = self.theme.get_opacity();
         let bg_hex = design_colors.background;
-        let bg_with_alpha = self.hex_to_rgba_with_opacity(bg_hex, opacity.main);
+        let bg_with_alpha = crate::ui_foundation::hex_to_rgba_with_opacity(bg_hex, opacity.main);
         let box_shadows = self.create_box_shadows();
 
         // Key handler for global shortcuts (Cmd+W, ESC)
