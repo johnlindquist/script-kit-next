@@ -4,6 +4,7 @@
 //! Each prompt type is implemented in its own submodule for parallel development.
 //!
 //! # Module Structure
+//! - `base`: PromptBase - Shared base infrastructure (fields, DesignContext, macros)
 //! - `arg`: ArgPrompt - Selectable list with search/filtering
 //! - `div`: DivPrompt - HTML content display
 //! - `path`: PathPrompt - File/folder picker (skeleton)
@@ -15,6 +16,7 @@
 #![allow(dead_code)]
 
 mod arg;
+pub mod base;
 pub mod div;
 mod drop;
 mod env;
@@ -27,6 +29,10 @@ mod template;
 // 1. Create Entity<PromptType> in main.rs
 // 2. Switch from inline rendering to entity-based rendering
 // pub use arg::ArgPrompt;
+
+// Base infrastructure for prompts - will be used as prompts adopt PromptBase
+#[allow(unused_imports)]
+pub use base::{DesignContext, PromptBase, ResolvedColors};
 pub use div::{ContainerOptions, ContainerPadding, DivPrompt};
 
 // These exports are ready for use in main.rs when AppView variants are added
