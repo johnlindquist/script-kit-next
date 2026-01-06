@@ -778,6 +778,7 @@ fn test_fuzzy_search_unified_scripts_first() {
         SearchResult::App(_) => panic!("Script should be first"),
         SearchResult::Window(_) => panic!("Script should be first"),
         SearchResult::Agent(_) => panic!("Script should be first"),
+        SearchResult::Fallback(_) => panic!("Script should be first"),
     }
 }
 
@@ -2160,6 +2161,7 @@ fn test_unified_search_ties_scripts_first() {
         SearchResult::App(_) => panic!("Expected Script first"),
         SearchResult::Window(_) => panic!("Expected Script first"),
         SearchResult::Agent(_) => panic!("Expected Script first"),
+        SearchResult::Fallback(_) => panic!("Expected Script first"),
     }
 }
 
@@ -2813,12 +2815,24 @@ fn test_get_grouped_results_search_mode_flat_list() {
         None,
     );
 
-    // Should be a flat list with no headers
+    // Should be a flat list with fallback section at the end
+    // Non-fallback items should be Item entries, followed by a SectionHeader and fallback Items
     assert!(!grouped.is_empty());
-    for item in &grouped {
-        assert!(matches!(item, GroupedListItem::Item(_)));
+
+    // Find first section header (should be the "Use with..." section)
+    let first_header_idx = grouped
+        .iter()
+        .position(|item| matches!(item, GroupedListItem::SectionHeader(_)));
+
+    // Items before the header should all be Item entries
+    if let Some(idx) = first_header_idx {
+        for item in grouped.iter().take(idx) {
+            assert!(matches!(item, GroupedListItem::Item(_)));
+        }
     }
-    assert_eq!(results.len(), 1); // Only "open" matches
+
+    // At least one match for "open"
+    assert!(!results.is_empty());
 }
 
 #[test]

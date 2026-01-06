@@ -11,15 +11,24 @@ use tracing::{debug, instrument};
 use crate::app_launcher::AppInfo;
 use crate::builtins::{menu_bar_items_to_entries, BuiltInEntry, BuiltInGroup};
 use crate::config::SuggestedConfig;
+use crate::fallbacks::collector::collect_fallbacks;
 use crate::frecency::FrecencyStore;
 use crate::list_item::GroupedListItem;
 use crate::menu_bar::MenuBarItem;
 
 use super::search::fuzzy_search_unified_all;
-use super::types::{Script, Scriptlet, SearchResult};
+use super::types::{FallbackMatch, Script, Scriptlet, SearchResult};
 
 /// Default maximum number of items to show in the RECENT section
 pub const DEFAULT_MAX_RECENT_ITEMS: usize = 10;
+
+/// Maximum number of menu bar items to show in search results
+/// This prevents menu bar actions from overwhelming the results
+pub const MAX_MENU_BAR_ITEMS: usize = 5;
+
+/// Minimum score required for a menu bar item to appear in results
+/// This filters out weak matches that would clutter the list
+pub const MIN_MENU_BAR_SCORE: i32 = 25;
 
 /// Get grouped results with SUGGESTED/MAIN sections based on frecency
 ///
@@ -90,15 +99,28 @@ pub fn get_grouped_results(
         let mut menu_bar_indices: Vec<usize> = Vec::new();
 
         for (idx, result) in results.iter().enumerate() {
-            if matches!(result, SearchResult::BuiltIn(bm) if bm.entry.group == BuiltInGroup::MenuBar)
-            {
-                menu_bar_indices.push(idx);
-            } else {
-                non_menu_bar_indices.push(idx);
+            if let SearchResult::BuiltIn(bm) = result {
+                if bm.entry.group == BuiltInGroup::MenuBar {
+                    // Only include menu bar items that meet minimum score threshold
+                    if bm.score >= MIN_MENU_BAR_SCORE {
+                        menu_bar_indices.push(idx);
+                    }
+                    continue;
+                }
             }
+            non_menu_bar_indices.push(idx);
         }
 
+        // Limit menu bar items to prevent overwhelming results
+        menu_bar_indices.truncate(MAX_MENU_BAR_ITEMS);
+
         let mut grouped: Vec<GroupedListItem> = Vec::new();
+        let mut results = results; // Make results mutable so we can append fallbacks
+
+        // Track counts before consuming the vectors
+        let non_menu_bar_count = non_menu_bar_indices.len();
+        let menu_bar_count = menu_bar_indices.len();
+        let has_other_results = non_menu_bar_count > 0 || menu_bar_count > 0;
 
         // Add non-menu-bar items first
         for idx in non_menu_bar_indices {
@@ -106,8 +128,7 @@ pub fn get_grouped_results(
         }
 
         // Add menu bar section with header if there are menu bar items
-        let menu_bar_count = menu_bar_indices.len();
-        if !menu_bar_indices.is_empty() {
+        if menu_bar_count > 0 {
             grouped.push(GroupedListItem::SectionHeader(
                 "MENU BAR ACTIONS".to_string(),
             ));
@@ -116,9 +137,40 @@ pub fn get_grouped_results(
             }
         }
 
+        // Collect fallback commands and append as "Use {query} with..." section OR as primary results
+        let fallbacks = collect_fallbacks(filter_text, scripts);
+        let fallback_count = fallbacks.len();
+
+        if !fallbacks.is_empty() {
+            // When there are no other results, fallbacks are elevated to primary (no header)
+            // This gives Raycast-style behavior where fallbacks become the main focus
+            if has_other_results {
+                // Add section header with the actual query text (fallbacks are secondary)
+                grouped.push(GroupedListItem::SectionHeader(format!(
+                    "Use \"{}\" with...",
+                    filter_text
+                )));
+            }
+            // When has_other_results is false, no header is added - fallbacks become primary
+
+            // Append fallback items to the results vec and add their indices to grouped
+            for fallback in fallbacks {
+                let idx = results.len();
+                results.push(SearchResult::Fallback(FallbackMatch {
+                    fallback,
+                    score: 0, // Fallbacks don't use score, they use priority
+                }));
+                grouped.push(GroupedListItem::Item(idx));
+            }
+        }
+
+        let fallbacks_elevated = fallback_count > 0 && !has_other_results;
         debug!(
             result_count = results.len(),
-            menu_bar_count, "Search mode: returning list with menu bar section"
+            menu_bar_count,
+            fallback_count,
+            fallbacks_elevated,
+            "Search mode: returning list with menu bar and fallback sections"
         );
         return (grouped, results);
     }
@@ -153,6 +205,8 @@ pub fn get_grouped_results(
                 Some(format!("window:{}:{}", wm.window.app, wm.window.title))
             }
             SearchResult::Agent(am) => Some(format!("agent:{}", am.agent.path.to_string_lossy())),
+            // Fallbacks don't have paths - they're only shown in search mode, not grouped view
+            SearchResult::Fallback(_) => None,
         }
     };
 
@@ -192,6 +246,8 @@ pub fn get_grouped_results(
                     }
                     SearchResult::App(_) => apps_indices.push(idx),
                     SearchResult::Agent(_) => agents_indices.push(idx),
+                    // Fallbacks should never appear in grouped view - they're search-mode only
+                    SearchResult::Fallback(_) => {}
                 }
             }
         } else {
@@ -202,6 +258,8 @@ pub fn get_grouped_results(
                 SearchResult::BuiltIn(_) | SearchResult::Window(_) => commands_indices.push(idx),
                 SearchResult::App(_) => apps_indices.push(idx),
                 SearchResult::Agent(_) => agents_indices.push(idx),
+                // Fallbacks should never appear in grouped view - they're search-mode only
+                SearchResult::Fallback(_) => {}
             }
         }
     }

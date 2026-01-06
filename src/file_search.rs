@@ -280,6 +280,175 @@ pub fn get_file_metadata(path: &str) -> Option<FileMetadata> {
     })
 }
 
+// ============================================================================
+// UI Helper Functions
+// These functions are prepared for file search UI that's being implemented.
+// Allow dead_code temporarily until the file search view is complete.
+// ============================================================================
+
+/// Get an emoji icon for the file type (used in file search UI)
+#[allow(dead_code)]
+pub fn file_type_icon(file_type: FileType) -> &'static str {
+    match file_type {
+        FileType::Directory => "📁",
+        FileType::Application => "📦",
+        FileType::Image => "🖼️",
+        FileType::Document => "📄",
+        FileType::Audio => "🎵",
+        FileType::Video => "🎬",
+        FileType::File => "📃",
+        FileType::Other => "📎",
+    }
+}
+
+/// Format file size in human-readable format (e.g., "1.2 MB", "456 KB")
+#[allow(dead_code)]
+pub fn format_file_size(bytes: u64) -> String {
+    const KB: u64 = 1024;
+    const MB: u64 = KB * 1024;
+    const GB: u64 = MB * 1024;
+
+    if bytes >= GB {
+        format!("{:.1} GB", bytes as f64 / GB as f64)
+    } else if bytes >= MB {
+        format!("{:.1} MB", bytes as f64 / MB as f64)
+    } else if bytes >= KB {
+        format!("{:.1} KB", bytes as f64 / KB as f64)
+    } else {
+        format!("{} B", bytes)
+    }
+}
+
+/// Format Unix timestamp as relative time (e.g., "2 hours ago", "3 days ago")
+#[allow(dead_code)]
+pub fn format_relative_time(unix_timestamp: u64) -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+
+    if unix_timestamp == 0 {
+        return "Unknown".to_string();
+    }
+
+    let diff = now.saturating_sub(unix_timestamp);
+
+    const MINUTE: u64 = 60;
+    const HOUR: u64 = MINUTE * 60;
+    const DAY: u64 = HOUR * 24;
+    const WEEK: u64 = DAY * 7;
+    const MONTH: u64 = DAY * 30;
+    const YEAR: u64 = DAY * 365;
+
+    if diff < MINUTE {
+        "Just now".to_string()
+    } else if diff < HOUR {
+        let mins = diff / MINUTE;
+        format!("{} min{} ago", mins, if mins == 1 { "" } else { "s" })
+    } else if diff < DAY {
+        let hours = diff / HOUR;
+        format!("{} hour{} ago", hours, if hours == 1 { "" } else { "s" })
+    } else if diff < WEEK {
+        let days = diff / DAY;
+        format!("{} day{} ago", days, if days == 1 { "" } else { "s" })
+    } else if diff < MONTH {
+        let weeks = diff / WEEK;
+        format!("{} week{} ago", weeks, if weeks == 1 { "" } else { "s" })
+    } else if diff < YEAR {
+        let months = diff / MONTH;
+        format!("{} month{} ago", months, if months == 1 { "" } else { "s" })
+    } else {
+        let years = diff / YEAR;
+        format!("{} year{} ago", years, if years == 1 { "" } else { "s" })
+    }
+}
+
+/// Open a file with the system default application
+#[allow(dead_code)]
+pub fn open_file(path: &str) -> Result<(), String> {
+    use std::process::Command;
+
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open")
+            .arg(path)
+            .spawn()
+            .map_err(|e| format!("Failed to open file: {}", e))?;
+        Ok(())
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        Command::new("xdg-open")
+            .arg(path)
+            .spawn()
+            .map_err(|e| format!("Failed to open file: {}", e))?;
+        Ok(())
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        Command::new("cmd")
+            .args(["/C", "start", "", path])
+            .spawn()
+            .map_err(|e| format!("Failed to open file: {}", e))?;
+        Ok(())
+    }
+}
+
+/// Reveal a file in Finder (macOS) or file manager
+#[allow(dead_code)]
+pub fn reveal_in_finder(path: &str) -> Result<(), String> {
+    use std::process::Command;
+
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open")
+            .args(["-R", path])
+            .spawn()
+            .map_err(|e| format!("Failed to reveal file: {}", e))?;
+        Ok(())
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        // Try to get the parent directory and open it
+        let parent = std::path::Path::new(path)
+            .parent()
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_else(|| path.to_string());
+        Command::new("xdg-open")
+            .arg(&parent)
+            .spawn()
+            .map_err(|e| format!("Failed to reveal file: {}", e))?;
+        Ok(())
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        Command::new("explorer")
+            .args(["/select,", path])
+            .spawn()
+            .map_err(|e| format!("Failed to reveal file: {}", e))?;
+        Ok(())
+    }
+}
+
+/// Shorten a path for display by using ~ for home directory
+#[allow(dead_code)]
+pub fn shorten_path(path: &str) -> String {
+    if let Some(home) = dirs::home_dir() {
+        if let Some(home_str) = home.to_str() {
+            if let Some(stripped) = path.strip_prefix(home_str) {
+                return format!("~{}", stripped);
+            }
+        }
+    }
+    path.to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -427,5 +596,86 @@ mod tests {
             assert!(m.readable);
         }
         // It's OK if this returns None on some systems
+    }
+
+    // ========================================================================
+    // UI Helper Function Tests
+    // ========================================================================
+
+    #[test]
+    fn test_file_type_icon() {
+        assert_eq!(file_type_icon(FileType::Directory), "📁");
+        assert_eq!(file_type_icon(FileType::Application), "📦");
+        assert_eq!(file_type_icon(FileType::Image), "🖼️");
+        assert_eq!(file_type_icon(FileType::Document), "📄");
+        assert_eq!(file_type_icon(FileType::Audio), "🎵");
+        assert_eq!(file_type_icon(FileType::Video), "🎬");
+        assert_eq!(file_type_icon(FileType::File), "📃");
+        assert_eq!(file_type_icon(FileType::Other), "📎");
+    }
+
+    #[test]
+    fn test_format_file_size() {
+        // Bytes
+        assert_eq!(format_file_size(0), "0 B");
+        assert_eq!(format_file_size(512), "512 B");
+        assert_eq!(format_file_size(1023), "1023 B");
+
+        // Kilobytes
+        assert_eq!(format_file_size(1024), "1.0 KB");
+        assert_eq!(format_file_size(1536), "1.5 KB");
+        assert_eq!(format_file_size(10240), "10.0 KB");
+
+        // Megabytes
+        assert_eq!(format_file_size(1024 * 1024), "1.0 MB");
+        assert_eq!(format_file_size(1024 * 1024 * 5), "5.0 MB");
+
+        // Gigabytes
+        assert_eq!(format_file_size(1024 * 1024 * 1024), "1.0 GB");
+        assert_eq!(format_file_size(1024 * 1024 * 1024 * 2), "2.0 GB");
+    }
+
+    #[test]
+    fn test_format_relative_time() {
+        use std::time::{SystemTime, UNIX_EPOCH};
+
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        // Just now (0 seconds ago)
+        assert_eq!(format_relative_time(now), "Just now");
+
+        // Minutes ago
+        assert_eq!(format_relative_time(now - 60), "1 min ago");
+        assert_eq!(format_relative_time(now - 120), "2 mins ago");
+        assert_eq!(format_relative_time(now - 59 * 60), "59 mins ago");
+
+        // Hours ago
+        assert_eq!(format_relative_time(now - 3600), "1 hour ago");
+        assert_eq!(format_relative_time(now - 7200), "2 hours ago");
+
+        // Days ago
+        assert_eq!(format_relative_time(now - 86400), "1 day ago");
+        assert_eq!(format_relative_time(now - 172800), "2 days ago");
+
+        // Unknown (0 timestamp)
+        assert_eq!(format_relative_time(0), "Unknown");
+    }
+
+    #[test]
+    fn test_shorten_path() {
+        // Test with a path that doesn't start with home
+        assert_eq!(shorten_path("/usr/local/bin"), "/usr/local/bin");
+        assert_eq!(shorten_path("/etc/hosts"), "/etc/hosts");
+
+        // Test with home directory path (if home dir is available)
+        if let Some(home) = dirs::home_dir() {
+            if let Some(home_str) = home.to_str() {
+                let test_path = format!("{}/Documents/test.txt", home_str);
+                assert_eq!(shorten_path(&test_path), "~/Documents/test.txt");
+            }
+        }
     }
 }

@@ -102,6 +102,8 @@ pub struct PromptHeaderConfig {
     pub actions_search_text: String,
     /// Whether the input is focused
     pub is_focused: bool,
+    /// Whether to show the "Ask AI" hint with Tab badge
+    pub show_ask_ai_hint: bool,
 }
 
 impl Default for PromptHeaderConfig {
@@ -117,6 +119,7 @@ impl Default for PromptHeaderConfig {
             actions_mode: false,
             actions_search_text: String::new(),
             is_focused: true,
+            show_ask_ai_hint: false,
         }
     }
 }
@@ -184,6 +187,12 @@ impl PromptHeaderConfig {
     /// Set whether the input is focused
     pub fn focused(mut self, focused: bool) -> Self {
         self.is_focused = focused;
+        self
+    }
+
+    /// Set whether to show the "Ask AI" hint with Tab badge
+    pub fn show_ask_ai_hint(mut self, show: bool) -> Self {
+        self.show_ask_ai_hint = show;
         self
     }
 }
@@ -484,6 +493,36 @@ impl PromptHeader {
             )
     }
 
+    /// Render the "Ask AI" hint with Tab badge (Raycast-style)
+    ///
+    /// Displays: "Ask AI [Tab]" where Tab is in a subtle bordered badge
+    fn render_ask_ai_hint(&self) -> impl IntoElement {
+        let colors = self.colors;
+
+        hstack()
+            .gap(rems(0.375))
+            .items_center()
+            // "Ask AI" text in muted color
+            .child(
+                div()
+                    .text_sm()
+                    .text_color(colors.text_muted.to_rgb())
+                    .child("Ask AI"),
+            )
+            // "Tab" badge with border
+            .child(
+                div()
+                    .px(rems(0.375))
+                    .py(rems(0.125))
+                    .rounded(px(4.))
+                    .border_1()
+                    .border_color(colors.border.to_rgb())
+                    .text_xs()
+                    .text_color(colors.text_muted.to_rgb())
+                    .child("Tab"),
+            )
+    }
+
     /// Render the Script Kit logo
     fn render_logo(&self) -> impl IntoElement {
         svg()
@@ -496,6 +535,7 @@ impl PromptHeader {
 impl RenderOnce for PromptHeader {
     fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
         let actions_mode = self.config.actions_mode;
+        let show_ask_ai_hint = self.config.show_ask_ai_hint;
 
         // Pre-compute visibility styles for buttons and search layers
         // Use opacity and visibility for CLS-free toggling
@@ -535,25 +575,32 @@ impl RenderOnce for PromptHeader {
         search_layer = search_layer.child(self.render_actions_search());
 
         // Main header using hstack() helper
-        hstack()
+        let mut header = hstack()
             .w_full()
             .px(rems(1.0))
             .py(rems(0.5))
             .gap(rems(0.75))
             // Search input area
-            .child(self.render_input_area())
-            // CLS-free actions area with stacked layers
-            .child(
-                div()
-                    .relative()
-                    .h(rems(1.75))
-                    .flex()
-                    .items_center()
-                    .child(buttons_layer)
-                    .child(search_layer),
-            )
-            // Script Kit logo
-            .child(self.render_logo())
+            .child(self.render_input_area());
+
+        // "Ask AI [Tab]" hint (conditionally rendered before buttons)
+        if show_ask_ai_hint {
+            header = header.child(self.render_ask_ai_hint());
+        }
+
+        // CLS-free actions area with stacked layers
+        header = header.child(
+            div()
+                .relative()
+                .h(rems(1.75))
+                .flex()
+                .items_center()
+                .child(buttons_layer)
+                .child(search_layer),
+        );
+
+        // Script Kit logo
+        header.child(self.render_logo())
     }
 }
 

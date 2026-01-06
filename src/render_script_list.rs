@@ -33,8 +33,14 @@ impl ScriptListApp {
 
         // Handle edge cases - keep selected_index in valid bounds
         // Use coerce_selection which tries down first, then up, handles all edge cases
+        //
+        // Note: Fallbacks now flow through GroupedListItem from get_grouped_results().
+        // When filter_text is non-empty, fallbacks are appended to the results, so
+        // item_count > 0 even when there are no regular matches. The old fallback_mode
+        // logic (separate rendering path) is kept for backwards compatibility but
+        // should rarely be triggered now.
         if item_count > 0 {
-            // We have results - exit fallback mode
+            // We have results (may include fallbacks) - exit legacy fallback mode
             self.fallback_mode = false;
             self.cached_fallbacks.clear();
 
@@ -48,30 +54,16 @@ impl ScriptListApp {
             }
         } else {
             // Empty list - reset selection state to avoid stale indices
+            // This path is hit when filter is empty AND there are truly no items,
+            // or in edge cases where even fallbacks aren't available
             self.selected_index = 0;
             self.hovered_index = None;
             self.last_scrolled_index = None;
 
-            // Check if we should show fallbacks (filter text exists but no matches)
-            if !self.filter_text.is_empty() {
-                // Enter fallback mode - cache fallbacks and track selection
-                use crate::fallbacks::collect_fallbacks;
-                let fallbacks = collect_fallbacks(&self.filter_text, self.scripts.as_slice());
-                if !fallbacks.is_empty() {
-                    self.fallback_mode = true;
-                    self.cached_fallbacks = fallbacks;
-                    // Keep fallback_selected_index in bounds
-                    if self.fallback_selected_index >= self.cached_fallbacks.len() {
-                        self.fallback_selected_index = 0;
-                    }
-                } else {
-                    self.fallback_mode = false;
-                    self.cached_fallbacks.clear();
-                }
-            } else {
-                self.fallback_mode = false;
-                self.cached_fallbacks.clear();
-            }
+            // Legacy fallback mode: only used if grouping.rs doesn't include fallbacks
+            // (This is a safety net - normally grouping.rs appends fallbacks to results)
+            self.fallback_mode = false;
+            self.cached_fallbacks.clear();
         }
 
         // Update list state if item count changed
@@ -129,6 +121,13 @@ impl ScriptListApp {
         let list_element: AnyElement = if item_count == 0 {
             // When there's no filter text, show "No scripts or snippets found"
             // When filtering, show Raycast-style fallback list instead of "No results"
+            // Empty list handling:
+            // - When filter is empty: "No scripts or snippets found"
+            // - When filter has text: "No results match '...'" (rare - fallbacks usually exist)
+            //
+            // Note: This branch is rarely hit when filtering because grouping.rs now
+            // appends fallbacks to the results. We only get here if there are truly
+            // no results at all (including no fallbacks).
             if self.filter_text.is_empty() {
                 div()
                     .w_full()
@@ -140,71 +139,8 @@ impl ScriptListApp {
                     .font_family(empty_font_family)
                     .child("No scripts or snippets found")
                     .into_any_element()
-            } else if self.fallback_mode && !self.cached_fallbacks.is_empty() {
-                // Use cached fallbacks with proper selection state
-                let fallback_selected = self.fallback_selected_index;
-
-                // Build fallback list UI
-                let mut fallback_container = div().w_full().h_full().flex().flex_col();
-
-                // Header: Use "{input}" with...
-                let header_text = format!("Use \"{}\" with...", self.filter_text);
-                fallback_container = fallback_container.child(
-                    div()
-                        .w_full()
-                        .px(px(16.))
-                        .py(px(8.))
-                        .text_xs()
-                        .text_color(rgb(empty_text_color))
-                        .font_family(empty_font_family)
-                        .child(header_text),
-                );
-
-                // Render each fallback item using ListItem component
-                for (idx, fallback) in self.cached_fallbacks.iter().enumerate() {
-                    let is_selected = idx == fallback_selected;
-
-                    // Clone strings to owned values for ListItem (avoids lifetime issues)
-                    let label = fallback.label().to_string();
-                    let description = fallback.description().to_string();
-                    let icon_name = fallback.icon().to_string();
-
-                    // Create click handler for this fallback item
-                    let click_handler = cx.listener(
-                        move |this: &mut ScriptListApp, event: &gpui::ClickEvent, _window, cx| {
-                            // Select this item
-                            this.fallback_selected_index = idx;
-                            cx.notify();
-
-                            // Double-click executes
-                            if let gpui::ClickEvent::Mouse(mouse_event) = event {
-                                if mouse_event.down.click_count == 2 {
-                                    this.execute_selected_fallback(cx);
-                                }
-                            }
-                        },
-                    );
-
-                    // Create ListItem with fallback data
-                    let item = list_item::ListItem::new(label, theme_colors)
-                        .description(description)
-                        .icon_kind(list_item::IconKind::Svg(icon_name))
-                        .selected(is_selected)
-                        .index(idx);
-
-                    // Wrap in clickable container
-                    fallback_container = fallback_container.child(
-                        div()
-                            .id(ElementId::NamedInteger("fallback-item".into(), idx as u64))
-                            .cursor_pointer()
-                            .on_click(click_handler)
-                            .child(item),
-                    );
-                }
-
-                fallback_container.into_any_element()
             } else {
-                // No fallbacks available either - show empty message
+                // Filtering but no results (including no fallbacks) - shouldn't normally happen
                 div()
                     .w_full()
                     .h_full()
@@ -715,7 +651,11 @@ impl ScriptListApp {
                     }
                 }
 
-                // Check if we're in fallback mode (no script matches, showing fallback commands)
+                // LEGACY: Check if we're in fallback mode (no script matches, showing fallback commands)
+                // Note: This is legacy code that handled a separate fallback rendering path.
+                // Now fallbacks flow through GroupedListItem from grouping.rs, so this
+                // branch should rarely (if ever) be triggered. The normal navigation below
+                // handles fallback items in the unified list.
                 if this.fallback_mode && !this.cached_fallbacks.is_empty() {
                     match key_str.as_str() {
                         "up" | "arrowup" => {
@@ -792,6 +732,25 @@ impl ScriptListApp {
                             this.clear_filter(window, cx);
                         } else {
                             // Filter is empty - close window
+                            this.close_and_reset_window(cx);
+                        }
+                    }
+                    "tab" => {
+                        // Tab key: Send query to AI chat if filter has text
+                        if !this.filter_text.is_empty() {
+                            let query = this.filter_text.clone();
+                            logging::log("KEY", &format!("TAB - sending to AI: '{}'", query));
+
+                            // Open AI window first
+                            if let Err(e) = ai::open_ai_window(cx) {
+                                logging::log("ERROR", &format!("Failed to open AI window: {}", e));
+                            } else {
+                                // Set input and submit to AI
+                                ai::set_ai_input(cx, &query, true);
+                            }
+
+                            // Clear filter and close main window
+                            this.clear_filter(window, cx);
                             this.close_and_reset_window(cx);
                         }
                     }
@@ -910,6 +869,28 @@ impl ScriptListApp {
                                 .bordered(false)
                                 .focus_bordered(false),
                         ),
+                    )
+                    // "Ask AI [Tab]" hint - shows Tab sends to AI
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .gap(px(6.))
+                            // "Ask AI" text
+                            .child(div().text_sm().text_color(rgb(text_muted)).child("Ask AI"))
+                            // "Tab" badge
+                            .child(
+                                div()
+                                    .px(px(6.))
+                                    .py(px(2.))
+                                    .rounded(px(4.))
+                                    .border_1()
+                                    .border_color(rgb(theme.colors.ui.border))
+                                    .text_xs()
+                                    .text_color(rgb(text_muted))
+                                    .child("Tab"),
+                            ),
                     )
                     // CLS-FREE ACTIONS AREA: Fixed-size relative container with stacked children
                     // Both states are always rendered at the same position, visibility toggled via opacity

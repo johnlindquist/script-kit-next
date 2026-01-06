@@ -1125,6 +1125,8 @@ impl ScriptListApp {
                     scripts::SearchResult::Agent(am) => {
                         Some(format!("agent:{}", am.agent.path.to_string_lossy()))
                     }
+                    // Fallbacks don't track frecency - they're utility commands
+                    scripts::SearchResult::Fallback(_) => None,
                 };
                 if let Some(path) = frecency_path {
                     self.frecency_store.record_use(&path);
@@ -1176,8 +1178,65 @@ impl ScriptListApp {
                             agent_match.agent.name
                         )));
                     }
+                    scripts::SearchResult::Fallback(fallback_match) => {
+                        logging::log(
+                            "EXEC",
+                            &format!("Executing fallback: {}", fallback_match.fallback.name()),
+                        );
+                        // Execute the fallback with the current filter text as input
+                        self.execute_fallback_item(&fallback_match.fallback, cx);
+                    }
                 }
             }
+        }
+    }
+
+    /// Execute a fallback item (from the "Use with..." section in search results)
+    /// This is called when a fallback is selected from the grouped list
+    pub fn execute_fallback_item(
+        &mut self,
+        fallback: &crate::fallbacks::FallbackItem,
+        cx: &mut Context<Self>,
+    ) {
+        let input = self.filter_text.clone();
+
+        logging::log(
+            "EXEC",
+            &format!(
+                "Executing fallback item: {} with input: '{}'",
+                fallback.name(),
+                input
+            ),
+        );
+
+        // Check if this is a "stay open" action (like run-in-terminal which opens a view)
+        let should_close = match fallback {
+            crate::fallbacks::FallbackItem::Builtin(builtin) => {
+                // run-in-terminal opens the built-in terminal, so don't close
+                builtin.id != "run-in-terminal"
+            }
+            crate::fallbacks::FallbackItem::Script(_) => {
+                // Script execution handles its own window state
+                false
+            }
+        };
+
+        // Execute the fallback action
+        match fallback {
+            crate::fallbacks::FallbackItem::Builtin(builtin) => {
+                // Execute built-in fallback action inline (no window needed for most)
+                let fallback_id = builtin.id.to_string();
+                self.execute_builtin_fallback_inline(&fallback_id, &input, cx);
+            }
+            crate::fallbacks::FallbackItem::Script(config) => {
+                // Execute user script with input as argument
+                self.execute_interactive(&config.script, cx);
+            }
+        }
+
+        // Close the window after executing (unless it's a stay-open action)
+        if should_close {
+            self.close_and_reset_window(cx);
         }
     }
 
@@ -1315,6 +1374,15 @@ impl ScriptListApp {
                         path.clone()
                     };
                     let _ = open::that(&expanded);
+                }
+                FallbackResult::SearchFiles { query } => {
+                    logging::log("FALLBACK", &format!("SearchFiles: {}", query));
+                    // TODO: Implement file search functionality
+                    crate::hud_manager::show_hud(
+                        format!("File search coming soon: {}", query),
+                        Some(2000),
+                        cx,
+                    );
                 }
             },
             Err(e) => {

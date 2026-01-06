@@ -10,7 +10,7 @@ use nucleo_matcher::pattern::Pattern;
 use nucleo_matcher::{Matcher, Utf32Str};
 
 use crate::app_launcher::AppInfo;
-use crate::builtins::BuiltInEntry;
+use crate::builtins::{BuiltInEntry, BuiltInGroup};
 use crate::window_control::WindowInfo;
 
 use super::types::{
@@ -333,6 +333,18 @@ pub fn compute_match_indices_for_result(result: &SearchResult, query: &str) -> M
                 if desc_matched {
                     indices.filename_indices = desc_indices;
                 }
+            }
+
+            indices
+        }
+        SearchResult::Fallback(fm) => {
+            let mut indices = MatchIndices::default();
+
+            // Try name match for fallback items
+            let (name_matched, name_indices) =
+                fuzzy_match_with_indices_ascii(fm.fallback.name(), &query_lower);
+            if name_matched {
+                indices.name_indices = name_indices;
             }
 
             indices
@@ -686,6 +698,15 @@ pub fn fuzzy_search_builtins(entries: &[BuiltInEntry], query: &str) -> Vec<Built
             }
         }
 
+        // Apply heavy penalty for menu bar items to prevent them from dominating search results
+        // This ensures scripts, apps, and core built-ins rank MUCH higher than menu bar matches
+        // Menu bar items should only appear if they're very strong matches
+        if entry.group == BuiltInGroup::MenuBar {
+            // Aggressive penalty: divide by 4 AND subtract 50
+            // This means a menu bar item needs ~4x the match quality to compete with scripts
+            score = (score / 4).saturating_sub(50);
+        }
+
         if score > 0 {
             matches.push(BuiltInMatch {
                 entry: entry.clone(),
@@ -943,6 +964,7 @@ pub fn fuzzy_search_unified_all(
         match b.score().cmp(&a.score()) {
             Ordering::Equal => {
                 // Prefer builtins over apps over windows over scripts over scriptlets over agents when scores are equal
+                // Fallbacks always sort last (they have their own ordering by priority)
                 let type_order = |r: &SearchResult| -> i32 {
                     match r {
                         SearchResult::BuiltIn(_) => 0, // Built-ins first
@@ -950,7 +972,8 @@ pub fn fuzzy_search_unified_all(
                         SearchResult::Window(_) => 2,  // Windows third
                         SearchResult::Script(_) => 3,
                         SearchResult::Scriptlet(_) => 4,
-                        SearchResult::Agent(_) => 5, // Agents last
+                        SearchResult::Agent(_) => 5,
+                        SearchResult::Fallback(_) => 6, // Fallbacks always last
                     }
                 };
                 let type_order_a = type_order(a);
@@ -1013,6 +1036,7 @@ pub fn fuzzy_search_unified_with_windows(
     }
 
     // Sort by score (highest first), then by type (builtins first, apps, windows, scripts, scriptlets, agents), then by name
+    // Fallbacks always sort last (they have their own ordering by priority)
     results.sort_by(|a, b| {
         match b.score().cmp(&a.score()) {
             Ordering::Equal => {
@@ -1024,7 +1048,8 @@ pub fn fuzzy_search_unified_with_windows(
                         SearchResult::Window(_) => 2,  // Windows third
                         SearchResult::Script(_) => 3,
                         SearchResult::Scriptlet(_) => 4,
-                        SearchResult::Agent(_) => 5, // Agents last
+                        SearchResult::Agent(_) => 5,
+                        SearchResult::Fallback(_) => 6, // Fallbacks always last
                     }
                 };
                 let type_order_a = type_order(a);

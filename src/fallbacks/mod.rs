@@ -9,7 +9,7 @@ pub mod collector;
 #[allow(unused_imports)]
 pub use builtins::{
     get_applicable_fallbacks, get_builtin_fallbacks, BuiltinFallback, FallbackAction,
-    FallbackCondition,
+    FallbackCondition, FallbackResult,
 };
 #[allow(unused_imports)]
 pub use collector::{

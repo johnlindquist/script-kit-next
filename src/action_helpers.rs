@@ -36,7 +36,7 @@ impl PathExtractionError {
 /// Extract the filesystem path from a SearchResult for reveal/copy operations.
 ///
 /// Supports: Script, App, Agent
-/// Not supported: Scriptlet, BuiltIn, Window
+/// Not supported: Scriptlet, BuiltIn, Window, Fallback
 pub fn extract_path_for_reveal(
     result: Option<&SearchResult>,
 ) -> Result<PathBuf, PathExtractionError> {
@@ -53,6 +53,9 @@ pub fn extract_path_for_reveal(
         )),
         Some(SearchResult::Window(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Cannot reveal windows in Finder"),
+        )),
+        Some(SearchResult::Fallback(_)) => Err(PathExtractionError::UnsupportedType(
+            SharedString::from("Cannot reveal fallback commands in Finder"),
         )),
     }
 }
@@ -75,13 +78,16 @@ pub fn extract_path_for_copy(
         Some(SearchResult::Window(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Cannot copy window path"),
         )),
+        Some(SearchResult::Fallback(_)) => Err(PathExtractionError::UnsupportedType(
+            SharedString::from("Cannot copy fallback command path"),
+        )),
     }
 }
 
 /// Extract the filesystem path from a SearchResult for edit operations.
 ///
 /// Supports: Script, Agent
-/// Not supported: Scriptlet, BuiltIn, App, Window
+/// Not supported: Scriptlet, BuiltIn, App, Window, Fallback
 pub fn extract_path_for_edit(
     result: Option<&SearchResult>,
 ) -> Result<PathBuf, PathExtractionError> {
@@ -100,6 +106,9 @@ pub fn extract_path_for_edit(
         )),
         Some(SearchResult::Window(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Cannot edit windows"),
+        )),
+        Some(SearchResult::Fallback(_)) => Err(PathExtractionError::UnsupportedType(
+            SharedString::from("Cannot edit fallback commands"),
         )),
     }
 }

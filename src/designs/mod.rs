@@ -453,6 +453,26 @@ pub fn render_design_item(
                         Some(IconKind::Svg(icon_name)),
                     )
                 }
+                SearchResult::Fallback(fm) => {
+                    // Fallback commands from "Use with..." section
+                    // Map fallback icon names to SVG icons
+                    let icon_name = match fm.fallback.icon() {
+                        "external-link" => "ExternalLink",
+                        "calculator" => "Calculator",
+                        "file" => "File",
+                        "terminal" => "Terminal",
+                        "sticky-note" => "StickyNote",
+                        "clipboard-copy" => "Copy",
+                        "search" => "MagnifyingGlass",
+                        other => other, // Pass through if already a valid icon name
+                    };
+                    (
+                        fm.fallback.label().to_string(),
+                        Some(fm.fallback.description().to_string()),
+                        None,
+                        Some(IconKind::Svg(icon_name.to_string())),
+                    )
+                }
             };
 
             ListItem::new(name, list_colors)

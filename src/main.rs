@@ -538,6 +538,17 @@ fn execute_fallback_action(
                         logging::log("FALLBACK", "File opened with default application");
                     }
                 }
+
+                FallbackResult::SearchFiles { query } => {
+                    logging::log("FALLBACK", &format!("SearchFiles: {}", query));
+                    // TODO: Implement file search functionality
+                    // For now, show a HUD message that this is coming soon
+                    hud_manager::show_hud(
+                        format!("File search coming soon: {}", query),
+                        Some(2000),
+                        cx,
+                    );
+                }
             }
         }
         Err(e) => {

@@ -610,6 +610,9 @@ impl ScriptListApp {
                                     scripts::SearchResult::App(m) => m.app.name.clone(),
                                     scripts::SearchResult::Window(m) => m.window.title.clone(),
                                     scripts::SearchResult::Agent(m) => m.agent.name.clone(),
+                                    scripts::SearchResult::Fallback(m) => {
+                                        m.fallback.name().to_string()
+                                    }
                                 })
                         } else {
                             None

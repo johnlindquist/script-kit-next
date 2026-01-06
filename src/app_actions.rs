@@ -57,8 +57,12 @@ impl ScriptListApp {
                 std::thread::spawn(move || {
                     use std::process::Command;
                     match Command::new("open").arg(&scripts_dir).spawn() {
-                        Ok(_) => logging::log("UI", &format!("Opened scripts folder: {}", scripts_dir)),
-                        Err(e) => logging::log("ERROR", &format!("Failed to open scripts folder: {}", e)),
+                        Ok(_) => {
+                            logging::log("UI", &format!("Opened scripts folder: {}", scripts_dir))
+                        }
+                        Err(e) => {
+                            logging::log("ERROR", &format!("Failed to open scripts folder: {}", e))
+                        }
                     }
                 });
                 self.last_output = Some(SharedString::from("Opened scripts folder"));
@@ -80,15 +84,24 @@ impl ScriptListApp {
                         scripts::SearchResult::App(m) => Some(m.app.path.clone()),
                         scripts::SearchResult::Agent(m) => Some(m.agent.path.clone()),
                         scripts::SearchResult::Scriptlet(_) => {
-                            self.last_output = Some(SharedString::from("Cannot reveal scriptlets in Finder"));
+                            self.last_output =
+                                Some(SharedString::from("Cannot reveal scriptlets in Finder"));
                             None
                         }
                         scripts::SearchResult::BuiltIn(_) => {
-                            self.last_output = Some(SharedString::from("Cannot reveal built-in features"));
+                            self.last_output =
+                                Some(SharedString::from("Cannot reveal built-in features"));
                             None
                         }
                         scripts::SearchResult::Window(_) => {
-                            self.last_output = Some(SharedString::from("Cannot reveal windows in Finder"));
+                            self.last_output =
+                                Some(SharedString::from("Cannot reveal windows in Finder"));
+                            None
+                        }
+                        scripts::SearchResult::Fallback(_) => {
+                            self.last_output = Some(SharedString::from(
+                                "Cannot reveal fallback commands in Finder",
+                            ));
                             None
                         }
                     };
@@ -110,15 +123,22 @@ impl ScriptListApp {
                         scripts::SearchResult::App(m) => Some(m.app.path.clone()),
                         scripts::SearchResult::Agent(m) => Some(m.agent.path.clone()),
                         scripts::SearchResult::Scriptlet(_) => {
-                            self.last_output = Some(SharedString::from("Cannot copy scriptlet path"));
+                            self.last_output =
+                                Some(SharedString::from("Cannot copy scriptlet path"));
                             None
                         }
                         scripts::SearchResult::BuiltIn(_) => {
-                            self.last_output = Some(SharedString::from("Cannot copy built-in path"));
+                            self.last_output =
+                                Some(SharedString::from("Cannot copy built-in path"));
                             None
                         }
                         scripts::SearchResult::Window(_) => {
                             self.last_output = Some(SharedString::from("Cannot copy window path"));
+                            None
+                        }
+                        scripts::SearchResult::Fallback(_) => {
+                            self.last_output =
+                                Some(SharedString::from("Cannot copy fallback command path"));
                             None
                         }
                     };
@@ -130,13 +150,17 @@ impl ScriptListApp {
                         {
                             match self.pbcopy(&path_str) {
                                 Ok(_) => {
-                                    logging::log("UI", &format!("Copied path to clipboard: {}", path_str));
+                                    logging::log(
+                                        "UI",
+                                        &format!("Copied path to clipboard: {}", path_str),
+                                    );
                                     self.last_output =
                                         Some(SharedString::from(format!("Copied: {}", path_str)));
                                 }
                                 Err(e) => {
                                     logging::log("ERROR", &format!("pbcopy failed: {}", e));
-                                    self.last_output = Some(SharedString::from("Failed to copy path"));
+                                    self.last_output =
+                                        Some(SharedString::from("Failed to copy path"));
                                 }
                             }
                         }
@@ -146,13 +170,17 @@ impl ScriptListApp {
                             use arboard::Clipboard;
                             match Clipboard::new().and_then(|mut c| c.set_text(&path_str)) {
                                 Ok(_) => {
-                                    logging::log("UI", &format!("Copied path to clipboard: {}", path_str));
+                                    logging::log(
+                                        "UI",
+                                        &format!("Copied path to clipboard: {}", path_str),
+                                    );
                                     self.last_output =
                                         Some(SharedString::from(format!("Copied: {}", path_str)));
                                 }
                                 Err(e) => {
                                     logging::log("ERROR", &format!("Failed to copy path: {}", e));
-                                    self.last_output = Some(SharedString::from("Failed to copy path"));
+                                    self.last_output =
+                                        Some(SharedString::from("Failed to copy path"));
                                 }
                             }
                         }
@@ -172,7 +200,8 @@ impl ScriptListApp {
                             None
                         }
                         scripts::SearchResult::BuiltIn(_) => {
-                            self.last_output = Some(SharedString::from("Cannot edit built-in features"));
+                            self.last_output =
+                                Some(SharedString::from("Cannot edit built-in features"));
                             None
                         }
                         scripts::SearchResult::App(_) => {
@@ -181,6 +210,11 @@ impl ScriptListApp {
                         }
                         scripts::SearchResult::Window(_) => {
                             self.last_output = Some(SharedString::from("Cannot edit windows"));
+                            None
+                        }
+                        scripts::SearchResult::Fallback(_) => {
+                            self.last_output =
+                                Some(SharedString::from("Cannot edit fallback commands"));
                             None
                         }
                     };
@@ -263,7 +297,10 @@ impl ScriptListApp {
                 } else {
                     logging::log(
                         "ACTIONS",
-                        &format!("SDK action '{}' has no value and has_action=false", action_name),
+                        &format!(
+                            "SDK action '{}' has no value and has_action=false",
+                            action_name
+                        ),
                     );
                     None
                 };
@@ -273,7 +310,13 @@ impl ScriptListApp {
                     match result {
                         Ok(()) => {}
                         Err(std::sync::mpsc::TrySendError::Full(_)) => {
-                            logging::log("WARN", &format!("Response channel full - action '{}' dropped", action_name));
+                            logging::log(
+                                "WARN",
+                                &format!(
+                                    "Response channel full - action '{}' dropped",
+                                    action_name
+                                ),
+                            );
                         }
                         Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
                             logging::log("UI", "Response channel disconnected - script exited");

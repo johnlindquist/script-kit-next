@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::agents::Agent;
+use crate::fallbacks::collector::FallbackItem;
 use crate::metadata_parser::TypedMetadata;
 use crate::schema_parser::Schema;
 
@@ -116,7 +117,19 @@ pub struct AgentMatch {
     pub match_indices: MatchIndices,
 }
 
-/// Unified search result that can be a Script, Scriptlet, BuiltIn, App, Window, or Agent
+/// Represents a fallback command match for the "Use with..." section
+///
+/// Fallbacks are always shown at the bottom of search results when there's a filter query.
+/// They provide Raycast-style actions like "Search Google", "Copy to Clipboard", etc.
+#[derive(Clone, Debug)]
+pub struct FallbackMatch {
+    /// The fallback item (either built-in or script fallback)
+    pub fallback: FallbackItem,
+    /// Score is always 0 for fallbacks (they sort by priority, not score)
+    pub score: i32,
+}
+
+/// Unified search result that can be a Script, Scriptlet, BuiltIn, App, Window, Agent, or Fallback
 #[derive(Clone, Debug)]
 #[allow(clippy::large_enum_variant)]
 pub enum SearchResult {
@@ -126,6 +139,8 @@ pub enum SearchResult {
     App(AppMatch),
     Window(WindowMatch),
     Agent(AgentMatch),
+    /// Fallback command from "Use with..." section (shown at bottom of search results)
+    Fallback(FallbackMatch),
 }
 
 impl SearchResult {
@@ -138,6 +153,7 @@ impl SearchResult {
             SearchResult::App(am) => &am.app.name,
             SearchResult::Window(wm) => &wm.window.title,
             SearchResult::Agent(am) => &am.agent.name,
+            SearchResult::Fallback(fm) => fm.fallback.name(),
         }
     }
 
@@ -150,6 +166,7 @@ impl SearchResult {
             SearchResult::App(am) => am.app.path.to_str(),
             SearchResult::Window(wm) => Some(&wm.window.app),
             SearchResult::Agent(am) => am.agent.description.as_deref(),
+            SearchResult::Fallback(fm) => Some(fm.fallback.description()),
         }
     }
 
@@ -162,6 +179,7 @@ impl SearchResult {
             SearchResult::App(am) => am.score,
             SearchResult::Window(wm) => wm.score,
             SearchResult::Agent(am) => am.score,
+            SearchResult::Fallback(fm) => fm.score,
         }
     }
 
@@ -174,6 +192,7 @@ impl SearchResult {
             SearchResult::App(_) => "App",
             SearchResult::Window(_) => "Window",
             SearchResult::Agent(_) => "Agent",
+            SearchResult::Fallback(_) => "Fallback",
         }
     }
 }

@@ -970,6 +970,103 @@ impl ScriptListApp {
         }
     }
 
+    // =========================================================================
+    // File Search Implementation
+    // =========================================================================
+    //
+    // BLOCKED: Requires the following changes to main.rs (not in worker reservations):
+    //
+    // 1. Add to AppView enum:
+    //    ```rust
+    //    /// Showing file search results (Spotlight/mdfind based)
+    //    FileSearchView {
+    //        query: String,
+    //        selected_index: usize,
+    //    },
+    //    ```
+    //
+    // 2. Add to ScriptListApp struct:
+    //    ```rust
+    //    /// Cached file search results
+    //    cached_file_results: Vec<file_search::FileResult>,
+    //    /// Scroll handle for file search list
+    //    file_search_scroll_handle: UniformListScrollHandle,
+    //    ```
+    //
+    // 3. Add initialization in app_impl.rs ScriptListApp::new():
+    //    ```rust
+    //    cached_file_results: Vec::new(),
+    //    file_search_scroll_handle: UniformListScrollHandle::new(),
+    //    ```
+    //
+    // 4. Add render call in main.rs Render impl match arm:
+    //    ```rust
+    //    AppView::FileSearchView { query, selected_index } => {
+    //        self.render_file_search(query.clone(), *selected_index, cx)
+    //    }
+    //    ```
+    //
+    // 5. Wire up in app_impl.rs execute_fallback():
+    //    ```rust
+    //    FallbackResult::SearchFiles { query } => {
+    //        self.open_file_search(query, cx);
+    //    }
+    //    ```
+    //
+    // Once those are added, uncomment the method below.
+    // =========================================================================
+
+    /* BLOCKED - Uncomment when main.rs changes are made:
+    /// Open file search with the given query
+    ///
+    /// This performs an mdfind-based file search and displays results in a Raycast-like UI.
+    ///
+    /// # Arguments
+    /// * `query` - The search query (passed from the "Search Files" fallback action)
+    ///
+    /// # Usage
+    /// Called when user selects "Search Files" fallback with a search term.
+    /// Features:
+    /// - Live search as user types (debounced)
+    /// - File type icons (folder, document, image, audio, video, code, etc.)
+    /// - File size and modified date display
+    /// - Enter: Open file in default application
+    /// - Cmd+Enter: Reveal in Finder
+    pub fn open_file_search(&mut self, query: String, cx: &mut Context<Self>) {
+        logging::log("EXEC", &format!("Opening File Search with query: {}", query));
+
+        // Perform initial search
+        let results = file_search::search_files(&query, None, file_search::DEFAULT_LIMIT);
+        logging::log(
+            "EXEC",
+            &format!("File search found {} results", results.len()),
+        );
+
+        // Cache the results
+        self.cached_file_results = results;
+
+        // Set up the view state
+        self.filter_text = query.clone();
+        self.pending_filter_sync = true;
+        self.pending_placeholder = Some("Search files...".to_string());
+
+        // Switch to file search view
+        self.current_view = AppView::FileSearchView {
+            query,
+            selected_index: 0,
+        };
+
+        // Use standard height for file search view (same as window switcher)
+        resize_to_view_sync(ViewType::ScriptList, 0);
+
+        // Focus the main filter input so cursor blinks and typing works
+        self.pending_focus = Some(FocusTarget::MainFilter);
+        self.focused_input = FocusedInput::MainFilter;
+
+        cx.notify();
+    }
+    */
+
     /// Open the quick terminal
     fn open_quick_terminal(&mut self, cx: &mut Context<Self>) {
         logging::log("EXEC", "Opening Quick Terminal");

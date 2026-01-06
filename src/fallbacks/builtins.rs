@@ -79,6 +79,8 @@ pub enum FallbackAction {
     Calculate,
     /// Open file path in default application
     OpenFile,
+    /// Search files using the input as query
+    SearchFiles,
 }
 
 /// A built-in fallback command
@@ -183,6 +185,10 @@ impl BuiltinFallback {
                     Err("Input is not a valid file path".to_string())
                 }
             }
+
+            FallbackAction::SearchFiles => Ok(FallbackResult::SearchFiles {
+                query: input.to_string(),
+            }),
         }
     }
 
@@ -204,6 +210,7 @@ impl BuiltinFallback {
             FallbackAction::OpenUrl => format!("Open {}", truncated),
             FallbackAction::Calculate => format!("Calculate {}", truncated),
             FallbackAction::OpenFile => format!("Open {}", truncated),
+            FallbackAction::SearchFiles => format!("Search files for '{}'", truncated),
         }
     }
 }
@@ -223,6 +230,8 @@ pub enum FallbackResult {
     Calculate { expression: String },
     /// Open file in default application
     OpenFile { path: String },
+    /// Search files with the given query
+    SearchFiles { query: String },
 }
 
 /// Get all built-in fallback commands
@@ -230,6 +239,17 @@ pub enum FallbackResult {
 /// Returns a vector of all default fallbacks in priority order
 pub fn get_builtin_fallbacks() -> Vec<BuiltinFallback> {
     vec![
+        // Search Files - high priority, always available
+        BuiltinFallback {
+            id: "search-files",
+            name: "Search Files",
+            description: "Search for files matching this query",
+            icon: "folder-search",
+            action: FallbackAction::SearchFiles,
+            condition: FallbackCondition::Always,
+            enabled: true,
+            priority: 5,
+        },
         // Conditional fallbacks first (more specific)
         BuiltinFallback {
             id: "open-url",
@@ -342,7 +362,7 @@ mod tests {
     #[test]
     fn test_get_builtin_fallbacks_count() {
         let fallbacks = get_builtin_fallbacks();
-        assert_eq!(fallbacks.len(), 8, "Should have 8 built-in fallbacks");
+        assert_eq!(fallbacks.len(), 9, "Should have 9 built-in fallbacks");
     }
 
     #[test]
@@ -387,6 +407,7 @@ mod tests {
 
         // Should include all "Always" fallbacks
         let ids: Vec<&str> = fallbacks.iter().map(|f| f.id).collect();
+        assert!(ids.contains(&"search-files"));
         assert!(ids.contains(&"run-in-terminal"));
         assert!(ids.contains(&"add-to-notes"));
         assert!(ids.contains(&"copy-to-clipboard"));
@@ -524,5 +545,44 @@ mod tests {
         let subtitle = copy.get_subtitle(&long_input);
         assert!(subtitle.contains("..."));
         assert!(subtitle.len() < 60); // Should be truncated
+    }
+
+    #[test]
+    fn test_search_files_fallback() {
+        let fallbacks = get_builtin_fallbacks();
+        let search_files = fallbacks.iter().find(|f| f.id == "search-files").unwrap();
+
+        // Verify properties
+        assert_eq!(search_files.name, "Search Files");
+        assert_eq!(search_files.priority, 5);
+        assert_eq!(search_files.condition, FallbackCondition::Always);
+        assert!(search_files.enabled);
+
+        // Test execute
+        let result = search_files.execute("test query").unwrap();
+        match result {
+            FallbackResult::SearchFiles { query } => assert_eq!(query, "test query"),
+            _ => panic!("Expected SearchFiles result"),
+        }
+
+        // Test subtitle
+        let subtitle = search_files.get_subtitle("my file");
+        assert_eq!(subtitle, "Search files for 'my file'");
+    }
+
+    #[test]
+    fn test_search_files_priority() {
+        let fallbacks = get_applicable_fallbacks("test");
+
+        // search-files (priority 5) should come first among "Always" fallbacks
+        let search_files_pos = fallbacks.iter().position(|f| f.id == "search-files");
+        let run_terminal_pos = fallbacks.iter().position(|f| f.id == "run-in-terminal");
+
+        assert!(search_files_pos.is_some());
+        assert!(run_terminal_pos.is_some());
+        assert!(
+            search_files_pos.unwrap() < run_terminal_pos.unwrap(),
+            "search-files should come before run-in-terminal"
+        );
     }
 }
