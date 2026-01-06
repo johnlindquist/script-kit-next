@@ -648,6 +648,8 @@ pub fn fuzzy_search_builtins(entries: &[BuiltInEntry], query: &str) -> Vec<Built
 
         // For menu bar items, prioritize matching the LEAF name (actual menu item)
         // e.g., for "Shell → New Tab", matching "New Tab" should score high
+        // IMPORTANT: We only accept SUBSTRING matches for menu bar items, not fuzzy
+        // This prevents "how are" from matching "Clear the scrollback" via scattered chars
         if entry.group == BuiltInGroup::MenuBar {
             let leaf_name = entry.leaf_name();
             if query_is_ascii && leaf_name.is_ascii() {
@@ -659,14 +661,8 @@ pub fn fuzzy_search_builtins(entries: &[BuiltInEntry], query: &str) -> Vec<Built
                     name_matched = true;
                 }
             }
-            // Fuzzy match on leaf name
-            if !leaf_name_matched {
-                if let Some(nucleo_s) = nucleo.score(leaf_name) {
-                    score += 150 + (nucleo_s / 10) as i32;
-                    leaf_name_matched = true;
-                    name_matched = true;
-                }
-            }
+            // NO fuzzy matching for menu bar leaf names - too many false positives
+            // Menu items should only match if query is a substring of the leaf name
         }
 
         // Score by full name match - HIGHEST priority for non-menu-bar items
@@ -692,8 +688,9 @@ pub fn fuzzy_search_builtins(entries: &[BuiltInEntry], query: &str) -> Vec<Built
         }
 
         // Fuzzy character matching in full name using nucleo (handles Unicode)
-        // Skip for menu bar items if we already matched the leaf name well
-        if !leaf_name_matched {
+        // Skip for menu bar items entirely - they should only match on substring, not fuzzy
+        // This prevents "how are" from matching menu items via scattered character matches
+        if !leaf_name_matched && entry.group != BuiltInGroup::MenuBar {
             if let Some(nucleo_s) = nucleo.score(&entry.name) {
                 // Scale nucleo score - name fuzzy matches are worth more than keyword matches
                 score += 100 + (nucleo_s / 15) as i32;
@@ -727,7 +724,8 @@ pub fn fuzzy_search_builtins(entries: &[BuiltInEntry], query: &str) -> Vec<Built
         // Fuzzy match on keywords using nucleo (handles Unicode)
         // Only add keyword fuzzy score if we didn't already match the name well
         // This prevents keywords from inflating scores when the name is already a good match
-        if !name_matched {
+        // Skip for menu bar items - they should only match on substring, not fuzzy
+        if !name_matched && entry.group != BuiltInGroup::MenuBar {
             for keyword in &entry.keywords {
                 if let Some(nucleo_s) = nucleo.score(keyword) {
                     // Scale nucleo score - keyword fuzzy is worth less than name fuzzy
