@@ -8,8 +8,8 @@ pub fn story_container() -> Div {
         .gap_4()
         .p_4()
         .bg(rgb(0x1e1e1e))
-        .size_full()
-        .overflow_hidden()
+        .w_full()
+        .min_h_full()
 }
 
 /// Section with title

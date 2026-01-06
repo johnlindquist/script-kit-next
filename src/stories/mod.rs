@@ -6,6 +6,8 @@
 mod button_stories;
 mod design_token_stories;
 mod form_field_stories;
+mod header_design_variations;
+mod header_stories;
 mod list_item_stories;
 mod scrollbar_stories;
 mod toast_stories;
@@ -17,6 +19,8 @@ use std::sync::OnceLock;
 pub use button_stories::ButtonStory;
 pub use design_token_stories::DesignTokenStory;
 pub use form_field_stories::FormFieldStory;
+pub use header_design_variations::HeaderDesignVariationsStory;
+pub use header_stories::HeaderVariationsStory;
 pub use list_item_stories::ListItemStory;
 pub use scrollbar_stories::ScrollbarStory;
 pub use toast_stories::ToastStory;
@@ -36,6 +40,9 @@ pub fn get_all_stories() -> &'static Vec<StoryEntry> {
             StoryEntry::new(Box::new(FormFieldStory)),
             StoryEntry::new(Box::new(ListItemStory)),
             StoryEntry::new(Box::new(ScrollbarStory)),
+            // Layouts
+            StoryEntry::new(Box::new(HeaderVariationsStory)),
+            StoryEntry::new(Box::new(HeaderDesignVariationsStory)),
         ]
     })
 }

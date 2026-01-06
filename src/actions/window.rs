@@ -11,8 +11,8 @@ use crate::panel::HEADER_TOTAL_HEIGHT;
 use crate::platform;
 use crate::theme;
 use gpui::{
-    div, prelude::*, px, App, Bounds, Context, Entity, FocusHandle, Focusable, Pixels, Point,
-    Render, Size, Window, WindowBounds, WindowHandle, WindowKind, WindowOptions,
+    div, prelude::*, px, App, Bounds, Context, DisplayId, Entity, FocusHandle, Focusable, Pixels,
+    Point, Render, Size, Window, WindowBounds, WindowHandle, WindowKind, WindowOptions,
 };
 use gpui_component::Root;
 use std::sync::{Mutex, OnceLock};
@@ -71,7 +71,9 @@ impl Render for ActionsWindow {
 ///
 /// # Arguments
 /// * `cx` - The application context
-/// * `main_window_bounds` - The bounds of the main window (for positioning)
+/// * `main_window_bounds` - The bounds of the main window in SCREEN-RELATIVE coordinates
+///   (as returned by GPUI's window.bounds() - top-left origin relative to the window's screen)
+/// * `display_id` - The display where the main window is located (actions window will be on same display)
 /// * `dialog_entity` - The shared ActionsDialog entity (created by main app)
 ///
 /// # Returns
@@ -79,6 +81,7 @@ impl Render for ActionsWindow {
 pub fn open_actions_window(
     cx: &mut App,
     main_window_bounds: Bounds<Pixels>,
+    display_id: Option<DisplayId>,
     dialog_entity: Entity<ActionsDialog>,
 ) -> anyhow::Result<WindowHandle<Root>> {
     // Close any existing actions window first
@@ -103,8 +106,10 @@ pub fn open_actions_window(
     // - X: Right edge of main window, minus actions width, minus margin
     // - Y: Below the header (HEADER_TOTAL_HEIGHT), plus margin
     //
-    // Both get_main_window_bounds() and GPUI's open_window() use canonical
-    // top-left origin coordinates (Y=0 at top, Y increases downward).
+    // CRITICAL: main_window_bounds must be in SCREEN-RELATIVE coordinates from GPUI's
+    // window.bounds(). These are top-left origin, relative to the window's current screen.
+    // When we pass display_id to WindowOptions, GPUI will position this window on the
+    // same screen as the main window, using these screen-relative coordinates.
     let window_width = px(ACTIONS_WINDOW_WIDTH);
     let window_height = px(dynamic_height);
 
@@ -128,8 +133,8 @@ pub fn open_actions_window(
     crate::logging::log(
         "ACTIONS",
         &format!(
-            "Opening actions window at ({:?}, {:?}), size {:?}x{:?}",
-            window_x, window_y, window_width, window_height
+            "Opening actions window at ({:?}, {:?}), size {:?}x{:?}, display_id={:?}",
+            window_x, window_y, window_width, window_height, display_id
         ),
     );
 
@@ -140,6 +145,7 @@ pub fn open_actions_window(
         focus: false, // CRITICAL: Don't take focus - main window keeps it
         show: true,
         kind: WindowKind::PopUp, // Floating popup window
+        display_id,              // CRITICAL: Position on same display as main window
         ..Default::default()
     };
 

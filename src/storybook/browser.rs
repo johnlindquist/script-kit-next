@@ -5,8 +5,11 @@
 //! - Right panel showing selected story preview
 //! - Theme and design variant controls in toolbar
 //! - Keyboard navigation support
+//! - Screenshot capture (Cmd+Shift+S)
 
 use gpui::*;
+use std::fs;
+use std::path::PathBuf;
 
 use crate::designs::DesignVariant;
 use crate::storybook::{all_categories, all_stories, StoryEntry};
@@ -22,11 +25,19 @@ pub struct StoryBrowser {
     theme_name: String,
     design_variant: DesignVariant,
     focus_handle: FocusHandle,
+    screenshot_dir: PathBuf,
 }
 
 impl StoryBrowser {
     pub fn new(cx: &mut Context<Self>) -> Self {
         let stories: Vec<_> = all_stories().collect();
+
+        // Set up screenshot directory
+        let screenshot_dir = std::env::current_dir()
+            .unwrap_or_else(|_| PathBuf::from("."))
+            .join("test-screenshots");
+        fs::create_dir_all(&screenshot_dir).ok();
+
         Self {
             stories,
             selected_index: 0,
@@ -35,6 +46,7 @@ impl StoryBrowser {
             theme_name: "Default".to_string(),
             design_variant: DesignVariant::Default,
             focus_handle: cx.focus_handle(),
+            screenshot_dir,
         }
     }
 
@@ -344,6 +356,76 @@ impl StoryBrowser {
             }
         }
     }
+
+    /// Capture a screenshot of the current storybook window
+    fn capture_screenshot(&self, _window: &mut Window, _cx: &mut Context<Self>) {
+        use image::codecs::png::PngEncoder;
+        use image::ImageEncoder;
+        use xcap::Window as XCapWindow;
+
+        let story_id = self
+            .stories
+            .get(self.selected_index)
+            .map(|s| s.story.id())
+            .unwrap_or("unknown");
+
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis())
+            .unwrap_or(0);
+
+        let filename = format!("storybook-{}-{}.png", story_id, timestamp);
+        let filepath = self.screenshot_dir.join(&filename);
+
+        // Find storybook window using xcap
+        match XCapWindow::all() {
+            Ok(windows) => {
+                for win in windows {
+                    let title = win.title().unwrap_or_default();
+                    let app_name = win.app_name().unwrap_or_default();
+
+                    // Match storybook window
+                    if title.contains("Storybook") || app_name.contains("storybook") {
+                        match win.capture_image() {
+                            Ok(img) => {
+                                let width = img.width();
+                                let height = img.height();
+                                let rgba_data = img.into_raw();
+
+                                // Encode as PNG
+                                let mut png_data = Vec::new();
+                                let encoder = PngEncoder::new(&mut png_data);
+                                if let Err(e) = encoder.write_image(
+                                    &rgba_data,
+                                    width,
+                                    height,
+                                    image::ExtendedColorType::Rgba8,
+                                ) {
+                                    eprintln!("[SCREENSHOT ERROR] PNG encode failed: {}", e);
+                                    return;
+                                }
+
+                                // Save to file
+                                if let Err(e) = fs::write(&filepath, &png_data) {
+                                    eprintln!("[SCREENSHOT ERROR] Save failed: {}", e);
+                                } else {
+                                    eprintln!("[SCREENSHOT] Saved: {}", filepath.display());
+                                }
+                                return;
+                            }
+                            Err(e) => {
+                                eprintln!("[SCREENSHOT ERROR] Capture failed: {}", e);
+                            }
+                        }
+                    }
+                }
+                eprintln!("[SCREENSHOT ERROR] Storybook window not found");
+            }
+            Err(e) => {
+                eprintln!("[SCREENSHOT ERROR] Failed to enumerate windows: {}", e);
+            }
+        }
+    }
 }
 
 impl Render for StoryBrowser {
@@ -357,8 +439,16 @@ impl Render for StoryBrowser {
             .id("story-browser")
             .key_context("StoryBrowser")
             .track_focus(&self.focus_handle)
-            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _window, cx| {
+            .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                 let key = event.keystroke.key.as_str();
+                let modifiers = &event.keystroke.modifiers;
+
+                // Cmd+Shift+S for screenshot
+                if key == "s" && modifiers.platform && modifiers.shift {
+                    this.capture_screenshot(window, cx);
+                    return;
+                }
+
                 match key {
                     "up" | "arrowup" => this.move_selection_up(cx),
                     "down" | "arrowdown" => this.move_selection_down(cx),
@@ -403,8 +493,16 @@ impl Render for StoryBrowser {
                     .flex_1()
                     .flex()
                     .flex_col()
+                    .overflow_hidden()
                     .child(self.render_toolbar(cx))
-                    .child(preview),
+                    // Scrollable preview area
+                    .child(
+                        div()
+                            .id("story-preview-scroll")
+                            .flex_1()
+                            .overflow_y_scroll()
+                            .child(preview),
+                    ),
             )
     }
 }

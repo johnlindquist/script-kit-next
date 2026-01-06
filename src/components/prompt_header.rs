@@ -500,6 +500,7 @@ impl PromptHeader {
         let colors = self.colors;
 
         hstack()
+            .flex_shrink_0()
             .gap(rems(0.375))
             .items_center()
             // "Ask AI" text in muted color
@@ -512,6 +513,7 @@ impl PromptHeader {
             // "Tab" badge with border
             .child(
                 div()
+                    .flex_shrink_0()
                     .px(rems(0.375))
                     .py(rems(0.125))
                     .rounded(px(4.))
@@ -589,9 +591,12 @@ impl RenderOnce for PromptHeader {
         }
 
         // CLS-free actions area with stacked layers
+        // Note: This container needs min-width for absolute children to be visible
         header = header.child(
             div()
                 .relative()
+                .flex_shrink_0()
+                .min_w(px(200.)) // Minimum width for buttons to be visible
                 .h(rems(1.75))
                 .flex()
                 .items_center()

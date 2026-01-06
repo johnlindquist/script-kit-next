@@ -1859,51 +1859,42 @@ impl ScriptListApp {
             // Store the dialog entity for keyboard routing
             self.actions_dialog = Some(dialog.clone());
 
-            // Get main window bounds for positioning the actions popup
-            // Use the canonical coordinate system (top-left origin, Y increases downward)
-            // which matches what our main window positioning uses
-            let main_bounds = if let Some((x, y, w, h)) = crate::platform::get_main_window_bounds()
-            {
-                logging::log(
-                    "ACTIONS",
-                    &format!(
-                        "Main window bounds (canonical): origin=({}, {}), size={}x{}",
-                        x, y, w, h
-                    ),
-                );
-                gpui::Bounds {
-                    origin: gpui::Point {
-                        x: px(x as f32),
-                        y: px(y as f32),
-                    },
-                    size: gpui::Size {
-                        width: px(w as f32),
-                        height: px(h as f32),
-                    },
-                }
-            } else {
-                // Fallback to GPUI bounds if platform API unavailable
-                let bounds = window.bounds();
-                logging::log(
-                    "ACTIONS",
-                    &format!(
-                        "Main window bounds (GPUI fallback): origin=({:?}, {:?}), size={:?}x{:?}",
-                        bounds.origin.x, bounds.origin.y, bounds.size.width, bounds.size.height
-                    ),
-                );
-                bounds
-            };
+            // Get main window bounds and display_id for positioning the actions popup
+            //
+            // CRITICAL: We use GPUI's window.bounds() which returns SCREEN-RELATIVE coordinates
+            // (top-left origin, relative to the window's current screen). We also capture the
+            // display_id so the actions window is created on the SAME screen as the main window.
+            //
+            // This fixes multi-monitor issues where the actions popup would appear on the wrong
+            // screen or at wrong coordinates when the main window was on a secondary display.
+            let main_bounds = window.bounds();
+            let display_id = window.display(cx).map(|d| d.id());
 
-            // Open the actions window via spawn, passing the shared dialog entity
+            logging::log(
+                "ACTIONS",
+                &format!(
+                    "Main window bounds (GPUI screen-relative): origin=({:?}, {:?}), size={:?}x{:?}, display_id={:?}",
+                    main_bounds.origin.x, main_bounds.origin.y,
+                    main_bounds.size.width, main_bounds.size.height,
+                    display_id
+                ),
+            );
+
+            // Open the actions window via spawn, passing the shared dialog entity and display_id
             cx.spawn(async move |_this, cx| {
-                cx.update(|cx| match open_actions_window(cx, main_bounds, dialog) {
-                    Ok(_handle) => {
-                        logging::log("ACTIONS", "Actions popup window opened");
-                    }
-                    Err(e) => {
-                        logging::log("ACTIONS", &format!("Failed to open actions window: {}", e));
-                    }
-                })
+                cx.update(
+                    |cx| match open_actions_window(cx, main_bounds, display_id, dialog) {
+                        Ok(_handle) => {
+                            logging::log("ACTIONS", "Actions popup window opened");
+                        }
+                        Err(e) => {
+                            logging::log(
+                                "ACTIONS",
+                                &format!("Failed to open actions window: {}", e),
+                            );
+                        }
+                    },
+                )
                 .ok();
             })
             .detach();
