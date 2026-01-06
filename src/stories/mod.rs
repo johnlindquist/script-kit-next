@@ -13,6 +13,7 @@ mod header_design_variations;
 mod header_raycast_variations;
 mod header_stories;
 mod list_item_stories;
+mod logo_centering_stories;
 mod path_prompt_stories;
 mod scrollbar_stories;
 mod select_prompt_stories;
@@ -32,6 +33,7 @@ pub use header_design_variations::HeaderDesignVariationsStory;
 pub use header_raycast_variations::HeaderRaycastVariationsStory;
 pub use header_stories::HeaderVariationsStory;
 pub use list_item_stories::ListItemStory;
+pub use logo_centering_stories::LogoCenteringStory;
 pub use path_prompt_stories::PathPromptStory;
 pub use scrollbar_stories::ScrollbarStory;
 pub use select_prompt_stories::SelectPromptStory;
@@ -56,6 +58,7 @@ pub fn get_all_stories() -> &'static Vec<StoryEntry> {
             StoryEntry::new(Box::new(HeaderVariationsStory)),
             StoryEntry::new(Box::new(HeaderDesignVariationsStory)),
             StoryEntry::new(Box::new(HeaderRaycastVariationsStory)),
+            StoryEntry::new(Box::new(LogoCenteringStory)),
             // Prompts
             StoryEntry::new(Box::new(ArgPromptStory)),
             StoryEntry::new(Box::new(DropPromptStory)),
