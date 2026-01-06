@@ -221,10 +221,11 @@ pub fn is_valid_command_id(id: &str) -> bool {
 
 /// Convert a command ID to its deeplink URL.
 ///
-/// The deeplink format is: `kit://commands/{commandId}`
+/// The deeplink format is: `scriptkit://commands/{commandId}`
+/// Note: The app registers 'scriptkit' URL scheme (not 'kit')
 #[allow(dead_code)]
 pub fn command_id_to_deeplink(command_id: &str) -> String {
-    format!("kit://commands/{}", command_id)
+    format!("scriptkit://commands/{}", command_id)
 }
 
 // ============================================

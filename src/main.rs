@@ -67,6 +67,7 @@ mod utils;
 mod warning_banner;
 mod watcher;
 mod window_manager;
+mod window_ops;
 mod window_resize;
 mod window_state;
 #[cfg(test)]
@@ -92,6 +93,7 @@ mod permissions_wizard;
 // Built-in features registry
 mod app_launcher;
 mod builtins;
+mod fallbacks;
 mod menu_bar;
 
 // Frontmost app tracker - Background observer for tracking active application
@@ -172,7 +174,7 @@ use ui_foundation::get_vibrancy_background;
 use warning_banner::{WarningBanner, WarningBannerColors};
 use window_resize::{
     defer_resize_to_view, height_for_view, initial_window_height, reset_resize_debounce,
-    resize_first_window_to_height, ViewType,
+    resize_first_window_to_height, resize_to_view_sync, ViewType,
 };
 
 use components::{
@@ -340,11 +342,11 @@ fn show_main_window_helper(
             view.reset_to_script_list(ctx);
         } else {
             // Ensure window size matches current view
-            // FIX: Use deferred resize to avoid RefCell borrow conflicts.
-            // view.update_window_size() called resize_first_window_to_height synchronously
-            // which triggered macOS callbacks that tried to borrow the same RefCell.
-            // Using defer_resize_to_view with a 16ms delay allows the render cycle to complete.
-            defer_resize_to_view(ViewType::ScriptList, 0, ctx);
+            // FIX: Use deferred resize via window_ops to avoid RefCell borrow conflicts.
+            // We need Window access for defer, so use window.update().
+            let _ = window.update(ctx, |_root, win, win_cx| {
+                defer_resize_to_view(ViewType::ScriptList, 0, win, win_cx);
+            });
         }
     });
 
@@ -402,6 +404,146 @@ fn hide_main_window_helper(app_entity: Entity<ScriptListApp>, cx: &mut App) {
     }
 
     logging::log("VISIBILITY", "Main window hidden");
+}
+
+/// Execute a fallback action based on the fallback ID and input text.
+///
+/// This handles the various fallback action types:
+/// - run-in-terminal: Open terminal with command
+/// - add-to-notes: Open Notes window with quick capture
+/// - copy-to-clipboard: Copy text to clipboard
+/// - search-google/search-duckduckgo: Open browser with search URL
+/// - open-url: Open the input as a URL
+/// - calculate: Evaluate math expression (basic)
+/// - open-file: Open file/folder with default app
+fn execute_fallback_action(
+    fallback_id: &str,
+    input: &str,
+    _window: &mut Window,
+    cx: &mut Context<ScriptListApp>,
+) {
+    use fallbacks::builtins::{get_builtin_fallbacks, FallbackResult};
+
+    logging::log(
+        "FALLBACK",
+        &format!("Executing fallback '{}' with input: {}", fallback_id, input),
+    );
+
+    // Find the fallback by ID
+    let fallbacks = get_builtin_fallbacks();
+    let fallback = fallbacks.iter().find(|f| f.id == fallback_id);
+
+    let Some(fallback) = fallback else {
+        logging::log("FALLBACK", &format!("Unknown fallback ID: {}", fallback_id));
+        return;
+    };
+
+    // Execute the fallback and get the result
+    match fallback.execute(input) {
+        Ok(result) => {
+            match result {
+                FallbackResult::RunTerminal { command } => {
+                    logging::log("FALLBACK", &format!("RunTerminal: {}", command));
+                    // Open Terminal.app with the command
+                    #[cfg(target_os = "macos")]
+                    {
+                        // Use AppleScript to open Terminal and run the command
+                        let script = format!(
+                            r#"tell application "Terminal"
+                                activate
+                                do script "{}"
+                            end tell"#,
+                            command.replace("\"", "\\\"").replace("\\", "\\\\")
+                        );
+                        match std::process::Command::new("osascript")
+                            .arg("-e")
+                            .arg(&script)
+                            .spawn()
+                        {
+                            Ok(_) => logging::log("FALLBACK", "Opened Terminal with command"),
+                            Err(e) => {
+                                logging::log("FALLBACK", &format!("Failed to open Terminal: {}", e))
+                            }
+                        }
+                    }
+                    #[cfg(not(target_os = "macos"))]
+                    {
+                        logging::log("FALLBACK", "RunTerminal not implemented for this platform");
+                    }
+                }
+
+                FallbackResult::AddNote { content } => {
+                    logging::log("FALLBACK", &format!("AddNote: {}", content));
+                    // First copy content to clipboard so user can paste it
+                    let item = gpui::ClipboardItem::new_string(content.clone());
+                    cx.write_to_clipboard(item);
+                    // Then open Notes window - user can paste with Cmd+V
+                    if let Err(e) = notes::open_notes_window(cx) {
+                        logging::log("FALLBACK", &format!("Failed to open Notes: {}", e));
+                    } else {
+                        hud_manager::show_hud(
+                            "Text copied - paste into Notes".to_string(),
+                            Some(2000),
+                            cx,
+                        );
+                    }
+                }
+
+                FallbackResult::Copy { text } => {
+                    logging::log("FALLBACK", &format!("Copy: {} chars", text.len()));
+                    // Copy to clipboard using GPUI
+                    let item = gpui::ClipboardItem::new_string(text);
+                    cx.write_to_clipboard(item);
+                    logging::log("FALLBACK", "Text copied to clipboard");
+                }
+
+                FallbackResult::OpenUrl { url } => {
+                    logging::log("FALLBACK", &format!("OpenUrl: {}", url));
+                    // Open URL in default browser
+                    if let Err(e) = open::that(&url) {
+                        logging::log("FALLBACK", &format!("Failed to open URL: {}", e));
+                    } else {
+                        logging::log("FALLBACK", "URL opened in browser");
+                    }
+                }
+
+                FallbackResult::Calculate { expression } => {
+                    logging::log("FALLBACK", &format!("Calculate: {}", expression));
+                    // Basic math evaluation using meval crate
+                    match meval::eval_str(&expression) {
+                        Ok(result) => {
+                            let result_str = result.to_string();
+                            logging::log("FALLBACK", &format!("Result: {}", result_str));
+                            // Copy result to clipboard
+                            let item = gpui::ClipboardItem::new_string(result_str.clone());
+                            cx.write_to_clipboard(item);
+                            // Show HUD with result
+                            hud_manager::show_hud(format!("= {}", result_str), Some(2000), cx);
+                        }
+                        Err(e) => {
+                            logging::log("FALLBACK", &format!("Calculation error: {}", e));
+                            hud_manager::show_hud(format!("Error: {}", e), Some(3000), cx);
+                        }
+                    }
+                }
+
+                FallbackResult::OpenFile { path } => {
+                    logging::log("FALLBACK", &format!("OpenFile: {}", path));
+                    // Expand ~ to home directory
+                    let expanded = shellexpand::tilde(&path).to_string();
+                    // Open with default application
+                    if let Err(e) = open::that(&expanded) {
+                        logging::log("FALLBACK", &format!("Failed to open file: {}", e));
+                    } else {
+                        logging::log("FALLBACK", "File opened with default application");
+                    }
+                }
+            }
+        }
+        Err(e) => {
+            logging::log("FALLBACK", &format!("Fallback execution failed: {}", e));
+        }
+    }
 }
 
 /// Register bundled JetBrains Mono font with GPUI's text system
@@ -1964,17 +2106,11 @@ fn main() {
                                 script_kit_gpui::set_main_window_visible(true);
                                 platform::ensure_move_to_active_space();
 
-                                // FIX: Defer window move to avoid RefCell borrow conflicts.
-                                // We're inside nested .update() blocks, and synchronous macOS
-                                // window operations can trigger callbacks that re-borrow.
+                                // Use Window::defer via window_ops to coalesce and defer window move.
+                                // This avoids RefCell borrow conflicts from synchronous macOS window operations.
                                 let window_size = gpui::size(px(750.), initial_window_height());
                                 let bounds = platform::calculate_eye_line_bounds_on_mouse_display(window_size);
-                                ctx.spawn(async move |_this, _cx: &mut gpui::AsyncApp| {
-                                    Timer::after(std::time::Duration::from_millis(16)).await;
-                                    if window_manager::get_main_window().is_some() {
-                                        platform::move_first_window_to_bounds(&bounds);
-                                    }
-                                }).detach();
+                                window_ops::queue_move(bounds, window, ctx);
 
                                 if !PANEL_CONFIGURED.load(std::sync::atomic::Ordering::SeqCst) {
                                     platform::configure_as_floating_panel();
@@ -2003,17 +2139,11 @@ fn main() {
                                 script_kit_gpui::set_main_window_visible(true);
                                 platform::ensure_move_to_active_space();
 
-                                // FIX: Defer window move to avoid RefCell borrow conflicts.
-                                // We're inside nested .update() blocks, and synchronous macOS
-                                // window operations can trigger callbacks that re-borrow.
+                                // Use Window::defer via window_ops to coalesce and defer window move.
+                                // This avoids RefCell borrow conflicts from synchronous macOS window operations.
                                 let window_size = gpui::size(px(750.), initial_window_height());
                                 let bounds = platform::calculate_eye_line_bounds_on_mouse_display(window_size);
-                                ctx.spawn(async move |_this, _cx: &mut gpui::AsyncApp| {
-                                    Timer::after(std::time::Duration::from_millis(16)).await;
-                                    if window_manager::get_main_window().is_some() {
-                                        platform::move_first_window_to_bounds(&bounds);
-                                    }
-                                }).detach();
+                                window_ops::queue_move(bounds, window, ctx);
 
                                 if !PANEL_CONFIGURED.load(std::sync::atomic::Ordering::SeqCst) {
                                     platform::configure_as_floating_panel();
@@ -2389,6 +2519,10 @@ fn main() {
                             ExternalCommand::HideGrid => {
                                 logging::log("STDIN", "HideGrid: hiding debug grid overlay");
                                 view.hide_grid(ctx);
+                            }
+                            ExternalCommand::ExecuteFallback { ref fallback_id, ref input } => {
+                                logging::log("STDIN", &format!("ExecuteFallback: id='{}', input='{}'", fallback_id, input));
+                                execute_fallback_action(fallback_id, input, window, ctx);
                             }
                         }
                         ctx.notify();

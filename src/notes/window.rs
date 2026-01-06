@@ -671,7 +671,7 @@ impl NotesApp {
     }
 
     fn note_deeplink(&self, id: NoteId) -> String {
-        format!("kit://notes/{}", id.as_str())
+        format!("scriptkit://notes/{}", id.as_str())
     }
 
     fn copy_note_as_markdown(&self) {

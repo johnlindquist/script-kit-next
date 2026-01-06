@@ -121,6 +121,15 @@ pub enum ExternalCommand {
     },
     /// Hide the debug grid overlay
     HideGrid,
+    /// Execute a fallback action (e.g., Search Google, Copy to Clipboard)
+    /// This is triggered when a fallback item is selected from the UI
+    ExecuteFallback {
+        /// The fallback ID (e.g., "search-google", "copy-to-clipboard")
+        #[serde(rename = "fallbackId")]
+        fallback_id: String,
+        /// The user's input text to use with the fallback action
+        input: String,
+    },
 }
 
 /// Start a thread that listens on stdin for external JSONL commands.
@@ -441,5 +450,32 @@ mod tests {
         let json = r#"{"type": "hideGrid"}"#;
         let cmd: ExternalCommand = serde_json::from_str(json).unwrap();
         assert!(matches!(cmd, ExternalCommand::HideGrid));
+    }
+
+    #[test]
+    fn test_external_command_execute_fallback_deserialization() {
+        let json =
+            r#"{"type": "executeFallback", "fallbackId": "search-google", "input": "hello world"}"#;
+        let cmd: ExternalCommand = serde_json::from_str(json).unwrap();
+        match cmd {
+            ExternalCommand::ExecuteFallback { fallback_id, input } => {
+                assert_eq!(fallback_id, "search-google");
+                assert_eq!(input, "hello world");
+            }
+            _ => panic!("Expected ExecuteFallback command"),
+        }
+    }
+
+    #[test]
+    fn test_external_command_execute_fallback_copy() {
+        let json = r#"{"type": "executeFallback", "fallbackId": "copy-to-clipboard", "input": "test text"}"#;
+        let cmd: ExternalCommand = serde_json::from_str(json).unwrap();
+        match cmd {
+            ExternalCommand::ExecuteFallback { fallback_id, input } => {
+                assert_eq!(fallback_id, "copy-to-clipboard");
+                assert_eq!(input, "test text");
+            }
+            _ => panic!("Expected ExecuteFallback command"),
+        }
     }
 }

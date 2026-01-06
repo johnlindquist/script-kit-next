@@ -200,3 +200,51 @@ pub struct ScheduleMetadata {
     /// Natural language schedule from `// Schedule: every tuesday at 2pm`
     pub schedule: Option<String>,
 }
+
+/// Runtime configuration for fallback commands
+/// Fallback commands are shown when no search results match,
+/// allowing the typed text to be used as input.
+#[derive(Debug, Clone)]
+pub struct FallbackConfig {
+    /// The script that handles this fallback
+    pub script: std::sync::Arc<Script>,
+    /// Display label with {input} placeholder replaced with actual input
+    /// (e.g., "Search docs for {input}" -> "Search docs for my query")
+    pub label: String,
+    /// The original label template with {input} placeholder
+    pub label_template: String,
+}
+
+impl FallbackConfig {
+    /// Create a new FallbackConfig from a script with fallback metadata
+    ///
+    /// Returns None if the script doesn't have fallback enabled
+    pub fn from_script(script: std::sync::Arc<Script>) -> Option<Self> {
+        let typed_meta = script.typed_metadata.as_ref()?;
+
+        if !typed_meta.fallback {
+            return None;
+        }
+
+        // Use fallback_label if provided, otherwise use script name with {input}
+        let label_template = typed_meta
+            .fallback_label
+            .clone()
+            .unwrap_or_else(|| format!("{} {{input}}", script.name));
+
+        Some(Self {
+            script,
+            label: label_template.clone(), // Will be replaced with actual input at runtime
+            label_template,
+        })
+    }
+
+    /// Update the label by replacing {input} placeholder with actual user input
+    pub fn with_input(&self, input: &str) -> Self {
+        Self {
+            script: self.script.clone(),
+            label: self.label_template.replace("{input}", input),
+            label_template: self.label_template.clone(),
+        }
+    }
+}

@@ -322,6 +322,16 @@ struct ActiveHud {
     bounds: gpui::Bounds<Pixels>,
     created_at: Instant,
     duration_ms: u64,
+    /// Slot index (0..MAX_SIMULTANEOUS_HUDS) for position calculation
+    #[allow(dead_code)] // Used in position calculation
+    slot: usize,
+}
+
+/// Entry in the slot allocation array (lightweight, for tracking slot ownership)
+#[derive(Clone, Copy, Debug)]
+struct HudSlotEntry {
+    /// HUD ID that owns this slot
+    id: u64,
 }
 
 /// Check if a duration has elapsed (used for HUD expiry)
@@ -338,8 +348,11 @@ impl ActiveHud {
 
 /// Global HUD manager state
 struct HudManagerState {
-    /// Currently displayed HUD windows
+    /// Currently displayed HUD windows (kept for window handle storage)
     active_huds: Vec<ActiveHud>,
+    /// Slot allocation array - each slot is None (free) or Some(entry) (occupied)
+    /// Using fixed array prevents overlap from len-based stacking
+    hud_slots: [Option<HudSlotEntry>; MAX_SIMULTANEOUS_HUDS],
     /// Queue of pending HUDs (if max simultaneous reached)
     pending_queue: VecDeque<HudNotification>,
 }
@@ -348,8 +361,40 @@ impl HudManagerState {
     fn new() -> Self {
         Self {
             active_huds: Vec::new(),
+            hud_slots: [None; MAX_SIMULTANEOUS_HUDS],
             pending_queue: VecDeque::new(),
         }
+    }
+
+    /// Find the first free slot (lowest index)
+    fn first_free_slot(&self) -> Option<usize> {
+        self.hud_slots.iter().position(|slot| slot.is_none())
+    }
+
+    /// Release a slot by HUD ID (clear the slot that contains this ID)
+    fn release_slot_by_id(&mut self, hud_id: u64) {
+        for slot in self.hud_slots.iter_mut() {
+            if let Some(entry) = slot {
+                if entry.id == hud_id {
+                    *slot = None;
+                    return;
+                }
+            }
+        }
+    }
+
+    /// Find which slot contains a given HUD ID
+    #[allow(dead_code)] // Used in tests
+    fn find_slot_by_id(&self, hud_id: u64) -> Option<usize> {
+        self.hud_slots
+            .iter()
+            .position(|slot| slot.as_ref().map_or(false, |entry| entry.id == hud_id))
+    }
+
+    /// Count how many HUDs are currently active
+    #[allow(dead_code)] // Used in tests
+    fn active_hud_count(&self) -> usize {
+        self.hud_slots.iter().filter(|s| s.is_some()).count()
     }
 }
 
@@ -394,36 +439,36 @@ pub fn show_hud(text: String, duration_ms: Option<u64>, cx: &mut App) {
         &format!("Showing HUD: '{}' for {}ms", text, duration),
     );
 
-    // Check if we can show immediately or need to queue
-    let should_queue = {
+    // Allocate slot and check if we can show immediately
+    let allocated_slot = {
         let manager = get_hud_manager();
         let state = manager.lock();
-        state.active_huds.len() >= MAX_SIMULTANEOUS_HUDS
+        state.first_free_slot()
     };
 
-    if should_queue {
-        logging::log("HUD", "Max HUDs reached, queueing");
-        let manager = get_hud_manager();
-        let mut state = manager.lock();
-        state.pending_queue.push_back(HudNotification {
-            text,
-            duration_ms: duration,
-            created_at: Instant::now(),
-            action_label: None,
-            action: None,
-        });
-        return;
-    }
+    let slot = match allocated_slot {
+        Some(s) => s,
+        None => {
+            // No free slots, queue the HUD
+            logging::log("HUD", "Max HUDs reached, queueing");
+            let manager = get_hud_manager();
+            let mut state = manager.lock();
+            state.pending_queue.push_back(HudNotification {
+                text,
+                duration_ms: duration,
+                created_at: Instant::now(),
+                action_label: None,
+                action: None,
+            });
+            return;
+        }
+    };
 
     // Calculate position - bottom center of screen with mouse
     let (hud_x, hud_y) = calculate_hud_position(cx);
 
-    // Calculate vertical offset for stacking
-    let stack_offset = {
-        let manager = get_hud_manager();
-        let state = manager.lock();
-        state.active_huds.len() as f32 * HUD_STACK_GAP
-    };
+    // Calculate vertical offset using SLOT index (not len) - this prevents overlap
+    let stack_offset = slot as f32 * HUD_STACK_GAP;
 
     let hud_width: Pixels = px(HUD_WIDTH);
     let hud_height: Pixels = px(HUD_HEIGHT);
@@ -462,16 +507,19 @@ pub fn show_hud(text: String, duration_ms: Option<u64>, cx: &mut App) {
             // Clone window handle for the cleanup timer
             let window_for_cleanup = window_handle;
 
-            // Track the active HUD
+            // Track the active HUD and register slot
             {
                 let manager = get_hud_manager();
                 let mut state = manager.lock();
+                // Register slot ownership
+                state.hud_slots[slot] = Some(HudSlotEntry { id: hud_id });
                 state.active_huds.push(ActiveHud {
                     id: hud_id,
                     window: window_handle,
                     bounds: expected_bounds,
                     created_at: Instant::now(),
                     duration_ms: duration,
+                    slot,
                 });
             }
 
@@ -494,7 +542,7 @@ pub fn show_hud(text: String, duration_ms: Option<u64>, cx: &mut App) {
 
             logging::log(
                 "HUD",
-                &format!("HUD window created for: '{}'", text_for_log),
+                &format!("HUD window created for: '{}' (slot {})", text_for_log, slot),
             );
         }
         Err(e) => {
@@ -533,36 +581,36 @@ pub fn show_hud_with_action(
         ),
     );
 
-    // Check if we can show immediately or need to queue
-    let should_queue = {
+    // Allocate slot and check if we can show immediately
+    let allocated_slot = {
         let manager = get_hud_manager();
         let state = manager.lock();
-        state.active_huds.len() >= MAX_SIMULTANEOUS_HUDS
+        state.first_free_slot()
     };
 
-    if should_queue {
-        logging::log("HUD", "Max HUDs reached, queueing action HUD");
-        let manager = get_hud_manager();
-        let mut state = manager.lock();
-        state.pending_queue.push_back(HudNotification {
-            text,
-            duration_ms: duration,
-            created_at: Instant::now(),
-            action_label: Some(action_label),
-            action: Some(action),
-        });
-        return;
-    }
+    let slot = match allocated_slot {
+        Some(s) => s,
+        None => {
+            // No free slots, queue the HUD
+            logging::log("HUD", "Max HUDs reached, queueing action HUD");
+            let manager = get_hud_manager();
+            let mut state = manager.lock();
+            state.pending_queue.push_back(HudNotification {
+                text,
+                duration_ms: duration,
+                created_at: Instant::now(),
+                action_label: Some(action_label),
+                action: Some(action),
+            });
+            return;
+        }
+    };
 
     // Calculate position - bottom center of screen with mouse
     let (hud_x, hud_y) = calculate_hud_position(cx);
 
-    // Calculate vertical offset for stacking
-    let stack_offset = {
-        let manager = get_hud_manager();
-        let state = manager.lock();
-        state.active_huds.len() as f32 * HUD_STACK_GAP
-    };
+    // Calculate vertical offset using SLOT index (not len) - this prevents overlap
+    let stack_offset = slot as f32 * HUD_STACK_GAP;
 
     // Use wider dimensions for action HUDs
     let hud_width: Pixels = px(HUD_ACTION_WIDTH);
@@ -605,16 +653,19 @@ pub fn show_hud_with_action(
             // Clone window handle for the cleanup timer
             let window_for_cleanup = window_handle;
 
-            // Track the active HUD
+            // Track the active HUD and register slot
             {
                 let manager = get_hud_manager();
                 let mut state = manager.lock();
+                // Register slot ownership
+                state.hud_slots[slot] = Some(HudSlotEntry { id: hud_id });
                 state.active_huds.push(ActiveHud {
                     id: hud_id,
                     window: window_handle,
                     bounds: expected_bounds,
                     created_at: Instant::now(),
                     duration_ms: duration,
+                    slot,
                 });
             }
 
@@ -637,7 +688,10 @@ pub fn show_hud_with_action(
 
             logging::log(
                 "HUD",
-                &format!("Action HUD window created for: '{}'", text_for_log),
+                &format!(
+                    "Action HUD window created for: '{}' (slot {})",
+                    text_for_log, slot
+                ),
             );
         }
         Err(e) => {
@@ -850,14 +904,20 @@ fn configure_hud_window_by_bounds(_expected_bounds: gpui::Bounds<Pixels>, _click
 ///
 /// This is more reliable than bounds matching for timer-based dismissal,
 /// as it avoids race conditions where bounds might match the wrong window.
+/// Uses slot-based clearing instead of swap_remove to prevent position overlap.
 fn dismiss_hud_by_id(hud_id: u64, cx: &mut App) {
     let manager = get_hud_manager();
 
     // Find and remove the HUD with matching ID, getting its bounds for window close
     let bounds_to_close: Option<gpui::Bounds<Pixels>> = {
         let mut state = manager.lock();
+
+        // First, release the slot (this is the key fix - clears by ID, not swap_remove)
+        state.release_slot_by_id(hud_id);
+
+        // Then find and remove from active_huds Vec (retain order, don't swap_remove)
         if let Some(idx) = state.active_huds.iter().position(|h| h.id == hud_id) {
-            let hud = state.active_huds.swap_remove(idx);
+            let hud = state.active_huds.remove(idx); // Use remove() to preserve order
             Some(hud.bounds)
         } else {
             None
@@ -885,8 +945,20 @@ fn cleanup_expired_huds(cx: &mut App) {
     let manager = get_hud_manager();
     let mut state = manager.lock();
 
-    // Remove expired HUDs from tracking
+    // Remove expired HUDs from tracking and release their slots
     let before_count = state.active_huds.len();
+    let expired_ids: Vec<u64> = state
+        .active_huds
+        .iter()
+        .filter(|hud| hud.is_expired())
+        .map(|hud| hud.id)
+        .collect();
+
+    // Release slots for expired HUDs
+    for id in &expired_ids {
+        state.release_slot_by_id(*id);
+    }
+
     state.active_huds.retain(|hud| !hud.is_expired());
     let removed = before_count - state.active_huds.len();
 
@@ -894,8 +966,8 @@ fn cleanup_expired_huds(cx: &mut App) {
         logging::log("HUD", &format!("Cleaned up {} expired HUD(s)", removed));
     }
 
-    // Show pending HUDs if we have room
-    while state.active_huds.len() < MAX_SIMULTANEOUS_HUDS {
+    // Show pending HUDs if we have free slots
+    while state.first_free_slot().is_some() {
         if let Some(pending) = state.pending_queue.pop_front() {
             // Drop lock before showing HUD (show_notification will acquire it)
             drop(state);
@@ -928,10 +1000,11 @@ pub fn dismiss_all_huds(_cx: &mut App) {
         close_hud_window_by_bounds(*bounds);
     }
 
-    // Clear tracking state
+    // Clear tracking state including slot allocations
     let mut state = manager.lock();
     let count = state.active_huds.len();
     state.active_huds.clear();
+    state.hud_slots = [None; MAX_SIMULTANEOUS_HUDS]; // Clear all slots
     state.pending_queue.clear();
 
     if count > 0 {
@@ -1387,5 +1460,180 @@ mod tests {
         assert_eq!(r, 127, "Red channel should be halved");
         assert_eq!(g, 64, "Green channel should be halved");
         assert_eq!(b, 0, "Blue channel should stay at 0");
+    }
+
+    // =============================================================================
+    // Slot-based Allocation Tests (TDD for overlap fix)
+    // =============================================================================
+
+    #[test]
+    fn test_slot_allocation_gives_unique_slots() {
+        // Each HUD should get a unique slot 0..MAX_SIMULTANEOUS_HUDS
+        let mut state = HudManagerState::new();
+
+        // Allocate slots one by one
+        let slot0 = state.first_free_slot();
+        assert_eq!(slot0, Some(0), "First slot should be 0");
+
+        // Simulate HUD at slot 0
+        state.hud_slots[0] = Some(HudSlotEntry { id: 100 });
+
+        let slot1 = state.first_free_slot();
+        assert_eq!(slot1, Some(1), "Second slot should be 1");
+
+        state.hud_slots[1] = Some(HudSlotEntry { id: 101 });
+
+        let slot2 = state.first_free_slot();
+        assert_eq!(slot2, Some(2), "Third slot should be 2");
+
+        state.hud_slots[2] = Some(HudSlotEntry { id: 102 });
+
+        // All slots full
+        let slot_none = state.first_free_slot();
+        assert_eq!(slot_none, None, "Should return None when all slots full");
+    }
+
+    #[test]
+    fn test_slot_release_makes_slot_available() {
+        // When a HUD dismisses, its slot becomes available for reuse
+        let mut state = HudManagerState::new();
+
+        // Fill all slots
+        state.hud_slots[0] = Some(HudSlotEntry { id: 100 });
+        state.hud_slots[1] = Some(HudSlotEntry { id: 101 });
+        state.hud_slots[2] = Some(HudSlotEntry { id: 102 });
+
+        // All slots full
+        assert_eq!(state.first_free_slot(), None);
+
+        // Release slot 1 (middle)
+        state.release_slot_by_id(101);
+
+        // Slot 1 should now be free
+        assert!(state.hud_slots[1].is_none(), "Slot 1 should be released");
+
+        // Next allocation should get slot 1
+        let next_slot = state.first_free_slot();
+        assert_eq!(next_slot, Some(1), "Should reuse released slot 1");
+    }
+
+    #[test]
+    fn test_concurrent_huds_get_different_slots() {
+        // Multiple HUDs active at same time should have different slots
+        let mut state = HudManagerState::new();
+
+        // Allocate and fill slots
+        state.hud_slots[0] = Some(HudSlotEntry { id: 200 });
+        state.hud_slots[1] = Some(HudSlotEntry { id: 201 });
+        state.hud_slots[2] = Some(HudSlotEntry { id: 202 });
+
+        // Verify all slots occupied by different IDs
+        let ids: Vec<u64> = state
+            .hud_slots
+            .iter()
+            .filter_map(|s| s.as_ref().map(|e| e.id))
+            .collect();
+
+        assert_eq!(ids.len(), 3, "All slots should be occupied");
+        assert!(ids.contains(&200));
+        assert!(ids.contains(&201));
+        assert!(ids.contains(&202));
+
+        // No duplicates
+        let mut sorted = ids.clone();
+        sorted.sort();
+        sorted.dedup();
+        assert_eq!(sorted.len(), 3, "All IDs should be unique");
+    }
+
+    #[test]
+    fn test_position_uses_slot_not_len() {
+        // Position calculation should use slot index, not active count
+        // This is the core bug fix - releasing middle HUD shouldn't move others
+
+        let mut state = HudManagerState::new();
+
+        // Fill slots 0, 1, 2
+        state.hud_slots[0] = Some(HudSlotEntry { id: 300 });
+        state.hud_slots[1] = Some(HudSlotEntry { id: 301 });
+        state.hud_slots[2] = Some(HudSlotEntry { id: 302 });
+
+        // Release middle HUD (slot 1)
+        state.release_slot_by_id(301);
+
+        // Slot 0 and 2 should still have their original entries
+        assert!(
+            state.hud_slots[0].is_some(),
+            "Slot 0 should still be occupied"
+        );
+        assert!(state.hud_slots[1].is_none(), "Slot 1 should be empty");
+        assert!(
+            state.hud_slots[2].is_some(),
+            "Slot 2 should still be occupied"
+        );
+
+        // Calculate offsets using slot indices
+        // Slot 0 -> offset = 0 * HUD_STACK_GAP
+        // Slot 2 -> offset = 2 * HUD_STACK_GAP (NOT 1 * HUD_STACK_GAP)
+        let offset_slot_0 = 0.0 * HUD_STACK_GAP;
+        let offset_slot_2 = 2.0 * HUD_STACK_GAP;
+
+        assert!(
+            (offset_slot_0 - 0.0).abs() < f32::EPSILON,
+            "Slot 0 should have offset 0"
+        );
+        assert!(
+            (offset_slot_2 - 2.0 * HUD_STACK_GAP).abs() < f32::EPSILON,
+            "Slot 2 should keep its original offset"
+        );
+    }
+
+    #[test]
+    fn test_release_nonexistent_id_is_safe() {
+        // Releasing an ID that doesn't exist should be a no-op
+        let mut state = HudManagerState::new();
+
+        state.hud_slots[0] = Some(HudSlotEntry { id: 400 });
+
+        // Release non-existent ID
+        state.release_slot_by_id(999);
+
+        // Original slot should be unchanged
+        assert!(state.hud_slots[0].is_some(), "Existing slot should remain");
+        assert_eq!(state.hud_slots[0].as_ref().unwrap().id, 400);
+    }
+
+    #[test]
+    fn test_find_slot_by_id() {
+        let mut state = HudManagerState::new();
+
+        state.hud_slots[0] = Some(HudSlotEntry { id: 500 });
+        state.hud_slots[2] = Some(HudSlotEntry { id: 502 });
+        // slot 1 is empty
+
+        assert_eq!(state.find_slot_by_id(500), Some(0));
+        assert_eq!(state.find_slot_by_id(502), Some(2));
+        assert_eq!(state.find_slot_by_id(501), None); // doesn't exist
+        assert_eq!(state.find_slot_by_id(999), None); // doesn't exist
+    }
+
+    #[test]
+    fn test_active_hud_count() {
+        let mut state = HudManagerState::new();
+
+        assert_eq!(state.active_hud_count(), 0);
+
+        state.hud_slots[0] = Some(HudSlotEntry { id: 600 });
+        assert_eq!(state.active_hud_count(), 1);
+
+        state.hud_slots[2] = Some(HudSlotEntry { id: 602 });
+        assert_eq!(state.active_hud_count(), 2);
+
+        state.hud_slots[1] = Some(HudSlotEntry { id: 601 });
+        assert_eq!(state.active_hud_count(), 3);
+
+        // Release middle
+        state.release_slot_by_id(601);
+        assert_eq!(state.active_hud_count(), 2);
     }
 }

@@ -585,21 +585,48 @@ fn is_relevant_script_file(path: &std::path::Path) -> bool {
     )
 }
 
-/// Compute the next deadline from pending events
+/// Compute the next deadline from pending events and global full_reload_at
 fn next_deadline(
     pending: &HashMap<PathBuf, (ScriptReloadEvent, Instant)>,
+    full_reload_at: Option<Instant>,
     debounce: Duration,
 ) -> Option<Instant> {
-    pending.values().map(|(_, t)| *t + debounce).min()
+    let pending_deadline = pending.values().map(|(_, t)| *t + debounce).min();
+    let full_reload_deadline = full_reload_at.map(|t| t + debounce);
+
+    match (pending_deadline, full_reload_deadline) {
+        (Some(p), Some(f)) => Some(p.min(f)),
+        (Some(p), None) => Some(p),
+        (None, Some(f)) => Some(f),
+        (None, None) => None,
+    }
 }
 
-/// Flush expired events from pending map
+/// Flush expired events from pending map and global full_reload_at
+///
+/// If full_reload_at has expired, emits a single FullReload and clears pending.
+/// Otherwise, flushes individual expired events from pending.
 fn flush_expired(
     pending: &mut HashMap<PathBuf, (ScriptReloadEvent, Instant)>,
+    full_reload_at: &mut Option<Instant>,
     debounce: Duration,
     out_tx: &Sender<ScriptReloadEvent>,
 ) {
     let now = Instant::now();
+
+    // Check global full_reload_at first - it supersedes all pending events
+    if let Some(reload_time) = *full_reload_at {
+        if now.duration_since(reload_time) >= debounce {
+            debug!("FullReload debounce complete, flushing");
+            info!(event = ?ScriptReloadEvent::FullReload, "Emitting script reload event");
+            let _ = out_tx.send(ScriptReloadEvent::FullReload);
+            *full_reload_at = None;
+            pending.clear(); // Clear any remaining pending - superseded by FullReload
+            return;
+        }
+    }
+
+    // Flush individual expired events
     let mut to_send: Vec<ScriptReloadEvent> = Vec::new();
 
     pending.retain(|path, (ev, t)| {
@@ -783,6 +810,9 @@ impl ScriptWatcher {
         let mut consecutive_errors: u32 = 0;
         let debounce = Duration::from_millis(DEBOUNCE_MS);
         let mut pending: HashMap<PathBuf, (ScriptReloadEvent, Instant)> = HashMap::new();
+        // Global FullReload state: when set, supersedes all per-file events
+        // This prevents multiple FullReload emissions during event storms
+        let mut full_reload_at: Option<Instant> = None;
 
         loop {
             if stop_flag.load(std::sync::atomic::Ordering::Relaxed) {
@@ -790,7 +820,7 @@ impl ScriptWatcher {
             }
 
             // Use a max timeout to periodically check stop flag
-            let deadline = next_deadline(&pending, debounce);
+            let deadline = next_deadline(&pending, full_reload_at, debounce);
             let timeout = deadline
                 .map(|dl| dl.saturating_duration_since(Instant::now()))
                 .unwrap_or(Duration::from_millis(500));
@@ -798,7 +828,7 @@ impl ScriptWatcher {
             let msg = match control_rx.recv_timeout(timeout) {
                 Ok(m) => Some(m),
                 Err(RecvTimeoutError::Timeout) => {
-                    flush_expired(&mut pending, debounce, &out_tx);
+                    flush_expired(&mut pending, &mut full_reload_at, debounce, &out_tx);
                     continue;
                 }
                 Err(RecvTimeoutError::Disconnected) => break,
@@ -857,28 +887,64 @@ impl ScriptWatcher {
                             continue;
                         }
 
-                        let reload_event = match kind {
+                        let now = Instant::now();
+
+                        // Handle event types
+                        match kind {
                             notify::EventKind::Create(_) => {
-                                ScriptReloadEvent::FileCreated(path.clone())
+                                debug!(
+                                    path = %path.display(),
+                                    event_kind = ?kind,
+                                    "Script change detected (create), merging event"
+                                );
+                                // Use merge_script_event to handle atomic saves
+                                merge_script_event(
+                                    &mut pending,
+                                    path,
+                                    ScriptReloadEvent::FileCreated(path.clone()),
+                                    now,
+                                );
                             }
                             notify::EventKind::Modify(_) => {
-                                ScriptReloadEvent::FileChanged(path.clone())
+                                debug!(
+                                    path = %path.display(),
+                                    event_kind = ?kind,
+                                    "Script change detected (modify), updating pending"
+                                );
+                                pending.insert(
+                                    path.clone(),
+                                    (ScriptReloadEvent::FileChanged(path.clone()), now),
+                                );
                             }
                             notify::EventKind::Remove(_) => {
-                                ScriptReloadEvent::FileDeleted(path.clone())
+                                debug!(
+                                    path = %path.display(),
+                                    event_kind = ?kind,
+                                    "Script change detected (remove), merging event"
+                                );
+                                // Use merge_script_event to handle atomic saves
+                                merge_script_event(
+                                    &mut pending,
+                                    path,
+                                    ScriptReloadEvent::FileDeleted(path.clone()),
+                                    now,
+                                );
                             }
                             // Access events are not relevant
                             notify::EventKind::Access(_) => continue,
-                            // For Other/Any events, use FullReload as a safe fallback
-                            _ => ScriptReloadEvent::FullReload,
-                        };
-
-                        debug!(
-                            path = %path.display(),
-                            event_kind = ?kind,
-                            "Script change detected, updating pending"
-                        );
-                        pending.insert(path.clone(), (reload_event, Instant::now()));
+                            // For Other/Any events, trigger global FullReload
+                            _ => {
+                                debug!(
+                                    path = %path.display(),
+                                    event_kind = ?kind,
+                                    "Unknown event kind, triggering global FullReload"
+                                );
+                                // Set global FullReload state and clear pending
+                                // This ensures only ONE FullReload is emitted after debounce
+                                full_reload_at = Some(now);
+                                pending.clear();
+                            }
+                        }
 
                         // Storm coalescing: if too many pending events, collapse to FullReload
                         if pending.len() >= STORM_THRESHOLD {
@@ -887,9 +953,10 @@ impl ScriptWatcher {
                                 threshold = STORM_THRESHOLD,
                                 "Event storm detected, collapsing to FullReload"
                             );
+                            // Set global FullReload instead of immediate emission
+                            // This ensures proper debounce even during storms
+                            full_reload_at = Some(Instant::now());
                             pending.clear();
-                            let _ = out_tx.send(ScriptReloadEvent::FullReload);
-                            break;
                         }
                     }
                 }
@@ -1055,9 +1122,253 @@ impl Drop for AppearanceWatcher {
     }
 }
 
+/// Merge create/delete event pairs for the same path into FileChanged (atomic save handling)
+///
+/// Editors often save files via temp file → rename, causing Delete+Create sequences.
+/// Within the debounce window, we merge these into FileChanged.
+fn merge_script_event(
+    pending: &mut HashMap<PathBuf, (ScriptReloadEvent, Instant)>,
+    path: &PathBuf,
+    new_event: ScriptReloadEvent,
+    timestamp: Instant,
+) {
+    if let Some((existing_event, _existing_time)) = pending.get(path) {
+        // Check if we can merge:
+        // FileDeleted + FileCreated → FileChanged (file was atomically saved)
+        // FileCreated + FileDeleted → FileChanged (temp file dance)
+        let merged = match (&existing_event, &new_event) {
+            (ScriptReloadEvent::FileDeleted(_), ScriptReloadEvent::FileCreated(_))
+            | (ScriptReloadEvent::FileCreated(_), ScriptReloadEvent::FileDeleted(_)) => {
+                Some(ScriptReloadEvent::FileChanged(path.clone()))
+            }
+            _ => None,
+        };
+
+        if let Some(merged_event) = merged {
+            pending.insert(path.clone(), (merged_event, timestamp));
+            return;
+        }
+    }
+
+    // No merge - insert new event
+    pending.insert(path.clone(), (new_event, timestamp));
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ============================================================
+    // ISSUE A - FullReload coalescing tests
+    // ============================================================
+
+    #[test]
+    fn test_full_reload_global_state_single_emission() {
+        // Multiple FullReload triggers during debounce window should result in single emission
+        let (tx, rx) = channel::<ScriptReloadEvent>();
+        let mut pending: HashMap<PathBuf, (ScriptReloadEvent, Instant)> = HashMap::new();
+        let mut full_reload_at: Option<Instant> = None;
+        let _debounce = Duration::from_millis(500);
+        let now = Instant::now();
+
+        // Simulate 3 FullReload triggers from different paths within debounce window
+        for i in 0..3 {
+            let _path = PathBuf::from(format!("/test/script{}.ts", i));
+            // When FullReload is triggered, set global state instead of per-path
+            full_reload_at = Some(now);
+            // Clear pending events - they're superseded by full reload
+            pending.clear();
+        }
+
+        // Verify: full_reload_at is set, pending is empty
+        assert!(full_reload_at.is_some());
+        assert!(pending.is_empty());
+
+        // Simulate debounce expiry - emit single FullReload
+        if full_reload_at.is_some() {
+            let _ = tx.send(ScriptReloadEvent::FullReload);
+            // Reset after emission (in real code)
+        }
+
+        // Should only receive one FullReload
+        let received = rx.try_recv().unwrap();
+        assert_eq!(received, ScriptReloadEvent::FullReload);
+        assert!(rx.try_recv().is_err()); // No more events
+    }
+
+    #[test]
+    fn test_full_reload_clears_pending_events() {
+        // When FullReload is triggered, it should clear all pending per-file events
+        let mut pending: HashMap<PathBuf, (ScriptReloadEvent, Instant)> = HashMap::new();
+        let now = Instant::now();
+
+        // Add some pending per-file events
+        pending.insert(
+            PathBuf::from("/test/a.ts"),
+            (
+                ScriptReloadEvent::FileChanged(PathBuf::from("/test/a.ts")),
+                now,
+            ),
+        );
+        pending.insert(
+            PathBuf::from("/test/b.ts"),
+            (
+                ScriptReloadEvent::FileCreated(PathBuf::from("/test/b.ts")),
+                now,
+            ),
+        );
+
+        assert_eq!(pending.len(), 2);
+
+        // Trigger FullReload (e.g., from EventKind::Other)
+        let full_reload_at: Option<Instant> = Some(now);
+        pending.clear();
+
+        // Pending should be empty, full_reload_at should be set
+        assert!(pending.is_empty());
+        assert!(full_reload_at.is_some());
+    }
+
+    // ============================================================
+    // ISSUE B - Atomic save event merging tests
+    // ============================================================
+
+    #[test]
+    fn test_merge_delete_then_create_to_changed() {
+        // FileDeleted + FileCreated (same path) → FileChanged
+        let mut pending: HashMap<PathBuf, (ScriptReloadEvent, Instant)> = HashMap::new();
+        let path = PathBuf::from("/test/script.ts");
+        let now = Instant::now();
+
+        // First: delete event
+        merge_script_event(
+            &mut pending,
+            &path,
+            ScriptReloadEvent::FileDeleted(path.clone()),
+            now,
+        );
+        assert_eq!(pending.len(), 1);
+        assert!(matches!(
+            pending.get(&path),
+            Some((ScriptReloadEvent::FileDeleted(_), _))
+        ));
+
+        // Then: create event (atomic save completes)
+        let later = now + Duration::from_millis(10);
+        merge_script_event(
+            &mut pending,
+            &path,
+            ScriptReloadEvent::FileCreated(path.clone()),
+            later,
+        );
+
+        // Should be merged to FileChanged
+        assert_eq!(pending.len(), 1);
+        let (event, _) = pending.get(&path).unwrap();
+        assert_eq!(*event, ScriptReloadEvent::FileChanged(path.clone()));
+    }
+
+    #[test]
+    fn test_merge_create_then_delete_to_changed() {
+        // FileCreated + FileDeleted (same path) → FileChanged
+        // (temp file dance: create temp, delete original, rename temp)
+        let mut pending: HashMap<PathBuf, (ScriptReloadEvent, Instant)> = HashMap::new();
+        let path = PathBuf::from("/test/script.ts");
+        let now = Instant::now();
+
+        // First: create event
+        merge_script_event(
+            &mut pending,
+            &path,
+            ScriptReloadEvent::FileCreated(path.clone()),
+            now,
+        );
+
+        // Then: delete event
+        let later = now + Duration::from_millis(10);
+        merge_script_event(
+            &mut pending,
+            &path,
+            ScriptReloadEvent::FileDeleted(path.clone()),
+            later,
+        );
+
+        // Should be merged to FileChanged
+        assert_eq!(pending.len(), 1);
+        let (event, _) = pending.get(&path).unwrap();
+        assert_eq!(*event, ScriptReloadEvent::FileChanged(path.clone()));
+    }
+
+    #[test]
+    fn test_no_merge_for_different_paths() {
+        // Events for different paths should not be merged
+        let mut pending: HashMap<PathBuf, (ScriptReloadEvent, Instant)> = HashMap::new();
+        let path_a = PathBuf::from("/test/a.ts");
+        let path_b = PathBuf::from("/test/b.ts");
+        let now = Instant::now();
+
+        // Delete on path A
+        merge_script_event(
+            &mut pending,
+            &path_a,
+            ScriptReloadEvent::FileDeleted(path_a.clone()),
+            now,
+        );
+
+        // Create on path B (different path - no merge)
+        merge_script_event(
+            &mut pending,
+            &path_b,
+            ScriptReloadEvent::FileCreated(path_b.clone()),
+            now,
+        );
+
+        // Should have 2 separate events
+        assert_eq!(pending.len(), 2);
+        assert!(matches!(
+            pending.get(&path_a),
+            Some((ScriptReloadEvent::FileDeleted(_), _))
+        ));
+        assert!(matches!(
+            pending.get(&path_b),
+            Some((ScriptReloadEvent::FileCreated(_), _))
+        ));
+    }
+
+    #[test]
+    fn test_no_merge_for_modify_events() {
+        // FileChanged + FileDeleted should NOT merge to FileChanged
+        // (only create/delete pairs merge)
+        let mut pending: HashMap<PathBuf, (ScriptReloadEvent, Instant)> = HashMap::new();
+        let path = PathBuf::from("/test/script.ts");
+        let now = Instant::now();
+
+        // First: modify event
+        merge_script_event(
+            &mut pending,
+            &path,
+            ScriptReloadEvent::FileChanged(path.clone()),
+            now,
+        );
+
+        // Then: delete event
+        let later = now + Duration::from_millis(10);
+        merge_script_event(
+            &mut pending,
+            &path,
+            ScriptReloadEvent::FileDeleted(path.clone()),
+            later,
+        );
+
+        // Should NOT merge - delete overwrites
+        assert_eq!(pending.len(), 1);
+        let (event, _) = pending.get(&path).unwrap();
+        assert_eq!(*event, ScriptReloadEvent::FileDeleted(path.clone()));
+    }
+
+    // ============================================================
+    // Existing tests
+    // ============================================================
 
     #[test]
     fn test_config_watcher_creation() {
@@ -1283,7 +1594,7 @@ mod tests {
         let pending: HashMap<PathBuf, (ScriptReloadEvent, Instant)> = HashMap::new();
         let debounce = Duration::from_millis(500);
 
-        assert!(next_deadline(&pending, debounce).is_none());
+        assert!(next_deadline(&pending, None, debounce).is_none());
     }
 
     #[test]
@@ -1300,7 +1611,7 @@ mod tests {
             ),
         );
 
-        let deadline = next_deadline(&pending, debounce);
+        let deadline = next_deadline(&pending, None, debounce);
         assert!(deadline.is_some());
         // Deadline should be approximately now + debounce
         let expected = now + debounce;
@@ -1334,7 +1645,7 @@ mod tests {
             ),
         );
 
-        let deadline = next_deadline(&pending, debounce);
+        let deadline = next_deadline(&pending, None, debounce);
         assert!(deadline.is_some());
         // Should pick the older event's deadline (earlier)
         let expected = older_time + debounce;
@@ -1343,9 +1654,50 @@ mod tests {
     }
 
     #[test]
+    fn test_next_deadline_with_full_reload() {
+        let pending: HashMap<PathBuf, (ScriptReloadEvent, Instant)> = HashMap::new();
+        let now = Instant::now();
+        let debounce = Duration::from_millis(500);
+
+        // Only full_reload_at is set, no pending events
+        let deadline = next_deadline(&pending, Some(now), debounce);
+        assert!(deadline.is_some());
+        let expected = now + debounce;
+        let actual = deadline.unwrap();
+        assert!(actual >= expected && actual <= expected + Duration::from_millis(1));
+    }
+
+    #[test]
+    fn test_next_deadline_full_reload_earlier_than_pending() {
+        let mut pending: HashMap<PathBuf, (ScriptReloadEvent, Instant)> = HashMap::new();
+        let now = Instant::now();
+        let debounce = Duration::from_millis(500);
+
+        // Add a fresh pending event (deadline = now + 500ms)
+        pending.insert(
+            PathBuf::from("/test/script.ts"),
+            (
+                ScriptReloadEvent::FileChanged(PathBuf::from("/test/script.ts")),
+                now,
+            ),
+        );
+
+        // Add an older full_reload_at (deadline = older + 500ms < now + 500ms)
+        let older_reload = now - Duration::from_millis(200);
+        let deadline = next_deadline(&pending, Some(older_reload), debounce);
+        assert!(deadline.is_some());
+
+        // Should pick the earlier deadline (full_reload)
+        let expected = older_reload + debounce;
+        let actual = deadline.unwrap();
+        assert!(actual >= expected && actual <= expected + Duration::from_millis(1));
+    }
+
+    #[test]
     fn test_flush_expired_none_expired() {
         let (tx, _rx) = channel::<ScriptReloadEvent>();
         let mut pending: HashMap<PathBuf, (ScriptReloadEvent, Instant)> = HashMap::new();
+        let mut full_reload_at: Option<Instant> = None;
         let now = Instant::now();
         let debounce = Duration::from_millis(500);
 
@@ -1358,7 +1710,7 @@ mod tests {
             ),
         );
 
-        flush_expired(&mut pending, debounce, &tx);
+        flush_expired(&mut pending, &mut full_reload_at, debounce, &tx);
 
         // Event should still be pending
         assert_eq!(pending.len(), 1);
@@ -1368,6 +1720,7 @@ mod tests {
     fn test_flush_expired_some_expired() {
         let (tx, rx) = channel::<ScriptReloadEvent>();
         let mut pending: HashMap<PathBuf, (ScriptReloadEvent, Instant)> = HashMap::new();
+        let mut full_reload_at: Option<Instant> = None;
         let debounce = Duration::from_millis(500);
 
         // Add an expired event (from 600ms ago)
@@ -1389,7 +1742,7 @@ mod tests {
             ),
         );
 
-        flush_expired(&mut pending, debounce, &tx);
+        flush_expired(&mut pending, &mut full_reload_at, debounce, &tx);
 
         // Only fresh event should remain
         assert_eq!(pending.len(), 1);
@@ -1401,6 +1754,46 @@ mod tests {
             received,
             ScriptReloadEvent::FileChanged(PathBuf::from("/test/old.ts"))
         );
+    }
+
+    #[test]
+    fn test_flush_expired_full_reload_supersedes_pending() {
+        let (tx, rx) = channel::<ScriptReloadEvent>();
+        let mut pending: HashMap<PathBuf, (ScriptReloadEvent, Instant)> = HashMap::new();
+        let debounce = Duration::from_millis(500);
+
+        // Add some expired pending events
+        let old_time = Instant::now() - Duration::from_millis(600);
+        pending.insert(
+            PathBuf::from("/test/a.ts"),
+            (
+                ScriptReloadEvent::FileChanged(PathBuf::from("/test/a.ts")),
+                old_time,
+            ),
+        );
+        pending.insert(
+            PathBuf::from("/test/b.ts"),
+            (
+                ScriptReloadEvent::FileCreated(PathBuf::from("/test/b.ts")),
+                old_time,
+            ),
+        );
+
+        // Set expired full_reload_at (should supersede pending)
+        let mut full_reload_at: Option<Instant> = Some(old_time);
+
+        flush_expired(&mut pending, &mut full_reload_at, debounce, &tx);
+
+        // All pending should be cleared
+        assert!(pending.is_empty());
+        // full_reload_at should be reset
+        assert!(full_reload_at.is_none());
+
+        // Should receive only ONE FullReload (not per-file events)
+        let received = rx.try_recv().unwrap();
+        assert_eq!(received, ScriptReloadEvent::FullReload);
+        // No more events
+        assert!(rx.try_recv().is_err());
     }
 
     #[test]

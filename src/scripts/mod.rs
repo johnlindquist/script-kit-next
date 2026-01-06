@@ -20,6 +20,7 @@
 #![allow(dead_code)]
 
 mod grouping;
+pub mod input_detection;
 mod loader;
 mod metadata;
 mod scheduling;
@@ -28,7 +29,7 @@ mod search;
 mod types;
 
 // Re-export core types (always used)
-pub use types::{AgentMatch, Script, Scriptlet, SearchResult};
+pub use types::{AgentMatch, FallbackConfig, Script, Scriptlet, SearchResult};
 
 // Re-export loader functions (always used)
 pub use loader::read_scripts;

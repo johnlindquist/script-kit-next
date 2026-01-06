@@ -61,7 +61,7 @@ impl ScriptListApp {
                 } else {
                     ViewType::ArgPromptWithChoices
                 };
-                defer_resize_to_view(view_type, choice_count, cx);
+                resize_to_view_sync(view_type, choice_count);
                 cx.notify();
             }
             PromptMessage::ShowDiv {
@@ -140,7 +140,7 @@ impl ScriptListApp {
                 self.current_view = AppView::DivPrompt { id, entity };
                 self.focused_input = FocusedInput::None; // DivPrompt has no text input
                 self.pending_focus = Some(FocusTarget::AppRoot); // DivPrompt uses parent focus
-                defer_resize_to_view(ViewType::DivPrompt, 0, cx);
+                resize_to_view_sync(ViewType::DivPrompt, 0);
                 cx.notify();
             }
             PromptMessage::ShowForm { id, html, actions } => {
@@ -167,7 +167,7 @@ impl ScriptListApp {
                 } else {
                     ViewType::DivPrompt
                 };
-                defer_resize_to_view(view_type, field_count, cx);
+                resize_to_view_sync(view_type, field_count);
                 cx.notify();
             }
             PromptMessage::ShowTerm {
@@ -226,7 +226,7 @@ impl ScriptListApp {
                         self.current_view = AppView::TermPrompt { id, entity };
                         self.focused_input = FocusedInput::None; // Terminal handles its own cursor
                         self.pending_focus = Some(FocusTarget::TermPrompt);
-                        defer_resize_to_view(ViewType::TermPrompt, 0, cx);
+                        resize_to_view_sync(ViewType::TermPrompt, 0);
                         cx.notify();
                     }
                     Err(e) => {
@@ -350,7 +350,7 @@ impl ScriptListApp {
                 self.focused_input = FocusedInput::None; // Editor handles its own focus
                 self.pending_focus = Some(FocusTarget::EditorPrompt);
 
-                defer_resize_to_view(ViewType::EditorPrompt, 0, cx);
+                resize_to_view_sync(ViewType::EditorPrompt, 0);
                 cx.notify();
             }
             PromptMessage::ScriptExit => {
@@ -1091,7 +1091,7 @@ impl ScriptListApp {
                     *guard = false;
                 }
 
-                defer_resize_to_view(ViewType::ScriptList, 20, cx);
+                resize_to_view_sync(ViewType::ScriptList, 20);
                 cx.notify();
             }
             PromptMessage::ShowEnv {
@@ -1159,7 +1159,7 @@ impl ScriptListApp {
                 self.focused_input = FocusedInput::None; // EnvPrompt has its own focus handling
                 self.pending_focus = Some(FocusTarget::EnvPrompt);
 
-                defer_resize_to_view(ViewType::ArgPromptNoChoices, 0, cx);
+                resize_to_view_sync(ViewType::ArgPromptNoChoices, 0);
                 cx.notify();
             }
             PromptMessage::ShowDrop {
@@ -1217,7 +1217,7 @@ impl ScriptListApp {
                 self.focused_input = FocusedInput::None;
                 self.pending_focus = Some(FocusTarget::DropPrompt);
 
-                defer_resize_to_view(ViewType::DivPrompt, 0, cx);
+                resize_to_view_sync(ViewType::DivPrompt, 0);
                 cx.notify();
             }
             PromptMessage::ShowTemplate { id, template } => {
@@ -1270,7 +1270,7 @@ impl ScriptListApp {
                 self.focused_input = FocusedInput::None;
                 self.pending_focus = Some(FocusTarget::TemplatePrompt);
 
-                defer_resize_to_view(ViewType::DivPrompt, 0, cx);
+                resize_to_view_sync(ViewType::DivPrompt, 0);
                 cx.notify();
             }
             PromptMessage::ShowSelect {
@@ -1343,7 +1343,7 @@ impl ScriptListApp {
                 } else {
                     ViewType::ArgPromptWithChoices
                 };
-                defer_resize_to_view(view_type, choice_count, cx);
+                resize_to_view_sync(view_type, choice_count);
                 cx.notify();
             }
             PromptMessage::ShowHud { text, duration_ms } => {

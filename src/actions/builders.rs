@@ -169,7 +169,10 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
         Action::new(
             "copy_deeplink",
             "Copy Deeplink",
-            Some(format!("Copy kit://run/{} URL to clipboard", deeplink_name)),
+            Some(format!(
+                "Copy scriptkit://run/{} URL to clipboard",
+                deeplink_name
+            )),
             ActionCategory::ScriptContext,
         )
         .with_shortcut("⌘⇧D"),
@@ -310,6 +313,6 @@ mod tests {
             .description
             .as_ref()
             .unwrap()
-            .contains("kit://run/my-cool-script"));
+            .contains("scriptkit://run/my-cool-script"));
     }
 }

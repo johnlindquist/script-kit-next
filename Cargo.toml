@@ -97,6 +97,9 @@ parking_lot = "0.12"
 # Open URLs and files with system default handler
 open = "5"
 
+# Math expression evaluation for calculate fallback
+meval = "0.2"
+
 # Storybook infrastructure (compile-time story registration + CLI)
 inventory = "0.3"  # Compile-time story registration (same pattern as Zed)
 clap = { version = "4", features = ["derive"] }  # CLI argument parsing

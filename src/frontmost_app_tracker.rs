@@ -305,16 +305,37 @@ fn setup_workspace_observer() {
                     );
 
                     // Check if this is a different app than currently tracked
+                    // CRITICAL: Also check PID! Same bundle_id with different PID means
+                    // app was relaunched (quit and reopened), so we need to refresh the
+                    // menu cache to avoid stale menus.
                     let should_update = {
                         let state = TRACKER_STATE.read();
                         state
                             .last_real_app
                             .as_ref()
-                            .map(|a| a.bundle_id != tracked.bundle_id)
+                            .map(|a| a.bundle_id != tracked.bundle_id || a.pid != tracked.pid)
                             .unwrap_or(true)
                     };
 
                     if should_update {
+                        // Log if this is a PID change (app relaunch) case
+                        {
+                            let state = TRACKER_STATE.read();
+                            if let Some(old_app) = &state.last_real_app {
+                                if old_app.bundle_id == tracked.bundle_id
+                                    && old_app.pid != tracked.pid
+                                {
+                                    logging::log(
+                                        "APP",
+                                        &format!(
+                                            "App relaunched (same bundle_id, new PID): {} PID {} -> {}",
+                                            tracked.bundle_id, old_app.pid, tracked.pid
+                                        ),
+                                    );
+                                }
+                            }
+                        }
+
                         // Update state
                         {
                             let mut state = TRACKER_STATE.write();
@@ -514,5 +535,65 @@ mod tests {
         assert_eq!(cloned.pid, 123);
         assert_eq!(cloned.bundle_id, "com.test.app");
         assert_eq!(cloned.name, "Test App");
+    }
+
+    #[test]
+    fn test_same_bundle_id_different_pid_triggers_update() {
+        // Regression test: when an app is relaunched (quit and reopened),
+        // the bundle_id stays the same but the PID changes.
+        // We MUST trigger an update to refresh the menu cache.
+
+        // Helper function that mirrors the should_update logic in handle_app_activation_inner
+        fn should_update(tracked: &TrackedApp, current_app: &Option<TrackedApp>) -> bool {
+            current_app
+                .as_ref()
+                .map(|a| a.bundle_id != tracked.bundle_id || a.pid != tracked.pid)
+                .unwrap_or(true)
+        }
+
+        // Case 1: No current app tracked -> should update
+        let new_app = TrackedApp {
+            pid: 100,
+            bundle_id: "com.test.app".to_string(),
+            name: "Test App".to_string(),
+        };
+        assert!(
+            should_update(&new_app, &None),
+            "Should update when no app is tracked"
+        );
+
+        // Case 2: Different bundle_id -> should update
+        let current = Some(TrackedApp {
+            pid: 100,
+            bundle_id: "com.other.app".to_string(),
+            name: "Other App".to_string(),
+        });
+        assert!(
+            should_update(&new_app, &current),
+            "Should update when bundle_id differs"
+        );
+
+        // Case 3: Same bundle_id AND same PID -> should NOT update
+        let current_same = Some(TrackedApp {
+            pid: 100,
+            bundle_id: "com.test.app".to_string(),
+            name: "Test App".to_string(),
+        });
+        assert!(
+            !should_update(&new_app, &current_same),
+            "Should NOT update when both bundle_id and PID are the same"
+        );
+
+        // Case 4: CRITICAL - Same bundle_id but DIFFERENT PID -> MUST update
+        // This is the bug fix: app was relaunched with new PID
+        let current_relaunched = Some(TrackedApp {
+            pid: 200, // Different PID - app was relaunched!
+            bundle_id: "com.test.app".to_string(),
+            name: "Test App".to_string(),
+        });
+        assert!(
+            should_update(&new_app, &current_relaunched),
+            "MUST update when same bundle_id but different PID (app relaunched)"
+        );
     }
 }

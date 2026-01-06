@@ -568,6 +568,7 @@ pub fn swizzle_gpui_blurred_view() {
             patched_update_layer;
         let _ = objc::runtime::method_setImplementation(
             original_method as *mut _,
+            #[allow(clippy::missing_transmute_annotations)]
             std::mem::transmute::<_, objc::runtime::Imp>(new_imp),
         );
 
@@ -586,7 +587,10 @@ extern "C" fn patched_update_layer(this: &objc::runtime::Object, _sel: objc::run
     let call_count = PATCHED_UPDATE_LAYER_CALLS.fetch_add(1, Ordering::Relaxed);
 
     // Log first few calls and then periodically to confirm swizzle is active
-    if call_count < 3 || (call_count < 100 && call_count % 20 == 0) || call_count % 500 == 0 {
+    if call_count < 3
+        || (call_count < 100 && call_count.is_multiple_of(20))
+        || call_count.is_multiple_of(500)
+    {
         logging::log(
             "VIBRANCY",
             &format!("patched_update_layer CALLED (count={})", call_count + 1),

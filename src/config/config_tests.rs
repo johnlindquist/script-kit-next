@@ -1436,6 +1436,46 @@ fn test_config_deserialization_with_confirmation_required() {
     assert!(config.requires_confirmation("builtin-restart"));
 }
 
+// ============================================
+// DEEPLINK URL TESTS
+// ============================================
+
+#[test]
+fn test_command_id_to_deeplink_uses_scriptkit_scheme() {
+    use crate::config::types::command_id_to_deeplink;
+
+    // The app registers 'scriptkit' URL scheme, so deeplinks must use scriptkit://
+    let deeplink = command_id_to_deeplink("builtin/clipboard-history");
+    assert_eq!(deeplink, "scriptkit://commands/builtin/clipboard-history");
+
+    let deeplink = command_id_to_deeplink("script/hello-world");
+    assert_eq!(deeplink, "scriptkit://commands/script/hello-world");
+
+    let deeplink = command_id_to_deeplink("app/com.apple.Safari");
+    assert_eq!(deeplink, "scriptkit://commands/app/com.apple.Safari");
+
+    let deeplink = command_id_to_deeplink("scriptlet/my-snippet");
+    assert_eq!(deeplink, "scriptkit://commands/scriptlet/my-snippet");
+}
+
+#[test]
+fn test_command_id_to_deeplink_not_kit_scheme() {
+    use crate::config::types::command_id_to_deeplink;
+
+    // Verify we're NOT using the old incorrect 'kit://' scheme
+    let deeplink = command_id_to_deeplink("builtin/test");
+    assert!(
+        !deeplink.starts_with("kit://"),
+        "Deeplink should NOT use kit:// scheme, got: {}",
+        deeplink
+    );
+    assert!(
+        deeplink.starts_with("scriptkit://"),
+        "Deeplink should use scriptkit:// scheme, got: {}",
+        deeplink
+    );
+}
+
 #[test]
 fn test_requires_confirmation_with_partial_command_config() {
     // Command config exists but doesn't specify confirmation_required

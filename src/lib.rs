@@ -35,6 +35,7 @@ pub mod tray;
 pub mod utils;
 pub mod warning_banner;
 pub mod window_manager;
+pub mod window_ops;
 pub mod window_resize;
 pub mod window_state;
 pub mod windows;
@@ -80,6 +81,9 @@ pub mod action_helpers;
 // Built-in features registry
 pub mod app_launcher;
 pub mod builtins;
+
+// Fallback commands - Raycast-style fallback actions when no scripts match
+pub mod fallbacks;
 
 // Frecency tracking for script usage
 pub mod frecency;

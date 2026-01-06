@@ -1,14 +1,10 @@
-use std::time::Duration;
-
-use gpui::{
-    px, size, App, AppContext as _, AsyncApp, Context, Focusable, Timer, Window, WindowHandle,
-};
+use gpui::{px, size, App, AppContext as _, AsyncApp, Context, Focusable, Window, WindowHandle};
 
 use crate::ai;
 use crate::hotkeys;
 use crate::notes;
-use crate::platform::{calculate_eye_line_bounds_on_mouse_display, move_first_window_to_bounds};
-use crate::window_manager;
+use crate::platform::calculate_eye_line_bounds_on_mouse_display;
+use crate::window_ops;
 use crate::window_resize::{initial_window_height, reset_resize_debounce};
 use crate::{logging, platform, ScriptListApp, NEEDS_RESET, PANEL_CONFIGURED};
 
@@ -131,9 +127,10 @@ impl HotkeyPoller {
                     logging::log("VISIBILITY", "WINDOW_VISIBLE set to: true");
 
                     let window_clone = window;
-                    // Calculate bounds and do GPUI operations synchronously, but DEFER native window ops
+                    // Calculate bounds and do GPUI operations synchronously.
+                    // Window move is deferred via window_ops::queue_move() which uses Window::defer
                     // to avoid RefCell borrow conflicts during GPUI's update cycle.
-                    let deferred_bounds = cx.update(move |cx: &mut App| {
+                    let _ = cx.update(move |cx: &mut App| {
                         // Step 0: CRITICAL - Set MoveToActiveSpace BEFORE any activation
                         // This MUST happen before move_first_window_to_bounds, cx.activate(),
                         // or win.activate_window() to prevent macOS from switching spaces
@@ -154,34 +151,29 @@ impl HotkeyPoller {
                             ),
                         );
 
-                        // NOTE: move_first_window_to_bounds is DEFERRED to avoid RefCell borrow error
-                        // The native macOS setFrame:display:animate: call triggers callbacks that
-                        // try to borrow the RefCell while GPUI still holds it.
-                        logging::log("HOTKEY", "Bounds calculated, window move will be deferred");
-
-                        // Step 3: NOW activate the app (makes window visible at new position)
+                        // Step 2: NOW activate the app (makes window visible at new position)
                         cx.activate(true);
                         logging::log("HOTKEY", "App activated (window now visible)");
 
-                        // Step 3.5: Configure as floating panel on first show only
+                        // Step 2.5: Configure as floating panel on first show only
                         if !PANEL_CONFIGURED.swap(true, std::sync::atomic::Ordering::SeqCst) {
                             platform::configure_as_floating_panel();
                             logging::log("HOTKEY", "Configured window as floating panel (first show)");
                         }
 
-                        // Step 4: Activate the specific window and focus it
+                        // Step 3: Activate the specific window, focus it, and queue deferred move
                         let _ = window_clone.update(
                             cx,
-                            |view: &mut ScriptListApp, win: &mut Window, cx: &mut Context<ScriptListApp>| {
+                            |view: &mut ScriptListApp, win: &mut Window, ctx: &mut Context<ScriptListApp>| {
                                 win.activate_window();
-                                let focus_handle = view.focus_handle(cx);
-                                win.focus(&focus_handle, cx);
+                                let focus_handle = view.focus_handle(ctx);
+                                win.focus(&focus_handle, ctx);
                                 logging::log("HOTKEY", "Window activated and focused");
 
                                 // Menu bar items are now tracked by frontmost_app_tracker
                                 // No state reset needed here
 
-                                // Step 5: Check if we need to reset to script list (after script completion)
+                                // Step 4: Check if we need to reset to script list (after script completion)
                                 // Reset debounce timer to allow immediate resize after window move
                                 reset_resize_debounce();
 
@@ -198,29 +190,19 @@ impl HotkeyPoller {
                                         "VISIBILITY",
                                         "NEEDS_RESET was true - clearing and resetting to script list",
                                     );
-                                    view.reset_to_script_list(cx);
+                                    view.reset_to_script_list(ctx);
                                 }
-                                // NOTE: update_window_size() removed from here - resize is deferred below
+
+                                // Step 5: Queue window move via Window::defer (replaces Timer::after pattern)
+                                // This defers the native macOS setFrame call to end of effect cycle,
+                                // avoiding RefCell borrow conflicts during GPUI's update.
+                                window_ops::queue_move(new_bounds, win, ctx);
+                                logging::log("HOTKEY", "Window move queued via Window::defer");
                             },
                         );
 
-                        logging::log("VISIBILITY", "Window show sequence complete (sync part)");
-
-                        // Return bounds for deferred window move
-                        new_bounds
+                        logging::log("VISIBILITY", "Window show sequence complete");
                     });
-
-                    // DEFERRED WINDOW OPERATIONS: Execute after cx.update() releases RefCell borrow
-                    // 16ms delay (~1 frame at 60fps) ensures GPUI render cycle completes
-                    if let Ok(bounds) = deferred_bounds {
-                        Timer::after(Duration::from_millis(16)).await;
-
-                        // Move window to calculated bounds (safe now, RefCell released)
-                        if window_manager::get_main_window().is_some() {
-                            move_first_window_to_bounds(&bounds);
-                            logging::log("HOTKEY", "Window repositioned to mouse display (deferred)");
-                        }
-                    }
                 }
 
                 let final_visible = script_kit_gpui::is_main_window_visible();

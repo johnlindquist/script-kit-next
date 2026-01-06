@@ -59,6 +59,11 @@ pub struct TypedMetadata {
     /// System-level script (higher privileges)
     #[serde(default)]
     pub system: bool,
+    /// Whether this script is a fallback handler (shown when no search results match)
+    #[serde(default)]
+    pub fallback: bool,
+    /// Display label for fallback with {input} placeholder (e.g., "Search docs for {input}")
+    pub fallback_label: Option<String>,
     /// Any additional custom fields
     #[serde(flatten)]
     pub extra: HashMap<String, serde_json::Value>,
@@ -529,5 +534,57 @@ metadata = {
         let meta = result.metadata.unwrap();
         assert_eq!(meta.cron, Some("0 14 * * 2".to_string()));
         assert_eq!(meta.schedule, Some("every tuesday at 2pm".to_string()));
+    }
+
+    #[test]
+    fn test_parse_fallback_fields() {
+        let content = r#"
+metadata = {
+    name: "Search Docs",
+    description: "Search documentation for a term",
+    fallback: true,
+    fallbackLabel: "Search docs for {input}"
+}
+"#;
+        let result = extract_typed_metadata(content);
+        assert!(result.errors.is_empty(), "Errors: {:?}", result.errors);
+        let meta = result.metadata.unwrap();
+        assert_eq!(meta.name, Some("Search Docs".to_string()));
+        assert!(meta.fallback, "fallback should be true");
+        assert_eq!(
+            meta.fallback_label,
+            Some("Search docs for {input}".to_string())
+        );
+    }
+
+    #[test]
+    fn test_parse_fallback_without_label() {
+        let content = r#"
+metadata = {
+    name: "Web Search",
+    fallback: true
+}
+"#;
+        let result = extract_typed_metadata(content);
+        assert!(result.errors.is_empty(), "Errors: {:?}", result.errors);
+        let meta = result.metadata.unwrap();
+        assert!(meta.fallback, "fallback should be true");
+        assert_eq!(
+            meta.fallback_label, None,
+            "fallback_label should be None when not provided"
+        );
+    }
+
+    #[test]
+    fn test_fallback_defaults_to_false() {
+        let content = r#"
+metadata = {
+    name: "Regular Script"
+}
+"#;
+        let result = extract_typed_metadata(content);
+        let meta = result.metadata.unwrap();
+        assert!(!meta.fallback, "fallback should default to false");
+        assert_eq!(meta.fallback_label, None);
     }
 }

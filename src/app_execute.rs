@@ -49,7 +49,7 @@ impl ScriptListApp {
                     selected_index: 0,
                 };
                 // Use standard height for clipboard history view
-                defer_resize_to_view(ViewType::ScriptList, 0, cx);
+                resize_to_view_sync(ViewType::ScriptList, 0);
                 // Focus the main filter input so cursor blinks and typing works
                 self.pending_focus = Some(FocusTarget::MainFilter);
                 self.focused_input = FocusedInput::MainFilter;
@@ -70,7 +70,7 @@ impl ScriptListApp {
                     selected_index: 0,
                 };
                 // Use standard height for app launcher view
-                defer_resize_to_view(ViewType::ScriptList, 0, cx);
+                resize_to_view_sync(ViewType::ScriptList, 0);
                 // Focus the main filter input so cursor blinks and typing works
                 self.pending_focus = Some(FocusTarget::MainFilter);
                 self.focused_input = FocusedInput::MainFilter;
@@ -115,7 +115,7 @@ impl ScriptListApp {
                             selected_index: 0,
                         };
                         // Use standard height for window switcher view
-                        defer_resize_to_view(ViewType::ScriptList, 0, cx);
+                        resize_to_view_sync(ViewType::ScriptList, 0);
                         // Focus the main filter input so cursor blinks and typing works
                         self.pending_focus = Some(FocusTarget::MainFilter);
                         self.focused_input = FocusedInput::MainFilter;
@@ -140,7 +140,7 @@ impl ScriptListApp {
                     selected_index: 0,
                 };
                 // Use standard height for design gallery view
-                defer_resize_to_view(ViewType::ScriptList, 0, cx);
+                resize_to_view_sync(ViewType::ScriptList, 0);
                 cx.notify();
             }
             builtins::BuiltInFeature::AiChat => {
@@ -918,7 +918,7 @@ impl ScriptListApp {
         self.focused_input = FocusedInput::None;
         self.pending_focus = Some(FocusTarget::EditorPrompt);
 
-        defer_resize_to_view(ViewType::EditorPrompt, 0, cx);
+        resize_to_view_sync(ViewType::EditorPrompt, 0);
         cx.notify();
     }
 
@@ -950,7 +950,7 @@ impl ScriptListApp {
                 self.current_view = AppView::QuickTerminalView { entity };
                 self.focused_input = FocusedInput::None;
                 self.pending_focus = Some(FocusTarget::TermPrompt);
-                defer_resize_to_view(ViewType::TermPrompt, 0, cx);
+                resize_to_view_sync(ViewType::TermPrompt, 0);
                 cx.notify();
             }
             Err(e) => {

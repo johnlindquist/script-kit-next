@@ -42,6 +42,11 @@ impl ScriptListApp {
                 // No selectable items (list is all headers) - set to 0 as fallback
                 self.selected_index = 0;
             }
+        } else {
+            // Empty list - reset selection state to avoid stale indices
+            self.selected_index = 0;
+            self.hovered_index = None;
+            self.last_scrolled_index = None;
         }
 
         // Update list state if item count changed
@@ -97,20 +102,62 @@ impl ScriptListApp {
         };
 
         let list_element: AnyElement = if item_count == 0 {
-            div()
-                .w_full()
-                .h_full()
-                .flex()
-                .items_center()
-                .justify_center()
-                .text_color(rgb(empty_text_color))
-                .font_family(empty_font_family)
-                .child(if self.filter_text.is_empty() {
-                    "No scripts or snippets found".to_string()
-                } else {
-                    format!("No results match '{}'", self.filter_text)
-                })
-                .into_any_element()
+            // When there's no filter text, show "No scripts or snippets found"
+            // When filtering, show Raycast-style fallback list instead of "No results"
+            if self.filter_text.is_empty() {
+                div()
+                    .w_full()
+                    .h_full()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .text_color(rgb(empty_text_color))
+                    .font_family(empty_font_family)
+                    .child("No scripts or snippets found")
+                    .into_any_element()
+            } else {
+                // Collect fallbacks for current input
+                use crate::fallbacks::collect_fallbacks;
+                let fallbacks = collect_fallbacks(&self.filter_text, self.scripts.as_slice());
+
+                // Build fallback list UI
+                let mut fallback_container = div().w_full().h_full().flex().flex_col();
+
+                // Header: Use "{input}" with...
+                let header_text = format!("Use \"{}\" with...", self.filter_text);
+                fallback_container = fallback_container.child(
+                    div()
+                        .w_full()
+                        .px(px(16.))
+                        .py(px(8.))
+                        .text_xs()
+                        .text_color(rgb(empty_text_color))
+                        .font_family(empty_font_family)
+                        .child(header_text),
+                );
+
+                // Render each fallback item using ListItem component
+                // First item is selected by default (keyboard nav can be added later)
+                for (idx, fallback) in fallbacks.iter().enumerate() {
+                    let is_selected = idx == 0; // Default: first item selected
+
+                    // Clone strings to owned values for ListItem (avoids lifetime issues)
+                    let label = fallback.label().to_string();
+                    let description = fallback.description().to_string();
+                    let icon_name = fallback.icon().to_string();
+
+                    // Create ListItem with fallback data
+                    let item = list_item::ListItem::new(label, theme_colors)
+                        .description(description)
+                        .icon_kind(list_item::IconKind::Svg(icon_name))
+                        .selected(is_selected)
+                        .index(idx);
+
+                    fallback_container = fallback_container.child(item);
+                }
+
+                fallback_container.into_any_element()
+            }
         } else {
             // Use GPUI's list() component for variable-height items
             // Section headers render at 24px, regular items at 48px
@@ -557,6 +604,8 @@ impl ScriptListApp {
                                     }
                                     this.handle_action(action_id, cx);
                                 }
+                                // Notify to update UI state after closing popup
+                                cx.notify();
                                 return;
                             }
                             "escape" => {

@@ -296,7 +296,10 @@ impl ScriptListApp {
                         } else {
                             (ViewType::ArgPromptWithChoices, filtered.len())
                         };
-                        defer_resize_to_view(view_type, item_count, cx);
+                        // Use window_ops for coalesced resize (avoids Timer::after pattern)
+                        let target_height =
+                            crate::window_resize::height_for_view(view_type, item_count);
+                        crate::window_ops::queue_resize(f32::from(target_height), window, &mut *cx);
                     }
                     cx.notify();
                 }

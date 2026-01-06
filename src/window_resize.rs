@@ -13,12 +13,12 @@ use cocoa::foundation::{NSPoint, NSRect, NSSize};
 #[cfg(target_os = "macos")]
 use objc::{msg_send, sel, sel_impl};
 
-use gpui::{px, Context, Pixels, Render, Timer};
-use std::time::Duration;
+use gpui::{px, Pixels};
 use tracing::{debug, warn};
 
-use crate::list_item::LIST_ITEM_HEIGHT;
 use crate::logging;
+
+use crate::list_item::LIST_ITEM_HEIGHT;
 use crate::window_manager;
 
 /// Layout constants for height calculations
@@ -106,41 +106,45 @@ pub fn initial_window_height() -> Pixels {
     layout::STANDARD_HEIGHT
 }
 
-/// Defer a window resize to the next frame to avoid RefCell borrow conflicts.
+/// Defer a window resize to the end of the current effect cycle.
 ///
-/// This is the **preferred way** to trigger resizes from prompt message handlers.
-/// Direct calls to `resize_first_window_to_height` during GPUI's render cycle can cause
-/// "RefCell already borrowed" errors because the native macOS `setFrame:display:animate:`
-/// call happens synchronously within GPUI's update cycle.
+/// This version uses `Window::defer()` for coalesced, deferred execution.
+/// Use when you have direct Window access (e.g., in window update closures, hotkey handlers).
 ///
 /// # Arguments
 /// * `view_type` - The type of view to resize for
 /// * `item_count` - Item count (used for some view types)
-/// * `cx` - The GPUI context (must implement `Render`)
+/// * `window` - The GPUI Window reference
+/// * `cx` - The GPUI App context
 ///
-pub fn defer_resize_to_view<T: Render>(
+pub fn defer_resize_to_view(
     view_type: ViewType,
     item_count: usize,
-    cx: &mut Context<T>,
+    window: &mut gpui::Window,
+    cx: &mut gpui::App,
 ) {
     let target_height = height_for_view(view_type, item_count);
+    crate::window_ops::queue_resize(f32::from(target_height), window, cx);
+}
 
-    cx.spawn(async move |_this, _cx: &mut gpui::AsyncApp| {
-        // 16ms delay (~1 frame at 60fps) ensures GPUI render cycle completes
-        Timer::after(Duration::from_millis(16)).await;
-
-        // Validate window still exists before resizing
-        if window_manager::get_main_window().is_some() {
-            resize_first_window_to_height(target_height);
-        } else {
-            warn!("defer_resize_to_view: window no longer exists, skipping resize");
-            logging::log(
-                "RESIZE",
-                "WARNING: Window gone before deferred resize could execute",
-            );
-        }
-    })
-    .detach();
+/// Resize window synchronously based on view type.
+///
+/// Use this version when you only have ViewContext access (e.g., in prompt message handlers
+/// running from async tasks via `cx.spawn`). These handlers run outside the render cycle,
+/// so direct resize is safe and won't cause RefCell borrow conflicts.
+///
+/// # Arguments
+/// * `view_type` - The type of view to resize for
+/// * `item_count` - Item count (used for some view types)
+///
+/// # Example
+/// ```rust,ignore
+/// // In handle_prompt_message or similar ViewContext methods:
+/// resize_to_view_sync(ViewType::ArgPromptWithChoices, choices.len());
+/// ```
+pub fn resize_to_view_sync(view_type: ViewType, item_count: usize) {
+    let target_height = height_for_view(view_type, item_count);
+    resize_first_window_to_height(target_height);
 }
 
 /// Force reset the debounce timer (kept for API compatibility)
