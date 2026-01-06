@@ -316,10 +316,8 @@ impl Render for HudView {
 struct ActiveHud {
     /// Unique identifier for this HUD
     id: u64,
-    #[allow(dead_code)]
+    /// Window handle for closing via GPUI's proper API
     window: WindowHandle<HudView>,
-    /// The bounds used to identify this HUD window for closing
-    bounds: gpui::Bounds<Pixels>,
     created_at: Instant,
     duration_ms: u64,
     /// Slot index (0..MAX_SIMULTANEOUS_HUDS) for position calculation
@@ -479,7 +477,6 @@ pub fn show_hud(text: String, duration_ms: Option<u64>, cx: &mut App) {
     };
 
     let text_for_log = text.clone();
-    let expected_bounds = bounds;
 
     // Create the HUD window with specific options for overlay behavior
     let window_result = cx.open_window(
@@ -497,15 +494,12 @@ pub fn show_hud(text: String, duration_ms: Option<u64>, cx: &mut App) {
 
     match window_result {
         Ok(window_handle) => {
-            // Configure the window as a floating overlay
+            // Configure the window as a floating overlay using size-based matching
             // Regular HUDs without actions are click-through (true)
-            configure_hud_window_by_bounds(expected_bounds, true);
+            configure_hud_window_by_size(HUD_WIDTH, HUD_HEIGHT, true);
 
             // Generate unique ID for this HUD
             let hud_id = next_hud_id();
-
-            // Clone window handle for the cleanup timer
-            let window_for_cleanup = window_handle;
 
             // Track the active HUD and register slot
             {
@@ -516,7 +510,6 @@ pub fn show_hud(text: String, duration_ms: Option<u64>, cx: &mut App) {
                 state.active_huds.push(ActiveHud {
                     id: hud_id,
                     window: window_handle,
-                    bounds: expected_bounds,
                     created_at: Instant::now(),
                     duration_ms: duration,
                     slot,
@@ -531,12 +524,9 @@ pub fn show_hud(text: String, duration_ms: Option<u64>, cx: &mut App) {
                 // IMPORTANT: All AppKit calls must happen on the main thread.
                 // cx.update() ensures we're on the main thread.
                 let _ = cx.update(|cx| {
-                    // Dismiss by ID - this is more reliable than bounds matching
+                    // Dismiss by ID using GPUI's WindowHandle API
                     dismiss_hud_by_id(hud_id, cx);
                 });
-
-                // Drop the window handle reference
-                let _ = window_for_cleanup;
             })
             .detach();
 
@@ -625,7 +615,6 @@ pub fn show_hud_with_action(
     };
 
     let text_for_log = text.clone();
-    let expected_bounds = bounds;
 
     // Create the HUD window with action button
     let window_result = cx.open_window(
@@ -643,15 +632,12 @@ pub fn show_hud_with_action(
 
     match window_result {
         Ok(window_handle) => {
-            // Configure the window as a floating overlay
+            // Configure the window as a floating overlay using size-based matching
             // Action HUDs need to receive mouse events for button clicks (click_through = false)
-            configure_hud_window_by_bounds(expected_bounds, false);
+            configure_hud_window_by_size(HUD_ACTION_WIDTH, HUD_ACTION_HEIGHT, false);
 
             // Generate unique ID for this HUD
             let hud_id = next_hud_id();
-
-            // Clone window handle for the cleanup timer
-            let window_for_cleanup = window_handle;
 
             // Track the active HUD and register slot
             {
@@ -662,7 +648,6 @@ pub fn show_hud_with_action(
                 state.active_huds.push(ActiveHud {
                     id: hud_id,
                     window: window_handle,
-                    bounds: expected_bounds,
                     created_at: Instant::now(),
                     duration_ms: duration,
                     slot,
@@ -677,12 +662,9 @@ pub fn show_hud_with_action(
                 // IMPORTANT: All AppKit calls must happen on the main thread.
                 // cx.update() ensures we're on the main thread.
                 let _ = cx.update(|cx| {
-                    // Dismiss by ID - this is more reliable than bounds matching
+                    // Dismiss by ID using GPUI's WindowHandle API
                     dismiss_hud_by_id(hud_id, cx);
                 });
-
-                // Drop the window handle reference
-                let _ = window_for_cleanup;
             })
             .detach();
 
@@ -701,62 +683,6 @@ pub fn show_hud_with_action(
             );
         }
     }
-}
-
-/// Close a HUD window by finding it based on its expected bounds
-/// This avoids borrowing issues by not using WindowHandle
-#[cfg(target_os = "macos")]
-fn close_hud_window_by_bounds(expected_bounds: gpui::Bounds<Pixels>) {
-    use cocoa::appkit::NSApp;
-    use cocoa::base::id;
-    use cocoa::foundation::NSRect;
-
-    let expected_x: f32 = expected_bounds.origin.x.into();
-    let expected_y: f32 = expected_bounds.origin.y.into();
-    let expected_w: f32 = expected_bounds.size.width.into();
-    let expected_h: f32 = expected_bounds.size.height.into();
-
-    unsafe {
-        let app: id = NSApp();
-        let windows: id = msg_send![app, windows];
-        let count: usize = msg_send![windows, count];
-
-        for i in 0..count {
-            let ns_window: id = msg_send![windows, objectAtIndex: i];
-            let frame: NSRect = msg_send![ns_window, frame];
-
-            // Match by size AND position (x, y) to distinguish stacked HUDs
-            let w_match = (frame.size.width - expected_w as f64).abs() < 5.0;
-            let h_match = (frame.size.height - expected_h as f64).abs() < 5.0;
-            let x_match = (frame.origin.x - expected_x as f64).abs() < 5.0;
-            let y_match = (frame.origin.y - expected_y as f64).abs() < 5.0;
-
-            if w_match && h_match && x_match && y_match {
-                logging::log(
-                    "HUD",
-                    &format!(
-                        "Closing HUD window at ({:.0}, {:.0})",
-                        frame.origin.x, frame.origin.y
-                    ),
-                );
-                let _: () = msg_send![ns_window, close];
-                return;
-            }
-        }
-
-        logging::log(
-            "HUD",
-            &format!(
-                "Could not find HUD window to close at ({:.0}, {:.0})",
-                expected_x, expected_y
-            ),
-        );
-    }
-}
-
-#[cfg(not(target_os = "macos"))]
-fn close_hud_window_by_bounds(_expected_bounds: gpui::Bounds<Pixels>) {
-    logging::log("HUD", "Non-macOS: HUD window cleanup not implemented");
 }
 
 /// Calculate HUD position - bottom center of screen containing mouse
@@ -802,14 +728,19 @@ fn calculate_hud_position(cx: &App) -> (f32, f32) {
     }
 }
 
-/// Configure a HUD window by finding it based on expected bounds
+/// Configure a HUD window by finding it based on its expected size
+///
+/// Since HUD windows have unique sizes (200x36 for regular, 300x40 for action),
+/// we can reliably find the most recently created window with matching dimensions.
+/// This is more reliable than bounds matching since coordinate systems vary.
 ///
 /// # Arguments
-/// * `expected_bounds` - The bounds used to identify the HUD window
+/// * `expected_width` - The expected width of the HUD window
+/// * `expected_height` - The expected height of the HUD window
 /// * `click_through` - If true, window ignores mouse events (for plain HUDs).
 ///   If false, window receives mouse events (for action HUDs with buttons).
 #[cfg(target_os = "macos")]
-fn configure_hud_window_by_bounds(expected_bounds: gpui::Bounds<Pixels>, click_through: bool) {
+fn configure_hud_window_by_size(expected_width: f32, expected_height: f32, click_through: bool) {
     use cocoa::appkit::NSApp;
     use cocoa::base::{id, nil};
     use cocoa::foundation::NSRect;
@@ -819,27 +750,19 @@ fn configure_hud_window_by_bounds(expected_bounds: gpui::Bounds<Pixels>, click_t
         let windows: id = msg_send![app, windows];
         let count: usize = msg_send![windows, count];
 
-        let expected_x: f32 = expected_bounds.origin.x.into();
-        let expected_y: f32 = expected_bounds.origin.y.into();
-        let expected_width: f32 = expected_bounds.size.width.into();
-        let expected_height: f32 = expected_bounds.size.height.into();
-
-        // Find the window with matching dimensions AND position
+        // Find a window with matching dimensions (search from most recent)
         for i in 0..count {
             let window: id = msg_send![windows, objectAtIndex: i];
             let frame: NSRect = msg_send![window, frame];
 
-            // Check if this looks like our HUD window (by size AND position)
+            // Check if this looks like our HUD window by size
             let width_matches = (frame.size.width - expected_width as f64).abs() < 5.0;
             let height_matches = (frame.size.height - expected_height as f64).abs() < 5.0;
-            let x_matches = (frame.origin.x - expected_x as f64).abs() < 5.0;
-            let y_matches = (frame.origin.y - expected_y as f64).abs() < 5.0;
 
-            if width_matches && height_matches && x_matches && y_matches {
+            if width_matches && height_matches {
                 // Found it! Configure as HUD overlay
 
                 // Set window level very high (NSPopUpMenuWindowLevel = 101)
-                // Use i64 (NSInteger) for proper ABI compatibility on 64-bit macOS
                 let hud_level: i64 = 101;
                 let _: () = msg_send![window, setLevel: hud_level];
 
@@ -851,8 +774,6 @@ fn configure_hud_window_by_bounds(expected_bounds: gpui::Bounds<Pixels>, click_t
                 let _: () = msg_send![window, setCollectionBehavior: collection_behavior];
 
                 // Set mouse event handling based on whether HUD has clickable actions
-                // Action HUDs need to receive mouse events for button clicks
-                // Use cocoa::base::BOOL (i8) for proper ObjC BOOL type on macOS
                 let ignores_mouse: cocoa::base::BOOL = if click_through {
                     cocoa::base::YES
                 } else {
@@ -874,8 +795,8 @@ fn configure_hud_window_by_bounds(expected_bounds: gpui::Bounds<Pixels>, click_t
                 logging::log(
                     "HUD",
                     &format!(
-                        "Configured HUD NSWindow at ({:.0}, {:.0}): level={}, {}, orderFront",
-                        frame.origin.x, frame.origin.y, hud_level, click_status
+                        "Configured HUD NSWindow ({}x{}): level={}, {}, orderFront",
+                        expected_width, expected_height, hud_level, click_status
                     ),
                 );
                 return;
@@ -885,15 +806,15 @@ fn configure_hud_window_by_bounds(expected_bounds: gpui::Bounds<Pixels>, click_t
         logging::log(
             "HUD",
             &format!(
-                "Could not find HUD window with bounds ({:.0}, {:.0})",
-                expected_x, expected_y
+                "Could not find HUD window with size {}x{}",
+                expected_width, expected_height
             ),
         );
     }
 }
 
 #[cfg(not(target_os = "macos"))]
-fn configure_hud_window_by_bounds(_expected_bounds: gpui::Bounds<Pixels>, _click_through: bool) {
+fn configure_hud_window_by_size(_expected_width: f32, _expected_height: f32, _click_through: bool) {
     logging::log(
         "HUD",
         "Non-macOS platform, skipping HUD window configuration",
@@ -902,14 +823,13 @@ fn configure_hud_window_by_bounds(_expected_bounds: gpui::Bounds<Pixels>, _click
 
 /// Dismiss a specific HUD by its ID
 ///
-/// This is more reliable than bounds matching for timer-based dismissal,
-/// as it avoids race conditions where bounds might match the wrong window.
+/// Uses WindowHandle.update() + window.remove_window() for reliable window closing.
 /// Uses slot-based clearing instead of swap_remove to prevent position overlap.
 fn dismiss_hud_by_id(hud_id: u64, cx: &mut App) {
     let manager = get_hud_manager();
 
-    // Find and remove the HUD with matching ID, getting its bounds for window close
-    let bounds_to_close: Option<gpui::Bounds<Pixels>> = {
+    // Find and remove the HUD with matching ID, getting its window handle for closing
+    let window_to_close: Option<WindowHandle<HudView>> = {
         let mut state = manager.lock();
 
         // First, release the slot (this is the key fix - clears by ID, not swap_remove)
@@ -918,16 +838,31 @@ fn dismiss_hud_by_id(hud_id: u64, cx: &mut App) {
         // Then find and remove from active_huds Vec (retain order, don't swap_remove)
         if let Some(idx) = state.active_huds.iter().position(|h| h.id == hud_id) {
             let hud = state.active_huds.remove(idx); // Use remove() to preserve order
-            Some(hud.bounds)
+            Some(hud.window)
         } else {
             None
         }
     };
 
-    // Close the window if we found it
-    if let Some(bounds) = bounds_to_close {
-        close_hud_window_by_bounds(bounds);
-        logging::log("HUD", &format!("Dismissed HUD id={}", hud_id));
+    // Close the window using GPUI's proper API
+    if let Some(window_handle) = window_to_close {
+        // Use WindowHandle.update() to access window.remove_window()
+        let result = window_handle.update(cx, |_view, window, _cx| {
+            window.remove_window();
+        });
+
+        match result {
+            Ok(()) => {
+                logging::log("HUD", &format!("Dismissed HUD id={}", hud_id));
+            }
+            Err(e) => {
+                // Window may have already been closed (e.g., by user)
+                logging::log(
+                    "HUD",
+                    &format!("HUD id={} window already closed: {}", hud_id, e),
+                );
+            }
+        }
 
         // Show any pending HUDs
         cleanup_expired_huds(cx);
@@ -986,26 +921,26 @@ fn cleanup_expired_huds(cx: &mut App) {
 /// This closes all active HUD windows and clears the pending queue.
 /// Must be called on the main thread (i.e., from within App context).
 #[allow(dead_code)]
-pub fn dismiss_all_huds(_cx: &mut App) {
+pub fn dismiss_all_huds(cx: &mut App) {
     let manager = get_hud_manager();
 
-    // Collect bounds first, then close windows
-    let bounds_to_close: Vec<gpui::Bounds<Pixels>> = {
-        let state = manager.lock();
-        state.active_huds.iter().map(|hud| hud.bounds).collect()
+    // Collect window handles first, then close windows
+    let windows_to_close: Vec<WindowHandle<HudView>> = {
+        let mut state = manager.lock();
+        let windows: Vec<_> = state.active_huds.drain(..).map(|hud| hud.window).collect();
+        state.hud_slots = [None; MAX_SIMULTANEOUS_HUDS]; // Clear all slots
+        state.pending_queue.clear();
+        windows
     };
 
-    // Close each window by its bounds
-    for bounds in &bounds_to_close {
-        close_hud_window_by_bounds(*bounds);
-    }
+    let count = windows_to_close.len();
 
-    // Clear tracking state including slot allocations
-    let mut state = manager.lock();
-    let count = state.active_huds.len();
-    state.active_huds.clear();
-    state.hud_slots = [None; MAX_SIMULTANEOUS_HUDS]; // Clear all slots
-    state.pending_queue.clear();
+    // Close each window using GPUI's proper API
+    for window_handle in windows_to_close {
+        let _ = window_handle.update(cx, |_view, window, _cx| {
+            window.remove_window();
+        });
+    }
 
     if count > 0 {
         logging::log("HUD", &format!("Dismissed {} active HUD(s)", count));
