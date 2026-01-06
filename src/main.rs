@@ -990,6 +990,13 @@ struct ScriptListApp {
     // Mouse hover tracking - independent from selected_index (keyboard focus)
     // hovered_index shows subtle visual feedback, selected_index shows full focus styling
     hovered_index: Option<usize>,
+    // Fallback mode: when true, we're showing fallback commands instead of scripts
+    // This happens when filter_text doesn't match any scripts
+    fallback_mode: bool,
+    // Selected index within the fallback list (0-based)
+    fallback_selected_index: usize,
+    // Cached fallback items for the current filter_text
+    cached_fallbacks: Vec<crate::fallbacks::FallbackItem>,
     // P0-2: Debounce hover notify calls (16ms window to reduce 50% unnecessary re-renders)
     last_hover_notify: std::time::Instant,
     // Pending path action - when set, show ActionsDialog for this path
@@ -2233,6 +2240,33 @@ fn main() {
                                         if has_cmd && key_lower == "k" {
                                             logging::log("STDIN", "SimulateKey: Cmd+K - toggle actions");
                                             view.toggle_actions(ctx, window);
+                                        } else if view.fallback_mode && !view.cached_fallbacks.is_empty() {
+                                            // Handle keys in fallback mode
+                                            match key_lower.as_str() {
+                                                "up" | "arrowup" => {
+                                                    if view.fallback_selected_index > 0 {
+                                                        view.fallback_selected_index -= 1;
+                                                        ctx.notify();
+                                                    }
+                                                }
+                                                "down" | "arrowdown" => {
+                                                    if view.fallback_selected_index < view.cached_fallbacks.len().saturating_sub(1) {
+                                                        view.fallback_selected_index += 1;
+                                                        ctx.notify();
+                                                    }
+                                                }
+                                                "enter" => {
+                                                    logging::log("STDIN", "SimulateKey: Enter - execute fallback");
+                                                    view.execute_selected_fallback(ctx);
+                                                }
+                                                "escape" => {
+                                                    logging::log("STDIN", "SimulateKey: Escape - clear filter (exit fallback mode)");
+                                                    view.clear_filter(window, ctx);
+                                                }
+                                                _ => {
+                                                    logging::log("STDIN", &format!("SimulateKey: Unhandled key '{}' in fallback mode", key_lower));
+                                                }
+                                            }
                                         } else {
                                             match key_lower.as_str() {
                                                 "up" | "arrowup" => {

@@ -34,6 +34,10 @@ impl ScriptListApp {
         // Handle edge cases - keep selected_index in valid bounds
         // Use coerce_selection which tries down first, then up, handles all edge cases
         if item_count > 0 {
+            // We have results - exit fallback mode
+            self.fallback_mode = false;
+            self.cached_fallbacks.clear();
+
             if let Some(valid_idx) =
                 list_item::coerce_selection(&grouped_items, self.selected_index)
             {
@@ -47,6 +51,27 @@ impl ScriptListApp {
             self.selected_index = 0;
             self.hovered_index = None;
             self.last_scrolled_index = None;
+
+            // Check if we should show fallbacks (filter text exists but no matches)
+            if !self.filter_text.is_empty() {
+                // Enter fallback mode - cache fallbacks and track selection
+                use crate::fallbacks::collect_fallbacks;
+                let fallbacks = collect_fallbacks(&self.filter_text, self.scripts.as_slice());
+                if !fallbacks.is_empty() {
+                    self.fallback_mode = true;
+                    self.cached_fallbacks = fallbacks;
+                    // Keep fallback_selected_index in bounds
+                    if self.fallback_selected_index >= self.cached_fallbacks.len() {
+                        self.fallback_selected_index = 0;
+                    }
+                } else {
+                    self.fallback_mode = false;
+                    self.cached_fallbacks.clear();
+                }
+            } else {
+                self.fallback_mode = false;
+                self.cached_fallbacks.clear();
+            }
         }
 
         // Update list state if item count changed
@@ -115,10 +140,9 @@ impl ScriptListApp {
                     .font_family(empty_font_family)
                     .child("No scripts or snippets found")
                     .into_any_element()
-            } else {
-                // Collect fallbacks for current input
-                use crate::fallbacks::collect_fallbacks;
-                let fallbacks = collect_fallbacks(&self.filter_text, self.scripts.as_slice());
+            } else if self.fallback_mode && !self.cached_fallbacks.is_empty() {
+                // Use cached fallbacks with proper selection state
+                let fallback_selected = self.fallback_selected_index;
 
                 // Build fallback list UI
                 let mut fallback_container = div().w_full().h_full().flex().flex_col();
@@ -137,14 +161,29 @@ impl ScriptListApp {
                 );
 
                 // Render each fallback item using ListItem component
-                // First item is selected by default (keyboard nav can be added later)
-                for (idx, fallback) in fallbacks.iter().enumerate() {
-                    let is_selected = idx == 0; // Default: first item selected
+                for (idx, fallback) in self.cached_fallbacks.iter().enumerate() {
+                    let is_selected = idx == fallback_selected;
 
                     // Clone strings to owned values for ListItem (avoids lifetime issues)
                     let label = fallback.label().to_string();
                     let description = fallback.description().to_string();
                     let icon_name = fallback.icon().to_string();
+
+                    // Create click handler for this fallback item
+                    let click_handler = cx.listener(
+                        move |this: &mut ScriptListApp, event: &gpui::ClickEvent, _window, cx| {
+                            // Select this item
+                            this.fallback_selected_index = idx;
+                            cx.notify();
+
+                            // Double-click executes
+                            if let gpui::ClickEvent::Mouse(mouse_event) = event {
+                                if mouse_event.down.click_count == 2 {
+                                    this.execute_selected_fallback(cx);
+                                }
+                            }
+                        },
+                    );
 
                     // Create ListItem with fallback data
                     let item = list_item::ListItem::new(label, theme_colors)
@@ -153,10 +192,29 @@ impl ScriptListApp {
                         .selected(is_selected)
                         .index(idx);
 
-                    fallback_container = fallback_container.child(item);
+                    // Wrap in clickable container
+                    fallback_container = fallback_container.child(
+                        div()
+                            .id(ElementId::NamedInteger("fallback-item".into(), idx as u64))
+                            .cursor_pointer()
+                            .on_click(click_handler)
+                            .child(item),
+                    );
                 }
 
                 fallback_container.into_any_element()
+            } else {
+                // No fallbacks available either - show empty message
+                div()
+                    .w_full()
+                    .h_full()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .text_color(rgb(empty_text_color))
+                    .font_family(empty_font_family)
+                    .child(format!("No results match '{}'", self.filter_text))
+                    .into_any_element()
             }
         } else {
             // Use GPUI's list() component for variable-height items
@@ -657,6 +715,38 @@ impl ScriptListApp {
                     }
                 }
 
+                // Check if we're in fallback mode (no script matches, showing fallback commands)
+                if this.fallback_mode && !this.cached_fallbacks.is_empty() {
+                    match key_str.as_str() {
+                        "up" | "arrowup" => {
+                            if this.fallback_selected_index > 0 {
+                                this.fallback_selected_index -= 1;
+                                cx.notify();
+                            }
+                        }
+                        "down" | "arrowdown" => {
+                            if this.fallback_selected_index
+                                < this.cached_fallbacks.len().saturating_sub(1)
+                            {
+                                this.fallback_selected_index += 1;
+                                cx.notify();
+                            }
+                        }
+                        "enter" => {
+                            if !this.gpui_input_focused {
+                                this.execute_selected_fallback(cx);
+                            }
+                        }
+                        "escape" => {
+                            // Clear filter to exit fallback mode
+                            this.clear_filter(window, cx);
+                        }
+                        _ => {}
+                    }
+                    return;
+                }
+
+                // Normal script list navigation
                 match key_str.as_str() {
                     "up" | "arrowup" => {
                         let _key_perf = crate::perf::KeyEventPerfGuard::new();

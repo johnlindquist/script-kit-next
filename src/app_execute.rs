@@ -922,6 +922,54 @@ impl ScriptListApp {
         cx.notify();
     }
 
+    /// Open a terminal with a specific command (for fallback "Run in Terminal")
+    pub fn open_terminal_with_command(&mut self, command: String, cx: &mut Context<Self>) {
+        logging::log(
+            "EXEC",
+            &format!("Opening terminal with command: {}", command),
+        );
+
+        // Create submit callback that just closes on exit/escape
+        let submit_callback: std::sync::Arc<dyn Fn(String, Option<String>) + Send + Sync> =
+            std::sync::Arc::new(move |_id: String, _value: Option<String>| {
+                // Terminal exited - nothing special to do
+            });
+
+        // Get the target height for terminal view
+        let term_height = window_resize::layout::MAX_HEIGHT;
+
+        // Create terminal with the specified command
+        match term_prompt::TermPrompt::with_height(
+            "fallback-terminal".to_string(),
+            Some(command), // Run the specified command
+            self.focus_handle.clone(),
+            submit_callback,
+            std::sync::Arc::new(self.theme.clone()),
+            std::sync::Arc::new(self.config.clone()),
+            Some(term_height),
+        ) {
+            Ok(term_prompt) => {
+                let entity = cx.new(|_| term_prompt);
+                self.current_view = AppView::QuickTerminalView { entity };
+                self.focused_input = FocusedInput::None;
+                self.pending_focus = Some(FocusTarget::TermPrompt);
+                resize_to_view_sync(ViewType::TermPrompt, 0);
+                cx.notify();
+            }
+            Err(e) => {
+                logging::log("ERROR", &format!("Failed to create terminal: {}", e));
+                self.toast_manager.push(
+                    components::toast::Toast::error(
+                        format!("Failed to open terminal: {}", e),
+                        &self.theme,
+                    )
+                    .duration_ms(Some(5000)),
+                );
+                cx.notify();
+            }
+        }
+    }
+
     /// Open the quick terminal
     fn open_quick_terminal(&mut self, cx: &mut Context<Self>) {
         logging::log("EXEC", "Opening Quick Terminal");

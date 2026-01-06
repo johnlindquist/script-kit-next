@@ -167,7 +167,12 @@ impl ScriptListApp {
                 InputEvent::PressEnter { .. } => {
                     if matches!(this.current_view, AppView::ScriptList) && !this.show_actions_popup
                     {
-                        this.execute_selected(cx);
+                        // Check if we're in fallback mode first
+                        if this.fallback_mode && !this.cached_fallbacks.is_empty() {
+                            this.execute_selected_fallback(cx);
+                        } else {
+                            this.execute_selected(cx);
+                        }
                     }
                 }
             }
@@ -242,6 +247,10 @@ impl ScriptListApp {
             frecency_store,
             // Mouse hover tracking - starts as None (no item hovered)
             hovered_index: None,
+            // Fallback mode state - starts as false (showing scripts, not fallbacks)
+            fallback_mode: false,
+            fallback_selected_index: 0,
+            cached_fallbacks: Vec::new(),
             // P0-2: Initialize hover debounce timer
             last_hover_notify: std::time::Instant::now(),
             // Pending path action - starts as None (Arc<Mutex<>> for callback access)
@@ -1172,6 +1181,148 @@ impl ScriptListApp {
         }
     }
 
+    /// Execute the currently selected fallback command
+    /// This is called from keyboard handler, so we need to defer window access
+    pub fn execute_selected_fallback(&mut self, cx: &mut Context<Self>) {
+        if !self.fallback_mode || self.cached_fallbacks.is_empty() {
+            return;
+        }
+
+        let input = self.filter_text.clone();
+        if let Some(fallback) = self
+            .cached_fallbacks
+            .get(self.fallback_selected_index)
+            .cloned()
+        {
+            logging::log(
+                "EXEC",
+                &format!(
+                    "Executing fallback: {} with input: '{}'",
+                    fallback.name(),
+                    input
+                ),
+            );
+
+            // Check if this is a "stay open" action (like run-in-terminal which opens a view)
+            let should_close = match &fallback {
+                crate::fallbacks::FallbackItem::Builtin(builtin) => {
+                    // run-in-terminal opens the built-in terminal, so don't close
+                    builtin.id != "run-in-terminal"
+                }
+                crate::fallbacks::FallbackItem::Script(_) => {
+                    // Script execution handles its own window state
+                    false
+                }
+            };
+
+            // Execute the fallback action
+            match &fallback {
+                crate::fallbacks::FallbackItem::Builtin(builtin) => {
+                    // Execute built-in fallback action inline (no window needed for most)
+                    let fallback_id = builtin.id.to_string();
+                    self.execute_builtin_fallback_inline(&fallback_id, &input, cx);
+                }
+                crate::fallbacks::FallbackItem::Script(config) => {
+                    // Execute user script with input as argument
+                    self.execute_interactive(&config.script, cx);
+                }
+            }
+
+            // Close the window after executing (unless it's a stay-open action)
+            if should_close {
+                self.close_and_reset_window(cx);
+            }
+        }
+    }
+
+    /// Execute a built-in fallback action without window reference
+    fn execute_builtin_fallback_inline(
+        &mut self,
+        fallback_id: &str,
+        input: &str,
+        cx: &mut Context<Self>,
+    ) {
+        use crate::fallbacks::builtins::{get_builtin_fallbacks, FallbackResult};
+
+        logging::log(
+            "FALLBACK",
+            &format!("Executing fallback '{}' with input: {}", fallback_id, input),
+        );
+
+        // Find the fallback by ID
+        let fallbacks = get_builtin_fallbacks();
+        let fallback = fallbacks.iter().find(|f| f.id == fallback_id);
+
+        let Some(fallback) = fallback else {
+            logging::log("FALLBACK", &format!("Unknown fallback ID: {}", fallback_id));
+            return;
+        };
+
+        // Execute the fallback and get the result
+        match fallback.execute(input) {
+            Ok(result) => match result {
+                FallbackResult::RunTerminal { command } => {
+                    logging::log("FALLBACK", &format!("RunTerminal: {}", command));
+                    // Open the built-in terminal with the command
+                    self.open_terminal_with_command(command, cx);
+                }
+                FallbackResult::AddNote { content } => {
+                    logging::log("FALLBACK", &format!("AddNote: {}", content));
+                    let item = gpui::ClipboardItem::new_string(content);
+                    cx.write_to_clipboard(item);
+                    if let Err(e) = crate::notes::open_notes_window(cx) {
+                        logging::log("FALLBACK", &format!("Failed to open Notes: {}", e));
+                    }
+                }
+                FallbackResult::Copy { text } => {
+                    logging::log("FALLBACK", &format!("Copy: {} chars", text.len()));
+                    let item = gpui::ClipboardItem::new_string(text);
+                    cx.write_to_clipboard(item);
+                    crate::hud_manager::show_hud("Copied to clipboard".to_string(), Some(1500), cx);
+                }
+                FallbackResult::OpenUrl { url } => {
+                    logging::log("FALLBACK", &format!("OpenUrl: {}", url));
+                    let _ = open::that(&url);
+                }
+                FallbackResult::Calculate { expression } => {
+                    // Evaluate the expression using meval
+                    logging::log("FALLBACK", &format!("Calculate: {}", expression));
+                    match meval::eval_str(&expression) {
+                        Ok(result) => {
+                            let item = gpui::ClipboardItem::new_string(result.to_string());
+                            cx.write_to_clipboard(item);
+                            crate::hud_manager::show_hud(
+                                format!("{} = {}", expression, result),
+                                Some(3000),
+                                cx,
+                            );
+                        }
+                        Err(e) => {
+                            logging::log("FALLBACK", &format!("Calculate error: {}", e));
+                            crate::hud_manager::show_hud(format!("Error: {}", e), Some(3000), cx);
+                        }
+                    }
+                }
+                FallbackResult::OpenFile { path } => {
+                    logging::log("FALLBACK", &format!("OpenFile: {}", path));
+                    let expanded = if path.starts_with("~") {
+                        if let Some(home) = dirs::home_dir() {
+                            path.replacen("~", &home.to_string_lossy(), 1)
+                        } else {
+                            path.clone()
+                        }
+                    } else {
+                        path.clone()
+                    };
+                    let _ = open::that(&expanded);
+                }
+            },
+            Err(e) => {
+                logging::log("FALLBACK", &format!("Fallback execution error: {}", e));
+            }
+        }
+    }
+
     fn handle_filter_input_change(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.suppress_filter_events {
             return;
@@ -1324,8 +1475,34 @@ impl ScriptListApp {
         // Menu bar items are now pre-fetched by frontmost_app_tracker
         // No lazy loading needed - items are already in cache when we open
 
-        self.computed_filter_text = text;
+        self.computed_filter_text = text.clone();
         self.filter_coalescer.reset();
+
+        // Update fallback mode immediately based on filter results
+        // This ensures SimulateKey commands can check fallback_mode correctly
+        if !text.is_empty() {
+            let results = self.get_filtered_results_cached();
+            if results.is_empty() {
+                // No matches - check if we should enter fallback mode
+                use crate::fallbacks::collect_fallbacks;
+                let fallbacks = collect_fallbacks(&text, self.scripts.as_slice());
+                if !fallbacks.is_empty() {
+                    self.fallback_mode = true;
+                    self.cached_fallbacks = fallbacks;
+                    self.fallback_selected_index = 0;
+                } else {
+                    self.fallback_mode = false;
+                    self.cached_fallbacks.clear();
+                }
+            } else {
+                self.fallback_mode = false;
+                self.cached_fallbacks.clear();
+            }
+        } else {
+            self.fallback_mode = false;
+            self.cached_fallbacks.clear();
+        }
+
         self.update_window_size();
         cx.notify();
     }
