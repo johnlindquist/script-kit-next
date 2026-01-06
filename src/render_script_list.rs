@@ -913,6 +913,7 @@ impl ScriptListApp {
                                     .flex_row()
                                     .items_center()
                                     .justify_end()
+                                    .gap(px(16.)) // 16px gap between all elements
                                     // Visibility: hidden when actions popup is shown
                                     .when(show_actions, |d| d.opacity(0.).invisible())
                                     // "Ask AI [Tab]" hint - yellow text, grey badge
@@ -942,8 +943,6 @@ impl ScriptListApp {
                                                     .child("Tab"),
                                             ),
                                     )
-                                    // Spacing
-                                    .child(div().w(px(16.)))
                                     // Run button - yellow label, grey shortcut
                                     .child(
                                         div()
@@ -976,8 +975,6 @@ impl ScriptListApp {
                                                     .child("↵"),
                                             ),
                                     )
-                                    // Spacing
-                                    .child(div().w(px(16.)))
                                     // Actions button - yellow label, grey shortcut
                                     .child(
                                         div()
@@ -1009,9 +1006,7 @@ impl ScriptListApp {
                                                     .text_color(rgb(text_dimmed))
                                                     .child("⌘K"),
                                             ),
-                                    )
-                                    // Spacing before logo
-                                    .child(div().w(px(16.))),
+                                    ),
                             )
                             // Actions search input - absolute positioned, visible when actions shown
                             .child(
@@ -1093,15 +1088,14 @@ impl ScriptListApp {
                                                         ),
                                                 )
                                             }),
-                                    )
-                                    // Spacing before logo (no pipe separator)
-                                    .child(div().w(px(16.))),
+                                    ),
                             )
                     })
                     // Script Kit Logo - Golden ratio: 21px container, 13px SVG, 4px radius
                     // 85% opacity yellow background for softer appearance
                     .child(
                         div()
+                            .ml(px(16.)) // Spacing from buttons
                             .w(px(21.))
                             .h(px(21.))
                             .flex()
