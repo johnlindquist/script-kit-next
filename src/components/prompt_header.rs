@@ -331,7 +331,7 @@ impl PromptHeader {
         input
     }
 
-    /// Render the action buttons area (Run + Actions)
+    /// Render the action buttons area (Run + Actions) - no separators style
     fn render_buttons_area(&self) -> impl IntoElement {
         let colors = self.colors;
         let button_colors = ButtonColors {
@@ -346,8 +346,8 @@ impl PromptHeader {
         let on_primary = self.on_primary_click.clone();
         let on_actions = self.on_actions_click.clone();
 
-        // Use hstack() helper for cleaner layout
-        let mut container = hstack().justify_end();
+        // Use hstack() helper with gap for clean spacing (no pipe separators)
+        let mut container = hstack().justify_end().gap(px(16.));
 
         // Primary button
         let mut primary_btn = Button::new(self.config.primary_button_label.clone(), button_colors)
@@ -361,14 +361,6 @@ impl PromptHeader {
             }));
         }
         container = container.child(primary_btn);
-        // Use rgba8() instead of manual << 8 | alpha
-        container = container.child(
-            div()
-                .mx(rems(0.25))
-                .text_color(colors.text_dimmed.rgba8(0x60))
-                .text_sm()
-                .child("|"),
-        );
 
         // Actions button (if enabled)
         if self.config.show_actions_button {
@@ -384,14 +376,6 @@ impl PromptHeader {
             }
 
             container = container.child(actions_btn);
-            // Use rgba8() instead of manual << 8 | alpha
-            container = container.child(
-                div()
-                    .mx(rems(0.25))
-                    .text_color(colors.text_dimmed.rgba8(0x60))
-                    .text_sm()
-                    .child("|"),
-            );
         }
 
         container
@@ -525,12 +509,22 @@ impl PromptHeader {
             )
     }
 
-    /// Render the Script Kit logo
+    /// Render the Script Kit logo (golden ratio: 21px container, 13px SVG, 4px radius)
     fn render_logo(&self) -> impl IntoElement {
-        svg()
-            .external_path(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/logo.svg"))
-            .size(rems(1.0))
-            .text_color(self.colors.accent.to_rgb())
+        div()
+            .w(px(21.))
+            .h(px(21.))
+            .flex()
+            .items_center()
+            .justify_center()
+            .bg(self.colors.accent.rgba8(0xD9)) // 85% opacity (0xD9 = 217 = 85% of 255)
+            .rounded(px(4.))
+            .child(
+                svg()
+                    .external_path(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/logo.svg"))
+                    .size(px(13.))
+                    .text_color(rgb(0x000000)), // Black logo inside yellow
+            )
     }
 }
 
