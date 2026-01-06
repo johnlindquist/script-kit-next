@@ -25,7 +25,7 @@
 //! - Uses the WindowRegistry to notify all windows
 //! - Polls for changes every 200ms (same as previous per-window watchers)
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 use gpui::{App, Timer};
 use tracing::info;
@@ -35,6 +35,39 @@ use crate::windows;
 
 /// Flag to track if the theme service is running
 static THEME_SERVICE_RUNNING: AtomicBool = AtomicBool::new(false);
+
+/// Global theme revision counter.
+/// Incremented each time theme.json changes.
+/// Views use this to invalidate cached theme-derived values (like box shadows).
+static THEME_REVISION: AtomicU64 = AtomicU64::new(1);
+
+/// Get the current theme revision.
+///
+/// Views should compare this against a stored value to detect theme changes
+/// and recompute cached theme-derived values (like box shadows).
+///
+/// # Example
+///
+/// ```rust,ignore
+/// let rev = crate::theme::service::theme_revision();
+/// if self.theme_rev_seen != rev {
+///     self.theme_rev_seen = rev;
+///     self.cached_box_shadows = Self::compute_box_shadows();
+/// }
+/// ```
+pub fn theme_revision() -> u64 {
+    THEME_REVISION.load(Ordering::Relaxed)
+}
+
+/// Increment the theme revision.
+/// Called internally when theme.json changes are detected.
+fn bump_theme_revision() {
+    let old = THEME_REVISION.fetch_add(1, Ordering::SeqCst);
+    crate::logging::log(
+        "THEME",
+        &format!("Theme revision bumped: {} -> {}", old, old + 1),
+    );
+}
 
 /// Ensure the global theme service is running.
 ///
@@ -74,6 +107,9 @@ pub fn ensure_theme_service(cx: &mut App) {
                 let update_result = cx.update(|cx| {
                     // Re-sync gpui-component theme with updated Script Kit theme
                     crate::theme::sync_gpui_component_theme(cx);
+
+                    // Bump revision so views know to update cached values
+                    bump_theme_revision();
 
                     // Notify all registered windows to re-render
                     windows::notify_all_windows(cx);
@@ -117,5 +153,20 @@ mod tests {
 
         // Clean up
         THEME_SERVICE_RUNNING.store(false, Ordering::SeqCst);
+    }
+
+    #[test]
+    fn test_theme_revision_starts_at_one() {
+        // Revision starts at 1 (not 0) so initial comparison fails
+        let rev = theme_revision();
+        assert!(rev >= 1);
+    }
+
+    #[test]
+    fn test_bump_increments_revision() {
+        let before = theme_revision();
+        bump_theme_revision();
+        let after = theme_revision();
+        assert!(after > before);
     }
 }

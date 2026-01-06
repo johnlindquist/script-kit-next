@@ -32,17 +32,13 @@ use super::actions_panel::{
 use super::browse_panel::{BrowsePanel, NoteAction, NoteListItem};
 use super::model::{ExportFormat, Note, NoteId};
 use super::storage;
-use crate::watcher::ThemeWatcher;
 
 /// Global handle to the notes window
 static NOTES_WINDOW: std::sync::OnceLock<std::sync::Mutex<Option<gpui::WindowHandle<Root>>>> =
     std::sync::OnceLock::new();
 
-/// Flag to track if the Notes theme watcher is already running
-/// This ensures we only spawn one theme watcher task regardless of how many times
-/// the window is opened/closed
-static NOTES_THEME_WATCHER_RUNNING: std::sync::atomic::AtomicBool =
-    std::sync::atomic::AtomicBool::new(false);
+// NOTE: Theme watching is now centralized in crate::theme::service
+// The per-window NOTES_THEME_WATCHER_RUNNING flag has been removed
 
 /// View mode for the notes list
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -2056,49 +2052,9 @@ pub fn open_notes_window(cx: &mut App) -> Result<()> {
     // Configure as floating panel (always on top) after window is created
     configure_notes_as_floating_panel();
 
-    // Theme hot-reload watcher for Notes window
-    // Spawns a background task that watches ~/.scriptkit/kit/theme.json for changes
-    // Only spawns once to prevent task leaks across window open/close cycles
-    if !NOTES_THEME_WATCHER_RUNNING.swap(true, std::sync::atomic::Ordering::SeqCst) {
-        cx.spawn(async move |cx: &mut gpui::AsyncApp| {
-            let (mut theme_watcher, theme_rx) = ThemeWatcher::new();
-            if theme_watcher.start().is_err() {
-                NOTES_THEME_WATCHER_RUNNING.store(false, std::sync::atomic::Ordering::SeqCst);
-                return;
-            }
-            info!("Notes theme watcher started (singleton)");
-            loop {
-                gpui::Timer::after(std::time::Duration::from_millis(200)).await;
-                if theme_rx.try_recv().is_ok() {
-                    info!("Notes window: theme.json changed, reloading");
-                    let update_result = cx.update(|cx| {
-                        // Re-sync gpui-component theme with updated Script Kit theme
-                        crate::theme::sync_gpui_component_theme(cx);
-
-                        // Notify the Notes window to re-render with new colors (if open)
-                        // SAFETY: Release lock BEFORE calling handle.update() to prevent deadlock
-                        let handle = {
-                            let slot = NOTES_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
-                            slot.lock().ok().and_then(|g| *g)
-                        };
-                        if let Some(handle) = handle {
-                            let _ = handle.update(cx, |_root, _window, cx| {
-                                // Notify to trigger re-render with new theme colors
-                                cx.notify();
-                            });
-                        }
-                    });
-
-                    // If the update failed, the app may be shutting down
-                    if update_result.is_err() {
-                        break;
-                    }
-                }
-            }
-            NOTES_THEME_WATCHER_RUNNING.store(false, std::sync::atomic::Ordering::SeqCst);
-        })
-        .detach();
-    }
+    // NOTE: Theme hot-reload is now handled by the centralized ThemeService
+    // (crate::theme::service::ensure_theme_service) which is started once at app init.
+    // This eliminates per-window theme watcher tasks and their potential for leaks.
 
     Ok(())
 }

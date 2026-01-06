@@ -40,7 +40,6 @@ use super::config::ModelInfo;
 use super::model::{Chat, ChatId, Message, MessageRole};
 use super::providers::ProviderRegistry;
 use super::storage;
-use crate::watcher::ThemeWatcher;
 
 /// Events from the streaming thread
 enum StreamingEvent {
@@ -2073,45 +2072,9 @@ pub fn open_ai_window(cx: &mut App) -> Result<()> {
     // NOTE: We do NOT configure as floating panel - this is a normal window
     // that can go behind other windows
 
-    // Theme hot-reload watcher for AI window
-    // Spawns a background task that watches ~/.scriptkit/kit/theme.json for changes
-    // NOTE: Uses window handle (not entity) to avoid memory leaks - the entity reference
-    // would keep AiApp alive even after window closes. This pattern matches Notes window.
-    // TODO: Consolidate into a single ThemeService (script-kit-gpui-dar.4)
-    cx.spawn(async move |cx: &mut gpui::AsyncApp| {
-        let (mut theme_watcher, theme_rx) = ThemeWatcher::new();
-        if theme_watcher.start().is_err() {
-            return;
-        }
-        loop {
-            gpui::Timer::after(std::time::Duration::from_millis(200)).await;
-            if theme_rx.try_recv().is_ok() {
-                info!("AI window: theme.json changed, reloading");
-                let update_result = cx.update(|cx| {
-                    // Re-sync gpui-component theme with updated Script Kit theme
-                    crate::theme::sync_gpui_component_theme(cx);
-
-                    // Notify the AI window to re-render with new colors (if open)
-                    // SAFETY: Release lock BEFORE calling handle.update() to prevent deadlock
-                    let handle = {
-                        let slot = AI_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
-                        slot.lock().ok().and_then(|g| *g)
-                    };
-                    if let Some(handle) = handle {
-                        let _ = handle.update(cx, |_root, _window, cx| {
-                            cx.notify();
-                        });
-                    }
-                });
-
-                // If the update failed, the app may be shutting down
-                if update_result.is_err() {
-                    break;
-                }
-            }
-        }
-    })
-    .detach();
+    // NOTE: Theme hot-reload is now handled by the centralized ThemeService
+    // (crate::theme::service::ensure_theme_service) which is started once at app init.
+    // This eliminates per-window theme watcher tasks and their potential for leaks.
 
     Ok(())
 }

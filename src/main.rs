@@ -1586,6 +1586,11 @@ fn main() {
         // This ensures all gpui-component widgets use our colors
         theme::sync_gpui_component_theme(cx);
 
+        // Start the centralized theme service for hot-reload
+        // This replaces per-window theme watchers and ensures all windows
+        // stay in sync with theme.json changes
+        theme::service::ensure_theme_service(cx);
+
         // Initialize tray icon and menu
         // MUST be done after Application::new() creates the NSApplication
         let tray_manager = match TrayManager::new() {
