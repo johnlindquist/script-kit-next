@@ -10,6 +10,7 @@ mod drop_prompt_stories;
 mod env_prompt_stories;
 mod form_field_stories;
 mod header_design_variations;
+mod header_logo_variations;
 mod header_raycast_variations;
 mod header_stories;
 mod list_item_stories;
@@ -30,6 +31,7 @@ pub use drop_prompt_stories::DropPromptStory;
 pub use env_prompt_stories::EnvPromptStory;
 pub use form_field_stories::FormFieldStory;
 pub use header_design_variations::HeaderDesignVariationsStory;
+pub use header_logo_variations::HeaderLogoVariationsStory;
 pub use header_raycast_variations::HeaderRaycastVariationsStory;
 pub use header_stories::HeaderVariationsStory;
 pub use list_item_stories::ListItemStory;
@@ -58,6 +60,7 @@ pub fn get_all_stories() -> &'static Vec<StoryEntry> {
             StoryEntry::new(Box::new(HeaderVariationsStory)),
             StoryEntry::new(Box::new(HeaderDesignVariationsStory)),
             StoryEntry::new(Box::new(HeaderRaycastVariationsStory)),
+            StoryEntry::new(Box::new(HeaderLogoVariationsStory)),
             StoryEntry::new(Box::new(LogoCenteringStory)),
             // Prompts
             StoryEntry::new(Box::new(ArgPromptStory)),
