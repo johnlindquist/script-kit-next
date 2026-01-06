@@ -271,7 +271,7 @@ fn header_container(colors: PromptHeaderColors) -> Div {
         .border_color(colors.border.to_rgb())
 }
 
-/// Script Kit logo as dark icon inside yellow rounded rectangle
+/// Script Kit logo as black icon inside yellow rounded rectangle
 fn logo_component(size: f32, corner_radius: f32) -> impl IntoElement {
     div()
         .w(px(size))
@@ -283,9 +283,9 @@ fn logo_component(size: f32, corner_radius: f32) -> impl IntoElement {
         .rounded(px(corner_radius))
         .child(
             svg()
-                .path(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/logo.svg"))
-                .size(px(size * 0.6))
-                .text_color(rgb(0x1a1a1a)), // Dark logo inside
+                .external_path(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/logo.svg"))
+                .size(px(size * 0.65))
+                .text_color(rgb(0x000000)), // Black logo inside yellow
         )
 }
 
@@ -308,7 +308,7 @@ fn ask_ai_hint(colors: PromptHeaderColors) -> impl IntoElement {
         .child(
             div()
                 .text_sm()
-                .text_color(colors.text_muted.to_rgb())
+                .text_color(colors.accent.to_rgb()) // Yellow text
                 .child("Ask AI"),
         )
         .child(
@@ -318,7 +318,7 @@ fn ask_ai_hint(colors: PromptHeaderColors) -> impl IntoElement {
                 .bg(colors.search_box_bg.to_rgb())
                 .rounded(px(4.))
                 .text_xs()
-                .text_color(colors.text_muted.to_rgb())
+                .text_color(colors.text_muted.to_rgb()) // Grey shortcut
                 .child("Tab"),
         )
 }
@@ -355,13 +355,13 @@ fn actions_button(colors: PromptHeaderColors) -> impl IntoElement {
         .child(
             div()
                 .text_sm()
-                .text_color(colors.text_muted.to_rgb())
+                .text_color(colors.accent.to_rgb()) // Yellow text
                 .child("Actions"),
         )
         .child(
             div()
                 .text_xs()
-                .text_color(colors.text_dimmed.to_rgb())
+                .text_color(colors.text_dimmed.to_rgb()) // Grey shortcut
                 .child("⌘K"),
         )
 }
@@ -606,7 +606,7 @@ fn render_v10_compact_all(colors: PromptHeaderColors) -> impl IntoElement {
         .child(
             div()
                 .text_xs()
-                .text_color(colors.text_muted.to_rgb())
+                .text_color(colors.accent.to_rgb()) // Yellow text
                 .child("AI"),
         )
         .child(
@@ -711,9 +711,12 @@ fn render_v14_logo_border(colors: PromptHeaderColors) -> impl IntoElement {
                         .rounded(px(4.))
                         .child(
                             svg()
-                                .path(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/logo.svg"))
+                                .external_path(concat!(
+                                    env!("CARGO_MANIFEST_DIR"),
+                                    "/assets/logo.svg"
+                                ))
                                 .size(px(14.))
-                                .text_color(rgb(0x1a1a1a)),
+                                .text_color(rgb(0x000000)), // Black logo
                         ),
                 ),
         )
@@ -741,9 +744,9 @@ fn render_v15_logo_circular(colors: PromptHeaderColors) -> impl IntoElement {
                 .rounded_full()
                 .child(
                     svg()
-                        .path(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/logo.svg"))
+                        .external_path(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/logo.svg"))
                         .size(px(16.))
-                        .text_color(rgb(0x1a1a1a)),
+                        .text_color(rgb(0x000000)), // Black logo
                 ),
         )
 }
@@ -770,7 +773,7 @@ fn render_v16_pill_buttons(colors: PromptHeaderColors) -> impl IntoElement {
                 .child(
                     div()
                         .text_sm()
-                        .text_color(colors.text_muted.to_rgb())
+                        .text_color(colors.accent.to_rgb()) // Yellow text
                         .child("Ask AI"),
                 )
                 .child(
@@ -780,7 +783,7 @@ fn render_v16_pill_buttons(colors: PromptHeaderColors) -> impl IntoElement {
                         .bg(colors.search_box_bg.to_rgb())
                         .rounded_full()
                         .text_xs()
-                        .text_color(colors.text_muted.to_rgb())
+                        .text_color(colors.text_muted.to_rgb()) // Grey shortcut
                         .child("Tab"),
                 ),
         )
@@ -799,13 +802,26 @@ fn render_v16_pill_buttons(colors: PromptHeaderColors) -> impl IntoElement {
         .child(div().w(px(8.)))
         .child(
             div()
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap_1()
                 .px_3()
                 .py(px(6.))
                 .bg(rgba(0xffffff10))
                 .rounded_full()
-                .text_sm()
-                .text_color(colors.text_muted.to_rgb())
-                .child("⌘K"),
+                .child(
+                    div()
+                        .text_sm()
+                        .text_color(colors.accent.to_rgb()) // Yellow text
+                        .child("Actions"),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(colors.text_muted.to_rgb()) // Grey shortcut
+                        .child("⌘K"),
+                ),
         )
         .child(div().w(px(8.)))
         .child(logo_component(28., 6.))
@@ -818,31 +834,70 @@ fn render_v17_ghost_buttons(colors: PromptHeaderColors) -> impl IntoElement {
         .child(div().flex_1())
         .child(
             div()
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap_1()
                 .px_2()
                 .py_1()
                 .rounded(px(4.))
-                .text_sm()
-                .text_color(colors.text_muted.to_rgb())
-                .child("Ask AI ⇥"),
+                .child(
+                    div()
+                        .text_sm()
+                        .text_color(colors.accent.to_rgb()) // Yellow text
+                        .child("Ask AI"),
+                )
+                .child(
+                    div()
+                        .text_sm()
+                        .text_color(colors.text_muted.to_rgb()) // Grey shortcut
+                        .child("⇥"),
+                ),
         )
         .child(
             div()
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap_1()
                 .px_2()
                 .py_1()
                 .rounded(px(4.))
-                .text_sm()
-                .text_color(colors.accent.to_rgb())
-                .font_weight(FontWeight::MEDIUM)
-                .child("Run ↵"),
+                .child(
+                    div()
+                        .text_sm()
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(colors.accent.to_rgb()) // Yellow text
+                        .child("Run"),
+                )
+                .child(
+                    div()
+                        .text_sm()
+                        .text_color(colors.text_muted.to_rgb()) // Grey shortcut
+                        .child("↵"),
+                ),
         )
         .child(
             div()
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap_1()
                 .px_2()
                 .py_1()
                 .rounded(px(4.))
-                .text_sm()
-                .text_color(colors.text_muted.to_rgb())
-                .child("Actions ⌘K"),
+                .child(
+                    div()
+                        .text_sm()
+                        .text_color(colors.accent.to_rgb()) // Yellow text
+                        .child("Actions"),
+                )
+                .child(
+                    div()
+                        .text_sm()
+                        .text_color(colors.text_muted.to_rgb()) // Grey shortcut
+                        .child("⌘K"),
+                ),
         )
         .child(div().w(px(8.)))
         .child(logo_component(28., 6.))
@@ -910,24 +965,63 @@ fn render_v19_text_only(colors: PromptHeaderColors) -> impl IntoElement {
         .child(div().flex_1())
         .child(
             div()
-                .text_sm()
-                .text_color(colors.text_dimmed.to_rgb())
-                .child("Tab for AI"),
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap_1()
+                .child(
+                    div()
+                        .text_sm()
+                        .text_color(colors.text_dimmed.to_rgb()) // Grey shortcut
+                        .child("Tab"),
+                )
+                .child(
+                    div()
+                        .text_sm()
+                        .text_color(colors.accent.to_rgb()) // Yellow text
+                        .child("for AI"),
+                ),
         )
         .child(div().w(px(16.)))
         .child(
             div()
-                .text_sm()
-                .text_color(colors.accent.to_rgb())
-                .font_weight(FontWeight::MEDIUM)
-                .child("Enter to Run"),
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap_1()
+                .child(
+                    div()
+                        .text_sm()
+                        .text_color(colors.text_dimmed.to_rgb()) // Grey shortcut
+                        .child("Enter"),
+                )
+                .child(
+                    div()
+                        .text_sm()
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(colors.accent.to_rgb()) // Yellow text
+                        .child("to Run"),
+                ),
         )
         .child(div().w(px(16.)))
         .child(
             div()
-                .text_sm()
-                .text_color(colors.text_dimmed.to_rgb())
-                .child("⌘K Actions"),
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap_1()
+                .child(
+                    div()
+                        .text_sm()
+                        .text_color(colors.text_dimmed.to_rgb()) // Grey shortcut
+                        .child("⌘K"),
+                )
+                .child(
+                    div()
+                        .text_sm()
+                        .text_color(colors.accent.to_rgb()) // Yellow text
+                        .child("Actions"),
+                ),
         )
 }
 
