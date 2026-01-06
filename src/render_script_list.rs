@@ -962,15 +962,8 @@ impl ScriptListApp {
                                                 }
                                             })),
                                     )
-                                    .child(
-                                        div()
-                                            .flex()
-                                            .items_center()
-                                            .mx(px(4.)) // Horizontal margin for spacing
-                                            .text_color(rgba((text_dimmed << 8) | 0x60)) // Reduced opacity (60%)
-                                            .text_sm()
-                                            .child("|"),
-                                    )
+                                    // Spacing between Run and Actions (no pipe separator)
+                                    .child(div().w(px(16.)))
                                     // Actions button with click handler
                                     .child(
                                         Button::new("Actions", button_colors)
@@ -984,15 +977,8 @@ impl ScriptListApp {
                                                 }
                                             })),
                                     )
-                                    .child(
-                                        div()
-                                            .flex()
-                                            .items_center()
-                                            .mx(px(4.)) // Horizontal margin for spacing
-                                            .text_color(rgba((text_dimmed << 8) | 0x60)) // Reduced opacity (60%)
-                                            .text_sm()
-                                            .child("|"),
-                                    ),
+                                    // Spacing before logo (no pipe separator)
+                                    .child(div().w(px(16.))),
                             )
                             // Actions search input - absolute positioned, visible when actions shown
                             .child(
@@ -1075,24 +1061,27 @@ impl ScriptListApp {
                                                 )
                                             }),
                                     )
-                                    .child(
-                                        div()
-                                            .flex()
-                                            .items_center()
-                                            .mx(px(4.)) // Horizontal margin for spacing
-                                            .text_color(rgba((text_dimmed << 8) | 0x60)) // Reduced opacity (60%)
-                                            .text_sm()
-                                            .child("|"),
-                                    ),
+                                    // Spacing before logo (no pipe separator)
+                                    .child(div().w(px(16.))),
                             )
                     })
-                    // Script Kit Logo - ALWAYS visible
-                    // Size slightly larger than text for visual presence
+                    // Script Kit Logo - Golden ratio: 21px container, 13px SVG, 4px radius
+                    // 85% opacity yellow background for softer appearance
                     .child(
-                        svg()
-                            .external_path(utils::get_logo_path())
-                            .size(px(16.)) // Slightly larger than text_sm for visual presence
-                            .text_color(rgb(accent_color)),
+                        div()
+                            .w(px(21.))
+                            .h(px(21.))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .bg(rgba((accent_color << 8) | 0xD9)) // 85% opacity (0xD9 = 217)
+                            .rounded(px(4.))
+                            .child(
+                                svg()
+                                    .external_path(utils::get_logo_path())
+                                    .size(px(13.))
+                                    .text_color(rgb(0x000000)), // Black logo inside yellow
+                            ),
                     )
             })
             // Subtle divider - semi-transparent
