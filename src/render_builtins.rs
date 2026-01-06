@@ -155,6 +155,7 @@ impl ScriptListApp {
         // Pre-compute colors
         let list_colors = ListItemColors::from_design(&design_colors);
         let text_primary = design_colors.text_primary;
+        #[allow(unused_variables)]
         let text_muted = design_colors.text_muted;
         let text_dimmed = design_colors.text_dimmed;
         let ui_border = design_colors.border;

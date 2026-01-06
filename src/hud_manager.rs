@@ -388,7 +388,7 @@ impl HudManagerState {
     fn find_slot_by_id(&self, hud_id: u64) -> Option<usize> {
         self.hud_slots
             .iter()
-            .position(|slot| slot.as_ref().map_or(false, |entry| entry.id == hud_id))
+            .position(|slot| slot.as_ref().is_some_and(|entry| entry.id == hud_id))
     }
 
     /// Count how many HUDs are currently active

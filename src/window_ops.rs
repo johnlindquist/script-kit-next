@@ -135,6 +135,7 @@ pub fn has_pending_ops() -> bool {
 /// Clear all pending operations without executing them.
 ///
 /// Use this when the window is being hidden/closed to avoid stale operations.
+#[allow(dead_code)]
 pub fn clear_pending_ops() {
     *PENDING_RESIZE.lock().unwrap() = None;
     *PENDING_BOUNDS.lock().unwrap() = None;

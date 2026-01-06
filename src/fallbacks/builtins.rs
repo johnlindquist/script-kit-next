@@ -3,6 +3,9 @@
 //! This module defines the default fallback commands that appear when no scripts
 //! match the user's input. Fallbacks are Raycast-style actions like "Search Google",
 //! "Open URL", "Calculate", etc.
+//!
+//! NOTE: Some items are currently unused as this is a new module being integrated.
+#![allow(dead_code)]
 
 use crate::scripts::input_detection::{is_file_path, is_math_expression, is_url, InputType};
 

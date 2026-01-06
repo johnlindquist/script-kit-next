@@ -2,6 +2,9 @@
 //!
 //! Collects and filters all available fallbacks: built-in fallbacks and
 //! user scripts with `fallback: true` in their typed metadata.
+//!
+//! NOTE: Some items are currently unused as this is a new module being integrated.
+#![allow(dead_code)]
 
 use std::sync::Arc;
 

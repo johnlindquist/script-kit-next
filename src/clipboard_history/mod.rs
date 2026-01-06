@@ -53,6 +53,7 @@ pub use config::{
 };
 
 // Cache
+#[allow(unused_imports)]
 pub use cache::{cache_image, get_cached_entries, get_cached_image};
 
 // Database operations
@@ -64,6 +65,7 @@ pub use database::{
 };
 
 // Image operations
+#[allow(unused_imports)]
 pub use image::decode_to_render_image;
 
 // Monitor/Init

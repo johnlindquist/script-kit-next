@@ -121,13 +121,12 @@ pub fn is_file_path(input: &str) -> bool {
 
     // Windows drive letter (C:\ or C:/)
     let chars: Vec<char> = trimmed.chars().collect();
-    if chars.len() >= 3 {
-        if chars[0].is_ascii_alphabetic()
-            && chars[1] == ':'
-            && (chars[2] == '\\' || chars[2] == '/')
-        {
-            return true;
-        }
+    if chars.len() >= 3
+        && chars[0].is_ascii_alphabetic()
+        && chars[1] == ':'
+        && (chars[2] == '\\' || chars[2] == '/')
+    {
+        return true;
     }
 
     false

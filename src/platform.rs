@@ -713,6 +713,7 @@ pub fn swizzle_gpui_blurred_view() {
 
 /// Get diagnostic info about the BlurredView swizzle status
 #[cfg(target_os = "macos")]
+#[allow(dead_code)]
 pub fn get_swizzle_diagnostics() -> (bool, u64) {
     use std::sync::atomic::Ordering;
     (
@@ -722,11 +723,13 @@ pub fn get_swizzle_diagnostics() -> (bool, u64) {
 }
 
 #[cfg(not(target_os = "macos"))]
+#[allow(dead_code)]
 pub fn get_swizzle_diagnostics() -> (bool, u64) {
     (false, 0)
 }
 
 /// Log swizzle diagnostics - call periodically to monitor swizzle health
+#[allow(dead_code)]
 pub fn log_swizzle_diagnostics() {
     let (done, calls) = get_swizzle_diagnostics();
     logging::log(

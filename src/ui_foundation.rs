@@ -3,6 +3,10 @@
 //! This module extracts common UI patterns from the main menu (render_script_list.rs)
 //! into reusable helpers. The main menu is the "gold standard" for vibrancy support.
 //!
+//! NOTE: Many items are currently unused as this is a foundation module.
+//! They will be used as other modules are refactored to use the shared patterns.
+#![allow(dead_code)]
+//!
 //! # Key Vibrancy Pattern (from render_script_list.rs:699-707)
 //!
 //! ```ignore
