@@ -794,6 +794,23 @@ impl ScriptListApp {
             design_typography.font_family
         };
 
+        // Extract footer colors BEFORE render_preview_panel (borrow checker)
+        let footer_accent = if is_default_design {
+            theme.colors.accent.selected
+        } else {
+            design_colors.accent
+        };
+        let footer_text_muted = if is_default_design {
+            theme.colors.text.muted
+        } else {
+            design_colors.text_muted
+        };
+        let footer_border = if is_default_design {
+            theme.colors.ui.border
+        } else {
+            design_colors.border
+        };
+
         // VIBRANCY: Remove background from content div - let gpui-component Root's
         // semi-transparent background handle vibrancy effect. Content areas should NOT
         // have their own backgrounds to allow blur to show through.
@@ -836,7 +853,7 @@ impl ScriptListApp {
                 } else {
                     design_colors.text_muted
                 };
-                let text_dimmed = if is_default_design {
+                let _text_dimmed = if is_default_design {
                     theme.colors.text.dimmed
                 } else {
                     design_colors.text_dimmed
@@ -875,257 +892,41 @@ impl ScriptListApp {
                                 .focus_bordered(false),
                         ),
                     )
-                    // CLS-FREE ACTIONS AREA: Fixed-size relative container with stacked children
-                    // Both states are always rendered at the same position, visibility toggled via opacity
-                    // This prevents any layout shift when toggling between Run/Actions and search input
+                    // "Ask AI [Tab]" button - yellow text, grey badge, hover state
                     .child({
-                        let handle_run = cx.entity().downgrade();
-                        let handle_actions = cx.entity().downgrade();
-                        let show_actions = self.show_actions_popup;
-
-                        // Get actions search text from the dialog
-                        let search_text = self
-                            .actions_dialog
-                            .as_ref()
-                            .map(|dialog| dialog.read(cx).search_text.clone())
-                            .unwrap_or_default();
-                        let search_is_empty = search_text.is_empty();
-                        let search_display = if search_is_empty {
-                            SharedString::from("Search actions...")
-                        } else {
-                            SharedString::from(search_text.clone())
-                        };
-
-                        // Outer container: relative positioned, fixed height to match header
+                        // Hover background: accent color at 15% opacity
+                        let hover_bg = (accent_color << 8) | 0x26;
+                        let tab_bg = (search_box_bg << 8) | 0x4D; // 30% opacity
                         div()
-                            .relative()
-                            .h(px(28.)) // Fixed height to prevent vertical CLS
+                            .id("ask-ai-button")
                             .flex()
+                            .flex_row()
                             .items_center()
-                            // Run + Actions buttons - absolute positioned, hidden when actions shown
+                            .gap(px(6.))
+                            .px(px(6.))
+                            .py(px(4.))
+                            .rounded(px(4.))
+                            .cursor_pointer()
+                            .hover(move |s| s.bg(rgba(hover_bg)))
+                            // "Ask AI" text - YELLOW (accent)
                             .child(
                                 div()
-                                    .absolute()
-                                    .inset_0()
-                                    .flex()
-                                    .flex_row()
-                                    .items_center()
-                                    .justify_end()
-                                    .gap(px(4.)) // Smaller gap since buttons have padding
-                                    // Visibility: hidden when actions popup is shown
-                                    .when(show_actions, |d| d.opacity(0.).invisible())
-                                    // "Ask AI [Tab]" button - yellow text, grey badge, hover state
-                                    .child({
-                                        // Hover background: accent color at 15% opacity
-                                        let hover_bg = (accent_color << 8) | 0x26;
-                                        let tab_bg = (search_box_bg << 8) | 0x4D; // 30% opacity
-                                        div()
-                                            .id("ask-ai-button")
-                                            .flex()
-                                            .flex_row()
-                                            .items_center()
-                                            .gap(px(6.))
-                                            .px(px(6.))
-                                            .py(px(4.))
-                                            .rounded(px(4.))
-                                            .cursor_pointer()
-                                            .hover(move |s| s.bg(rgba(hover_bg)))
-                                            // "Ask AI" text - YELLOW (accent)
-                                            .child(
-                                                div()
-                                                    .text_sm()
-                                                    .text_color(rgb(accent_color))
-                                                    .child("Ask AI"),
-                                            )
-                                            // "Tab" badge - grey background at 30% opacity (no border)
-                                            .child(
-                                                div()
-                                                    .px(px(6.))
-                                                    .py(px(2.))
-                                                    .rounded(px(4.))
-                                                    .bg(rgba(tab_bg))
-                                                    .text_xs()
-                                                    .text_color(rgb(text_muted))
-                                                    .child("Tab"),
-                                            )
-                                    })
-                                    // Run button - yellow label, grey shortcut, hover state
-                                    .child({
-                                        let hover_bg = (accent_color << 8) | 0x26;
-                                        div()
-                                            .id("run-button")
-                                            .flex()
-                                            .flex_row()
-                                            .items_center()
-                                            .gap(px(4.))
-                                            .px(px(6.))
-                                            .py(px(4.))
-                                            .rounded(px(4.))
-                                            .cursor_pointer()
-                                            .hover(move |s| s.bg(rgba(hover_bg)))
-                                            .on_click({
-                                                let handle = handle_run.clone();
-                                                move |_, _window, cx| {
-                                                    if let Some(app) = handle.upgrade() {
-                                                        app.update(cx, |this, cx| {
-                                                            this.execute_selected(cx);
-                                                        });
-                                                    }
-                                                }
-                                            })
-                                            .child(
-                                                div()
-                                                    .text_sm()
-                                                    .text_color(rgb(accent_color))
-                                                    .child("Run"),
-                                            )
-                                            .child(
-                                                div()
-                                                    .text_sm()
-                                                    .text_color(rgb(text_muted))
-                                                    .child("↵"),
-                                            )
-                                    })
-                                    // Actions button - yellow label, grey shortcut, hover state
-                                    .child({
-                                        let hover_bg = (accent_color << 8) | 0x26;
-                                        div()
-                                            .id("actions-button")
-                                            .flex()
-                                            .flex_row()
-                                            .items_center()
-                                            .gap(px(4.))
-                                            .px(px(6.))
-                                            .py(px(4.))
-                                            .rounded(px(4.))
-                                            .cursor_pointer()
-                                            .hover(move |s| s.bg(rgba(hover_bg)))
-                                            .on_click({
-                                                let handle = handle_actions.clone();
-                                                move |_, window, cx| {
-                                                    if let Some(app) = handle.upgrade() {
-                                                        app.update(cx, |this, cx| {
-                                                            this.toggle_actions(cx, window);
-                                                        });
-                                                    }
-                                                }
-                                            })
-                                            .child(
-                                                div()
-                                                    .text_sm()
-                                                    .text_color(rgb(accent_color))
-                                                    .child("Actions"),
-                                            )
-                                            .child(
-                                                div()
-                                                    .text_xs()
-                                                    .text_color(rgb(text_dimmed))
-                                                    .child("⌘K"),
-                                            )
-                                    }),
+                                    .text_sm()
+                                    .text_color(rgb(accent_color))
+                                    .child("Ask AI"),
                             )
-                            // Actions search input - absolute positioned, visible when actions shown
+                            // "Tab" badge - grey background at 30% opacity (no border)
                             .child(
                                 div()
-                                    .absolute()
-                                    .inset_0()
-                                    .flex()
-                                    .flex_row()
-                                    .items_center()
-                                    .justify_end()
-                                    .gap(px(8.))
-                                    // Visibility: hidden when actions popup is NOT shown
-                                    .when(!show_actions, |d| d.opacity(0.).invisible())
-                                    // ⌘K indicator
-                                    .child(div().text_color(rgb(text_dimmed)).text_xs().child("⌘K"))
-                                    // Search input display - compact style matching buttons
-                                    // CRITICAL: Fixed width prevents resize when typing
-                                    .child(
-                                        div()
-                                            .flex_shrink_0() // PREVENT flexbox from shrinking this
-                                            .w(px(130.0)) // Compact width
-                                            .min_w(px(130.0))
-                                            .max_w(px(130.0))
-                                            .h(px(24.0)) // Comfortable height with padding
-                                            .min_h(px(24.0))
-                                            .max_h(px(24.0))
-                                            .overflow_hidden()
-                                            .flex()
-                                            .flex_row()
-                                            .items_center()
-                                            .px(px(8.)) // Comfortable horizontal padding
-                                            .rounded(px(4.)) // Match button border radius
-                                            // Use low opacity for frosted glass vibrancy effect
-                                            .bg(rgba(
-                                                (theme.colors.background.search_box << 8) | 0x15, // ~8% opacity to match actions popup
-                                            ))
-                                            .border_1()
-                                            // ALWAYS show border - just vary intensity
-                                            .border_color(rgba(
-                                                (accent_color << 8)
-                                                    | if search_is_empty { 0x20 } else { 0x40 },
-                                            ))
-                                            .text_sm()
-                                            .text_color(if search_is_empty {
-                                                rgb(text_muted)
-                                            } else {
-                                                rgb(text_primary)
-                                            })
-                                            // Cursor before placeholder when empty
-                                            .when(search_is_empty, |d| {
-                                                d.child(
-                                                    div()
-                                                        .w(px(2.))
-                                                        .h(px(14.)) // Cursor height for comfortable input
-                                                        .mr(px(2.))
-                                                        .rounded(px(1.))
-                                                        .when(
-                                                            self.focused_input
-                                                                == FocusedInput::ActionsSearch
-                                                                && self.cursor_visible,
-                                                            |d| d.bg(rgb(accent_color)),
-                                                        ),
-                                                )
-                                            })
-                                            .child(search_display)
-                                            // Cursor after text when not empty
-                                            .when(!search_is_empty, |d| {
-                                                d.child(
-                                                    div()
-                                                        .w(px(2.))
-                                                        .h(px(14.)) // Cursor height for comfortable input
-                                                        .ml(px(2.))
-                                                        .rounded(px(1.))
-                                                        .when(
-                                                            self.focused_input
-                                                                == FocusedInput::ActionsSearch
-                                                                && self.cursor_visible,
-                                                            |d| d.bg(rgb(accent_color)),
-                                                        ),
-                                                )
-                                            }),
-                                    ),
+                                    .px(px(6.))
+                                    .py(px(2.))
+                                    .rounded(px(4.))
+                                    .bg(rgba(tab_bg))
+                                    .text_xs()
+                                    .text_color(rgb(text_muted))
+                                    .child("Tab"),
                             )
                     })
-                    // Script Kit Logo - 19px container, 12px SVG, 4px radius
-                    // 85% opacity yellow background for softer appearance
-                    .child(
-                        div()
-                            .ml(px(6.)) // Tighter spacing from buttons (was 16px)
-                            .w(px(18.))
-                            .h(px(18.))
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .bg(rgba((accent_color << 8) | 0xD9)) // 85% opacity (0xD9 = 217)
-                            .rounded(px(4.))
-                            .child(
-                                svg()
-                                    .external_path(utils::get_logo_path())
-                                    .size(px(11.))
-                                    .text_color(rgb(0x000000)), // Black logo inside yellow
-                            ),
-                    )
             })
             // Subtle divider - semi-transparent
             // Use design tokens for border color and spacing
@@ -1186,6 +987,132 @@ impl ScriptListApp {
                             .child(self.render_preview_panel(cx)),
                     ),
             );
+
+        // Footer: Logo left | Run Script ↵ | divider | Actions ⌘K right
+        // Raycast-style footer with Script Kit branding
+        // Note: footer colors extracted earlier to avoid borrow conflict with render_preview_panel
+        main_div = main_div.child({
+            let hover_bg = (footer_accent << 8) | 0x26; // 15% opacity
+
+            let handle_run = cx.entity().downgrade();
+            let handle_actions = cx.entity().downgrade();
+
+            div()
+                .w_full()
+                .h(px(40.))
+                .px(px(12.))
+                .flex()
+                .flex_row()
+                .items_center()
+                .justify_between()
+                .border_t_1()
+                .border_color(rgba((footer_border << 8) | 0x30))
+                // Left: Script Kit Logo
+                .child(
+                    div()
+                        .w(px(20.))
+                        .h(px(20.))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .bg(rgba((footer_accent << 8) | 0xD9)) // 85% opacity
+                        .rounded(px(4.))
+                        .child(
+                            svg()
+                                .external_path(utils::get_logo_path())
+                                .size(px(13.))
+                                .text_color(rgb(0x000000)),
+                        ),
+                )
+                // Right: Run Script + divider + Actions
+                .child(
+                    div()
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .gap(px(4.))
+                        // Run Script button
+                        .child(
+                            div()
+                                .id("footer-run-button")
+                                .flex()
+                                .flex_row()
+                                .items_center()
+                                .gap(px(6.))
+                                .px(px(8.))
+                                .py(px(4.))
+                                .rounded(px(4.))
+                                .cursor_pointer()
+                                .hover(move |s| s.bg(rgba(hover_bg)))
+                                .on_click({
+                                    let handle = handle_run.clone();
+                                    move |_, _window, cx| {
+                                        if let Some(app) = handle.upgrade() {
+                                            app.update(cx, |this, cx| {
+                                                this.execute_selected(cx);
+                                            });
+                                        }
+                                    }
+                                })
+                                .child(
+                                    div()
+                                        .text_sm()
+                                        .text_color(rgb(footer_accent))
+                                        .child("Run Script"),
+                                )
+                                .child(
+                                    div()
+                                        .text_sm()
+                                        .text_color(rgb(footer_text_muted))
+                                        .child("↵"),
+                                ),
+                        )
+                        // Divider
+                        .child(
+                            div()
+                                .w(px(1.))
+                                .h(px(16.))
+                                .mx(px(4.))
+                                .bg(rgba((footer_border << 8) | 0x40)),
+                        )
+                        // Actions button
+                        .child(
+                            div()
+                                .id("footer-actions-button")
+                                .flex()
+                                .flex_row()
+                                .items_center()
+                                .gap(px(6.))
+                                .px(px(8.))
+                                .py(px(4.))
+                                .rounded(px(4.))
+                                .cursor_pointer()
+                                .hover(move |s| s.bg(rgba(hover_bg)))
+                                .on_click({
+                                    let handle = handle_actions.clone();
+                                    move |_, window, cx| {
+                                        if let Some(app) = handle.upgrade() {
+                                            app.update(cx, |this, cx| {
+                                                this.toggle_actions(cx, window);
+                                            });
+                                        }
+                                    }
+                                })
+                                .child(
+                                    div()
+                                        .text_sm()
+                                        .text_color(rgb(footer_accent))
+                                        .child("Actions"),
+                                )
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(rgb(footer_text_muted))
+                                        .child("⌘K"),
+                                ),
+                        ),
+                )
+        });
 
         if let Some(panel) = log_panel {
             main_div = main_div.child(panel);
