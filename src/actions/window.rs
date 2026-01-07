@@ -17,7 +17,7 @@ use gpui::{
 use gpui_component::Root;
 use std::sync::{Mutex, OnceLock};
 
-use super::constants::{ACTION_ITEM_HEIGHT, POPUP_MAX_HEIGHT, SEARCH_INPUT_HEIGHT};
+use super::constants::{ACTION_ITEM_HEIGHT, HEADER_HEIGHT, POPUP_MAX_HEIGHT, SEARCH_INPUT_HEIGHT};
 use super::dialog::ActionsDialog;
 
 /// Global singleton for the actions window handle
@@ -97,10 +97,21 @@ pub fn open_actions_window(
 
     // Calculate dynamic window height based on number of actions
     // This ensures the window fits the content without empty dark space
-    let num_actions = dialog_entity.read(cx).filtered_actions.len();
-    let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT).min(POPUP_MAX_HEIGHT);
+    let dialog = dialog_entity.read(cx);
+    let num_actions = dialog.filtered_actions.len();
+    let hide_search = dialog.hide_search;
+    let has_header = dialog.context_title.is_some();
+
+    let search_box_height = if hide_search {
+        0.0
+    } else {
+        SEARCH_INPUT_HEIGHT
+    };
+    let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
+    let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT)
+        .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
     let border_height = 2.0; // top + bottom border
-    let dynamic_height = items_height + border_height;
+    let dynamic_height = items_height + search_box_height + header_height + border_height;
 
     // Calculate window position:
     // - X: Right edge of main window, minus actions width, minus margin
@@ -236,12 +247,16 @@ pub fn notify_actions_window(cx: &mut App) {
 
 /// Resize the actions window to fit the current number of filtered actions
 /// Call this after filtering changes the action count
+///
+/// The window is "pinned to bottom" - the search input stays in place and
+/// the window shrinks/grows from the top.
 pub fn resize_actions_window(cx: &mut App, dialog_entity: &Entity<ActionsDialog>) {
     if let Some(handle) = get_actions_window_handle() {
         // Read dialog state to calculate new height
         let dialog = dialog_entity.read(cx);
         let num_actions = dialog.filtered_actions.len();
         let hide_search = dialog.hide_search;
+        let has_header = dialog.context_title.is_some();
 
         // Calculate new height (same logic as open_actions_window)
         let search_box_height = if hide_search {
@@ -249,19 +264,89 @@ pub fn resize_actions_window(cx: &mut App, dialog_entity: &Entity<ActionsDialog>
         } else {
             SEARCH_INPUT_HEIGHT
         };
-        let items_height =
-            (num_actions as f32 * ACTION_ITEM_HEIGHT).min(POPUP_MAX_HEIGHT - search_box_height);
+        let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
+        let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT)
+            .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
         let border_height = 2.0; // top + bottom border
-        let dynamic_height = items_height + search_box_height + border_height;
-
-        let new_height = px(dynamic_height);
+        let new_height_f32 = items_height + search_box_height + header_height + border_height;
 
         let _ = handle.update(cx, |_root, window, cx| {
             let current_bounds = window.bounds();
-            // Keep same position and width, just change height
+            let current_height_f32: f32 = current_bounds.size.height.into();
+            let current_width_f32: f32 = current_bounds.size.width.into();
+
+            // Skip if height hasn't changed
+            if (current_height_f32 - new_height_f32).abs() < 1.0 {
+                return;
+            }
+
+            // "Pin to bottom": keep the bottom edge fixed
+            // In macOS screen coords (bottom-left origin), the bottom of the window
+            // is at frame.origin.y. When we change height, we keep origin.y the same
+            // and only change height - this naturally keeps the bottom fixed.
+            #[cfg(target_os = "macos")]
+            {
+                use cocoa::appkit::NSScreen;
+                use cocoa::base::nil;
+                use cocoa::foundation::{NSPoint, NSRect, NSSize};
+                use objc::{msg_send, sel, sel_impl};
+
+                unsafe {
+                    let ns_app: cocoa::base::id = cocoa::appkit::NSApp();
+                    let windows: cocoa::base::id = msg_send![ns_app, windows];
+                    let count: usize = msg_send![windows, count];
+
+                    // Find our actions window by matching current dimensions
+                    for i in 0..count {
+                        let ns_window: cocoa::base::id = msg_send![windows, objectAtIndex: i];
+                        if ns_window == nil {
+                            continue;
+                        }
+
+                        let frame: NSRect = msg_send![ns_window, frame];
+
+                        // Match by width (actions window has unique width)
+                        if (frame.size.width - current_width_f32 as f64).abs() < 2.0
+                            && (frame.size.height - current_height_f32 as f64).abs() < 2.0
+                        {
+                            // Get the screen this window is on (NOT primary screen!)
+                            let window_screen: cocoa::base::id = msg_send![ns_window, screen];
+                            if window_screen == nil {
+                                // Fallback to primary if no screen
+                                let screens: cocoa::base::id = NSScreen::screens(nil);
+                                let _primary: cocoa::base::id =
+                                    msg_send![screens, objectAtIndex: 0u64];
+                            }
+
+                            // In macOS coords (bottom-left origin):
+                            // - frame.origin.y is the BOTTOM of the window
+                            // - To keep bottom fixed, we keep origin.y the same
+                            // - Only change the height
+                            let new_frame = NSRect::new(
+                                NSPoint::new(frame.origin.x, frame.origin.y),
+                                NSSize::new(frame.size.width, new_height_f32 as f64),
+                            );
+
+                            let _: () =
+                                msg_send![ns_window, setFrame:new_frame display:true animate:false];
+
+                            crate::logging::log(
+                                "ACTIONS",
+                                &format!(
+                                    "Resized actions window (bottom pinned): height {:.0} -> {:.0}",
+                                    current_height_f32, new_height_f32
+                                ),
+                            );
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // Also tell GPUI about the new size
             window.resize(Size {
                 width: current_bounds.size.width,
-                height: new_height,
+                height: px(new_height_f32),
             });
             cx.notify();
         });
@@ -269,8 +354,8 @@ pub fn resize_actions_window(cx: &mut App, dialog_entity: &Entity<ActionsDialog>
         crate::logging::log(
             "ACTIONS",
             &format!(
-                "Resized actions window: {} items, height={:?}",
-                num_actions, new_height
+                "Resized actions window: {} items, height={:.0}",
+                num_actions, new_height_f32
             ),
         );
     }

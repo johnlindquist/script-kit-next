@@ -18,8 +18,13 @@ use std::sync::Arc;
 
 use super::builders::{get_global_actions, get_path_context_actions, get_script_context_actions};
 use super::constants::{
-    ACCENT_BAR_WIDTH, ACTION_ITEM_HEIGHT, POPUP_MAX_HEIGHT, POPUP_WIDTH, SEARCH_INPUT_HEIGHT,
+    ACTION_ITEM_HEIGHT, ACTION_ROW_INSET, HEADER_HEIGHT, KEYCAP_HEIGHT, KEYCAP_MIN_WIDTH,
+    POPUP_MAX_HEIGHT, POPUP_WIDTH, SEARCH_INPUT_HEIGHT, SELECTION_RADIUS,
 };
+
+// Keep ACCENT_BAR_WIDTH for backwards compatibility during transition
+#[allow(unused_imports)]
+use super::constants::ACCENT_BAR_WIDTH;
 use super::types::{Action, ActionCallback, ActionCategory, ScriptInfo};
 use crate::prompts::PathInfo;
 
@@ -31,6 +36,7 @@ fn hex_with_alpha(hex: u32, alpha: u8) -> u32 {
 }
 
 /// ActionsDialog - Compact overlay popup for quick actions
+/// Implements Raycast-style design with individual keycap shortcuts
 pub struct ActionsDialog {
     pub actions: Vec<Action>,
     pub filtered_actions: Vec<usize>, // Indices into actions
@@ -52,6 +58,8 @@ pub struct ActionsDialog {
     pub hide_search: bool,
     /// SDK-provided actions (when present, replaces built-in actions)
     pub sdk_actions: Option<Vec<ProtocolAction>>,
+    /// Context title shown in the header (e.g., "Activity Monitor", script name)
+    pub context_title: Option<String>,
 }
 
 impl ActionsDialog {
@@ -121,6 +129,7 @@ impl ActionsDialog {
             cursor_visible: true,
             hide_search: false,
             sdk_actions: None,
+            context_title: Some(path_info.path.clone()),
         }
     }
 
@@ -153,6 +162,9 @@ impl ActionsDialog {
             theme.colors.accent.selected
         ));
 
+        // Extract context title from focused script if available
+        let context_title = focused_script.as_ref().map(|s| s.name.clone());
+
         ActionsDialog {
             actions,
             filtered_actions,
@@ -167,6 +179,7 @@ impl ActionsDialog {
             cursor_visible: true,
             hide_search: false,
             sdk_actions: None,
+            context_title,
         }
     }
 
@@ -178,6 +191,33 @@ impl ActionsDialog {
     /// Hide the search input (for inline mode where header has search)
     pub fn set_hide_search(&mut self, hide: bool) {
         self.hide_search = hide;
+    }
+
+    /// Set the context title shown in the header
+    pub fn set_context_title(&mut self, title: Option<String>) {
+        self.context_title = title;
+    }
+
+    /// Parse a shortcut string into individual keycap characters
+    /// e.g., "⌘↵" → vec!["⌘", "↵"], "⌘I" → vec!["⌘", "I"]
+    fn parse_shortcut_keycaps(shortcut: &str) -> Vec<String> {
+        let mut keycaps = Vec::new();
+
+        for ch in shortcut.chars() {
+            // Handle modifier symbols (single character)
+            match ch {
+                '⌘' | '⌃' | '⌥' | '⇧' | '↵' | '⎋' | '⇥' | '⌫' | '␣' | '↑' | '↓' | '←' | '→' =>
+                {
+                    keycaps.push(ch.to_string());
+                }
+                // Regular characters (letters, numbers)
+                _ => {
+                    keycaps.push(ch.to_uppercase().to_string());
+                }
+            }
+        }
+
+        keycaps
     }
 
     /// Set actions from SDK (replaces built-in actions)
@@ -931,59 +971,36 @@ impl Render for ActionsDialog {
                                     let title_str: String = action.title.clone();
                                     let shortcut_opt: Option<String> = action.shortcut.clone();
 
-                                    // Check if this is the first or last item for rounded corners
-                                    // First item needs rounded top corners, last item needs rounded bottom corners
-                                    // (when search is hidden, last item is at bottom of panel)
-                                    let is_first_item = idx == 0;
-                                    let is_last_item = idx == filtered_len - 1;
-                                    // Use the design token's radius_lg for corner radius
-                                    // GPUI's overflow_hidden only clips to rectangular bounds, NOT rounded corners
-                                    // So we must explicitly round children that touch the container's corners
-                                    let corner_radius = item_visual.radius_lg;
+                                    // Note: First/last item rounding is handled by the outer container's overflow_hidden
+                                    // Keeping these vars commented for reference in case we need them later
+                                    // let is_first_item = idx == 0;
+                                    // let is_last_item = idx == filtered_len - 1;
+                                    let _ = item_visual.radius_lg; // Suppress unused warning
 
-                                    // Left accent color - used as border color when selected
-                                    // Using a LEFT BORDER instead of a child div because:
-                                    // 1. GPUI clamps corner radii to ≤ half the shortest side
-                                    // 2. A 3px-wide child with 12px radius gets clamped to ~1.5px (invisible)
-                                    // 3. A border on the row follows the row's rounded corners naturally
-                                    let accent_color = if design_variant == DesignVariant::Default {
-                                        rgb(this.theme.colors.accent.selected)
+                                    // Get keycap colors for Raycast-style shortcuts
+                                    let keycap_bg = if design_variant == DesignVariant::Default {
+                                        rgba(hex_with_alpha(this.theme.colors.ui.border, 0x80))
                                     } else {
-                                        rgb(item_colors.accent)
+                                        rgba(hex_with_alpha(item_colors.border, 0x80))
+                                    };
+                                    let keycap_border = if design_variant == DesignVariant::Default
+                                    {
+                                        rgba(hex_with_alpha(this.theme.colors.ui.border, 0xA0))
+                                    } else {
+                                        rgba(hex_with_alpha(item_colors.border, 0xA0))
                                     };
 
-                                    // Build the action item - use left border for accent indicator
-                                    // Border is always reserved (for consistent layout), just toggle color
+                                    // Raycast-style: compact rows with pill-style selection
+                                    // No left accent bar - using rounded background instead
                                     let mut action_item = div()
                                         .id(idx)
                                         .w_full()
                                         .h(px(ACTION_ITEM_HEIGHT)) // Fixed height for uniform_list
+                                        .px(px(ACTION_ROW_INSET)) // Horizontal inset for pill effect
+                                        .py(px(2.0)) // Minimal vertical padding for tight spacing
                                         .flex()
-                                        .flex_row()
-                                        .items_center()
-                                        // Match main list: subtle selection bg, transparent when not selected
-                                        .bg(if is_selected {
-                                            selected_bg
-                                        } else {
-                                            rgba(0x00000000)
-                                        })
-                                        .hover(|s| s.bg(hover_bg))
-                                        .cursor_pointer()
-                                        // LEFT BORDER as accent indicator - follows rounded corners!
-                                        .border_l(px(ACCENT_BAR_WIDTH))
-                                        .border_color(if is_selected {
-                                            accent_color
-                                        } else {
-                                            rgba(0x00000000)
-                                        });
-
-                                    // Round first/last items to match container's 12px corners
-                                    if is_first_item {
-                                        action_item = action_item.rounded_t(px(corner_radius));
-                                    }
-                                    if is_last_item && this.hide_search {
-                                        action_item = action_item.rounded_b(px(corner_radius));
-                                    }
+                                        .flex_col()
+                                        .justify_center();
 
                                     // Add top border for category separator (non-first items only)
                                     if is_category_start {
@@ -991,16 +1008,32 @@ impl Render for ActionsDialog {
                                             action_item.border_t_1().border_color(separator_color);
                                     }
 
-                                    // Content container with proper padding
+                                    // Inner row fills available height (minus 4px for py(2) top+bottom)
+                                    let inner_row = div()
+                                        .w_full()
+                                        .flex_1() // Fill available height instead of fixed
+                                        .flex()
+                                        .flex_row()
+                                        .items_center()
+                                        .px(px(item_spacing.item_padding_x))
+                                        .rounded(px(SELECTION_RADIUS)) // Pill-style rounded corners
+                                        .bg(if is_selected {
+                                            selected_bg
+                                        } else {
+                                            rgba(0x00000000)
+                                        })
+                                        .hover(|s| s.bg(hover_bg))
+                                        .cursor_pointer();
+
+                                    // Content row: label + shortcuts
                                     let content = div()
                                         .flex_1()
-                                        .px(px(item_spacing.item_padding_x))
                                         .flex()
                                         .flex_row()
                                         .items_center()
                                         .justify_between()
                                         .child(
-                                            // Left side: title
+                                            // Left side: title only (no icons)
                                             div()
                                                 .text_color(title_color)
                                                 .text_sm()
@@ -1012,38 +1045,42 @@ impl Render for ActionsDialog {
                                                 .child(title_str),
                                         );
 
-                                    // Right side: keyboard shortcut with pill background
+                                    // Right side: keyboard shortcuts as individual keycaps (Raycast-style)
                                     let content = if let Some(shortcut) = shortcut_opt {
-                                        // Get subtle background color for shortcut pill - use panel opacity
-                                        let panel_alpha = (theme_opacity.panel * 255.0) as u32;
-                                        let shortcut_bg =
-                                            if design_variant == DesignVariant::Default {
-                                                rgba(
-                                                    (this.theme.colors.background.search_box << 8)
-                                                        | panel_alpha,
-                                                )
-                                            } else {
-                                                rgba(
-                                                    (item_colors.background_tertiary << 8)
-                                                        | panel_alpha,
-                                                )
-                                            };
+                                        // Parse shortcut into individual keycaps
+                                        let keycaps =
+                                            ActionsDialog::parse_shortcut_keycaps(&shortcut);
 
-                                        content.child(
-                                            div()
-                                                .px(px(6.))
-                                                .py(px(2.))
-                                                .bg(shortcut_bg)
-                                                .rounded(px(4.))
-                                                .text_color(shortcut_color)
-                                                .text_xs()
-                                                .child(shortcut),
-                                        )
+                                        // Build keycap row
+                                        let mut keycap_row =
+                                            div().flex().flex_row().items_center().gap(px(3.));
+
+                                        for keycap in keycaps {
+                                            keycap_row = keycap_row.child(
+                                                div()
+                                                    .min_w(px(KEYCAP_MIN_WIDTH))
+                                                    .h(px(KEYCAP_HEIGHT))
+                                                    .px(px(6.))
+                                                    .flex()
+                                                    .items_center()
+                                                    .justify_center()
+                                                    .bg(keycap_bg)
+                                                    .border_1()
+                                                    .border_color(keycap_border)
+                                                    .rounded(px(5.))
+                                                    .text_xs()
+                                                    .text_color(shortcut_color)
+                                                    .child(keycap),
+                                            );
+                                        }
+
+                                        content.child(keycap_row)
                                     } else {
                                         content
                                     };
 
-                                    action_item = action_item.child(content);
+                                    // Build final action item with inner row
+                                    action_item = action_item.child(inner_row.child(content));
 
                                     items.push(action_item);
                                 }
@@ -1079,6 +1116,7 @@ impl Render for ActionsDialog {
         // Calculate dynamic height based on number of items
         // Each item is ACTION_ITEM_HEIGHT, plus search box height (SEARCH_INPUT_HEIGHT), plus padding
         // When hide_search is true, we don't include the search box height
+        // Now also includes HEADER_HEIGHT when context_title is set
         // NOTE: Add border_thin * 2 for border (top + bottom from .border_1()) to prevent
         // content from being clipped and causing unnecessary scrolling
         let num_items = self.filtered_actions.len();
@@ -1087,10 +1125,45 @@ impl Render for ActionsDialog {
         } else {
             SEARCH_INPUT_HEIGHT
         };
+        let header_height = if self.context_title.is_some() {
+            HEADER_HEIGHT
+        } else {
+            0.0
+        };
         let border_height = visual.border_thin * 2.0; // top + bottom border
-        let items_height =
-            (num_items as f32 * ACTION_ITEM_HEIGHT).min(POPUP_MAX_HEIGHT - search_box_height);
-        let total_height = items_height + search_box_height + border_height;
+        let items_height = (num_items as f32 * ACTION_ITEM_HEIGHT)
+            .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+        let total_height = items_height + search_box_height + header_height + border_height;
+
+        // Build header row (Raycast-style context title)
+        let header_container = self.context_title.as_ref().map(|title| {
+            let header_text = if self.design_variant == DesignVariant::Default {
+                rgb(self.theme.colors.text.primary)
+            } else {
+                rgb(colors.text_primary)
+            };
+            let header_border = if self.design_variant == DesignVariant::Default {
+                rgba(hex_with_alpha(self.theme.colors.ui.border, 0x40))
+            } else {
+                rgba(hex_with_alpha(colors.border, 0x40))
+            };
+
+            div()
+                .w_full()
+                .h(px(HEADER_HEIGHT))
+                .px(px(spacing.item_padding_x))
+                .flex()
+                .items_center()
+                .border_b_1()
+                .border_color(header_border)
+                .child(
+                    div()
+                        .text_sm()
+                        .font_weight(gpui::FontWeight::MEDIUM)
+                        .text_color(header_text)
+                        .child(title.clone()),
+                )
+        });
 
         // Main overlay popup container
         // Fixed width, dynamic height based on content, rounded corners, shadow
@@ -1116,6 +1189,8 @@ impl Render for ActionsDialog {
             .key_context("actions_dialog")
             .track_focus(&self.focus_handle)
             // NOTE: No on_key_down here - parent handles all keyboard input
+            // Header row (if context_title is set)
+            .when_some(header_container, |d, header| d.child(header))
             .child(actions_container)
             .when(!self.hide_search, |d| d.child(input_container))
     }

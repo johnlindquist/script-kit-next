@@ -15,8 +15,23 @@ pub const ACTION_ITEM_HEIGHT: f32 = 44.0;
 /// Fixed height for the search input row (matches Notes panel PANEL_SEARCH_HEIGHT)
 pub const SEARCH_INPUT_HEIGHT: f32 = 44.0;
 
-/// Width of the left accent bar for selected items
+/// Width of the left accent bar for selected items (legacy, kept for reference)
 pub const ACCENT_BAR_WIDTH: f32 = 3.0;
+
+/// Height for the header row showing context title
+pub const HEADER_HEIGHT: f32 = 44.0;
+
+/// Horizontal inset for action rows (creates rounded pill appearance)
+pub const ACTION_ROW_INSET: f32 = 6.0;
+
+/// Corner radius for selected row background (pill style)
+pub const SELECTION_RADIUS: f32 = 8.0;
+
+/// Minimum width for keycap badges
+pub const KEYCAP_MIN_WIDTH: f32 = 22.0;
+
+/// Height for keycap badges
+pub const KEYCAP_HEIGHT: f32 = 22.0;
 
 #[cfg(test)]
 mod tests {
