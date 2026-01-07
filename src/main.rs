@@ -1881,6 +1881,47 @@ fn main() {
             logging::log("HOTKEY", "AI hotkey listener exiting (channel closed)");
         }).detach();
 
+        // Script/Scriptlet/App hotkey listener - event-driven via async_channel
+        // Handles shortcuts from shortcuts.json for scriptlets, builtins, and apps
+        let app_entity_for_scripts = app_entity.clone();
+        let window_for_scripts = window;
+        cx.spawn(async move |cx: &mut gpui::AsyncApp| {
+            logging::log("HOTKEY", "Script shortcut listener started (event-driven)");
+            while let Ok(command_id) = hotkeys::script_hotkey_channel().1.recv().await {
+                logging::log(
+                    "HOTKEY",
+                    &format!("Script shortcut received in main.rs: {}", command_id),
+                );
+
+                let id_clone = command_id.clone();
+                let app_entity_inner = app_entity_for_scripts.clone();
+                let window_inner = window_for_scripts;
+
+                let _ = cx.update(move |cx: &mut gpui::App| {
+                    logging::log(
+                        "HOTKEY",
+                        &format!("Executing command_id: {}", id_clone),
+                    );
+
+                    // Use app_entity.update to access ScriptListApp directly
+                    app_entity_inner.update(cx, |view, ctx| {
+                        logging::log(
+                            "HOTKEY",
+                            "Inside app_entity update, calling execute_by_command_id_or_path",
+                        );
+                        view.execute_by_command_id_or_path(&id_clone, ctx);
+                    });
+
+                    // Also show the window if it's hidden
+                    if !script_kit_gpui::is_main_window_visible() {
+                        logging::log("HOTKEY", "Window hidden, showing it");
+                        show_main_window_helper(window_inner, app_entity_inner.clone(), cx);
+                    }
+                });
+            }
+            logging::log("HOTKEY", "Script shortcut listener exiting (channel closed)");
+        }).detach();
+
         // Appearance change watcher - event-driven with async_channel
         // Only spawn if watcher started successfully
         if appearance_watcher_ok {
