@@ -53,7 +53,8 @@ pub use context::{ContextStack, ShortcutContext, ViewType};
 // Re-export registry types
 #[allow(unused_imports)]
 pub use registry::{
-    BindingSource, ShortcutBinding, ShortcutCategory, ShortcutRegistry, ShortcutScope,
+    BindingSource, ConflictType, PotentialConflict, ShortcutBinding, ShortcutCategory,
+    ShortcutConflict, ShortcutRegistry, ShortcutScope,
 };
 
 // Re-export hotkey compatibility functions (used by hotkeys.rs, prompt_handler.rs, etc.)

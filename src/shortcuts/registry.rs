@@ -292,4 +292,289 @@ impl ShortcutRegistry {
             .filter(|b| !self.disabled.contains(&b.id))
             .count()
     }
+
+    /// Find all conflicts in the registry.
+    ///
+    /// Returns a list of conflicts, each containing:
+    /// - The type of conflict
+    /// - The IDs of the conflicting bindings
+    /// - The conflicting shortcut
+    pub fn find_conflicts(&self) -> Vec<ShortcutConflict> {
+        let mut conflicts = Vec::new();
+
+        // Build a map of effective shortcuts to bindings
+        let mut shortcut_map: HashMap<(String, ShortcutContext), Vec<&ShortcutBinding>> =
+            HashMap::new();
+
+        for binding in &self.bindings {
+            if self.disabled.contains(&binding.id) {
+                continue;
+            }
+
+            let effective = self
+                .user_overrides
+                .get(&binding.id)
+                .cloned()
+                .unwrap_or_else(|| Some(binding.default_shortcut.clone()));
+
+            if let Some(shortcut) = effective {
+                let key = (shortcut.to_canonical_string(), binding.context);
+                shortcut_map.entry(key).or_default().push(binding);
+            }
+        }
+
+        // Check for hard conflicts (same shortcut + same context)
+        for ((shortcut_str, context), bindings) in &shortcut_map {
+            if bindings.len() > 1 {
+                // Sort by priority to determine winner/loser
+                let mut sorted: Vec<_> = bindings.iter().collect();
+                sorted.sort_by_key(|b| b.source.priority());
+
+                let winner = sorted[0];
+                for loser in &sorted[1..] {
+                    let conflict_type = if winner.source == loser.source {
+                        ConflictType::Hard
+                    } else {
+                        // Different sources: higher priority shadows lower
+                        ConflictType::Shadowed
+                    };
+
+                    conflicts.push(ShortcutConflict {
+                        conflict_type,
+                        winner_id: winner.id.clone(),
+                        loser_id: loser.id.clone(),
+                        shortcut: shortcut_str.clone(),
+                        context: *context,
+                    });
+                }
+            }
+        }
+
+        // Check for shadowing across context specificity
+        for binding in &self.bindings {
+            if self.disabled.contains(&binding.id) {
+                continue;
+            }
+
+            let effective = self
+                .user_overrides
+                .get(&binding.id)
+                .cloned()
+                .unwrap_or_else(|| Some(binding.default_shortcut.clone()));
+
+            if let Some(shortcut) = effective {
+                let shortcut_str = shortcut.to_canonical_string();
+
+                // Check if this binding is shadowed by a more specific context
+                for other in &self.bindings {
+                    if other.id == binding.id || self.disabled.contains(&other.id) {
+                        continue;
+                    }
+
+                    // Skip if not same shortcut
+                    let other_effective = self
+                        .user_overrides
+                        .get(&other.id)
+                        .cloned()
+                        .unwrap_or_else(|| Some(other.default_shortcut.clone()));
+
+                    let other_shortcut = match other_effective {
+                        Some(s) => s,
+                        None => continue,
+                    };
+
+                    if other_shortcut.to_canonical_string() != shortcut_str {
+                        continue;
+                    }
+
+                    // Check context specificity: other shadows binding if other is more specific
+                    if other.context.specificity() > binding.context.specificity()
+                        && binding.context.contains(&other.context)
+                    {
+                        // Already covered by same-context check
+                        continue;
+                    }
+                }
+            }
+        }
+
+        // Check for OS-reserved shortcuts (unreachable)
+        let os_reserved = Self::get_os_reserved_shortcuts();
+        for binding in &self.bindings {
+            if self.disabled.contains(&binding.id) {
+                continue;
+            }
+
+            let effective = self
+                .user_overrides
+                .get(&binding.id)
+                .cloned()
+                .unwrap_or_else(|| Some(binding.default_shortcut.clone()));
+
+            if let Some(shortcut) = effective {
+                let canonical = shortcut.to_canonical_string();
+                if os_reserved.contains(&canonical.as_str()) {
+                    conflicts.push(ShortcutConflict {
+                        conflict_type: ConflictType::Unreachable,
+                        winner_id: "system".to_string(),
+                        loser_id: binding.id.clone(),
+                        shortcut: canonical,
+                        context: binding.context,
+                    });
+                }
+            }
+        }
+
+        conflicts
+    }
+
+    /// Get list of OS-reserved shortcuts that cannot be overridden.
+    ///
+    /// These are typically system-level shortcuts that apps cannot intercept.
+    fn get_os_reserved_shortcuts() -> HashSet<&'static str> {
+        let mut reserved = HashSet::new();
+
+        #[cfg(target_os = "macos")]
+        {
+            // macOS system shortcuts
+            reserved.insert("cmd+tab"); // App switcher
+            reserved.insert("cmd+shift+tab"); // Reverse app switcher
+            reserved.insert("cmd+space"); // Spotlight (often)
+            reserved.insert("cmd+ctrl+q"); // Lock screen
+            reserved.insert("cmd+shift+3"); // Screenshot full
+            reserved.insert("cmd+shift+4"); // Screenshot selection
+            reserved.insert("cmd+shift+5"); // Screenshot/record options
+            reserved.insert("ctrl+up"); // Mission Control
+            reserved.insert("ctrl+down"); // App windows
+            reserved.insert("ctrl+left"); // Move space left
+            reserved.insert("ctrl+right"); // Move space right
+        }
+
+        #[cfg(target_os = "windows")]
+        {
+            // Windows system shortcuts
+            reserved.insert("cmd+tab"); // Alt+Tab (cmd maps to Win)
+            reserved.insert("cmd+d"); // Show desktop
+            reserved.insert("cmd+l"); // Lock
+            reserved.insert("cmd+e"); // File Explorer
+            reserved.insert("ctrl+alt+delete"); // Security options
+        }
+
+        #[cfg(target_os = "linux")]
+        {
+            // Common Linux shortcuts (vary by DE)
+            reserved.insert("alt+tab"); // Window switcher
+            reserved.insert("cmd+tab"); // Super+Tab
+            reserved.insert("ctrl+alt+t"); // Terminal (common)
+            reserved.insert("ctrl+alt+delete"); // System
+        }
+
+        reserved
+    }
+
+    /// Get conflicts for a specific binding.
+    pub fn conflicts_for(&self, id: &str) -> Vec<ShortcutConflict> {
+        self.find_conflicts()
+            .into_iter()
+            .filter(|c| c.winner_id == id || c.loser_id == id)
+            .collect()
+    }
+
+    /// Check if adding a shortcut would create conflicts.
+    ///
+    /// Returns the conflicts that would be created if this shortcut were added.
+    pub fn would_conflict(
+        &self,
+        shortcut: &Shortcut,
+        context: ShortcutContext,
+        source: BindingSource,
+    ) -> Vec<PotentialConflict> {
+        let mut conflicts = Vec::new();
+        let canonical = shortcut.to_canonical_string();
+
+        // Check OS reserved
+        let os_reserved = Self::get_os_reserved_shortcuts();
+        if os_reserved.contains(&canonical.as_str()) {
+            conflicts.push(PotentialConflict {
+                conflict_type: ConflictType::Unreachable,
+                existing_id: "system".to_string(),
+                existing_name: "System Shortcut".to_string(),
+            });
+        }
+
+        // Check existing bindings
+        for binding in &self.bindings {
+            if self.disabled.contains(&binding.id) {
+                continue;
+            }
+
+            let effective = self
+                .user_overrides
+                .get(&binding.id)
+                .cloned()
+                .unwrap_or_else(|| Some(binding.default_shortcut.clone()));
+
+            if let Some(existing_shortcut) = effective {
+                if existing_shortcut.to_canonical_string() != canonical {
+                    continue;
+                }
+
+                // Same shortcut - check context overlap
+                let contexts_overlap = binding.context == context
+                    || binding.context == ShortcutContext::Global
+                    || context == ShortcutContext::Global
+                    || binding.context.contains(&context)
+                    || context.contains(&binding.context);
+
+                if contexts_overlap {
+                    let conflict_type = if binding.context == context
+                        && source.priority() == binding.source.priority()
+                    {
+                        ConflictType::Hard // Same context + same priority = hard conflict
+                    } else {
+                        ConflictType::Shadowed // Different priority or context = shadowing
+                    };
+
+                    conflicts.push(PotentialConflict {
+                        conflict_type,
+                        existing_id: binding.id.clone(),
+                        existing_name: binding.name.clone(),
+                    });
+                }
+            }
+        }
+
+        conflicts
+    }
+}
+
+/// Type of shortcut conflict.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ConflictType {
+    /// Same shortcut + same context + same priority.
+    /// One must be changed or disabled.
+    Hard,
+    /// Shortcut exists but is intentionally shadowed by context specificity
+    /// or source priority. The more specific/higher priority binding wins.
+    Shadowed,
+    /// Shortcut is reserved by the OS and cannot be overridden.
+    Unreachable,
+}
+
+/// A conflict between two shortcut bindings.
+#[derive(Clone, Debug)]
+pub struct ShortcutConflict {
+    pub conflict_type: ConflictType,
+    pub winner_id: String,
+    pub loser_id: String,
+    pub shortcut: String,
+    pub context: ShortcutContext,
+}
+
+/// A potential conflict that would occur if a shortcut were added.
+#[derive(Clone, Debug)]
+pub struct PotentialConflict {
+    pub conflict_type: ConflictType,
+    pub existing_id: String,
+    pub existing_name: String,
 }
