@@ -10,10 +10,25 @@ use super::context::ShortcutContext;
 use super::types::Shortcut;
 
 /// Source of a shortcut binding.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+///
+/// Priority order (highest first): user_override > Builtin > Script
+/// This ensures built-in shortcuts aren't silently stolen by scripts.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum BindingSource {
-    Builtin,
-    Script,
+    /// Built-in app shortcut (highest priority)
+    Builtin = 0,
+    /// Script-defined shortcut (lower priority)
+    Script = 1,
+}
+
+impl BindingSource {
+    /// Get the priority value (lower = higher priority).
+    pub fn priority(&self) -> u8 {
+        match self {
+            Self::Builtin => 0,
+            Self::Script => 1,
+        }
+    }
 }
 
 /// Scope in which a shortcut operates.
@@ -164,25 +179,88 @@ impl ShortcutRegistry {
     }
 
     /// Find a matching binding for a keystroke in the given context stack.
+    ///
+    /// Within each context, priority order is:
+    /// 1. User overrides (always win if present)
+    /// 2. Builtins (win over scripts)
+    /// 3. Scripts (lowest priority)
     pub fn find_match(
         &self,
         keystroke: &gpui::Keystroke,
         contexts: &[ShortcutContext],
     ) -> Option<&str> {
         for context in contexts {
+            // Collect all matches in this context
+            let mut matches: Vec<(&ShortcutBinding, bool)> = Vec::new();
+
             for binding in &self.bindings {
                 if binding.context != *context || self.disabled.contains(&binding.id) {
                     continue;
                 }
+
+                let has_user_override = self.user_overrides.contains_key(&binding.id);
                 let shortcut = if let Some(override_opt) = self.user_overrides.get(&binding.id) {
                     match override_opt {
                         Some(s) => s.clone(),
-                        None => continue,
+                        None => continue, // Disabled via override
                     }
                 } else {
                     binding.default_shortcut.clone()
                 };
+
                 if shortcut.matches_keystroke(keystroke) {
+                    matches.push((binding, has_user_override));
+                }
+            }
+
+            // If we have matches, return the highest priority one
+            if !matches.is_empty() {
+                // Sort by: user_override first, then source priority, then registration order
+                matches.sort_by(|(a, a_override), (b, b_override)| {
+                    // User override always wins
+                    match (a_override, b_override) {
+                        (true, false) => std::cmp::Ordering::Less,
+                        (false, true) => std::cmp::Ordering::Greater,
+                        _ => {
+                            // Same override status: compare source priority
+                            a.source.priority().cmp(&b.source.priority())
+                        }
+                    }
+                });
+
+                return Some(&matches[0].0.id);
+            }
+        }
+        None
+    }
+
+    /// Check if a script shortcut would conflict with a builtin.
+    ///
+    /// Returns the ID of the conflicting builtin if one exists.
+    pub fn check_builtin_conflict(
+        &self,
+        shortcut: &Shortcut,
+        context: ShortcutContext,
+    ) -> Option<&str> {
+        for binding in &self.bindings {
+            if binding.source != BindingSource::Builtin {
+                continue;
+            }
+            if binding.context != context && binding.context != ShortcutContext::Global {
+                continue;
+            }
+            if self.disabled.contains(&binding.id) {
+                continue;
+            }
+
+            let effective = self
+                .user_overrides
+                .get(&binding.id)
+                .cloned()
+                .unwrap_or_else(|| Some(binding.default_shortcut.clone()));
+
+            if let Some(builtin_shortcut) = effective {
+                if builtin_shortcut == *shortcut {
                     return Some(&binding.id);
                 }
             }

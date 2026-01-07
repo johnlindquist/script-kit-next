@@ -237,3 +237,178 @@ fn replace_existing_binding() {
     assert_eq!(binding.name, "Replaced");
     assert_eq!(binding.default_shortcut.key, "j");
 }
+
+// ========================
+// Priority Model Tests
+// ========================
+
+#[test]
+fn builtin_wins_over_script_same_shortcut() {
+    let mut registry = ShortcutRegistry::new();
+
+    // Register script first (lower priority)
+    registry.register(ShortcutBinding::script(
+        "script.action",
+        "Script Action",
+        make_shortcut("k", true, false),
+    ));
+
+    // Register builtin second (higher priority)
+    registry.register(ShortcutBinding::builtin(
+        "builtin.action",
+        "Builtin Action",
+        make_shortcut("k", true, false),
+        ShortcutContext::Global,
+        ShortcutCategory::Actions,
+    ));
+
+    let keystroke = gpui::Keystroke {
+        key: "k".to_string(),
+        key_char: None,
+        modifiers: gpui::Modifiers {
+            platform: true,
+            ..Default::default()
+        },
+    };
+
+    let contexts = [ShortcutContext::Global];
+    // Builtin should win even though script was registered first
+    assert_eq!(
+        registry.find_match(&keystroke, &contexts),
+        Some("builtin.action")
+    );
+}
+
+#[test]
+fn user_override_wins_over_builtin() {
+    let mut registry = ShortcutRegistry::new();
+
+    // Register builtin
+    registry.register(ShortcutBinding::builtin(
+        "builtin.action",
+        "Builtin Action",
+        make_shortcut("k", true, false),
+        ShortcutContext::Global,
+        ShortcutCategory::Actions,
+    ));
+
+    // Register script with different default shortcut
+    registry.register(ShortcutBinding::script(
+        "script.action",
+        "Script Action",
+        make_shortcut("j", true, false),
+    ));
+
+    // User overrides script to use same shortcut as builtin
+    registry.set_override("script.action", Some(make_shortcut("k", true, false)));
+
+    let keystroke = gpui::Keystroke {
+        key: "k".to_string(),
+        key_char: None,
+        modifiers: gpui::Modifiers {
+            platform: true,
+            ..Default::default()
+        },
+    };
+
+    let contexts = [ShortcutContext::Global];
+    // User override on script should win over builtin
+    assert_eq!(
+        registry.find_match(&keystroke, &contexts),
+        Some("script.action")
+    );
+}
+
+#[test]
+fn check_builtin_conflict_detects_collision() {
+    let mut registry = ShortcutRegistry::new();
+
+    registry.register(ShortcutBinding::builtin(
+        "builtin.copy",
+        "Copy",
+        make_shortcut("c", true, false),
+        ShortcutContext::Global,
+        ShortcutCategory::Edit,
+    ));
+
+    // Check if a script trying to use cmd+c would conflict
+    let script_shortcut = make_shortcut("c", true, false);
+    let conflict = registry.check_builtin_conflict(&script_shortcut, ShortcutContext::Global);
+
+    assert_eq!(conflict, Some("builtin.copy"));
+}
+
+#[test]
+fn check_builtin_conflict_no_collision_different_shortcut() {
+    let mut registry = ShortcutRegistry::new();
+
+    registry.register(ShortcutBinding::builtin(
+        "builtin.copy",
+        "Copy",
+        make_shortcut("c", true, false),
+        ShortcutContext::Global,
+        ShortcutCategory::Edit,
+    ));
+
+    // Script using different shortcut should not conflict
+    let script_shortcut = make_shortcut("k", true, false);
+    let conflict = registry.check_builtin_conflict(&script_shortcut, ShortcutContext::Global);
+
+    assert!(conflict.is_none());
+}
+
+#[test]
+fn check_builtin_conflict_respects_user_override() {
+    let mut registry = ShortcutRegistry::new();
+
+    registry.register(ShortcutBinding::builtin(
+        "builtin.copy",
+        "Copy",
+        make_shortcut("c", true, false),
+        ShortcutContext::Global,
+        ShortcutCategory::Edit,
+    ));
+
+    // User overrides builtin to different shortcut
+    registry.set_override("builtin.copy", Some(make_shortcut("x", true, false)));
+
+    // Now cmd+c should not conflict (builtin was moved)
+    let script_shortcut = make_shortcut("c", true, false);
+    let conflict = registry.check_builtin_conflict(&script_shortcut, ShortcutContext::Global);
+
+    assert!(conflict.is_none());
+
+    // But cmd+x should now conflict (builtin's new shortcut)
+    let script_shortcut_x = make_shortcut("x", true, false);
+    let conflict_x = registry.check_builtin_conflict(&script_shortcut_x, ShortcutContext::Global);
+
+    assert_eq!(conflict_x, Some("builtin.copy"));
+}
+
+#[test]
+fn check_builtin_conflict_ignores_disabled() {
+    let mut registry = ShortcutRegistry::new();
+
+    registry.register(ShortcutBinding::builtin(
+        "builtin.copy",
+        "Copy",
+        make_shortcut("c", true, false),
+        ShortcutContext::Global,
+        ShortcutCategory::Edit,
+    ));
+
+    // User disables the builtin
+    registry.set_override("builtin.copy", None);
+
+    // Now cmd+c should not conflict (builtin is disabled)
+    let script_shortcut = make_shortcut("c", true, false);
+    let conflict = registry.check_builtin_conflict(&script_shortcut, ShortcutContext::Global);
+
+    assert!(conflict.is_none());
+}
+
+#[test]
+fn binding_source_priority_values() {
+    // Verify priority order: lower value = higher priority
+    assert!(BindingSource::Builtin.priority() < BindingSource::Script.priority());
+}
