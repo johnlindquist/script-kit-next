@@ -49,6 +49,10 @@ pub mod clipboard_history;
 pub mod file_search;
 pub mod window_control;
 
+// Enhanced window control - backends + capabilities architecture
+// Provides WindowBounds (AX coords), capability detection, DisplayInfo, SpaceManager
+pub mod window_control_enhanced;
+
 // System actions - macOS AppleScript-based system commands
 #[cfg(target_os = "macos")]
 pub mod system_actions;
