@@ -140,10 +140,6 @@ impl ScriptListApp {
         let max_height = 700.0; // Same as window_resize::layout::MAX_HEIGHT
         let content_height = px(calculated_height.min(max_height));
 
-        // Button colors from theme
-        let button_colors = ButtonColors::from_theme(&self.theme);
-        let actions_button_colors = ButtonColors::from_theme(&self.theme);
-
         // Form fields have their own focus handles and on_key_down handlers.
         // We DO NOT track_focus on the container - the fields handle their own focus.
         // Enter/Escape/Tab are handled by the handle_key listener above.
@@ -172,153 +168,26 @@ impl ScriptListApp {
                     // Render the form entity (contains all fields)
                     .child(entity.clone()),
             )
-            // Header with CLS-FREE Actions area and Submit button
-            .child(
-                div()
-                    .w_full()
-                    .px(px(design_spacing.padding_lg))
-                    .py(px(design_spacing.padding_md))
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .justify_end()
-                    .gap_2()
-                    // CLS-FREE ACTIONS AREA
-                    .when(has_actions, |d| {
-                        let handle_actions = cx.entity().downgrade();
-                        let show_actions_state = self.show_actions_popup;
+            // Unified footer with PromptFooter component
+            .child({
+                let footer_colors = PromptFooterColors::from_theme(&self.theme);
+                let footer_config = PromptFooterConfig::new()
+                    .primary_label("Submit Form")
+                    .primary_shortcut("↵")
+                    .show_secondary(has_actions);
 
-                        let search_text = self
-                            .actions_dialog
-                            .as_ref()
-                            .map(|dialog| dialog.read(cx).search_text.clone())
-                            .unwrap_or_default();
-                        let search_is_empty = search_text.is_empty();
-                        let search_display: SharedString = if search_is_empty {
-                            "Search actions...".into()
-                        } else {
-                            search_text.into()
-                        };
-                        let accent_color = design_colors.accent;
-                        let text_primary = design_colors.text_primary;
-                        let text_muted = design_colors.text_muted;
-                        let text_dimmed = design_colors.text_dimmed;
-                        let search_box_bg = self.theme.colors.background.search_box;
-                        let cursor_visible_for_search = self.focused_input
-                            == FocusedInput::ActionsSearch
-                            && self.cursor_visible;
+                let handle_actions = cx.entity().downgrade();
 
-                        d.child(
-                            div()
-                                .relative()
-                                .h(px(28.))
-                                .flex()
-                                .items_center()
-                                .child(
-                                    div()
-                                        .absolute()
-                                        .inset_0()
-                                        .flex()
-                                        .flex_row()
-                                        .items_center()
-                                        .justify_end()
-                                        .when(show_actions_state, |d| d.opacity(0.).invisible())
-                                        .child(
-                                            Button::new("Actions", actions_button_colors)
-                                                .variant(ButtonVariant::Ghost)
-                                                .shortcut("⌘ K")
-                                                .on_click(Box::new(move |_, window, cx| {
-                                                    if let Some(app) = handle_actions.upgrade() {
-                                                        app.update(cx, |this, cx| {
-                                                            this.toggle_arg_actions(cx, window);
-                                                        });
-                                                    }
-                                                })),
-                                        ),
-                                )
-                                .child(
-                                    div()
-                                        .absolute()
-                                        .inset_0()
-                                        .flex()
-                                        .flex_row()
-                                        .items_center()
-                                        .justify_end()
-                                        .gap(px(8.))
-                                        .when(!show_actions_state, |d| d.opacity(0.).invisible())
-                                        .child(
-                                            div()
-                                                .text_color(rgb(text_dimmed))
-                                                .text_xs()
-                                                .child("⌘K"),
-                                        )
-                                        .child(
-                                            div()
-                                                .id("form-actions-search")
-                                                .flex_shrink_0()
-                                                .w(px(130.))
-                                                .min_w(px(130.))
-                                                .max_w(px(130.))
-                                                .h(px(24.))
-                                                .min_h(px(24.))
-                                                .max_h(px(24.))
-                                                .overflow_hidden()
-                                                .flex()
-                                                .flex_row()
-                                                .items_center()
-                                                .px(px(8.))
-                                                .rounded(px(4.))
-                                                .bg(rgba(
-                                                    (search_box_bg << 8)
-                                                        | if search_is_empty { 0x40 } else { 0x80 },
-                                                ))
-                                                .border_1()
-                                                .border_color(rgba(
-                                                    (accent_color << 8)
-                                                        | if search_is_empty { 0x20 } else { 0x40 },
-                                                ))
-                                                .text_sm()
-                                                .text_color(if search_is_empty {
-                                                    rgb(text_muted)
-                                                } else {
-                                                    rgb(text_primary)
-                                                })
-                                                .when(search_is_empty, |d| {
-                                                    d.child(
-                                                        div()
-                                                            .w(px(2.))
-                                                            .h(px(14.))
-                                                            .mr(px(2.))
-                                                            .rounded(px(1.))
-                                                            .when(cursor_visible_for_search, |d| {
-                                                                d.bg(rgb(accent_color))
-                                                            }),
-                                                    )
-                                                })
-                                                .child(search_display)
-                                                .when(!search_is_empty, |d| {
-                                                    d.child(
-                                                        div()
-                                                            .w(px(2.))
-                                                            .h(px(14.))
-                                                            .ml(px(2.))
-                                                            .rounded(px(1.))
-                                                            .when(cursor_visible_for_search, |d| {
-                                                                d.bg(rgb(accent_color))
-                                                            }),
-                                                    )
-                                                }),
-                                        ),
-                                ),
-                        )
-                    })
-                    // Submit button
-                    .child(
-                        Button::new("Submit", button_colors)
-                            .variant(ButtonVariant::Primary)
-                            .shortcut("↵"),
-                    ),
-            )
+                PromptFooter::new(footer_config, footer_colors).on_secondary_click(Box::new(
+                    move |_, window, cx| {
+                        if let Some(app) = handle_actions.upgrade() {
+                            app.update(cx, |this, cx| {
+                                this.toggle_arg_actions(cx, window);
+                            });
+                        }
+                    },
+                ))
+            })
             // Actions dialog overlay
             .when_some(
                 if self.show_actions_popup {

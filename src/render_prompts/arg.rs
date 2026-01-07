@@ -192,10 +192,7 @@ impl ScriptListApp {
                             .scroll_to_item(this.arg_selected_index, ScrollStrategy::Nearest);
                         logging::log_debug(
                             "SCROLL",
-                            &format!(
-                                "P0: Arg down: selected_index={}",
-                                this.arg_selected_index
-                            ),
+                            &format!("P0: Arg down: selected_index={}", this.arg_selected_index),
                         );
                         cx.notify();
                     }
@@ -335,7 +332,6 @@ impl ScriptListApp {
 
         // P4: Pre-compute more theme values for the main container using design tokens
         let ui_border = design_colors.border;
-        let text_dimmed = design_colors.text_dimmed;
 
         div()
             .relative() // Needed for absolute positioned actions dialog overlay
@@ -409,162 +405,7 @@ impl ScriptListApp {
                             .when(!input_is_empty, |d: gpui::Div| {
                                 d.child(self.render_arg_input_text(text_primary, accent_color))
                             })
-                    })
-                    // CLS-FREE ACTIONS AREA: Matches main menu pattern exactly
-                    // Both states are always rendered at the same position, visibility toggled via opacity
-                    .when(has_actions, |d| {
-                        let button_colors = ButtonColors::from_theme(&self.theme);
-                        let handle_actions = cx.entity().downgrade();
-                        let show_actions = self.show_actions_popup;
-
-                        // Get actions search text from the dialog
-                        let search_text = self
-                            .actions_dialog
-                            .as_ref()
-                            .map(|dialog| dialog.read(cx).search_text.clone())
-                            .unwrap_or_default();
-                        let search_is_empty = search_text.is_empty();
-                        let search_display: SharedString = if search_is_empty {
-                            "Search actions...".into()
-                        } else {
-                            search_text.into()
-                        };
-                        let accent_color = design_colors.accent;
-                        let search_box_bg = self.theme.colors.background.search_box;
-                        let cursor_visible_for_search = self.focused_input
-                            == FocusedInput::ActionsSearch
-                            && self.cursor_visible;
-
-                        d.child(
-                            div()
-                                .relative()
-                                .h(px(28.)) // Fixed height to prevent vertical CLS
-                                .flex()
-                                .items_center()
-                                // Layer 1: Actions button - visible when NOT showing actions search
-                                .child(
-                                    div()
-                                        .absolute()
-                                        .inset_0()
-                                        .flex()
-                                        .flex_row()
-                                        .items_center()
-                                        .justify_end()
-                                        .when(show_actions, |d| d.opacity(0.).invisible())
-                                        .child(
-                                            Button::new("Actions", button_colors)
-                                                .variant(ButtonVariant::Ghost)
-                                                .shortcut("⌘ K")
-                                                .on_click(Box::new(move |_, window, cx| {
-                                                    if let Some(app) = handle_actions.upgrade() {
-                                                        app.update(cx, |this, cx| {
-                                                            this.toggle_arg_actions(cx, window);
-                                                        });
-                                                    }
-                                                })),
-                                        )
-                                        .child(
-                                            div()
-                                                .mx(px(4.))
-                                                .text_color(rgba((text_dimmed << 8) | 0x60))
-                                                .text_sm()
-                                                .child("|"),
-                                        ),
-                                )
-                                // Layer 2: Actions search input - visible when showing actions search
-                                .child(
-                                    div()
-                                        .absolute()
-                                        .inset_0()
-                                        .flex()
-                                        .flex_row()
-                                        .items_center()
-                                        .justify_end()
-                                        .gap(px(8.))
-                                        .when(!show_actions, |d| d.opacity(0.).invisible())
-                                        // ⌘K indicator
-                                        .child(
-                                            div()
-                                                .text_color(rgb(text_dimmed))
-                                                .text_xs()
-                                                .child("⌘K"),
-                                        )
-                                        // Search input display - compact style matching buttons
-                                        .child(
-                                            div()
-                                                .id("arg-actions-search")
-                                                .flex_shrink_0()
-                                                .w(px(130.))
-                                                .min_w(px(130.))
-                                                .max_w(px(130.))
-                                                .h(px(24.))
-                                                .min_h(px(24.))
-                                                .max_h(px(24.))
-                                                .overflow_hidden()
-                                                .flex()
-                                                .flex_row()
-                                                .items_center()
-                                                .px(px(8.))
-                                                .rounded(px(4.))
-                                                .bg(rgba(
-                                                    (search_box_bg << 8)
-                                                        | if search_is_empty { 0x40 } else { 0x80 },
-                                                ))
-                                                .border_1()
-                                                .border_color(rgba(
-                                                    (accent_color << 8)
-                                                        | if search_is_empty { 0x20 } else { 0x40 },
-                                                ))
-                                                .text_sm()
-                                                .text_color(if search_is_empty {
-                                                    rgb(text_muted)
-                                                } else {
-                                                    rgb(text_primary)
-                                                })
-                                                // Cursor before placeholder when empty
-                                                .when(search_is_empty, |d| {
-                                                    d.child(
-                                                        div()
-                                                            .w(px(2.))
-                                                            .h(px(14.))
-                                                            .mr(px(2.))
-                                                            .rounded(px(1.))
-                                                            .when(cursor_visible_for_search, |d| {
-                                                                d.bg(rgb(accent_color))
-                                                            }),
-                                                    )
-                                                })
-                                                .child(search_display)
-                                                // Cursor after text when not empty
-                                                .when(!search_is_empty, |d| {
-                                                    d.child(
-                                                        div()
-                                                            .w(px(2.))
-                                                            .h(px(14.))
-                                                            .ml(px(2.))
-                                                            .rounded(px(1.))
-                                                            .when(cursor_visible_for_search, |d| {
-                                                                d.bg(rgb(accent_color))
-                                                            }),
-                                                    )
-                                                }),
-                                        )
-                                        .child(
-                                            div()
-                                                .mx(px(4.))
-                                                .text_color(rgba((text_dimmed << 8) | 0x60))
-                                                .text_sm()
-                                                .child("|"),
-                                        ),
-                                ),
-                        )
-                    })
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(rgb(text_dimmed))
-                            .child(format!("{} choices", choices.len())),
-                    ),
+                    }),
             )
             // Choices list (only when prompt has choices)
             .when(has_choices, |d| {
@@ -584,6 +425,52 @@ impl ScriptListApp {
                         .py(px(design_spacing.padding_xs))
                         .child(list_element),
                 )
+            })
+            // Footer with unified actions
+            .child({
+                let footer_colors = PromptFooterColors::from_design(&design_colors);
+                let footer_config = PromptFooterConfig::new()
+                    .primary_label("Submit")
+                    .primary_shortcut("↵")
+                    .secondary_label("Actions")
+                    .secondary_shortcut("⌘K")
+                    .show_secondary(has_actions);
+
+                // Create click handlers
+                let prompt_id_for_primary = id.clone();
+                let handle_primary = cx.entity().downgrade();
+                let handle_secondary = cx.entity().downgrade();
+
+                PromptFooter::new(footer_config, footer_colors)
+                    .on_primary_click(Box::new(move |_, _window, cx| {
+                        if let Some(app) = handle_primary.upgrade() {
+                            app.update(cx, |this, cx| {
+                                let filtered = this.filtered_arg_choices();
+                                if let Some((_, choice)) = filtered.get(this.arg_selected_index) {
+                                    let value = choice.value.clone();
+                                    this.submit_prompt_response(
+                                        prompt_id_for_primary.clone(),
+                                        Some(value),
+                                        cx,
+                                    );
+                                } else if !this.arg_input.is_empty() {
+                                    let value = this.arg_input.text().to_string();
+                                    this.submit_prompt_response(
+                                        prompt_id_for_primary.clone(),
+                                        Some(value),
+                                        cx,
+                                    );
+                                }
+                            });
+                        }
+                    }))
+                    .on_secondary_click(Box::new(move |_, window, cx| {
+                        if let Some(app) = handle_secondary.upgrade() {
+                            app.update(cx, |this, cx| {
+                                this.toggle_arg_actions(cx, window);
+                            });
+                        }
+                    }))
             })
             // Actions dialog overlay (when Cmd+K is pressed with SDK actions)
             // Uses same pattern as main menu: check BOTH show_actions_popup AND actions_dialog
