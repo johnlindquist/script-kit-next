@@ -17,12 +17,17 @@
 //! # Example
 //!
 //! ```ignore
-//! use script_kit_gpui::shortcuts::{Shortcut, ShortcutParseError};
+//! use script_kit_gpui::shortcuts::{Shortcut, ShortcutParseError, ContextStack, ViewType};
 //!
 //! let shortcut = Shortcut::parse("cmd+shift+k")?;
 //! println!("Display: {}", shortcut.display()); // ⌘⇧K on macOS
+//!
+//! // Build context stack from UI state
+//! let stack = ContextStack::from_state(ViewType::Editor, false);
+//! // Shortcuts are matched against contexts in order
 //! ```
 
+mod context;
 mod hotkey_compat;
 mod types;
 
@@ -35,6 +40,10 @@ mod types_tests;
 pub use types::{
     canonicalize_key, is_known_key, Modifiers, Platform, Shortcut, ShortcutParseError,
 };
+
+// Re-export context types
+#[allow(unused_imports)]
+pub use context::{ContextStack, ShortcutContext, ViewType};
 
 // Re-export hotkey compatibility functions (used by hotkeys.rs, prompt_handler.rs, etc.)
 pub use hotkey_compat::{keystroke_to_shortcut, normalize_shortcut, parse_shortcut};
