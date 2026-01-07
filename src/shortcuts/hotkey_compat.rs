@@ -1,18 +1,21 @@
+//! Compatibility functions for global_hotkey crate integration.
+//!
+//! These functions bridge between our `Shortcut` type and the
+//! `global_hotkey::hotkey::{Code, Modifiers}` types.
+
 use global_hotkey::hotkey::{Code, Modifiers};
 
 use crate::logging;
 
-/// Parse a shortcut string into (Modifiers, Code).
+/// Parse a shortcut string into (Modifiers, Code) for global_hotkey crate.
 ///
 /// Supports flexible formats:
 /// - Space-separated: "opt i", "cmd shift k"
 /// - Plus-separated: "cmd+shift+k", "ctrl+alt+delete"
 /// - Mixed: "cmd + shift + k"
-/// - Various modifier names: cmd/command/meta, ctrl/control/^, alt/opt/option, shift
 ///
 /// Returns None if the shortcut string is invalid.
 pub fn parse_shortcut(shortcut: &str) -> Option<(Modifiers, Code)> {
-    // Normalize the shortcut: replace + with space, collapse whitespace
     let normalized = shortcut
         .replace('+', " ")
         .split_whitespace()
@@ -30,15 +33,10 @@ pub fn parse_shortcut(shortcut: &str) -> Option<(Modifiers, Code)> {
     for part in &parts {
         let part_lower = part.to_lowercase();
         match part_lower.as_str() {
-            // Meta/Command key - many variations
             "cmd" | "command" | "meta" | "super" | "win" | "⌘" => modifiers |= Modifiers::META,
-            // Control key
             "ctrl" | "control" | "ctl" | "^" => modifiers |= Modifiers::CONTROL,
-            // Alt/Option key
             "alt" | "opt" | "option" | "⌥" => modifiers |= Modifiers::ALT,
-            // Shift key
             "shift" | "shft" | "⇧" => modifiers |= Modifiers::SHIFT,
-            // If not a modifier, it's the key
             _ => key_part = Some(part),
         }
     }
@@ -47,7 +45,6 @@ pub fn parse_shortcut(shortcut: &str) -> Option<(Modifiers, Code)> {
     let key_lower = key.to_lowercase();
 
     let code = match key_lower.as_str() {
-        // Letters
         "a" => Code::KeyA,
         "b" => Code::KeyB,
         "c" => Code::KeyC,
@@ -74,7 +71,6 @@ pub fn parse_shortcut(shortcut: &str) -> Option<(Modifiers, Code)> {
         "x" => Code::KeyX,
         "y" => Code::KeyY,
         "z" => Code::KeyZ,
-        // Numbers
         "0" => Code::Digit0,
         "1" => Code::Digit1,
         "2" => Code::Digit2,
@@ -85,7 +81,6 @@ pub fn parse_shortcut(shortcut: &str) -> Option<(Modifiers, Code)> {
         "7" => Code::Digit7,
         "8" => Code::Digit8,
         "9" => Code::Digit9,
-        // Function keys
         "f1" => Code::F1,
         "f2" => Code::F2,
         "f3" => Code::F3,
@@ -98,7 +93,6 @@ pub fn parse_shortcut(shortcut: &str) -> Option<(Modifiers, Code)> {
         "f10" => Code::F10,
         "f11" => Code::F11,
         "f12" => Code::F12,
-        // Special keys
         "space" => Code::Space,
         "enter" | "return" => Code::Enter,
         "tab" => Code::Tab,
@@ -116,12 +110,10 @@ pub fn parse_shortcut(shortcut: &str) -> Option<(Modifiers, Code)> {
         "-" | "minus" | "dash" | "hyphen" => Code::Minus,
         "=" | "equal" | "equals" => Code::Equal,
         "`" | "backquote" | "backtick" | "grave" => Code::Backquote,
-        // Arrow keys
         "up" | "arrowup" | "uparrow" => Code::ArrowUp,
         "down" | "arrowdown" | "downarrow" => Code::ArrowDown,
         "left" | "arrowleft" | "leftarrow" => Code::ArrowLeft,
         "right" | "arrowright" | "rightarrow" => Code::ArrowRight,
-        // Home/End/PageUp/PageDown
         "home" => Code::Home,
         "end" => Code::End,
         "pageup" | "pgup" => Code::PageUp,
@@ -142,8 +134,6 @@ pub fn parse_shortcut(shortcut: &str) -> Option<(Modifiers, Code)> {
 /// Converts "cmd+shift+c" and "Cmd+Shift+C" to "cmd+shift+c".
 pub fn normalize_shortcut(shortcut: &str) -> String {
     let mut parts: Vec<&str> = shortcut.split('+').collect();
-
-    // Separate modifiers from key
     let mut modifiers: Vec<&str> = Vec::new();
     let mut key: Option<&str> = None;
 
@@ -158,10 +148,7 @@ pub fn normalize_shortcut(shortcut: &str) -> String {
         }
     }
 
-    // Sort modifiers for consistent ordering
     modifiers.sort();
-
-    // Rebuild with sorted modifiers + key
     let mut result = modifiers.join("+");
     if let Some(k) = key {
         if !result.is_empty() {
@@ -176,8 +163,6 @@ pub fn normalize_shortcut(shortcut: &str) -> String {
 /// Convert a GPUI keystroke to a normalized shortcut string.
 pub fn keystroke_to_shortcut(key: &str, modifiers: &gpui::Modifiers) -> String {
     let mut parts: Vec<&str> = Vec::new();
-
-    // Add modifiers in sorted order
     if modifiers.alt {
         parts.push("alt");
     }
@@ -191,14 +176,12 @@ pub fn keystroke_to_shortcut(key: &str, modifiers: &gpui::Modifiers) -> String {
         parts.push("shift");
     }
 
-    // Add the key
     let key_lower = key.to_lowercase();
     let mut result = parts.join("+");
     if !result.is_empty() {
         result.push('+');
     }
     result.push_str(&key_lower);
-
     result
 }
 
