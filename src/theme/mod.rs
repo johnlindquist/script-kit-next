@@ -22,6 +22,11 @@ pub mod hex_color;
 pub mod semantic;
 pub mod service;
 mod types;
+pub mod validation;
+
+#[cfg(test)]
+#[path = "validation_tests.rs"]
+mod validation_tests;
 
 // Re-export types used externally
 pub use types::{ColorScheme, Theme};
@@ -29,6 +34,10 @@ pub use types::{ColorScheme, Theme};
 // Re-export semantic types (allow unused - designed for incremental adoption)
 #[allow(unused_imports)]
 pub use semantic::{FocusAware, SemanticColors, Surface, SurfaceStyle};
+
+// Re-export validation types
+#[allow(unused_imports)]
+pub use validation::{validate_theme_json, Diagnostic, DiagnosticSeverity, ThemeDiagnostics};
 
 // Re-export loader functions
 pub use types::load_theme;
