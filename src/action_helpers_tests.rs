@@ -168,13 +168,13 @@ fn test_extract_path_for_edit_scriptlet() {
 
 #[test]
 fn test_is_reserved_action_id() {
-    assert!(is_reserved_action_id("quit"));
     assert!(is_reserved_action_id("copy_path"));
     assert!(is_reserved_action_id("edit_script"));
+    assert!(is_reserved_action_id("copy_deeplink"));
     assert!(is_reserved_action_id("__cancel__"));
 
     assert!(!is_reserved_action_id("custom_action"));
-    assert!(!is_reserved_action_id("my_quit"));
+    assert!(!is_reserved_action_id("quit")); // quit is no longer reserved (main menu only)
     assert!(!is_reserved_action_id(""));
 }
 

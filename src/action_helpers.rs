@@ -227,8 +227,8 @@ pub const RESERVED_ACTION_IDS: &[&str] = &[
     "reveal_in_finder",
     "copy_path",
     "edit_script",
-    "settings",
-    "quit",
+    "copy_deeplink",
+    "configure_shortcut",
     "__cancel__",
 ];
 

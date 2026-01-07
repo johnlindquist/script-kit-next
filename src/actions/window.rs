@@ -7,9 +7,9 @@
 //! - Auto-closes when app loses focus
 //! - Shares the ActionsDialog entity with the main app for keyboard routing
 
-use crate::panel::HEADER_TOTAL_HEIGHT;
 use crate::platform;
 use crate::theme;
+use crate::window_resize::layout::FOOTER_HEIGHT;
 use gpui::{
     div, prelude::*, px, App, Bounds, Context, DisplayId, Entity, FocusHandle, Focusable, Pixels,
     Point, Render, Size, Window, WindowBounds, WindowHandle, WindowKind, WindowOptions,
@@ -115,7 +115,7 @@ pub fn open_actions_window(
 
     // Calculate window position:
     // - X: Right edge of main window, minus actions width, minus margin
-    // - Y: Below the header (HEADER_TOTAL_HEIGHT), plus margin
+    // - Y: Bottom-aligned with main window (above footer), minus margin
     //
     // CRITICAL: main_window_bounds must be in SCREEN-RELATIVE coordinates from GPUI's
     // window.bounds(). These are top-left origin, relative to the window's current screen.
@@ -127,8 +127,11 @@ pub fn open_actions_window(
     let window_x = main_window_bounds.origin.x + main_window_bounds.size.width
         - window_width
         - px(ACTIONS_MARGIN_X);
-    // Position popup right below the header
-    let window_y = main_window_bounds.origin.y + px(HEADER_TOTAL_HEIGHT) + px(ACTIONS_MARGIN_Y);
+    // Position popup above the footer (footer is 40px)
+    let window_y = main_window_bounds.origin.y + main_window_bounds.size.height
+        - window_height
+        - px(FOOTER_HEIGHT)
+        - px(ACTIONS_MARGIN_Y);
 
     let bounds = Bounds {
         origin: Point {

@@ -108,7 +108,8 @@ pub enum ActionCategory {
     ScriptContext, // Actions specific to the focused script
     #[allow(dead_code)]
     ScriptOps, // Edit, Create, Delete script operations (reserved for future use)
-    GlobalOps,     // Settings, Quit, etc.
+    #[allow(dead_code)]
+    GlobalOps, // Settings, Quit, etc.
 }
 
 impl Action {

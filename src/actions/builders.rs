@@ -183,23 +183,9 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
 }
 
 /// Predefined global actions
+/// Note: Settings and Quit are available from the main menu, not shown in actions dialog
 pub fn get_global_actions() -> Vec<Action> {
-    vec![
-        Action::new(
-            "settings",
-            "Settings",
-            Some("Configure preferences".to_string()),
-            ActionCategory::GlobalOps,
-        )
-        .with_shortcut("⌘,"),
-        Action::new(
-            "quit",
-            "Quit Script Kit",
-            Some("Exit the application".to_string()),
-            ActionCategory::GlobalOps,
-        )
-        .with_shortcut("⌘Q"),
-    ]
+    vec![]
 }
 
 #[cfg(test)]
@@ -257,10 +243,8 @@ mod tests {
     #[test]
     fn test_get_global_actions() {
         let actions = get_global_actions();
-
-        assert!(!actions.is_empty());
-        assert!(actions.iter().any(|a| a.id == "settings"));
-        assert!(actions.iter().any(|a| a.id == "quit"));
+        // Global actions are now empty - Settings/Quit available from main menu
+        assert!(actions.is_empty());
     }
 
     #[test]

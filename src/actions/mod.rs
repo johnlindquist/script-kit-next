@@ -45,8 +45,8 @@ mod tests {
 
     #[test]
     fn test_actions_exceed_visible_space() {
-        // Verify that with script context + global actions, we exceed visible space
-        // This confirms scrolling/virtualization is needed
+        // Verify script context actions count
+        // Global actions are now empty (Settings/Quit in main menu only)
         let script = ScriptInfo::new("test-script", "/path/to/test.ts");
         let script_actions = get_script_context_actions(&script);
         let global_actions = get_global_actions();
@@ -54,10 +54,13 @@ mod tests {
 
         let max_visible = (POPUP_MAX_HEIGHT / ACTION_ITEM_HEIGHT) as usize;
 
-        // With 5 script context actions + 4 global = 9 actions
-        // At 42px height in 400px container, we can fit ~9 items
-        // So we might not always overflow, but we're close
-        assert!(total_actions >= 8, "Should have at least 8 total actions");
+        // Script context actions: run, edit, configure_shortcut, view_logs,
+        // reveal_in_finder, copy_path, copy_deeplink = 7 actions
+        assert!(
+            total_actions >= 7,
+            "Should have at least 7 script context actions"
+        );
+        assert!(global_actions.is_empty(), "Global actions should be empty");
 
         // Log for visibility
         println!(
