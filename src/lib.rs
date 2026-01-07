@@ -11,6 +11,9 @@ pub mod app_shell;
 
 pub mod components;
 pub mod config;
+
+// Unified icon system - single API for all icon sources
+// Supports gpui_component IconName, embedded SVGs, SF Symbols, app bundles
 pub mod debug_grid;
 pub mod designs;
 pub mod editor;
@@ -18,6 +21,7 @@ pub mod error;
 pub mod executor;
 pub mod form_prompt;
 pub mod hotkeys;
+pub mod icons;
 pub mod list_item;
 pub mod logging;
 pub mod navigation;
