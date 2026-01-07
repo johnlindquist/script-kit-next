@@ -38,6 +38,10 @@ pub mod term_prompt;
 pub mod terminal;
 pub mod theme;
 pub mod toast_manager;
+
+// Unified notification system - centralized notification handling
+// Supports toast, HUD, banner, system notifications with deduplication and history
+pub mod notification;
 #[cfg(not(test))]
 pub mod tray;
 pub mod utils;
