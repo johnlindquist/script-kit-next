@@ -152,6 +152,27 @@ impl ScriptListApp {
                 InputEvent::Focus => {
                     this.gpui_input_focused = true;
                     this.focused_input = FocusedInput::MainFilter;
+
+                    // Close actions popup when main input receives focus
+                    // This ensures consistent behavior: clicking the input closes actions
+                    // just like pressing Cmd+K would
+                    if this.show_actions_popup || is_actions_window_open() {
+                        logging::log(
+                            "FOCUS",
+                            "Main input focused while actions open - closing actions (same as Cmd+K)",
+                        );
+                        this.show_actions_popup = false;
+                        this.actions_dialog = None;
+                        // Close the actions window
+                        cx.spawn(async move |_this, cx| {
+                            cx.update(|cx| {
+                                close_actions_window(cx);
+                            })
+                            .ok();
+                        })
+                        .detach();
+                    }
+
                     cx.notify();
                 }
                 InputEvent::Blur => {
@@ -2163,6 +2184,19 @@ impl ScriptListApp {
     ) {
         self.show_actions_popup = false;
         self.actions_dialog = None;
+
+        // Close the separate actions window if open
+        // This ensures consistent behavior whether closing via Cmd+K, Escape, backdrop click,
+        // or any other close mechanism
+        if is_actions_window_open() {
+            cx.spawn(async move |_this, cx| {
+                cx.update(|cx| {
+                    close_actions_window(cx);
+                })
+                .ok();
+            })
+            .detach();
+        }
 
         // Restore focus based on host type
         match host {
