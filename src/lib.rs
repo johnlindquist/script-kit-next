@@ -5,6 +5,10 @@
 //! This library provides the core functionality for executing scripts
 //! with bidirectional JSONL communication.
 
+// App Shell - Unified frame and chrome for all prompts
+// Provides ShellSpec, HeaderSpec, FooterSpec, ChromeSpec for consistent prompt layout
+pub mod app_shell;
+
 pub mod components;
 pub mod config;
 pub mod debug_grid;
