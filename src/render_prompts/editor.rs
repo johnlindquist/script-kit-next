@@ -100,6 +100,39 @@ impl ScriptListApp {
         // Get the prompt ID for submit
         let prompt_id = entity.read(cx).id.clone();
 
+        // Extract editor state for footer display
+        let (snippet_helper_text, language_label) = {
+            let editor = entity.read(cx);
+            let language = editor.language().to_string();
+
+            // Build snippet indicator if in snippet mode
+            let snippet_text = editor.snippet_state().map(|state| {
+                let current = state.current_tabstop_idx + 1; // 1-based for display
+                let total = state.snippet.tabstops.len();
+
+                // Get the current tabstop's display name (placeholder or index)
+                let current_name = state
+                    .snippet
+                    .tabstops
+                    .get(state.current_tabstop_idx)
+                    .and_then(|ts| {
+                        ts.placeholder.clone().or_else(|| {
+                            ts.choices
+                                .as_ref()
+                                .and_then(|c: &Vec<String>| c.first().cloned())
+                        })
+                    })
+                    .unwrap_or_else(|| format!("${}", current));
+
+                format!(
+                    "Tab {} of {} · \"{}\" · Tab to continue, Esc to exit",
+                    current, total, current_name
+                )
+            });
+
+            (snippet_text, language)
+        };
+
         // NOTE: The EditorPrompt entity has its own track_focus and on_key_down in its render method.
         // We do NOT add track_focus here to avoid duplicate focus tracking on the same handle.
         //
@@ -117,7 +150,15 @@ impl ScriptListApp {
             .rounded(px(design_visual.radius_lg))
             .on_key_down(handle_key)
             // Main content area with editor - use flex_1 to fill space above footer
-            .child(div().flex_1().size_full().child(entity))
+            // NOTE: Use w_full() not size_full() - size_full() includes h_full() which conflicts with flex
+            .child(
+                div()
+                    .flex_1()
+                    .w_full()
+                    .min_h(px(0.))
+                    .overflow_hidden()
+                    .child(entity),
+            )
             // Unified footer with Submit + Actions
             .child({
                 let handle_submit = cx.entity().downgrade();
@@ -131,31 +172,38 @@ impl ScriptListApp {
                     border: design_colors.border,
                 };
 
-                let mut footer = PromptFooter::new(
-                    PromptFooterConfig::new()
-                        .primary_label("Submit")
-                        .primary_shortcut("↵")
-                        .secondary_label("Actions")
-                        .secondary_shortcut("⌘K")
-                        .show_secondary(has_actions),
-                    footer_colors,
-                )
-                .on_primary_click(Box::new(move |_, _window, cx| {
-                    // Get editor content and submit
-                    if let Some(editor_entity) = entity_weak.upgrade() {
-                        let content = editor_entity.update(cx, |editor, cx| editor.content(cx));
-                        if let Some(app) = handle_submit.upgrade() {
-                            app.update(cx, |this, cx| {
-                                logging::log("EDITOR", "Footer Submit button clicked");
-                                this.submit_prompt_response(
-                                    prompt_id_for_submit.clone(),
-                                    Some(content),
-                                    cx,
-                                );
-                            });
+                // Build footer config with optional helper text and language
+                let mut footer_config = PromptFooterConfig::new()
+                    .primary_label("Submit")
+                    .primary_shortcut("↵")
+                    .secondary_label("Actions")
+                    .secondary_shortcut("⌘K")
+                    .show_secondary(has_actions)
+                    .info_label(language_label.clone());
+
+                // Add snippet helper text if in snippet mode
+                if let Some(ref helper) = snippet_helper_text {
+                    footer_config = footer_config.helper_text(helper.clone());
+                }
+
+                let mut footer = PromptFooter::new(footer_config, footer_colors).on_primary_click(
+                    Box::new(move |_, _window, cx| {
+                        // Get editor content and submit
+                        if let Some(editor_entity) = entity_weak.upgrade() {
+                            let content = editor_entity.update(cx, |editor, cx| editor.content(cx));
+                            if let Some(app) = handle_submit.upgrade() {
+                                app.update(cx, |this, cx| {
+                                    logging::log("EDITOR", "Footer Submit button clicked");
+                                    this.submit_prompt_response(
+                                        prompt_id_for_submit.clone(),
+                                        Some(content),
+                                        cx,
+                                    );
+                                });
+                            }
                         }
-                    }
-                }));
+                    }),
+                );
 
                 if has_actions {
                     footer = footer.on_secondary_click(Box::new(move |_, window, cx| {

@@ -1,11 +1,12 @@
 //! PromptFooter - Reusable footer component for prompts
 //!
 //! This module provides a theme-aware footer component used across all prompt types.
-//! It includes a Script Kit logo, primary action button, divider, and secondary action button.
+//! It includes a Script Kit logo, optional helper text, primary action button, divider,
+//! and secondary action button.
 //!
 //! # Structure
 //! ```text
-//! | [Logo] |                           | [Primary ↵] | [Secondary ⌘K] |
+//! | [Logo] [Helper Text] |              | [Info] | [Primary ↵] | [Secondary ⌘K] |
 //! ```
 //!
 //! # Example
@@ -91,6 +92,10 @@ pub struct PromptFooterConfig {
     pub show_logo: bool,
     /// Whether to show the secondary button
     pub show_secondary: bool,
+    /// Optional helper text shown next to logo (e.g., "Tab 1 of 2 · Tab to continue")
+    pub helper_text: Option<String>,
+    /// Optional info label shown before buttons (e.g., "typescript", "5 items")
+    pub info_label: Option<String>,
 }
 
 impl Default for PromptFooterConfig {
@@ -102,6 +107,8 @@ impl Default for PromptFooterConfig {
             secondary_shortcut: "⌘K".to_string(),
             show_logo: true,
             show_secondary: true,
+            helper_text: None,
+            info_label: None,
         }
     }
 }
@@ -145,6 +152,18 @@ impl PromptFooterConfig {
     /// Set whether to show the secondary button
     pub fn show_secondary(mut self, show: bool) -> Self {
         self.show_secondary = show;
+        self
+    }
+
+    /// Set optional helper text shown next to the logo
+    pub fn helper_text(mut self, text: impl Into<String>) -> Self {
+        self.helper_text = Some(text.into());
+        self
+    }
+
+    /// Set optional info label shown before buttons (e.g., language indicator)
+    pub fn info_label(mut self, label: impl Into<String>) -> Self {
+        self.info_label = Some(label.into());
         self
     }
 }
@@ -267,7 +286,20 @@ impl RenderOnce for PromptFooter {
         let colors = self.colors;
         let hover_bg = (colors.accent << 8) | 0x26; // 15% opacity for hover
 
-        // Build the right-side buttons container
+        // Build the right-side container (info label + buttons)
+        let mut right_side = hstack().gap(px(8.)).items_center();
+
+        // Info label (e.g., "typescript", "5 items") - shown before buttons
+        if let Some(ref info) = self.config.info_label {
+            right_side = right_side.child(
+                div()
+                    .text_xs()
+                    .text_color(colors.text_muted.to_rgb())
+                    .child(info.clone()),
+            );
+        }
+
+        // Build the buttons container
         let mut buttons = hstack().gap(px(4.));
 
         // Primary button
@@ -291,6 +323,8 @@ impl RenderOnce for PromptFooter {
             ));
         }
 
+        right_side = right_side.child(buttons);
+
         // Main footer container (40px height)
         let mut footer = div()
             .w_full()
@@ -303,16 +337,28 @@ impl RenderOnce for PromptFooter {
             .border_t_1()
             .border_color(colors.border.rgba8(0x30)); // Top border with 19% opacity
 
-        // Left: Logo (if enabled)
+        // Left side: Logo + helper text
+        let mut left_side = hstack().gap(px(8.)).items_center();
+
+        // Logo (if enabled)
         if self.config.show_logo {
-            footer = footer.child(self.render_logo());
-        } else {
-            // Spacer for alignment when logo is hidden
-            footer = footer.child(div());
+            left_side = left_side.child(self.render_logo());
         }
 
-        // Right: Buttons
-        footer.child(buttons)
+        // Helper text (e.g., "Tab 1 of 2 · Tab to continue, Esc to exit")
+        if let Some(ref helper) = self.config.helper_text {
+            left_side = left_side.child(
+                div()
+                    .text_xs()
+                    .text_color(colors.accent.to_rgb())
+                    .child(helper.clone()),
+            );
+        }
+
+        footer = footer.child(left_side);
+
+        // Right: Info label + Buttons
+        footer.child(right_side)
     }
 }
 

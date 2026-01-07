@@ -444,6 +444,11 @@ impl EditorPrompt {
         self.snippet_state.as_ref().map(|s| s.current_tabstop_idx)
     }
 
+    /// Get a reference to the snippet state (for footer display)
+    pub fn snippet_state(&self) -> Option<&SnippetState> {
+        self.snippet_state.as_ref()
+    }
+
     /// Move to the next tabstop (public wrapper for testing via stdin commands)
     pub fn next_tabstop_public(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
         self.next_tabstop(window, cx)
@@ -1147,8 +1152,8 @@ impl Render for EditorPrompt {
             }
         });
 
-        // Calculate height
-        let height = self.content_height.unwrap_or_else(|| px(500.)); // Default height if not specified
+        // Calculate height (kept for reference, now using flex_1() for layout)
+        let _height = self.content_height.unwrap_or_else(|| px(500.)); // Default height if not specified
 
         // Get mono font family for code editor
         let fonts = self.theme.get_fonts();
@@ -1199,12 +1204,14 @@ impl Render for EditorPrompt {
         // Build the main container - code editor fills the space completely
         // Note: We don't track focus on the container because the InputState
         // has its own focus handle. Key events will be handled by the Input.
+        // NOTE: Use flex_1() instead of explicit height to allow parent flex container
+        // to control sizing (enables unified footer below editor)
         let mut container = div()
             .id("editor-v2")
             .flex()
             .flex_col()
             .w_full()
-            .h(height)
+            .flex_1()
             .bg(rgb(colors.background.main))
             .text_color(rgb(colors.text.primary))
             .font_family(mono_font.clone()) // Use monospace font for code
@@ -1241,68 +1248,13 @@ impl Render for EditorPrompt {
             );
         }
 
-        // Footer with language indicator and snippet state
-        let language_display: SharedString = self.language.clone().into();
-
-        // Build snippet indicator if in snippet mode
-        let snippet_indicator = if let Some(ref state) = self.snippet_state {
-            let current = state.current_tabstop_idx + 1; // 1-based for display
-            let total = state.snippet.tabstops.len();
-
-            // Get the current tabstop's display name (placeholder or index)
-            let current_name = state
-                .snippet
-                .tabstops
-                .get(state.current_tabstop_idx)
-                .and_then(|ts| {
-                    ts.placeholder
-                        .clone()
-                        .or_else(|| ts.choices.as_ref().and_then(|c| c.first().cloned()))
-                })
-                .unwrap_or_else(|| format!("${}", current));
-
-            Some(format!(
-                "Tab {} of {} · \"{}\" · Tab to continue, Esc to exit",
-                current, total, current_name
-            ))
-        } else {
-            None
-        };
-
-        container = container.child(
-            div()
-                .flex()
-                .flex_row()
-                .items_center()
-                .justify_between() // Space between left and right
-                .w_full()
-                .h(px(24.))
-                .px(px(12.))
-                .bg(rgb(colors.background.title_bar))
-                .border_t_1()
-                .border_color(rgb(colors.ui.border))
-                // Left side: snippet indicator (if in snippet mode)
-                // Uses text_xs() because this is UI chrome, not editor content
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(rgb(colors.accent.selected))
-                        .when_some(snippet_indicator, |d, indicator| {
-                            d.child(SharedString::from(indicator))
-                        }),
-                )
-                // Right side: language indicator
-                // Uses text_xs() because this is UI chrome, not editor content
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(rgb(colors.text.muted))
-                        .child(language_display),
-                ),
-        );
+        // NOTE: Footer rendering has been moved to the unified PromptFooter component
+        // in render_prompts/editor.rs. The snippet state and language are passed to that footer.
 
         // Wrap in a relative container to support absolute positioning for the choices popup
-        let mut wrapper = div().relative().w_full().h_full().child(container);
+        // NOTE: Use flex_1() instead of h_full() to allow parent flex container to control sizing
+        // This enables the unified footer to be placed below the editor
+        let mut wrapper = div().relative().w_full().flex_1().child(container);
 
         // Add the choices popup overlay if visible
         if let Some(popup_element) = self.render_choices_popup(cx) {
