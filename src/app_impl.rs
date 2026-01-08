@@ -1530,15 +1530,25 @@ impl ScriptListApp {
                         // Wait for debounce period
                         Timer::after(std::time::Duration::from_millis(200)).await;
 
-                        // Run mdfind in background thread
+                        // Run search or directory listing in background thread
                         let (tx, rx) = std::sync::mpsc::channel();
                         let query_for_thread = search_query.clone();
                         std::thread::spawn(move || {
-                            let results = crate::file_search::search_files(
-                                &query_for_thread,
-                                None,
-                                crate::file_search::DEFAULT_LIMIT,
-                            );
+                            // Check if query looks like a directory path
+                            // If so, list directory contents instead of searching
+                            let results =
+                                if crate::file_search::is_directory_path(&query_for_thread) {
+                                    crate::file_search::list_directory(
+                                        &query_for_thread,
+                                        crate::file_search::DEFAULT_LIMIT,
+                                    )
+                                } else {
+                                    crate::file_search::search_files(
+                                        &query_for_thread,
+                                        None,
+                                        crate::file_search::DEFAULT_LIMIT,
+                                    )
+                                };
                             let _ = tx.send(results);
                         });
 
@@ -1893,12 +1903,13 @@ impl ScriptListApp {
                 query,
                 selected_index,
             } => {
-                // Re-run mdfind search with new query
-                let results = crate::file_search::search_files(
-                    &text,
-                    None,
-                    crate::file_search::DEFAULT_LIMIT,
-                );
+                // Check if query looks like a directory path
+                // If so, list directory contents instead of searching
+                let results = if crate::file_search::is_directory_path(&text) {
+                    crate::file_search::list_directory(&text, crate::file_search::DEFAULT_LIMIT)
+                } else {
+                    crate::file_search::search_files(&text, None, crate::file_search::DEFAULT_LIMIT)
+                };
                 logging::log(
                     "EXEC",
                     &format!(

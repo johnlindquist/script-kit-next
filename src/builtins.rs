@@ -202,6 +202,8 @@ pub enum BuiltInFeature {
     SettingsCommand(SettingsCommandType),
     /// Utility commands (scratch pad, quick terminal)
     UtilityCommand(UtilityCommandType),
+    /// File search for navigating directories and finding files
+    FileSearch,
 }
 
 /// A built-in feature entry that appears in the main search
@@ -922,6 +924,30 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         "💻",
     ));
 
+    // =========================================================================
+    // File Search (Directory Navigation)
+    // =========================================================================
+
+    entries.push(BuiltInEntry::new_with_icon(
+        "builtin-file-search",
+        "Search Files",
+        "Browse directories and search for files",
+        vec![
+            "file",
+            "search",
+            "find",
+            "directory",
+            "folder",
+            "browse",
+            "navigate",
+            "path",
+            "open",
+            "explorer",
+        ],
+        BuiltInFeature::FileSearch,
+        "📂",
+    ));
+
     debug!(count = entries.len(), "Built-in entries loaded");
     entries
 }
@@ -1411,5 +1437,34 @@ mod tests {
             feature,
             BuiltInFeature::WindowAction(WindowActionType::Minimize)
         );
+    }
+
+    #[test]
+    fn test_file_search_builtin_exists() {
+        let config = BuiltInConfig::default();
+        let entries = get_builtin_entries(&config);
+
+        // Check that FileSearch entry exists
+        let file_search = entries.iter().find(|e| e.id == "builtin-file-search");
+        assert!(
+            file_search.is_some(),
+            "FileSearch builtin should exist in the main menu"
+        );
+
+        let file_search = file_search.unwrap();
+        assert_eq!(file_search.name, "Search Files");
+        assert_eq!(file_search.feature, BuiltInFeature::FileSearch);
+        assert!(file_search.keywords.contains(&"file".to_string()));
+        assert!(file_search.keywords.contains(&"search".to_string()));
+        assert!(file_search.keywords.contains(&"find".to_string()));
+        assert!(file_search.keywords.contains(&"directory".to_string()));
+        assert!(file_search.icon.is_some());
+    }
+
+    #[test]
+    fn test_file_search_feature_equality() {
+        assert_eq!(BuiltInFeature::FileSearch, BuiltInFeature::FileSearch);
+        assert_ne!(BuiltInFeature::FileSearch, BuiltInFeature::ClipboardHistory);
+        assert_ne!(BuiltInFeature::FileSearch, BuiltInFeature::Notes);
     }
 }

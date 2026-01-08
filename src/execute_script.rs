@@ -66,8 +66,9 @@ impl ScriptListApp {
                 // which meant stderr was never available for error messages. Now we use
                 // spawn_stderr_reader which returns a StderrCapture containing both the buffer
                 // AND a JoinHandle so we can wait for stderr to fully drain before reading.
-                let stderr_capture = stderr_handle
-                    .map(|stderr| executor::spawn_stderr_reader(stderr, script_path_for_errors.clone()));
+                let stderr_capture = stderr_handle.map(|stderr| {
+                    executor::spawn_stderr_reader(stderr, script_path_for_errors.clone())
+                });
 
                 // Move the capture into the reader thread - it owns both buffer and join handle
                 // The reader thread will wait for stderr to drain before reading contents
@@ -763,11 +764,25 @@ impl ScriptListApp {
                                         ),
                                     );
 
-                                    let results = file_search::search_files(
-                                        query,
-                                        only_in.as_deref(),
-                                        file_search::DEFAULT_LIMIT,
-                                    );
+                                    // Check if query looks like a directory path
+                                    // If so, list directory contents instead of searching
+                                    let results = if file_search::is_directory_path(query) {
+                                        logging::log(
+                                            "EXEC",
+                                            &format!("Detected directory path, listing: {}", query),
+                                        );
+                                        file_search::list_directory(
+                                            query,
+                                            file_search::DEFAULT_LIMIT,
+                                        )
+                                    } else {
+                                        file_search::search_files(
+                                            query,
+                                            only_in.as_deref(),
+                                            file_search::DEFAULT_LIMIT,
+                                        )
+                                    };
+
                                     let file_entries: Vec<protocol::FileSearchResultEntry> =
                                         results
                                             .into_iter()
@@ -1138,7 +1153,11 @@ impl ScriptListApp {
                                         // 100ms timeout is generous - stderr should drain quickly.
                                         let stderr_output = stderr_capture
                                             .as_ref()
-                                            .map(|cap| cap.get_contents_with_timeout(std::time::Duration::from_millis(100)))
+                                            .map(|cap| {
+                                                cap.get_contents_with_timeout(
+                                                    std::time::Duration::from_millis(100),
+                                                )
+                                            })
                                             .filter(|s| !s.is_empty());
 
                                         if let Some(ref stderr_text) = stderr_output {
@@ -1197,7 +1216,11 @@ impl ScriptListApp {
                                 // FIX: Wait for stderr reader to complete before reading
                                 let stderr_output = stderr_capture
                                     .as_ref()
-                                    .map(|cap| cap.get_contents_with_timeout(std::time::Duration::from_millis(100)))
+                                    .map(|cap| {
+                                        cap.get_contents_with_timeout(
+                                            std::time::Duration::from_millis(100),
+                                        )
+                                    })
                                     .filter(|s| !s.is_empty());
 
                                 if let Some(ref stderr_text) = stderr_output {

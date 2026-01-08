@@ -88,6 +88,49 @@ pub fn is_url(input: &str) -> bool {
     URL_REGEX.is_match(trimmed)
 }
 
+/// Check if the input looks like a directory path
+///
+/// This is a more lenient check than `is_file_path` - it recognizes:
+/// - `~` or `~/...` (home directory paths)
+/// - `/...` (absolute paths)
+/// - `.` or `./...` (current directory relative paths)
+/// - `..` or `../...` (parent directory relative paths)
+///
+/// Unlike `is_file_path`, this also matches:
+/// - `~` alone (home directory)
+/// - `~/dev` without trailing slash
+/// - `.` or `..` alone
+/// - `../foo` without trailing slash
+pub fn is_directory_path(input: &str) -> bool {
+    let trimmed = input.trim();
+
+    if trimmed.is_empty() {
+        return false;
+    }
+
+    // Home directory path (~ or ~/...)
+    if trimmed == "~" || trimmed.starts_with("~/") {
+        return true;
+    }
+
+    // Unix-style absolute path
+    if trimmed.starts_with('/') {
+        return true;
+    }
+
+    // Current directory (. or ./...)
+    if trimmed == "." || trimmed.starts_with("./") {
+        return true;
+    }
+
+    // Parent directory (.. or ../...)
+    if trimmed == ".." || trimmed.starts_with("../") {
+        return true;
+    }
+
+    false
+}
+
 /// Check if the input is a file path
 ///
 /// Matches:
@@ -429,5 +472,67 @@ mod tests {
     fn test_detect_input_type_priority() {
         // URL takes priority over file path even if it looks like a path
         assert_eq!(detect_input_type("file:///path/to/file"), InputType::Url);
+    }
+
+    // ==================== Directory Path Detection Tests ====================
+
+    #[test]
+    fn test_is_directory_path_home_with_trailing_slash() {
+        assert!(is_directory_path("~/dev/"));
+    }
+
+    #[test]
+    fn test_is_directory_path_home_without_trailing_slash() {
+        assert!(is_directory_path("~/dev"));
+    }
+
+    #[test]
+    fn test_is_directory_path_absolute() {
+        assert!(is_directory_path("/usr/local/bin"));
+    }
+
+    #[test]
+    fn test_is_directory_path_relative_current_dir() {
+        assert!(is_directory_path("./src/"));
+    }
+
+    #[test]
+    fn test_is_directory_path_relative_parent_dir() {
+        assert!(is_directory_path("../foo"));
+    }
+
+    #[test]
+    fn test_is_directory_path_negative_search_term() {
+        assert!(!is_directory_path("search term"));
+    }
+
+    #[test]
+    fn test_is_directory_path_negative_simple_word() {
+        assert!(!is_directory_path("clipboard"));
+    }
+
+    #[test]
+    fn test_is_directory_path_just_tilde() {
+        assert!(is_directory_path("~"));
+    }
+
+    #[test]
+    fn test_is_directory_path_empty() {
+        assert!(!is_directory_path(""));
+    }
+
+    #[test]
+    fn test_is_directory_path_whitespace() {
+        assert!(!is_directory_path("   "));
+    }
+
+    #[test]
+    fn test_is_directory_path_relative_dot_only() {
+        assert!(is_directory_path("."));
+    }
+
+    #[test]
+    fn test_is_directory_path_relative_dotdot_only() {
+        assert!(is_directory_path(".."));
     }
 }

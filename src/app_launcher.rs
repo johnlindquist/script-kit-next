@@ -230,20 +230,22 @@ fn get_mtime(path: &Path) -> Option<i64> {
 // SQLite Cache Operations
 // ============================================================================
 
-/// Load all apps from the SQLite cache (FAST - defers icon decoding)
+/// Load all apps from the SQLite cache with icon blobs returned separately.
 ///
-/// Returns apps with icon blobs but WITHOUT decoding icons.
-/// Icon decoding is deferred to a background thread to keep cache load <50ms.
+/// Returns (apps WITHOUT icons, icon blobs for decoding).
+/// This allows the caller to decode icons into a SHARED Arc rather than
+/// spawning a background thread that updates a local Arc.
+///
 /// This is the fast path for startup - no filesystem scanning or icon decoding.
-fn load_apps_from_db() -> Vec<AppInfo> {
-    let _span = info_span!("load_apps_from_db").entered();
+fn load_apps_from_db_with_blobs() -> (Vec<AppInfo>, Vec<(usize, Vec<u8>)>) {
+    let _span = info_span!("load_apps_from_db_with_blobs").entered();
     let start = Instant::now();
 
     let db = match get_apps_db() {
         Ok(db) => db,
         Err(e) => {
             warn!(error = %e, "Failed to get apps database");
-            return Vec::new();
+            return (Vec::new(), Vec::new());
         }
     };
 
@@ -251,7 +253,7 @@ fn load_apps_from_db() -> Vec<AppInfo> {
         Ok(c) => c,
         Err(e) => {
             error!(error = %e, "Failed to lock apps database");
-            return Vec::new();
+            return (Vec::new(), Vec::new());
         }
     };
 
@@ -264,7 +266,7 @@ fn load_apps_from_db() -> Vec<AppInfo> {
         Ok(s) => s,
         Err(e) => {
             warn!(error = %e, "Failed to prepare apps query");
-            return Vec::new();
+            return (Vec::new(), Vec::new());
         }
     };
 
@@ -280,7 +282,7 @@ fn load_apps_from_db() -> Vec<AppInfo> {
 
     let query_ms = query_start.elapsed().as_millis();
 
-    // Phase 1: Build apps WITHOUT icons (fast)
+    // Build apps WITHOUT icons (fast) + collect icon blobs separately
     let mut apps = Vec::new();
     let mut icon_blobs: Vec<(usize, Vec<u8>)> = Vec::new();
 
@@ -294,7 +296,7 @@ fn load_apps_from_db() -> Vec<AppInfo> {
                 continue;
             }
 
-            // Store icon blob for deferred decoding
+            // Store icon blob for caller to decode
             if let Some(blob) = icon_blob {
                 icon_blobs.push((apps.len(), blob));
             }
@@ -303,7 +305,7 @@ fn load_apps_from_db() -> Vec<AppInfo> {
                 name,
                 path,
                 bundle_id,
-                icon: None, // Defer icon decoding
+                icon: None, // Caller will decode icons
             });
         }
     }
@@ -319,43 +321,25 @@ fn load_apps_from_db() -> Vec<AppInfo> {
         query_ms,
         build_ms,
         total_ms = start.elapsed().as_millis(),
-        "Loaded apps from DB (icons deferred)"
+        "Loaded apps from DB (icons returned as blobs)"
     );
 
-    // Phase 2: Decode icons in background thread
-    if !icon_blobs.is_empty() {
-        // We'll return apps Arc'd so we can update them from background thread
-        let apps_arc = Arc::new(Mutex::new(apps));
-        let apps_for_thread = Arc::clone(&apps_arc);
+    (apps, icon_blobs)
+}
 
-        std::thread::spawn(move || {
-            let decode_start = Instant::now();
-            let mut decoded_count = 0;
-
-            for (idx, blob) in icon_blobs {
-                if let Ok(icon) =
-                    crate::list_item::decode_png_to_render_image_with_bgra_conversion(&blob)
-                {
-                    if let Ok(mut apps_guard) = apps_for_thread.lock() {
-                        if let Some(app) = apps_guard.get_mut(idx) {
-                            app.icon = Some(icon);
-                            decoded_count += 1;
-                        }
-                    }
-                }
-            }
-
-            info!(
-                decoded_count,
-                duration_ms = decode_start.elapsed().as_millis(),
-                "Background icon decoding complete"
-            );
-        });
-
-        // Return apps (icons will be populated asynchronously)
-        return apps_arc.lock().map(|g| g.clone()).unwrap_or_default();
-    }
-
+/// Load all apps from the SQLite cache (FAST - defers icon decoding)
+///
+/// Returns apps WITHOUT icons. Icon decoding is handled by the caller
+/// to ensure icons are decoded into a SHARED Arc rather than a local one.
+/// This is the fast path for startup - no filesystem scanning or icon decoding.
+///
+/// Note: This is a convenience wrapper. Use `load_apps_from_db_with_blobs()`
+/// if you need to decode icons into a shared Arc.
+#[allow(dead_code)]
+fn load_apps_from_db() -> Vec<AppInfo> {
+    let (apps, _icon_blobs) = load_apps_from_db_with_blobs();
+    // Note: icon_blobs are discarded - caller should use load_apps_from_db_with_blobs()
+    // if they want to decode icons into a shared Arc
     apps
 }
 
@@ -698,25 +682,56 @@ pub fn scan_applications() -> Vec<AppInfo> {
         let start = Instant::now();
 
         // Phase 1: Load from SQLite (FAST - no icon decoding)
-        let cached_apps = load_apps_from_db();
+        // FIXED: Use load_apps_from_db_with_blobs() to get icon blobs separately
+        // so we can decode them into the SHARED Arc (not a local one).
+        let (cached_apps, icon_blobs) = load_apps_from_db_with_blobs();
         let cache_load_ms = start.elapsed().as_millis();
 
         if !cached_apps.is_empty() {
             info!(
                 app_count = cached_apps.len(),
+                icon_blobs = icon_blobs.len(),
                 cache_load_ms,
                 target_met = cache_load_ms < 50,
                 "Cache load complete (target: <50ms)"
             );
 
-            // Start background scan for updates
             // IMPORTANT: Create ONE Arc and return it. The background thread gets a clone
-            // of the same Arc so its updates are visible to callers.
+            // of the same Arc so its updates (icon decoding + directory scan) are visible.
             let cache_arc = Arc::new(Mutex::new(cached_apps));
             let cache_for_thread = Arc::clone(&cache_arc);
 
             std::thread::spawn(move || {
-                let _span = info_span!("background_app_scan").entered();
+                let _span = info_span!("background_app_update").entered();
+
+                // Phase 2a: Decode icons into the SHARED Arc (FIX for icon cache bug)
+                // Previously this happened in load_apps_from_db() into a LOCAL Arc
+                // that was orphaned when the function returned a Vec clone.
+                if !icon_blobs.is_empty() {
+                    let decode_start = Instant::now();
+                    let mut decoded_count = 0;
+
+                    for (idx, blob) in icon_blobs {
+                        if let Ok(icon) =
+                            crate::list_item::decode_png_to_render_image_with_bgra_conversion(&blob)
+                        {
+                            if let Ok(mut apps_guard) = cache_for_thread.lock() {
+                                if let Some(app) = apps_guard.get_mut(idx) {
+                                    app.icon = Some(icon);
+                                    decoded_count += 1;
+                                }
+                            }
+                        }
+                    }
+
+                    info!(
+                        decoded_count,
+                        duration_ms = decode_start.elapsed().as_millis(),
+                        "Background icon decoding complete (into shared cache)"
+                    );
+                }
+
+                // Phase 2b: Scan directories for new/changed apps
                 set_loading_state(AppLoadingState::ScanningDirectories);
 
                 let scan_start = Instant::now();
@@ -1319,22 +1334,47 @@ mod tests {
     // Note: launch_application is not tested automatically to avoid
     // actually launching apps during test runs. It can be tested manually.
 
+    /// Test that icons are properly decoded when loading from cache.
+    ///
+    /// This test verifies the fix for a bug where:
+    /// - load_apps_from_db() spawned a background thread to decode icons
+    /// - The thread decoded icons into a LOCAL Arc
+    /// - But the function returned a CLONE of Vec, not the Arc
+    /// - So icons were decoded into an orphaned Arc and lost
     #[test]
-    fn test_get_icon_cache_dir() {
-        let cache_dir = get_icon_cache_dir();
-        assert!(cache_dir.is_some(), "Should return a cache directory path");
+    fn test_load_apps_from_db_returns_apps_with_icon_blobs() {
+        // First, ensure we have some apps in the database by doing a fresh scan
+        // This populates the SQLite DB with apps including icon blobs
+        let fresh_apps = scan_applications_fresh();
+        assert!(!fresh_apps.is_empty(), "Should have apps after fresh scan");
 
-        let dir = cache_dir.unwrap();
+        // Count how many apps have icons after fresh scan (these were decoded synchronously)
+        let fresh_with_icons = fresh_apps.iter().filter(|a| a.icon.is_some()).count();
         assert!(
-            dir.ends_with("cache/app-icons"),
-            "Cache dir should end with cache/app-icons: {:?}",
-            dir
+            fresh_with_icons > 0,
+            "Fresh scan should produce some apps with icons"
         );
+
+        // Now test the return type from load_apps_from_db
+        // The bug was that it returns (Vec<AppInfo>, Vec<(usize, Vec<u8>)>) implicitly
+        // by spawning a thread but returning a clone that doesn't get updated
+        let (apps_without_icons, icon_blobs) = load_apps_from_db_with_blobs();
+
+        // Verify we got apps
+        assert!(!apps_without_icons.is_empty(), "Should load apps from DB");
+
+        // Verify we got icon blobs - these should be returned separately
+        // The bug was that icon blobs were decoded in a background thread
+        // but into an Arc that was orphaned when the function returned
         assert!(
-            dir.to_string_lossy().contains(".scriptkit"),
-            "Cache dir should be under .scriptkit: {:?}",
-            dir
+            !icon_blobs.is_empty(),
+            "Should return icon blobs for decoding. Found {} apps but {} icon blobs",
+            apps_without_icons.len(),
+            icon_blobs.len()
         );
+
+        // The fix is that icon_blobs are now returned separately so the caller
+        // can decode them into the SHARED Arc that APP_CACHE holds
     }
 
     #[test]

@@ -623,6 +623,7 @@ impl ScriptListApp {
                                 "Quick Utility".to_string()
                             }
                             builtins::BuiltInFeature::SettingsCommand(_) => "Settings".to_string(),
+                            builtins::BuiltInFeature::FileSearch => "File Browser".to_string(),
                         };
                         panel = panel.child(
                             div()

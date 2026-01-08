@@ -735,6 +735,14 @@ impl ScriptListApp {
                     }
                 }
             }
+
+            // =========================================================================
+            // File Search (Directory Navigation)
+            // =========================================================================
+            builtins::BuiltInFeature::FileSearch => {
+                logging::log("EXEC", "Opening File Search");
+                self.open_file_search(String::new(), cx);
+            }
         }
     }
 
@@ -1049,8 +1057,17 @@ impl ScriptListApp {
             &format!("Opening File Search with query: {}", query),
         );
 
-        // Perform initial search
-        let results = file_search::search_files(&query, None, file_search::DEFAULT_LIMIT);
+        // Perform initial search or directory listing
+        // Check if query looks like a directory path
+        let results = if file_search::is_directory_path(&query) {
+            logging::log(
+                "EXEC",
+                &format!("Detected directory path, listing: {}", query),
+            );
+            file_search::list_directory(&query, file_search::DEFAULT_LIMIT)
+        } else {
+            file_search::search_files(&query, None, file_search::DEFAULT_LIMIT)
+        };
         logging::log(
             "EXEC",
             &format!("File search found {} results", results.len()),

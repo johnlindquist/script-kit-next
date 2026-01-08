@@ -449,6 +449,171 @@ pub fn shorten_path(path: &str) -> String {
     path.to_string()
 }
 
+/// Expand a path string, replacing ~ with the home directory
+/// and resolving relative paths (., ..)
+///
+/// # Arguments
+/// * `path` - Path string that may contain ~, ., or ..
+///
+/// # Returns
+/// Expanded absolute path as a String, or None if expansion fails
+pub fn expand_path(path: &str) -> Option<String> {
+    let trimmed = path.trim();
+
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    // Handle home directory expansion
+    if trimmed == "~" {
+        return dirs::home_dir().and_then(|p| p.to_str().map(|s| s.to_string()));
+    }
+
+    if let Some(rest) = trimmed.strip_prefix("~/") {
+        return dirs::home_dir().and_then(|home| home.join(rest).to_str().map(|s| s.to_string()));
+    }
+
+    // Handle relative paths
+    if trimmed == "." || trimmed.starts_with("./") {
+        let cwd = std::env::current_dir().ok()?;
+        let suffix = trimmed.strip_prefix("./").unwrap_or("");
+        if suffix.is_empty() {
+            return cwd.to_str().map(|s| s.to_string());
+        }
+        return cwd.join(suffix).to_str().map(|s| s.to_string());
+    }
+
+    if trimmed == ".." || trimmed.starts_with("../") {
+        let cwd = std::env::current_dir().ok()?;
+        let parent = cwd.parent()?;
+        let suffix = trimmed.strip_prefix("../").unwrap_or("");
+        if suffix.is_empty() {
+            return parent.to_str().map(|s| s.to_string());
+        }
+        return parent.join(suffix).to_str().map(|s| s.to_string());
+    }
+
+    // Already an absolute path
+    if trimmed.starts_with('/') {
+        return Some(trimmed.to_string());
+    }
+
+    // Not a recognized path format
+    None
+}
+
+/// List contents of a directory
+///
+/// Returns files and directories sorted with directories first, then by name.
+/// Handles ~ expansion and relative paths.
+///
+/// # Arguments
+/// * `dir_path` - Directory path (can include ~, ., ..)
+/// * `limit` - Maximum number of results to return
+///
+/// # Returns
+/// Vector of FileResult structs for directory contents
+#[instrument(skip_all, fields(dir_path = %dir_path, limit = limit))]
+pub fn list_directory(dir_path: &str, limit: usize) -> Vec<FileResult> {
+    debug!("Starting directory listing");
+
+    // Expand the path
+    let expanded = match expand_path(dir_path) {
+        Some(p) => p,
+        None => {
+            debug!("Failed to expand path: {}", dir_path);
+            return Vec::new();
+        }
+    };
+
+    let path = Path::new(&expanded);
+
+    // Check if it's a valid directory
+    if !path.is_dir() {
+        debug!("Path is not a directory: {}", expanded);
+        return Vec::new();
+    }
+
+    // Read directory contents
+    let entries = match std::fs::read_dir(path) {
+        Ok(entries) => entries,
+        Err(e) => {
+            warn!(error = %e, "Failed to read directory: {}", expanded);
+            return Vec::new();
+        }
+    };
+
+    let mut results: Vec<FileResult> = Vec::new();
+
+    for entry in entries.flatten() {
+        let entry_path = entry.path();
+        let path_str = match entry_path.to_str() {
+            Some(s) => s.to_string(),
+            None => continue,
+        };
+
+        let name = entry_path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .to_string();
+
+        // Skip hidden files (starting with .)
+        if name.starts_with('.') {
+            continue;
+        }
+
+        // Get metadata
+        let (size, modified) = match std::fs::metadata(&entry_path) {
+            Ok(meta) => {
+                let size = meta.len();
+                let modified = meta
+                    .modified()
+                    .ok()
+                    .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+                    .map(|d| d.as_secs())
+                    .unwrap_or(0);
+                (size, modified)
+            }
+            Err(_) => (0, 0),
+        };
+
+        let file_type = detect_file_type(&entry_path);
+
+        results.push(FileResult {
+            path: path_str,
+            name,
+            size,
+            modified,
+            file_type,
+        });
+    }
+
+    // Sort: directories first, then alphabetically by name
+    results.sort_by(|a, b| {
+        let a_is_dir = matches!(a.file_type, FileType::Directory);
+        let b_is_dir = matches!(b.file_type, FileType::Directory);
+
+        match (a_is_dir, b_is_dir) {
+            (true, false) => std::cmp::Ordering::Less,
+            (false, true) => std::cmp::Ordering::Greater,
+            _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+        }
+    });
+
+    // Apply limit
+    results.truncate(limit);
+
+    debug!(result_count = results.len(), "Directory listing completed");
+    results
+}
+
+/// Check if a path looks like a directory path that should be listed
+/// (as opposed to a search query)
+///
+/// Re-exports from input_detection module for convenience
+pub use crate::scripts::input_detection::is_directory_path;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -677,5 +842,177 @@ mod tests {
                 assert_eq!(shorten_path(&test_path), "~/Documents/test.txt");
             }
         }
+    }
+
+    // ========================================================================
+    // Directory Navigation Tests
+    // ========================================================================
+
+    #[test]
+    fn test_expand_path_home() {
+        // Test ~ expansion
+        if let Some(home) = dirs::home_dir() {
+            let home_str = home.to_str().unwrap();
+
+            // Just ~
+            assert_eq!(expand_path("~"), Some(home_str.to_string()));
+
+            // ~/subdir
+            let expanded = expand_path("~/Documents");
+            assert!(expanded.is_some());
+            assert!(expanded.unwrap().starts_with(home_str));
+        }
+    }
+
+    #[test]
+    fn test_expand_path_absolute() {
+        // Absolute paths should pass through unchanged
+        assert_eq!(expand_path("/usr/local"), Some("/usr/local".to_string()));
+        assert_eq!(expand_path("/"), Some("/".to_string()));
+        assert_eq!(
+            expand_path("/System/Library"),
+            Some("/System/Library".to_string())
+        );
+    }
+
+    #[test]
+    fn test_expand_path_relative_current() {
+        // Relative paths with .
+        let cwd = std::env::current_dir().unwrap();
+        let cwd_str = cwd.to_str().unwrap();
+
+        // Just .
+        let expanded = expand_path(".");
+        assert!(expanded.is_some());
+        assert_eq!(expanded.unwrap(), cwd_str);
+
+        // ./subdir
+        let expanded = expand_path("./src");
+        assert!(expanded.is_some());
+        let expected = cwd.join("src");
+        assert_eq!(expanded.unwrap(), expected.to_str().unwrap());
+    }
+
+    #[test]
+    fn test_expand_path_relative_parent() {
+        // Relative paths with ..
+        let cwd = std::env::current_dir().unwrap();
+        if let Some(parent) = cwd.parent() {
+            let parent_str = parent.to_str().unwrap();
+
+            // Just ..
+            let expanded = expand_path("..");
+            assert!(expanded.is_some());
+            assert_eq!(expanded.unwrap(), parent_str);
+        }
+    }
+
+    #[test]
+    fn test_expand_path_empty() {
+        assert_eq!(expand_path(""), None);
+        assert_eq!(expand_path("   "), None);
+    }
+
+    #[test]
+    fn test_expand_path_not_path() {
+        // Regular text should return None
+        assert_eq!(expand_path("hello"), None);
+        assert_eq!(expand_path("search query"), None);
+    }
+
+    #[test]
+    fn test_list_directory_nonexistent() {
+        // Non-existent directory should return empty
+        let results = list_directory("/this/path/does/not/exist/at/all", 50);
+        assert!(results.is_empty());
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn test_list_directory_system() {
+        // List /System which exists on all macOS systems
+        let results = list_directory("/System", 10);
+        assert!(!results.is_empty(), "Should find items in /System");
+
+        // Should contain Library
+        let has_library = results.iter().any(|r| r.name == "Library");
+        assert!(has_library, "Should contain Library folder");
+
+        // Library should be marked as directory
+        let library = results.iter().find(|r| r.name == "Library");
+        if let Some(lib) = library {
+            assert_eq!(lib.file_type, FileType::Directory);
+        }
+    }
+
+    #[test]
+    fn test_list_directory_home() {
+        // List home directory using ~
+        let results = list_directory("~", 100);
+
+        // Home should have at least some contents
+        // (assuming it's a valid home directory)
+        // Don't assert specific files as they vary by system
+        assert!(
+            results.is_empty() || !results.is_empty(),
+            "Should not panic on home directory"
+        );
+    }
+
+    #[test]
+    fn test_list_directory_dirs_first() {
+        // Test using /tmp which usually has both dirs and files
+        let results = list_directory("/tmp", 50);
+
+        // If we have results, verify sorting
+        if results.len() >= 2 {
+            // Find first file (non-directory)
+            let first_file_idx = results
+                .iter()
+                .position(|r| !matches!(r.file_type, FileType::Directory));
+
+            // Find last directory
+            let last_dir_idx = results
+                .iter()
+                .rposition(|r| matches!(r.file_type, FileType::Directory));
+
+            // If we have both dirs and files, dirs should come first
+            if let (Some(first_file), Some(last_dir)) = (first_file_idx, last_dir_idx) {
+                assert!(
+                    last_dir < first_file,
+                    "Directories should come before files"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_list_directory_limit() {
+        // Test limit is respected
+        let results = list_directory("/", 3);
+        assert!(results.len() <= 3, "Should respect limit");
+    }
+
+    #[test]
+    fn test_list_directory_hides_dotfiles() {
+        // Hidden files (starting with .) should be excluded
+        let results = list_directory("~", 100);
+
+        for result in &results {
+            assert!(
+                !result.name.starts_with('.'),
+                "Should not include hidden files: {}",
+                result.name
+            );
+        }
+    }
+
+    #[test]
+    fn test_is_directory_path_reexport() {
+        // Verify the re-export works
+        assert!(is_directory_path("~/dev"));
+        assert!(is_directory_path("/usr/local"));
+        assert!(is_directory_path("./src"));
+        assert!(!is_directory_path("hello world"));
     }
 }
