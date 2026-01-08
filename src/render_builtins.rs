@@ -2126,6 +2126,8 @@ impl ScriptListApp {
                                 cx.notify();
                             }
                         }
+                        // Tab/Shift+Tab handled by intercept_keystrokes in app_impl.rs
+                        // (interceptor fires BEFORE input component can capture Tab)
                         "enter" => {
                             // Check for Cmd+Enter (reveal in finder) first
                             if has_cmd {
@@ -2188,9 +2190,18 @@ impl ScriptListApp {
         let is_loading = self.file_search_loading;
 
         // Use uniform_list for virtualized scrolling
-        // Don't clear results while loading - keep showing existing results
-        // until new ones come in (better UX than flashing empty state)
-        let list_element = if filtered_len == 0 && !is_loading {
+        // Show appropriate state based on loading and results
+        let list_element = if is_loading && filtered_len == 0 {
+            // Loading state - show "Searching..." instead of empty list
+            div()
+                .w_full()
+                .py(px(design_spacing.padding_xl))
+                .text_center()
+                .text_color(rgb(text_dimmed))
+                .child("Searching...")
+                .into_any_element()
+        } else if filtered_len == 0 {
+            // No results and not loading
             div()
                 .w_full()
                 .py(px(design_spacing.padding_xl))

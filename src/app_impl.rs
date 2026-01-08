@@ -354,27 +354,122 @@ impl ScriptListApp {
             );
         }
 
-        // Add Tab key interceptor for "Ask AI" feature
+        // Add Tab key interceptor for "Ask AI" feature and file search directory navigation
         // This fires BEFORE normal key handling, allowing us to intercept Tab
         // even when the Input component has focus
         let app_entity_for_tab = cx.entity().downgrade();
         let tab_interceptor = cx.intercept_keystrokes({
             let app_entity = app_entity_for_tab;
-            move |event, _window, cx| {
+            move |event, window, cx| {
                 let key = event.keystroke.key.to_lowercase();
-                // Check for Tab key (no modifiers)
+                let has_shift = event.keystroke.modifiers.shift;
+                // Check for Tab key (no cmd/alt/ctrl modifiers, but shift is allowed)
                 if key == "tab"
                     && !event.keystroke.modifiers.platform
-                    && !event.keystroke.modifiers.shift
                     && !event.keystroke.modifiers.alt
                     && !event.keystroke.modifiers.control
                 {
                     if let Some(app) = app_entity.upgrade() {
                         app.update(cx, |this, cx| {
-                            // Only handle Tab in ScriptList view with filter text
+                            // Handle Tab in FileSearchView for directory navigation
+                            if let AppView::FileSearchView {
+                                query,
+                                selected_index,
+                            } = &mut this.current_view
+                            {
+                                if has_shift {
+                                    // Shift+Tab: Go up one directory level
+                                    if let Some(parsed) =
+                                        crate::file_search::parse_directory_path(query)
+                                    {
+                                        let current_dir = parsed.directory.trim_end_matches('/');
+
+                                        if let Some(last_slash) = current_dir.rfind('/') {
+                                            let parent_path = if last_slash == 0 {
+                                                "/".to_string()
+                                            } else if current_dir.starts_with('~')
+                                                && last_slash == 1
+                                            {
+                                                "~/".to_string()
+                                            } else {
+                                                format!("{}/", &current_dir[..last_slash])
+                                            };
+
+                                            crate::logging::log(
+                                                "KEY",
+                                                &format!("Shift+Tab: Going up to: {}", parent_path),
+                                            );
+
+                                            // Just update the input - handle_filter_input_change will:
+                                            // - Update query
+                                            // - Reset selected_index to 0
+                                            // - Detect directory change
+                                            // - Trigger async directory load
+                                            this.gpui_input_state.update(cx, |state, cx| {
+                                                state.set_value(parent_path, window, cx);
+                                            });
+
+                                            cx.notify();
+                                            cx.stop_propagation();
+                                        }
+                                    }
+                                } else {
+                                    // Tab: Enter selected directory
+                                    // Get filtered results to find selected item
+                                    let filter_pattern = if let Some(parsed) =
+                                        crate::file_search::parse_directory_path(query)
+                                    {
+                                        parsed.filter
+                                    } else if !query.is_empty() {
+                                        Some(query.clone())
+                                    } else {
+                                        None
+                                    };
+
+                                    let filtered_results: Vec<_> =
+                                        if let Some(ref pattern) = filter_pattern {
+                                            crate::file_search::filter_results_nucleo_simple(
+                                                &this.cached_file_results,
+                                                pattern,
+                                            )
+                                        } else {
+                                            this.cached_file_results.iter().enumerate().collect()
+                                        };
+
+                                    if let Some((_, file)) = filtered_results.get(*selected_index) {
+                                        if file.file_type == crate::file_search::FileType::Directory
+                                        {
+                                            // Use shorten_path to keep ~ instead of expanding to /Users/...
+                                            let shortened =
+                                                crate::file_search::shorten_path(&file.path);
+                                            let new_path = format!("{}/", shortened);
+                                            crate::logging::log(
+                                                "KEY",
+                                                &format!("Tab: Entering directory: {}", new_path),
+                                            );
+
+                                            // Just update the input - handle_filter_input_change will:
+                                            // - Update query
+                                            // - Reset selected_index to 0
+                                            // - Detect directory change
+                                            // - Trigger async directory load
+                                            this.gpui_input_state.update(cx, |state, cx| {
+                                                state.set_value(new_path, window, cx);
+                                            });
+
+                                            cx.notify();
+                                            cx.stop_propagation();
+                                        }
+                                    }
+                                }
+                                return;
+                            }
+
+                            // Handle Tab in ScriptList view for Ask AI feature
                             if matches!(this.current_view, AppView::ScriptList)
                                 && !this.filter_text.is_empty()
                                 && !this.show_actions_popup
+                                && !has_shift
                             {
                                 let query = this.filter_text.clone();
 
@@ -1686,6 +1781,9 @@ impl ScriptListApp {
 
                         if dir_changed {
                             // Directory changed - need to load new directory contents
+                            // Clear old results to prevent flash of wrong directory items
+                            // The render will show "Loading..." when loading with empty results
+                            self.cached_file_results.clear();
                             self.file_search_current_dir = Some(parsed.directory.clone());
                             self.file_search_loading = true;
                             cx.notify();
