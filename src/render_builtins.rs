@@ -2066,9 +2066,10 @@ impl ScriptListApp {
                     this.current_view = AppView::ScriptList;
                     this.filter_text.clear();
                     this.selected_index = 0;
-                    // Sync input
+                    // Sync input and reset placeholder to default
                     this.gpui_input_state.update(cx, |state, cx| {
                         state.set_value("", window, cx);
+                        state.set_placeholder(DEFAULT_PLACEHOLDER.to_string(), window, cx);
                     });
                     this.update_window_size();
                     cx.notify();
@@ -2427,28 +2428,37 @@ impl ScriptListApp {
             .rounded(px(design_visual.radius_lg))
             .border(px(design_visual.border_thin))
             .border_color(rgba((ui_border << 8) | 0x60))
-            // Header with search input
-            .child(
+            // Header with search input - styled to match main menu
+            // Uses shared header constants (HEADER_PADDING_X/Y, CURSOR_HEIGHT_LG, HEADER_BUTTON_HEIGHT)
+            // for visual consistency. The min_h ensures same header height as main menu.
+            .child({
+                // Calculate input height using same formula as main menu
+                let input_height = CURSOR_HEIGHT_LG + (CURSOR_MARGIN_Y * 2.0);
+
                 div()
+                    .w_full()
+                    .px(px(HEADER_PADDING_X))
+                    .py(px(HEADER_PADDING_Y))
                     .flex()
                     .flex_row()
                     .items_center()
-                    .px(px(design_spacing.padding_lg))
-                    .py(px(design_spacing.padding_sm))
-                    .gap(px(design_spacing.gap_md))
-                    .child({
-                        use gpui_component::IconNamed;
-                        svg()
-                            .path(gpui_component::IconName::Search.path())
-                            .size(px(18.))
-                            .flex_shrink_0()
-                            .text_color(rgb(text_muted))
-                    })
+                    // Ensure header content height matches main menu (28px) to prevent layout shift
+                    .min_h(px(HEADER_BUTTON_HEIGHT))
+                    .gap(px(HEADER_GAP))
+                    // Search input - matches main menu Input styling for visual consistency
+                    // NOTE: Removed search icon to match main menu alignment exactly
                     .child(
-                        Input::new(&self.gpui_input_state)
-                            .appearance(false)
-                            .cleanable(false)
-                            .focus_bordered(false),
+                        div().flex_1().flex().flex_row().items_center().child(
+                            Input::new(&self.gpui_input_state)
+                                .w_full()
+                                .h(px(input_height))
+                                .px(px(0.))
+                                .py(px(0.))
+                                .with_size(Size::Size(px(_design_typography.font_size_xl)))
+                                .appearance(false)
+                                .bordered(false)
+                                .focus_bordered(false),
+                        ),
                     )
                     .child(
                         div()
@@ -2459,8 +2469,8 @@ impl ScriptListApp {
                             } else {
                                 format!("{} files", filtered_len)
                             }),
-                    ),
-            )
+                    )
+            })
             // Divider
             .child(
                 div()
