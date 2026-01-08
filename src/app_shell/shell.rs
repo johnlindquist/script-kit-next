@@ -251,10 +251,10 @@ impl AppShell {
     fn render_footer(spec: &FooterSpec, runtime: &ShellRuntime) -> AnyElement {
         let colors = &runtime.style.footer;
 
-        // Main footer container (40px height)
+        // Main footer container (35px height)
         let mut footer = div()
             .w_full()
-            .h(px(40.0))
+            .h(px(35.0))
             .px(px(12.0))
             .flex()
             .flex_row()

@@ -34,8 +34,8 @@ pub mod layout {
     pub const ARG_DIVIDER_HEIGHT: f32 = 1.0;
     /// Input row text height (cursor height + margins)
     pub const ARG_INPUT_LINE_HEIGHT: f32 = CURSOR_HEIGHT_LG + (CURSOR_MARGIN_Y * 2.0);
-    /// Footer height (matches PromptFooter 40px)
-    pub const FOOTER_HEIGHT: f32 = 40.0;
+    /// Footer height (matches PromptFooter)
+    pub const FOOTER_HEIGHT: f32 = 30.0;
     /// Total input-only height (header only, no list, but with footer)
     pub const ARG_HEADER_HEIGHT: f32 =
         (ARG_INPUT_PADDING_Y * 2.0) + ARG_INPUT_LINE_HEIGHT + FOOTER_HEIGHT;

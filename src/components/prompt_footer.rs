@@ -32,6 +32,7 @@ use crate::designs::DesignColors;
 use crate::theme::Theme;
 use crate::ui_foundation::{hstack, HexColorExt};
 use crate::utils;
+use crate::window_resize::layout::FOOTER_HEIGHT;
 
 /// Pre-computed colors for PromptFooter rendering
 ///
@@ -242,7 +243,7 @@ impl PromptFooter {
             .items_center()
             .gap(px(6.))
             .px(px(8.))
-            .py(px(4.))
+            .py(px(2.))
             .rounded(px(4.))
             .cursor_pointer()
             .hover(move |s| s.bg(rgba(hover_bg)));
@@ -296,7 +297,7 @@ impl RenderOnce for PromptFooter {
         }
 
         // Build the buttons container
-        let mut buttons = hstack().gap(px(4.));
+        let mut buttons = hstack().gap(px(4.)).items_center();
 
         // Primary button
         buttons = buttons.child(self.render_button(
@@ -321,12 +322,18 @@ impl RenderOnce for PromptFooter {
 
         right_side = right_side.child(buttons);
 
-        // Main footer container (40px height)
+        // Main footer container (uses FOOTER_HEIGHT constant for single source of truth)
         // Use semi-transparent background for vibrancy support
         let mut footer = div()
             .w_full()
-            .h(px(40.))
+            .h(px(FOOTER_HEIGHT))
+            .min_h(px(FOOTER_HEIGHT))
+            .max_h(px(FOOTER_HEIGHT))
+            .flex_shrink_0()
+            .overflow_hidden()
             .px(px(12.))
+            .pt(px(0.))
+            .pb(px(2.)) // Extra bottom padding shifts content up
             .flex()
             .flex_row()
             .items_center()
