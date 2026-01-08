@@ -218,6 +218,46 @@ pub use script_kit_gpui::{is_main_window_visible, set_main_window_visible};
 static PANEL_CONFIGURED: AtomicBool = AtomicBool::new(false); // Track if floating panel has been configured (one-time setup on first show)
 static SHUTDOWN_REQUESTED: AtomicBool = AtomicBool::new(false); // Track if shutdown signal received (prevents new script spawns)
 
+// DEEPLINK_CHANNEL: Channel for handling scriptkit:// URL scheme events
+// URLs are sent from on_open_urls callback and processed inside the app
+static DEEPLINK_CHANNEL: std::sync::OnceLock<(
+    async_channel::Sender<String>,
+    async_channel::Receiver<String>,
+)> = std::sync::OnceLock::new();
+
+/// Get the deeplink channel, initializing it on first access.
+fn deeplink_channel() -> &'static (
+    async_channel::Sender<String>,
+    async_channel::Receiver<String>,
+) {
+    DEEPLINK_CHANNEL.get_or_init(|| async_channel::bounded(10))
+}
+
+/// Parse a scriptkit:// URL and extract the command ID
+/// Supported formats:
+/// - scriptkit://commands/{command_id} - Execute any command (app/builtin/script/scriptlet)
+/// - scriptkit://run/{script_name} - Execute a script by name (legacy)
+/// - scriptkit://notes/{note_id} - Open a specific note
+fn parse_deeplink_url(url: &str) -> Option<String> {
+    // Remove the scheme
+    let path = url.strip_prefix("scriptkit://")?;
+
+    if let Some(command_id) = path.strip_prefix("commands/") {
+        // Format: scriptkit://commands/app/com.apple.Safari
+        // or: scriptkit://commands/builtin/clipboard-history
+        Some(command_id.to_string())
+    } else if let Some(script_name) = path.strip_prefix("run/") {
+        // Legacy format: scriptkit://run/my-script -> script/{name}
+        Some(format!("script/{}", script_name))
+    } else if let Some(note_id) = path.strip_prefix("notes/") {
+        // Notes deeplink - handled specially
+        Some(format!("notes/{}", note_id))
+    } else {
+        logging::log("DEEPLINK", &format!("Unknown deeplink format: {}", url));
+        None
+    }
+}
+
 /// Convert our ToastVariant to gpui-component's NotificationType
 fn toast_variant_to_notification_type(variant: ToastVariant) -> NotificationType {
     match variant {
@@ -1657,7 +1697,26 @@ fn main() {
     // Wrap scheduler in Arc<Mutex<>> for thread-safe access (needed for re-scanning on file changes)
     let scheduler = Arc::new(Mutex::new(scheduler));
 
-    Application::new().run(move |cx: &mut App| {
+    // Register URL scheme handler for scriptkit:// deeplinks
+    // This must be done before .run() as it's called on Application
+    let app = Application::new();
+    app.on_open_urls(|urls| {
+        logging::log("DEEPLINK", &format!("Received {} URL(s)", urls.len()));
+        for url in urls {
+            logging::log("DEEPLINK", &format!("Processing URL: {}", url));
+            if let Some(command_id) = parse_deeplink_url(&url) {
+                logging::log("DEEPLINK", &format!("Parsed command_id: {}", command_id));
+                // Send to channel for processing inside the app
+                if deeplink_channel().0.try_send(command_id).is_err() {
+                    logging::log(
+                        "DEEPLINK",
+                        "Failed to send command to channel (full or closed)",
+                    );
+                }
+            }
+        }
+    });
+    app.run(move |cx: &mut App| {
         logging::log("APP", "GPUI Application starting");
 
         // Configure as accessory app FIRST, before any windows are created
@@ -1923,6 +1982,63 @@ fn main() {
                 });
             }
             logging::log("HOTKEY", "Script shortcut listener exiting (channel closed)");
+        }).detach();
+
+        // Deeplink listener - handles scriptkit:// URLs (same logic as hotkeys)
+        let app_entity_for_deeplinks = app_entity.clone();
+        let window_for_deeplinks = window;
+        cx.spawn(async move |cx: &mut gpui::AsyncApp| {
+            logging::log("DEEPLINK", "Deeplink listener started (event-driven)");
+            while let Ok(command_id) = deeplink_channel().1.recv().await {
+                logging::log(
+                    "DEEPLINK",
+                    &format!("Processing deeplink command: {}", command_id),
+                );
+
+                // Handle special deeplink types
+                if command_id.starts_with("notes/") {
+                    // Notes deeplink - open notes window
+                    // Note: Currently opens notes window; specific note navigation can be added later
+                    let note_id = command_id.strip_prefix("notes/").unwrap_or("");
+                    logging::log("DEEPLINK", &format!("Opening notes (note_id: {})", note_id));
+                    let _ = cx.update(|cx| {
+                        if let Err(e) = notes::open_notes_window(cx) {
+                            logging::log("DEEPLINK", &format!("Failed to open notes: {}", e));
+                        }
+                    });
+                    continue;
+                }
+
+                let id_clone = command_id.clone();
+                let app_entity_inner = app_entity_for_deeplinks.clone();
+                let window_inner = window_for_deeplinks;
+
+                let _ = cx.update(move |cx: &mut gpui::App| {
+                    logging::log(
+                        "DEEPLINK",
+                        &format!("Executing command_id: {}", id_clone),
+                    );
+
+                    // Use app_entity.update to access ScriptListApp directly
+                    // Returns whether main window should be shown (apps/certain builtins don't need it)
+                    let should_show_window = app_entity_inner.update(cx, |view, ctx| {
+                        logging::log(
+                            "DEEPLINK",
+                            "Inside app_entity update, calling execute_by_command_id_or_path",
+                        );
+                        view.execute_by_command_id_or_path(&id_clone, ctx)
+                    });
+
+                    // Only show window if command needs it AND it's currently hidden
+                    if should_show_window && !script_kit_gpui::is_main_window_visible() {
+                        logging::log("DEEPLINK", "Command needs main window, showing it");
+                        show_main_window_helper(window_inner, app_entity_inner.clone(), cx);
+                    } else if !should_show_window {
+                        logging::log("DEEPLINK", "Command doesn't need main window (app/ai/notes)");
+                    }
+                });
+            }
+            logging::log("DEEPLINK", "Deeplink listener exiting (channel closed)");
         }).detach();
 
         // Appearance change watcher - event-driven with async_channel
