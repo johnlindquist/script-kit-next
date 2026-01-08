@@ -745,7 +745,10 @@ impl ScriptListApp {
                                         );
                                     }
 
-                                    this.trigger_action_by_name(&action_id, cx);
+                                    // Use handle_action instead of trigger_action_by_name
+                                    // handle_action supports both built-in actions (open_file, quick_look, etc.)
+                                    // and SDK actions
+                                    this.handle_action(action_id, cx);
                                 }
                             }
                             cx.stop_propagation();
