@@ -2662,9 +2662,8 @@ export default {
             }
         }
 
-        // Close the recorder
-        self.shortcut_recorder_state = None;
-        cx.notify();
+        // Close the recorder and restore focus
+        self.close_shortcut_recorder(cx);
     }
 
     /// Execute a path action from the actions dialog

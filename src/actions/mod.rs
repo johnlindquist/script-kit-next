@@ -54,8 +54,8 @@ mod tests {
 
         let max_visible = (POPUP_MAX_HEIGHT / ACTION_ITEM_HEIGHT) as usize;
 
-        // Script context actions: run, edit, configure_shortcut, view_logs,
-        // reveal_in_finder, copy_path, copy_deeplink = 7 actions
+        // Script context actions: run, edit, add_shortcut (or update+remove),
+        // view_logs, reveal_in_finder, copy_path, copy_deeplink = 7 actions
         assert!(
             total_actions >= 7,
             "Should have at least 7 script context actions"

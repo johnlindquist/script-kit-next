@@ -189,8 +189,10 @@ impl ScriptListApp {
                     self.last_output = Some(SharedString::from("No item selected"));
                 }
             }
-            "configure_shortcut" => {
-                logging::log("UI", "Configure shortcut action");
+            // Handle both legacy "configure_shortcut" and new dynamic actions
+            // "add_shortcut" and "update_shortcut" open the shortcut recorder
+            "configure_shortcut" | "add_shortcut" | "update_shortcut" => {
+                logging::log("UI", &format!("{} action", action_id));
                 if let Some(result) = self.get_selected_result() {
                     match result {
                         // Scripts: open the script file to edit // Shortcut: comment
@@ -243,6 +245,67 @@ impl ScriptListApp {
                             }
                         }
                     }
+                } else {
+                    self.last_output = Some(SharedString::from("No item selected"));
+                }
+            }
+            // "remove_shortcut" removes the existing shortcut from the registry
+            "remove_shortcut" => {
+                logging::log("UI", "Remove shortcut action");
+                if let Some(result) = self.get_selected_result() {
+                    let command_id_opt = match result {
+                        scripts::SearchResult::Script(m) => {
+                            Some(format!("script/{}", m.script.name))
+                        }
+                        scripts::SearchResult::Scriptlet(m) => {
+                            Some(format!("scriptlet/{}", m.scriptlet.name))
+                        }
+                        scripts::SearchResult::BuiltIn(m) => {
+                            Some(format!("builtin/{}", m.entry.id))
+                        }
+                        scripts::SearchResult::App(m) => {
+                            if let Some(ref bundle_id) = m.app.bundle_id {
+                                Some(format!("app/{}", bundle_id))
+                            } else {
+                                Some(format!(
+                                    "app/{}",
+                                    m.app.name.to_lowercase().replace(' ', "-")
+                                ))
+                            }
+                        }
+                        scripts::SearchResult::Agent(m) => Some(format!("agent/{}", m.agent.name)),
+                        scripts::SearchResult::Window(_) => {
+                            self.last_output =
+                                Some(SharedString::from("Window shortcuts not supported"));
+                            None
+                        }
+                        scripts::SearchResult::Fallback(m) => {
+                            Some(format!("fallback/{}", m.fallback.name()))
+                        }
+                    };
+
+                    if let Some(command_id) = command_id_opt {
+                        // Remove the shortcut override from persistence
+                        match crate::shortcuts::remove_shortcut_override(&command_id) {
+                            Ok(()) => {
+                                logging::log(
+                                    "SHORTCUT",
+                                    &format!("Removed shortcut for: {}", command_id),
+                                );
+                                self.last_output = Some(SharedString::from("Shortcut removed"));
+                                // Refresh scripts to update shortcut display
+                                self.refresh_scripts(cx);
+                            }
+                            Err(e) => {
+                                logging::log("ERROR", &format!("Failed to remove shortcut: {}", e));
+                                self.last_output = Some(SharedString::from(format!(
+                                    "Failed to remove shortcut: {}",
+                                    e
+                                )));
+                            }
+                        }
+                    }
+                    self.hide_main_and_reset(cx);
                 } else {
                     self.last_output = Some(SharedString::from("No item selected"));
                 }

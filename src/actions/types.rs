@@ -25,6 +25,9 @@ pub struct ScriptInfo {
     /// The verb to use for the primary action (e.g., "Run", "Launch", "Switch to")
     /// Defaults to "Run" for scripts
     pub action_verb: String,
+    /// Current keyboard shortcut assigned to this script/item (if any)
+    /// Used to determine which shortcut actions to show in the actions menu
+    pub shortcut: Option<String>,
 }
 
 impl ScriptInfo {
@@ -35,6 +38,23 @@ impl ScriptInfo {
             path: path.into(),
             is_script: true,
             action_verb: "Run".to_string(),
+            shortcut: None,
+        }
+    }
+
+    /// Create a ScriptInfo for a real script file with shortcut info
+    #[allow(dead_code)]
+    pub fn with_shortcut(
+        name: impl Into<String>,
+        path: impl Into<String>,
+        shortcut: Option<String>,
+    ) -> Self {
+        ScriptInfo {
+            name: name.into(),
+            path: path.into(),
+            is_script: true,
+            action_verb: "Run".to_string(),
+            shortcut,
         }
     }
 
@@ -47,6 +67,7 @@ impl ScriptInfo {
             path: String::new(),
             is_script: false,
             action_verb: "Run".to_string(),
+            shortcut: None,
         }
     }
 
@@ -62,6 +83,7 @@ impl ScriptInfo {
             path: path.into(),
             is_script,
             action_verb: "Run".to_string(),
+            shortcut: None,
         }
     }
 
@@ -77,6 +99,25 @@ impl ScriptInfo {
             path: path.into(),
             is_script,
             action_verb: action_verb.into(),
+            shortcut: None,
+        }
+    }
+
+    /// Create a ScriptInfo with all options including custom action verb and shortcut
+    #[allow(dead_code)]
+    pub fn with_action_verb_and_shortcut(
+        name: impl Into<String>,
+        path: impl Into<String>,
+        is_script: bool,
+        action_verb: impl Into<String>,
+        shortcut: Option<String>,
+    ) -> Self {
+        ScriptInfo {
+            name: name.into(),
+            path: path.into(),
+            is_script,
+            action_verb: action_verb.into(),
+            shortcut,
         }
     }
 }
@@ -146,6 +187,18 @@ mod tests {
         assert_eq!(script.name, "test-script");
         assert_eq!(script.path, "/path/to/test-script.ts");
         assert!(script.is_script);
+        assert!(script.shortcut.is_none());
+    }
+
+    #[test]
+    fn test_script_info_with_shortcut() {
+        let script = ScriptInfo::with_shortcut(
+            "test-script",
+            "/path/to/test-script.ts",
+            Some("cmd+shift+t".to_string()),
+        );
+        assert_eq!(script.name, "test-script");
+        assert_eq!(script.shortcut, Some("cmd+shift+t".to_string()));
     }
 
     #[test]
@@ -154,15 +207,30 @@ mod tests {
         assert_eq!(builtin.name, "Clipboard History");
         assert_eq!(builtin.path, "");
         assert!(!builtin.is_script);
+        assert!(builtin.shortcut.is_none());
     }
 
     #[test]
     fn test_script_info_with_is_script() {
         let script = ScriptInfo::with_is_script("my-script", "/path/to/script.ts", true);
         assert!(script.is_script);
+        assert!(script.shortcut.is_none());
 
         let builtin = ScriptInfo::with_is_script("App Launcher", "", false);
         assert!(!builtin.is_script);
+    }
+
+    #[test]
+    fn test_script_info_with_action_verb_and_shortcut() {
+        let script = ScriptInfo::with_action_verb_and_shortcut(
+            "test",
+            "/path",
+            true,
+            "Launch",
+            Some("cmd+k".to_string()),
+        );
+        assert_eq!(script.action_verb, "Launch");
+        assert_eq!(script.shortcut, Some("cmd+k".to_string()));
     }
 
     #[test]

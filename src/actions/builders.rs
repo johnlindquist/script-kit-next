@@ -111,18 +111,41 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
         .with_shortcut("↵"),
     );
 
-    // Configure shortcut - available for ALL items
-    // Scripts: opens the script file to edit // Shortcut: comment
-    // Non-scripts: opens config.ts to add shortcut in commands section
-    actions.push(
-        Action::new(
-            "configure_shortcut",
-            "Configure Keyboard Shortcut",
-            Some("Set or change the keyboard shortcut".to_string()),
-            ActionCategory::ScriptContext,
-        )
-        .with_shortcut("⌘⇧K"),
-    );
+    // Dynamic shortcut actions based on whether a shortcut already exists
+    // If NO shortcut: Show "Add Keyboard Shortcut"
+    // If HAS shortcut: Show "Update Keyboard Shortcut" and "Remove Keyboard Shortcut"
+    if script.shortcut.is_some() {
+        // Has existing shortcut - show Update and Remove options
+        actions.push(
+            Action::new(
+                "update_shortcut",
+                "Update Keyboard Shortcut",
+                Some("Change the keyboard shortcut".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌘⇧K"),
+        );
+        actions.push(
+            Action::new(
+                "remove_shortcut",
+                "Remove Keyboard Shortcut",
+                Some("Remove the current keyboard shortcut".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌘⌥K"),
+        );
+    } else {
+        // No shortcut - show Add option
+        actions.push(
+            Action::new(
+                "add_shortcut",
+                "Add Keyboard Shortcut",
+                Some("Set a keyboard shortcut".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌘⇧K"),
+        );
+    }
 
     // Script-only actions (not available for built-ins, apps, windows)
     if script.is_script {
@@ -196,7 +219,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_get_script_context_actions() {
+    fn test_get_script_context_actions_no_shortcut() {
+        // Script without shortcut should show "Add Keyboard Shortcut"
         let script = ScriptInfo::new("my-script", "/path/to/my-script.ts");
         let actions = get_script_context_actions(&script);
 
@@ -207,9 +231,27 @@ mod tests {
         assert!(actions.iter().any(|a| a.id == "reveal_in_finder"));
         assert!(actions.iter().any(|a| a.id == "copy_path"));
         assert!(actions.iter().any(|a| a.id == "run_script"));
-        // New actions
-        assert!(actions.iter().any(|a| a.id == "configure_shortcut"));
+        // Dynamic shortcut action - no shortcut means "Add"
+        assert!(actions.iter().any(|a| a.id == "add_shortcut"));
+        assert!(!actions.iter().any(|a| a.id == "update_shortcut"));
+        assert!(!actions.iter().any(|a| a.id == "remove_shortcut"));
         assert!(actions.iter().any(|a| a.id == "copy_deeplink"));
+    }
+
+    #[test]
+    fn test_get_script_context_actions_with_shortcut() {
+        // Script with shortcut should show "Update" and "Remove" options
+        let script = ScriptInfo::with_shortcut(
+            "my-script",
+            "/path/to/my-script.ts",
+            Some("cmd+shift+m".to_string()),
+        );
+        let actions = get_script_context_actions(&script);
+
+        // Dynamic shortcut actions - has shortcut means "Update" and "Remove"
+        assert!(!actions.iter().any(|a| a.id == "add_shortcut"));
+        assert!(actions.iter().any(|a| a.id == "update_shortcut"));
+        assert!(actions.iter().any(|a| a.id == "remove_shortcut"));
     }
 
     #[test]
@@ -218,10 +260,10 @@ mod tests {
         let builtin = ScriptInfo::builtin("Clipboard History");
         let actions = get_script_context_actions(&builtin);
 
-        // Should have run, copy_deeplink, and configure_shortcut (opens config.ts)
+        // Should have run, copy_deeplink, and add_shortcut (no shortcut by default)
         assert!(actions.iter().any(|a| a.id == "run_script"));
         assert!(actions.iter().any(|a| a.id == "copy_deeplink"));
-        assert!(actions.iter().any(|a| a.id == "configure_shortcut"));
+        assert!(actions.iter().any(|a| a.id == "add_shortcut"));
 
         // Should NOT have script-only actions
         assert!(!actions.iter().any(|a| a.id == "edit_script"));

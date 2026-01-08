@@ -228,7 +228,10 @@ pub const RESERVED_ACTION_IDS: &[&str] = &[
     "copy_path",
     "edit_script",
     "copy_deeplink",
-    "configure_shortcut",
+    // Dynamic shortcut actions (context-dependent)
+    "add_shortcut",
+    "update_shortcut",
+    "remove_shortcut",
     "__cancel__",
 ];
 

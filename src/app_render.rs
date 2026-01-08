@@ -179,8 +179,10 @@ impl ScriptListApp {
                                 .child(format!("{}.{}", script.name, script.extension)),
                         );
 
-                        // Keyboard shortcut (if assigned via config.commands)
-                        if let Some(ref shortcut_str) = shortcut_display {
+                        // Keyboard shortcut: prefer script metadata shortcut, fall back to config-based
+                        let effective_shortcut =
+                            script.shortcut.clone().or_else(|| shortcut_display.clone());
+                        if let Some(shortcut_str) = effective_shortcut {
                             panel = panel.child(
                                 div()
                                     .flex()
@@ -204,7 +206,7 @@ impl ScriptListApp {
                                                     .text_sm()
                                                     .font_weight(gpui::FontWeight::MEDIUM)
                                                     .text_color(rgb(colors.accent))
-                                                    .child(shortcut_str.clone()),
+                                                    .child(shortcut_str),
                                             ),
                                     ),
                             );
@@ -1085,15 +1087,18 @@ impl ScriptListApp {
         if let Some(idx) = result_idx {
             if let Some(result) = flat_results.get(idx) {
                 match result {
-                    scripts::SearchResult::Script(m) => Some(ScriptInfo::new(
+                    scripts::SearchResult::Script(m) => Some(ScriptInfo::with_shortcut(
                         &m.script.name,
                         m.script.path.to_string_lossy(),
+                        m.script.shortcut.clone(),
                     )),
                     scripts::SearchResult::Scriptlet(m) => {
                         // Scriptlets don't have a path, use name as identifier
-                        Some(ScriptInfo::new(
+                        // Pass shortcut info for dynamic action menu
+                        Some(ScriptInfo::with_shortcut(
                             &m.scriptlet.name,
                             format!("scriptlet:{}", &m.scriptlet.name),
+                            m.scriptlet.shortcut.clone(),
                         ))
                     }
                     scripts::SearchResult::BuiltIn(m) => {
