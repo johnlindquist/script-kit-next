@@ -1976,9 +1976,8 @@ impl ScriptListApp {
         let _design_typography = tokens.typography();
         let design_visual = tokens.visual();
 
-        let opacity = self.theme.get_opacity();
-        let bg_hex = design_colors.background;
-        let bg_with_alpha = crate::ui_foundation::hex_to_rgba_with_opacity(bg_hex, opacity.main);
+        let _opacity = self.theme.get_opacity();
+        // bg_with_alpha removed - let vibrancy show through from Root (matches main menu)
         let box_shadows = self.create_box_shadows();
 
         // Color values for use in closures
@@ -2414,7 +2413,8 @@ impl ScriptListApp {
             )
         };
 
-        // Main container
+        // Main container - styled to match main menu exactly
+        // NOTE: No border to match main menu (border adds visual padding/shift)
         div()
             .key_context("FileSearchView")
             .track_focus(&self.focus_handle)
@@ -2423,11 +2423,9 @@ impl ScriptListApp {
             .h_full()
             .flex()
             .flex_col()
-            .bg(rgba(bg_with_alpha))
+            // Removed: .bg(rgba(bg_with_alpha)) - let vibrancy show through from Root
             .shadow(box_shadows)
             .rounded(px(design_visual.radius_lg))
-            .border(px(design_visual.border_thin))
-            .border_color(rgba((ui_border << 8) | 0x60))
             // Header with search input - styled to match main menu exactly
             // Uses shared header constants (HEADER_PADDING_X/Y, CURSOR_HEIGHT_LG) for visual consistency.
             // The right-side element uses same py(4px) padding as main menu's "Ask AI" button
