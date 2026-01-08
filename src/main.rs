@@ -2180,6 +2180,51 @@ fn main() {
             }).detach();
         }
 
+        // App watcher poll loop - watches /Applications and ~/Applications for changes
+        // When apps are added/removed/updated, refresh the app launcher cache
+        // Only spawn if watcher started successfully
+        if app_watcher_ok {
+            let app_entity_for_apps = app_entity.clone();
+            cx.spawn(async move |cx: &mut gpui::AsyncApp| {
+                use watcher::AppReloadEvent;
+
+                logging::log("APP", "App watcher poll loop started (event-driven)");
+
+                // Event-driven: blocks until app change event received
+                while let Ok(event) = app_rx.recv().await {
+                    logging::log("APP", &format!("App watcher event: {:?}", event));
+
+                    match event {
+                        AppReloadEvent::AppAdded(path) => {
+                            logging::log("APP", &format!("App added: {}", path.display()));
+                        }
+                        AppReloadEvent::AppRemoved(path) => {
+                            logging::log("APP", &format!("App removed: {}", path.display()));
+                        }
+                        AppReloadEvent::AppUpdated(path) => {
+                            logging::log("APP", &format!("App updated: {}", path.display()));
+                        }
+                        AppReloadEvent::FullReload => {
+                            logging::log("APP", "Full app reload requested");
+                        }
+                    }
+
+                    // Trigger cache refresh (scan_applications updates the in-memory cache)
+                    let _ = app_launcher::scan_applications();
+
+                    // Notify UI to re-fetch cached apps and invalidate search caches
+                    // This ensures new apps appear in search results immediately
+                    let _ = cx.update(|cx| {
+                        app_entity_for_apps.update(cx, |view, ctx| {
+                            view.refresh_apps(ctx);
+                        });
+                    });
+                }
+
+                logging::log("APP", "App watcher poll loop exiting (channel closed)");
+            }).detach();
+        }
+
         // NOTE: Prompt message listener is now spawned per-script in execute_interactive()
         // using event-driven async_channel instead of 50ms polling
 

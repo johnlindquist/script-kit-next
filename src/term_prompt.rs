@@ -440,8 +440,7 @@ impl TermPrompt {
     /// typically reducing to ~50-100 elements per frame.
     fn render_content(&self, content: &TerminalContent) -> impl IntoElement {
         let colors = &self.theme.colors;
-        // Use main background color to match window - no visible seam
-        let default_bg = rgb(colors.background.main);
+        // Colors for special cells (cursor, selection) - default cells are transparent for vibrancy
         let cursor_bg = rgb(colors.accent.selected);
         let selection_bg = rgb(colors.accent.selected_subtle);
         let default_fg = rgb(colors.text.primary);
@@ -467,7 +466,7 @@ impl TermPrompt {
             .size_full() // Both w_full and h_full
             .min_h(px(0.)) // Critical for flex children sizing
             .overflow_hidden()
-            .bg(default_bg)
+            // No background - let vibrancy show through from parent
             .font_family("Menlo")
             .text_size(px(font_size))
             .line_height(px(cell_height)); // Use calculated line height for proper descender room
@@ -537,10 +536,11 @@ impl TermPrompt {
                 let is_default_fg = fg_u32 == theme_default_fg;
                 let is_default_bg = bg_u32 == theme_default_bg;
 
-                // Determine colors - priority: cursor > selection > custom bg > default
+                // Determine colors - priority: cursor > selection > custom bg > default (transparent)
+                // For vibrancy support, default cells have no background (transparent)
                 let (fg_color, bg_color) = if is_cursor_start {
                     // Cursor inverts colors
-                    (rgb(bg_u32), cursor_bg)
+                    (rgb(bg_u32), Some(cursor_bg))
                 } else if is_selected_start {
                     // Selection uses selection background with original foreground
                     (
@@ -549,7 +549,7 @@ impl TermPrompt {
                         } else {
                             rgb(fg_u32)
                         },
-                        selection_bg,
+                        Some(selection_bg),
                     )
                 } else if !is_default_bg {
                     // Custom background (cell has explicit non-default background)
@@ -559,17 +559,17 @@ impl TermPrompt {
                         } else {
                             rgb(fg_u32)
                         },
-                        rgb(bg_u32),
+                        Some(rgb(bg_u32)),
                     )
                 } else {
-                    // Default colors from theme
+                    // Default colors - no background for vibrancy support
                     (
                         if is_default_fg {
                             default_fg
                         } else {
                             rgb(fg_u32)
                         },
-                        default_bg,
+                        None, // Transparent for vibrancy
                     )
                 };
 
@@ -577,7 +577,7 @@ impl TermPrompt {
                     .w(px(batch_width))
                     .h(px(cell_height))
                     .flex_shrink_0()
-                    .bg(bg_color) // Always apply background to prevent bleed-through
+                    .when_some(bg_color, |d, bg| d.bg(bg)) // Only apply bg when needed
                     .text_color(fg_color)
                     .child(SharedString::from(batch_text));
 
@@ -841,7 +841,7 @@ impl Render for TermPrompt {
         // Main container with terminal styling
         // Use explicit height if available, otherwise fall back to size_full
         // Apply padding from config settings (top/left/right/bottom)
-        // Use main background color to match window - no visible seam at edges
+        // No background - let vibrancy show through from parent (render_prompts/term.rs handles bg)
         let container = div()
             .flex()
             .flex_col()
@@ -850,7 +850,7 @@ impl Render for TermPrompt {
             .pr(px(padding.right))
             .pt(px(padding.top))
             .pb(px(padding.top)) // Use same as top for consistent spacing
-            .bg(rgb(colors.background.main))
+            // No .bg() - vibrancy support
             .text_color(rgb(colors.text.primary))
             .overflow_hidden() // Clip any overflow
             .key_context("term_prompt")

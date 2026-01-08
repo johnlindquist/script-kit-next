@@ -620,6 +620,30 @@ impl ScriptListApp {
         cx.notify();
     }
 
+    /// Refresh app launcher cache and invalidate search caches.
+    ///
+    /// Called by AppWatcher when applications are added/removed/updated.
+    /// This properly invalidates filter/grouped caches so the main search
+    /// immediately reflects new apps without requiring user to type.
+    ///
+    /// NOTE: cx.notify() is efficient - GPUI batches notifications and only
+    /// re-renders when the event loop runs. We always call it because:
+    /// 1. If user is in ScriptList, cached search results need updating
+    /// 2. If user is in AppLauncherView, the list needs updating
+    /// 3. The cost of an "unnecessary" notify is near-zero (just marks dirty)
+    pub fn refresh_apps(&mut self, cx: &mut Context<Self>) {
+        self.apps = crate::app_launcher::get_cached_apps();
+        // Invalidate caches so main search includes new apps
+        self.invalidate_filter_cache();
+        self.invalidate_grouped_cache();
+
+        logging::log(
+            "APP",
+            &format!("Apps refreshed: {} applications loaded", self.apps.len()),
+        );
+        cx.notify();
+    }
+
     /// Dismiss the bun warning banner
     fn dismiss_bun_warning(&mut self, cx: &mut Context<Self>) {
         logging::log("APP", "Bun warning banner dismissed by user");
