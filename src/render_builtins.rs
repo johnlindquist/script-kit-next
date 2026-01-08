@@ -2479,8 +2479,29 @@ impl ScriptListApp {
                     .h(px(design_visual.border_thin))
                     .bg(rgba((ui_border << 8) | 0x60)),
             )
-            // Main content: 50/50 split
-            .child(
+            // Main content: centered empty state OR 50/50 split
+            .child(if filtered_len == 0 && !is_loading {
+                // Empty state: single centered message (no awkward 50/50 split)
+                div()
+                    .flex_1()
+                    .w_full()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .min_h(px(0.))
+                    .child(
+                        div().flex().flex_col().items_center().gap(px(8.)).child(
+                            div()
+                                .text_color(rgb(text_dimmed))
+                                .child(if query.is_empty() {
+                                    "Type to search files"
+                                } else {
+                                    "No files found"
+                                }),
+                        ),
+                    )
+            } else {
+                // Normal state: 50/50 split with list and preview
                 div()
                     .flex_1()
                     .w_full()
@@ -2505,8 +2526,8 @@ impl ScriptListApp {
                             .h_full()
                             .overflow_hidden()
                             .child(preview_content),
-                    ),
-            )
+                    )
+            })
             // Footer
             .child(PromptFooter::new(
                 PromptFooterConfig::new()
