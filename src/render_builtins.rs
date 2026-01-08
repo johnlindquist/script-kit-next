@@ -2428,9 +2428,10 @@ impl ScriptListApp {
             .rounded(px(design_visual.radius_lg))
             .border(px(design_visual.border_thin))
             .border_color(rgba((ui_border << 8) | 0x60))
-            // Header with search input - styled to match main menu
-            // Uses shared header constants (HEADER_PADDING_X/Y, CURSOR_HEIGHT_LG, HEADER_BUTTON_HEIGHT)
-            // for visual consistency. The min_h ensures same header height as main menu.
+            // Header with search input - styled to match main menu exactly
+            // Uses shared header constants (HEADER_PADDING_X/Y, CURSOR_HEIGHT_LG) for visual consistency.
+            // The right-side element uses same py(4px) padding as main menu's "Ask AI" button
+            // to ensure identical flex row height (28px) and input vertical centering.
             .child({
                 // Calculate input height using same formula as main menu
                 let input_height = CURSOR_HEIGHT_LG + (CURSOR_MARGIN_Y * 2.0);
@@ -2442,8 +2443,6 @@ impl ScriptListApp {
                     .flex()
                     .flex_row()
                     .items_center()
-                    // Ensure header content height matches main menu (28px) to prevent layout shift
-                    .min_h(px(HEADER_BUTTON_HEIGHT))
                     .gap(px(HEADER_GAP))
                     // Search input - matches main menu Input styling for visual consistency
                     // NOTE: Removed search icon to match main menu alignment exactly
@@ -2460,15 +2459,19 @@ impl ScriptListApp {
                                 .focus_bordered(false),
                         ),
                     )
+                    // Right-side element styled to match main menu's "Ask AI" button height
+                    // Using same py(4px) padding ensures consistent flex row height (28px)
                     .child(
-                        div()
-                            .text_sm()
-                            .text_color(rgb(text_dimmed))
-                            .child(if is_loading {
-                                "Searching...".to_string()
-                            } else {
-                                format!("{} files", filtered_len)
-                            }),
+                        div().flex().flex_row().items_center().py(px(4.)).child(
+                            div()
+                                .text_sm()
+                                .text_color(rgb(text_dimmed))
+                                .child(if is_loading {
+                                    "Searching...".to_string()
+                                } else {
+                                    format!("{} files", filtered_len)
+                                }),
+                        ),
                     )
             })
             // Divider

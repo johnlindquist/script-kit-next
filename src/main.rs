@@ -198,8 +198,8 @@ use actions::{
     resize_actions_window, ActionsDialog, ScriptInfo,
 };
 use panel::{
-    CURSOR_GAP_X, CURSOR_HEIGHT_LG, CURSOR_MARGIN_Y, CURSOR_WIDTH, DEFAULT_PLACEHOLDER,
-    HEADER_BUTTON_HEIGHT, HEADER_GAP, HEADER_PADDING_X, HEADER_PADDING_Y,
+    CURSOR_GAP_X, CURSOR_HEIGHT_LG, CURSOR_MARGIN_Y, CURSOR_WIDTH, DEFAULT_PLACEHOLDER, HEADER_GAP,
+    HEADER_PADDING_X, HEADER_PADDING_Y,
 };
 use parking_lot::Mutex as ParkingMutex;
 use protocol::{Choice, Message, ProtocolAction};
