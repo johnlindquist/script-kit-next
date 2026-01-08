@@ -255,6 +255,51 @@ impl HotkeyConfig {
         }
     }
 
+    /// Convert to a human-readable display string using macOS symbols (e.g., "⌘⇧K").
+    ///
+    /// Uses standard macOS modifier symbols in order: ⌃ (Control), ⌥ (Option), ⇧ (Shift), ⌘ (Command)
+    pub fn to_display_string(&self) -> String {
+        let mut result = String::new();
+
+        // Standard macOS order: Control, Option, Shift, Command
+        let has_ctrl = self.modifiers.iter().any(|m| m == "ctrl" || m == "control");
+        let has_alt = self.modifiers.iter().any(|m| m == "alt" || m == "option");
+        let has_shift = self.modifiers.iter().any(|m| m == "shift");
+        let has_cmd = self.modifiers.iter().any(|m| m == "meta" || m == "cmd");
+
+        if has_ctrl {
+            result.push('⌃');
+        }
+        if has_alt {
+            result.push('⌥');
+        }
+        if has_shift {
+            result.push('⇧');
+        }
+        if has_cmd {
+            result.push('⌘');
+        }
+
+        // Normalize key for display
+        let key_display = if self.key.starts_with("Key") {
+            // "KeyA" -> "A"
+            self.key[3..].to_uppercase()
+        } else if self.key.starts_with("Digit") {
+            // "Digit0" -> "0"
+            self.key[5..].to_string()
+        } else {
+            // Keep as-is but uppercase first char for consistency
+            let mut chars = self.key.chars();
+            match chars.next() {
+                None => String::new(),
+                Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+            }
+        };
+        result.push_str(&key_display);
+
+        result
+    }
+
     /// Convert to canonical shortcut string format (e.g., "cmd+shift+k").
     ///
     /// Maps modifier names from config format to shortcut format:

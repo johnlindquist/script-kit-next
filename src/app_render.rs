@@ -30,6 +30,37 @@ impl ScriptListApp {
     // via the Root wrapper. Toasts are flushed via flush_pending_toasts() in render().
     // See toast_manager.rs for the queue and main.rs for the flush logic.
 
+    /// Get the command ID for a search result, used for config lookups (shortcuts, etc.)
+    fn get_command_id_for_result(result: &scripts::SearchResult) -> Option<String> {
+        match result {
+            scripts::SearchResult::Script(m) => {
+                // Script command ID: "script/{name}" (without extension)
+                Some(format!("script/{}", m.script.name))
+            }
+            scripts::SearchResult::Scriptlet(m) => {
+                // Scriptlet command ID: "scriptlet/{name}"
+                Some(format!("scriptlet/{}", m.scriptlet.name))
+            }
+            scripts::SearchResult::BuiltIn(m) => {
+                // Built-in command ID: "builtin/{id}"
+                Some(format!("builtin/{}", m.entry.id))
+            }
+            scripts::SearchResult::App(m) => {
+                // App command ID: "app/{bundle_id}" or "app/{name}"
+                if let Some(ref bundle_id) = m.app.bundle_id {
+                    Some(format!("app/{}", bundle_id))
+                } else {
+                    Some(format!(
+                        "app/{}",
+                        m.app.name.to_lowercase().replace(' ', "-")
+                    ))
+                }
+            }
+            // Window, Agent, and Fallback don't support shortcuts
+            _ => None,
+        }
+    }
+
     /// Render the preview panel showing details of the selected script/scriptlet
     fn render_preview_panel(&mut self, _cx: &mut Context<Self>) -> impl IntoElement {
         // Get grouped results to map from selected_index to actual result (cached)
@@ -61,6 +92,15 @@ impl ScriptListApp {
         let bg_search_box = colors.background_tertiary;
         let border_radius = visual.radius_md;
         let font_family = typography.font_family;
+
+        // Get shortcut display string for the selected item (if any)
+        let shortcut_display: Option<String> = selected_result.as_ref().and_then(|result| {
+            Self::get_command_id_for_result(result).and_then(|command_id| {
+                self.config
+                    .get_command_shortcut(&command_id)
+                    .map(|hotkey| hotkey.to_display_string())
+            })
+        });
 
         // Get opacity for vibrancy support from theme
         let opacity = self.theme.get_opacity();
@@ -138,6 +178,37 @@ impl ScriptListApp {
                                 .pb(px(spacing.padding_sm))
                                 .child(format!("{}.{}", script.name, script.extension)),
                         );
+
+                        // Keyboard shortcut (if assigned via config.commands)
+                        if let Some(ref shortcut_str) = shortcut_display {
+                            panel = panel.child(
+                                div()
+                                    .flex()
+                                    .flex_col()
+                                    .pb(px(spacing.padding_md))
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .text_color(rgb(text_muted))
+                                            .pb(px(spacing.padding_xs / 2.0))
+                                            .child("Keyboard Shortcut"),
+                                    )
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .flex_row()
+                                            .items_center()
+                                            .gap(px(spacing.gap_sm))
+                                            .child(
+                                                div()
+                                                    .text_sm()
+                                                    .font_weight(gpui::FontWeight::MEDIUM)
+                                                    .text_color(rgb(colors.accent))
+                                                    .child(shortcut_str.clone()),
+                                            ),
+                                    ),
+                            );
+                        }
 
                         // Description (if present)
                         if let Some(desc) = &script.description {
@@ -297,8 +368,12 @@ impl ScriptListApp {
                             );
                         }
 
-                        // Shortcut (if present)
-                        if let Some(shortcut) = &scriptlet.shortcut {
+                        // Shortcut: prefer inline shortcut from scriptlet, fall back to config-based
+                        let effective_shortcut = scriptlet
+                            .shortcut
+                            .clone()
+                            .or_else(|| shortcut_display.clone());
+                        if let Some(shortcut) = effective_shortcut {
                             panel = panel.child(
                                 div()
                                     .flex()
@@ -309,13 +384,21 @@ impl ScriptListApp {
                                             .text_xs()
                                             .text_color(rgb(text_muted))
                                             .pb(px(spacing.padding_xs / 2.0))
-                                            .child("Hotkey"),
+                                            .child("Keyboard Shortcut"),
                                     )
                                     .child(
                                         div()
-                                            .text_sm()
-                                            .text_color(rgb(text_secondary))
-                                            .child(shortcut.clone()),
+                                            .flex()
+                                            .flex_row()
+                                            .items_center()
+                                            .gap(px(spacing.gap_sm))
+                                            .child(
+                                                div()
+                                                    .text_sm()
+                                                    .font_weight(gpui::FontWeight::MEDIUM)
+                                                    .text_color(rgb(colors.accent))
+                                                    .child(shortcut),
+                                            ),
                                     ),
                             );
                         }
@@ -403,6 +486,37 @@ impl ScriptListApp {
                                 .pb(px(spacing.padding_sm))
                                 .child(builtin.name.clone()),
                         );
+
+                        // Keyboard shortcut (if assigned via config.commands)
+                        if let Some(ref shortcut_str) = shortcut_display {
+                            panel = panel.child(
+                                div()
+                                    .flex()
+                                    .flex_col()
+                                    .pb(px(spacing.padding_md))
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .text_color(rgb(text_muted))
+                                            .pb(px(spacing.padding_xs / 2.0))
+                                            .child("Keyboard Shortcut"),
+                                    )
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .flex_row()
+                                            .items_center()
+                                            .gap(px(spacing.gap_sm))
+                                            .child(
+                                                div()
+                                                    .text_sm()
+                                                    .font_weight(gpui::FontWeight::MEDIUM)
+                                                    .text_color(rgb(colors.accent))
+                                                    .child(shortcut_str.clone()),
+                                            ),
+                                    ),
+                            );
+                        }
 
                         // Description
                         panel = panel.child(
@@ -530,6 +644,37 @@ impl ScriptListApp {
                                 .pb(px(spacing.padding_sm))
                                 .child(app.name.clone()),
                         );
+
+                        // Keyboard shortcut (if assigned via config.commands)
+                        if let Some(ref shortcut_str) = shortcut_display {
+                            panel = panel.child(
+                                div()
+                                    .flex()
+                                    .flex_col()
+                                    .pb(px(spacing.padding_md))
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .text_color(rgb(text_muted))
+                                            .pb(px(spacing.padding_xs / 2.0))
+                                            .child("Keyboard Shortcut"),
+                                    )
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .flex_row()
+                                            .items_center()
+                                            .gap(px(spacing.gap_sm))
+                                            .child(
+                                                div()
+                                                    .text_sm()
+                                                    .font_weight(gpui::FontWeight::MEDIUM)
+                                                    .text_color(rgb(colors.accent))
+                                                    .child(shortcut_str.clone()),
+                                            ),
+                                    ),
+                            );
+                        }
 
                         // Path
                         panel = panel.child(

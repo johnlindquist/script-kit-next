@@ -20,7 +20,8 @@ impl ScriptListApp {
             let noop_callback: std::sync::Arc<dyn Fn(String) + Send + Sync> =
                 std::sync::Arc::new(|_| {});
             let focus_handle = cx.focus_handle();
-            let mut dialog = ActionsDialog::with_path(focus_handle, noop_callback, &path_info, theme_arc);
+            let mut dialog =
+                ActionsDialog::with_path(focus_handle, noop_callback, &path_info, theme_arc);
             // Hide search in the dialog - we show it in the header instead
             dialog.set_hide_search(true);
             dialog
@@ -95,6 +96,12 @@ impl ScriptListApp {
                   event: &gpui::KeyDownEvent,
                   window: &mut Window,
                   cx: &mut Context<Self>| {
+                // If the shortcut recorder is active, don't process any key events.
+                // The recorder has its own key handlers and should receive all key events.
+                if this.shortcut_recorder_state.is_some() {
+                    return;
+                }
+
                 // Global shortcuts (Cmd+W, ESC for dismissable prompts)
                 if this.handle_global_shortcut_with_options(event, true, cx) {
                     return;

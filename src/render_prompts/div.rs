@@ -24,6 +24,12 @@ impl ScriptListApp {
                   event: &gpui::KeyDownEvent,
                   window: &mut Window,
                   cx: &mut Context<Self>| {
+                // If the shortcut recorder is active, don't process any key events.
+                // The recorder has its own key handlers and should receive all key events.
+                if this.shortcut_recorder_state.is_some() {
+                    return;
+                }
+
                 // Global shortcuts (Cmd+W, ESC for dismissable prompts)
                 // Note: Escape when actions popup is open should close the popup, not dismiss prompt
                 // So only handle global shortcuts when popup is closed

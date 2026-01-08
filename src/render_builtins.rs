@@ -63,6 +63,12 @@ impl ScriptListApp {
                   event: &gpui::KeyDownEvent,
                   _window: &mut Window,
                   cx: &mut Context<Self>| {
+                // If the shortcut recorder is active, don't process any key events.
+                // The recorder has its own key handlers and should receive all key events.
+                if this.shortcut_recorder_state.is_some() {
+                    return;
+                }
+
                 // Global shortcuts (Cmd+W, ESC for dismissable views)
                 if this.handle_global_shortcut_with_options(event, true, cx) {
                     return;
@@ -637,6 +643,12 @@ impl ScriptListApp {
                   event: &gpui::KeyDownEvent,
                   _window: &mut Window,
                   cx: &mut Context<Self>| {
+                // If the shortcut recorder is active, don't process any key events.
+                // The recorder has its own key handlers and should receive all key events.
+                if this.shortcut_recorder_state.is_some() {
+                    return;
+                }
+
                 // Global shortcuts (Cmd+W) - handled first regardless of view state
                 // Global shortcuts (Cmd+W, ESC for dismissable views)
                 if this.handle_global_shortcut_with_options(event, true, cx) {
@@ -948,6 +960,12 @@ impl ScriptListApp {
                   event: &gpui::KeyDownEvent,
                   _window: &mut Window,
                   cx: &mut Context<Self>| {
+                // If the shortcut recorder is active, don't process any key events.
+                // The recorder has its own key handlers and should receive all key events.
+                if this.shortcut_recorder_state.is_some() {
+                    return;
+                }
+
                 // Global shortcuts (Cmd+W, ESC for dismissable views)
                 if this.handle_global_shortcut_with_options(event, true, cx) {
                     return;
@@ -1477,6 +1495,12 @@ impl ScriptListApp {
                   event: &gpui::KeyDownEvent,
                   _window: &mut Window,
                   cx: &mut Context<Self>| {
+                // If the shortcut recorder is active, don't process any key events.
+                // The recorder has its own key handlers and should receive all key events.
+                if this.shortcut_recorder_state.is_some() {
+                    return;
+                }
+
                 // Global shortcuts (Cmd+W) - handled first regardless of view state
                 // Global shortcuts (Cmd+W, ESC for dismissable views)
                 if this.handle_global_shortcut_with_options(event, true, cx) {
@@ -1906,6 +1930,12 @@ impl ScriptListApp {
                   event: &gpui::KeyDownEvent,
                   window: &mut Window,
                   cx: &mut Context<Self>| {
+                // If the shortcut recorder is active, don't process any key events.
+                // The recorder has its own key handlers and should receive all key events.
+                if this.shortcut_recorder_state.is_some() {
+                    return;
+                }
+
                 let key_str = event.keystroke.key.to_lowercase();
                 let has_cmd = event.keystroke.modifiers.platform;
 

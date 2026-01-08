@@ -113,6 +113,12 @@ impl ScriptListApp {
                   event: &gpui::KeyDownEvent,
                   window: &mut Window,
                   cx: &mut Context<Self>| {
+                // If the shortcut recorder is active, don't process any key events.
+                // The recorder has its own key handlers and should receive all key events.
+                if this.shortcut_recorder_state.is_some() {
+                    return;
+                }
+
                 // Global shortcuts (Cmd+W, ESC for dismissable prompts)
                 // Note: Escape when actions popup is open should close the popup, not dismiss prompt
                 if !this.show_actions_popup
@@ -243,7 +249,8 @@ impl ScriptListApp {
 
                             // Try to find the previously selected item in the new filtered list
                             let new_idx = if let Some(prev_idx) = prev_original_idx {
-                                filtered.iter()
+                                filtered
+                                    .iter()
                                     .position(|(orig_idx, _)| *orig_idx == prev_idx)
                                     .unwrap_or(0)
                             } else {
@@ -251,11 +258,12 @@ impl ScriptListApp {
                             };
 
                             // Check if there are any choices at all
-                            let has_choices = if let AppView::ArgPrompt { choices, .. } = &this.current_view {
-                                !choices.is_empty()
-                            } else {
-                                false
-                            };
+                            let has_choices =
+                                if let AppView::ArgPrompt { choices, .. } = &this.current_view {
+                                    !choices.is_empty()
+                                } else {
+                                    false
+                                };
 
                             (new_idx, filtered.len(), has_choices)
                         };

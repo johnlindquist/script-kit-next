@@ -3427,6 +3427,12 @@ export default {
         is_dismissable: bool,
         cx: &mut Context<Self>,
     ) -> bool {
+        // If the shortcut recorder is active, don't process any shortcuts here.
+        // The recorder has its own key handlers and should receive all key events.
+        if self.shortcut_recorder_state.is_some() {
+            return false;
+        }
+
         let key_str = event.keystroke.key.to_lowercase();
         let has_cmd = event.keystroke.modifiers.platform;
         let has_shift = event.keystroke.modifiers.shift;
