@@ -1674,6 +1674,19 @@ fn main() {
         }
     };
 
+    // Create AppWatcher for live application cache updates
+    let (mut app_watcher, app_rx) = watcher::AppWatcher::new();
+    let app_watcher_ok = match app_watcher.start() {
+        Ok(()) => {
+            logging::log("APP", "App watcher started");
+            true
+        }
+        Err(e) => {
+            logging::log("APP", &format!("Failed to start app watcher: {}", e));
+            false
+        }
+    };
+
     // Initialize script scheduler
     // Creates the scheduler and scans for scripts with // Cron: or // Schedule: metadata
     let (mut scheduler, scheduler_rx) = scheduler::Scheduler::new();

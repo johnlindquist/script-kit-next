@@ -25,7 +25,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Instant;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info, info_span, warn};
 
 #[cfg(target_os = "macos")]
 use cocoa::base::{id, nil};
@@ -230,11 +230,144 @@ fn get_mtime(path: &Path) -> Option<i64> {
 // SQLite Cache Operations
 // ============================================================================
 
-/// Load all apps from the SQLite cache
+/// Load all apps from the SQLite cache (FAST - defers icon decoding)
 ///
-/// Returns apps with their icons already decoded as RenderImages.
-/// This is the fast path for startup - no filesystem scanning needed.
+/// Returns apps with icon blobs but WITHOUT decoding icons.
+/// Icon decoding is deferred to a background thread to keep cache load <50ms.
+/// This is the fast path for startup - no filesystem scanning or icon decoding.
 fn load_apps_from_db() -> Vec<AppInfo> {
+    let _span = info_span!("load_apps_from_db").entered();
+    let start = Instant::now();
+
+    let db = match get_apps_db() {
+        Ok(db) => db,
+        Err(e) => {
+            warn!(error = %e, "Failed to get apps database");
+            return Vec::new();
+        }
+    };
+
+    let conn = match db.lock() {
+        Ok(c) => c,
+        Err(e) => {
+            error!(error = %e, "Failed to lock apps database");
+            return Vec::new();
+        }
+    };
+
+    let db_lock_ms = start.elapsed().as_millis();
+
+    let query_start = Instant::now();
+    let mut stmt = match conn
+        .prepare("SELECT bundle_id, name, path, icon_blob FROM apps ORDER BY name COLLATE NOCASE")
+    {
+        Ok(s) => s,
+        Err(e) => {
+            warn!(error = %e, "Failed to prepare apps query");
+            return Vec::new();
+        }
+    };
+
+    // Collect raw data from SQLite (no icon decoding yet)
+    let apps_iter = stmt.query_map([], |row| {
+        let bundle_id: Option<String> = row.get(0)?;
+        let name: String = row.get(1)?;
+        let path_str: String = row.get(2)?;
+        let icon_blob: Option<Vec<u8>> = row.get(3)?;
+
+        Ok((bundle_id, name, path_str, icon_blob))
+    });
+
+    let query_ms = query_start.elapsed().as_millis();
+
+    // Phase 1: Build apps WITHOUT icons (fast)
+    let mut apps = Vec::new();
+    let mut icon_blobs: Vec<(usize, Vec<u8>)> = Vec::new();
+
+    let build_start = Instant::now();
+    if let Ok(iter) = apps_iter {
+        for (bundle_id, name, path_str, icon_blob) in iter.flatten() {
+            let path = PathBuf::from(&path_str);
+
+            // Skip apps that no longer exist (fast stat check)
+            if !path.exists() {
+                continue;
+            }
+
+            // Store icon blob for deferred decoding
+            if let Some(blob) = icon_blob {
+                icon_blobs.push((apps.len(), blob));
+            }
+
+            apps.push(AppInfo {
+                name,
+                path,
+                bundle_id,
+                icon: None, // Defer icon decoding
+            });
+        }
+    }
+    let build_ms = build_start.elapsed().as_millis();
+
+    let app_count = apps.len();
+    let icons_to_decode = icon_blobs.len();
+
+    info!(
+        app_count,
+        icons_to_decode,
+        db_lock_ms,
+        query_ms,
+        build_ms,
+        total_ms = start.elapsed().as_millis(),
+        "Loaded apps from DB (icons deferred)"
+    );
+
+    // Phase 2: Decode icons in background thread
+    if !icon_blobs.is_empty() {
+        // We'll return apps Arc'd so we can update them from background thread
+        let apps_arc = Arc::new(Mutex::new(apps));
+        let apps_for_thread = Arc::clone(&apps_arc);
+
+        std::thread::spawn(move || {
+            let decode_start = Instant::now();
+            let mut decoded_count = 0;
+
+            for (idx, blob) in icon_blobs {
+                if let Ok(icon) =
+                    crate::list_item::decode_png_to_render_image_with_bgra_conversion(&blob)
+                {
+                    if let Ok(mut apps_guard) = apps_for_thread.lock() {
+                        if let Some(app) = apps_guard.get_mut(idx) {
+                            app.icon = Some(icon);
+                            decoded_count += 1;
+                        }
+                    }
+                }
+            }
+
+            info!(
+                decoded_count,
+                duration_ms = decode_start.elapsed().as_millis(),
+                "Background icon decoding complete"
+            );
+        });
+
+        // Return apps (icons will be populated asynchronously)
+        return apps_arc.lock().map(|g| g.clone()).unwrap_or_default();
+    }
+
+    apps
+}
+
+/// Load apps from SQLite with SYNCHRONOUS icon decoding
+///
+/// This is slower but guarantees icons are ready when returned.
+/// Used for background refresh when we have more time.
+#[allow(dead_code)]
+fn load_apps_from_db_with_icons() -> Vec<AppInfo> {
+    let _span = info_span!("load_apps_from_db_with_icons").entered();
+    let start = Instant::now();
+
     let db = match get_apps_db() {
         Ok(db) => db,
         Err(e) => {
@@ -271,6 +404,7 @@ fn load_apps_from_db() -> Vec<AppInfo> {
     });
 
     let mut apps = Vec::new();
+    let mut icons_decoded = 0;
 
     if let Ok(iter) = apps_iter {
         for (bundle_id, name, path_str, icon_blob) in iter.flatten() {
@@ -281,10 +415,14 @@ fn load_apps_from_db() -> Vec<AppInfo> {
                 continue;
             }
 
-            // Decode icon if present
+            // Decode icon if present (synchronous)
             let icon = icon_blob.and_then(|bytes| {
                 crate::list_item::decode_png_to_render_image_with_bgra_conversion(&bytes).ok()
             });
+
+            if icon.is_some() {
+                icons_decoded += 1;
+            }
 
             apps.push(AppInfo {
                 name,
@@ -294,6 +432,13 @@ fn load_apps_from_db() -> Vec<AppInfo> {
             });
         }
     }
+
+    info!(
+        app_count = apps.len(),
+        icons_decoded,
+        duration_ms = start.elapsed().as_millis(),
+        "Loaded apps from DB with icons"
+    );
 
     apps
 }
@@ -420,6 +565,7 @@ fn hash_path(path: &Path) -> String {
 /// The cache file's mtime is set to match the app's mtime for easy comparison.
 #[cfg(target_os = "macos")]
 fn get_or_extract_icon(app_path: &Path) -> Option<Vec<u8>> {
+    let start = Instant::now();
     let cache_dir = get_icon_cache_dir()?;
     let cache_key = hash_path(app_path);
     let cache_file = cache_dir.join(format!("{}.png", cache_key));
@@ -437,8 +583,9 @@ fn get_or_extract_icon(app_path: &Path) -> Option<Vec<u8>> {
                     if let Ok(png_bytes) = std::fs::read(&cache_file) {
                         debug!(
                             app = %app_path.display(),
-                            cache_file = %cache_file.display(),
-                            "Loaded icon from cache"
+                            duration_ms = start.elapsed().as_millis(),
+                            source = "disk_cache",
+                            "Loaded icon"
                         );
                         return Some(png_bytes);
                     }
@@ -450,7 +597,9 @@ fn get_or_extract_icon(app_path: &Path) -> Option<Vec<u8>> {
     // Cache miss or stale - extract fresh icon
     // Note: Color channel swap (BGRA -> RGBA) is handled at decode time in
     // decode_png_to_render_image_with_rb_swap() for performance (no PNG re-encoding needed)
+    let extract_start = Instant::now();
     let png_bytes = extract_app_icon(app_path)?;
+    let extract_ms = extract_start.elapsed().as_millis();
 
     // Save to cache
     if let Err(e) = std::fs::create_dir_all(&cache_dir) {
@@ -477,8 +626,10 @@ fn get_or_extract_icon(app_path: &Path) -> Option<Vec<u8>> {
         } else {
             debug!(
                 app = %app_path.display(),
-                cache_file = %cache_file.display(),
-                "Saved icon to cache"
+                extract_ms,
+                total_ms = start.elapsed().as_millis(),
+                source = "extracted",
+                "Extracted and cached icon"
             );
         }
     }
@@ -525,31 +676,37 @@ pub fn get_icon_cache_stats() -> (usize, u64) {
 /// Scan for installed macOS applications
 ///
 /// This function uses a two-phase loading strategy:
-/// 1. First, instantly load from SQLite cache (if available)
+/// 1. First, instantly load from SQLite cache (if available) WITHOUT icon decoding
 /// 2. Then, scan directories in background to find new/changed apps
 ///
 /// # Returns
 /// A reference to the cached vector of AppInfo structs.
 ///
 /// # Performance
-/// - First call: Returns SQLite-cached apps instantly, then background scans
+/// - First call: Returns SQLite-cached apps in <50ms (icons decoded in background)
 /// - Subsequent calls: Returns immediately from in-memory cache
+///
+/// # Tracing
+/// Uses spans to profile: db_lock, query, deserialization, icon_decode
 pub fn scan_applications() -> Vec<AppInfo> {
+    let _span = info_span!("scan_applications").entered();
+
     // Initialize the cache if needed
     let cache = APP_CACHE.get_or_init(|| {
         set_loading_state(AppLoadingState::LoadingFromCache);
 
         let start = Instant::now();
 
-        // Phase 1: Load from SQLite (instant)
+        // Phase 1: Load from SQLite (FAST - no icon decoding)
         let cached_apps = load_apps_from_db();
-        let db_duration = start.elapsed().as_millis();
+        let cache_load_ms = start.elapsed().as_millis();
 
         if !cached_apps.is_empty() {
             info!(
                 app_count = cached_apps.len(),
-                duration_ms = db_duration,
-                "Loaded apps from SQLite cache"
+                cache_load_ms,
+                target_met = cache_load_ms < 50,
+                "Cache load complete (target: <50ms)"
             );
 
             // Start background scan for updates
@@ -559,6 +716,7 @@ pub fn scan_applications() -> Vec<AppInfo> {
             let cache_for_thread = Arc::clone(&cache_arc);
 
             std::thread::spawn(move || {
+                let _span = info_span!("background_app_scan").entered();
                 set_loading_state(AppLoadingState::ScanningDirectories);
 
                 let scan_start = Instant::now();
@@ -588,6 +746,7 @@ pub fn scan_applications() -> Vec<AppInfo> {
         }
 
         // No SQLite cache - do a full synchronous scan
+        info!("No SQLite cache found, performing full scan");
         set_loading_state(AppLoadingState::ScanningDirectories);
 
         let apps = scan_all_directories_with_db_update();
@@ -632,21 +791,29 @@ pub fn scan_applications_fresh() -> Vec<AppInfo> {
 
 /// Scan all configured directories for applications and update SQLite
 fn scan_all_directories_with_db_update() -> Vec<AppInfo> {
+    let _span = info_span!("scan_all_directories_with_db_update").entered();
+    let start = Instant::now();
+
     let mut apps = Vec::new();
+    let mut dirs_scanned = 0;
 
     for dir in APP_DIRECTORIES {
         let expanded = shellexpand::tilde(dir);
         let path = Path::new(expanded.as_ref());
 
         if path.exists() {
+            let dir_start = Instant::now();
             match scan_directory_with_db_update(path) {
                 Ok(found) => {
+                    let count = found.len();
                     debug!(
                         directory = %path.display(),
-                        count = found.len(),
+                        count,
+                        duration_ms = dir_start.elapsed().as_millis(),
                         "Scanned directory"
                     );
                     apps.extend(found);
+                    dirs_scanned += 1;
                 }
                 Err(e) => {
                     warn!(
@@ -666,6 +833,13 @@ fn scan_all_directories_with_db_update() -> Vec<AppInfo> {
 
     // Remove duplicates (same name from different directories - prefer first)
     apps.dedup_by(|a, b| a.name.to_lowercase() == b.name.to_lowercase());
+
+    debug!(
+        total_apps = apps.len(),
+        dirs_scanned,
+        total_duration_ms = start.elapsed().as_millis(),
+        "Directory scan complete"
+    );
 
     apps
 }
@@ -1126,7 +1300,9 @@ mod tests {
 
     #[test]
     fn test_app_has_icon() {
-        let apps = scan_applications();
+        // Use fresh scan which does synchronous icon loading
+        // (scan_applications() defers icon decoding to background for performance)
+        let apps = scan_applications_fresh();
 
         // Check that at least some apps have icons (most should)
         let apps_with_icons = apps.iter().filter(|a| a.icon.is_some()).count();

@@ -940,8 +940,9 @@ impl ScriptListApp {
                 // Terminal exited - nothing special to do
             });
 
-        // Get the target height for terminal view
-        let term_height = window_resize::layout::MAX_HEIGHT;
+        // Get the target height for terminal view (subtract footer height)
+        let term_height =
+            window_resize::layout::MAX_HEIGHT - px(window_resize::layout::FOOTER_HEIGHT);
 
         // Create terminal with the specified command
         match term_prompt::TermPrompt::with_height(
@@ -1089,8 +1090,9 @@ impl ScriptListApp {
                 // Terminal exited - nothing special to do
             });
 
-        // Get the target height for terminal view
-        let term_height = window_resize::layout::MAX_HEIGHT;
+        // Get the target height for terminal view (subtract footer height)
+        let term_height =
+            window_resize::layout::MAX_HEIGHT - px(window_resize::layout::FOOTER_HEIGHT);
 
         // Create terminal without a specific command (opens default shell)
         match term_prompt::TermPrompt::with_height(

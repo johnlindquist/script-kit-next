@@ -1154,6 +1154,430 @@ fn merge_script_event(
     pending.insert(path.clone(), (new_event, timestamp));
 }
 
+/// Event emitted when applications need to be reloaded
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AppReloadEvent {
+    /// A new .app bundle was added
+    AppAdded(PathBuf),
+    /// An .app bundle was removed
+    AppRemoved(PathBuf),
+    /// An .app bundle was updated (modified)
+    AppUpdated(PathBuf),
+    /// Fallback for complex events (e.g., bulk changes)
+    FullReload,
+}
+
+/// Check if a path is a .app bundle directory
+fn is_app_bundle(path: &std::path::Path) -> bool {
+    // Must end in .app extension
+    if let Some(ext) = path.extension() {
+        if ext == "app" {
+            // Additionally check it's a directory (when it exists)
+            // For remove events, the path may not exist anymore
+            return path.is_dir() || !path.exists();
+        }
+    }
+    false
+}
+
+/// Compute the next deadline from pending app events and global full_reload_at
+fn next_app_deadline(
+    pending: &HashMap<PathBuf, (AppReloadEvent, Instant)>,
+    full_reload_at: Option<Instant>,
+    debounce: Duration,
+) -> Option<Instant> {
+    let pending_deadline = pending.values().map(|(_, t)| *t + debounce).min();
+    let full_reload_deadline = full_reload_at.map(|t| t + debounce);
+
+    match (pending_deadline, full_reload_deadline) {
+        (Some(p), Some(f)) => Some(p.min(f)),
+        (Some(p), None) => Some(p),
+        (None, Some(f)) => Some(f),
+        (None, None) => None,
+    }
+}
+
+/// Flush expired app events from pending map and global full_reload_at
+///
+/// If full_reload_at has expired, emits a single FullReload and clears pending.
+/// Otherwise, flushes individual expired events from pending.
+fn flush_expired_apps(
+    pending: &mut HashMap<PathBuf, (AppReloadEvent, Instant)>,
+    full_reload_at: &mut Option<Instant>,
+    debounce: Duration,
+    out_tx: &async_channel::Sender<AppReloadEvent>,
+) {
+    let now = Instant::now();
+
+    // Check global full_reload_at first - it supersedes all pending events
+    if let Some(reload_time) = *full_reload_at {
+        if now.duration_since(reload_time) >= debounce {
+            debug!("App FullReload debounce complete, flushing");
+            info!(event = ?AppReloadEvent::FullReload, "Emitting app reload event");
+            let _ = out_tx.send_blocking(AppReloadEvent::FullReload);
+            *full_reload_at = None;
+            pending.clear();
+            return;
+        }
+    }
+
+    // Flush individual expired events
+    let mut to_send: Vec<AppReloadEvent> = Vec::new();
+
+    pending.retain(|path, (ev, t)| {
+        if now.duration_since(*t) >= debounce {
+            debug!(path = %path.display(), event = ?ev, "App debounce complete, flushing");
+            to_send.push(ev.clone());
+            false
+        } else {
+            true
+        }
+    });
+
+    for ev in to_send {
+        info!(event = ?ev, "Emitting app reload event");
+        let _ = out_tx.send_blocking(ev);
+    }
+}
+
+/// Merge create/delete event pairs for the same path into AppUpdated (app update handling)
+///
+/// App installers may cause Delete+Create sequences during updates.
+/// Within the debounce window, we merge these into AppUpdated.
+fn merge_app_event(
+    pending: &mut HashMap<PathBuf, (AppReloadEvent, Instant)>,
+    path: &PathBuf,
+    new_event: AppReloadEvent,
+    timestamp: Instant,
+) {
+    if let Some((existing_event, _existing_time)) = pending.get(path) {
+        // Check if we can merge:
+        // AppRemoved + AppAdded → AppUpdated (app was updated)
+        // AppAdded + AppRemoved → AppUpdated (temp app dance during install)
+        let merged = match (&existing_event, &new_event) {
+            (AppReloadEvent::AppRemoved(_), AppReloadEvent::AppAdded(_))
+            | (AppReloadEvent::AppAdded(_), AppReloadEvent::AppRemoved(_)) => {
+                Some(AppReloadEvent::AppUpdated(path.clone()))
+            }
+            _ => None,
+        };
+
+        if let Some(merged_event) = merged {
+            pending.insert(path.clone(), (merged_event, timestamp));
+            return;
+        }
+    }
+
+    // No merge - insert new event
+    pending.insert(path.clone(), (new_event, timestamp));
+}
+
+/// Watches /Applications and ~/Applications for .app bundle changes
+///
+/// Uses per-file trailing-edge debounce with storm coalescing.
+/// Filters to only .app directories.
+/// Properly shuts down via stop flag.
+/// Includes supervisor restart with exponential backoff on transient errors.
+pub struct AppWatcher {
+    tx: Option<async_channel::Sender<AppReloadEvent>>,
+    stop_flag: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
+    watcher_thread: Option<thread::JoinHandle<()>>,
+}
+
+impl AppWatcher {
+    /// Create a new AppWatcher
+    ///
+    /// Returns a tuple of (watcher, receiver) where receiver will emit AppReloadEvent
+    /// when .app bundles in /Applications or ~/Applications change.
+    pub fn new() -> (Self, async_channel::Receiver<AppReloadEvent>) {
+        let (tx, rx) = async_channel::bounded(100);
+        let watcher = AppWatcher {
+            tx: Some(tx),
+            stop_flag: None,
+            watcher_thread: None,
+        };
+        (watcher, rx)
+    }
+
+    /// Start watching the applications directories for changes
+    ///
+    /// This spawns a background thread that watches /Applications and ~/Applications
+    /// and sends reload events through the receiver when .app bundles are added,
+    /// modified, or deleted.
+    /// On transient errors, the watcher will retry with exponential backoff.
+    pub fn start(&mut self) -> NotifyResult<()> {
+        let tx = self
+            .tx
+            .take()
+            .ok_or_else(|| std::io::Error::other("watcher already started"))?;
+
+        let stop_flag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let thread_stop_flag = stop_flag.clone();
+        self.stop_flag = Some(stop_flag);
+
+        // Watch paths: /Applications and ~/Applications
+        let system_apps_path = PathBuf::from("/Applications");
+        let user_apps_path = PathBuf::from(shellexpand::tilde("~/Applications").as_ref());
+
+        let thread_handle = thread::spawn(move || {
+            Self::supervisor_loop(system_apps_path, user_apps_path, tx, thread_stop_flag);
+        });
+
+        self.watcher_thread = Some(thread_handle);
+        Ok(())
+    }
+
+    /// Supervisor loop that restarts the watcher on failures with exponential backoff
+    fn supervisor_loop(
+        system_apps_path: PathBuf,
+        user_apps_path: PathBuf,
+        out_tx: async_channel::Sender<AppReloadEvent>,
+        stop_flag: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    ) {
+        let mut attempt: u32 = 0;
+
+        loop {
+            if stop_flag.load(std::sync::atomic::Ordering::Relaxed) {
+                info!(watcher = "apps", "App watcher supervisor stopping");
+                break;
+            }
+
+            let (control_tx, control_rx) = channel::<ControlMsg>();
+
+            match Self::watch_loop(
+                system_apps_path.clone(),
+                user_apps_path.clone(),
+                out_tx.clone(),
+                control_rx,
+                control_tx,
+                stop_flag.clone(),
+            ) {
+                Ok(()) => {
+                    info!(watcher = "apps", "App watcher completed normally");
+                    break;
+                }
+                Err(e) => {
+                    if stop_flag.load(std::sync::atomic::Ordering::Relaxed) {
+                        break;
+                    }
+
+                    let backoff = compute_backoff(attempt);
+                    warn!(
+                        error = %e,
+                        watcher = "apps",
+                        attempt = attempt,
+                        backoff_ms = backoff.as_millis(),
+                        "App watcher error, retrying with backoff"
+                    );
+
+                    if !interruptible_sleep(backoff, &stop_flag) {
+                        break;
+                    }
+                    attempt = attempt.saturating_add(1);
+                }
+            }
+        }
+
+        info!(watcher = "apps", "App watcher supervisor shutting down");
+    }
+
+    /// Internal watch loop running in background thread
+    fn watch_loop(
+        system_apps_path: PathBuf,
+        user_apps_path: PathBuf,
+        out_tx: async_channel::Sender<AppReloadEvent>,
+        control_rx: Receiver<ControlMsg>,
+        callback_tx: Sender<ControlMsg>,
+        stop_flag: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    ) -> NotifyResult<()> {
+        let mut watcher: Box<dyn Watcher> = Box::new(recommended_watcher({
+            let tx = callback_tx.clone();
+            move |res: notify::Result<notify::Event>| {
+                let _ = tx.send(ControlMsg::Notify(res));
+            }
+        })?);
+
+        // Watch /Applications with NonRecursive (apps are top-level .app bundles)
+        if system_apps_path.exists() {
+            watcher.watch(&system_apps_path, RecursiveMode::NonRecursive)?;
+            info!(
+                path = %system_apps_path.display(),
+                recursive = false,
+                "System Applications watcher started"
+            );
+        } else {
+            debug!(
+                path = %system_apps_path.display(),
+                "System Applications path does not exist, skipping"
+            );
+        }
+
+        // Watch ~/Applications with NonRecursive
+        if user_apps_path.exists() {
+            watcher.watch(&user_apps_path, RecursiveMode::NonRecursive)?;
+            info!(
+                path = %user_apps_path.display(),
+                recursive = false,
+                "User Applications watcher started"
+            );
+        } else {
+            // Create ~/Applications if it doesn't exist so we can watch it
+            // Many users don't have this directory initially
+            debug!(
+                path = %user_apps_path.display(),
+                "User Applications path does not exist, skipping"
+            );
+        }
+
+        let mut consecutive_errors: u32 = 0;
+        let debounce = Duration::from_millis(DEBOUNCE_MS);
+        let mut pending: HashMap<PathBuf, (AppReloadEvent, Instant)> = HashMap::new();
+        // Global FullReload state: when set, supersedes all per-file events
+        let mut full_reload_at: Option<Instant> = None;
+
+        loop {
+            if stop_flag.load(std::sync::atomic::Ordering::Relaxed) {
+                break;
+            }
+
+            // Use a max timeout to periodically check stop flag
+            let deadline = next_app_deadline(&pending, full_reload_at, debounce);
+            let timeout = deadline
+                .map(|dl| dl.saturating_duration_since(Instant::now()))
+                .unwrap_or(Duration::from_millis(500));
+
+            let msg = match control_rx.recv_timeout(timeout) {
+                Ok(m) => Some(m),
+                Err(RecvTimeoutError::Timeout) => {
+                    flush_expired_apps(&mut pending, &mut full_reload_at, debounce, &out_tx);
+                    continue;
+                }
+                Err(RecvTimeoutError::Disconnected) => break,
+            };
+
+            let Some(msg) = msg else { continue };
+
+            match msg {
+                ControlMsg::Stop => {
+                    info!(watcher = "apps", "App watcher received stop signal");
+                    break;
+                }
+
+                ControlMsg::Notify(Err(e)) => {
+                    consecutive_errors = consecutive_errors.saturating_add(1);
+                    warn!(
+                        error = %e,
+                        watcher = "apps",
+                        consecutive_errors = consecutive_errors,
+                        "notify delivered error"
+                    );
+
+                    if consecutive_errors >= MAX_NOTIFY_ERRORS {
+                        warn!(
+                            watcher = "apps",
+                            consecutive_errors = consecutive_errors,
+                            "Too many consecutive errors, triggering restart"
+                        );
+                        return Err(notify::Error::generic("Too many consecutive notify errors"));
+                    }
+                }
+
+                ControlMsg::Notify(Ok(event)) => {
+                    consecutive_errors = 0;
+                    let kind = &event.kind;
+
+                    for path in event.paths.iter() {
+                        // Filter: only .app directories
+                        if !is_app_bundle(path) {
+                            continue;
+                        }
+
+                        let now = Instant::now();
+
+                        // Handle event types
+                        match kind {
+                            notify::EventKind::Create(_) => {
+                                debug!(
+                                    path = %path.display(),
+                                    event_kind = ?kind,
+                                    "App change detected (create), merging event"
+                                );
+                                merge_app_event(
+                                    &mut pending,
+                                    path,
+                                    AppReloadEvent::AppAdded(path.clone()),
+                                    now,
+                                );
+                            }
+                            notify::EventKind::Modify(_) => {
+                                debug!(
+                                    path = %path.display(),
+                                    event_kind = ?kind,
+                                    "App change detected (modify), updating pending"
+                                );
+                                pending.insert(
+                                    path.clone(),
+                                    (AppReloadEvent::AppUpdated(path.clone()), now),
+                                );
+                            }
+                            notify::EventKind::Remove(_) => {
+                                debug!(
+                                    path = %path.display(),
+                                    event_kind = ?kind,
+                                    "App change detected (remove), merging event"
+                                );
+                                merge_app_event(
+                                    &mut pending,
+                                    path,
+                                    AppReloadEvent::AppRemoved(path.clone()),
+                                    now,
+                                );
+                            }
+                            // Access events are not relevant
+                            notify::EventKind::Access(_) => continue,
+                            // For Other/Any events, trigger global FullReload
+                            _ => {
+                                debug!(
+                                    path = %path.display(),
+                                    event_kind = ?kind,
+                                    "Unknown event kind, triggering global FullReload"
+                                );
+                                full_reload_at = Some(now);
+                                pending.clear();
+                            }
+                        }
+
+                        // Storm coalescing: if too many pending events, collapse to FullReload
+                        if pending.len() >= STORM_THRESHOLD {
+                            warn!(
+                                pending_count = pending.len(),
+                                threshold = STORM_THRESHOLD,
+                                "App event storm detected, collapsing to FullReload"
+                            );
+                            full_reload_at = Some(Instant::now());
+                            pending.clear();
+                        }
+                    }
+                }
+            }
+        }
+
+        info!(watcher = "apps", "App watcher shutting down");
+        Ok(())
+    }
+}
+
+impl Drop for AppWatcher {
+    fn drop(&mut self) {
+        if let Some(flag) = self.stop_flag.take() {
+            flag.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+        if let Some(handle) = self.watcher_thread.take() {
+            let _ = handle.join();
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1967,5 +2391,370 @@ mod tests {
         const { assert!(MAX_BACKOFF_MS <= 120_000) }; // At most 2 minutes
         const { assert!(MAX_NOTIFY_ERRORS >= 3) }; // At least 3 errors
         const { assert!(MAX_NOTIFY_ERRORS <= 100) }; // At most 100 errors
+    }
+
+    // ============================================================
+    // AppWatcher tests
+    // ============================================================
+
+    #[test]
+    fn test_app_watcher_creation() {
+        let (_watcher, _rx) = AppWatcher::new();
+        // Watcher should be created without panicking
+    }
+
+    #[test]
+    fn test_app_watcher_shutdown_no_hang() {
+        let (mut watcher, _rx) = AppWatcher::new();
+        let _ = watcher.start();
+        drop(watcher);
+        // If we get here, the test passed (didn't hang)
+    }
+
+    #[test]
+    fn test_app_reload_event_clone() {
+        let event = AppReloadEvent::FullReload;
+        let _cloned = event.clone();
+        // Event should be cloneable
+    }
+
+    #[test]
+    fn test_app_reload_event_app_added() {
+        let path = PathBuf::from("/Applications/MyApp.app");
+        let event = AppReloadEvent::AppAdded(path.clone());
+
+        if let AppReloadEvent::AppAdded(event_path) = event {
+            assert_eq!(event_path, path);
+        } else {
+            panic!("Expected AppAdded variant");
+        }
+    }
+
+    #[test]
+    fn test_app_reload_event_app_removed() {
+        let path = PathBuf::from("/Applications/OldApp.app");
+        let event = AppReloadEvent::AppRemoved(path.clone());
+
+        if let AppReloadEvent::AppRemoved(event_path) = event {
+            assert_eq!(event_path, path);
+        } else {
+            panic!("Expected AppRemoved variant");
+        }
+    }
+
+    #[test]
+    fn test_app_reload_event_app_updated() {
+        let path = PathBuf::from("/Applications/UpdatedApp.app");
+        let event = AppReloadEvent::AppUpdated(path.clone());
+
+        if let AppReloadEvent::AppUpdated(event_path) = event {
+            assert_eq!(event_path, path);
+        } else {
+            panic!("Expected AppUpdated variant");
+        }
+    }
+
+    #[test]
+    fn test_app_reload_event_equality() {
+        let path1 = PathBuf::from("/Applications/App1.app");
+        let path2 = PathBuf::from("/Applications/App1.app");
+        let path3 = PathBuf::from("/Applications/App2.app");
+
+        // Same path should be equal
+        assert_eq!(
+            AppReloadEvent::AppAdded(path1.clone()),
+            AppReloadEvent::AppAdded(path2.clone())
+        );
+
+        // Different paths should not be equal
+        assert_ne!(
+            AppReloadEvent::AppAdded(path1.clone()),
+            AppReloadEvent::AppAdded(path3.clone())
+        );
+
+        // Different event types should not be equal
+        assert_ne!(
+            AppReloadEvent::AppAdded(path1.clone()),
+            AppReloadEvent::AppRemoved(path1.clone())
+        );
+
+        // FullReload should equal itself
+        assert_eq!(AppReloadEvent::FullReload, AppReloadEvent::FullReload);
+    }
+
+    #[test]
+    fn test_is_app_bundle_valid() {
+        use std::path::Path;
+
+        // .app extension should be recognized
+        let valid_app = Path::new("/Applications/Safari.app");
+        assert!(is_app_bundle(valid_app));
+
+        let user_app = Path::new("/Users/test/Applications/MyApp.app");
+        assert!(is_app_bundle(user_app));
+    }
+
+    #[test]
+    fn test_is_app_bundle_invalid() {
+        use std::path::Path;
+
+        // Non-.app files should not be recognized
+        let not_app = Path::new("/Applications/readme.txt");
+        assert!(!is_app_bundle(not_app));
+
+        let dmg_file = Path::new("/Applications/installer.dmg");
+        assert!(!is_app_bundle(dmg_file));
+
+        let ds_store = Path::new("/Applications/.DS_Store");
+        assert!(!is_app_bundle(ds_store));
+
+        let hidden = Path::new("/Applications/.Trash");
+        assert!(!is_app_bundle(hidden));
+    }
+
+    #[test]
+    fn test_merge_app_event_remove_then_add() {
+        // AppRemoved + AppAdded (same path) → AppUpdated
+        let mut pending: HashMap<PathBuf, (AppReloadEvent, Instant)> = HashMap::new();
+        let path = PathBuf::from("/Applications/MyApp.app");
+        let now = Instant::now();
+
+        // First: remove event
+        merge_app_event(
+            &mut pending,
+            &path,
+            AppReloadEvent::AppRemoved(path.clone()),
+            now,
+        );
+        assert_eq!(pending.len(), 1);
+        assert!(matches!(
+            pending.get(&path),
+            Some((AppReloadEvent::AppRemoved(_), _))
+        ));
+
+        // Then: add event (app reinstalled/updated)
+        let later = now + Duration::from_millis(10);
+        merge_app_event(
+            &mut pending,
+            &path,
+            AppReloadEvent::AppAdded(path.clone()),
+            later,
+        );
+
+        // Should be merged to AppUpdated
+        assert_eq!(pending.len(), 1);
+        let (event, _) = pending.get(&path).unwrap();
+        assert_eq!(*event, AppReloadEvent::AppUpdated(path.clone()));
+    }
+
+    #[test]
+    fn test_merge_app_event_add_then_remove() {
+        // AppAdded + AppRemoved (same path) → AppUpdated
+        let mut pending: HashMap<PathBuf, (AppReloadEvent, Instant)> = HashMap::new();
+        let path = PathBuf::from("/Applications/MyApp.app");
+        let now = Instant::now();
+
+        // First: add event
+        merge_app_event(
+            &mut pending,
+            &path,
+            AppReloadEvent::AppAdded(path.clone()),
+            now,
+        );
+
+        // Then: remove event
+        let later = now + Duration::from_millis(10);
+        merge_app_event(
+            &mut pending,
+            &path,
+            AppReloadEvent::AppRemoved(path.clone()),
+            later,
+        );
+
+        // Should be merged to AppUpdated
+        assert_eq!(pending.len(), 1);
+        let (event, _) = pending.get(&path).unwrap();
+        assert_eq!(*event, AppReloadEvent::AppUpdated(path.clone()));
+    }
+
+    #[test]
+    fn test_no_merge_app_events_different_paths() {
+        // Events for different paths should not be merged
+        let mut pending: HashMap<PathBuf, (AppReloadEvent, Instant)> = HashMap::new();
+        let path_a = PathBuf::from("/Applications/AppA.app");
+        let path_b = PathBuf::from("/Applications/AppB.app");
+        let now = Instant::now();
+
+        // Remove on path A
+        merge_app_event(
+            &mut pending,
+            &path_a,
+            AppReloadEvent::AppRemoved(path_a.clone()),
+            now,
+        );
+
+        // Add on path B (different path - no merge)
+        merge_app_event(
+            &mut pending,
+            &path_b,
+            AppReloadEvent::AppAdded(path_b.clone()),
+            now,
+        );
+
+        // Should have 2 separate events
+        assert_eq!(pending.len(), 2);
+        assert!(matches!(
+            pending.get(&path_a),
+            Some((AppReloadEvent::AppRemoved(_), _))
+        ));
+        assert!(matches!(
+            pending.get(&path_b),
+            Some((AppReloadEvent::AppAdded(_), _))
+        ));
+    }
+
+    #[test]
+    fn test_next_app_deadline_empty() {
+        let pending: HashMap<PathBuf, (AppReloadEvent, Instant)> = HashMap::new();
+        let debounce = Duration::from_millis(500);
+
+        assert!(next_app_deadline(&pending, None, debounce).is_none());
+    }
+
+    #[test]
+    fn test_next_app_deadline_single() {
+        let mut pending: HashMap<PathBuf, (AppReloadEvent, Instant)> = HashMap::new();
+        let now = Instant::now();
+        let debounce = Duration::from_millis(500);
+
+        pending.insert(
+            PathBuf::from("/Applications/Test.app"),
+            (
+                AppReloadEvent::AppAdded(PathBuf::from("/Applications/Test.app")),
+                now,
+            ),
+        );
+
+        let deadline = next_app_deadline(&pending, None, debounce);
+        assert!(deadline.is_some());
+        let expected = now + debounce;
+        let actual = deadline.unwrap();
+        assert!(actual >= expected && actual <= expected + Duration::from_millis(1));
+    }
+
+    #[test]
+    fn test_next_app_deadline_with_full_reload() {
+        let pending: HashMap<PathBuf, (AppReloadEvent, Instant)> = HashMap::new();
+        let now = Instant::now();
+        let debounce = Duration::from_millis(500);
+
+        let deadline = next_app_deadline(&pending, Some(now), debounce);
+        assert!(deadline.is_some());
+        let expected = now + debounce;
+        let actual = deadline.unwrap();
+        assert!(actual >= expected && actual <= expected + Duration::from_millis(1));
+    }
+
+    #[test]
+    fn test_flush_expired_apps_none_expired() {
+        let (tx, _rx) = async_channel::bounded::<AppReloadEvent>(10);
+        let mut pending: HashMap<PathBuf, (AppReloadEvent, Instant)> = HashMap::new();
+        let mut full_reload_at: Option<Instant> = None;
+        let now = Instant::now();
+        let debounce = Duration::from_millis(500);
+
+        // Add a fresh event (not expired)
+        pending.insert(
+            PathBuf::from("/Applications/Test.app"),
+            (
+                AppReloadEvent::AppAdded(PathBuf::from("/Applications/Test.app")),
+                now,
+            ),
+        );
+
+        flush_expired_apps(&mut pending, &mut full_reload_at, debounce, &tx);
+
+        // Event should still be pending
+        assert_eq!(pending.len(), 1);
+    }
+
+    #[test]
+    fn test_flush_expired_apps_some_expired() {
+        let (tx, rx) = async_channel::bounded::<AppReloadEvent>(10);
+        let mut pending: HashMap<PathBuf, (AppReloadEvent, Instant)> = HashMap::new();
+        let mut full_reload_at: Option<Instant> = None;
+        let debounce = Duration::from_millis(500);
+
+        // Add an expired event (from 600ms ago)
+        let old_time = Instant::now() - Duration::from_millis(600);
+        pending.insert(
+            PathBuf::from("/Applications/Old.app"),
+            (
+                AppReloadEvent::AppAdded(PathBuf::from("/Applications/Old.app")),
+                old_time,
+            ),
+        );
+
+        // Add a fresh event
+        pending.insert(
+            PathBuf::from("/Applications/New.app"),
+            (
+                AppReloadEvent::AppAdded(PathBuf::from("/Applications/New.app")),
+                Instant::now(),
+            ),
+        );
+
+        flush_expired_apps(&mut pending, &mut full_reload_at, debounce, &tx);
+
+        // Only fresh event should remain
+        assert_eq!(pending.len(), 1);
+        assert!(pending.contains_key(&PathBuf::from("/Applications/New.app")));
+
+        // Should have received the expired event
+        let received = rx.try_recv().unwrap();
+        assert_eq!(
+            received,
+            AppReloadEvent::AppAdded(PathBuf::from("/Applications/Old.app"))
+        );
+    }
+
+    #[test]
+    fn test_flush_expired_apps_full_reload_supersedes_pending() {
+        let (tx, rx) = async_channel::bounded::<AppReloadEvent>(10);
+        let mut pending: HashMap<PathBuf, (AppReloadEvent, Instant)> = HashMap::new();
+        let debounce = Duration::from_millis(500);
+
+        // Add some expired pending events
+        let old_time = Instant::now() - Duration::from_millis(600);
+        pending.insert(
+            PathBuf::from("/Applications/A.app"),
+            (
+                AppReloadEvent::AppAdded(PathBuf::from("/Applications/A.app")),
+                old_time,
+            ),
+        );
+        pending.insert(
+            PathBuf::from("/Applications/B.app"),
+            (
+                AppReloadEvent::AppRemoved(PathBuf::from("/Applications/B.app")),
+                old_time,
+            ),
+        );
+
+        // Set expired full_reload_at (should supersede pending)
+        let mut full_reload_at: Option<Instant> = Some(old_time);
+
+        flush_expired_apps(&mut pending, &mut full_reload_at, debounce, &tx);
+
+        // All pending should be cleared
+        assert!(pending.is_empty());
+        // full_reload_at should be reset
+        assert!(full_reload_at.is_none());
+
+        // Should receive only ONE FullReload (not per-app events)
+        let received = rx.try_recv().unwrap();
+        assert_eq!(received, AppReloadEvent::FullReload);
+        // No more events
+        assert!(rx.try_recv().is_err());
     }
 }

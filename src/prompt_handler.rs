@@ -208,8 +208,9 @@ impl ScriptListApp {
                         }
                     });
 
-                // Get the target height for terminal view
-                let term_height = window_resize::layout::MAX_HEIGHT;
+                // Get the target height for terminal view (subtract footer height)
+                let term_height =
+                    window_resize::layout::MAX_HEIGHT - px(window_resize::layout::FOOTER_HEIGHT);
 
                 // Create terminal with explicit height - GPUI entities don't inherit parent flex sizing
                 match term_prompt::TermPrompt::with_height(
