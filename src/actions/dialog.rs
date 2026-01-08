@@ -16,11 +16,15 @@ use gpui::{
 };
 use std::sync::Arc;
 
-use super::builders::{get_global_actions, get_path_context_actions, get_script_context_actions};
+use super::builders::{
+    get_file_context_actions, get_global_actions, get_path_context_actions,
+    get_script_context_actions,
+};
 use super::constants::{
     ACTION_ITEM_HEIGHT, ACTION_ROW_INSET, HEADER_HEIGHT, KEYCAP_HEIGHT, KEYCAP_MIN_WIDTH,
     POPUP_MAX_HEIGHT, POPUP_WIDTH, SEARCH_INPUT_HEIGHT, SELECTION_RADIUS,
 };
+use crate::file_search::FileInfo;
 
 // Keep ACCENT_BAR_WIDTH for backwards compatibility during transition
 #[allow(unused_imports)]
@@ -130,6 +134,45 @@ impl ActionsDialog {
             hide_search: false,
             sdk_actions: None,
             context_title: Some(path_info.path.clone()),
+        }
+    }
+
+    /// Create ActionsDialog for a file search result with file-specific actions
+    /// Actions: Open, Show in Finder, Quick Look, Open With..., Show Info, Copy Path
+    pub fn with_file(
+        focus_handle: FocusHandle,
+        on_select: ActionCallback,
+        file_info: &FileInfo,
+        theme: Arc<theme::Theme>,
+    ) -> Self {
+        let actions = get_file_context_actions(file_info);
+        let filtered_actions: Vec<usize> = (0..actions.len()).collect();
+
+        logging::log(
+            "ACTIONS",
+            &format!(
+                "ActionsDialog created for file: {} (is_dir={}) with {} actions",
+                file_info.path,
+                file_info.is_dir,
+                actions.len()
+            ),
+        );
+
+        ActionsDialog {
+            actions,
+            filtered_actions,
+            selected_index: 0,
+            search_text: String::new(),
+            focus_handle,
+            on_select,
+            focused_script: None,
+            scroll_handle: UniformListScrollHandle::new(),
+            theme,
+            design_variant: DesignVariant::Default,
+            cursor_visible: true,
+            hide_search: false,
+            sdk_actions: None,
+            context_title: Some(file_info.name.clone()),
         }
     }
 

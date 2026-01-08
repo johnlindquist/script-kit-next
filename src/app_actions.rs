@@ -366,8 +366,95 @@ impl ScriptListApp {
             }
             "__cancel__" => {
                 logging::log("UI", "Actions dialog cancelled");
+                // Clear file search actions path on cancel
+                self.file_search_actions_path = None;
+            }
+            // File search specific actions
+            "open_file" | "open_directory" => {
+                if let Some(ref path) = self.file_search_actions_path {
+                    logging::log("UI", &format!("Opening file: {}", path));
+                    let _ = crate::file_search::open_file(path);
+                    self.file_search_actions_path = None;
+                    self.close_and_reset_window(cx);
+                }
+            }
+            "quick_look" => {
+                if let Some(ref path) = self.file_search_actions_path {
+                    logging::log("UI", &format!("Quick Look: {}", path));
+                    let _ = crate::file_search::quick_look(path);
+                    self.file_search_actions_path = None;
+                    // Don't close window for Quick Look - user may want to continue
+                }
+            }
+            "open_with" => {
+                if let Some(ref path) = self.file_search_actions_path {
+                    logging::log("UI", &format!("Open With: {}", path));
+                    let _ = crate::file_search::open_with(path);
+                    self.file_search_actions_path = None;
+                }
+            }
+            "show_info" => {
+                if let Some(ref path) = self.file_search_actions_path {
+                    logging::log("UI", &format!("Show Info: {}", path));
+                    let _ = crate::file_search::show_info(path);
+                    self.file_search_actions_path = None;
+                }
+            }
+            "copy_filename" => {
+                if let Some(ref path) = self.file_search_actions_path {
+                    let filename = std::path::Path::new(path)
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("");
+                    logging::log("UI", &format!("Copy filename: {}", filename));
+                    #[cfg(target_os = "macos")]
+                    {
+                        let _ = self.pbcopy(filename);
+                    }
+                    #[cfg(not(target_os = "macos"))]
+                    {
+                        use arboard::Clipboard;
+                        let _ = Clipboard::new().and_then(|mut c| c.set_text(filename));
+                    }
+                    self.last_output = Some(SharedString::from(format!("Copied: {}", filename)));
+                    self.file_search_actions_path = None;
+                }
             }
             _ => {
+                // Check if this is a file search action with reveal_in_finder or copy_path
+                // (these actions exist both for scripts and file search)
+                if let Some(path) = self.file_search_actions_path.clone() {
+                    match action_id.as_str() {
+                        "reveal_in_finder" => {
+                            logging::log(
+                                "UI",
+                                &format!("Reveal in Finder (file search): {}", path),
+                            );
+                            self.reveal_in_finder(std::path::Path::new(&path));
+                            self.file_search_actions_path = None;
+                            cx.notify();
+                            return;
+                        }
+                        "copy_path" => {
+                            logging::log("UI", &format!("Copy path (file search): {}", path));
+                            #[cfg(target_os = "macos")]
+                            {
+                                let _ = self.pbcopy(&path);
+                            }
+                            #[cfg(not(target_os = "macos"))]
+                            {
+                                use arboard::Clipboard;
+                                let _ = Clipboard::new().and_then(|mut c| c.set_text(&path));
+                            }
+                            self.last_output =
+                                Some(SharedString::from(format!("Copied: {}", path)));
+                            self.file_search_actions_path = None;
+                            cx.notify();
+                            return;
+                        }
+                        _ => {}
+                    }
+                }
                 // Handle SDK actions using shared helper
                 self.trigger_sdk_action_internal(&action_id);
             }

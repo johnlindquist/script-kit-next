@@ -3,6 +3,90 @@
 // Contains: render_clipboard_history, render_app_launcher, render_window_switcher, render_design_gallery
 
 impl ScriptListApp {
+    /// Toggle the actions dialog for file search results
+    /// Opens a popup with file-specific actions: Open, Show in Finder, Quick Look, etc.
+    fn toggle_file_search_actions(
+        &mut self,
+        file: &file_search::FileResult,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        logging::log("KEY", "Toggling file search actions popup");
+
+        if self.show_actions_popup || is_actions_window_open() {
+            // Close the actions popup
+            self.show_actions_popup = false;
+            self.actions_dialog = None;
+            self.file_search_actions_path = None;
+
+            // Close the actions window via spawn
+            cx.spawn(async move |_this, cx| {
+                cx.update(|cx| {
+                    close_actions_window(cx);
+                })
+                .ok();
+            })
+            .detach();
+
+            // Refocus main window
+            self.focus_handle.focus(window, cx);
+            logging::log("FOCUS", "File search actions closed");
+        } else {
+            // Open actions popup for the selected file
+            self.show_actions_popup = true;
+
+            // Store the file path for action handling
+            self.file_search_actions_path = Some(file.path.clone());
+
+            // Create file info from the result
+            let file_info = file_search::FileInfo::from_result(file);
+
+            // Create the dialog entity
+            let theme_arc = std::sync::Arc::new(self.theme.clone());
+            let dialog = cx.new(|cx| {
+                let focus_handle = cx.focus_handle();
+                ActionsDialog::with_file(
+                    focus_handle,
+                    std::sync::Arc::new(|_action_id| {}), // Callback handled via main app
+                    &file_info,
+                    theme_arc,
+                )
+            });
+
+            // Store the dialog entity for keyboard routing
+            self.actions_dialog = Some(dialog.clone());
+
+            // Get main window bounds and display_id for positioning
+            let main_bounds = window.bounds();
+            let display_id = window.display(cx).map(|d| d.id());
+
+            logging::log(
+                "ACTIONS",
+                &format!(
+                    "Opening file search actions for: {} (is_dir={})",
+                    file_info.name, file_info.is_dir
+                ),
+            );
+
+            // Open the actions window
+            cx.spawn(async move |_this, cx| {
+                cx.update(
+                    |cx| match open_actions_window(cx, main_bounds, display_id, dialog) {
+                        Ok(_handle) => {
+                            logging::log("ACTIONS", "File search actions popup window opened");
+                        }
+                        Err(e) => {
+                            logging::log("ERROR", &format!("Failed to open actions window: {}", e));
+                        }
+                    },
+                )
+                .ok();
+            })
+            .detach();
+        }
+        cx.notify();
+    }
+
     /// Render clipboard history view
     /// P0 FIX: Data comes from self.cached_clipboard_entries, view passes only state
     fn render_clipboard_history(
@@ -1945,7 +2029,30 @@ impl ScriptListApp {
                 }
 
                 let key_str = event.keystroke.key.to_lowercase();
+                let key_char = event.keystroke.key_char.as_deref();
                 let has_cmd = event.keystroke.modifiers.platform;
+
+                // Route keys to actions dialog first if it's open
+                match this.route_key_to_actions_dialog(
+                    &key_str,
+                    key_char,
+                    ActionsDialogHost::FileSearch,
+                    window,
+                    cx,
+                ) {
+                    ActionsRoute::NotHandled => {
+                        // Actions dialog not open - continue to file search key handling
+                    }
+                    ActionsRoute::Handled => {
+                        // Key was consumed by actions dialog
+                        return;
+                    }
+                    ActionsRoute::Execute { action_id } => {
+                        // User selected an action - execute it
+                        this.trigger_action_by_name(&action_id, cx);
+                        return;
+                    }
+                }
 
                 // ESC goes back to main menu (not close window)
                 if key_str == "escape" {
@@ -2020,18 +2127,50 @@ impl ScriptListApp {
                             }
                         }
                         "enter" => {
-                            // Open file with default app
-                            if let Some((_, file)) = filtered_results.get(*selected_index) {
-                                let _ = file_search::open_file(&file.path);
-                                // Close window after opening file
-                                this.close_and_reset_window(cx);
+                            // Check for Cmd+Enter (reveal in finder) first
+                            if has_cmd {
+                                if let Some((_, file)) = filtered_results.get(*selected_index) {
+                                    let _ = file_search::reveal_in_finder(&file.path);
+                                }
+                            } else {
+                                // Open file with default app
+                                if let Some((_, file)) = filtered_results.get(*selected_index) {
+                                    let _ = file_search::open_file(&file.path);
+                                    // Close window after opening file
+                                    this.close_and_reset_window(cx);
+                                }
                             }
                         }
                         _ => {
-                            // Check for Cmd+Enter (reveal in finder)
-                            if has_cmd && key_str == "enter" {
+                            // Handle Cmd+K (toggle actions)
+                            if has_cmd && key_str == "k" {
                                 if let Some((_, file)) = filtered_results.get(*selected_index) {
-                                    let _ = file_search::reveal_in_finder(&file.path);
+                                    // Clone the file to avoid borrow issues
+                                    let file_clone = (*file).clone();
+                                    this.toggle_file_search_actions(&file_clone, window, cx);
+                                }
+                                return;
+                            }
+                            // Handle Cmd+Y (Quick Look) - macOS only
+                            #[cfg(target_os = "macos")]
+                            if has_cmd && key_str == "y" {
+                                if let Some((_, file)) = filtered_results.get(*selected_index) {
+                                    let _ = file_search::quick_look(&file.path);
+                                }
+                                return;
+                            }
+                            // Handle Cmd+I (Show Info) - macOS only
+                            #[cfg(target_os = "macos")]
+                            if has_cmd && key_str == "i" {
+                                if let Some((_, file)) = filtered_results.get(*selected_index) {
+                                    let _ = file_search::show_info(&file.path);
+                                }
+                            }
+                            // Handle Cmd+O (Open With) - macOS only
+                            #[cfg(target_os = "macos")]
+                            if has_cmd && key_str == "o" {
+                                if let Some((_, file)) = filtered_results.get(*selected_index) {
+                                    let _ = file_search::open_with(&file.path);
                                 }
                             }
                         }
@@ -2146,7 +2285,7 @@ impl ScriptListApp {
             .into_any_element()
         };
 
-        // Build preview panel content
+        // Build preview panel content - matching main menu labeled section pattern
         let preview_content = if let Some(file) = &selected_file {
             let file_type_str = match file.file_type {
                 FileType::Directory => "Folder",
@@ -2163,76 +2302,107 @@ impl ScriptListApp {
                 .flex_1()
                 .flex()
                 .flex_col()
-                .p(px(16.))
-                .gap(px(12.))
-                // Header with file name
+                .p(px(design_spacing.padding_lg))
+                .gap(px(design_spacing.gap_md))
+                .overflow_y_hidden()
+                // Name section (labeled like main menu)
                 .child(
                     div()
                         .flex()
-                        .flex_row()
-                        .items_center()
-                        .gap(px(8.))
+                        .flex_col()
+                        .pb(px(design_spacing.padding_md))
                         .child(
                             div()
-                                .text_lg()
-                                .text_color(rgb(text_primary))
-                                .child(file.name.clone()),
+                                .text_xs()
+                                .text_color(rgb(text_muted))
+                                .pb(px(design_spacing.padding_xs / 2.0))
+                                .child("Name"),
                         )
                         .child(
                             div()
-                                .px(px(8.))
-                                .py(px(2.))
-                                .rounded(px(4.))
-                                .bg(rgba((ui_border << 8) | 0x40))
-                                .text_xs()
-                                .text_color(rgb(text_muted))
-                                .child(file_type_str),
+                                .flex()
+                                .flex_row()
+                                .items_center()
+                                .gap(px(design_spacing.gap_sm))
+                                .child(
+                                    div()
+                                        .text_lg()
+                                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                                        .text_color(rgb(text_primary))
+                                        .child(file.name.clone()),
+                                )
+                                .child(
+                                    div()
+                                        .px(px(6.))
+                                        .py(px(2.))
+                                        .rounded(px(4.))
+                                        .bg(rgba((ui_border << 8) | 0x40))
+                                        .text_xs()
+                                        .text_color(rgb(text_muted))
+                                        .child(file_type_str),
+                                ),
                         ),
                 )
-                // Path
+                // Path section (labeled)
                 .child(
                     div()
-                        .text_xs()
-                        .text_color(rgb(text_dimmed))
-                        .child(file.path.clone()),
-                )
-                // Metadata
-                .child(
-                    div()
-                        .flex_1()
-                        .w_full()
-                        .overflow_hidden()
-                        .rounded(px(8.))
-                        .bg(rgba((ui_border << 8) | 0x20))
-                        .p(px(12.))
                         .flex()
                         .flex_col()
-                        .gap(px(8.))
-                        .child(div().text_sm().text_color(rgb(text_muted)).child(format!(
-                            "Size: {}",
-                            file_search::format_file_size(file.size)
-                        )))
-                        .child(div().text_sm().text_color(rgb(text_muted)).child(format!(
-                            "Modified: {}",
-                            file_search::format_relative_time(file.modified)
-                        )))
+                        .pb(px(design_spacing.padding_md))
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(rgb(text_muted))
+                                .pb(px(design_spacing.padding_xs / 2.0))
+                                .child("Path"),
+                        )
                         .child(
                             div()
                                 .text_sm()
-                                .text_color(rgb(text_muted))
-                                .child(format!("Type: {}", file_type_str)),
+                                .text_color(rgb(text_dimmed))
+                                .child(file.path.clone()),
                         ),
                 )
-                // Footer with hints
+                // Divider (like main menu)
+                .child(
+                    div()
+                        .w_full()
+                        .h(px(design_visual.border_thin))
+                        .bg(rgba((ui_border << 8) | 0x60))
+                        .my(px(design_spacing.padding_sm)),
+                )
+                // Details section (labeled)
                 .child(
                     div()
                         .flex()
-                        .flex_row()
-                        .gap(px(16.))
-                        .text_xs()
-                        .text_color(rgb(text_dimmed))
-                        .child("↵ Open")
-                        .child("⌘↵ Reveal in Finder"),
+                        .flex_col()
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(rgb(text_muted))
+                                .pb(px(design_spacing.padding_xs / 2.0))
+                                .child("Details"),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .gap(px(design_spacing.gap_sm))
+                                .child(div().text_sm().text_color(rgb(text_dimmed)).child(format!(
+                                    "Size: {}",
+                                    file_search::format_file_size(file.size)
+                                )))
+                                .child(div().text_sm().text_color(rgb(text_dimmed)).child(format!(
+                                    "Modified: {}",
+                                    file_search::format_relative_time(file.modified)
+                                )))
+                                .child(
+                                    div()
+                                        .text_sm()
+                                        .text_color(rgb(text_dimmed))
+                                        .child(format!("Type: {}", file_type_str)),
+                                ),
+                        ),
                 )
         } else {
             div().flex_1().flex().items_center().justify_center().child(
@@ -2330,8 +2500,8 @@ impl ScriptListApp {
             .child(PromptFooter::new(
                 PromptFooterConfig::new()
                     .primary_label("Open")
-                    .primary_shortcut("↵")
-                    .show_secondary(false),
+                    .primary_shortcut("↵"),
+                // Default config already has secondary_label="Actions", secondary_shortcut="⌘K", show_secondary=true
                 PromptFooterColors::from_design(&design_colors),
             ))
             .into_any_element()

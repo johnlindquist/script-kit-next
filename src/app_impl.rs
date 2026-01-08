@@ -243,6 +243,7 @@ impl ScriptListApp {
             file_search_loading: false,
             file_search_debounce_task: None,
             file_search_current_dir: None,
+            file_search_actions_path: None,
             show_actions_popup: false,
             actions_dialog: None,
             cursor_visible: true,
@@ -2458,6 +2459,11 @@ impl ScriptListApp {
                 self.focused_input = FocusedInput::None;
             }
             ActionsDialogHost::MainList => {
+                self.focused_input = FocusedInput::MainFilter;
+                self.pending_focus = Some(FocusTarget::AppRoot);
+            }
+            ActionsDialogHost::FileSearch => {
+                // File search uses MainFilter input - restore focus to it
                 self.focused_input = FocusedInput::MainFilter;
                 self.pending_focus = Some(FocusTarget::AppRoot);
             }

@@ -22,6 +22,58 @@ pub enum FileType {
     Other,
 }
 
+/// Information about a file for the actions dialog
+/// Used as context for file-specific actions (similar to PathInfo and ScriptInfo)
+#[derive(Debug, Clone)]
+pub struct FileInfo {
+    /// Full path to the file
+    pub path: String,
+    /// File name (last component of path)
+    pub name: String,
+    /// Type of file (used by the actions builder for context-specific actions)
+    #[allow(dead_code)]
+    pub file_type: FileType,
+    /// Whether this is a directory
+    pub is_dir: bool,
+}
+
+impl FileInfo {
+    /// Create FileInfo from a FileResult
+    #[allow(dead_code)]
+    pub fn from_result(result: &FileResult) -> Self {
+        FileInfo {
+            path: result.path.clone(),
+            name: result.name.clone(),
+            file_type: result.file_type,
+            is_dir: result.file_type == FileType::Directory,
+        }
+    }
+
+    /// Create FileInfo from path string
+    #[allow(dead_code)]
+    pub fn from_path(path: &str) -> Self {
+        let path_obj = std::path::Path::new(path);
+        let name = path_obj
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .to_string();
+        let is_dir = path_obj.is_dir();
+        let file_type = if is_dir {
+            FileType::Directory
+        } else {
+            FileType::File
+        };
+
+        FileInfo {
+            path: path.to_string(),
+            name,
+            file_type,
+            is_dir,
+        }
+    }
+}
+
 /// Result of a file search
 #[derive(Debug, Clone)]
 pub struct FileResult {
@@ -433,6 +485,87 @@ pub fn reveal_in_finder(path: &str) -> Result<(), String> {
             .spawn()
             .map_err(|e| format!("Failed to reveal file: {}", e))?;
         Ok(())
+    }
+}
+
+/// Preview a file using Quick Look (macOS)
+#[allow(dead_code)]
+pub fn quick_look(path: &str) -> Result<(), String> {
+    use std::process::Command;
+
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("qlmanage")
+            .args(["-p", path])
+            .spawn()
+            .map_err(|e| format!("Failed to preview file: {}", e))?;
+        Ok(())
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        // Quick Look is macOS-only; fall back to opening the file
+        open_file(path)
+    }
+}
+
+/// Show the "Open With" dialog for a file (macOS)
+#[allow(dead_code)]
+pub fn open_with(path: &str) -> Result<(), String> {
+    use std::process::Command;
+
+    #[cfg(target_os = "macos")]
+    {
+        // Use AppleScript to trigger the "Open With" menu
+        let script = format!(
+            r#"tell application "Finder"
+                activate
+                set theFile to POSIX file "{}"
+                open information window of theFile
+            end tell"#,
+            path.replace('"', r#"\""#)
+        );
+        Command::new("osascript")
+            .args(["-e", &script])
+            .spawn()
+            .map_err(|e| format!("Failed to open 'Open With' dialog: {}", e))?;
+        Ok(())
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = path;
+        Err("Open With is only supported on macOS".to_string())
+    }
+}
+
+/// Show the Get Info window for a file in Finder (macOS)
+#[allow(dead_code)]
+pub fn show_info(path: &str) -> Result<(), String> {
+    use std::process::Command;
+
+    #[cfg(target_os = "macos")]
+    {
+        // Use AppleScript to open the Get Info window
+        let script = format!(
+            r#"tell application "Finder"
+                activate
+                set theFile to POSIX file "{}"
+                open information window of theFile
+            end tell"#,
+            path.replace('"', r#"\""#)
+        );
+        Command::new("osascript")
+            .args(["-e", &script])
+            .spawn()
+            .map_err(|e| format!("Failed to show file info: {}", e))?;
+        Ok(())
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = path;
+        Err("Show Info is only supported on macOS".to_string())
     }
 }
 
@@ -1195,5 +1328,194 @@ mod tests {
         assert!(is_directory_path("/usr/local"));
         assert!(is_directory_path("./src"));
         assert!(!is_directory_path("hello world"));
+    }
+
+    // ========================================================================
+    // Nucleo Filtering Tests
+    // ========================================================================
+
+    #[test]
+    fn test_filter_results_nucleo_empty_pattern() {
+        let results = vec![
+            FileResult {
+                path: "/test/apple.txt".to_string(),
+                name: "apple.txt".to_string(),
+                size: 100,
+                modified: 0,
+                file_type: FileType::Document,
+            },
+            FileResult {
+                path: "/test/banana.txt".to_string(),
+                name: "banana.txt".to_string(),
+                size: 200,
+                modified: 0,
+                file_type: FileType::Document,
+            },
+        ];
+
+        // Empty pattern with Nucleo matches everything (score 0)
+        // This is expected behavior - caller should check for empty pattern before calling
+        let filtered = filter_results_nucleo_simple(&results, "");
+        assert_eq!(filtered.len(), 2);
+    }
+
+    #[test]
+    fn test_filter_results_nucleo_exact_match() {
+        let results = vec![
+            FileResult {
+                path: "/test/mcp-final.txt".to_string(),
+                name: "mcp-final".to_string(),
+                size: 100,
+                modified: 0,
+                file_type: FileType::File,
+            },
+            FileResult {
+                path: "/test/definitions.txt".to_string(),
+                name: "definitions".to_string(),
+                size: 200,
+                modified: 0,
+                file_type: FileType::File,
+            },
+        ];
+
+        // "final" should match "mcp-final" better than "definitions"
+        let filtered = filter_results_nucleo_simple(&results, "final");
+        assert!(!filtered.is_empty());
+        assert_eq!(filtered[0].1.name, "mcp-final");
+    }
+
+    #[test]
+    fn test_filter_results_nucleo_fuzzy_ordering() {
+        let results = vec![
+            FileResult {
+                path: "/test/define.txt".to_string(),
+                name: "define".to_string(),
+                size: 100,
+                modified: 0,
+                file_type: FileType::File,
+            },
+            FileResult {
+                path: "/test/mcp-final.txt".to_string(),
+                name: "mcp-final".to_string(),
+                size: 200,
+                modified: 0,
+                file_type: FileType::File,
+            },
+            FileResult {
+                path: "/test/final-test.txt".to_string(),
+                name: "final-test".to_string(),
+                size: 300,
+                modified: 0,
+                file_type: FileType::File,
+            },
+        ];
+
+        // "fin" should fuzzy match both "mcp-final" and "final-test"
+        // Both should rank higher than "define" (which has f, i, n but not consecutive)
+        let filtered = filter_results_nucleo_simple(&results, "fin");
+
+        // Should have matches
+        assert!(!filtered.is_empty());
+
+        // "final-test" or "mcp-final" should be first (both have "fin" as prefix of "final")
+        let first_name = &filtered[0].1.name;
+        assert!(
+            first_name.contains("final"),
+            "Expected 'final' in first result, got: {}",
+            first_name
+        );
+    }
+
+    #[test]
+    fn test_filter_results_nucleo_no_matches() {
+        let results = vec![
+            FileResult {
+                path: "/test/apple.txt".to_string(),
+                name: "apple".to_string(),
+                size: 100,
+                modified: 0,
+                file_type: FileType::File,
+            },
+            FileResult {
+                path: "/test/banana.txt".to_string(),
+                name: "banana".to_string(),
+                size: 200,
+                modified: 0,
+                file_type: FileType::File,
+            },
+        ];
+
+        // "xyz" should not match anything
+        let filtered = filter_results_nucleo_simple(&results, "xyz");
+        assert!(filtered.is_empty());
+    }
+
+    #[test]
+    fn test_filter_results_nucleo_case_insensitive() {
+        let results = vec![FileResult {
+            path: "/test/MyDocument.txt".to_string(),
+            name: "MyDocument".to_string(),
+            size: 100,
+            modified: 0,
+            file_type: FileType::Document,
+        }];
+
+        // Should match regardless of case
+        let filtered_lower = filter_results_nucleo_simple(&results, "mydoc");
+        let filtered_upper = filter_results_nucleo_simple(&results, "MYDOC");
+        let filtered_mixed = filter_results_nucleo_simple(&results, "MyDoc");
+
+        assert!(!filtered_lower.is_empty());
+        assert!(!filtered_upper.is_empty());
+        assert!(!filtered_mixed.is_empty());
+    }
+
+    // ========================================================================
+    // FileInfo Tests
+    // ========================================================================
+
+    #[test]
+    fn test_file_info_from_result() {
+        let result = FileResult {
+            path: "/test/document.pdf".to_string(),
+            name: "document.pdf".to_string(),
+            size: 1024,
+            modified: 1234567890,
+            file_type: FileType::Document,
+        };
+
+        let info = FileInfo::from_result(&result);
+        assert_eq!(info.path, "/test/document.pdf");
+        assert_eq!(info.name, "document.pdf");
+        assert_eq!(info.file_type, FileType::Document);
+        assert!(!info.is_dir);
+    }
+
+    #[test]
+    fn test_file_info_from_result_directory() {
+        let result = FileResult {
+            path: "/test/Documents".to_string(),
+            name: "Documents".to_string(),
+            size: 0,
+            modified: 1234567890,
+            file_type: FileType::Directory,
+        };
+
+        let info = FileInfo::from_result(&result);
+        assert_eq!(info.path, "/test/Documents");
+        assert_eq!(info.name, "Documents");
+        assert_eq!(info.file_type, FileType::Directory);
+        assert!(info.is_dir);
+    }
+
+    #[test]
+    fn test_file_info_from_path() {
+        // Test with a path that likely exists
+        let info = FileInfo::from_path("/tmp");
+        assert_eq!(info.path, "/tmp");
+        assert_eq!(info.name, "tmp");
+        // /tmp should be a directory on Unix systems
+        #[cfg(unix)]
+        assert!(info.is_dir);
     }
 }

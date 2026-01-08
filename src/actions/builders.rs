@@ -3,7 +3,110 @@
 //! Factory functions for creating context-specific action lists.
 
 use super::types::{Action, ActionCategory, ScriptInfo};
+use crate::file_search::FileInfo;
 use crate::prompts::PathInfo;
+
+/// Get actions specific to a file search result
+/// Actions: Open (default), Show in Finder, Quick Look, Open With..., Show Info
+pub fn get_file_context_actions(file_info: &FileInfo) -> Vec<Action> {
+    let mut actions = Vec::new();
+
+    // Primary action - Open file
+    if file_info.is_dir {
+        actions.push(
+            Action::new(
+                "open_directory",
+                format!("Open \"{}\"", file_info.name),
+                Some("Open this folder".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("↵"),
+        );
+    } else {
+        actions.push(
+            Action::new(
+                "open_file",
+                format!("Open \"{}\"", file_info.name),
+                Some("Open with default application".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("↵"),
+        );
+    }
+
+    // Show in Finder (Cmd+Enter)
+    actions.push(
+        Action::new(
+            "reveal_in_finder",
+            "Show in Finder",
+            Some("Reveal in Finder".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("⌘↵"),
+    );
+
+    // Quick Look (Cmd+Y) - macOS only
+    #[cfg(target_os = "macos")]
+    if !file_info.is_dir {
+        actions.push(
+            Action::new(
+                "quick_look",
+                "Quick Look",
+                Some("Preview with Quick Look".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌘Y"),
+        );
+    }
+
+    // Open With... (Cmd+O) - macOS only
+    #[cfg(target_os = "macos")]
+    actions.push(
+        Action::new(
+            "open_with",
+            "Open With...",
+            Some("Choose application to open with".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("⌘O"),
+    );
+
+    // Show Info in Finder (Cmd+I) - macOS only
+    #[cfg(target_os = "macos")]
+    actions.push(
+        Action::new(
+            "show_info",
+            "Get Info",
+            Some("Show file information in Finder".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("⌘I"),
+    );
+
+    // Copy Path
+    actions.push(
+        Action::new(
+            "copy_path",
+            "Copy Path",
+            Some("Copy the full path to clipboard".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("⌘⇧C"),
+    );
+
+    // Copy Filename
+    actions.push(
+        Action::new(
+            "copy_filename",
+            "Copy Filename",
+            Some("Copy just the filename to clipboard".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("⌘C"),
+    );
+
+    actions
+}
 
 /// Get actions specific to a file/folder path
 pub fn get_path_context_actions(path_info: &PathInfo) -> Vec<Action> {
@@ -328,5 +431,92 @@ mod tests {
             .as_ref()
             .unwrap()
             .contains("scriptkit://run/my-cool-script"));
+    }
+
+    #[test]
+    fn test_get_file_context_actions_file() {
+        // Test file actions for a regular file
+        let file_info = FileInfo {
+            path: "/Users/test/document.pdf".to_string(),
+            name: "document.pdf".to_string(),
+            file_type: crate::file_search::FileType::Document,
+            is_dir: false,
+        };
+        let actions = get_file_context_actions(&file_info);
+
+        // Should have open_file as primary action
+        assert!(actions.iter().any(|a| a.id == "open_file"));
+        assert!(actions.iter().any(|a| a.id == "reveal_in_finder"));
+        assert!(actions.iter().any(|a| a.id == "copy_path"));
+        assert!(actions.iter().any(|a| a.id == "copy_filename"));
+
+        // Should NOT have open_directory (not a directory)
+        assert!(!actions.iter().any(|a| a.id == "open_directory"));
+
+        // On macOS, should have Quick Look, Open With, Get Info
+        #[cfg(target_os = "macos")]
+        {
+            assert!(actions.iter().any(|a| a.id == "quick_look"));
+            assert!(actions.iter().any(|a| a.id == "open_with"));
+            assert!(actions.iter().any(|a| a.id == "show_info"));
+        }
+    }
+
+    #[test]
+    fn test_get_file_context_actions_directory() {
+        // Test file actions for a directory
+        let file_info = FileInfo {
+            path: "/Users/test/Documents".to_string(),
+            name: "Documents".to_string(),
+            file_type: crate::file_search::FileType::Directory,
+            is_dir: true,
+        };
+        let actions = get_file_context_actions(&file_info);
+
+        // Should have open_directory as primary action
+        assert!(actions.iter().any(|a| a.id == "open_directory"));
+        assert!(actions.iter().any(|a| a.id == "reveal_in_finder"));
+        assert!(actions.iter().any(|a| a.id == "copy_path"));
+        assert!(actions.iter().any(|a| a.id == "copy_filename"));
+
+        // Should NOT have open_file (it's a directory)
+        assert!(!actions.iter().any(|a| a.id == "open_file"));
+
+        // Directory should NOT have quick_look (only files)
+        #[cfg(target_os = "macos")]
+        {
+            assert!(!actions.iter().any(|a| a.id == "quick_look"));
+            // But should have Open With and Get Info
+            assert!(actions.iter().any(|a| a.id == "open_with"));
+            assert!(actions.iter().any(|a| a.id == "show_info"));
+        }
+    }
+
+    #[test]
+    fn test_file_context_actions_shortcuts() {
+        // Verify the keyboard shortcuts are correct
+        let file_info = FileInfo {
+            path: "/test/file.txt".to_string(),
+            name: "file.txt".to_string(),
+            file_type: crate::file_search::FileType::File,
+            is_dir: false,
+        };
+        let actions = get_file_context_actions(&file_info);
+
+        // Check specific shortcuts
+        let open_action = actions.iter().find(|a| a.id == "open_file").unwrap();
+        assert_eq!(open_action.shortcut.as_ref().unwrap(), "↵");
+
+        let reveal_action = actions.iter().find(|a| a.id == "reveal_in_finder").unwrap();
+        assert_eq!(reveal_action.shortcut.as_ref().unwrap(), "⌘↵");
+
+        #[cfg(target_os = "macos")]
+        {
+            let quick_look_action = actions.iter().find(|a| a.id == "quick_look").unwrap();
+            assert_eq!(quick_look_action.shortcut.as_ref().unwrap(), "⌘Y");
+
+            let show_info_action = actions.iter().find(|a| a.id == "show_info").unwrap();
+            assert_eq!(show_info_action.shortcut.as_ref().unwrap(), "⌘I");
+        }
     }
 }

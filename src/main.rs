@@ -824,6 +824,8 @@ enum ActionsDialogHost {
     FormPrompt,
     /// Actions in main script list (restore focus to MainFilter)
     MainList,
+    /// Actions in file search (restore focus to file search input)
+    FileSearch,
 }
 
 /// Result of routing a key event to the actions dialog.
@@ -1062,6 +1064,8 @@ struct ScriptListApp {
     file_search_debounce_task: Option<gpui::Task<()>>,
     // Current directory being listed (for instant filter mode)
     file_search_current_dir: Option<String>,
+    // Path of the file selected for actions (for file search actions handling)
+    file_search_actions_path: Option<String>,
     // Actions popup overlay
     show_actions_popup: bool,
     // ActionsDialog entity for focus management
