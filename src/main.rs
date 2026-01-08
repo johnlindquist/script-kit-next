@@ -1904,18 +1904,21 @@ fn main() {
                     );
 
                     // Use app_entity.update to access ScriptListApp directly
-                    app_entity_inner.update(cx, |view, ctx| {
+                    // Returns whether main window should be shown (apps/certain builtins don't need it)
+                    let should_show_window = app_entity_inner.update(cx, |view, ctx| {
                         logging::log(
                             "HOTKEY",
                             "Inside app_entity update, calling execute_by_command_id_or_path",
                         );
-                        view.execute_by_command_id_or_path(&id_clone, ctx);
+                        view.execute_by_command_id_or_path(&id_clone, ctx)
                     });
 
-                    // Also show the window if it's hidden
-                    if !script_kit_gpui::is_main_window_visible() {
-                        logging::log("HOTKEY", "Window hidden, showing it");
+                    // Only show window if command needs it AND it's currently hidden
+                    if should_show_window && !script_kit_gpui::is_main_window_visible() {
+                        logging::log("HOTKEY", "Command needs main window, showing it");
                         show_main_window_helper(window_inner, app_entity_inner.clone(), cx);
+                    } else if !should_show_window {
+                        logging::log("HOTKEY", "Command doesn't need main window (app/ai/notes)");
                     }
                 });
             }

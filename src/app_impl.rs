@@ -3192,11 +3192,29 @@ export default {
     /// - "builtin/ai-chat" - execute a builtin
     /// - "app/com.apple.Finder" - launch an app
     /// - Otherwise: treated as a file path (legacy behavior)
-    pub fn execute_by_command_id_or_path(&mut self, command_id: &str, cx: &mut Context<Self>) {
+    ///
+    /// Returns `true` if the main window should be shown, `false` if not.
+    /// Apps and certain builtins (AI Chat, Notes) open their own windows
+    /// and don't need the main window.
+    pub fn execute_by_command_id_or_path(
+        &mut self,
+        command_id: &str,
+        cx: &mut Context<Self>,
+    ) -> bool {
         logging::log(
             "EXEC",
             &format!("Executing by command ID or path: {}", command_id),
         );
+
+        // Builtins that open their own windows and don't need main window
+        const NO_MAIN_WINDOW_BUILTINS: &[&str] = &[
+            "builtin-ai-chat",
+            "builtin-notes",
+            "builtin-new-note",
+            "builtin-search-notes",
+            "builtin-quick-capture",
+            "builtin-new-conversation",
+        ];
 
         // Parse command ID format: "type/identifier"
         if let Some((cmd_type, identifier)) = command_id.split_once('/') {
@@ -3207,10 +3225,10 @@ export default {
                         let scriptlet_clone = scriptlet.clone();
                         logging::log("EXEC", &format!("Executing scriptlet: {}", identifier));
                         self.execute_scriptlet(&scriptlet_clone, cx);
-                        return;
+                        return true; // Scriptlets typically need the main window for prompts
                     }
                     logging::log("ERROR", &format!("Scriptlet not found: {}", identifier));
-                    return;
+                    return false;
                 }
                 "builtin" => {
                     // Execute builtin by ID
@@ -3221,13 +3239,23 @@ export default {
                     {
                         logging::log("EXEC", &format!("Executing builtin: {}", identifier));
                         self.execute_builtin(entry, cx);
-                        return;
+                        // Check if this builtin opens its own window
+                        let needs_main_window = !NO_MAIN_WINDOW_BUILTINS.contains(&identifier);
+                        logging::log(
+                            "EXEC",
+                            &format!(
+                                "Builtin {} needs_main_window: {}",
+                                identifier, needs_main_window
+                            ),
+                        );
+                        return needs_main_window;
                     }
                     logging::log("ERROR", &format!("Builtin not found: {}", identifier));
-                    return;
+                    return false;
                 }
                 "app" => {
                     // Launch app by bundle ID - find app in cached apps and launch
+                    // Apps NEVER need the main window - they open externally
                     logging::log(
                         "EXEC",
                         &format!("Launching app by bundle ID: {}", identifier),
@@ -3243,7 +3271,7 @@ export default {
                     } else {
                         logging::log("ERROR", &format!("App not found: {}", identifier));
                     }
-                    return;
+                    return false; // Apps never need main window
                 }
                 _ => {
                     // Unknown type - fall through to path-based execution
@@ -3256,7 +3284,9 @@ export default {
         }
 
         // Fall back to path-based execution (legacy behavior)
+        // Scripts typically need the main window for prompts
         self.execute_script_by_path(command_id, cx);
+        true
     }
 
     /// Cancel the currently running script and clean up all state

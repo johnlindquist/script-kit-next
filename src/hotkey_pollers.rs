@@ -244,15 +244,27 @@ impl ScriptHotkeyPoller {
 
                 let id_clone = command_id.clone();
                 let _ = cx.update(move |cx: &mut App| {
-                    let _ = window.update(
-                        cx,
-                        |view: &mut ScriptListApp,
-                         _win: &mut Window,
-                         ctx: &mut Context<ScriptListApp>| {
-                            // Handle both file paths (legacy) and command IDs (new format)
-                            view.execute_by_command_id_or_path(&id_clone, ctx);
-                        },
-                    );
+                    // Execute command and check if main window should be shown
+                    let should_show = window
+                        .update(
+                            cx,
+                            |view: &mut ScriptListApp,
+                             _win: &mut Window,
+                             ctx: &mut Context<ScriptListApp>| {
+                                // Handle both file paths (legacy) and command IDs (new format)
+                                // Returns whether main window should be shown
+                                view.execute_by_command_id_or_path(&id_clone, ctx)
+                            },
+                        )
+                        .unwrap_or(true); // Default to showing window on error
+
+                    // Only show window if command needs it (apps/ai/notes don't)
+                    if should_show && !script_kit_gpui::is_main_window_visible() {
+                        logging::log("HOTKEY", "Command needs main window, showing it");
+                        cx.activate(true);
+                    } else if !should_show {
+                        logging::log("HOTKEY", "Command doesn't need main window (app/ai/notes)");
+                    }
                 });
             }
 
