@@ -142,12 +142,9 @@ impl ScriptListApp {
         // NOTE: The EditorPrompt entity has its own track_focus and on_key_down in its render method.
         // We do NOT add track_focus here to avoid duplicate focus tracking on the same handle.
         //
-        // Container with explicit height. Use flex layout with:
-        // - Editor wrapper using flex_1 to fill remaining space
-        // - Footer as normal child at bottom (not absolute positioned)
-        // Editor height: 700px total - 40px footer = 660px
-        let editor_height = px(660.0);
-
+        // Container with flex layout:
+        // - Editor wrapper using flex_1 to fill remaining space above footer
+        // - Footer as normal child at bottom (40px fixed height)
         div()
             .relative() // Needed for absolute positioned actions dialog overlay
             .flex()
@@ -159,11 +156,12 @@ impl ScriptListApp {
             .overflow_hidden() // Clip content to rounded corners
             .rounded(px(design_visual.radius_lg))
             .on_key_down(handle_key)
-            // Editor entity with explicit height (700 - 40 = 660px)
+            // Editor entity fills remaining space (flex_1)
             .child(
                 div()
+                    .flex_1()
+                    .min_h(px(0.)) // Required for flex children to shrink properly
                     .w_full()
-                    .h(editor_height) // Explicit height instead of flex_1
                     .overflow_hidden()
                     .child(entity),
             )
