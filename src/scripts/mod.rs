@@ -25,7 +25,7 @@ mod loader;
 mod metadata;
 mod scheduling;
 mod scriptlet_loader;
-mod search;
+pub mod search;
 mod types;
 
 // Re-export core types (always used)
@@ -39,7 +39,7 @@ pub use scriptlet_loader::{load_scriptlets, read_scriptlets, read_scriptlets_fro
 
 // Re-export search functions (always used)
 pub use search::{
-    compute_match_indices_for_result, fuzzy_search_unified, fuzzy_search_unified_all,
+    compute_match_indices_for_result, fuzzy_search_unified, fuzzy_search_unified_all, NucleoCtx,
 };
 
 // Re-export grouping functions (always used)

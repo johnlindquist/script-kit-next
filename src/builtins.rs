@@ -945,7 +945,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "explorer",
         ],
         BuiltInFeature::FileSearch,
-        "📂",
+        "folder-search",
     ));
 
     debug!(count = entries.len(), "Built-in entries loaded");

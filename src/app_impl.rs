@@ -242,6 +242,7 @@ impl ScriptListApp {
             file_search_scroll_handle: UniformListScrollHandle::new(),
             file_search_loading: false,
             file_search_debounce_task: None,
+            file_search_current_dir: None,
             show_actions_popup: false,
             actions_dialog: None,
             cursor_visible: true,
@@ -330,6 +331,14 @@ impl ScriptListApp {
             shortcut_recorder_state: None,
             // Shortcut recorder entity - persisted to maintain focus
             shortcut_recorder_entity: None,
+            // Input history for shell-like up/down navigation
+            input_history: {
+                let mut history = input_history::InputHistory::new();
+                if let Err(e) = history.load() {
+                    tracing::warn!("Failed to load input history: {}", e);
+                }
+                history
+            },
         };
 
         // Build initial alias/shortcut registries (conflicts logged, not shown via HUD on startup)
@@ -391,6 +400,145 @@ impl ScriptListApp {
             }
         });
         app.gpui_input_subscriptions.push(tab_interceptor);
+
+        // Add arrow key interceptor for builtin views with Input components
+        // This fires BEFORE Input component handles arrow keys, allowing list navigation
+        let app_entity_for_arrows = cx.entity().downgrade();
+        let arrow_interceptor = cx.intercept_keystrokes({
+            let app_entity = app_entity_for_arrows;
+            move |event, _window, cx| {
+                let key = event.keystroke.key.to_lowercase();
+                // Check for Up/Down arrow keys (no modifiers except shift for selection)
+                if (key == "up" || key == "arrowup" || key == "down" || key == "arrowdown")
+                    && !event.keystroke.modifiers.platform
+                    && !event.keystroke.modifiers.alt
+                    && !event.keystroke.modifiers.control
+                {
+                    if let Some(app) = app_entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            // Only intercept in views that use Input + list navigation
+                            match &mut this.current_view {
+                                AppView::FileSearchView {
+                                    selected_index,
+                                    query,
+                                } => {
+                                    // Compute filtered length using same logic as render
+                                    let filter_pattern = if let Some(parsed) =
+                                        crate::file_search::parse_directory_path(query)
+                                    {
+                                        parsed.filter
+                                    } else if !query.is_empty() {
+                                        Some(query.clone())
+                                    } else {
+                                        None
+                                    };
+
+                                    // Use Nucleo fuzzy matching for consistent filtering with render
+                                    let filtered_len = if let Some(ref pattern) = filter_pattern {
+                                        crate::file_search::filter_results_nucleo_simple(
+                                            &this.cached_file_results,
+                                            pattern,
+                                        )
+                                        .len()
+                                    } else {
+                                        this.cached_file_results.len()
+                                    };
+
+                                    if (key == "up" || key == "arrowup") && *selected_index > 0 {
+                                        *selected_index -= 1;
+                                        this.file_search_scroll_handle.scroll_to_item(
+                                            *selected_index,
+                                            gpui::ScrollStrategy::Nearest,
+                                        );
+                                        cx.notify();
+                                    } else if (key == "down" || key == "arrowdown")
+                                        && *selected_index + 1 < filtered_len
+                                    {
+                                        *selected_index += 1;
+                                        this.file_search_scroll_handle.scroll_to_item(
+                                            *selected_index,
+                                            gpui::ScrollStrategy::Nearest,
+                                        );
+                                        cx.notify();
+                                    }
+                                    // Stop propagation so Input doesn't handle it
+                                    cx.stop_propagation();
+                                }
+                                AppView::ClipboardHistoryView {
+                                    selected_index,
+                                    filter: _,
+                                } => {
+                                    let filtered_len = this.cached_clipboard_entries.len();
+                                    if (key == "up" || key == "arrowup") && *selected_index > 0 {
+                                        *selected_index -= 1;
+                                        this.clipboard_list_scroll_handle.scroll_to_item(
+                                            *selected_index,
+                                            gpui::ScrollStrategy::Nearest,
+                                        );
+                                        cx.notify();
+                                    } else if (key == "down" || key == "arrowdown")
+                                        && *selected_index + 1 < filtered_len
+                                    {
+                                        *selected_index += 1;
+                                        this.clipboard_list_scroll_handle.scroll_to_item(
+                                            *selected_index,
+                                            gpui::ScrollStrategy::Nearest,
+                                        );
+                                        cx.notify();
+                                    }
+                                    cx.stop_propagation();
+                                }
+                                AppView::AppLauncherView {
+                                    selected_index,
+                                    filter: _,
+                                } => {
+                                    // Filter apps to get correct count
+                                    let filtered_len = this.apps.len();
+                                    if (key == "up" || key == "arrowup") && *selected_index > 0 {
+                                        *selected_index -= 1;
+                                        cx.notify();
+                                    } else if (key == "down" || key == "arrowdown")
+                                        && *selected_index + 1 < filtered_len
+                                    {
+                                        *selected_index += 1;
+                                        cx.notify();
+                                    }
+                                    cx.stop_propagation();
+                                }
+                                AppView::WindowSwitcherView {
+                                    selected_index,
+                                    filter: _,
+                                } => {
+                                    let filtered_len = this.cached_windows.len();
+                                    if (key == "up" || key == "arrowup") && *selected_index > 0 {
+                                        *selected_index -= 1;
+                                        this.window_list_scroll_handle.scroll_to_item(
+                                            *selected_index,
+                                            gpui::ScrollStrategy::Nearest,
+                                        );
+                                        cx.notify();
+                                    } else if (key == "down" || key == "arrowdown")
+                                        && *selected_index + 1 < filtered_len
+                                    {
+                                        *selected_index += 1;
+                                        this.window_list_scroll_handle.scroll_to_item(
+                                            *selected_index,
+                                            gpui::ScrollStrategy::Nearest,
+                                        );
+                                        cx.notify();
+                                    }
+                                    cx.stop_propagation();
+                                }
+                                _ => {
+                                    // Don't intercept arrows for other views (let normal handling work)
+                                }
+                            }
+                        });
+                    }
+                }
+            }
+        });
+        app.gpui_input_subscriptions.push(arrow_interceptor);
 
         app
     }
@@ -1187,6 +1335,14 @@ impl ScriptListApp {
     }
 
     fn execute_selected(&mut self, cx: &mut Context<Self>) {
+        // Record input to history if filter has meaningful text
+        if !self.filter_text.trim().is_empty() {
+            self.input_history.add_entry(&self.filter_text);
+            if let Err(e) = self.input_history.save() {
+                tracing::warn!("Failed to save input history: {}", e);
+            }
+        }
+
         // Get grouped results to map from selected_index to actual result (cached)
         let (grouped_items, flat_results) = self.get_grouped_results_cached();
         // Clone to avoid borrow issues with self mutation below
@@ -1520,7 +1676,65 @@ impl ScriptListApp {
                     // Cancel existing debounce task
                     self.file_search_debounce_task = None;
 
-                    // Set loading state
+                    // Check if this is a directory path with potential filter
+                    // e.g., ~/dev/fin -> list ~/dev/ and filter by "fin"
+                    if let Some(parsed) = crate::file_search::parse_directory_path(&new_text) {
+                        // Directory path mode - check if we need to reload directory
+                        let dir_changed =
+                            self.file_search_current_dir.as_ref() != Some(&parsed.directory);
+
+                        if dir_changed {
+                            // Directory changed - need to load new directory contents
+                            self.file_search_current_dir = Some(parsed.directory.clone());
+                            self.file_search_loading = true;
+                            cx.notify();
+
+                            let dir_to_list = parsed.directory.clone();
+                            let task = cx.spawn(async move |this, cx| {
+                                // Small debounce for directory listing
+                                Timer::after(std::time::Duration::from_millis(50)).await;
+
+                                let (tx, rx) = std::sync::mpsc::channel();
+                                std::thread::spawn(move || {
+                                    let results = crate::file_search::list_directory(
+                                        &dir_to_list,
+                                        crate::file_search::DEFAULT_LIMIT * 2, // Get more for filtering
+                                    );
+                                    let _ = tx.send(results);
+                                });
+
+                                loop {
+                                    Timer::after(std::time::Duration::from_millis(10)).await;
+                                    match rx.try_recv() {
+                                        Ok(results) => {
+                                            let _ = cx.update(|cx| {
+                                                this.update(cx, |app, cx| {
+                                                    app.cached_file_results = results;
+                                                    app.file_search_loading = false;
+                                                    app.file_search_scroll_handle
+                                                        .scroll_to_item(0, ScrollStrategy::Top);
+                                                    cx.notify();
+                                                })
+                                            });
+                                            break;
+                                        }
+                                        Err(std::sync::mpsc::TryRecvError::Empty) => continue,
+                                        Err(std::sync::mpsc::TryRecvError::Disconnected) => break,
+                                    }
+                                }
+                            });
+                            self.file_search_debounce_task = Some(task);
+                        } else {
+                            // Same directory - just filter existing results (instant!)
+                            // Filtering is done in render based on query
+                            self.file_search_loading = false;
+                            cx.notify();
+                        }
+                        return; // Don't run main menu filter logic
+                    }
+
+                    // Not a directory path - do regular file search with debounce
+                    self.file_search_current_dir = None;
                     self.file_search_loading = true;
                     cx.notify();
 
@@ -1530,25 +1744,15 @@ impl ScriptListApp {
                         // Wait for debounce period
                         Timer::after(std::time::Duration::from_millis(200)).await;
 
-                        // Run search or directory listing in background thread
+                        // Run search in background thread
                         let (tx, rx) = std::sync::mpsc::channel();
                         let query_for_thread = search_query.clone();
                         std::thread::spawn(move || {
-                            // Check if query looks like a directory path
-                            // If so, list directory contents instead of searching
-                            let results =
-                                if crate::file_search::is_directory_path(&query_for_thread) {
-                                    crate::file_search::list_directory(
-                                        &query_for_thread,
-                                        crate::file_search::DEFAULT_LIMIT,
-                                    )
-                                } else {
-                                    crate::file_search::search_files(
-                                        &query_for_thread,
-                                        None,
-                                        crate::file_search::DEFAULT_LIMIT,
-                                    )
-                                };
+                            let results = crate::file_search::search_files(
+                                &query_for_thread,
+                                None,
+                                crate::file_search::DEFAULT_LIMIT,
+                            );
                             let _ = tx.send(results);
                         });
 
@@ -1606,6 +1810,10 @@ impl ScriptListApp {
         }
 
         let previous_text = std::mem::replace(&mut self.filter_text, new_text.clone());
+
+        // Reset input history navigation when user types (they're no longer navigating history)
+        self.input_history.reset_navigation();
+
         // FIX: Don't reset selected_index here - do it in queue_filter_compute() callback
         // AFTER computed_filter_text is updated. This prevents a race condition where:
         // 1. We set selected_index=0 immediately

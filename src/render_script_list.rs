@@ -695,6 +695,23 @@ impl ScriptListApp {
                 // Normal script list navigation
                 match key_str.as_str() {
                     "up" | "arrowup" => {
+                        // Input history navigation: Up arrow when filter is empty
+                        if this.filter_text.is_empty() {
+                            if let Some(text) = this.input_history.navigate_up() {
+                                tracing::debug!(entry = %text, "Input history: navigate up");
+                                this.filter_text = text.clone();
+                                let text_for_input = text.clone();
+                                this.gpui_input_state.update(cx, |state, input_cx| {
+                                    state.set_value(text_for_input, window, input_cx);
+                                });
+                                // Reset selection since results will change
+                                this.selected_index = 0;
+                                this.last_scrolled_index = None;
+                                this.invalidate_grouped_cache();
+                                cx.notify();
+                                return;
+                            }
+                        }
                         let _key_perf = crate::perf::KeyEventPerfGuard::new();
                         match this.nav_coalescer.record(NavDirection::Up) {
                             NavRecord::ApplyImmediate => this.move_selection_up(cx),
@@ -709,6 +726,37 @@ impl ScriptListApp {
                         this.ensure_nav_flush_task(cx);
                     }
                     "down" | "arrowdown" => {
+                        // Input history navigation: Down arrow when navigating history
+                        if this.input_history.current_index().is_some() {
+                            if let Some(text) = this.input_history.navigate_down() {
+                                tracing::debug!(entry = %text, "Input history: navigate down");
+                                this.filter_text = text.clone();
+                                let text_for_input = text.clone();
+                                this.gpui_input_state.update(cx, |state, input_cx| {
+                                    state.set_value(text_for_input, window, input_cx);
+                                });
+                                // Reset selection since results will change
+                                this.selected_index = 0;
+                                this.last_scrolled_index = None;
+                                this.invalidate_grouped_cache();
+                                cx.notify();
+                                return;
+                            } else {
+                                // Went past newest entry - clear input and reset to empty state
+                                tracing::debug!("Input history: past newest, clearing input");
+                                this.input_history.reset_navigation();
+                                this.filter_text.clear();
+                                this.gpui_input_state.update(cx, |state, input_cx| {
+                                    state.set_value(String::new(), window, input_cx);
+                                });
+                                // Reset selection since results will change
+                                this.selected_index = 0;
+                                this.last_scrolled_index = None;
+                                this.invalidate_grouped_cache();
+                                cx.notify();
+                                return;
+                            }
+                        }
                         let _key_perf = crate::perf::KeyEventPerfGuard::new();
                         match this.nav_coalescer.record(NavDirection::Down) {
                             NavRecord::ApplyImmediate => this.move_selection_down(cx),

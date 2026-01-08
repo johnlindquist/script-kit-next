@@ -1907,15 +1907,23 @@ impl ScriptListApp {
         let list_selected = design_colors.background_selected;
 
         // Filter results based on query
-        let filtered_results: Vec<_> = if query.is_empty() {
-            self.cached_file_results.iter().enumerate().collect()
+        // When query is a directory path, extract the filter component for instant filtering
+        // e.g., ~/dev/fin -> filter by "fin" on directory contents
+        let filter_pattern = if let Some(parsed) = crate::file_search::parse_directory_path(query) {
+            parsed.filter // Some("fin") or None
+        } else if !query.is_empty() {
+            // Not a directory path - use query as filter for search results
+            Some(query.to_string())
         } else {
-            let query_lower = query.to_lowercase();
-            self.cached_file_results
-                .iter()
-                .enumerate()
-                .filter(|(_, r)| r.name.to_lowercase().contains(&query_lower))
-                .collect()
+            None
+        };
+
+        // Use Nucleo fuzzy matching for filtering - gives better match quality ranking
+        let filtered_results: Vec<_> = if let Some(ref pattern) = filter_pattern {
+            file_search::filter_results_nucleo_simple(&self.cached_file_results, pattern)
+        } else {
+            // No filter - show all results
+            self.cached_file_results.iter().enumerate().collect()
         };
         let filtered_len = filtered_results.len();
 
@@ -1973,15 +1981,24 @@ impl ScriptListApp {
                 } = &mut this.current_view
                 {
                     // Apply filter to get current filtered list
-                    let filtered_results: Vec<_> = if query.is_empty() {
-                        this.cached_file_results.iter().enumerate().collect()
+                    // Use parse_directory_path to extract filter pattern
+                    let filter_pattern =
+                        if let Some(parsed) = crate::file_search::parse_directory_path(query) {
+                            parsed.filter
+                        } else if !query.is_empty() {
+                            Some(query.clone())
+                        } else {
+                            None
+                        };
+
+                    // Use Nucleo fuzzy matching for filtering
+                    let filtered_results: Vec<_> = if let Some(ref pattern) = filter_pattern {
+                        crate::file_search::filter_results_nucleo_simple(
+                            &this.cached_file_results,
+                            pattern,
+                        )
                     } else {
-                        let query_lower = query.to_lowercase();
-                        this.cached_file_results
-                            .iter()
-                            .enumerate()
-                            .filter(|(_, r)| r.name.to_lowercase().contains(&query_lower))
-                            .collect()
+                        this.cached_file_results.iter().enumerate().collect()
                     };
                     let filtered_len = filtered_results.len();
 
@@ -2032,25 +2049,9 @@ impl ScriptListApp {
         let is_loading = self.file_search_loading;
 
         // Use uniform_list for virtualized scrolling
-        let list_element = if is_loading {
-            // Show loading indicator
-            div()
-                .w_full()
-                .h_full()
-                .flex()
-                .flex_col()
-                .items_center()
-                .justify_center()
-                .gap(px(8.))
-                .child(div().text_lg().text_color(rgb(text_muted)).child("⏳"))
-                .child(
-                    div()
-                        .text_sm()
-                        .text_color(rgb(text_dimmed))
-                        .child("Searching..."),
-                )
-                .into_any_element()
-        } else if filtered_len == 0 {
+        // Don't clear results while loading - keep showing existing results
+        // until new ones come in (better UX than flashing empty state)
+        let list_element = if filtered_len == 0 && !is_loading {
             div()
                 .w_full()
                 .py(px(design_spacing.padding_xl))
@@ -2265,7 +2266,14 @@ impl ScriptListApp {
                     .px(px(design_spacing.padding_lg))
                     .py(px(design_spacing.padding_sm))
                     .gap(px(design_spacing.gap_md))
-                    .child(div().text_lg().text_color(rgb(text_muted)).child("🔍"))
+                    .child({
+                        use gpui_component::IconNamed;
+                        svg()
+                            .path(gpui_component::IconName::Search.path())
+                            .size(px(18.))
+                            .flex_shrink_0()
+                            .text_color(rgb(text_muted))
+                    })
                     .child(
                         Input::new(&self.gpui_input_state)
                             .appearance(false)

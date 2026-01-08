@@ -115,6 +115,9 @@ mod schema_parser;
 // Scriptlet codefence metadata parser for ```metadata and ```schema blocks
 mod scriptlet_metadata;
 
+// Input history for shell-like up/down navigation through previous inputs
+mod input_history;
+
 // VSCode snippet syntax parser for template() SDK function
 mod snippet;
 
@@ -1057,6 +1060,8 @@ struct ScriptListApp {
     file_search_loading: bool,
     // Debounce task for file search (cancelled when new input arrives)
     file_search_debounce_task: Option<gpui::Task<()>>,
+    // Current directory being listed (for instant filter mode)
+    file_search_current_dir: Option<String>,
     // Actions popup overlay
     show_actions_popup: bool,
     // ActionsDialog entity for focus management
@@ -1170,6 +1175,8 @@ struct ScriptListApp {
     /// The shortcut recorder entity (persisted to maintain focus)
     shortcut_recorder_entity:
         Option<Entity<crate::components::shortcut_recorder::ShortcutRecorder>>,
+    /// Input history for shell-like up/down navigation through previous inputs
+    input_history: input_history::InputHistory,
 }
 
 /// Result of alias matching - either a Script or Scriptlet

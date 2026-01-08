@@ -181,7 +181,7 @@ pub(crate) fn nucleo_score(
 ///     }
 /// }
 /// ```
-pub(crate) struct NucleoCtx {
+pub struct NucleoCtx {
     pattern: Pattern,
     matcher: Matcher,
     buf: Vec<char>,
