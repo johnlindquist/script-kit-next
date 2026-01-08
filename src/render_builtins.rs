@@ -19,6 +19,10 @@ impl ScriptListApp {
             self.actions_dialog = None;
             self.file_search_actions_path = None;
 
+            // Restore focus state - file search uses the main filter input
+            self.focused_input = FocusedInput::MainFilter;
+            self.gpui_input_focused = true;
+
             // Close the actions window via spawn
             cx.spawn(async move |_this, cx| {
                 cx.update(|cx| {
@@ -28,12 +32,22 @@ impl ScriptListApp {
             })
             .detach();
 
-            // Refocus main window
-            self.focus_handle.focus(window, cx);
-            logging::log("FOCUS", "File search actions closed");
+            // Refocus the file search input
+            self.focus_main_filter(window, cx);
+            logging::log(
+                "FOCUS",
+                "File search actions closed, focus returned to file search input",
+            );
         } else {
             // Open actions popup for the selected file
             self.show_actions_popup = true;
+
+            // CRITICAL: Transfer focus from Input to main focus_handle
+            // This prevents the Input from receiving text (which would go to file search filter)
+            // while keeping keyboard focus in main window for routing to actions dialog
+            self.focus_handle.focus(window, cx);
+            self.gpui_input_focused = false;
+            self.focused_input = FocusedInput::ActionsSearch;
 
             // Store the file path for action handling
             self.file_search_actions_path = Some(file.path.clone());

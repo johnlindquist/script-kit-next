@@ -518,6 +518,21 @@ impl ScriptListApp {
                                     selected_index,
                                     query,
                                 } => {
+                                    // CRITICAL: If actions popup is open, route to actions dialog instead
+                                    if this.show_actions_popup {
+                                        if let Some(ref dialog) = this.actions_dialog {
+                                            if key == "up" || key == "arrowup" {
+                                                dialog.update(cx, |d, cx| d.move_up(cx));
+                                            } else if key == "down" || key == "arrowdown" {
+                                                dialog.update(cx, |d, cx| d.move_down(cx));
+                                            }
+                                            // Notify the actions window to re-render
+                                            crate::actions::notify_actions_window(cx);
+                                        }
+                                        cx.stop_propagation();
+                                        return;
+                                    }
+
                                     // Compute filtered length using same logic as render
                                     let filter_pattern = if let Some(parsed) =
                                         crate::file_search::parse_directory_path(query)
@@ -635,6 +650,137 @@ impl ScriptListApp {
             }
         });
         app.gpui_input_subscriptions.push(arrow_interceptor);
+
+        // Add interceptor for actions popup in FileSearchView
+        // This handles Cmd+K (toggle), Escape (close), Enter (submit), and typing
+        let app_entity_for_actions = cx.entity().downgrade();
+        let actions_interceptor = cx.intercept_keystrokes({
+            let app_entity = app_entity_for_actions;
+            move |event, window, cx| {
+                let key = event.keystroke.key.to_lowercase();
+                let has_cmd = event.keystroke.modifiers.platform;
+                let key_char = event.keystroke.key_char.as_deref();
+
+                if let Some(app) = app_entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        // Only handle when in FileSearchView with actions popup open
+                        if !matches!(this.current_view, AppView::FileSearchView { .. }) {
+                            return;
+                        }
+
+                        // Handle Cmd+K to toggle actions popup
+                        if has_cmd && key == "k" {
+                            if let AppView::FileSearchView { selected_index, .. } =
+                                &this.current_view
+                            {
+                                // Get the selected file for toggle
+                                let filter_pattern =
+                                    if let AppView::FileSearchView { query, .. } =
+                                        &this.current_view
+                                    {
+                                        if let Some(parsed) =
+                                            crate::file_search::parse_directory_path(query)
+                                        {
+                                            parsed.filter
+                                        } else if !query.is_empty() {
+                                            Some(query.clone())
+                                        } else {
+                                            None
+                                        }
+                                    } else {
+                                        None
+                                    };
+
+                                let filtered_results: Vec<_> =
+                                    if let Some(ref pattern) = filter_pattern {
+                                        crate::file_search::filter_results_nucleo_simple(
+                                            &this.cached_file_results,
+                                            pattern,
+                                        )
+                                    } else {
+                                        this.cached_file_results.iter().enumerate().collect()
+                                    };
+
+                                if let Some((_, file)) = filtered_results.get(*selected_index) {
+                                    let file_clone = (*file).clone();
+                                    this.toggle_file_search_actions(&file_clone, window, cx);
+                                }
+                            }
+                            cx.stop_propagation();
+                            return;
+                        }
+
+                        // Only handle remaining keys if actions popup is open
+                        if !this.show_actions_popup {
+                            return;
+                        }
+
+                        // Handle Escape to close actions popup
+                        if key == "escape" {
+                            this.close_actions_popup(ActionsDialogHost::FileSearch, window, cx);
+                            cx.stop_propagation();
+                            return;
+                        }
+
+                        // Handle Enter to submit selected action
+                        if key == "enter" {
+                            if let Some(ref dialog) = this.actions_dialog {
+                                let action_id = dialog.read(cx).get_selected_action_id();
+                                let should_close = dialog.read(cx).selected_action_should_close();
+
+                                if let Some(action_id) = action_id {
+                                    crate::logging::log(
+                                        "ACTIONS",
+                                        &format!(
+                                            "FileSearch actions executing action: {} (close={})",
+                                            action_id, should_close
+                                        ),
+                                    );
+
+                                    if should_close {
+                                        this.close_actions_popup(
+                                            ActionsDialogHost::FileSearch,
+                                            window,
+                                            cx,
+                                        );
+                                    }
+
+                                    this.trigger_action_by_name(&action_id, cx);
+                                }
+                            }
+                            cx.stop_propagation();
+                            return;
+                        }
+
+                        // Handle Backspace for actions search
+                        if key == "backspace" {
+                            if let Some(ref dialog) = this.actions_dialog {
+                                dialog.update(cx, |d, cx| d.handle_backspace(cx));
+                                crate::actions::notify_actions_window(cx);
+                                crate::actions::resize_actions_window(cx, dialog);
+                            }
+                            cx.stop_propagation();
+                            return;
+                        }
+
+                        // Handle printable character input for actions search
+                        if let Some(chars) = key_char {
+                            if let Some(ch) = chars.chars().next() {
+                                if ch.is_ascii_graphic() || ch == ' ' {
+                                    if let Some(ref dialog) = this.actions_dialog {
+                                        dialog.update(cx, |d, cx| d.handle_char(ch, cx));
+                                        crate::actions::notify_actions_window(cx);
+                                        crate::actions::resize_actions_window(cx, dialog);
+                                    }
+                                    cx.stop_propagation();
+                                }
+                            }
+                        }
+                    });
+                }
+            }
+        });
+        app.gpui_input_subscriptions.push(actions_interceptor);
 
         app
     }

@@ -29,9 +29,6 @@ node_modules/
 # Package caches
 .packx_cache/
 
-# OpenCode / Agent tooling
-.opencode/
-
 # Logs
 *.log
 

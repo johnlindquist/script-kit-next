@@ -1,0 +1,12 @@
+# Dependencies
+node_modules/
+
+# Build artifacts
+.build/
+
+# Session-specific data (large, regenerated)
+swarm.db
+
+# Package files (regenerated)
+package.json
+bun.lock
