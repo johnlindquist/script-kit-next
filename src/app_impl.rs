@@ -2092,14 +2092,12 @@ impl ScriptListApp {
 
                         if dir_changed {
                             // Directory changed - need to load new directory contents
-                            // Clear old results to prevent flash of wrong directory items
-                            // The render will show "Loading..." when loading with empty results
-                            self.cached_file_results.clear();
+                            // DON'T clear results - keep showing old results until new ones arrive
+                            // This prevents the jarring flash of empty/loading state during transitions
+                            // The async task will atomically replace results when ready
                             self.file_search_current_dir = Some(parsed.directory.clone());
                             self.file_search_loading = true;
-                            // Reset scroll immediately to prevent stale scroll position
-                            self.file_search_scroll_handle
-                                .scroll_to_item(0, ScrollStrategy::Top);
+                            // Don't reset scroll yet - wait until results arrive
                             cx.notify();
 
                             let dir_to_list = parsed.directory.clone();
@@ -2170,7 +2168,7 @@ impl ScriptListApp {
                         let (tx, rx) = std::sync::mpsc::channel();
                         let query_for_thread = search_query.clone();
                         std::thread::spawn(move || {
-                            let results = crate::file_search::search_files_native(
+                            let results = crate::file_search::search_files(
                                 &query_for_thread,
                                 None,
                                 crate::file_search::DEFAULT_SEARCH_LIMIT,
@@ -2576,7 +2574,7 @@ impl ScriptListApp {
                         crate::file_search::DEFAULT_CACHE_LIMIT,
                     )
                 } else {
-                    crate::file_search::search_files_native(
+                    crate::file_search::search_files(
                         &text,
                         None,
                         crate::file_search::DEFAULT_SEARCH_LIMIT,
