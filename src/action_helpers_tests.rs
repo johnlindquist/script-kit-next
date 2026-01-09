@@ -318,21 +318,21 @@ fn test_trigger_sdk_action_without_handler_without_value() {
 
 // Tests for pbcopy (macOS only)
 
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", feature = "system-tests"))]
 #[test]
 fn test_pbcopy_basic() {
     let result = pbcopy("test clipboard content");
     assert!(result.is_ok());
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", feature = "system-tests"))]
 #[test]
 fn test_pbcopy_empty_string() {
     let result = pbcopy("");
     assert!(result.is_ok());
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", feature = "system-tests"))]
 #[test]
 fn test_pbcopy_unicode() {
     let result = pbcopy("Hello 🌍 世界");

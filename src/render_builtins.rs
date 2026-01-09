@@ -474,12 +474,17 @@ impl ScriptListApp {
         let bg_search_box = self.theme.colors.background.search_box;
         let accent = self.theme.colors.accent.selected;
 
+        // Use theme opacity for vibrancy-compatible backgrounds
+        let opacity = self.theme.get_opacity();
+        let panel_alpha = (opacity.main * 255.0 * 0.3) as u8; // 30% of main opacity for subtle tint
+
         let mut panel = div()
             .w_full()
             .h_full()
-            .bg(rgb(bg_main))
+            // Semi-transparent background to let vibrancy show through
+            .bg(rgba((bg_main << 8) | panel_alpha as u32))
             .border_l_1()
-            .border_color(rgba((ui_border << 8) | 0x80))
+            .border_color(rgba((ui_border << 8) | 0x30)) // Subtle border
             .p(px(spacing.padding_lg))
             .flex()
             .flex_col()
@@ -574,6 +579,8 @@ impl ScriptListApp {
                         let char_count = content.chars().count();
                         let line_count = content.lines().count();
 
+                        // Use subtle background for content preview - 20% opacity for vibrancy
+                        let content_alpha = (opacity.main * 255.0 * 0.5) as u32;
                         panel = panel
                             .child(
                                 div()
@@ -581,7 +588,7 @@ impl ScriptListApp {
                                     .flex_1()
                                     .p(px(spacing.padding_md))
                                     .rounded(px(visual.radius_md))
-                                    .bg(rgba((bg_search_box << 8) | 0x80))
+                                    .bg(rgba((bg_search_box << 8) | content_alpha))
                                     .overflow_hidden()
                                     .font_family(typography.font_family_mono)
                                     .text_sm()
@@ -2002,6 +2009,10 @@ impl ScriptListApp {
         let _accent_color = self.theme.colors.accent.selected;
         let list_hover = self.theme.colors.accent.selected_subtle;
         let list_selected = self.theme.colors.accent.selected_subtle;
+        // Use theme opacity for vibrancy-compatible selection/hover (matches main menu)
+        let opacity = self.theme.get_opacity();
+        let selected_alpha = (opacity.selected * 255.0) as u32;
+        let hover_alpha = (opacity.hover * 255.0) as u32;
 
         // Filter results based on query
         // When query is a directory path, extract the filter component for instant filtering
@@ -2222,12 +2233,13 @@ impl ScriptListApp {
                         .map(|ix| {
                             if let Some(file) = files_for_closure.get(ix) {
                                 let is_selected = ix == current_selected;
+                                // Use theme opacity for vibrancy-compatible selection
                                 let bg = if is_selected {
-                                    rgba((list_selected << 8) | 0xFF)
+                                    rgba((list_selected << 8) | selected_alpha)
                                 } else {
                                     rgba(0x00000000)
                                 };
-                                let hover_bg = rgba((list_hover << 8) | 0x80);
+                                let hover_bg = rgba((list_hover << 8) | hover_alpha);
 
                                 div()
                                     .id(ix)
