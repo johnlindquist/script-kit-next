@@ -188,14 +188,10 @@ impl UIDesignColors {
         }
     }
 
-    /// Get design colors based on variant - uses theme for Default, tokens for others
-    pub fn for_variant(variant: DesignVariant, theme: &Theme) -> Self {
-        if variant == DesignVariant::Default {
-            Self::from_theme(theme)
-        } else {
-            let tokens = get_tokens(variant);
-            Self::from_design(&tokens.colors())
-        }
+    /// Get design colors based on variant - always uses theme for consistent styling
+    pub fn for_variant(_variant: DesignVariant, theme: &Theme) -> Self {
+        // Always use theme for consistent styling across all prompts
+        Self::from_theme(theme)
     }
 }
 

@@ -259,8 +259,8 @@ impl ListItemColors {
     }
 
     /// Create from design colors for GLOBAL theming support
+    /// Uses same opacity values as from_theme() for consistent vibrancy-compatible styling
     pub fn from_design(colors: &crate::designs::DesignColors) -> Self {
-        // Design colors use default opacity values
         Self {
             text_primary: colors.text_primary,
             text_secondary: colors.text_secondary,
@@ -270,8 +270,8 @@ impl ListItemColors {
             accent_selected_subtle: colors.background_selected,
             background: colors.background,
             background_selected: colors.background_selected,
-            selected_opacity: 0.95, // Default - visible selection
-            hover_opacity: 0.85,    // Default - visible hover
+            selected_opacity: 0.12, // Match theme default for vibrancy support
+            hover_opacity: 0.07,    // Match theme default for vibrancy support
             warning_bg: colors.warning,
             text_on_accent: colors.text_on_accent,
         }

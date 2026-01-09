@@ -1194,7 +1194,7 @@ impl ScriptListApp {
         // Use design tokens for global theming
         let opacity = self.theme.get_opacity();
         let bg_hex = design_colors.background;
-        let bg_with_alpha = crate::ui_foundation::hex_to_rgba_with_opacity(bg_hex, opacity.main);
+        let _bg_with_alpha = crate::ui_foundation::hex_to_rgba_with_opacity(bg_hex, opacity.main);
         let box_shadows = self.create_box_shadows();
 
         // Key handler for actions dialog
@@ -1215,7 +1215,7 @@ impl ScriptListApp {
             .flex_col()
             .w_full()
             .h_full()
-            .bg(rgba(bg_with_alpha))
+            // Removed: .bg(rgba(bg_with_alpha)) - let vibrancy show through from Root
             .shadow(box_shadows)
             .rounded(px(design_visual.radius_lg))
             .p(px(design_spacing.padding_xl))

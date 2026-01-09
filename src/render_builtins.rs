@@ -109,17 +109,16 @@ impl ScriptListApp {
         selected_index: usize,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        // Use design tokens for GLOBAL theming
+        // Use theme for all colors - consistent with main menu
         let tokens = get_tokens(self.current_design);
-        let design_colors = tokens.colors();
         let design_spacing = tokens.spacing();
         let design_typography = tokens.typography();
         let design_visual = tokens.visual();
 
-        // Use design tokens for global theming
+        // Use theme colors for consistency with main menu
         let opacity = self.theme.get_opacity();
-        let bg_hex = design_colors.background;
-        let bg_with_alpha = crate::ui_foundation::hex_to_rgba_with_opacity(bg_hex, opacity.main);
+        let bg_hex = self.theme.colors.background.main;
+        let _bg_with_alpha = crate::ui_foundation::hex_to_rgba_with_opacity(bg_hex, opacity.main);
         let box_shadows = self.create_box_shadows();
 
         // P0 FIX: Reference data from self instead of taking ownership
@@ -256,13 +255,13 @@ impl ScriptListApp {
             },
         );
 
-        // Pre-compute colors
-        let list_colors = ListItemColors::from_design(&design_colors);
-        let text_primary = design_colors.text_primary;
+        // Pre-compute colors - use theme for consistency with main menu
+        let list_colors = ListItemColors::from_theme(&self.theme);
+        let text_primary = self.theme.colors.text.primary;
         #[allow(unused_variables)]
-        let text_muted = design_colors.text_muted;
-        let text_dimmed = design_colors.text_dimmed;
-        let ui_border = design_colors.border;
+        let text_muted = self.theme.colors.text.muted;
+        let text_dimmed = self.theme.colors.text.dimmed;
+        let ui_border = self.theme.colors.ui.border;
 
         // Build virtualized list
         let list_element: AnyElement = if filtered_len == 0 {
@@ -270,7 +269,7 @@ impl ScriptListApp {
                 .w_full()
                 .py(px(design_spacing.padding_xl))
                 .text_center()
-                .text_color(rgb(design_colors.text_muted))
+                .text_color(rgb(self.theme.colors.text.muted))
                 .font_family(design_typography.font_family)
                 .child(if filter.is_empty() {
                     "No clipboard history"
@@ -362,7 +361,6 @@ impl ScriptListApp {
         let preview_panel = self.render_clipboard_preview_panel(
             &selected_entry,
             &image_cache,
-            &design_colors,
             &design_spacing,
             &design_typography,
             &design_visual,
@@ -371,7 +369,7 @@ impl ScriptListApp {
         div()
             .flex()
             .flex_col()
-            .bg(rgba(bg_with_alpha))
+            // Removed: .bg(rgba(bg_with_alpha)) - let vibrancy show through from Root
             .shadow(box_shadows)
             .w_full()
             .h_full()
@@ -453,7 +451,7 @@ impl ScriptListApp {
                     .primary_label("Paste")
                     .primary_shortcut("↵")
                     .show_secondary(false),
-                PromptFooterColors::from_design(&design_colors),
+                PromptFooterColors::from_theme(&self.theme),
             ))
             .into_any_element()
     }
@@ -463,17 +461,18 @@ impl ScriptListApp {
         &self,
         selected_entry: &Option<clipboard_history::ClipboardEntryMeta>,
         image_cache: &std::collections::HashMap<String, Arc<gpui::RenderImage>>,
-        colors: &designs::DesignColors,
         spacing: &designs::DesignSpacing,
         typography: &designs::DesignTypography,
         visual: &designs::DesignVisual,
     ) -> impl IntoElement {
-        let bg_main = colors.background;
-        let ui_border = colors.border;
-        let text_primary = colors.text_primary;
-        let text_muted = colors.text_muted;
-        let text_secondary = colors.text_secondary;
-        let bg_search_box = colors.background_tertiary;
+        // Use theme colors for consistency with main menu
+        let bg_main = self.theme.colors.background.main;
+        let ui_border = self.theme.colors.ui.border;
+        let text_primary = self.theme.colors.text.primary;
+        let text_muted = self.theme.colors.text.muted;
+        let text_secondary = self.theme.colors.text.secondary;
+        let bg_search_box = self.theme.colors.background.search_box;
+        let accent = self.theme.colors.accent.selected;
 
         let mut panel = div()
             .w_full()
@@ -508,9 +507,9 @@ impl ScriptListApp {
                                 .px(px(spacing.padding_sm))
                                 .py(px(spacing.padding_xs / 2.0))
                                 .rounded(px(visual.radius_sm))
-                                .bg(rgba((colors.accent << 8) | 0x30))
+                                .bg(rgba((accent << 8) | 0x30))
                                 .text_xs()
-                                .text_color(rgb(colors.accent))
+                                .text_color(rgb(accent))
                                 .child(content_type_label),
                         )
                         // Pin indicator
@@ -520,9 +519,9 @@ impl ScriptListApp {
                                     .px(px(spacing.padding_sm))
                                     .py(px(spacing.padding_xs / 2.0))
                                     .rounded(px(visual.radius_sm))
-                                    .bg(rgba((colors.accent << 8) | 0x20))
+                                    .bg(rgba((accent << 8) | 0x20))
                                     .text_xs()
-                                    .text_color(rgb(colors.accent))
+                                    .text_color(rgb(accent))
                                     .child("📌 Pinned"),
                             )
                         }),
@@ -709,17 +708,16 @@ impl ScriptListApp {
         selected_index: usize,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        // Use design tokens for GLOBAL theming
+        // Use design tokens for spacing/typography/visual, theme for colors
         let tokens = get_tokens(self.current_design);
-        let design_colors = tokens.colors();
         let design_spacing = tokens.spacing();
         let design_typography = tokens.typography();
         let design_visual = tokens.visual();
 
         // Use design tokens for global theming
         let opacity = self.theme.get_opacity();
-        let bg_hex = design_colors.background;
-        let bg_with_alpha = crate::ui_foundation::hex_to_rgba_with_opacity(bg_hex, opacity.main);
+        let bg_hex = self.theme.colors.background.main;
+        let _bg_with_alpha = crate::ui_foundation::hex_to_rgba_with_opacity(bg_hex, opacity.main);
         let box_shadows = self.create_box_shadows();
 
         // P0 FIX: Filter apps from self.apps instead of taking ownership
@@ -836,11 +834,11 @@ impl ScriptListApp {
         let input_is_empty = filter.is_empty();
 
         // Pre-compute colors
-        let list_colors = ListItemColors::from_design(&design_colors);
-        let text_primary = design_colors.text_primary;
-        let text_muted = design_colors.text_muted;
-        let text_dimmed = design_colors.text_dimmed;
-        let ui_border = design_colors.border;
+        let list_colors = ListItemColors::from_theme(&self.theme);
+        let text_primary = self.theme.colors.text.primary;
+        let text_muted = self.theme.colors.text.muted;
+        let text_dimmed = self.theme.colors.text.dimmed;
+        let ui_border = self.theme.colors.ui.border;
 
         // Build virtualized list
         let list_element: AnyElement = if filtered_len == 0 {
@@ -848,7 +846,7 @@ impl ScriptListApp {
                 .w_full()
                 .py(px(design_spacing.padding_xl))
                 .text_center()
-                .text_color(rgb(design_colors.text_muted))
+                .text_color(rgb(self.theme.colors.text.muted))
                 .font_family(design_typography.font_family)
                 .child(if filter.is_empty() {
                     "No applications found"
@@ -909,7 +907,7 @@ impl ScriptListApp {
         div()
             .flex()
             .flex_col()
-            .bg(rgba(bg_with_alpha))
+            // Removed: .bg(rgba(bg_with_alpha)) - let vibrancy show through from Root
             .shadow(box_shadows)
             .w_full()
             .h_full()
@@ -1010,7 +1008,7 @@ impl ScriptListApp {
                     .primary_label("Launch")
                     .primary_shortcut("↵")
                     .show_secondary(false),
-                PromptFooterColors::from_design(&design_colors),
+                PromptFooterColors::from_theme(&self.theme),
             ))
             .into_any_element()
     }
@@ -1032,8 +1030,8 @@ impl ScriptListApp {
 
         // Use design tokens for global theming
         let opacity = self.theme.get_opacity();
-        let bg_hex = design_colors.background;
-        let bg_with_alpha = crate::ui_foundation::hex_to_rgba_with_opacity(bg_hex, opacity.main);
+        let bg_hex = self.theme.colors.background.main;
+        let _bg_with_alpha = crate::ui_foundation::hex_to_rgba_with_opacity(bg_hex, opacity.main);
         let box_shadows = self.create_box_shadows();
 
         // P0 FIX: Filter windows from self.cached_windows instead of taking ownership
@@ -1153,12 +1151,12 @@ impl ScriptListApp {
         );
 
         // Pre-compute colors
-        let list_colors = ListItemColors::from_design(&design_colors);
-        let text_primary = design_colors.text_primary;
+        let list_colors = ListItemColors::from_theme(&self.theme);
+        let text_primary = self.theme.colors.text.primary;
         #[allow(unused_variables)]
-        let text_muted = design_colors.text_muted;
-        let text_dimmed = design_colors.text_dimmed;
-        let ui_border = design_colors.border;
+        let text_muted = self.theme.colors.text.muted;
+        let text_dimmed = self.theme.colors.text.dimmed;
+        let ui_border = self.theme.colors.ui.border;
 
         // Build virtualized list
         let list_element: AnyElement = if filtered_len == 0 {
@@ -1166,7 +1164,7 @@ impl ScriptListApp {
                 .w_full()
                 .py(px(design_spacing.padding_xl))
                 .text_center()
-                .text_color(rgb(design_colors.text_muted))
+                .text_color(rgb(self.theme.colors.text.muted))
                 .font_family(design_typography.font_family)
                 .child(if filter.is_empty() {
                     "No windows found"
@@ -1237,7 +1235,7 @@ impl ScriptListApp {
         div()
             .flex()
             .flex_col()
-            .bg(rgba(bg_with_alpha))
+            // Removed: .bg(rgba(bg_with_alpha)) - let vibrancy show through from Root
             .shadow(box_shadows)
             .w_full()
             .h_full()
@@ -1319,7 +1317,7 @@ impl ScriptListApp {
                     .primary_label("Switch")
                     .primary_shortcut("↵")
                     .show_secondary(false),
-                PromptFooterColors::from_design(&design_colors),
+                PromptFooterColors::from_theme(&self.theme),
             ))
             .into_any_element()
     }
@@ -1523,8 +1521,8 @@ impl ScriptListApp {
 
         // Use design tokens for global theming
         let opacity = self.theme.get_opacity();
-        let bg_hex = design_colors.background;
-        let bg_with_alpha = crate::ui_foundation::hex_to_rgba_with_opacity(bg_hex, opacity.main);
+        let bg_hex = self.theme.colors.background.main;
+        let _bg_with_alpha = crate::ui_foundation::hex_to_rgba_with_opacity(bg_hex, opacity.main);
         let box_shadows = self.create_box_shadows();
 
         // Build gallery items: group headers grouped by category, then icons grouped by category
@@ -1672,13 +1670,13 @@ impl ScriptListApp {
         };
         let input_is_empty = filter.is_empty();
 
-        // Pre-compute colors
-        let list_colors = ListItemColors::from_design(&design_colors);
-        let text_primary = design_colors.text_primary;
-        let text_muted = design_colors.text_muted;
-        let text_dimmed = design_colors.text_dimmed;
-        let ui_border = design_colors.border;
-        let _accent = design_colors.accent;
+        // Pre-compute colors - use theme for consistency with main menu
+        let list_colors = ListItemColors::from_theme(&self.theme);
+        let text_primary = self.theme.colors.text.primary;
+        #[allow(unused_variables)]
+        let text_muted = self.theme.colors.text.muted;
+        let text_dimmed = self.theme.colors.text.dimmed;
+        let ui_border = self.theme.colors.ui.border;
 
         // Build virtualized list
         let list_element: AnyElement = if filtered_len == 0 {
@@ -1686,7 +1684,7 @@ impl ScriptListApp {
                 .w_full()
                 .py(px(design_spacing.padding_xl))
                 .text_center()
-                .text_color(rgb(design_colors.text_muted))
+                .text_color(rgb(self.theme.colors.text.muted))
                 .font_family(design_typography.font_family)
                 .child("No items match your filter")
                 .into_any_element()
@@ -1876,7 +1874,7 @@ impl ScriptListApp {
         div()
             .flex()
             .flex_col()
-            .bg(rgba(bg_with_alpha))
+            // Removed: .bg(rgba(bg_with_alpha)) - let vibrancy show through from Root
             .shadow(box_shadows)
             .w_full()
             .h_full()
@@ -1972,7 +1970,7 @@ impl ScriptListApp {
                     .primary_label("Select")
                     .primary_shortcut("↵")
                     .show_secondary(false),
-                PromptFooterColors::from_design(&design_colors),
+                PromptFooterColors::from_theme(&self.theme),
             ))
             .into_any_element()
     }
@@ -1986,9 +1984,8 @@ impl ScriptListApp {
     ) -> AnyElement {
         use crate::file_search::{self, FileType};
 
-        // Use design tokens for theming
+        // Use design tokens for spacing/visual, theme for colors
         let tokens = get_tokens(self.current_design);
-        let design_colors = tokens.colors();
         let design_spacing = tokens.spacing();
         let _design_typography = tokens.typography();
         let design_visual = tokens.visual();
@@ -1998,13 +1995,13 @@ impl ScriptListApp {
         let box_shadows = self.create_box_shadows();
 
         // Color values for use in closures
-        let text_primary = design_colors.text_primary;
-        let text_muted = design_colors.text_muted;
-        let text_dimmed = design_colors.text_dimmed;
-        let ui_border = design_colors.border;
-        let _accent_color = design_colors.accent;
-        let list_hover = design_colors.background_hover;
-        let list_selected = design_colors.background_selected;
+        let text_primary = self.theme.colors.text.primary;
+        let text_muted = self.theme.colors.text.muted;
+        let text_dimmed = self.theme.colors.text.dimmed;
+        let ui_border = self.theme.colors.ui.border;
+        let _accent_color = self.theme.colors.accent.selected;
+        let list_hover = self.theme.colors.accent.selected_subtle;
+        let list_selected = self.theme.colors.accent.selected_subtle;
 
         // Filter results based on query
         // When query is a directory path, extract the filter component for instant filtering
@@ -2569,7 +2566,7 @@ impl ScriptListApp {
                     .primary_label("Open")
                     .primary_shortcut("↵"),
                 // Default config already has secondary_label="Actions", secondary_shortcut="⌘K", show_secondary=true
-                PromptFooterColors::from_design(&design_colors),
+                PromptFooterColors::from_theme(&self.theme),
             ))
             .into_any_element()
     }

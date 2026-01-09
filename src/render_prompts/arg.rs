@@ -296,8 +296,8 @@ impl ScriptListApp {
 
         let input_is_empty = self.arg_input.is_empty();
 
-        // P4: Pre-compute theme values for arg prompt using design tokens for GLOBAL theming
-        let arg_list_colors = ListItemColors::from_design(&design_colors);
+        // P4: Pre-compute theme values for arg prompt - use theme for consistent styling
+        let arg_list_colors = ListItemColors::from_theme(&self.theme);
         let text_primary = design_colors.text_primary;
         let text_muted = design_colors.text_muted;
         let accent_color = design_colors.accent;
@@ -363,7 +363,7 @@ impl ScriptListApp {
         // Use design tokens for global theming
         let opacity = self.theme.get_opacity();
         let bg_hex = design_colors.background;
-        let bg_with_alpha = crate::ui_foundation::hex_to_rgba_with_opacity(bg_hex, opacity.main);
+        let _bg_with_alpha = crate::ui_foundation::hex_to_rgba_with_opacity(bg_hex, opacity.main);
         let box_shadows = self.create_box_shadows();
 
         // P4: Pre-compute more theme values for the main container using design tokens
@@ -373,7 +373,7 @@ impl ScriptListApp {
             .relative() // Needed for absolute positioned actions dialog overlay
             .flex()
             .flex_col()
-            .bg(rgba(bg_with_alpha))
+            // Removed: .bg(rgba(bg_with_alpha)) - let vibrancy show through from Root
             .shadow(box_shadows)
             .w_full()
             .h_full()
@@ -464,7 +464,7 @@ impl ScriptListApp {
             })
             // Footer with unified actions
             .child({
-                let footer_colors = PromptFooterColors::from_design(&design_colors);
+                let footer_colors = PromptFooterColors::from_theme(&self.theme);
                 let footer_config = PromptFooterConfig::new()
                     .primary_label("Submit")
                     .primary_shortcut("↵")

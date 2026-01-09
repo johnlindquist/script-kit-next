@@ -52,12 +52,8 @@ impl ScriptListApp {
         let log_panel_border = self.theme.colors.ui.border;
         let log_panel_success = self.theme.colors.ui.success;
 
-        // Pre-compute scrollbar colors (Copy type)
-        let scrollbar_colors = if is_default_design {
-            ScrollbarColors::from_theme(&self.theme)
-        } else {
-            ScrollbarColors::from_design(&design_colors)
-        };
+        // Pre-compute scrollbar colors (Copy type) - always use theme for consistency
+        let scrollbar_colors = ScrollbarColors::from_theme(&self.theme);
         // Pre-compute list item colors for closure (Copy type)
         let theme_colors = ListItemColors::from_theme(&self.theme);
 

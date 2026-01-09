@@ -903,12 +903,8 @@ impl Render for ActionsDialog {
                 0
             };
 
-            // Get scrollbar colors from theme or design
-            let scrollbar_colors = if self.design_variant == DesignVariant::Default {
-                ScrollbarColors::from_theme(&self.theme)
-            } else {
-                ScrollbarColors::from_design(&colors)
-            };
+            // Get scrollbar colors from theme for consistent styling
+            let scrollbar_colors = ScrollbarColors::from_theme(&self.theme);
 
             // Create scrollbar (only visible if content overflows)
             let scrollbar =

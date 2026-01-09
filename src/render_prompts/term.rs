@@ -16,12 +16,7 @@ impl ScriptListApp {
             term.suppress_keys = show_actions;
         });
 
-        // Use design tokens for GLOBAL theming
-        let tokens = get_tokens(self.current_design);
-        let design_colors = tokens.colors();
-        let _design_spacing = tokens.spacing(); // Unused but kept for consistency with other prompts
-
-        // Use design tokens for global theming
+        // Create box shadows using theme
         let box_shadows = self.create_box_shadows();
 
         // VIBRANCY: Use foundation helper - returns None when vibrancy enabled (let Root handle bg)
@@ -99,8 +94,8 @@ impl ScriptListApp {
             },
         );
 
-        // Footer colors for the terminal prompt
-        let footer_colors = PromptFooterColors::from_design(&design_colors);
+        // Footer colors for the terminal prompt - use theme for consistent styling
+        let footer_colors = PromptFooterColors::from_theme(&self.theme);
 
         // Footer configuration - Terminal uses "Close" as primary action (Cmd+W)
         // and Actions as secondary (Cmd+K) when actions are available

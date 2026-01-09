@@ -21,7 +21,7 @@ use crate::components::{
     PromptContainer, PromptContainerColors, PromptContainerConfig, PromptHeader,
     PromptHeaderColors, PromptHeaderConfig,
 };
-use crate::designs::{get_tokens, DesignVariant};
+use crate::designs::DesignVariant;
 use crate::list_item::{IconKind, ListItem, ListItemColors};
 use crate::logging;
 use crate::theme;
@@ -485,9 +485,6 @@ impl EventEmitter<PathPromptEvent> for PathPrompt {}
 
 impl Render for PathPrompt {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let tokens = get_tokens(self.design_variant);
-        let design_colors = tokens.colors();
-
         let handle_key = cx.listener(
             |this: &mut Self,
              event: &gpui::KeyDownEvent,
@@ -547,12 +544,8 @@ impl Render for PathPrompt {
             },
         );
 
-        // Use ListItemColors for consistent theming
-        let list_colors = if self.design_variant == DesignVariant::Default {
-            ListItemColors::from_theme(&self.theme)
-        } else {
-            ListItemColors::from_design(&design_colors)
-        };
+        // Use ListItemColors for consistent theming - always use theme
+        let list_colors = ListItemColors::from_theme(&self.theme);
 
         // Clone values needed for the closure
         let filtered_count = self.filtered_entries.len();
@@ -618,12 +611,8 @@ impl Render for PathPrompt {
         // Create path prefix for display in search input
         let path_prefix = format!("{}/", self.current_path.trim_end_matches('/'));
 
-        // Create header colors and config using shared components
-        let header_colors = if self.design_variant == DesignVariant::Default {
-            PromptHeaderColors::from_theme(&self.theme)
-        } else {
-            PromptHeaderColors::from_design(&design_colors)
-        };
+        // Create header colors and config using shared components - always use theme
+        let header_colors = PromptHeaderColors::from_theme(&self.theme);
 
         let header_config = PromptHeaderConfig::new()
             .filter_text(self.filter_text.clone())
@@ -660,12 +649,8 @@ impl Render for PathPrompt {
             format!("{} items • ↑↓ navigate • ←→ in/out • Enter open • Tab into • ⌘K actions • Esc cancel", filtered_count)
         });
 
-        // Create container colors and config
-        let container_colors = if self.design_variant == DesignVariant::Default {
-            PromptContainerColors::from_theme(&self.theme)
-        } else {
-            PromptContainerColors::from_design(&design_colors)
-        };
+        // Create container colors and config - always use theme
+        let container_colors = PromptContainerColors::from_theme(&self.theme);
 
         let container_config = PromptContainerConfig::new()
             .show_divider(true)
