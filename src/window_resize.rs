@@ -23,11 +23,9 @@ use crate::window_manager;
 
 /// Layout constants for height calculations
 pub mod layout {
-    use crate::panel::{CURSOR_HEIGHT_LG, CURSOR_MARGIN_Y};
+    use crate::panel::{CURSOR_HEIGHT_LG, CURSOR_MARGIN_Y, HEADER_PADDING_Y};
     use gpui::{px, Pixels};
 
-    /// Input row vertical padding (matches default design spacing padding_md)
-    pub const ARG_INPUT_PADDING_Y: f32 = 12.0;
     /// List container vertical padding (top + bottom, matches default padding_xs)
     pub const ARG_LIST_PADDING_Y: f32 = 8.0;
     /// Divider thickness (matches default design border_thin)
@@ -37,8 +35,9 @@ pub mod layout {
     /// Footer height (matches PromptFooter)
     pub const FOOTER_HEIGHT: f32 = 30.0;
     /// Total input-only height (header only, no list, but with footer)
+    /// Uses HEADER_PADDING_Y from panel.rs for accurate height calculation
     pub const ARG_HEADER_HEIGHT: f32 =
-        (ARG_INPUT_PADDING_Y * 2.0) + ARG_INPUT_LINE_HEIGHT + FOOTER_HEIGHT;
+        (HEADER_PADDING_Y * 2.0) + ARG_INPUT_LINE_HEIGHT + FOOTER_HEIGHT;
 
     /// Minimum window height (input only) - for input-only prompts
     pub const MIN_HEIGHT: Pixels = px(ARG_HEADER_HEIGHT);
