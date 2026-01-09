@@ -1142,7 +1142,9 @@ impl ScriptListApp {
             }
             FocusTarget::AppRoot => {
                 window.focus(&self.focus_handle, cx);
-                self.focused_input = FocusedInput::None;
+                // Don't reset focused_input here - the caller already set it appropriately.
+                // For example, ArgPrompt sets focused_input = ArgPrompt before setting
+                // pending_focus = AppRoot, and we want to preserve that so the cursor blinks.
             }
         }
 

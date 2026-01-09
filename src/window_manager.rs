@@ -241,7 +241,8 @@ pub fn find_and_register_main_window() -> bool {
     // Expected main window dimensions (with tolerance)
     const EXPECTED_WIDTH: f64 = 750.0;
     const WIDTH_TOLERANCE: f64 = 50.0;
-    const MIN_HEIGHT: f64 = 100.0;
+    // MIN_HEIGHT lowered to 50 to accommodate compact arg prompts (76px)
+    const MIN_HEIGHT: f64 = 50.0;
     const MAX_HEIGHT: f64 = 800.0;
 
     unsafe {

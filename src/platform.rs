@@ -1626,9 +1626,10 @@ pub fn capture_app_screenshot(
         let width = window.width().unwrap_or(0);
         let height = window.height().unwrap_or(0);
 
-        // Only consider windows that are reasonably sized (at least 200x200)
-        // This filters out tooltips, list items, icons, etc.
-        let is_reasonable_size = width >= 200 && height >= 200;
+        // Only consider windows that are reasonably sized
+        // Width >= 200 filters out small UI elements
+        // Height >= 50 allows compact prompts (arg prompt without choices is ~76px)
+        let is_reasonable_size = width >= 200 && height >= 50;
 
         if is_our_window && !is_minimized && is_reasonable_size {
             candidates.push(Candidate {
