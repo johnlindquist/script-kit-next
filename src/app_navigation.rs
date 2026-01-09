@@ -156,6 +156,7 @@ impl ScriptListApp {
     }
 
     /// Apply a coalesced navigation delta in the given direction
+    #[allow(dead_code)]
     fn apply_nav_delta(&mut self, dir: NavDirection, delta: i32, cx: &mut Context<Self>) {
         let signed = match dir {
             NavDirection::Up => -delta,
@@ -235,7 +236,10 @@ impl ScriptListApp {
         };
 
         // Final validation: ensure we're not on a header
-        if matches!(grouped_items.get(new_index), Some(GroupedListItem::SectionHeader(_))) {
+        if matches!(
+            grouped_items.get(new_index),
+            Some(GroupedListItem::SectionHeader(_))
+        ) {
             // Can't find a valid position, stay put
             return;
         }
@@ -290,8 +294,90 @@ impl ScriptListApp {
         }
     }
 
+    /// Synchronize the GPUI list component state with the current grouped results.
+    ///
+    /// Call this method after any operation that may change the number of items
+    /// in the list (filter changes, data refresh, view transitions).
+    ///
+    /// This method handles:
+    /// - Updating the list component's item count via splice()
+    /// - Invalidating scroll tracking when structure changes
+    ///
+    /// Note: This is separate from validate_selection_bounds() which handles
+    /// ensuring the selected index is valid.
+    pub fn sync_list_state(&mut self) {
+        let (grouped_items, _) = self.get_grouped_results_cached();
+        let item_count = grouped_items.len();
+
+        let old_list_count = self.main_list_state.item_count();
+        if old_list_count != item_count {
+            self.main_list_state.splice(0..old_list_count, item_count);
+            // Invalidate scroll tracking since list structure changed
+            self.last_scrolled_index = None;
+        }
+    }
+
+    /// Validate and correct selection bounds after list structure changes.
+    ///
+    /// Call this method from event handlers after any operation that may change
+    /// the number of items in the list (filter changes, data refresh, view transitions).
+    ///
+    /// This replaces the anti-pattern of mutating selection during render.
+    /// By validating in event handlers, render remains a pure function of state.
+    ///
+    /// # Returns
+    /// `true` if selection was changed, `false` if it was already valid.
+    pub fn validate_selection_bounds(&mut self, cx: &mut Context<Self>) -> bool {
+        // Get grouped results to validate against
+        let (grouped_items, _) = self.get_grouped_results_cached();
+        let grouped_items = grouped_items.clone();
+        let item_count = grouped_items.len();
+
+        if item_count == 0 {
+            // Empty list - reset all selection state
+            let changed = self.selected_index != 0
+                || self.hovered_index.is_some()
+                || self.last_scrolled_index.is_some();
+
+            self.selected_index = 0;
+            self.hovered_index = None;
+            self.last_scrolled_index = None;
+
+            // Clear legacy fallback state
+            self.fallback_mode = false;
+            self.cached_fallbacks.clear();
+
+            if changed {
+                cx.notify();
+            }
+            return changed;
+        }
+
+        // List has items - coerce selection to a valid selectable item
+        self.fallback_mode = false;
+        self.cached_fallbacks.clear();
+
+        if let Some(valid_idx) = list_item::coerce_selection(&grouped_items, self.selected_index) {
+            if self.selected_index != valid_idx {
+                self.selected_index = valid_idx;
+                cx.notify();
+                return true;
+            }
+        } else {
+            // No selectable items (list is all headers) - reset to 0
+            if self.selected_index != 0 {
+                self.selected_index = 0;
+                cx.notify();
+                return true;
+            }
+        }
+
+        false
+    }
+
     /// Ensure the navigation flush task is running. Spawns a background task
     /// that periodically flushes pending navigation deltas.
+    #[allow(dead_code)]
     fn ensure_nav_flush_task(&mut self, cx: &mut Context<Self>) {
         if self.nav_coalescer.flush_task_running {
             return;

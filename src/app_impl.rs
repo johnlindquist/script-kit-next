@@ -679,6 +679,106 @@ impl ScriptListApp {
                                     }
                                     cx.stop_propagation();
                                 }
+                                AppView::ScriptList => {
+                                    // Main menu: handle list navigation + input history
+                                    let (grouped_items, _) = this.get_grouped_results_cached();
+                                    let total_items = grouped_items.len();
+
+                                    if key == "up" || key == "arrowup" {
+                                        // Input history: only when filter empty AND at top of list
+                                        if this.filter_text.is_empty() && this.selected_index == 0 {
+                                            if let Some(text) = this.input_history.navigate_up() {
+                                                logging::log(
+                                                    "HISTORY",
+                                                    &format!("Recalled: {}", text),
+                                                );
+                                                this.filter_text = text.clone();
+                                                let text_len = text.len();
+                                                this.gpui_input_state.update(
+                                                    cx,
+                                                    |state, input_cx| {
+                                                        state.set_value(
+                                                            text.clone(),
+                                                            _window,
+                                                            input_cx,
+                                                        );
+                                                        state.set_selection(
+                                                            text_len, text_len, _window, input_cx,
+                                                        );
+                                                    },
+                                                );
+                                                this.queue_filter_compute(text, cx);
+                                                cx.notify();
+                                                cx.stop_propagation();
+                                                return;
+                                            }
+                                        }
+                                        // Normal up navigation
+                                        if this.selected_index > 0 {
+                                            this.selected_index -= 1;
+                                            this.main_list_state
+                                                .scroll_to_reveal_item(this.selected_index);
+                                            cx.notify();
+                                        }
+                                    } else if key == "down" || key == "arrowdown" {
+                                        // Down during history navigation returns to newer entries
+                                        if this.input_history.current_index().is_some() {
+                                            if let Some(text) = this.input_history.navigate_down() {
+                                                logging::log(
+                                                    "HISTORY",
+                                                    &format!("Recalled: {}", text),
+                                                );
+                                                this.filter_text = text.clone();
+                                                let text_len = text.len();
+                                                this.gpui_input_state.update(
+                                                    cx,
+                                                    |state, input_cx| {
+                                                        state.set_value(
+                                                            text.clone(),
+                                                            _window,
+                                                            input_cx,
+                                                        );
+                                                        state.set_selection(
+                                                            text_len, text_len, _window, input_cx,
+                                                        );
+                                                    },
+                                                );
+                                                this.queue_filter_compute(text, cx);
+                                                cx.notify();
+                                                cx.stop_propagation();
+                                                return;
+                                            } else {
+                                                // Past newest - clear to empty
+                                                this.input_history.reset_navigation();
+                                                this.filter_text.clear();
+                                                this.gpui_input_state.update(
+                                                    cx,
+                                                    |state, input_cx| {
+                                                        state.set_value(
+                                                            String::new(),
+                                                            _window,
+                                                            input_cx,
+                                                        );
+                                                        state
+                                                            .set_selection(0, 0, _window, input_cx);
+                                                    },
+                                                );
+                                                this.queue_filter_compute(String::new(), cx);
+                                                cx.notify();
+                                                cx.stop_propagation();
+                                                return;
+                                            }
+                                        }
+                                        // Normal down navigation
+                                        if this.selected_index + 1 < total_items {
+                                            this.selected_index += 1;
+                                            this.main_list_state
+                                                .scroll_to_reveal_item(this.selected_index);
+                                            cx.notify();
+                                        }
+                                    }
+                                    cx.stop_propagation();
+                                }
                                 _ => {
                                     // Don't intercept arrows for other views (let normal handling work)
                                 }
@@ -1028,13 +1128,16 @@ impl ScriptListApp {
     fn refresh_scripts(&mut self, cx: &mut Context<Self>) {
         self.scripts = scripts::read_scripts();
         self.scriptlets = scripts::read_scriptlets();
-        self.selected_index = 0;
-        self.last_scrolled_index = None;
-        // Use main_list_state for variable-height list (not the legacy list_scroll_handle)
-        self.main_list_state.scroll_to_reveal_item(0);
-        self.last_scrolled_index = Some(0);
         self.invalidate_filter_cache();
         self.invalidate_grouped_cache();
+
+        // Sync list component state and validate selection
+        // This moves state mutation OUT of render() (anti-pattern fix)
+        self.sync_list_state();
+        self.selected_index = 0;
+        self.validate_selection_bounds(cx);
+        self.main_list_state.scroll_to_reveal_item(self.selected_index);
+        self.last_scrolled_index = Some(self.selected_index);
 
         // Rebuild alias/shortcut registries and show HUD for any conflicts
         let conflicts = self.rebuild_registries();
@@ -2173,13 +2276,14 @@ impl ScriptListApp {
                         if let Some(latest) = app.filter_coalescer.take_latest() {
                             if app.computed_filter_text != latest {
                                 app.computed_filter_text = latest;
-                                // FIX: Reset selection AFTER cache key updates to prevent race condition
-                                // Now when render calls get_grouped_results_cached() and coerce_selection(),
-                                // the cache key matches computed_filter_text, so results are fresh.
+                                // Sync list component state and validate selection
+                                // This moves state mutation OUT of render() (anti-pattern fix)
+                                app.sync_list_state();
                                 app.selected_index = 0;
-                                app.main_list_state.scroll_to_reveal_item(0);
-                                app.last_scrolled_index = Some(0);
-                                // This will trigger cache recompute on next get_grouped_results_cached()
+                                app.validate_selection_bounds(cx);
+                                app.main_list_state.scroll_to_reveal_item(app.selected_index);
+                                app.last_scrolled_index = Some(app.selected_index);
+                                // This will trigger window resize
                                 app.update_window_size();
                                 cx.notify();
                             }
@@ -2208,19 +2312,24 @@ impl ScriptListApp {
         self.suppress_filter_events = false;
         self.pending_filter_sync = false;
 
-        self.selected_index = 0;
-        self.last_scrolled_index = None;
-        self.main_list_state.scroll_to_reveal_item(0);
-        self.last_scrolled_index = Some(0);
-
         // Menu bar items are now pre-fetched by frontmost_app_tracker
         // No lazy loading needed - items are already in cache when we open
 
         self.computed_filter_text = text.clone();
         self.filter_coalescer.reset();
 
+        // Sync list component state and validate selection
+        // This moves state mutation OUT of render() (anti-pattern fix)
+        self.sync_list_state();
+        self.selected_index = 0;
+        self.validate_selection_bounds(cx);
+        self.main_list_state.scroll_to_reveal_item(self.selected_index);
+        self.last_scrolled_index = Some(self.selected_index);
+
         // Update fallback mode immediately based on filter results
         // This ensures SimulateKey commands can check fallback_mode correctly
+        // NOTE: validate_selection_bounds already clears fallback_mode and cached_fallbacks,
+        // but we need special handling for legacy SimulateKey compatibility
         if !text.is_empty() {
             let results = self.get_filtered_results_cached();
             if results.is_empty() {
@@ -2231,17 +2340,8 @@ impl ScriptListApp {
                     self.fallback_mode = true;
                     self.cached_fallbacks = fallbacks;
                     self.fallback_selected_index = 0;
-                } else {
-                    self.fallback_mode = false;
-                    self.cached_fallbacks.clear();
                 }
-            } else {
-                self.fallback_mode = false;
-                self.cached_fallbacks.clear();
             }
-        } else {
-            self.fallback_mode = false;
-            self.cached_fallbacks.clear();
         }
 
         self.update_window_size_deferred(window, cx);
@@ -4364,11 +4464,15 @@ export default {
         self.computed_filter_text.clear();
         self.filter_coalescer.reset();
         self.pending_filter_sync = true;
+
+        // Sync list component state and validate selection
+        // This moves state mutation OUT of render() (anti-pattern fix)
+        self.invalidate_grouped_cache(); // Ensure cache is fresh
+        self.sync_list_state();
         self.selected_index = 0;
-        self.last_scrolled_index = None;
-        // Use main_list_state for variable-height list (not the legacy list_scroll_handle)
-        self.main_list_state.scroll_to_reveal_item(0);
-        self.last_scrolled_index = Some(0);
+        self.validate_selection_bounds(cx);
+        self.main_list_state.scroll_to_reveal_item(self.selected_index);
+        self.last_scrolled_index = Some(self.selected_index);
 
         // Resize window for script list content.
         // SAFETY: This sync resize is safe because reset_to_script_list is called from:

@@ -27,58 +27,18 @@ impl ScriptListApp {
         let _total_len = self.scripts.len() + self.scriptlets.len();
 
         // ============================================================
-        // MUTABLE OPERATIONS BLOCK - do all &mut self calls here BEFORE
-        // taking immutable borrows of theme for UI building
+        // RENDER IS READ-ONLY
         // ============================================================
-
-        // Handle edge cases - keep selected_index in valid bounds
-        // Use coerce_selection which tries down first, then up, handles all edge cases
+        // NOTE: State mutations (selection validation, list sync) are now done
+        // in event handlers via sync_list_state() and validate_selection_bounds(),
+        // not during render. This prevents the anti-pattern of mutating state
+        // during render which can cause infinite render loops and inconsistent UI.
         //
-        // Note: Fallbacks now flow through GroupedListItem from get_grouped_results().
-        // When filter_text is non-empty, fallbacks are appended to the results, so
-        // item_count > 0 even when there are no regular matches. The old fallback_mode
-        // logic (separate rendering path) is kept for backwards compatibility but
-        // should rarely be triggered now.
-        if item_count > 0 {
-            // We have results (may include fallbacks) - exit legacy fallback mode
-            self.fallback_mode = false;
-            self.cached_fallbacks.clear();
-
-            if let Some(valid_idx) =
-                list_item::coerce_selection(&grouped_items, self.selected_index)
-            {
-                self.selected_index = valid_idx;
-            } else {
-                // No selectable items (list is all headers) - set to 0 as fallback
-                self.selected_index = 0;
-            }
-        } else {
-            // Empty list - reset selection state to avoid stale indices
-            // This path is hit when filter is empty AND there are truly no items,
-            // or in edge cases where even fallbacks aren't available
-            self.selected_index = 0;
-            self.hovered_index = None;
-            self.last_scrolled_index = None;
-
-            // Legacy fallback mode: only used if grouping.rs doesn't include fallbacks
-            // (This is a safety net - normally grouping.rs appends fallbacks to results)
-            self.fallback_mode = false;
-            self.cached_fallbacks.clear();
-        }
-
-        // Update list state if item count changed
-        // Use splice instead of reset to preserve scroll events and measurement cache
-        // reset() drops scroll events until the list is painted, which can break scroll-driven UI
-        let old_list_count = self.main_list_state.item_count();
-        if old_list_count != item_count {
-            self.main_list_state.splice(0..old_list_count, item_count);
-            // Invalidate last_scrolled_index since list structure changed
-            self.last_scrolled_index = None;
-        }
-
-        // Only scroll to reveal selection when selection actually changed
-        // This prevents fighting trackpad/wheel scrolling and reduces redundant scroll calls
-        self.scroll_to_selected_if_needed("render_list");
+        // Event handlers that call these methods:
+        // - queue_filter_compute() - after filter text changes
+        // - set_filter_text_immediate() - for immediate filter updates
+        // - refresh_scripts() - after script reload
+        // - reset_to_script_list() - on view transitions
 
         // Get scroll offset AFTER updates for scrollbar
         let scroll_offset = self.main_list_state.logical_scroll_top().item_ix;
@@ -693,91 +653,10 @@ impl ScriptListApp {
                 }
 
                 // Normal script list navigation
+                // NOTE: Arrow keys are now handled by the arrow_interceptor in app_impl.rs
+                // which fires before the Input component can consume them. This allows
+                // input history navigation + list navigation to work correctly.
                 match key_str.as_str() {
-                    "up" | "arrowup" => {
-                        // Input history navigation: Up arrow when filter is empty
-                        if this.filter_text.is_empty() {
-                            if let Some(text) = this.input_history.navigate_up() {
-                                tracing::debug!(entry = %text, "Input history: navigate up");
-                                this.filter_text = text.clone();
-                                let text_for_input = text.clone();
-                                let text_len = text_for_input.len();
-                                this.gpui_input_state.update(cx, |state, input_cx| {
-                                    state.set_value(text_for_input, window, input_cx);
-                                    // Ensure cursor is at end with no selection after programmatic set_value
-                                    state.set_selection(text_len, text_len, window, input_cx);
-                                });
-                                // Reset selection since results will change
-                                this.selected_index = 0;
-                                this.last_scrolled_index = None;
-                                this.invalidate_grouped_cache();
-                                cx.notify();
-                                return;
-                            }
-                        }
-                        let _key_perf = crate::perf::KeyEventPerfGuard::new();
-                        match this.nav_coalescer.record(NavDirection::Up) {
-                            NavRecord::ApplyImmediate => this.move_selection_up(cx),
-                            NavRecord::Coalesced => {}
-                            NavRecord::FlushOld { dir, delta } => {
-                                if delta != 0 {
-                                    this.apply_nav_delta(dir, delta, cx);
-                                }
-                                this.move_selection_up(cx);
-                            }
-                        }
-                        this.ensure_nav_flush_task(cx);
-                    }
-                    "down" | "arrowdown" => {
-                        // Input history navigation: Down arrow when navigating history
-                        if this.input_history.current_index().is_some() {
-                            if let Some(text) = this.input_history.navigate_down() {
-                                tracing::debug!(entry = %text, "Input history: navigate down");
-                                this.filter_text = text.clone();
-                                let text_for_input = text.clone();
-                                let text_len = text_for_input.len();
-                                this.gpui_input_state.update(cx, |state, input_cx| {
-                                    state.set_value(text_for_input, window, input_cx);
-                                    // Ensure cursor is at end with no selection after programmatic set_value
-                                    state.set_selection(text_len, text_len, window, input_cx);
-                                });
-                                // Reset selection since results will change
-                                this.selected_index = 0;
-                                this.last_scrolled_index = None;
-                                this.invalidate_grouped_cache();
-                                cx.notify();
-                                return;
-                            } else {
-                                // Went past newest entry - clear input and reset to empty state
-                                tracing::debug!("Input history: past newest, clearing input");
-                                this.input_history.reset_navigation();
-                                this.filter_text.clear();
-                                this.gpui_input_state.update(cx, |state, input_cx| {
-                                    state.set_value(String::new(), window, input_cx);
-                                    // Ensure cursor is at start (empty string, so 0..0)
-                                    state.set_selection(0, 0, window, input_cx);
-                                });
-                                // Reset selection since results will change
-                                this.selected_index = 0;
-                                this.last_scrolled_index = None;
-                                this.invalidate_grouped_cache();
-                                cx.notify();
-                                return;
-                            }
-                        }
-                        let _key_perf = crate::perf::KeyEventPerfGuard::new();
-                        match this.nav_coalescer.record(NavDirection::Down) {
-                            NavRecord::ApplyImmediate => this.move_selection_down(cx),
-                            NavRecord::Coalesced => {}
-                            NavRecord::FlushOld { dir, delta } => {
-                                if delta != 0 {
-                                    this.apply_nav_delta(dir, delta, cx);
-                                }
-                                this.move_selection_down(cx);
-                            }
-                        }
-                        this.ensure_nav_flush_task(cx);
-                    }
                     "enter" => {
                         if !this.gpui_input_focused {
                             this.execute_selected(cx);
