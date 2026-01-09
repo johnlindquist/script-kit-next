@@ -25,6 +25,7 @@ mod window;
 // - ActionsDialog: the main dialog component
 // - Window functions for separate vibrancy window
 
+pub use builders::to_deeplink_name;
 pub use dialog::ActionsDialog;
 pub use types::ScriptInfo;
 

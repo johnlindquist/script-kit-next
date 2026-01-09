@@ -78,8 +78,16 @@ impl ScriptListApp {
             }
             "reveal_in_finder" => {
                 logging::log("UI", "Reveal in Finder action");
-                if let Some(result) = self.get_selected_result() {
-                    let path_opt = match result {
+                // First check if we have a file search path (takes priority)
+                let path_opt = if let Some(path) = self.file_search_actions_path.take() {
+                    logging::log(
+                        "UI",
+                        &format!("Reveal in Finder (file search): {}", path),
+                    );
+                    Some(std::path::PathBuf::from(path))
+                } else if let Some(result) = self.get_selected_result() {
+                    // Fall back to main menu selected result
+                    match result {
                         scripts::SearchResult::Script(m) => Some(m.script.path.clone()),
                         scripts::SearchResult::App(m) => Some(m.app.path.clone()),
                         scripts::SearchResult::Agent(m) => Some(m.agent.path.clone()),
@@ -104,24 +112,36 @@ impl ScriptListApp {
                             ));
                             None
                         }
-                    };
-
-                    if let Some(path) = path_opt {
-                        self.reveal_in_finder(&path);
-                        self.last_output = Some(SharedString::from("Revealed in Finder"));
-                        self.hide_main_and_reset(cx);
                     }
                 } else {
                     self.last_output = Some(SharedString::from("No item selected"));
+                    None
+                };
+
+                if let Some(path) = path_opt {
+                    self.reveal_in_finder(&path);
+                    self.last_output = Some(SharedString::from("Revealed in Finder"));
+                    self.hide_main_and_reset(cx);
                 }
             }
             "copy_path" => {
                 logging::log("UI", "Copy path action");
-                if let Some(result) = self.get_selected_result() {
+                // First check if we have a file search path (takes priority)
+                let path_str = if let Some(path) = self.file_search_actions_path.take() {
+                    logging::log("UI", &format!("Copy path (file search): {}", path));
+                    Some(path)
+                } else if let Some(result) = self.get_selected_result() {
+                    // Fall back to main menu selected result
                     let path_opt = match result {
-                        scripts::SearchResult::Script(m) => Some(m.script.path.clone()),
-                        scripts::SearchResult::App(m) => Some(m.app.path.clone()),
-                        scripts::SearchResult::Agent(m) => Some(m.agent.path.clone()),
+                        scripts::SearchResult::Script(m) => {
+                            Some(m.script.path.to_string_lossy().to_string())
+                        }
+                        scripts::SearchResult::App(m) => {
+                            Some(m.app.path.to_string_lossy().to_string())
+                        }
+                        scripts::SearchResult::Agent(m) => {
+                            Some(m.agent.path.to_string_lossy().to_string())
+                        }
                         scripts::SearchResult::Scriptlet(_) => {
                             self.last_output =
                                 Some(SharedString::from("Cannot copy scriptlet path"));
@@ -142,49 +162,99 @@ impl ScriptListApp {
                             None
                         }
                     };
+                    path_opt
+                } else {
+                    self.last_output = Some(SharedString::from("No item selected"));
+                    None
+                };
 
-                    if let Some(path) = path_opt {
-                        let path_str = path.to_string_lossy().to_string();
-
-                        #[cfg(target_os = "macos")]
-                        {
-                            match self.pbcopy(&path_str) {
-                                Ok(_) => {
-                                    logging::log(
-                                        "UI",
-                                        &format!("Copied path to clipboard: {}", path_str),
-                                    );
-                                    self.last_output =
-                                        Some(SharedString::from(format!("Copied: {}", path_str)));
-                                }
-                                Err(e) => {
-                                    logging::log("ERROR", &format!("pbcopy failed: {}", e));
-                                    self.last_output =
-                                        Some(SharedString::from("Failed to copy path"));
-                                }
+                if let Some(path_str) = path_str {
+                    #[cfg(target_os = "macos")]
+                    {
+                        match self.pbcopy(&path_str) {
+                            Ok(_) => {
+                                logging::log(
+                                    "UI",
+                                    &format!("Copied path to clipboard: {}", path_str),
+                                );
+                                self.last_output =
+                                    Some(SharedString::from(format!("Copied: {}", path_str)));
                             }
-                        }
-
-                        #[cfg(not(target_os = "macos"))]
-                        {
-                            use arboard::Clipboard;
-                            match Clipboard::new().and_then(|mut c| c.set_text(&path_str)) {
-                                Ok(_) => {
-                                    logging::log(
-                                        "UI",
-                                        &format!("Copied path to clipboard: {}", path_str),
-                                    );
-                                    self.last_output =
-                                        Some(SharedString::from(format!("Copied: {}", path_str)));
-                                }
-                                Err(e) => {
-                                    logging::log("ERROR", &format!("Failed to copy path: {}", e));
-                                    self.last_output =
-                                        Some(SharedString::from("Failed to copy path"));
-                                }
+                            Err(e) => {
+                                logging::log("ERROR", &format!("pbcopy failed: {}", e));
+                                self.last_output =
+                                    Some(SharedString::from("Failed to copy path"));
                             }
                         }
                     }
+
+                    #[cfg(not(target_os = "macos"))]
+                    {
+                        use arboard::Clipboard;
+                        match Clipboard::new().and_then(|mut c| c.set_text(&path_str)) {
+                            Ok(_) => {
+                                logging::log(
+                                    "UI",
+                                    &format!("Copied path to clipboard: {}", path_str),
+                                );
+                                self.last_output =
+                                    Some(SharedString::from(format!("Copied: {}", path_str)));
+                            }
+                            Err(e) => {
+                                logging::log("ERROR", &format!("Failed to copy path: {}", e));
+                                self.last_output =
+                                    Some(SharedString::from("Failed to copy path"));
+                            }
+                        }
+                    }
+                }
+            }
+            "copy_deeplink" => {
+                logging::log("UI", "Copy deeplink action");
+                if let Some(result) = self.get_selected_result() {
+                    let name = result.name();
+                    let deeplink_name = crate::actions::to_deeplink_name(name);
+                    let deeplink_url = format!("scriptkit://run/{}", deeplink_name);
+
+                    #[cfg(target_os = "macos")]
+                    {
+                        match self.pbcopy(&deeplink_url) {
+                            Ok(_) => {
+                                logging::log(
+                                    "UI",
+                                    &format!("Copied deeplink to clipboard: {}", deeplink_url),
+                                );
+                                self.last_output =
+                                    Some(SharedString::from(format!("Copied: {}", deeplink_url)));
+                            }
+                            Err(e) => {
+                                logging::log("ERROR", &format!("pbcopy failed: {}", e));
+                                self.last_output =
+                                    Some(SharedString::from("Failed to copy deeplink"));
+                            }
+                        }
+                    }
+
+                    #[cfg(not(target_os = "macos"))]
+                    {
+                        use arboard::Clipboard;
+                        match Clipboard::new().and_then(|mut c| c.set_text(&deeplink_url)) {
+                            Ok(_) => {
+                                logging::log(
+                                    "UI",
+                                    &format!("Copied deeplink to clipboard: {}", deeplink_url),
+                                );
+                                self.last_output =
+                                    Some(SharedString::from(format!("Copied: {}", deeplink_url)));
+                            }
+                            Err(e) => {
+                                logging::log("ERROR", &format!("Failed to copy deeplink: {}", e));
+                                self.last_output =
+                                    Some(SharedString::from("Failed to copy deeplink"));
+                            }
+                        }
+                    }
+                    self.hide_main_and_reset(cx);
                 } else {
                     self.last_output = Some(SharedString::from("No item selected"));
                 }
@@ -421,40 +491,6 @@ impl ScriptListApp {
                 }
             }
             _ => {
-                // Check if this is a file search action with reveal_in_finder or copy_path
-                // (these actions exist both for scripts and file search)
-                if let Some(path) = self.file_search_actions_path.clone() {
-                    match action_id.as_str() {
-                        "reveal_in_finder" => {
-                            logging::log(
-                                "UI",
-                                &format!("Reveal in Finder (file search): {}", path),
-                            );
-                            self.reveal_in_finder(std::path::Path::new(&path));
-                            self.file_search_actions_path = None;
-                            cx.notify();
-                            return;
-                        }
-                        "copy_path" => {
-                            logging::log("UI", &format!("Copy path (file search): {}", path));
-                            #[cfg(target_os = "macos")]
-                            {
-                                let _ = self.pbcopy(&path);
-                            }
-                            #[cfg(not(target_os = "macos"))]
-                            {
-                                use arboard::Clipboard;
-                                let _ = Clipboard::new().and_then(|mut c| c.set_text(&path));
-                            }
-                            self.last_output =
-                                Some(SharedString::from(format!("Copied: {}", path)));
-                            self.file_search_actions_path = None;
-                            cx.notify();
-                            return;
-                        }
-                        _ => {}
-                    }
-                }
                 // Handle SDK actions using shared helper
                 self.trigger_sdk_action_internal(&action_id);
             }

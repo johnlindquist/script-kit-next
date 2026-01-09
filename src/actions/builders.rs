@@ -186,7 +186,12 @@ pub fn get_path_context_actions(path_info: &PathInfo) -> Vec<Action> {
 }
 
 /// Convert a script name to a deeplink-safe format (lowercase, hyphenated)
-fn to_deeplink_name(name: &str) -> String {
+///
+/// Examples:
+/// - "My Script" → "my-script"
+/// - "Clipboard History" → "clipboard-history"
+/// - "hello_world" → "hello-world"
+pub fn to_deeplink_name(name: &str) -> String {
     name.to_lowercase()
         .chars()
         .map(|c| if c.is_alphanumeric() { c } else { '-' })
