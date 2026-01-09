@@ -1209,19 +1209,44 @@ pub fn configure_actions_popup_window(_window: *mut std::ffi::c_void) {
 // Mouse Position
 // ============================================================================
 
-#[cfg(target_os = "macos")]
-use core_graphics::event::CGEvent;
-#[cfg(target_os = "macos")]
-use core_graphics::event_source::{CGEventSource, CGEventSourceStateID};
-
 /// Get the current global mouse cursor position using macOS Core Graphics API.
-/// Returns the position in screen coordinates.
+/// Returns the position in global display coordinates (top-left origin, Y increases down).
+///
+/// # Implementation Note
+/// We use `CGEventCreate(NULL)` directly via FFI because the Rust core-graphics crate's
+/// `CGEvent::new(source)` creates a null-type event with undefined location. According to
+/// Apple's documentation, when `CGEventCreate` is passed NULL and then `CGEventGetLocation`
+/// is called, it returns the CURRENT mouse position. This is the canonical way to get
+/// mouse position in Core Graphics.
 #[cfg(target_os = "macos")]
 pub fn get_global_mouse_position() -> Option<(f64, f64)> {
-    let source = CGEventSource::new(CGEventSourceStateID::CombinedSessionState).ok()?;
-    let event = CGEvent::new(source).ok()?;
-    let location = event.location();
-    Some((location.x, location.y))
+    use core_graphics::geometry::CGPoint;
+    use core_foundation::base::CFRelease;
+    use std::ffi::c_void;
+
+    // FFI declarations for direct CGEventCreate(NULL) call
+    #[link(name = "CoreGraphics", kind = "framework")]
+    extern "C" {
+        fn CGEventCreate(source: *const c_void) -> *const c_void;
+        fn CGEventGetLocation(event: *const c_void) -> CGPoint;
+    }
+
+    unsafe {
+        // CGEventCreate(NULL) returns an event that, when queried for location,
+        // returns the current mouse cursor position
+        let event = CGEventCreate(std::ptr::null());
+        if event.is_null() {
+            logging::log("POSITION", "WARNING: CGEventCreate returned null");
+            return None;
+        }
+
+        let location = CGEventGetLocation(event);
+
+        // Release the event to avoid memory leak
+        CFRelease(event);
+
+        Some((location.x, location.y))
+    }
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -1502,19 +1527,31 @@ pub fn calculate_eye_line_bounds_on_mouse_display(
         );
 
         // Find the display that contains the mouse cursor
-        let found = displays.iter().enumerate().find(|(idx, display)| {
-            let contains = mouse_x >= display.origin_x
-                && mouse_x < display.origin_x + display.width
-                && mouse_y >= display.origin_y
-                && mouse_y < display.origin_y + display.height;
+        let mut found_display = None;
+        for (idx, display) in displays.iter().enumerate() {
+            let in_x = mouse_x >= display.origin_x && mouse_x < display.origin_x + display.width;
+            let in_y = mouse_y >= display.origin_y && mouse_y < display.origin_y + display.height;
+            let contains = in_x && in_y;
 
             if contains {
                 logging::log("POSITION", &format!("  -> Mouse is on display {}", idx));
+                found_display = Some(display.clone());
+                break;
+            } else {
+                // Log why this display didn't match (helpful for debugging edge cases)
+                logging::log(
+                    "POSITION",
+                    &format!(
+                        "  Display {} rejected: in_x={} in_y={} (mouse: {:.0},{:.0} vs bounds: x={:.0}..{:.0}, y={:.0}..{:.0})",
+                        idx, in_x, in_y, mouse_x, mouse_y,
+                        display.origin_x, display.origin_x + display.width,
+                        display.origin_y, display.origin_y + display.height
+                    ),
+                );
             }
-            contains
-        });
+        }
 
-        found.map(|(_, d)| d.clone())
+        found_display
     } else {
         logging::log(
             "POSITION",
