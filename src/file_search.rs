@@ -980,12 +980,20 @@ pub fn parse_directory_path(path: &str) -> Option<ParsedDirPath> {
 
     // Handle paths ending with / - they're complete directory paths
     if trimmed.ends_with('/') {
+        // Normalize to remove trailing slash (except for root /)
+        let normalized = if trimmed == "/" {
+            "/".to_string()
+        } else {
+            trimmed.trim_end_matches('/').to_string()
+        };
         // Verify the directory exists
-        if let Some(expanded) = expand_path(trimmed.trim_end_matches('/')) {
+        if let Some(expanded) = expand_path(&normalized) {
             let p = Path::new(&expanded);
             if p.is_dir() {
                 return Some(ParsedDirPath {
-                    directory: trimmed.to_string(),
+                    // Return normalized directory (no trailing slash except root)
+                    // This ensures "~/dev/" and "~/dev" are treated as the same directory
+                    directory: normalized,
                     filter: None,
                 });
             }
@@ -1000,13 +1008,14 @@ pub fn parse_directory_path(path: &str) -> Option<ParsedDirPath> {
         let potential_filter = &trimmed[last_slash_idx + 1..];
 
         // Verify parent directory exists
-        let parent_to_check = if parent == "/" {
-            "/"
+        // Normalize to remove trailing slash (except for root /)
+        let parent_normalized = if parent == "/" {
+            "/".to_string()
         } else {
-            parent.trim_end_matches('/')
+            parent.trim_end_matches('/').to_string()
         };
 
-        if let Some(expanded) = expand_path(parent_to_check) {
+        if let Some(expanded) = expand_path(&parent_normalized) {
             let p = Path::new(&expanded);
             if p.is_dir() {
                 let filter = if potential_filter.is_empty() {
@@ -1015,7 +1024,9 @@ pub fn parse_directory_path(path: &str) -> Option<ParsedDirPath> {
                     Some(potential_filter.to_string())
                 };
                 return Some(ParsedDirPath {
-                    directory: parent.to_string(),
+                    // Return normalized directory (no trailing slash except root)
+                    // This ensures "~" and "~/" are treated as the same directory
+                    directory: parent_normalized,
                     filter,
                 });
             }
@@ -1889,5 +1900,95 @@ mod tests {
         // The function expects trailing slash, but should handle edge cases gracefully
         assert_eq!(parent_dir_display("/foo/bar"), Some("/foo/".to_string()));
         assert_eq!(parent_dir_display("~/foo"), Some("~/".to_string()));
+    }
+
+    // ========================================================================
+    // Parse Directory Path Normalization Tests
+    // These tests ensure consistent directory strings to prevent UI flash
+    // ========================================================================
+
+    #[test]
+    fn test_parse_directory_path_home_normalization() {
+        // "~" and "~/" should return the same normalized directory
+        let result_tilde = parse_directory_path("~");
+        let result_tilde_slash = parse_directory_path("~/");
+
+        // Both should return Some with directory "~" (no trailing slash)
+        assert!(result_tilde.is_some());
+        assert!(result_tilde_slash.is_some());
+
+        // The directories should be identical to prevent UI flash when typing
+        assert_eq!(
+            result_tilde.as_ref().unwrap().directory,
+            result_tilde_slash.as_ref().unwrap().directory,
+            "~` and ~/ should normalize to the same directory string"
+        );
+    }
+
+    #[test]
+    fn test_parse_directory_path_filter_same_directory() {
+        // "~/" and "~/d" should have the SAME normalized directory
+        // This is the exact case that was causing the UI flash bug
+        let result_home = parse_directory_path("~/");
+        let result_home_filter = parse_directory_path("~/d");
+
+        assert!(result_home.is_some());
+        assert!(result_home_filter.is_some());
+
+        let home = result_home.unwrap();
+        let home_filter = result_home_filter.unwrap();
+
+        // Directory strings must be identical
+        assert_eq!(
+            home.directory, home_filter.directory,
+            "~/` and ~/d should have the same directory string to prevent flash"
+        );
+
+        // First should have no filter, second should have "d"
+        assert_eq!(home.filter, None);
+        assert_eq!(home_filter.filter, Some("d".to_string()));
+    }
+
+    #[test]
+    fn test_parse_directory_path_subdirectory_normalization() {
+        // ~/dev/ and ~/dev/foo should have the same parent directory
+        let _result_dev_slash = parse_directory_path("~/dev/");
+        let _result_dev_filter = parse_directory_path("~/dev/foo");
+
+        // ~/dev/ might not exist, so we test the pattern with /tmp instead
+        // /tmp should exist on all Unix systems
+        if let (Some(tmp), Some(tmp_filter)) = (
+            parse_directory_path("/tmp/"),
+            parse_directory_path("/tmp/test"),
+        ) {
+            assert_eq!(
+                tmp.directory, tmp_filter.directory,
+                "/tmp/ and /tmp/test should have the same directory string"
+            );
+            assert_eq!(tmp.filter, None);
+            assert_eq!(tmp_filter.filter, Some("test".to_string()));
+        }
+    }
+
+    #[test]
+    fn test_parse_directory_path_no_trailing_slash_in_directory() {
+        // Directories should be normalized without trailing slash (except root)
+        let result = parse_directory_path("/tmp/foo");
+        if let Some(parsed) = result {
+            // Directory should not have trailing slash
+            assert!(
+                !parsed.directory.ends_with('/') || parsed.directory == "/",
+                "Directory should not have trailing slash: {}",
+                parsed.directory
+            );
+        }
+
+        // Root is special case - it should keep its slash
+        let root = parse_directory_path("/foo");
+        if let Some(parsed) = root {
+            // For root, the directory is "/" which ends with slash
+            // But /foo would have parent "/" - that's fine
+            assert_eq!(parsed.directory, "/");
+        }
     }
 }
