@@ -368,7 +368,6 @@ pub fn search_files(query: &str, onlyin: Option<&str>, limit: usize) -> Vec<File
 
 /// Default roots for native file search.
 /// These provide broad coverage without full `/` traversal.
-#[allow(dead_code)]
 fn default_search_roots() -> Vec<PathBuf> {
     let mut roots = Vec::new();
 
@@ -394,7 +393,6 @@ fn default_search_roots() -> Vec<PathBuf> {
 }
 
 /// Detect file type with pre-fetched metadata (avoids extra stat calls)
-#[allow(dead_code)]
 fn detect_file_type_with_meta(path: &Path, exists: bool, is_dir: bool) -> FileType {
     let extension = path
         .extension()
@@ -451,7 +449,6 @@ fn detect_file_type_with_meta(path: &Path, exists: bool, is_dir: bool) -> FileTy
 ///
 /// # Returns
 /// Vector of FileResult structs containing file information
-#[allow(dead_code)]
 #[instrument(skip_all, fields(query = %query, onlyin = ?onlyin, limit = limit))]
 pub fn search_files_native(query: &str, onlyin: Option<&str>, limit: usize) -> Vec<FileResult> {
     let q = query.trim();
@@ -510,7 +507,6 @@ pub fn search_files_native(query: &str, onlyin: Option<&str>, limit: usize) -> V
 }
 
 /// Search within a single root directory using parallel traversal
-#[allow(dead_code)]
 fn search_in_root(
     root: &Path,
     pattern: &str,
