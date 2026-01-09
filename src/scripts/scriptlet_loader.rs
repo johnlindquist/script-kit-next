@@ -51,10 +51,14 @@ pub(crate) fn extract_html_comment_metadata(
 
 /// Extract code block from markdown text
 /// Looks for ```language ... ``` pattern and returns (language, code)
+/// Skips `metadata` and `schema` blocks which are used for configuration
 pub(crate) fn extract_code_block(text: &str) -> Option<(String, String)> {
-    // Find first code fence
-    if let Some(start) = text.find("```") {
+    let mut search_start = 0;
+
+    while let Some(fence_offset) = text[search_start..].find("```") {
+        let start = search_start + fence_offset;
         let after_fence = &text[start + 3..];
+
         // Get the language specifier (rest of line)
         if let Some(newline_pos) = after_fence.find('\n') {
             let language = after_fence[..newline_pos].trim().to_string();
@@ -62,11 +66,22 @@ pub(crate) fn extract_code_block(text: &str) -> Option<(String, String)> {
 
             // Find closing fence
             if let Some(end_pos) = text[code_start..].find("```") {
+                // Skip metadata and schema blocks - these are config, not code
+                if language == "metadata" || language == "schema" {
+                    // Move past this block and continue searching
+                    search_start = code_start + end_pos + 3;
+                    continue;
+                }
+
                 let code = text[code_start..code_start + end_pos].trim().to_string();
                 return Some((language, code));
             }
         }
+
+        // Couldn't parse this fence, move past it
+        search_start = start + 3;
     }
+
     None
 }
 
@@ -484,4 +499,64 @@ pub fn read_scriptlets_from_file(path: &Path) -> Vec<Arc<Scriptlet>> {
     );
 
     scriptlets
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_extract_code_block_skips_metadata() {
+        // This is the user's actual format - metadata block followed by paste block
+        let text = r#"## Greet
+
+```metadata
+keyword: !testing
+```
+
+```paste
+success!
+```
+"#;
+        let result = extract_code_block(text);
+        assert!(result.is_some());
+        let (tool, code) = result.unwrap();
+        assert_eq!(tool, "paste");
+        assert_eq!(code, "success!");
+    }
+
+    #[test]
+    fn test_extract_code_block_skips_schema() {
+        let text = r#"## Test
+
+```schema
+{"input": {"name": "string"}}
+```
+
+```ts
+console.log("hello");
+```
+"#;
+        let result = extract_code_block(text);
+        assert!(result.is_some());
+        let (tool, code) = result.unwrap();
+        assert_eq!(tool, "ts");
+        assert_eq!(code, "console.log(\"hello\");");
+    }
+
+    #[test]
+    fn test_extract_code_block_no_metadata() {
+        // When there's no metadata block, should still work
+        let text = r#"## Test
+
+```paste
+hello world
+```
+"#;
+        let result = extract_code_block(text);
+        assert!(result.is_some());
+        let (tool, code) = result.unwrap();
+        assert_eq!(tool, "paste");
+        assert_eq!(code, "hello world");
+    }
 }
