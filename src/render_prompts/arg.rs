@@ -462,8 +462,6 @@ impl ScriptListApp {
                         .child(list_element),
                 )
             })
-            // Spacer when no choices - pushes footer to bottom of window
-            .when(!has_choices, |d| d.child(div().flex_1()))
             // Footer with unified actions
             .child({
                 let footer_colors = PromptFooterColors::from_design(&design_colors);
