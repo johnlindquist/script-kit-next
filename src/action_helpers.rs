@@ -222,6 +222,7 @@ pub fn trigger_sdk_action(
 
 /// Reserved built-in action IDs that SDK actions cannot shadow.
 pub const RESERVED_ACTION_IDS: &[&str] = &[
+    // Script context actions
     "run_script",
     "view_logs",
     "reveal_in_finder",
@@ -232,6 +233,20 @@ pub const RESERVED_ACTION_IDS: &[&str] = &[
     "add_shortcut",
     "update_shortcut",
     "remove_shortcut",
+    // File search context actions
+    "open_file",
+    "open_directory",
+    "quick_look",
+    "open_with",
+    "show_info",
+    "copy_filename",
+    // Path prompt context actions
+    "select_file",
+    "open_in_finder",
+    "open_in_editor",
+    "open_in_terminal",
+    "move_to_trash",
+    // Internal
     "__cancel__",
 ];
 
