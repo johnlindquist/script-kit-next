@@ -31,7 +31,8 @@ mod validation_tests;
 // Re-export types used externally
 pub use types::{ColorScheme, Theme};
 
-// Re-export helper types for lightweight color extraction
+// Re-export helper types for lightweight color extraction (allow unused - designed for incremental adoption)
+#[allow(unused_imports)]
 pub use helpers::{InputFieldColors, ListItemColors, PromptColors};
 
 // Re-export semantic types (allow unused - designed for incremental adoption)

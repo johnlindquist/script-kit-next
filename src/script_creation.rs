@@ -126,7 +126,11 @@ console.log(result);
 fn generate_extension_template(name: &str) -> String {
     let title = name_to_title(name);
     format!(
-        r#"# {title}
+        r#"<!--
+  Learn more about creating extensions: ~/.scriptkit/kit/GUIDE.md
+-->
+
+# {title}
 
 Commands for {title}.
 

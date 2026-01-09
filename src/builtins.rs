@@ -105,7 +105,7 @@ pub enum AiCommandType {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ScriptCommandType {
     NewScript,
-    NewScriptlet,
+    NewExtension,
 }
 
 /// Permission management command types
@@ -813,11 +813,11 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
     ));
 
     entries.push(BuiltInEntry::new_with_icon(
-        "builtin-new-scriptlet",
-        "New Scriptlet",
-        "Create a new Script Kit scriptlet",
-        vec!["new", "scriptlet", "create", "snippet"],
-        BuiltInFeature::ScriptCommand(ScriptCommandType::NewScriptlet),
+        "builtin-new-extension",
+        "New Extension",
+        "Create a new Script Kit extension",
+        vec!["new", "extension", "create", "snippet"],
+        BuiltInFeature::ScriptCommand(ScriptCommandType::NewExtension),
         "✨",
     ));
 

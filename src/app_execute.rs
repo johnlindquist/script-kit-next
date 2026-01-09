@@ -512,10 +512,12 @@ impl ScriptListApp {
                     ScriptCommandType::NewScript => {
                         (script_creation::create_new_script("untitled"), "script")
                     }
-                    ScriptCommandType::NewScriptlet => (
-                        script_creation::create_new_extension("untitled"),
-                        "extension",
-                    ),
+                    ScriptCommandType::NewExtension => {
+                        // Generate a unique name with timestamp
+                        let timestamp = chrono::Local::now().format("%Y%m%d-%H%M%S");
+                        let name = format!("my-extension-{}", timestamp);
+                        (script_creation::create_new_extension(&name), "extension")
+                    }
                 };
 
                 match create_result {

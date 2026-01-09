@@ -152,6 +152,9 @@ pub struct DivPrompt {
     pub scroll_handle: ScrollHandle,
     /// Cached scroll offset for scrollbar rendering
     scroll_offset: Point<f32>,
+    /// Pre-extracted prompt colors for efficient rendering (Copy, 28 bytes)
+    /// Avoids re-extracting colors from theme on every render
+    prompt_colors: theme::PromptColors,
 }
 
 impl DivPrompt {
@@ -207,6 +210,10 @@ impl DivPrompt {
         design_variant: DesignVariant,
         container_options: ContainerOptions,
     ) -> Self {
+        // Extract colors ONCE during construction to avoid re-extraction on every render
+        // PromptColors is Copy (28 bytes) - much cheaper than extracting on every frame
+        let prompt_colors = theme.colors.prompt_colors();
+
         logging::log(
             "PROMPTS",
             &format!(
@@ -225,6 +232,7 @@ impl DivPrompt {
             container_options,
             scroll_handle: ScrollHandle::new(),
             scroll_offset: Point::default(),
+            prompt_colors,
         }
     }
 
@@ -900,9 +908,19 @@ impl Render for DivPrompt {
             }
         });
 
-        // Create render context from theme with link callback
+        // Create render context using pre-extracted colors (avoids extraction on every render)
         let render_ctx = if self.design_variant == DesignVariant::Default {
-            RenderContext::from_theme(&self.theme.colors).with_link_callback(on_link_click)
+            // Use pre-extracted prompt_colors instead of extracting from theme
+            RenderContext {
+                text_primary: self.prompt_colors.text_primary,
+                text_secondary: self.prompt_colors.text_secondary,
+                text_tertiary: self.prompt_colors.text_tertiary,
+                accent_color: self.prompt_colors.accent_color,
+                code_bg: self.prompt_colors.code_bg,
+                quote_border: self.prompt_colors.quote_border,
+                hr_color: self.prompt_colors.hr_color,
+                on_link_click: Some(on_link_click),
+            }
         } else {
             RenderContext {
                 text_primary: colors.text_primary,
