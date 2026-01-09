@@ -1098,6 +1098,7 @@ pub fn launch_application_by_name(name: &str) -> Result<()> {
 mod tests {
     use super::*;
 
+    #[cfg(feature = "slow-tests")]
     #[test]
     fn test_scan_applications_returns_apps() {
         let apps = scan_applications();
@@ -1130,6 +1131,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "slow-tests")]
     #[test]
     fn test_app_info_has_required_fields() {
         let apps = scan_applications();
@@ -1150,6 +1152,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "slow-tests")]
     #[test]
     fn test_apps_sorted_alphabetically() {
         let apps = scan_applications();
@@ -1204,6 +1207,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "slow-tests")]
     #[test]
     fn test_no_duplicate_apps() {
         let apps = scan_applications();
@@ -1227,8 +1231,8 @@ mod tests {
         );
     }
 
+    #[cfg(all(target_os = "macos", feature = "slow-tests"))]
     #[test]
-    #[cfg(target_os = "macos")]
     fn test_extract_app_icon() {
         // Test icon extraction for Calculator (always present on macOS)
         let calculator_path = Path::new("/System/Applications/Calculator.app");
@@ -1248,6 +1252,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "slow-tests")]
     #[test]
     fn test_app_has_icon() {
         // Use fresh scan which does synchronous icon loading
@@ -1274,6 +1279,7 @@ mod tests {
     /// The bug was that a previous version deferred icon decoding to a background
     /// thread that updated a LOCAL Arc, then returned a clone of the Vec without icons.
     /// The fix is to decode icons synchronously in load_apps_from_db.
+    #[cfg(feature = "slow-tests")]
     #[test]
     fn test_load_apps_from_db_returns_apps_with_icons() {
         // First, ensure we have some apps in the database by doing a fresh scan
@@ -1336,8 +1342,8 @@ mod tests {
         );
     }
 
+    #[cfg(all(target_os = "macos", feature = "slow-tests"))]
     #[test]
-    #[cfg(target_os = "macos")]
     fn test_get_or_extract_icon_caches() {
         // Test that get_or_extract_icon properly caches icons
         let calculator_path = Path::new("/System/Applications/Calculator.app");

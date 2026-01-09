@@ -11,14 +11,17 @@ path = "src/lib.rs"
 [[bin]]
 name = "script-kit-gpui"
 path = "src/main.rs"
+test = false  # Tests run via lib.rs only - avoids duplicate test runs
 
 [[bin]]
 name = "smoke-test"
 path = "src/bin/smoke-test.rs"
+test = false
 
 [[bin]]
 name = "storybook"
 path = "src/bin/storybook.rs"
+test = false
 
 [dependencies]
 gpui = { git = "https://github.com/zed-industries/zed" }
@@ -135,6 +138,10 @@ default = ["ocr"]
 # These tests may have side effects like modifying clipboard, opening dialogs, etc.
 # Run with: cargo test --features system-tests
 system-tests = []
+# Enable slow tests that spawn shell processes (sleep, bash, zsh, etc.)
+# These tests add ~30+ seconds to the test suite.
+# Run with: cargo test --features slow-tests
+slow-tests = []
 # OCR support using macOS Vision framework (enabled by default on macOS)
 ocr = []
 # Performance instrumentation (disabled by default to reduce hot-path overhead)

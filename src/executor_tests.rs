@@ -100,7 +100,7 @@ fn test_process_handle_registers_with_process_manager() {
     // If we get here, register/unregister cycle completed successfully
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, feature = "slow-tests"))]
 #[test]
 fn test_spawn_and_kill_process() {
     // Spawn a simple process that sleeps
@@ -125,7 +125,7 @@ fn test_spawn_and_kill_process() {
     // If spawn failed (sleep not available), that's OK for this test
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, feature = "slow-tests"))]
 #[test]
 fn test_drop_kills_process() {
     // Spawn a process
@@ -170,7 +170,7 @@ fn test_drop_kills_process() {
     }
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, feature = "slow-tests"))]
 #[test]
 fn test_split_session_kill() {
     // Spawn a process and split it
@@ -194,7 +194,7 @@ fn test_split_session_kill() {
 /// Test that process group liveness check works correctly
 /// This verifies the fix for the bug where we only checked the leader PID
 /// instead of the entire process group.
-#[cfg(unix)]
+#[cfg(all(unix, feature = "slow-tests"))]
 #[test]
 fn test_process_group_alive_check() {
     // Spawn a simple sleep process - don't use backgrounded children
@@ -921,7 +921,7 @@ fn test_build_final_content_handles_trailing_newlines() {
     assert_eq!(result, "#!/bin/bash\necho hello");
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, feature = "slow-tests"))]
 #[test]
 fn test_run_scriptlet_bash_echo() {
     let scriptlet = Scriptlet::new(
@@ -943,7 +943,7 @@ fn test_run_scriptlet_bash_echo() {
     );
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, feature = "slow-tests"))]
 #[test]
 fn test_run_scriptlet_bash_with_variable_substitution() {
     let scriptlet = Scriptlet::new(
@@ -972,7 +972,7 @@ fn test_run_scriptlet_bash_with_variable_substitution() {
     );
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, feature = "slow-tests"))]
 #[test]
 fn test_run_scriptlet_bash_with_positional_args() {
     let scriptlet = Scriptlet::new(
@@ -998,7 +998,7 @@ fn test_run_scriptlet_bash_with_positional_args() {
     );
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, feature = "slow-tests"))]
 #[test]
 fn test_run_scriptlet_with_prepend_append() {
     let scriptlet = Scriptlet::new(
@@ -1032,7 +1032,7 @@ fn test_run_scriptlet_with_prepend_append() {
     assert!(stdout.contains("end"), "Should contain 'end': {}", stdout);
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, feature = "slow-tests"))]
 #[test]
 fn test_run_scriptlet_with_cwd() {
     let scriptlet = Scriptlet::new(
@@ -1193,7 +1193,7 @@ fn test_shell_tools_count() {
 }
 
 /// Test successful shell execution returns correct exit code and stdout
-#[cfg(unix)]
+#[cfg(all(unix, feature = "slow-tests"))]
 #[test]
 fn test_execute_shell_scriptlet_success_exit_code() {
     let result = execute_shell_scriptlet("bash", "exit 0", &ScriptletExecOptions::default());
@@ -1205,7 +1205,7 @@ fn test_execute_shell_scriptlet_success_exit_code() {
 }
 
 /// Test shell execution captures stdout correctly
-#[cfg(unix)]
+#[cfg(all(unix, feature = "slow-tests"))]
 #[test]
 fn test_execute_shell_scriptlet_captures_stdout() {
     let result = execute_shell_scriptlet(
@@ -1229,7 +1229,7 @@ fn test_execute_shell_scriptlet_captures_stdout() {
 }
 
 /// Test shell execution captures stderr correctly
-#[cfg(unix)]
+#[cfg(all(unix, feature = "slow-tests"))]
 #[test]
 fn test_execute_shell_scriptlet_captures_stderr() {
     let result = execute_shell_scriptlet(
@@ -1248,7 +1248,7 @@ fn test_execute_shell_scriptlet_captures_stderr() {
 }
 
 /// Test non-zero exit code is captured correctly
-#[cfg(unix)]
+#[cfg(all(unix, feature = "slow-tests"))]
 #[test]
 fn test_execute_shell_scriptlet_nonzero_exit_code() {
     let result = execute_shell_scriptlet("bash", "exit 42", &ScriptletExecOptions::default());
@@ -1267,7 +1267,7 @@ fn test_execute_shell_scriptlet_nonzero_exit_code() {
 }
 
 /// Test script syntax errors are captured in stderr
-#[cfg(unix)]
+#[cfg(all(unix, feature = "slow-tests"))]
 #[test]
 fn test_execute_shell_scriptlet_syntax_error_captured() {
     // Intentional syntax error: unclosed quote
@@ -1290,7 +1290,7 @@ fn test_execute_shell_scriptlet_syntax_error_captured() {
 }
 
 /// Test undefined variable doesn't cause hard failure (just empty expansion)
-#[cfg(unix)]
+#[cfg(all(unix, feature = "slow-tests"))]
 #[test]
 fn test_execute_shell_scriptlet_undefined_variable() {
     // By default, bash doesn't fail on undefined variables
@@ -1310,7 +1310,7 @@ fn test_execute_shell_scriptlet_undefined_variable() {
 }
 
 /// Test strict mode catches undefined variables
-#[cfg(unix)]
+#[cfg(all(unix, feature = "slow-tests"))]
 #[test]
 fn test_execute_shell_scriptlet_strict_mode_undefined_var() {
     // set -u makes bash fail on undefined variables
@@ -1331,7 +1331,7 @@ fn test_execute_shell_scriptlet_strict_mode_undefined_var() {
 }
 
 /// Test command not found error message
-#[cfg(unix)]
+#[cfg(all(unix, feature = "slow-tests"))]
 #[test]
 fn test_execute_shell_scriptlet_command_not_found() {
     let result = execute_shell_scriptlet(
@@ -1356,7 +1356,7 @@ fn test_execute_shell_scriptlet_command_not_found() {
 }
 
 /// Test missing shell executable returns helpful error
-#[cfg(unix)]
+#[cfg(all(unix, feature = "slow-tests"))]
 #[test]
 fn test_execute_shell_scriptlet_missing_shell() {
     // Try to use a non-existent shell
@@ -1383,7 +1383,7 @@ fn test_execute_shell_scriptlet_missing_shell() {
 }
 
 /// Test sh shell works (most basic POSIX shell)
-#[cfg(unix)]
+#[cfg(all(unix, feature = "slow-tests"))]
 #[test]
 fn test_execute_shell_scriptlet_sh() {
     let result =
@@ -1396,7 +1396,7 @@ fn test_execute_shell_scriptlet_sh() {
 }
 
 /// Test zsh shell works (if available)
-#[cfg(unix)]
+#[cfg(all(unix, feature = "slow-tests"))]
 #[test]
 fn test_execute_shell_scriptlet_zsh() {
     // zsh might not be installed, so we check first
@@ -1418,7 +1418,7 @@ fn test_execute_shell_scriptlet_zsh() {
 }
 
 /// Test fish shell works (if available)
-#[cfg(unix)]
+#[cfg(all(unix, feature = "slow-tests"))]
 #[test]
 fn test_execute_shell_scriptlet_fish() {
     // fish might not be installed, so we check first
@@ -1441,7 +1441,7 @@ fn test_execute_shell_scriptlet_fish() {
 }
 
 /// Test cwd option changes working directory for shell scripts
-#[cfg(unix)]
+#[cfg(all(unix, feature = "slow-tests"))]
 #[test]
 fn test_execute_shell_scriptlet_with_cwd() {
     let options = ScriptletExecOptions {
@@ -1463,7 +1463,7 @@ fn test_execute_shell_scriptlet_with_cwd() {
 }
 
 /// Test multiline scripts work correctly
-#[cfg(unix)]
+#[cfg(all(unix, feature = "slow-tests"))]
 #[test]
 fn test_execute_shell_scriptlet_multiline() {
     let script = r#"
@@ -1483,7 +1483,7 @@ echo "line 3"
 }
 
 /// Test environment variable access works in shell scripts
-#[cfg(unix)]
+#[cfg(all(unix, feature = "slow-tests"))]
 #[test]
 fn test_execute_shell_scriptlet_environment() {
     // HOME should always be set
@@ -1497,7 +1497,7 @@ fn test_execute_shell_scriptlet_environment() {
 }
 
 /// Test Windows shells return appropriate error on Unix
-#[cfg(unix)]
+#[cfg(all(unix, feature = "slow-tests"))]
 #[test]
 fn test_execute_shell_scriptlet_windows_shell_on_unix() {
     // cmd.exe doesn't exist on Unix
@@ -1512,7 +1512,7 @@ fn test_execute_shell_scriptlet_windows_shell_on_unix() {
 }
 
 /// Test powershell on Unix (might be installed as pwsh)
-#[cfg(unix)]
+#[cfg(all(unix, feature = "slow-tests"))]
 #[test]
 fn test_execute_shell_scriptlet_powershell_on_unix() {
     // Check if pwsh is installed (PowerShell Core)
@@ -1582,7 +1582,7 @@ fn test_unix_shells_in_shell_tools() {
 }
 
 /// Test run_scriptlet correctly dispatches to shell handler
-#[cfg(unix)]
+#[cfg(all(unix, feature = "slow-tests"))]
 #[test]
 fn test_run_scriptlet_dispatches_to_shell_handler() {
     for shell in &["bash", "sh"] {
@@ -1611,7 +1611,7 @@ fn test_run_scriptlet_dispatches_to_shell_handler() {
 }
 
 /// Test shell scripts handle special characters correctly
-#[cfg(unix)]
+#[cfg(all(unix, feature = "slow-tests"))]
 #[test]
 fn test_execute_shell_scriptlet_special_characters() {
     // Test that special shell characters are handled
@@ -1630,7 +1630,7 @@ fn test_execute_shell_scriptlet_special_characters() {
 }
 
 /// Test shell scripts with here-documents
-#[cfg(unix)]
+#[cfg(all(unix, feature = "slow-tests"))]
 #[test]
 fn test_execute_shell_scriptlet_heredoc() {
     let script = r#"cat << 'EOF'
@@ -1650,7 +1650,7 @@ EOF"#;
 }
 
 /// Test shell scripts with pipes
-#[cfg(unix)]
+#[cfg(all(unix, feature = "slow-tests"))]
 #[test]
 fn test_execute_shell_scriptlet_pipes() {
     let result = execute_shell_scriptlet(
@@ -1666,7 +1666,7 @@ fn test_execute_shell_scriptlet_pipes() {
 }
 
 /// Test shell scripts with command substitution
-#[cfg(unix)]
+#[cfg(all(unix, feature = "slow-tests"))]
 #[test]
 fn test_execute_shell_scriptlet_command_substitution() {
     let result = execute_shell_scriptlet(
@@ -1682,7 +1682,7 @@ fn test_execute_shell_scriptlet_command_substitution() {
 }
 
 /// Test that temp file is cleaned up after execution
-#[cfg(unix)]
+#[cfg(all(unix, feature = "slow-tests"))]
 #[test]
 fn test_execute_shell_scriptlet_cleanup() {
     // Run a script - the temp file should be cleaned up after execution

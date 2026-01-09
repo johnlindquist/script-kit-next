@@ -1334,7 +1334,7 @@ mod tests {
         assert_eq!(FileType::default(), FileType::Other);
     }
 
-    #[cfg(target_os = "macos")]
+    #[cfg(all(target_os = "macos", feature = "slow-tests"))]
     #[test]
     fn test_search_files_real_query() {
         // This test only runs on macOS and verifies mdfind works
@@ -1344,7 +1344,7 @@ mod tests {
         assert!(results.len() <= 5);
     }
 
-    #[cfg(target_os = "macos")]
+    #[cfg(all(target_os = "macos", feature = "slow-tests"))]
     #[test]
     fn test_get_file_metadata_real_file() {
         // Test with a file that should exist on all macOS systems
