@@ -1160,7 +1160,8 @@ impl ScriptListApp {
         self.sync_list_state();
         self.selected_index = 0;
         self.validate_selection_bounds(cx);
-        self.main_list_state.scroll_to_reveal_item(self.selected_index);
+        self.main_list_state
+            .scroll_to_reveal_item(self.selected_index);
         self.last_scrolled_index = Some(self.selected_index);
 
         // Rebuild alias/shortcut registries and show HUD for any conflicts
@@ -2305,7 +2306,8 @@ impl ScriptListApp {
                                 app.sync_list_state();
                                 app.selected_index = 0;
                                 app.validate_selection_bounds(cx);
-                                app.main_list_state.scroll_to_reveal_item(app.selected_index);
+                                app.main_list_state
+                                    .scroll_to_reveal_item(app.selected_index);
                                 app.last_scrolled_index = Some(app.selected_index);
                                 // This will trigger window resize
                                 app.update_window_size();
@@ -2347,7 +2349,8 @@ impl ScriptListApp {
         self.sync_list_state();
         self.selected_index = 0;
         self.validate_selection_bounds(cx);
-        self.main_list_state.scroll_to_reveal_item(self.selected_index);
+        self.main_list_state
+            .scroll_to_reveal_item(self.selected_index);
         self.last_scrolled_index = Some(self.selected_index);
 
         // Update fallback mode immediately based on filter results
@@ -3725,7 +3728,57 @@ export default {
             return;
         }
 
-        // For non-TypeScript tools (bash, python, etc.), run synchronously
+        // Shell tools (bash, zsh, sh, fish, etc.) run in the built-in terminal
+        // so users can see output interactively
+        if scriptlets::SHELL_TOOLS.contains(&tool.as_str()) {
+            logging::log(
+                "EXEC",
+                &format!(
+                    "Shell scriptlet '{}' (tool: {}) - running in terminal",
+                    scriptlet.name, tool
+                ),
+            );
+
+            // Write scriptlet code to a temp file and execute it
+            let temp_dir = std::env::temp_dir();
+            let extension = match tool.as_str() {
+                "bash" | "zsh" | "sh" => "sh",
+                "fish" => "fish",
+                "powershell" | "pwsh" => "ps1",
+                "cmd" => "bat",
+                _ => "sh",
+            };
+            let temp_file = temp_dir.join(format!(
+                "extension-{}-{}.{}",
+                scriptlet.name.to_lowercase().replace(' ', "-"),
+                std::process::id(),
+                extension
+            ));
+
+            if let Err(e) = std::fs::write(&temp_file, &scriptlet.code) {
+                logging::log(
+                    "ERROR",
+                    &format!("Failed to write temp extension file: {}", e),
+                );
+                self.toast_manager.push(
+                    components::toast::Toast::error(
+                        format!("Failed to write extension: {}", e),
+                        &self.theme,
+                    )
+                    .duration_ms(Some(5000)),
+                );
+                cx.notify();
+                return;
+            }
+
+            // Build the command to execute the script file
+            let shell_command = format!("{} {}", tool, temp_file.display());
+
+            self.open_terminal_with_command(shell_command, cx);
+            return;
+        }
+
+        // For other tools (python, ruby, template, etc.), run synchronously
         // These don't use the SDK and won't block waiting for input
 
         // Convert scripts::Scriptlet to scriptlets::Scriptlet for executor
@@ -4495,7 +4548,8 @@ export default {
         self.sync_list_state();
         self.selected_index = 0;
         self.validate_selection_bounds(cx);
-        self.main_list_state.scroll_to_reveal_item(self.selected_index);
+        self.main_list_state
+            .scroll_to_reveal_item(self.selected_index);
         self.last_scrolled_index = Some(self.selected_index);
 
         // Resize window for script list content.
