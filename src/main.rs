@@ -41,6 +41,8 @@ mod form_prompt;
 #[allow(dead_code)] // TODO: Re-enable once hotkey_pollers is updated for Root wrapper
 mod hotkey_pollers;
 mod hotkeys;
+#[cfg(test)]
+mod keyboard_routing_tests;
 mod list_item;
 mod logging;
 mod login_item;
@@ -164,7 +166,7 @@ use crate::filter_coalescer::FilterCoalescer;
 use crate::form_prompt::FormPromptState;
 // TODO: Re-enable when hotkey_pollers.rs is updated for Root wrapper
 // use crate::hotkey_pollers::start_hotkey_event_handler;
-use crate::navigation::{NavCoalescer, NavDirection, NavRecord};
+use crate::navigation::{NavCoalescer, NavDirection};
 use crate::toast_manager::{PendingToast, ToastManager};
 use components::ToastVariant;
 use editor::EditorPrompt;
@@ -1143,6 +1145,8 @@ struct ScriptListApp {
     /// Debug grid overlay configuration (None = hidden)
     grid_config: Option<debug_grid::GridConfig>,
     // Navigation coalescing for rapid arrow key events (20ms window)
+    // NOTE: Currently unused - arrow keys handled in interceptor without coalescing
+    #[allow(dead_code)]
     nav_coalescer: NavCoalescer,
     // Wheel scroll accumulator for smooth trackpad scrolling
     // Accumulates fractional deltas until they cross 1.0, then converts to item steps
