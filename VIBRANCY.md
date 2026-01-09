@@ -38,12 +38,12 @@ div().bg(highlight_color.rgba8(0x08))  // ~3% opacity
 
 | Alpha Hex | Decimal | Percentage | Use Case |
 |-----------|---------|------------|----------|
-| `0x05` | 5 | ~2% | Barely perceptible hover |
-| `0x08` | 8 | ~3% | Subtle hover state |
-| `0x0a` | 10 | ~4% | Light hover |
-| `0x0f` | 15 | ~6% | Selection highlight |
-| `0x14` | 20 | ~8% | Stronger selection |
-| `0x1a` | 26 | ~10% | Maximum before looking solid |
+| `0x0a` | 10 | ~4% | Very subtle hover |
+| `0x14` | 20 | ~8% | Light hover |
+| `0x26` | 38 | ~15% | Standard hover (default) |
+| `0x40` | 64 | ~25% | Visible hover |
+| `0x54` | 84 | ~33% | Selection highlight (default) |
+| `0x80` | 128 | ~50% | Strong selection |
 
 ### Where Applied
 
@@ -118,8 +118,8 @@ To enable vibrancy in your theme, update these values:
     }
   },
   "opacity": {
-    "selected": 0.06,  // 6% opacity
-    "hover": 0.03      // 3% opacity
+    "selected": 0.33,  // 33% opacity - visible but lets blur through
+    "hover": 0.15      // 15% opacity - subtle hover
   }
 }
 ```

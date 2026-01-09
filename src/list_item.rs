@@ -7,6 +7,7 @@
 
 use crate::designs::icon_variations::{icon_name_from_str, IconName};
 use crate::logging;
+use crate::ui_foundation::HexColorExt;
 use gpui::*;
 use std::sync::Arc;
 
@@ -452,10 +453,11 @@ impl RenderOnce for ListItem {
 
         // Selection colors with alpha from theme opacity settings
         // This allows vibrancy blur to show through selected/hovered items
-        let selected_alpha = (colors.selected_opacity * 255.0) as u32;
-        let hover_alpha = (colors.hover_opacity * 255.0) as u32;
-        let selected_bg = rgba((colors.accent_selected_subtle << 8) | selected_alpha);
-        let hover_bg = rgba((colors.accent_selected_subtle << 8) | hover_alpha);
+        // Use rgba8() helper (same pattern as footer) to ensure consistent Hsla conversion
+        let selected_alpha = (colors.selected_opacity * 255.0) as u8;
+        let hover_alpha = (colors.hover_opacity * 255.0) as u8;
+        let selected_bg = colors.accent_selected_subtle.rgba8(selected_alpha);
+        let hover_bg = colors.accent_selected_subtle.rgba8(hover_alpha);
 
         // Icon element (if present) - displayed on the left
         // Supports both emoji strings and PNG image data
@@ -590,12 +592,12 @@ impl RenderOnce for ListItem {
         // Determine background color based on selection/hover state
         // Priority: selected (full focus styling) > hovered (subtle feedback) > transparent
         // Note: For non-selected items, we ALSO apply GPUI's .hover() modifier for instant feedback
-        let bg_color = if self.selected {
-            selected_bg // 35% opacity - visible selection
+        let bg_color: Hsla = if self.selected {
+            selected_bg // 15% opacity - subtle selection with vibrancy
         } else if self.hovered {
-            hover_bg // 25% opacity - visible hover feedback (state-based)
+            hover_bg // 10% opacity - subtle hover feedback (state-based)
         } else {
-            rgba(0x00000000) // transparent
+            hsla(0.0, 0.0, 0.0, 0.0) // fully transparent
         };
 
         // Build the inner content div with all styling

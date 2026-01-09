@@ -568,6 +568,43 @@ All of these are correct and should be applied, but they **won't produce visible
 
 **Debug with:** `Cmd+Shift+M` to cycle through material/appearance combinations (won't fix the tint issue, but useful for understanding).
 
+## 17c. Vibrancy Selection/Hover Colors (CRITICAL)
+
+**Problem:** Selection highlights appear as opaque bands while footer shows vibrancy through.
+
+**Root Cause:** Two issues compound:
+1. **User's `~/.scriptkit/kit/theme.json`** overrides code defaults. If it has old values like `selected_subtle: "#2A2A2A"`, that gray color will be used instead of the vibrancy-compatible white.
+2. **Serde defaults vs struct defaults** - The `#[serde(default = "...")]` functions must match the `Default` impl. If they differ, loading a theme.json with missing fields uses the wrong values.
+
+**The Fix:** For vibrancy-compatible selection highlights:
+- Use **white (`#FFFFFF`)** as the base color for `selected_subtle`
+- Use **low opacity (6-33%)** via `opacity.selected` and `opacity.hover`
+- The combination `white @ low opacity` creates subtle brightening that lets blur show through
+
+**Code pattern:**
+```rust
+// In types.rs - serde defaults MUST match struct Default impl
+fn default_selected_opacity() -> f32 {
+    0.33 // Must match BackgroundOpacity::default().selected
+}
+
+// In list_item.rs - rgba computation
+let selected_bg = rgba((colors.accent_selected_subtle << 8) | selected_alpha);
+// With white (0xffffff) and 33% opacity: rgba(0xffffff54)
+```
+
+**User theme.json fix:**
+```json
+{
+  "colors": { "accent": { "selected_subtle": "#FFFFFF" } },
+  "opacity": { "selected": 0.33, "hover": 0.15 }
+}
+```
+
+**Key insight:** The footer worked because it hardcoded `rgba8(0x0f)` directly. Selection didn't work because it read from theme.json which had old values.
+
+See `VIBRANCY.md` for full documentation.
+
 ---
 
 ## 18. Repository structure (key modules)
