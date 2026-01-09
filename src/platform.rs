@@ -1220,8 +1220,8 @@ pub fn configure_actions_popup_window(_window: *mut std::ffi::c_void) {
 /// mouse position in Core Graphics.
 #[cfg(target_os = "macos")]
 pub fn get_global_mouse_position() -> Option<(f64, f64)> {
-    use core_graphics::geometry::CGPoint;
     use core_foundation::base::CFRelease;
+    use core_graphics::geometry::CGPoint;
     use std::ffi::c_void;
 
     // FFI declarations for direct CGEventCreate(NULL) call
