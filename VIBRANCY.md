@@ -103,3 +103,25 @@ GPUI intentionally hides the macOS `CAChameleonLayer` (the native tint layer). T
 3. **Test against different desktop backgrounds** - the blur adapts
 4. **Use consistent opacity** for related elements (e.g., footer and selection)
 5. **Avoid colored tints** unless brand identity requires it (they block more blur)
+
+## User Theme Override (IMPORTANT)
+
+If your `~/.scriptkit/kit/theme.json` has old values, they will **override** the code defaults!
+
+To enable vibrancy in your theme, update these values:
+
+```json
+{
+  "colors": {
+    "accent": {
+      "selected_subtle": "#FFFFFF"  // WHITE, not gray!
+    }
+  },
+  "opacity": {
+    "selected": 0.06,  // 6% opacity
+    "hover": 0.03      // 3% opacity
+  }
+}
+```
+
+Or delete `~/.scriptkit/kit/theme.json` entirely to use the new defaults.

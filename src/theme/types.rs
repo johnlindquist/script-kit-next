@@ -59,11 +59,11 @@ pub struct BackgroundOpacity {
 }
 
 fn default_selected_opacity() -> f32 {
-    0.95 // More visible selection background
+    0.06 // Subtle brightening for vibrancy support (see VIBRANCY.md)
 }
 
 fn default_hover_opacity() -> f32 {
-    0.85 // Visible hover background
+    0.03 // Barely visible hover for vibrancy support
 }
 
 fn default_preview_opacity() -> f32 {
