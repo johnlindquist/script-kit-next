@@ -1296,25 +1296,54 @@ impl ScriptListApp {
             })
             .collect();
 
-        // Compute diff
+        // ALWAYS update keyword triggers when a file changes
+        // This is needed because the diff only tracks registration metadata (name, shortcut, keyword, alias)
+        // but NOT the actual content. So content changes like "success three" -> "success four"
+        // would be missed if we only update on diff changes.
+        #[cfg(target_os = "macos")]
+        {
+            let (added, removed, updated) =
+                crate::keyword_manager::update_keyword_triggers_for_file(
+                    path,
+                    &new_scripts_scriptlets,
+                );
+            if added > 0 || removed > 0 || updated > 0 {
+                logging::log(
+                    "KEYWORD",
+                    &format!(
+                        "Updated keyword triggers for {}: {} added, {} removed, {} updated",
+                        path.display(),
+                        added,
+                        removed,
+                        updated
+                    ),
+                );
+            }
+        }
+
+        // Compute diff for registration metadata changes (shortcuts, aliases)
         let diff = diff_scriptlets(&old_scriptlets, &new_scriptlets);
 
         if diff.is_empty() {
-            logging::log("APP", &format!("No changes detected in {}", path.display()));
-            return;
+            logging::log(
+                "APP",
+                &format!("No registration metadata changes in {}", path.display()),
+            );
+            // Still need to update the scriptlets list even if no registration changes
+            // because the content might have changed
+        } else {
+            logging::log(
+                "APP",
+                &format!(
+                    "Scriptlet diff: {} added, {} removed, {} shortcut changes, {} keyword changes, {} alias changes",
+                    diff.added.len(),
+                    diff.removed.len(),
+                    diff.shortcut_changes.len(),
+                    diff.keyword_changes.len(),
+                    diff.alias_changes.len()
+                ),
+            );
         }
-
-        logging::log(
-            "APP",
-            &format!(
-                "Scriptlet diff: {} added, {} removed, {} shortcut changes, {} keyword changes, {} alias changes",
-                diff.added.len(),
-                diff.removed.len(),
-                diff.shortcut_changes.len(),
-                diff.keyword_changes.len(),
-                diff.alias_changes.len()
-            ),
-        );
 
         // Apply hotkey changes
         for removed in &diff.removed {
@@ -1348,43 +1377,6 @@ impl ScriptListApp {
                 logging::log(
                     "HOTKEY",
                     &format!("Failed to update hotkey for {}: {}", change.name, e),
-                );
-            }
-        }
-
-        // Apply expand manager changes (macOS only)
-        #[cfg(target_os = "macos")]
-        {
-            // For removed scriptlets, clear their triggers
-            for removed in &diff.removed {
-                if removed.keyword.is_some() {
-                    // We'd need access to the expand manager here
-                    // For now, log that we would clear triggers
-                    logging::log(
-                        "EXPAND",
-                        &format!("Would clear keyword trigger for removed: {}", removed.name),
-                    );
-                }
-            }
-
-            // For added scriptlets with expand, register them
-            for added in &diff.added {
-                if added.keyword.is_some() {
-                    logging::log(
-                        "EXPAND",
-                        &format!("Would register keyword trigger for added: {}", added.name),
-                    );
-                }
-            }
-
-            // For changed keyword triggers, update them
-            for change in &diff.keyword_changes {
-                logging::log(
-                    "EXPAND",
-                    &format!(
-                        "Would update keyword trigger for {}: {:?} -> {:?}",
-                        change.name, change.old, change.new
-                    ),
                 );
             }
         }

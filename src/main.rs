@@ -1562,62 +1562,34 @@ fn main() {
 
     // Initialize text expansion system (background thread with keyboard monitoring)
     // This must be done early, before the GPUI run loop starts
+    // Uses a global singleton so the manager can be updated when scriptlet files change
     #[cfg(target_os = "macos")]
     {
-        use keyword_manager::KeywordManager;
-
         // Spawn initialization in a thread to not block startup
         std::thread::spawn(move || {
             logging::log("KEYWORD", "Initializing text expansion system");
 
-            // Check accessibility permissions first
-            if !KeywordManager::has_accessibility_permission() {
-                logging::log(
-                    "KEYWORD",
-                    "Accessibility permissions not granted - text expansion disabled",
-                );
-                logging::log(
-                    "KEYWORD",
-                    "Enable in System Preferences > Privacy & Security > Accessibility",
-                );
-                return;
-            }
-
-            let mut manager = KeywordManager::new();
-
-            // Load scriptlets with keyword triggers
-            match manager.load_scriptlets() {
-                Ok(count) => {
-                    if count == 0 {
-                        logging::log("KEYWORD", "No keyword triggers found in scriptlets");
-                        return;
-                    }
-                    logging::log("KEYWORD", &format!("Loaded {} keyword triggers", count));
+            match keyword_manager::init_keyword_manager() {
+                Ok(Some(count)) => {
+                    logging::log(
+                        "KEYWORD",
+                        &format!("Text expansion system enabled with {} triggers", count),
+                    );
                 }
-                Err(e) => {
-                    logging::log("KEYWORD", &format!("Failed to load scriptlets: {}", e));
-                    return;
-                }
-            }
-
-            // Enable keyboard monitoring
-            match manager.enable() {
-                Ok(()) => {
-                    logging::log("KEYWORD", "Text expansion system enabled");
-
-                    // List registered triggers
-                    for (trigger, name) in manager.list_triggers() {
-                        logging::log("KEYWORD", &format!("  Trigger '{}' -> {}", trigger, name));
-                    }
-
-                    // Keep the manager alive - it will run until the process exits
-                    // The keyboard monitor thread is managed by the KeyboardMonitor
-                    std::mem::forget(manager);
+                Ok(None) => {
+                    logging::log(
+                        "KEYWORD",
+                        "Accessibility permissions not granted - text expansion disabled",
+                    );
+                    logging::log(
+                        "KEYWORD",
+                        "Enable in System Preferences > Privacy & Security > Accessibility",
+                    );
                 }
                 Err(e) => {
                     logging::log(
                         "KEYWORD",
-                        &format!("Failed to enable text expansion: {:?}", e),
+                        &format!("Failed to initialize text expansion: {}", e),
                     );
                 }
             }
