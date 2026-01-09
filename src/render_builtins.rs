@@ -2198,44 +2198,9 @@ impl ScriptListApp {
         let is_loading = self.file_search_loading;
 
         // Use uniform_list for virtualized scrolling
-        // Show appropriate state based on loading and results
-        let list_element = if is_loading && filtered_len == 0 {
-            // Loading state - show subtle loading indicator with pulsing dots
-            div()
-                .w_full()
-                .h_full()
-                .flex()
-                .flex_col()
-                .items_center()
-                .justify_center()
-                .gap(px(12.))
-                .child(
-                    // Pulsing dots indicator
-                    div()
-                        .flex()
-                        .flex_row()
-                        .gap(px(6.))
-                        .child(
-                            div()
-                                .size(px(8.))
-                                .rounded_full()
-                                .bg(rgba((text_dimmed << 8) | 0x60)),
-                        )
-                        .child(
-                            div()
-                                .size(px(8.))
-                                .rounded_full()
-                                .bg(rgba((text_dimmed << 8) | 0x40)),
-                        )
-                        .child(
-                            div()
-                                .size(px(8.))
-                                .rounded_full()
-                                .bg(rgba((text_dimmed << 8) | 0x20)),
-                        ),
-                )
-                .into_any_element()
-        } else if filtered_len == 0 {
+        // Note: Loading state with 0 results is handled by the main content section (full-width spinner)
+        // This list_element is only used in the 50/50 split when we have results
+        let list_element = if filtered_len == 0 {
             // No results and not loading
             div()
                 .w_full()
@@ -2507,43 +2472,24 @@ impl ScriptListApp {
                         ),
                     )
                     // Right-side element styled to match main menu's "Ask AI" button height
-                    // Using same py(4px) padding ensures consistent flex row height (28px)
+                    // Using fixed min-width to prevent layout shift when content changes
                     .child(
-                        div().flex().flex_row().items_center().py(px(4.)).child(
-                            div()
-                                .text_sm()
-                                .text_color(rgb(text_dimmed))
-                                .child(if is_loading {
-                                    // Show pulsing dots instead of text when loading
-                                    div()
-                                        .flex()
-                                        .flex_row()
-                                        .gap(px(4.))
-                                        .child(
-                                            div()
-                                                .size(px(6.))
-                                                .rounded_full()
-                                                .bg(rgba((text_dimmed << 8) | 0x80)),
-                                        )
-                                        .child(
-                                            div()
-                                                .size(px(6.))
-                                                .rounded_full()
-                                                .bg(rgba((text_dimmed << 8) | 0x50)),
-                                        )
-                                        .child(
-                                            div()
-                                                .size(px(6.))
-                                                .rounded_full()
-                                                .bg(rgba((text_dimmed << 8) | 0x30)),
-                                        )
-                                        .into_any_element()
-                                } else {
-                                    div()
-                                        .child(format!("{} files", filtered_len))
-                                        .into_any_element()
-                                }),
-                        ),
+                        div()
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .justify_end()
+                            .py(px(4.))
+                            .min_w(px(70.)) // Fixed width prevents layout shift
+                            .child(if is_loading {
+                                Spinner::new().with_size(Size::Small).into_any_element()
+                            } else {
+                                div()
+                                    .text_sm()
+                                    .text_color(rgb(text_dimmed))
+                                    .child(format!("{} files", filtered_len))
+                                    .into_any_element()
+                            }),
                     )
             })
             // Divider
@@ -2553,8 +2499,31 @@ impl ScriptListApp {
                     .h(px(design_visual.border_thin))
                     .bg(rgba((ui_border << 8) | 0x60)),
             )
-            // Main content: centered empty state OR 50/50 split
-            .child(if filtered_len == 0 && !is_loading {
+            // Main content: loading state OR empty state OR 50/50 split
+            .child(if is_loading && filtered_len == 0 {
+                // Loading state: full-width centered spinner (no split)
+                div()
+                    .flex_1()
+                    .w_full()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .min_h(px(0.))
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .items_center()
+                            .gap(px(12.))
+                            .child(Spinner::new().with_size(Size::Large))
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .text_color(rgb(text_dimmed))
+                                    .child("Searching..."),
+                            ),
+                    )
+            } else if filtered_len == 0 {
                 // Empty state: single centered message (no awkward 50/50 split)
                 div()
                     .flex_1()

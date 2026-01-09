@@ -11,6 +11,7 @@ use gpui::{
 // gpui-component Root wrapper for theme and context provision
 use gpui_component::input::{Input, InputEvent, InputState};
 use gpui_component::notification::{Notification, NotificationType};
+use gpui_component::spinner::Spinner;
 use gpui_component::Root;
 use gpui_component::{Sizable, Size};
 use std::sync::atomic::{AtomicBool, Ordering};
