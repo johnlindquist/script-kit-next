@@ -44,6 +44,8 @@ mod hotkeys;
 #[cfg(test)]
 mod keyboard_routing_tests;
 mod list_item;
+#[cfg(test)]
+mod list_state_init_tests;
 mod logging;
 mod login_item;
 mod navigation;

@@ -940,6 +940,15 @@ impl ScriptListApp {
         });
         app.gpui_input_subscriptions.push(actions_interceptor);
 
+        // CRITICAL FIX: Sync list state on initialization
+        // This was removed when state mutations were moved out of render(),
+        // but we still need to sync once during initialization so the list
+        // knows about the scripts that were loaded.
+        // Without this, the first render shows "No scripts or snippets found"
+        // because main_list_state starts with 0 items.
+        app.sync_list_state();
+        app.validate_selection_bounds(cx);
+
         app
     }
 
