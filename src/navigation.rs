@@ -1,4 +1,5 @@
 /// Direction of navigation (up/down arrow keys).
+#[allow(dead_code)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NavDirection {
     Up,
@@ -6,6 +7,7 @@ pub enum NavDirection {
 }
 
 /// Result of recording a navigation event.
+#[allow(dead_code)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NavRecord {
     /// First event - apply immediately (move by 1).
@@ -33,6 +35,7 @@ pub struct NavCoalescer {
     pub(crate) flush_task_running: bool,
 }
 
+#[allow(dead_code)]
 impl NavCoalescer {
     /// Coalescing window: 20ms between events triggers batching.
     pub const WINDOW: std::time::Duration = std::time::Duration::from_millis(20);

@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use tracing::{debug, info, instrument, warn};
 
 /// Maximum number of entries to store in history
-const MAX_ENTRIES: usize = 50;
+const MAX_ENTRIES: usize = 100;
 
 /// Input history with navigation state
 ///
@@ -145,7 +145,7 @@ impl InputHistory {
     ///
     /// - Prepends the entry to the front
     /// - Removes any existing duplicate
-    /// - Caps at MAX_ENTRIES (50)
+    /// - Caps at MAX_ENTRIES (100)
     /// - Resets navigation state
     #[instrument(name = "input_history_add", skip(self))]
     pub fn add_entry(&mut self, text: &str) {
@@ -352,12 +352,13 @@ mod tests {
     fn test_add_entry_caps_at_max() {
         let (mut history, path) = create_test_history();
 
-        for i in 0..60 {
+        // Add more than MAX_ENTRIES to verify truncation
+        for i in 0..120 {
             history.add_entry(&format!("entry{}", i));
         }
 
         assert_eq!(history.len(), MAX_ENTRIES);
-        assert_eq!(history.entries()[0], "entry59"); // Most recent
+        assert_eq!(history.entries()[0], "entry119"); // Most recent
 
         cleanup_temp_file(&path);
     }
@@ -560,6 +561,7 @@ mod tests {
 
     #[test]
     fn test_max_entries_constant() {
-        assert_eq!(MAX_ENTRIES, 50);
+        // User requirement: store at least 100 recent entries
+        assert_eq!(MAX_ENTRIES, 100);
     }
 }

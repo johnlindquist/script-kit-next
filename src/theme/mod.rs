@@ -31,6 +31,9 @@ mod validation_tests;
 // Re-export types used externally
 pub use types::{ColorScheme, Theme};
 
+// Re-export helper types for lightweight color extraction
+pub use helpers::{InputFieldColors, ListItemColors, PromptColors};
+
 // Re-export semantic types (allow unused - designed for incremental adoption)
 #[allow(unused_imports)]
 pub use semantic::{FocusAware, SemanticColors, Surface, SurfaceStyle};
@@ -57,8 +60,9 @@ pub use types::{
 };
 
 #[cfg(test)]
-pub use helpers::{InputFieldColors, ListItemColors};
-
-#[cfg(test)]
 #[path = "theme_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "lightweight_colors_test.rs"]
+mod lightweight_colors_test;

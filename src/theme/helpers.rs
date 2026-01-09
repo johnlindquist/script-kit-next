@@ -148,4 +148,53 @@ impl ColorScheme {
     pub fn input_field_colors(&self) -> InputFieldColors {
         InputFieldColors::from_color_scheme(self)
     }
+
+    /// Extract colors for prompt rendering (DivPrompt, etc.)
+    pub fn prompt_colors(&self) -> PromptColors {
+        PromptColors::from_color_scheme(self)
+    }
+}
+
+/// Lightweight struct for prompt rendering (DivPrompt HTML content)
+///
+/// Pre-computes colors needed for rendering HTML elements in prompts.
+/// Implements Copy to avoid heap allocations when captured by closures.
+#[allow(dead_code)]
+#[derive(Copy, Clone, Debug)]
+pub struct PromptColors {
+    /// Primary text color (for headings, strong text)
+    pub text_primary: u32,
+    /// Secondary text color (default paragraph text)
+    pub text_secondary: u32,
+    /// Tertiary text color (italic text, list bullets)
+    pub text_tertiary: u32,
+    /// Accent color (links, inline code text)
+    pub accent_color: u32,
+    /// Code background color (code blocks, inline code)
+    pub code_bg: u32,
+    /// Quote border color (blockquote left border)
+    pub quote_border: u32,
+    /// Horizontal rule color
+    pub hr_color: u32,
+}
+
+#[allow(dead_code)]
+impl PromptColors {
+    /// Create PromptColors from a ColorScheme
+    ///
+    /// This extracts only the colors needed for rendering HTML prompts.
+    pub fn from_color_scheme(colors: &ColorScheme) -> Self {
+        #[cfg(debug_assertions)]
+        debug!("Extracting prompt colors");
+
+        PromptColors {
+            text_primary: colors.text.primary,
+            text_secondary: colors.text.secondary,
+            text_tertiary: colors.text.tertiary,
+            accent_color: colors.accent.selected,
+            code_bg: colors.background.search_box,
+            quote_border: colors.ui.border,
+            hr_color: colors.ui.border,
+        }
+    }
 }

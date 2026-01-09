@@ -978,7 +978,294 @@ Run with: `cargo test --features system-tests`
 
 ---
 
-## 29. References
+## 29. GPUI Anti-Patterns (preloaded skill)
+
+Common mistakes that cause bugs. Check this list when debugging.
+
+### Forgetting `cx.notify()`
+```rust
+// WRONG - UI won't update
+fn increment(&mut self) {
+    self.count += 1;
+}
+
+// CORRECT
+fn increment(&mut self, cx: &mut Context<Self>) {
+    self.count += 1;
+    cx.notify();  // Required for re-render
+}
+```
+
+### Skipping Root wrapper
+```rust
+// WRONG - theming breaks
+cx.open_window(opts, |_window, cx| {
+    cx.new(|cx| MyView::new())
+})
+
+// CORRECT
+cx.open_window(opts, |window, cx| {
+    let view = cx.new(|cx| MyView::new(window, cx));
+    cx.new(|cx| Root::new(view, window, cx))  // Required
+})
+```
+
+### Missing `gpui_component::init()`
+```rust
+Application::new().run(|cx: &mut App| {
+    gpui_component::init(cx);  // MUST call before opening windows
+    cx.open_window(...);
+});
+```
+
+### Creating entities in render()
+```rust
+// WRONG - creates new entity every frame, loses state
+impl Render for MyView {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let input = cx.new(|cx| TextInput::new(window, cx));  // BAD
+        div().child(input)
+    }
+}
+
+// CORRECT - create once in new(), store in struct
+struct MyView { input: Entity<TextInput> }
+
+impl MyView {
+    fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+        Self { input: cx.new(|cx| TextInput::new(window, cx)) }
+    }
+}
+```
+
+### Blocking the main thread
+```rust
+// WRONG - freezes UI
+let data = reqwest::blocking::get(url).unwrap();
+
+// CORRECT - use async
+cx.spawn(|this, mut cx| async move {
+    let data = reqwest::get(url).await.unwrap();
+    this.update(&mut cx, |this, cx| {
+        this.data = data;
+        cx.notify();
+    }).ok();
+}).detach();
+```
+
+### Not detaching spawned tasks
+```rust
+// WRONG - task may never run (dropped immediately)
+cx.spawn(|this, mut cx| async move { ... });
+
+// CORRECT
+cx.spawn(|this, mut cx| async move { ... }).detach();
+```
+
+**Debugging checklist:**
+1. UI not updating? → Missing `cx.notify()`
+2. Theming broken? → Missing `init()` or `Root`
+3. State resetting? → Creating entities in `render()`
+4. App freezing? → Blocking calls on main thread
+5. Async not completing? → Task not detached
+
+---
+
+## 30. Rust Smart Pointers (preloaded skill)
+
+Essential patterns for GPUI apps. Most bugs come from misusing these.
+
+### Quick Decision Tree
+```
+Need multiple owners?
+  NO  → Use regular ownership/references
+  YES → Will it cross threads?
+          NO  → Rc<T>
+          YES → Arc<T>
+
+Need interior mutability?
+  Single-threaded → RefCell<T> (panics if misused!)
+  Multi-threaded  → Mutex<T> or RwLock<T>
+
+Need lazy initialization?
+  → OnceLock<T> or LazyLock<T>
+```
+
+### Arc<Mutex<T>> - Shared mutable state across threads
+```rust
+// The standard pattern for thread-safe shared state
+let state = Arc::new(Mutex::new(AppState::new()));
+let state_clone = Arc::clone(&state);
+thread::spawn(move || {
+    let mut guard = state_clone.lock().unwrap();
+    guard.update();
+});
+```
+
+### OnceLock<Mutex<T>> - Global singletons
+```rust
+// The canonical pattern for global mutable singletons
+static WINDOW_MANAGER: OnceLock<Mutex<WindowManager>> = OnceLock::new();
+
+fn get_manager() -> &'static Mutex<WindowManager> {
+    WINDOW_MANAGER.get_or_init(|| Mutex::new(WindowManager::new()))
+}
+```
+
+### Arc vs Rc
+- `Rc<T>` - Single-threaded only (UI callbacks that never leave main thread)
+- `Arc<T>` - Thread-safe (callbacks that might cross async/thread boundaries)
+
+```rust
+// UI callbacks (single-threaded) - Rc is fine
+on_click: Option<Rc<OnClickCallback>>,
+
+// Hotkey handlers (cross threads) - must use Arc
+pub type HotkeyHandler = Arc<dyn Fn() + Send + Sync>;
+```
+
+### Common Anti-Patterns
+
+**Deadlock from nested locks:**
+```rust
+// DEADLOCK - locking same mutex twice
+let guard1 = data.lock().unwrap();
+let guard2 = data.lock().unwrap();  // Blocks forever!
+
+// FIX - drop first guard
+{ let guard = data.lock().unwrap(); /* use */ }
+{ let guard = data.lock().unwrap(); /* OK */ }
+```
+
+**RefCell borrow panics:**
+```rust
+// PANIC - overlapping borrows
+let r = data.borrow();
+data.borrow_mut().push(4);  // PANIC!
+
+// FIX - use try_borrow_mut or ensure no overlap
+if let Ok(mut r) = data.try_borrow_mut() { r.push(4); }
+```
+
+**Holding locks across await:**
+```rust
+// BAD - lock held during await
+let mut guard = data.lock().unwrap();
+do_async_work().await;  // Lock held!
+
+// GOOD - copy, unlock, await
+let value = { data.lock().unwrap().clone() };
+do_async_work().await;
+```
+
+### Quick Reference Table
+
+| Type | Thread-safe | Multiple owners | Mutable | Use case |
+|------|-------------|-----------------|---------|----------|
+| `Box<T>` | Yes* | No | Yes | Heap allocation, trait objects |
+| `Rc<T>` | No | Yes | No | Single-threaded sharing |
+| `Arc<T>` | Yes | Yes | No | Multi-threaded sharing |
+| `RefCell<T>` | No | N/A | Yes | Interior mut (runtime check) |
+| `Mutex<T>` | Yes | N/A | Yes | Thread-safe interior mut |
+| `OnceLock<T>` | Yes | N/A | No | One-time initialization |
+
+---
+
+## 31. GPUI Testing Patterns (preloaded skill)
+
+### Test File Organization
+```
+src/
+  theme/
+    mod.rs           # Implementation
+    theme_tests.rs   # Tests (separate file)
+```
+
+Import in mod.rs:
+```rust
+#[cfg(test)]
+mod theme_tests;
+```
+
+### Test Helpers (reduce boilerplate)
+```rust
+fn test_scriptlet(name: &str, tool: &str, code: &str) -> Scriptlet {
+    Scriptlet { name: name.to_string(), tool: tool.to_string(), code: code.to_string(), ..Default::default() }
+}
+
+fn wrap_scripts(scripts: Vec<Script>) -> Vec<Arc<Script>> {
+    scripts.into_iter().map(Arc::new).collect()
+}
+```
+
+### System Tests (feature-gated)
+Tests that need OS permissions (clipboard, accessibility, hotkeys):
+```rust
+#[cfg(feature = "system-tests")]
+#[test]
+fn test_clipboard_integration() { ... }
+```
+Run with: `cargo test --features system-tests`
+
+### Platform-Specific Tests
+```rust
+#[cfg(target_os = "macos")]
+#[test]
+fn test_macos_specific() { ... }
+
+#[cfg(unix)]
+#[test]
+fn test_unix_signals() { ... }
+```
+
+### Environment Variable Tests
+```rust
+#[test]
+fn test_env_var() {
+    // Save original
+    let original = std::env::var("MY_VAR").ok();
+    
+    // Test
+    std::env::set_var("MY_VAR", "value");
+    assert!(check_var());
+    
+    // Restore (always!)
+    match original {
+        Some(v) => std::env::set_var("MY_VAR", v),
+        None => std::env::remove_var("MY_VAR"),
+    }
+}
+```
+
+### Code Audit Tests
+Enforce invariants about the codebase:
+```rust
+#[test]
+fn test_no_direct_cx_hide() {
+    let content = fs::read_to_string("src/app_execute.rs").unwrap_or_default();
+    assert!(!content.contains("cx.hide()"), "Use close_and_reset_window() instead");
+}
+```
+
+### Anti-Patterns
+- **DON'T** use `cx.run()` in unit tests (needs running app)
+- **DON'T** rely on global state between tests
+- **DON'T** hardcode paths (`/Users/john/...`) - use temp dirs
+- **DON'T** forget platform guards for OS-specific tests
+- **DON'T** skip cleanup (env vars, temp files)
+
+### Running Tests
+```bash
+cargo test                           # All tests
+cargo test theme_tests               # Specific module
+cargo test --features system-tests   # System tests
+cargo test -- --nocapture            # Show output
+cargo test test_default_config       # Single test
+```
+
+---
+
+## 32. References
 - GPUI docs: https://docs.rs/gpui/latest/gpui/
 - Zed source (GPUI): https://github.com/zed-industries/zed/tree/main/crates/gpui
 - Project research: `GPUI_RESEARCH.md`, `GPUI_IMPROVEMENTS_REPORT.md`
@@ -988,7 +1275,7 @@ Run with: `cargo test --features system-tests`
 
 ---
 
-## 30. Landing the plane (session completion)
+## 33. Landing the plane (session completion)
 
 Work is not done until `git push` succeeds.
 
