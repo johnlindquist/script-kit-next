@@ -14,7 +14,7 @@ impl ScriptListApp {
         let scriptlets = scripts::read_scriptlets();
         let scriptlets_elapsed = scriptlets_start.elapsed();
 
-        let theme = theme::load_theme();
+        let theme = std::sync::Arc::new(theme::load_theme());
         // Config is now passed in from main() to avoid duplicate load (~100-300ms savings)
 
         // Load frecency data for suggested section tracking
@@ -998,12 +998,12 @@ impl ScriptListApp {
     }
 
     fn update_theme(&mut self, cx: &mut Context<Self>) {
-        self.theme = theme::load_theme();
+        self.theme = std::sync::Arc::new(theme::load_theme());
         logging::log("APP", "Theme reloaded based on system appearance");
 
         // Propagate theme to open ActionsDialog (if any) for hot-reload support
         if let Some(ref dialog) = self.actions_dialog {
-            let theme_arc = std::sync::Arc::new(self.theme.clone());
+            let theme_arc = std::sync::Arc::clone(&self.theme);
             dialog.update(cx, |d, _| {
                 d.update_theme(theme_arc);
             });
@@ -2663,7 +2663,7 @@ impl ScriptListApp {
             let script_info = self.get_focused_script_info();
 
             // Create the dialog entity HERE in main app (for keyboard routing)
-            let theme_arc = std::sync::Arc::new(self.theme.clone());
+            let theme_arc = std::sync::Arc::clone(&self.theme);
             // Create the dialog entity (search input shown at bottom, Raycast-style)
             let dialog = cx.new(|cx| {
                 let focus_handle = cx.focus_handle();
@@ -2751,7 +2751,7 @@ impl ScriptListApp {
                     self.show_actions_popup = true;
                     self.focused_input = FocusedInput::ActionsSearch;
 
-                    let theme_arc = std::sync::Arc::new(self.theme.clone());
+                    let theme_arc = std::sync::Arc::clone(&self.theme);
                     let sdk_actions_clone = sdk_actions.clone();
                     let dialog = cx.new(|cx| {
                         let focus_handle = cx.focus_handle();
@@ -3179,7 +3179,7 @@ export default {
         if self.shortcut_recorder_entity.is_none() {
             let command_id = state.command_id.clone();
             let command_name = state.command_name.clone();
-            let theme = std::sync::Arc::new(self.theme.clone());
+            let theme = std::sync::Arc::clone(&self.theme);
 
             // Get a weak reference to the app for callbacks
             let app_entity = cx.entity().downgrade();

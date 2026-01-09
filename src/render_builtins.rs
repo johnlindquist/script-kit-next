@@ -56,7 +56,7 @@ impl ScriptListApp {
             let file_info = file_search::FileInfo::from_result(file);
 
             // Create the dialog entity
-            let theme_arc = std::sync::Arc::new(self.theme.clone());
+            let theme_arc = std::sync::Arc::clone(&self.theme);
             let dialog = cx.new(|cx| {
                 let focus_handle = cx.focus_handle();
                 ActionsDialog::with_file(

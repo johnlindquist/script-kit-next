@@ -1028,7 +1028,8 @@ struct ScriptListApp {
     last_output: Option<SharedString>,
     focus_handle: FocusHandle,
     show_logs: bool,
-    theme: theme::Theme,
+    /// Theme wrapped in Arc for cheap cloning when passing to prompts/dialogs
+    theme: std::sync::Arc<theme::Theme>,
     #[allow(dead_code)]
     config: config::Config,
     // Scroll activity tracking for scrollbar fade

@@ -880,7 +880,7 @@ impl ScriptListApp {
             "markdown".to_string(), // Use markdown for nice highlighting
             editor_focus_handle.clone(),
             submit_callback,
-            std::sync::Arc::new(self.theme.clone()),
+            std::sync::Arc::clone(&self.theme),
             std::sync::Arc::new(self.config.clone()),
             Some(editor_height),
         );
@@ -958,7 +958,7 @@ impl ScriptListApp {
             Some(command), // Run the specified command
             self.focus_handle.clone(),
             submit_callback,
-            std::sync::Arc::new(self.theme.clone()),
+            std::sync::Arc::clone(&self.theme),
             std::sync::Arc::new(self.config.clone()),
             Some(term_height),
         ) {
@@ -1135,7 +1135,7 @@ impl ScriptListApp {
             None, // No command - opens default shell
             self.focus_handle.clone(),
             submit_callback,
-            std::sync::Arc::new(self.theme.clone()),
+            std::sync::Arc::clone(&self.theme),
             std::sync::Arc::new(self.config.clone()),
             Some(term_height),
         ) {

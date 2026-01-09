@@ -14,7 +14,7 @@ impl ScriptListApp {
         );
 
         // Create ActionsDialog for this path
-        let theme_arc = std::sync::Arc::new(self.theme.clone());
+        let theme_arc = std::sync::Arc::clone(&self.theme);
         let dialog = cx.new(|cx| {
             // Use a no-op callback - action execution is handled directly in key handler
             let noop_callback: std::sync::Arc<dyn Fn(String) + Send + Sync> =

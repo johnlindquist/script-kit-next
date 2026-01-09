@@ -131,7 +131,7 @@ impl ScriptListApp {
                     None, // tailwind param deprecated - use container_classes in options
                     div_focus_handle,
                     submit_callback,
-                    std::sync::Arc::new(self.theme.clone()),
+                    std::sync::Arc::clone(&self.theme),
                     crate::designs::DesignVariant::Default,
                     container_options,
                 );
@@ -218,7 +218,7 @@ impl ScriptListApp {
                     command,
                     self.focus_handle.clone(),
                     submit_callback,
-                    std::sync::Arc::new(self.theme.clone()),
+                    std::sync::Arc::clone(&self.theme),
                     std::sync::Arc::new(self.config.clone()),
                     Some(term_height),
                 ) {
@@ -315,7 +315,7 @@ impl ScriptListApp {
                         resolved_language.clone(),
                         editor_focus_handle.clone(),
                         submit_callback,
-                        std::sync::Arc::new(self.theme.clone()),
+                        std::sync::Arc::clone(&self.theme),
                         std::sync::Arc::new(self.config.clone()),
                         Some(editor_height),
                     )
@@ -331,7 +331,7 @@ impl ScriptListApp {
                         resolved_language.clone(),
                         editor_focus_handle.clone(),
                         submit_callback,
-                        std::sync::Arc::new(self.theme.clone()),
+                        std::sync::Arc::clone(&self.theme),
                         std::sync::Arc::new(self.config.clone()),
                         Some(editor_height),
                     )
@@ -342,7 +342,7 @@ impl ScriptListApp {
                         resolved_language.clone(),
                         editor_focus_handle.clone(),
                         submit_callback,
-                        std::sync::Arc::new(self.theme.clone()),
+                        std::sync::Arc::clone(&self.theme),
                         std::sync::Arc::new(self.config.clone()),
                         Some(editor_height),
                     )
@@ -1076,7 +1076,7 @@ impl ScriptListApp {
                     hint,
                     focus_handle.clone(),
                     submit_callback,
-                    std::sync::Arc::new(self.theme.clone()),
+                    std::sync::Arc::clone(&self.theme),
                 )
                 // Note: Legacy callbacks are no longer needed - we use events now
                 // But we still pass the shared state for header display
@@ -1173,7 +1173,7 @@ impl ScriptListApp {
                     secret,
                     focus_handle,
                     submit_callback,
-                    std::sync::Arc::new(self.theme.clone()),
+                    std::sync::Arc::clone(&self.theme),
                 );
 
                 // Check keyring first - if value exists, auto-submit without showing UI
@@ -1239,7 +1239,7 @@ impl ScriptListApp {
                     hint,
                     focus_handle,
                     submit_callback,
-                    std::sync::Arc::new(self.theme.clone()),
+                    std::sync::Arc::clone(&self.theme),
                 );
 
                 let entity = cx.new(|_| drop_prompt);
@@ -1292,7 +1292,7 @@ impl ScriptListApp {
                     template,
                     focus_handle,
                     submit_callback,
-                    std::sync::Arc::new(self.theme.clone()),
+                    std::sync::Arc::clone(&self.theme),
                 );
 
                 let entity = cx.new(|_| template_prompt);
@@ -1360,7 +1360,7 @@ impl ScriptListApp {
                     multiple,
                     self.focus_handle.clone(),
                     submit_callback,
-                    std::sync::Arc::new(self.theme.clone()),
+                    std::sync::Arc::clone(&self.theme),
                 );
                 let entity = cx.new(|_| select_prompt);
                 self.current_view = AppView::SelectPrompt { id, entity };
