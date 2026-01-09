@@ -57,8 +57,8 @@ impl ListItemColors {
 
         ListItemColors {
             background: rgba(TRANSPARENT), // Fully transparent
-            background_hover: rgba((selected_subtle << 8) | 0x1a), // ~10% opacity - subtle hover
-            background_selected: rgba((selected_subtle << 8) | 0x26), // ~15% opacity - subtle selection like Raycast
+            background_hover: rgba((selected_subtle << 8) | 0x12), // ~7% opacity - very subtle hover
+            background_selected: rgba((selected_subtle << 8) | 0x1f), // ~12% opacity - subtle selection like Raycast
             text: rgb(colors.text.primary),
             text_secondary: rgb(colors.text.secondary),
             text_dimmed: rgb(colors.text.dimmed),

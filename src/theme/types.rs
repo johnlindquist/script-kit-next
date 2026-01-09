@@ -59,11 +59,11 @@ pub struct BackgroundOpacity {
 }
 
 fn default_selected_opacity() -> f32 {
-    0.15 // Subtle selection with vibrancy support - near-invisible like Raycast (see VIBRANCY.md)
+    0.12 // Subtle selection with vibrancy support - near-invisible like Raycast (see VIBRANCY.md)
 }
 
 fn default_hover_opacity() -> f32 {
-    0.15 // Subtle hover with vibrancy support
+    0.07 // Very subtle hover with vibrancy support
 }
 
 fn default_preview_opacity() -> f32 {
@@ -128,8 +128,8 @@ impl Default for BackgroundOpacity {
             title_bar: 0.30,        // Title bar areas
             search_box: 0.40,       // Search input backgrounds
             log_panel: 0.40,        // Log/terminal panels
-            selected: 0.15,         // Selected list item highlight - subtle with vibrancy
-            hover: 0.15,            // Hovered list item highlight - subtle
+            selected: 0.12,         // Selected list item highlight - subtle with vibrancy
+            hover: 0.07,            // Hovered list item highlight - very subtle
             preview: 0.0,           // Preview panel (0 = fully transparent)
             dialog: 0.15, // Dialogs/popups - very low opacity, let vibrancy blur show through
             input: 0.30,  // Input fields

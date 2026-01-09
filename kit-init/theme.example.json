@@ -15,7 +15,7 @@
     },
     "accent": {
       "selected": "#FBBF24",
-      "selected_subtle": "#2A2A2A"
+      "selected_subtle": "#FFFFFF"
     },
     "ui": {
       "border": "#464647",
@@ -29,7 +29,9 @@
     "main": 0.3,
     "title_bar": 0.65,
     "search_box": 0.7,
-    "log_panel": 0.55
+    "log_panel": 0.55,
+    "selected": 0.12,
+    "hover": 0.07
   },
   "drop_shadow": {
     "enabled": true,

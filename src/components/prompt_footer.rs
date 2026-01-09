@@ -340,7 +340,7 @@ impl RenderOnce for PromptFooter {
             .justify_between()
             .border_t_1()
             .border_color(colors.border.rgba8(0x30)) // Top border with 19% opacity
-            .bg(colors.background.rgba8(0x26)); // ~15% opacity - subtle like Raycast selection
+            .bg(colors.background.rgba8(0x1f)); // ~12% opacity - subtle like Raycast selection
 
         // Left side: Logo + helper text
         let mut left_side = hstack().gap(px(8.)).items_center();
