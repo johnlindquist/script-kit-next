@@ -20,7 +20,7 @@ fn test_scriptlet(name: &str, tool: &str, code: &str) -> Scriptlet {
         code: code.to_string(),
         tool: tool.to_string(),
         shortcut: None,
-        expand: None,
+        keyword: None,
         group: None,
         file_path: None,
         command: None,
@@ -36,7 +36,7 @@ fn test_scriptlet_with_desc(name: &str, tool: &str, code: &str, desc: &str) -> S
         code: code.to_string(),
         tool: tool.to_string(),
         shortcut: None,
-        expand: None,
+        keyword: None,
         group: None,
         file_path: None,
         command: None,
@@ -118,7 +118,7 @@ fn test_scriptlet_new_fields() {
         code: "code".to_string(),
         tool: "ts".to_string(),
         shortcut: None,
-        expand: None,
+        keyword: None,
         group: Some("My Group".to_string()),
         file_path: Some("/path/to/file.md#test".to_string()),
         command: Some("test".to_string()),
@@ -170,12 +170,12 @@ fn test_parse_scriptlet_with_description() {
 }
 
 #[test]
-fn test_parse_scriptlet_with_expand() {
-    let section = "## Execute Plan\n\n<!-- \nexpand: plan,,\n-->\n\n```paste\nPlease execute\n```";
+fn test_parse_scriptlet_with_keyword() {
+    let section = "## Execute Plan\n\n<!-- \nkeyword: plan,,\n-->\n\n```paste\nPlease execute\n```";
     let scriptlet = parse_scriptlet_section(section, None);
     assert!(scriptlet.is_some());
     let s = scriptlet.unwrap();
-    assert_eq!(s.expand, Some("plan,,".to_string()));
+    assert_eq!(s.keyword, Some("plan,,".to_string()));
     assert_eq!(s.tool, "paste");
 }
 
@@ -208,10 +208,10 @@ fn test_extract_html_metadata_shortcut() {
 
 #[test]
 fn test_extract_html_metadata_multiple() {
-    let text = "<!-- \nshortcut: cmd k\nexpand: foo,,\ndescription: Test\n-->";
+    let text = "<!-- \nshortcut: cmd k\nkeyword: foo,,\ndescription: Test\n-->";
     let metadata = extract_html_comment_metadata(text);
     assert_eq!(metadata.get("shortcut"), Some(&"cmd k".to_string()));
-    assert_eq!(metadata.get("expand"), Some(&"foo,,".to_string()));
+    assert_eq!(metadata.get("keyword"), Some(&"foo,,".to_string()));
     assert_eq!(metadata.get("description"), Some(&"Test".to_string()));
 }
 
@@ -816,7 +816,7 @@ fn test_scriptlet_with_all_metadata() {
         code: "code here".to_string(),
         tool: "bash".to_string(),
         shortcut: Some("cmd k".to_string()),
-        expand: Some("prompt,,".to_string()),
+        keyword: Some("prompt,,".to_string()),
         group: None,
         file_path: None,
         command: None,
@@ -826,7 +826,7 @@ fn test_scriptlet_with_all_metadata() {
     assert_eq!(scriptlet.name, "Full Scriptlet");
     assert_eq!(scriptlet.description, Some("Complete metadata".to_string()));
     assert_eq!(scriptlet.shortcut, Some("cmd k".to_string()));
-    assert_eq!(scriptlet.expand, Some("prompt,,".to_string()));
+    assert_eq!(scriptlet.keyword, Some("prompt,,".to_string()));
 }
 
 #[test]
@@ -1687,7 +1687,7 @@ echo "second"
 ## Script Three
 <!-- 
 description: Has URL: https://example.com
-expand: type,,
+keyword: type,,
 -->
 ```ts
 open("https://example.com");
@@ -1846,7 +1846,7 @@ fn test_parse_scriptlet_section_all_metadata_fields() {
 <!-- 
 description: Full description here
 shortcut: ctrl shift k
-expand: choices,,
+keyword: choices,,
 custom: value
 -->
 ```ts
@@ -1861,7 +1861,7 @@ code here
         Some("Full description here".to_string())
     );
     assert_eq!(scriptlet.shortcut, Some("ctrl shift k".to_string()));
-    assert_eq!(scriptlet.expand, Some("choices,,".to_string()));
+    assert_eq!(scriptlet.keyword, Some("choices,,".to_string()));
     // "custom" field won't be extracted as it's not a known field
 }
 
@@ -3622,7 +3622,7 @@ fn test_fuzzy_search_scriptlets_by_file_path() {
             code: "open('https://github.com')".to_string(),
             tool: "ts".to_string(),
             shortcut: None,
-            expand: None,
+            keyword: None,
             group: Some("URLs".to_string()),
             file_path: Some("/path/to/urls.md#open-github".to_string()),
             command: Some("open-github".to_string()),
@@ -3634,7 +3634,7 @@ fn test_fuzzy_search_scriptlets_by_file_path() {
             code: "copy()".to_string(),
             tool: "ts".to_string(),
             shortcut: None,
-            expand: None,
+            keyword: None,
             group: None,
             file_path: Some("/path/to/clipboard.md#copy-text".to_string()),
             command: Some("copy-text".to_string()),
@@ -3656,7 +3656,7 @@ fn test_fuzzy_search_scriptlets_by_anchor() {
             code: "code".to_string(),
             tool: "ts".to_string(),
             shortcut: None,
-            expand: None,
+            keyword: None,
             group: None,
             file_path: Some("/path/to/file.md#open-github".to_string()),
             command: Some("open-github".to_string()),
@@ -3668,7 +3668,7 @@ fn test_fuzzy_search_scriptlets_by_anchor() {
             code: "code".to_string(),
             tool: "ts".to_string(),
             shortcut: None,
-            expand: None,
+            keyword: None,
             group: None,
             file_path: Some("/path/to/file.md#close-tab".to_string()),
             command: Some("close-tab".to_string()),
@@ -3690,7 +3690,7 @@ fn test_fuzzy_search_scriptlets_display_file_path() {
         code: "code".to_string(),
         tool: "ts".to_string(),
         shortcut: None,
-        expand: None,
+        keyword: None,
         group: None,
         file_path: Some("/home/user/.scriptkit/scriptlets/urls.md#test-slug".to_string()),
         command: Some("test-slug".to_string()),
@@ -3714,7 +3714,7 @@ fn test_fuzzy_search_scriptlets_match_indices() {
         code: "code".to_string(),
         tool: "ts".to_string(),
         shortcut: None,
-        expand: None,
+        keyword: None,
         group: None,
         file_path: Some("/path/urls.md#test".to_string()),
         command: None,
@@ -4107,7 +4107,7 @@ fn bench_get_grouped_results_repeated_calls() {
                 code: format!("console.log('snippet {}')", i),
                 description: Some(format!("Snippet {} description", i)),
                 shortcut: None,
-                expand: None,
+                keyword: None,
                 group: None,
                 command: None,
                 alias: None,

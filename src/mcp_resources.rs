@@ -103,7 +103,7 @@ pub struct ScriptletResourceEntry {
     pub group: Option<String>,
     /// Expand trigger (if available)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub expand: Option<String>,
+    pub keyword: Option<String>,
     /// Keyboard shortcut (if available)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub shortcut: Option<String>,
@@ -116,7 +116,7 @@ impl From<&Scriptlet> for ScriptletResourceEntry {
             tool: scriptlet.tool.clone(),
             description: scriptlet.description.clone(),
             group: scriptlet.group.clone(),
-            expand: scriptlet.expand.clone(),
+            keyword: scriptlet.keyword.clone(),
             shortcut: scriptlet.shortcut.clone(),
         }
     }
@@ -284,7 +284,7 @@ mod tests {
             code: "echo test".to_string(),
             tool: tool.to_string(),
             shortcut: None,
-            expand: None,
+            keyword: None,
             group: None,
             file_path: None,
             command: None,
@@ -538,7 +538,7 @@ mod tests {
             code: "echo test".to_string(),
             tool: "bash".to_string(),
             shortcut: Some("cmd k".to_string()),
-            expand: Some(":test".to_string()),
+            keyword: Some(":test".to_string()),
             group: Some("My Group".to_string()),
             file_path: None,
             command: None,
@@ -551,7 +551,7 @@ mod tests {
         assert_eq!(entry.description, Some("Test description".to_string()));
         assert_eq!(entry.tool, "bash");
         assert_eq!(entry.shortcut, Some("cmd k".to_string()));
-        assert_eq!(entry.expand, Some(":test".to_string()));
+        assert_eq!(entry.keyword, Some(":test".to_string()));
         assert_eq!(entry.group, Some("My Group".to_string()));
     }
 

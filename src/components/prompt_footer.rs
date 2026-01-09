@@ -78,7 +78,7 @@ impl Default for PromptFooterColors {
             accent: 0xfbbf24, // Script Kit yellow/gold
             text_muted: 0x808080,
             border: 0x464647,
-            background: 0x2a2a2a, // Match default selected_subtle
+            background: 0xffffff, // White - subtle brightening like Raycast
         }
     }
 }
@@ -340,7 +340,7 @@ impl RenderOnce for PromptFooter {
             .justify_between()
             .border_t_1()
             .border_color(colors.border.rgba8(0x30)) // Top border with 19% opacity
-            .bg(rgb(colors.background)); // 100% opacity - matches selected item background color
+            .bg(colors.background.rgba8(0x0f)); // ~6% opacity - subtle brightening matching selection
 
         // Left side: Logo + helper text
         let mut left_side = hstack().gap(px(8.)).items_center();

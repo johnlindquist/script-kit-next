@@ -1,7 +1,7 @@
-//! Expand trigger matching module
+//! Keyword trigger matching module
 //!
 //! This module provides a trigger detection system that buffers typed characters
-//! and matches against registered expand triggers. When a trigger keyword is
+//! and matches against registered keyword triggers. When a trigger keyword is
 //! fully typed, a match is returned with information needed to perform the
 //! text expansion.
 //!
@@ -38,7 +38,7 @@ pub struct MatchResult {
 /// against registered triggers. Uses immediate matching - the trigger fires
 /// as soon as the keyword is fully typed.
 #[derive(Debug)]
-pub struct ExpandMatcher {
+pub struct KeywordMatcher {
     /// Map of trigger keywords to their scriptlet paths
     triggers: HashMap<String, PathBuf>,
     /// Rolling buffer of recent keystrokes
@@ -47,14 +47,14 @@ pub struct ExpandMatcher {
     max_buffer_size: usize,
 }
 
-impl Default for ExpandMatcher {
+impl Default for KeywordMatcher {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl ExpandMatcher {
-    /// Create a new ExpandMatcher with default settings
+impl KeywordMatcher {
+    /// Create a new KeywordMatcher with default settings
     pub fn new() -> Self {
         Self {
             triggers: HashMap::new(),
@@ -63,7 +63,7 @@ impl ExpandMatcher {
         }
     }
 
-    /// Create a new ExpandMatcher with a custom buffer size
+    /// Create a new KeywordMatcher with a custom buffer size
     #[allow(dead_code)]
     pub fn with_buffer_size(max_size: usize) -> Self {
         Self {
@@ -89,7 +89,7 @@ impl ExpandMatcher {
         debug!(
             trigger = %keyword,
             path = %scriptlet_path.display(),
-            "Registering expand trigger"
+            "Registering keyword trigger"
         );
 
         self.triggers.insert(keyword.to_string(), scriptlet_path);
@@ -107,7 +107,7 @@ impl ExpandMatcher {
         let removed = self.triggers.remove(keyword).is_some();
 
         if removed {
-            debug!(trigger = %keyword, "Unregistered expand trigger");
+            debug!(trigger = %keyword, "Unregistered keyword trigger");
         }
 
         removed
@@ -224,21 +224,21 @@ mod tests {
 
     #[test]
     fn test_new_creates_empty_matcher() {
-        let matcher = ExpandMatcher::new();
+        let matcher = KeywordMatcher::new();
         assert_eq!(matcher.trigger_count(), 0);
         assert!(matcher.buffer().is_empty());
     }
 
     #[test]
     fn test_default_creates_empty_matcher() {
-        let matcher = ExpandMatcher::default();
+        let matcher = KeywordMatcher::default();
         assert_eq!(matcher.trigger_count(), 0);
         assert!(matcher.buffer().is_empty());
     }
 
     #[test]
     fn test_with_buffer_size_sets_custom_size() {
-        let matcher = ExpandMatcher::with_buffer_size(100);
+        let matcher = KeywordMatcher::with_buffer_size(100);
         assert_eq!(matcher.max_buffer_size, 100);
     }
 
@@ -248,7 +248,7 @@ mod tests {
 
     #[test]
     fn test_register_trigger_adds_trigger() {
-        let mut matcher = ExpandMatcher::new();
+        let mut matcher = KeywordMatcher::new();
         matcher.register_trigger(":sig", PathBuf::from("/test/sig.md"));
 
         assert_eq!(matcher.trigger_count(), 1);
@@ -257,7 +257,7 @@ mod tests {
 
     #[test]
     fn test_register_multiple_triggers() {
-        let mut matcher = ExpandMatcher::new();
+        let mut matcher = KeywordMatcher::new();
         matcher.register_trigger(":sig", PathBuf::from("/test/sig.md"));
         matcher.register_trigger("!today", PathBuf::from("/test/today.md"));
         matcher.register_trigger("/date", PathBuf::from("/test/date.md"));
@@ -270,7 +270,7 @@ mod tests {
 
     #[test]
     fn test_register_empty_trigger_ignored() {
-        let mut matcher = ExpandMatcher::new();
+        let mut matcher = KeywordMatcher::new();
         matcher.register_trigger("", PathBuf::from("/test/empty.md"));
 
         assert_eq!(matcher.trigger_count(), 0);
@@ -278,7 +278,7 @@ mod tests {
 
     #[test]
     fn test_register_trigger_replaces_existing() {
-        let mut matcher = ExpandMatcher::new();
+        let mut matcher = KeywordMatcher::new();
         matcher.register_trigger(":sig", PathBuf::from("/test/sig1.md"));
         matcher.register_trigger(":sig", PathBuf::from("/test/sig2.md"));
 
@@ -293,7 +293,7 @@ mod tests {
 
     #[test]
     fn test_unregister_trigger_removes_trigger() {
-        let mut matcher = ExpandMatcher::new();
+        let mut matcher = KeywordMatcher::new();
         matcher.register_trigger(":sig", PathBuf::from("/test/sig.md"));
 
         assert!(matcher.unregister_trigger(":sig"));
@@ -303,14 +303,14 @@ mod tests {
 
     #[test]
     fn test_unregister_nonexistent_returns_false() {
-        let mut matcher = ExpandMatcher::new();
+        let mut matcher = KeywordMatcher::new();
 
         assert!(!matcher.unregister_trigger(":nonexistent"));
     }
 
     #[test]
     fn test_clear_triggers_removes_all() {
-        let mut matcher = ExpandMatcher::new();
+        let mut matcher = KeywordMatcher::new();
         matcher.register_trigger(":sig", PathBuf::from("/test/sig.md"));
         matcher.register_trigger("!today", PathBuf::from("/test/today.md"));
 
@@ -321,7 +321,7 @@ mod tests {
 
     #[test]
     fn test_bulk_register_triggers() {
-        let mut matcher = ExpandMatcher::new();
+        let mut matcher = KeywordMatcher::new();
         let triggers = vec![
             (":sig".to_string(), PathBuf::from("/test/sig.md")),
             ("!today".to_string(), PathBuf::from("/test/today.md")),
@@ -340,7 +340,7 @@ mod tests {
 
     #[test]
     fn test_process_keystroke_no_match_without_triggers() {
-        let mut matcher = ExpandMatcher::new();
+        let mut matcher = KeywordMatcher::new();
 
         for c in "hello".chars() {
             assert!(matcher.process_keystroke(c).is_none());
@@ -349,7 +349,7 @@ mod tests {
 
     #[test]
     fn test_process_keystroke_matches_simple_trigger() {
-        let mut matcher = ExpandMatcher::new();
+        let mut matcher = KeywordMatcher::new();
         matcher.register_trigger(":sig", PathBuf::from("/test/sig.md"));
 
         // Type ":sig"
@@ -368,7 +368,7 @@ mod tests {
 
     #[test]
     fn test_match_result_chars_to_delete_counts_chars_not_bytes() {
-        let mut matcher = ExpandMatcher::new();
+        let mut matcher = KeywordMatcher::new();
         // Unicode trigger
         matcher.register_trigger("✓ok", PathBuf::from("/test/ok.md"));
 
@@ -393,7 +393,7 @@ mod tests {
 
     #[test]
     fn test_match_fires_immediately_when_complete() {
-        let mut matcher = ExpandMatcher::new();
+        let mut matcher = KeywordMatcher::new();
         matcher.register_trigger(":sig", PathBuf::from("/test/sig.md"));
 
         // Type "Hello :sig" - match should fire right after 'g'
@@ -411,7 +411,7 @@ mod tests {
 
     #[test]
     fn test_buffer_stores_keystrokes() {
-        let mut matcher = ExpandMatcher::new();
+        let mut matcher = KeywordMatcher::new();
 
         for c in "hello".chars() {
             matcher.process_keystroke(c);
@@ -422,7 +422,7 @@ mod tests {
 
     #[test]
     fn test_buffer_clears_on_enter() {
-        let mut matcher = ExpandMatcher::new();
+        let mut matcher = KeywordMatcher::new();
 
         for c in "hello".chars() {
             matcher.process_keystroke(c);
@@ -435,7 +435,7 @@ mod tests {
 
     #[test]
     fn test_buffer_clears_on_carriage_return() {
-        let mut matcher = ExpandMatcher::new();
+        let mut matcher = KeywordMatcher::new();
 
         for c in "hello".chars() {
             matcher.process_keystroke(c);
@@ -448,7 +448,7 @@ mod tests {
 
     #[test]
     fn test_buffer_clears_on_escape() {
-        let mut matcher = ExpandMatcher::new();
+        let mut matcher = KeywordMatcher::new();
 
         for c in "hello".chars() {
             matcher.process_keystroke(c);
@@ -461,7 +461,7 @@ mod tests {
 
     #[test]
     fn test_buffer_clears_on_tab() {
-        let mut matcher = ExpandMatcher::new();
+        let mut matcher = KeywordMatcher::new();
 
         for c in "hello".chars() {
             matcher.process_keystroke(c);
@@ -474,7 +474,7 @@ mod tests {
 
     #[test]
     fn test_buffer_does_not_clear_on_space() {
-        let mut matcher = ExpandMatcher::new();
+        let mut matcher = KeywordMatcher::new();
 
         for c in "hello world".chars() {
             matcher.process_keystroke(c);
@@ -485,7 +485,7 @@ mod tests {
 
     #[test]
     fn test_buffer_trims_when_exceeds_max_size() {
-        let mut matcher = ExpandMatcher::with_buffer_size(10);
+        let mut matcher = KeywordMatcher::with_buffer_size(10);
 
         for c in "12345678901234567890".chars() {
             matcher.process_keystroke(c);
@@ -498,7 +498,7 @@ mod tests {
 
     #[test]
     fn test_clear_buffer_empties_buffer() {
-        let mut matcher = ExpandMatcher::new();
+        let mut matcher = KeywordMatcher::new();
 
         for c in "hello".chars() {
             matcher.process_keystroke(c);
@@ -515,7 +515,7 @@ mod tests {
 
     #[test]
     fn test_colon_prefix_trigger() {
-        let mut matcher = ExpandMatcher::new();
+        let mut matcher = KeywordMatcher::new();
         matcher.register_trigger(":sig", PathBuf::from("/test/sig.md"));
 
         for c in "hello :sig".chars() {
@@ -529,7 +529,7 @@ mod tests {
 
     #[test]
     fn test_exclamation_prefix_trigger() {
-        let mut matcher = ExpandMatcher::new();
+        let mut matcher = KeywordMatcher::new();
         matcher.register_trigger("!today", PathBuf::from("/test/today.md"));
 
         for c in "hello !today".chars() {
@@ -543,7 +543,7 @@ mod tests {
 
     #[test]
     fn test_slash_prefix_trigger() {
-        let mut matcher = ExpandMatcher::new();
+        let mut matcher = KeywordMatcher::new();
         matcher.register_trigger("/date", PathBuf::from("/test/date.md"));
 
         for c in "hello /date".chars() {
@@ -557,7 +557,7 @@ mod tests {
 
     #[test]
     fn test_double_comma_suffix_trigger() {
-        let mut matcher = ExpandMatcher::new();
+        let mut matcher = KeywordMatcher::new();
         matcher.register_trigger("sig,,", PathBuf::from("/test/sig.md"));
 
         for c in "hello sig,,".chars() {
@@ -572,7 +572,7 @@ mod tests {
 
     #[test]
     fn test_semicolon_suffix_trigger() {
-        let mut matcher = ExpandMatcher::new();
+        let mut matcher = KeywordMatcher::new();
         matcher.register_trigger("email;", PathBuf::from("/test/email.md"));
 
         for c in "email;".chars() {
@@ -586,7 +586,7 @@ mod tests {
 
     #[test]
     fn test_no_prefix_trigger() {
-        let mut matcher = ExpandMatcher::new();
+        let mut matcher = KeywordMatcher::new();
         matcher.register_trigger("btw", PathBuf::from("/test/btw.md"));
 
         // Should match "btw" even without prefix
@@ -605,7 +605,7 @@ mod tests {
 
     #[test]
     fn test_partial_match_then_complete_different_trigger() {
-        let mut matcher = ExpandMatcher::new();
+        let mut matcher = KeywordMatcher::new();
         matcher.register_trigger(":sig", PathBuf::from("/test/sig.md"));
         matcher.register_trigger(":sign", PathBuf::from("/test/sign.md"));
 
@@ -623,7 +623,7 @@ mod tests {
     fn test_longer_trigger_preferred_when_both_match() {
         // Note: This test documents current behavior - first match wins
         // If we want longest match, implementation would need to change
-        let mut matcher = ExpandMatcher::new();
+        let mut matcher = KeywordMatcher::new();
         matcher.register_trigger(":sig", PathBuf::from("/test/sig.md"));
         matcher.register_trigger(":signature", PathBuf::from("/test/signature.md"));
 
@@ -639,7 +639,7 @@ mod tests {
 
     #[test]
     fn test_match_after_buffer_clear() {
-        let mut matcher = ExpandMatcher::new();
+        let mut matcher = KeywordMatcher::new();
         matcher.register_trigger(":sig", PathBuf::from("/test/sig.md"));
 
         // Type some text, then Enter (clears buffer), then trigger
@@ -654,7 +654,7 @@ mod tests {
 
     #[test]
     fn test_no_match_when_trigger_split_by_clear() {
-        let mut matcher = ExpandMatcher::new();
+        let mut matcher = KeywordMatcher::new();
         matcher.register_trigger(":sig", PathBuf::from("/test/sig.md"));
 
         // Type ":si", then Enter (clears buffer), then "g"
@@ -670,7 +670,7 @@ mod tests {
 
     #[test]
     fn test_trigger_in_middle_of_sentence() {
-        let mut matcher = ExpandMatcher::new();
+        let mut matcher = KeywordMatcher::new();
         matcher.register_trigger(":sig", PathBuf::from("/test/sig.md"));
 
         // Type "Please sign here :sig thanks"
@@ -685,7 +685,7 @@ mod tests {
 
     #[test]
     fn test_multiple_triggers_same_text() {
-        let mut matcher = ExpandMatcher::new();
+        let mut matcher = KeywordMatcher::new();
         matcher.register_trigger(":sig", PathBuf::from("/test/sig.md"));
 
         // Type ":sig" twice - should match twice
@@ -702,7 +702,7 @@ mod tests {
 
     #[test]
     fn test_trigger_with_numbers() {
-        let mut matcher = ExpandMatcher::new();
+        let mut matcher = KeywordMatcher::new();
         matcher.register_trigger(":addr1", PathBuf::from("/test/addr1.md"));
 
         for c in ":addr1".chars() {
@@ -716,7 +716,7 @@ mod tests {
 
     #[test]
     fn test_case_sensitive_triggers() {
-        let mut matcher = ExpandMatcher::new();
+        let mut matcher = KeywordMatcher::new();
         matcher.register_trigger(":Sig", PathBuf::from("/test/sig.md"));
 
         // Lowercase should NOT match
@@ -742,7 +742,7 @@ mod tests {
 
     #[test]
     fn test_triggers_iterator() {
-        let mut matcher = ExpandMatcher::new();
+        let mut matcher = KeywordMatcher::new();
         matcher.register_trigger(":sig", PathBuf::from("/test/sig.md"));
         matcher.register_trigger("!today", PathBuf::from("/test/today.md"));
 
@@ -753,7 +753,7 @@ mod tests {
 
     #[test]
     fn test_has_trigger_returns_true_for_registered() {
-        let mut matcher = ExpandMatcher::new();
+        let mut matcher = KeywordMatcher::new();
         matcher.register_trigger(":sig", PathBuf::from("/test/sig.md"));
 
         assert!(matcher.has_trigger(":sig"));
@@ -766,7 +766,7 @@ mod tests {
 
     #[test]
     fn test_realistic_usage_scenario() {
-        let mut matcher = ExpandMatcher::new();
+        let mut matcher = KeywordMatcher::new();
 
         // Register common text expansion triggers
         matcher.register_trigger(":sig", PathBuf::from("/scriptlets/signature.md"));
@@ -794,7 +794,7 @@ mod tests {
 
     #[test]
     fn test_buffer_wrapping_preserves_recent_context() {
-        let mut matcher = ExpandMatcher::with_buffer_size(20);
+        let mut matcher = KeywordMatcher::with_buffer_size(20);
         matcher.register_trigger(":sig", PathBuf::from("/test/sig.md"));
 
         // Type a lot of text to cause buffer trimming

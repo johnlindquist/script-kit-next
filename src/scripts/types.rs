@@ -40,7 +40,7 @@ pub struct Scriptlet {
     pub code: String,
     pub tool: String, // "ts", "bash", "paste", etc.
     pub shortcut: Option<String>,
-    pub expand: Option<String>,
+    pub keyword: Option<String>,
     /// Group name from H1 header (e.g., "Productivity", "Development")
     pub group: Option<String>,
     /// Source file path with anchor for execution (e.g., "/path/to/file.md#slug")

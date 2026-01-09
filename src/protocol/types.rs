@@ -721,7 +721,7 @@ pub struct ScriptletMetadataData {
     pub description: Option<String>,
     /// Text expansion trigger (e.g., "type,,")
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub expand: Option<String>,
+    pub keyword: Option<String>,
 }
 
 /// Scriptlet data for protocol transmission

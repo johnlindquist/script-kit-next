@@ -41,7 +41,7 @@ fn make_scriptlet_match() -> ScriptletMatch {
             code: "console.log('test')".to_string(),
             tool: "ts".to_string(),
             shortcut: None,
-            expand: None,
+            keyword: None,
             group: None,
             file_path: None,
             command: None,

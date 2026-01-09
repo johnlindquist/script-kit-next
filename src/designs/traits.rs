@@ -86,8 +86,8 @@ impl Default for DesignColors {
             background: 0x1e1e1e,
             background_secondary: 0x2d2d30,
             background_tertiary: 0x3c3c3c,
-            background_selected: 0x2a2a2a,
-            background_hover: 0x323232,
+            background_selected: 0xffffff, // White - subtle brightening like Raycast
+            background_hover: 0xffffff,    // White - barely visible hover
 
             text_primary: 0xffffff,
             text_secondary: 0xcccccc,

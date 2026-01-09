@@ -139,18 +139,18 @@ pub mod template_variables;
 // Text injection for text expansion/snippet systems
 pub mod text_injector;
 
-// Expand trigger matching for text expansion
-pub mod expand_matcher;
+// Keyword trigger matching for text expansion
+pub mod keyword_matcher;
 
 // Global keyboard monitoring for system-wide keystroke capture
 // Required for text expansion triggers typed in any application
 #[cfg(target_os = "macos")]
 pub mod keyboard_monitor;
 
-// Expand manager - ties together keyboard monitoring, trigger matching,
+// Keyword manager - ties together keyboard monitoring, trigger matching,
 // and text injection for the complete text expansion system
 #[cfg(target_os = "macos")]
-pub mod expand_manager;
+pub mod keyword_manager;
 
 // OCR module - macOS Vision framework integration
 #[cfg(feature = "ocr")]

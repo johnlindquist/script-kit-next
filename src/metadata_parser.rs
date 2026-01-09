@@ -34,6 +34,9 @@ pub struct TypedMetadata {
     pub enter: Option<String>,
     /// Short alias for quick triggering (e.g., "gc" for "git-commit")
     pub alias: Option<String>,
+    /// Text expansion keyword trigger (e.g., "!testing", ":sig", "addr,,")
+    #[serde(alias = "expand", alias = "snippet")]
+    pub keyword: Option<String>,
     /// Icon name (e.g., "File", "Terminal", "Star")
     pub icon: Option<String>,
     /// Keyboard shortcut (e.g., "opt i", "cmd shift k")

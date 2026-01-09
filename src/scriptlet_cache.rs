@@ -79,7 +79,7 @@ pub struct CachedScriptlet {
     /// Keyboard shortcut (e.g., "cmd shift k")
     pub shortcut: Option<String>,
     /// Text expansion trigger (e.g., "type,,")
-    pub expand: Option<String>,
+    pub keyword: Option<String>,
     /// Alias trigger (e.g., "gpt")
     pub alias: Option<String>,
     /// Source file path with anchor (e.g., "/path/to/file.md#my-snippet")
@@ -91,14 +91,14 @@ impl CachedScriptlet {
     pub fn new(
         name: impl Into<String>,
         shortcut: Option<String>,
-        expand: Option<String>,
+        keyword: Option<String>,
         alias: Option<String>,
         file_path: impl Into<String>,
     ) -> Self {
         Self {
             name: name.into(),
             shortcut,
-            expand,
+            keyword,
             alias,
             file_path: file_path.into(),
         }
@@ -352,7 +352,7 @@ pub struct ShortcutChange {
 
 /// Represents a change to a scriptlet's expand trigger
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ExpandChange {
+pub struct KeywordChange {
     pub name: String,
     pub file_path: String,
     pub old: Option<String>,
@@ -390,7 +390,7 @@ pub struct ScriptletDiff {
     /// Scriptlets whose shortcut changed
     pub shortcut_changes: Vec<ShortcutChange>,
     /// Scriptlets whose expand trigger changed
-    pub expand_changes: Vec<ExpandChange>,
+    pub keyword_changes: Vec<KeywordChange>,
     /// Scriptlets whose alias changed
     pub alias_changes: Vec<AliasChange>,
     /// Scriptlets whose file_path/anchor changed (critical for re-registration)
@@ -403,7 +403,7 @@ impl ScriptletDiff {
         self.added.is_empty()
             && self.removed.is_empty()
             && self.shortcut_changes.is_empty()
-            && self.expand_changes.is_empty()
+            && self.keyword_changes.is_empty()
             && self.alias_changes.is_empty()
             && self.file_path_changes.is_empty()
     }
@@ -413,7 +413,7 @@ impl ScriptletDiff {
         self.added.len()
             + self.removed.len()
             + self.shortcut_changes.len()
-            + self.expand_changes.len()
+            + self.keyword_changes.len()
             + self.alias_changes.len()
             + self.file_path_changes.len()
     }
@@ -452,12 +452,12 @@ pub fn diff_scriptlets(old: &[CachedScriptlet], new: &[CachedScriptlet]) -> Scri
                     });
                 }
                 // Check for expand changes
-                if old_scriptlet.expand != new_scriptlet.expand {
-                    diff.expand_changes.push(ExpandChange {
+                if old_scriptlet.keyword != new_scriptlet.keyword {
+                    diff.keyword_changes.push(KeywordChange {
                         name: new_scriptlet.name.clone(),
                         file_path: new_scriptlet.file_path.clone(),
-                        old: old_scriptlet.expand.clone(),
-                        new: new_scriptlet.expand.clone(),
+                        old: old_scriptlet.keyword.clone(),
+                        new: new_scriptlet.keyword.clone(),
                     });
                 }
                 // Check for alias changes
@@ -619,7 +619,11 @@ pub fn scriptlet_to_cached(
     CachedScriptlet::new(
         &scriptlet.name,
         scriptlet.metadata.shortcut.clone(),
-        scriptlet.metadata.expand.clone(),
+        scriptlet
+            .typed_metadata
+            .as_ref()
+            .and_then(|t| t.keyword.clone())
+            .or(scriptlet.metadata.keyword.clone()),
         scriptlet.metadata.alias.clone(),
         full_path,
     )
@@ -745,7 +749,7 @@ mod tests {
         assert_eq!(retrieved[0].name, "Snippet One");
         assert_eq!(retrieved[0].shortcut, Some("cmd+shift+1".to_string()));
         assert_eq!(retrieved[1].name, "Snippet Two");
-        assert_eq!(retrieved[1].expand, Some("snip,,".to_string()));
+        assert_eq!(retrieved[1].keyword, Some("snip,,".to_string()));
 
         // Verify get_file
         let file = cache.get_file(&path).unwrap();
@@ -937,10 +941,10 @@ mod tests {
         assert_eq!(diff.added.len(), 1);
         assert_eq!(diff.added[0].name, "New Snippet");
         assert_eq!(diff.added[0].shortcut, Some("cmd+2".to_string()));
-        assert_eq!(diff.added[0].expand, Some("new,,".to_string()));
+        assert_eq!(diff.added[0].keyword, Some("new,,".to_string()));
         assert!(diff.removed.is_empty());
         assert!(diff.shortcut_changes.is_empty());
-        assert!(diff.expand_changes.is_empty());
+        assert!(diff.keyword_changes.is_empty());
         assert!(diff.alias_changes.is_empty());
     }
 
@@ -977,7 +981,7 @@ mod tests {
         assert_eq!(diff.removed.len(), 1);
         assert_eq!(diff.removed[0].name, "Will Be Removed");
         assert!(diff.shortcut_changes.is_empty());
-        assert!(diff.expand_changes.is_empty());
+        assert!(diff.keyword_changes.is_empty());
         assert!(diff.alias_changes.is_empty());
     }
 
@@ -1007,7 +1011,7 @@ mod tests {
         assert_eq!(diff.shortcut_changes[0].name, "Snippet");
         assert_eq!(diff.shortcut_changes[0].old, Some("cmd+1".to_string()));
         assert_eq!(diff.shortcut_changes[0].new, Some("cmd+2".to_string()));
-        assert!(diff.expand_changes.is_empty());
+        assert!(diff.keyword_changes.is_empty());
         assert!(diff.alias_changes.is_empty());
     }
 
@@ -1062,7 +1066,7 @@ mod tests {
     }
 
     #[test]
-    fn test_diff_expand_changed() {
+    fn test_diff_keyword_changed() {
         let old = vec![CachedScriptlet::new(
             "Snippet",
             None,
@@ -1084,10 +1088,10 @@ mod tests {
         assert!(diff.added.is_empty());
         assert!(diff.removed.is_empty());
         assert!(diff.shortcut_changes.is_empty());
-        assert_eq!(diff.expand_changes.len(), 1);
-        assert_eq!(diff.expand_changes[0].name, "Snippet");
-        assert_eq!(diff.expand_changes[0].old, Some("old,,".to_string()));
-        assert_eq!(diff.expand_changes[0].new, Some("new,,".to_string()));
+        assert_eq!(diff.keyword_changes.len(), 1);
+        assert_eq!(diff.keyword_changes[0].name, "Snippet");
+        assert_eq!(diff.keyword_changes[0].old, Some("old,,".to_string()));
+        assert_eq!(diff.keyword_changes[0].new, Some("new,,".to_string()));
         assert!(diff.alias_changes.is_empty());
     }
 
@@ -1114,7 +1118,7 @@ mod tests {
         assert!(diff.added.is_empty());
         assert!(diff.removed.is_empty());
         assert!(diff.shortcut_changes.is_empty());
-        assert!(diff.expand_changes.is_empty());
+        assert!(diff.keyword_changes.is_empty());
         assert_eq!(diff.alias_changes.len(), 1);
         assert_eq!(diff.alias_changes[0].name, "Snippet");
         assert_eq!(diff.alias_changes[0].old, Some("old".to_string()));
@@ -1146,11 +1150,11 @@ mod tests {
                 "/path/to/file.md#shortcut-changed",
             ),
             CachedScriptlet::new(
-                "Expand Changed",
+                "Keyword Changed",
                 None,
                 Some("old,,".to_string()),
                 None,
-                "/path/to/file.md#expand-changed",
+                "/path/to/file.md#keyword-changed",
             ),
             CachedScriptlet::new(
                 "Alias Changed",
@@ -1177,11 +1181,11 @@ mod tests {
                 "/path/to/file.md#shortcut-changed",
             ),
             CachedScriptlet::new(
-                "Expand Changed",
+                "Keyword Changed",
                 None,
                 Some("new,,".to_string()), // Changed
                 None,
-                "/path/to/file.md#expand-changed",
+                "/path/to/file.md#keyword-changed",
             ),
             CachedScriptlet::new(
                 "Alias Changed",
@@ -1216,10 +1220,10 @@ mod tests {
         assert_eq!(diff.shortcut_changes[0].new, Some("cmd+9".to_string()));
 
         // Verify expand change
-        assert_eq!(diff.expand_changes.len(), 1);
-        assert_eq!(diff.expand_changes[0].name, "Expand Changed");
-        assert_eq!(diff.expand_changes[0].old, Some("old,,".to_string()));
-        assert_eq!(diff.expand_changes[0].new, Some("new,,".to_string()));
+        assert_eq!(diff.keyword_changes.len(), 1);
+        assert_eq!(diff.keyword_changes[0].name, "Keyword Changed");
+        assert_eq!(diff.keyword_changes[0].old, Some("old,,".to_string()));
+        assert_eq!(diff.keyword_changes[0].new, Some("new,,".to_string()));
 
         // Verify alias change
         assert_eq!(diff.alias_changes.len(), 1);

@@ -244,7 +244,7 @@ pub struct ScriptletMetadata {
     /// Description of the scriptlet
     pub description: Option<String>,
     /// Text expansion trigger (e.g., "type,,")
-    pub expand: Option<String>,
+    pub keyword: Option<String>,
     /// Alias trigger - when user types alias + space, immediately run script
     pub alias: Option<String>,
     /// Any additional metadata key-value pairs
@@ -414,7 +414,7 @@ pub fn parse_html_comment_metadata(text: &str) -> ScriptletMetadata {
                         "watch" => metadata.watch = Some(value),
                         "system" => metadata.system = Some(value),
                         "description" => metadata.description = Some(value),
-                        "expand" => metadata.expand = Some(value),
+                        "keyword" | "expand" => metadata.keyword = Some(value),
                         "alias" => metadata.alias = Some(value),
                         _ => {
                             metadata.extra.insert(key, value);

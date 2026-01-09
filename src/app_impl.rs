@@ -1230,7 +1230,7 @@ impl ScriptListApp {
     /// Instead of reloading all scriptlets, this method:
     /// 1. Parses only the changed file
     /// 2. Diffs against cached state to find what changed
-    /// 3. Updates hotkeys/expand triggers incrementally
+    /// 3. Updates hotkeys/keyword triggers incrementally
     /// 4. Updates the scriptlets list
     ///
     /// # Arguments
@@ -1269,7 +1269,7 @@ impl ScriptListApp {
                 CachedScriptlet::new(
                     s.name.clone(),
                     s.shortcut.clone(),
-                    s.expand.clone(),
+                    s.keyword.clone(),
                     s.alias.clone(),
                     s.file_path.clone().unwrap_or_default(),
                 )
@@ -1289,7 +1289,7 @@ impl ScriptListApp {
                 CachedScriptlet::new(
                     s.name.clone(),
                     s.shortcut.clone(),
-                    s.expand.clone(),
+                    s.keyword.clone(),
                     s.alias.clone(),
                     s.file_path.clone().unwrap_or_default(),
                 )
@@ -1307,11 +1307,11 @@ impl ScriptListApp {
         logging::log(
             "APP",
             &format!(
-                "Scriptlet diff: {} added, {} removed, {} shortcut changes, {} expand changes, {} alias changes",
+                "Scriptlet diff: {} added, {} removed, {} shortcut changes, {} keyword changes, {} alias changes",
                 diff.added.len(),
                 diff.removed.len(),
                 diff.shortcut_changes.len(),
-                diff.expand_changes.len(),
+                diff.keyword_changes.len(),
                 diff.alias_changes.len()
             ),
         );
@@ -1357,32 +1357,32 @@ impl ScriptListApp {
         {
             // For removed scriptlets, clear their triggers
             for removed in &diff.removed {
-                if removed.expand.is_some() {
+                if removed.keyword.is_some() {
                     // We'd need access to the expand manager here
                     // For now, log that we would clear triggers
                     logging::log(
                         "EXPAND",
-                        &format!("Would clear expand trigger for removed: {}", removed.name),
+                        &format!("Would clear keyword trigger for removed: {}", removed.name),
                     );
                 }
             }
 
             // For added scriptlets with expand, register them
             for added in &diff.added {
-                if added.expand.is_some() {
+                if added.keyword.is_some() {
                     logging::log(
                         "EXPAND",
-                        &format!("Would register expand trigger for added: {}", added.name),
+                        &format!("Would register keyword trigger for added: {}", added.name),
                     );
                 }
             }
 
-            // For changed expand triggers, update them
-            for change in &diff.expand_changes {
+            // For changed keyword triggers, update them
+            for change in &diff.keyword_changes {
                 logging::log(
                     "EXPAND",
                     &format!(
-                        "Would update expand trigger for {}: {:?} -> {:?}",
+                        "Would update keyword trigger for {}: {:?} -> {:?}",
                         change.name, change.old, change.new
                     ),
                 );
@@ -3797,7 +3797,7 @@ export default {
             preview: None,
             metadata: scriptlets::ScriptletMetadata {
                 shortcut: scriptlet.shortcut.clone(),
-                expand: scriptlet.expand.clone(),
+                keyword: scriptlet.keyword.clone(),
                 description: scriptlet.description.clone(),
                 ..Default::default()
             },

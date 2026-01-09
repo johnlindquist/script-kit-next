@@ -126,7 +126,7 @@ pub(crate) fn parse_scriptlet_section(
         code,
         tool,
         shortcut: metadata.get("shortcut").cloned(),
-        expand: metadata.get("expand").cloned(),
+        keyword: metadata.get("keyword").cloned(),
         group: None,
         file_path,
         command: Some(command),
@@ -283,7 +283,11 @@ pub fn load_scriptlets() -> Vec<Arc<Scriptlet>> {
                                             code: parsed_scriptlet.scriptlet_content,
                                             tool: parsed_scriptlet.tool,
                                             shortcut: parsed_scriptlet.metadata.shortcut,
-                                            expand: parsed_scriptlet.metadata.expand,
+                                            keyword: parsed_scriptlet
+                                                .typed_metadata
+                                                .as_ref()
+                                                .and_then(|t| t.keyword.clone())
+                                                .or(parsed_scriptlet.metadata.keyword.clone()),
                                             group: if parsed_scriptlet.group.is_empty() {
                                                 kit.clone()
                                             } else {
@@ -418,7 +422,11 @@ pub fn read_scriptlets_from_file(path: &Path) -> Vec<Arc<Scriptlet>> {
                 code: parsed_scriptlet.scriptlet_content,
                 tool: parsed_scriptlet.tool,
                 shortcut: parsed_scriptlet.metadata.shortcut,
-                expand: parsed_scriptlet.metadata.expand,
+                keyword: parsed_scriptlet
+                    .typed_metadata
+                    .as_ref()
+                    .and_then(|t| t.keyword.clone())
+                    .or(parsed_scriptlet.metadata.keyword.clone()),
                 group: if parsed_scriptlet.group.is_empty() {
                     kit.clone()
                 } else {

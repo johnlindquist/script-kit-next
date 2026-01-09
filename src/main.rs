@@ -132,14 +132,14 @@ mod form_parser;
 mod template_variables;
 
 // Text expansion system components (macOS only)
-mod expand_matcher;
 #[cfg(target_os = "macos")]
 mod keyboard_monitor;
+mod keyword_matcher;
 mod text_injector;
 
-// Expand manager - text expansion system integration
+// Keyword manager - text expansion system integration
 #[cfg(target_os = "macos")]
-mod expand_manager;
+mod keyword_manager;
 
 // Script scheduling with cron expressions and natural language
 mod scheduler;
@@ -1564,38 +1564,38 @@ fn main() {
     // This must be done early, before the GPUI run loop starts
     #[cfg(target_os = "macos")]
     {
-        use expand_manager::ExpandManager;
+        use keyword_manager::KeywordManager;
 
         // Spawn initialization in a thread to not block startup
         std::thread::spawn(move || {
-            logging::log("EXPAND", "Initializing text expansion system");
+            logging::log("KEYWORD", "Initializing text expansion system");
 
             // Check accessibility permissions first
-            if !ExpandManager::has_accessibility_permission() {
+            if !KeywordManager::has_accessibility_permission() {
                 logging::log(
-                    "EXPAND",
+                    "KEYWORD",
                     "Accessibility permissions not granted - text expansion disabled",
                 );
                 logging::log(
-                    "EXPAND",
+                    "KEYWORD",
                     "Enable in System Preferences > Privacy & Security > Accessibility",
                 );
                 return;
             }
 
-            let mut manager = ExpandManager::new();
+            let mut manager = KeywordManager::new();
 
-            // Load scriptlets with expand triggers
+            // Load scriptlets with keyword triggers
             match manager.load_scriptlets() {
                 Ok(count) => {
                     if count == 0 {
-                        logging::log("EXPAND", "No expand triggers found in scriptlets");
+                        logging::log("KEYWORD", "No keyword triggers found in scriptlets");
                         return;
                     }
-                    logging::log("EXPAND", &format!("Loaded {} expand triggers", count));
+                    logging::log("KEYWORD", &format!("Loaded {} keyword triggers", count));
                 }
                 Err(e) => {
-                    logging::log("EXPAND", &format!("Failed to load scriptlets: {}", e));
+                    logging::log("KEYWORD", &format!("Failed to load scriptlets: {}", e));
                     return;
                 }
             }
@@ -1603,11 +1603,11 @@ fn main() {
             // Enable keyboard monitoring
             match manager.enable() {
                 Ok(()) => {
-                    logging::log("EXPAND", "Text expansion system enabled");
+                    logging::log("KEYWORD", "Text expansion system enabled");
 
                     // List registered triggers
                     for (trigger, name) in manager.list_triggers() {
-                        logging::log("EXPAND", &format!("  Trigger '{}' -> {}", trigger, name));
+                        logging::log("KEYWORD", &format!("  Trigger '{}' -> {}", trigger, name));
                     }
 
                     // Keep the manager alive - it will run until the process exits
@@ -1616,7 +1616,7 @@ fn main() {
                 }
                 Err(e) => {
                     logging::log(
-                        "EXPAND",
+                        "KEYWORD",
                         &format!("Failed to enable text expansion: {:?}", e),
                     );
                 }

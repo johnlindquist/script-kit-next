@@ -300,7 +300,7 @@ pub struct CommandMetadata {
     /// Alias trigger
     pub alias: Option<String>,
     /// Text expansion trigger
-    pub expand: Option<String>,
+    pub keyword: Option<String>,
     /// Whether to hide from main list
     #[serde(default)]
     pub hidden: bool,

@@ -1,16 +1,16 @@
-//! Expand Manager - Text expansion system integration
+//! Keyword Manager - Text expansion system integration
 //!
 //! This module ties together all the components of the text expansion system:
 //! - KeyboardMonitor: Global keystroke capture
-//! - ExpandMatcher: Trigger detection with rolling buffer
+//! - KeywordMatcher: Trigger detection with rolling buffer
 //! - TextInjector: Backspace deletion + clipboard paste
-//! - Scriptlets: Source of expand triggers and replacement text
+//! - Scriptlets: Source of keyword triggers and replacement text
 //!
 //! # Architecture
 //!
-//! The ExpandManager:
-//! 1. Loads scriptlets with `expand` metadata from ~/.scriptkit/scriptlets/
-//! 2. Registers each expand trigger with the ExpandMatcher
+//! The KeywordManager:
+//! 1. Loads scriptlets with `keyword` metadata from ~/.scriptkit/scriptlets/
+//! 2. Registers each keyword trigger with the KeywordMatcher
 //! 3. Starts the KeyboardMonitor with a callback that feeds keystrokes to the matcher
 //! 4. When a match is found, performs the expansion:
 //!    a. Stops keyboard monitor (avoid capturing our own keystrokes)
@@ -29,8 +29,8 @@ use anyhow::Result;
 use tracing::{debug, error, info, instrument, warn};
 
 // Import from crate (these are declared in main.rs)
-use crate::expand_matcher::ExpandMatcher;
 use crate::keyboard_monitor::{KeyEvent, KeyboardMonitor, KeyboardMonitorError};
+use crate::keyword_matcher::KeywordMatcher;
 use crate::scripts::read_scriptlets;
 use crate::template_variables::substitute_variables;
 use crate::text_injector::{TextInjector, TextInjectorConfig};
@@ -41,9 +41,9 @@ const STOP_DELAY_MS: u64 = 50;
 /// Delay after expansion before restarting monitor (ms)
 const RESTART_DELAY_MS: u64 = 100;
 
-/// Configuration for the expand manager
+/// Configuration for the keyword manager
 #[derive(Debug, Clone)]
-pub struct ExpandManagerConfig {
+pub struct KeywordManagerConfig {
     /// Configuration for text injection timing
     pub injector_config: TextInjectorConfig,
     /// Delay after stopping monitor before expansion (ms)
@@ -53,7 +53,7 @@ pub struct ExpandManagerConfig {
     pub restart_delay_ms: u64,
 }
 
-impl Default for ExpandManagerConfig {
+impl Default for KeywordManagerConfig {
     fn default() -> Self {
         Self {
             injector_config: TextInjectorConfig::default(),
@@ -66,7 +66,7 @@ impl Default for ExpandManagerConfig {
 /// Stored scriptlet information for expansion
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
-struct ExpandScriptlet {
+struct KeywordScriptlet {
     /// The trigger keyword (e.g., ":sig")
     trigger: String,
     /// The scriptlet name
@@ -83,13 +83,13 @@ struct ExpandScriptlet {
 ///
 /// Coordinates keyboard monitoring, trigger detection, and text injection
 /// to provide system-wide text expansion functionality.
-pub struct ExpandManager {
+pub struct KeywordManager {
     /// Configuration
-    config: ExpandManagerConfig,
+    config: KeywordManagerConfig,
     /// Registered scriptlets by trigger keyword
-    scriptlets: Arc<Mutex<HashMap<String, ExpandScriptlet>>>,
+    scriptlets: Arc<Mutex<HashMap<String, KeywordScriptlet>>>,
     /// The expand matcher for trigger detection
-    matcher: Arc<Mutex<ExpandMatcher>>,
+    matcher: Arc<Mutex<KeywordMatcher>>,
     /// Reverse lookup: file path -> set of triggers from that file
     /// Used for efficient clearing/updating of triggers when a file changes
     file_triggers: Arc<Mutex<HashMap<PathBuf, HashSet<String>>>>,
@@ -98,24 +98,24 @@ pub struct ExpandManager {
     /// The text injector (reserved for future direct use)
     #[allow(dead_code)]
     injector: TextInjector,
-    /// Whether the expand system is enabled
+    /// Whether the keyword system is enabled
     enabled: bool,
 }
 
-impl ExpandManager {
-    /// Create a new ExpandManager with default configuration
+impl KeywordManager {
+    /// Create a new KeywordManager with default configuration
     pub fn new() -> Self {
-        Self::with_config(ExpandManagerConfig::default())
+        Self::with_config(KeywordManagerConfig::default())
     }
 
-    /// Create a new ExpandManager with custom configuration
-    pub fn with_config(config: ExpandManagerConfig) -> Self {
+    /// Create a new KeywordManager with custom configuration
+    pub fn with_config(config: KeywordManagerConfig) -> Self {
         let injector = TextInjector::with_config(config.injector_config.clone());
 
         Self {
             config,
             scriptlets: Arc::new(Mutex::new(HashMap::new())),
-            matcher: Arc::new(Mutex::new(ExpandMatcher::new())),
+            matcher: Arc::new(Mutex::new(KeywordMatcher::new())),
             file_triggers: Arc::new(Mutex::new(HashMap::new())),
             monitor: None,
             injector,
@@ -123,38 +123,38 @@ impl ExpandManager {
         }
     }
 
-    /// Load scriptlets with expand metadata from ~/.scriptkit/scriptlets/
+    /// Load scriptlets with keyword metadata from ~/.scriptkit/scriptlets/
     ///
     /// This scans all markdown files and registers any scriptlet that has
-    /// an `expand` metadata field as a trigger.
+    /// an `keyword` metadata field as a trigger.
     #[instrument(skip(self))]
     pub fn load_scriptlets(&mut self) -> Result<usize> {
-        info!("Loading scriptlets with expand triggers");
+        info!("Loading scriptlets with keyword triggers");
 
         let scriptlets = read_scriptlets();
         let mut loaded_count = 0;
 
         for scriptlet in scriptlets {
-            // Only process scriptlets with expand metadata
-            if let Some(ref expand_trigger) = scriptlet.expand {
-                if expand_trigger.is_empty() {
+            // Only process scriptlets with keyword metadata
+            if let Some(ref keyword_trigger) = scriptlet.keyword {
+                if keyword_trigger.is_empty() {
                     debug!(
                         name = %scriptlet.name,
-                        "Skipping scriptlet with empty expand trigger"
+                        "Skipping scriptlet with empty keyword trigger"
                     );
                     continue;
                 }
 
                 info!(
-                    trigger = %expand_trigger,
+                    trigger = %keyword_trigger,
                     name = %scriptlet.name,
                     tool = %scriptlet.tool,
-                    "Registering expand trigger"
+                    "Registering keyword trigger"
                 );
 
                 // Store the scriptlet info
-                let expand_scriptlet = ExpandScriptlet {
-                    trigger: expand_trigger.clone(),
+                let keyword_scriptlet = KeywordScriptlet {
+                    trigger: keyword_trigger.clone(),
                     name: scriptlet.name.clone(),
                     content: scriptlet.code.clone(),
                     tool: scriptlet.tool.clone(),
@@ -164,14 +164,14 @@ impl ExpandManager {
                 // Register with matcher and scriptlets store
                 {
                     let mut scriptlets_guard = self.scriptlets.lock().unwrap();
-                    scriptlets_guard.insert(expand_trigger.clone(), expand_scriptlet);
+                    scriptlets_guard.insert(keyword_trigger.clone(), keyword_scriptlet);
                 }
 
                 {
                     let mut matcher_guard = self.matcher.lock().unwrap();
                     // Use a dummy path since we store scriptlet data separately
                     let dummy_path = PathBuf::from(format!("scriptlet:{}", scriptlet.name));
-                    matcher_guard.register_trigger(expand_trigger, dummy_path);
+                    matcher_guard.register_trigger(keyword_trigger, dummy_path);
                 }
 
                 // Track which file this trigger came from for incremental updates
@@ -181,7 +181,7 @@ impl ExpandManager {
                     file_triggers_guard
                         .entry(path)
                         .or_default()
-                        .insert(expand_trigger.clone());
+                        .insert(keyword_trigger.clone());
                 }
 
                 loaded_count += 1;
@@ -190,12 +190,12 @@ impl ExpandManager {
 
         info!(
             count = loaded_count,
-            "Loaded expand triggers from scriptlets"
+            "Loaded keyword triggers from scriptlets"
         );
         Ok(loaded_count)
     }
 
-    /// Register a single expand trigger manually
+    /// Register a single keyword trigger manually
     ///
     /// This is useful for adding triggers that don't come from scriptlets.
     #[allow(dead_code)]
@@ -208,10 +208,10 @@ impl ExpandManager {
         info!(
             trigger = %trigger,
             name = %name,
-            "Manually registering expand trigger"
+            "Manually registering keyword trigger"
         );
 
-        let expand_scriptlet = ExpandScriptlet {
+        let keyword_scriptlet = KeywordScriptlet {
             trigger: trigger.to_string(),
             name: name.to_string(),
             content: content.to_string(),
@@ -221,7 +221,7 @@ impl ExpandManager {
 
         {
             let mut scriptlets_guard = self.scriptlets.lock().unwrap();
-            scriptlets_guard.insert(trigger.to_string(), expand_scriptlet);
+            scriptlets_guard.insert(trigger.to_string(), keyword_scriptlet);
         }
 
         {
@@ -231,7 +231,7 @@ impl ExpandManager {
         }
     }
 
-    /// Enable the expand system (start keyboard monitoring)
+    /// Enable the keyword system (start keyboard monitoring)
     ///
     /// # Errors
     /// - `AccessibilityNotGranted`: Accessibility permissions not enabled
@@ -239,11 +239,11 @@ impl ExpandManager {
     #[instrument(skip(self))]
     pub fn enable(&mut self) -> Result<(), KeyboardMonitorError> {
         if self.enabled {
-            debug!("Expand system already enabled");
+            debug!("Keyword system already enabled");
             return Ok(());
         }
 
-        info!("Enabling expand system");
+        info!("Enabling keyword system");
 
         // Check trigger count
         let trigger_count = {
@@ -252,7 +252,7 @@ impl ExpandManager {
         };
 
         if trigger_count == 0 {
-            warn!("No expand triggers registered, keyboard monitoring will be ineffective");
+            warn!("No keyword triggers registered, keyboard monitoring will be ineffective");
         }
 
         // Clone Arc references for the closure
@@ -326,7 +326,7 @@ impl ExpandManager {
                                         info!(
                                             tool = %tool,
                                             name = %name,
-                                            "Tool type not yet fully supported for expand, using raw content"
+                                            "Tool type not yet fully supported for keyword, using raw content"
                                         );
                                         content.clone()
                                     }
@@ -395,19 +395,19 @@ impl ExpandManager {
         self.monitor = Some(monitor);
         self.enabled = true;
 
-        info!("Expand system enabled, keyboard monitoring active");
+        info!("Keyword system enabled, keyboard monitoring active");
         Ok(())
     }
 
-    /// Disable the expand system (stop keyboard monitoring)
+    /// Disable the keyword system (stop keyboard monitoring)
     #[instrument(skip(self))]
     pub fn disable(&mut self) {
         if !self.enabled {
-            debug!("Expand system already disabled");
+            debug!("Keyword system already disabled");
             return;
         }
 
-        info!("Disabling expand system");
+        info!("Disabling keyword system");
 
         if let Some(ref mut monitor) = self.monitor {
             monitor.stop();
@@ -415,10 +415,10 @@ impl ExpandManager {
         self.monitor = None;
         self.enabled = false;
 
-        info!("Expand system disabled");
+        info!("Keyword system disabled");
     }
 
-    /// Check if the expand system is currently enabled
+    /// Check if the keyword system is currently enabled
     #[allow(dead_code)]
     pub fn is_enabled(&self) -> bool {
         self.enabled
@@ -463,14 +463,14 @@ impl ExpandManager {
             file_triggers_guard.clear();
         }
 
-        debug!("All expand triggers cleared");
+        debug!("All keyword triggers cleared");
     }
 
     /// Reload scriptlets (clear existing and load fresh)
     #[allow(dead_code)]
     #[instrument(skip(self))]
     pub fn reload(&mut self) -> Result<usize> {
-        info!("Reloading expand scriptlets");
+        info!("Reloading keyword scriptlets");
 
         self.clear_triggers();
         self.load_scriptlets()
@@ -517,7 +517,7 @@ impl ExpandManager {
         }
 
         if scriptlet_removed || matcher_removed {
-            debug!(trigger = %trigger, "Unregistered expand trigger");
+            debug!(trigger = %trigger, "Unregistered keyword trigger");
             true
         } else {
             false
@@ -618,10 +618,10 @@ impl ExpandManager {
             trigger = %trigger,
             name = %name,
             source = %source_path.display(),
-            "Registering expand trigger from file"
+            "Registering keyword trigger from file"
         );
 
-        let expand_scriptlet = ExpandScriptlet {
+        let keyword_scriptlet = KeywordScriptlet {
             trigger: trigger.to_string(),
             name: name.to_string(),
             content: content.to_string(),
@@ -631,7 +631,7 @@ impl ExpandManager {
 
         {
             let mut scriptlets_guard = self.scriptlets.lock().unwrap();
-            scriptlets_guard.insert(trigger.to_string(), expand_scriptlet);
+            scriptlets_guard.insert(trigger.to_string(), keyword_scriptlet);
         }
 
         {
@@ -709,7 +709,7 @@ impl ExpandManager {
 
                 if content_changed {
                     // Update the scriptlet
-                    let expand_scriptlet = ExpandScriptlet {
+                    let keyword_scriptlet = KeywordScriptlet {
                         trigger: trigger.clone(),
                         name: name.clone(),
                         content: content.clone(),
@@ -719,7 +719,7 @@ impl ExpandManager {
 
                     {
                         let mut scriptlets_guard = self.scriptlets.lock().unwrap();
-                        scriptlets_guard.insert(trigger.clone(), expand_scriptlet);
+                        scriptlets_guard.insert(trigger.clone(), keyword_scriptlet);
                     }
 
                     debug!(
@@ -747,7 +747,7 @@ impl ExpandManager {
 
         // Add new triggers
         for (trigger, name, content, tool) in &to_add {
-            let expand_scriptlet = ExpandScriptlet {
+            let keyword_scriptlet = KeywordScriptlet {
                 trigger: trigger.clone(),
                 name: name.clone(),
                 content: content.clone(),
@@ -757,7 +757,7 @@ impl ExpandManager {
 
             {
                 let mut scriptlets_guard = self.scriptlets.lock().unwrap();
-                scriptlets_guard.insert(trigger.clone(), expand_scriptlet);
+                scriptlets_guard.insert(trigger.clone(), keyword_scriptlet);
             }
 
             {
@@ -794,13 +794,13 @@ impl ExpandManager {
     }
 }
 
-impl Default for ExpandManager {
+impl Default for KeywordManager {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl Drop for ExpandManager {
+impl Drop for KeywordManager {
     fn drop(&mut self) {
         self.disable();
     }
@@ -816,33 +816,33 @@ mod tests {
 
     #[test]
     fn test_new_creates_disabled_manager() {
-        let manager = ExpandManager::new();
+        let manager = KeywordManager::new();
         assert!(!manager.is_enabled());
         assert_eq!(manager.trigger_count(), 0);
     }
 
     #[test]
     fn test_default_creates_disabled_manager() {
-        let manager = ExpandManager::default();
+        let manager = KeywordManager::default();
         assert!(!manager.is_enabled());
         assert_eq!(manager.trigger_count(), 0);
     }
 
     #[test]
     fn test_custom_config() {
-        let config = ExpandManagerConfig {
+        let config = KeywordManagerConfig {
             stop_delay_ms: 100,
             restart_delay_ms: 200,
             ..Default::default()
         };
-        let manager = ExpandManager::with_config(config.clone());
+        let manager = KeywordManager::with_config(config.clone());
         assert_eq!(manager.config.stop_delay_ms, 100);
         assert_eq!(manager.config.restart_delay_ms, 200);
     }
 
     #[test]
     fn test_register_trigger_manually() {
-        let mut manager = ExpandManager::new();
+        let mut manager = KeywordManager::new();
 
         manager.register_trigger(":test", "Test Snippet", "Hello, World!", "paste");
 
@@ -856,7 +856,7 @@ mod tests {
 
     #[test]
     fn test_register_empty_trigger_ignored() {
-        let mut manager = ExpandManager::new();
+        let mut manager = KeywordManager::new();
 
         manager.register_trigger("", "Empty", "Content", "paste");
 
@@ -865,7 +865,7 @@ mod tests {
 
     #[test]
     fn test_clear_triggers() {
-        let mut manager = ExpandManager::new();
+        let mut manager = KeywordManager::new();
 
         manager.register_trigger(":a", "A", "Content A", "paste");
         manager.register_trigger(":b", "B", "Content B", "paste");
@@ -879,7 +879,7 @@ mod tests {
 
     #[test]
     fn test_list_triggers() {
-        let mut manager = ExpandManager::new();
+        let mut manager = KeywordManager::new();
 
         manager.register_trigger(":sig", "Signature", "Best regards", "paste");
         manager.register_trigger(":addr", "Address", "123 Main St", "type");
@@ -896,7 +896,7 @@ mod tests {
     #[test]
     fn test_accessibility_check_does_not_panic() {
         // Just verify it doesn't panic - actual result depends on system
-        let _ = ExpandManager::has_accessibility_permission();
+        let _ = KeywordManager::has_accessibility_permission();
     }
 
     // ========================================
@@ -905,7 +905,7 @@ mod tests {
 
     #[test]
     fn test_unregister_trigger() {
-        let mut manager = ExpandManager::new();
+        let mut manager = KeywordManager::new();
 
         manager.register_trigger(":test", "Test Snippet", "Hello, World!", "paste");
         assert_eq!(manager.trigger_count(), 1);
@@ -922,7 +922,7 @@ mod tests {
 
     #[test]
     fn test_unregister_nonexistent_trigger() {
-        let mut manager = ExpandManager::new();
+        let mut manager = KeywordManager::new();
 
         let removed = manager.unregister_trigger(":nonexistent");
         assert!(!removed);
@@ -930,7 +930,7 @@ mod tests {
 
     #[test]
     fn test_unregister_one_of_multiple_triggers() {
-        let mut manager = ExpandManager::new();
+        let mut manager = KeywordManager::new();
 
         manager.register_trigger(":a", "A", "Content A", "paste");
         manager.register_trigger(":b", "B", "Content B", "paste");
@@ -957,7 +957,7 @@ mod tests {
 
     #[test]
     fn test_clear_triggers_for_file() {
-        let mut manager = ExpandManager::new();
+        let mut manager = KeywordManager::new();
         let path = PathBuf::from("/test/scriptlets/test.md");
 
         // Register triggers from a file
@@ -976,7 +976,7 @@ mod tests {
 
     #[test]
     fn test_clear_triggers_for_file_only_affects_that_file() {
-        let mut manager = ExpandManager::new();
+        let mut manager = KeywordManager::new();
         let path1 = PathBuf::from("/test/file1.md");
         let path2 = PathBuf::from("/test/file2.md");
 
@@ -1000,7 +1000,7 @@ mod tests {
 
     #[test]
     fn test_clear_triggers_for_nonexistent_file() {
-        let mut manager = ExpandManager::new();
+        let mut manager = KeywordManager::new();
         let path = PathBuf::from("/test/nonexistent.md");
 
         let cleared = manager.clear_triggers_for_file(&path);
@@ -1013,7 +1013,7 @@ mod tests {
 
     #[test]
     fn test_update_triggers_add_new() {
-        let mut manager = ExpandManager::new();
+        let mut manager = KeywordManager::new();
         let path = PathBuf::from("/test/file.md");
 
         // Start with no triggers
@@ -1045,7 +1045,7 @@ mod tests {
 
     #[test]
     fn test_update_triggers_remove_old() {
-        let mut manager = ExpandManager::new();
+        let mut manager = KeywordManager::new();
         let path = PathBuf::from("/test/file.md");
 
         // Start with two triggers
@@ -1074,7 +1074,7 @@ mod tests {
 
     #[test]
     fn test_update_triggers_change_content() {
-        let mut manager = ExpandManager::new();
+        let mut manager = KeywordManager::new();
         let path = PathBuf::from("/test/file.md");
 
         // Start with a trigger
@@ -1099,7 +1099,7 @@ mod tests {
 
     #[test]
     fn test_update_triggers_mixed_operations() {
-        let mut manager = ExpandManager::new();
+        let mut manager = KeywordManager::new();
         let path = PathBuf::from("/test/file.md");
 
         // Start with triggers :a, :b, :c
@@ -1151,7 +1151,7 @@ mod tests {
 
     #[test]
     fn test_update_triggers_empty_removes_all() {
-        let mut manager = ExpandManager::new();
+        let mut manager = KeywordManager::new();
         let path = PathBuf::from("/test/file.md");
 
         // Start with triggers
@@ -1172,7 +1172,7 @@ mod tests {
 
     #[test]
     fn test_update_triggers_does_not_affect_other_files() {
-        let mut manager = ExpandManager::new();
+        let mut manager = KeywordManager::new();
         let path1 = PathBuf::from("/test/file1.md");
         let path2 = PathBuf::from("/test/file2.md");
 
@@ -1197,7 +1197,7 @@ mod tests {
 
     #[test]
     fn test_register_trigger_from_file() {
-        let mut manager = ExpandManager::new();
+        let mut manager = KeywordManager::new();
         let path = PathBuf::from("/test/file.md");
 
         manager.register_trigger_from_file(":test", "Test", "Content", "paste", &path);
@@ -1211,7 +1211,7 @@ mod tests {
 
     #[test]
     fn test_register_trigger_from_file_empty_ignored() {
-        let mut manager = ExpandManager::new();
+        let mut manager = KeywordManager::new();
         let path = PathBuf::from("/test/file.md");
 
         manager.register_trigger_from_file("", "Test", "Content", "paste", &path);
@@ -1221,7 +1221,7 @@ mod tests {
 
     #[test]
     fn test_get_triggers_for_file() {
-        let mut manager = ExpandManager::new();
+        let mut manager = KeywordManager::new();
         let path = PathBuf::from("/test/file.md");
 
         manager.register_trigger_from_file(":a", "A", "Content A", "paste", &path);
@@ -1237,7 +1237,7 @@ mod tests {
     #[test]
     #[ignore = "Requires accessibility permissions"]
     fn test_enable_disable_cycle() {
-        let mut manager = ExpandManager::new();
+        let mut manager = KeywordManager::new();
         manager.register_trigger(":test", "Test", "Content", "paste");
 
         assert!(manager.enable().is_ok());

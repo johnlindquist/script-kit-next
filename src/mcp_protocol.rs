@@ -1311,7 +1311,7 @@ mod tests {
                 code: "echo test".to_string(),
                 tool: tool.to_string(),
                 shortcut: None,
-                expand: None,
+                keyword: None,
                 group: None,
                 file_path: None,
                 command: None,

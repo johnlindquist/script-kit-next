@@ -67,21 +67,28 @@ pub fn parse_codefence_metadata(content: &str) -> CodefenceParseResult {
 
     for (language, block_content) in blocks {
         match language.as_str() {
-            "metadata" => match serde_json::from_str::<TypedMetadata>(&block_content) {
-                Ok(metadata) => {
+            "metadata" => {
+                // Try JSON first, then fall back to simple key: value format
+                if let Ok(metadata) = serde_json::from_str::<TypedMetadata>(&block_content) {
                     debug!(
                         name = ?metadata.name,
                         description = ?metadata.description,
-                        "Parsed codefence metadata"
+                        "Parsed codefence metadata (JSON)"
                     );
                     result.metadata = Some(metadata);
+                } else if let Some(metadata) = parse_simple_metadata(&block_content) {
+                    debug!(
+                        keyword = ?metadata.keyword,
+                        "Parsed codefence metadata (simple format)"
+                    );
+                    result.metadata = Some(metadata);
+                } else {
+                    result.errors.push(
+                        "Failed to parse metadata: not valid JSON or simple key: value format"
+                            .to_string(),
+                    );
                 }
-                Err(e) => {
-                    result
-                        .errors
-                        .push(format!("Failed to parse metadata JSON: {}", e));
-                }
-            },
+            }
             "schema" => match serde_json::from_str::<Schema>(&block_content) {
                 Ok(schema) => {
                     debug!(
@@ -182,6 +189,81 @@ fn is_closing_fence(line: &str, fence_char: char, min_count: usize) -> bool {
     // Rest of line should be empty or whitespace
     let rest = &line[count..];
     rest.chars().all(|c| c.is_whitespace())
+}
+
+/// Parse simple key: value metadata format
+///
+/// Supports lines like:
+/// ```text
+/// keyword: !testing
+/// name: My Script
+/// description: Does something useful
+/// ```
+///
+/// The value is everything after `: ` (colon-space).
+/// Lines starting with `//` are treated as comments and ignored.
+/// Empty lines are ignored.
+///
+/// Special handling:
+/// - `keyword`, `expand`, `snippet` all map to the `keyword` field
+fn parse_simple_metadata(content: &str) -> Option<TypedMetadata> {
+    use std::collections::HashMap;
+
+    let mut fields: HashMap<String, String> = HashMap::new();
+
+    for line in content.lines() {
+        let line = line.trim();
+
+        // Skip empty lines and comments
+        if line.is_empty() || line.starts_with("//") {
+            continue;
+        }
+
+        // Look for `key: value` pattern (colon followed by space)
+        if let Some(colon_pos) = line.find(": ") {
+            let key = line[..colon_pos].trim().to_lowercase();
+            let value = line[colon_pos + 2..].trim().to_string();
+
+            if !value.is_empty() {
+                fields.insert(key, value);
+            }
+        }
+    }
+
+    // If no fields were parsed, return None
+    if fields.is_empty() {
+        return None;
+    }
+
+    // Build TypedMetadata from parsed fields
+    let mut metadata = TypedMetadata::default();
+
+    for (key, value) in fields {
+        match key.as_str() {
+            "name" => metadata.name = Some(value),
+            "description" => metadata.description = Some(value),
+            "author" => metadata.author = Some(value),
+            "enter" => metadata.enter = Some(value),
+            "alias" => metadata.alias = Some(value),
+            "keyword" | "expand" | "snippet" => metadata.keyword = Some(value),
+            "icon" => metadata.icon = Some(value),
+            "shortcut" => metadata.shortcut = Some(value),
+            "placeholder" => metadata.placeholder = Some(value),
+            "cron" => metadata.cron = Some(value),
+            "schedule" => metadata.schedule = Some(value),
+            "hidden" => metadata.hidden = value.to_lowercase() == "true" || value == "1",
+            "background" => metadata.background = value.to_lowercase() == "true" || value == "1",
+            "system" => metadata.system = value.to_lowercase() == "true" || value == "1",
+            "fallback" => metadata.fallback = value.to_lowercase() == "true" || value == "1",
+            "fallback_label" => metadata.fallback_label = Some(value),
+            // Unknown fields go to extra
+            _ => {
+                metadata.extra.insert(key, serde_json::Value::String(value));
+            }
+        }
+    }
+
+    Some(metadata)
 }
 
 #[cfg(test)]
@@ -314,10 +396,12 @@ Some text here with no code fences at all.
     }
 
     #[test]
-    fn test_malformed_json_returns_error() {
+    fn test_malformed_content_returns_error() {
+        // Content that's neither valid JSON nor valid simple key: value format
         let content = r#"
 ```metadata
-{ "name": "Bad JSON, "description": missing quote }
+this is just random text with no valid format
+no key value pairs here either
 ```
 
 ```ts
@@ -328,7 +412,86 @@ console.log("test");
 
         assert!(result.metadata.is_none());
         assert!(!result.errors.is_empty());
-        assert!(result.errors[0].contains("Failed to parse metadata JSON"));
+        assert!(result.errors[0].contains("not valid JSON or simple key: value format"));
+    }
+
+    #[test]
+    fn test_simple_format_keyword() {
+        // Simple key: value format (not JSON)
+        let content = r#"
+```metadata
+keyword: !testing
+```
+
+```paste
+success!
+```
+"#;
+        let result = parse_codefence_metadata(content);
+
+        assert!(result.metadata.is_some());
+        assert!(result.errors.is_empty());
+        let metadata = result.metadata.unwrap();
+        assert_eq!(metadata.keyword, Some("!testing".to_string()));
+    }
+
+    #[test]
+    fn test_simple_format_multiple_fields() {
+        let content = r#"
+```metadata
+name: My Script
+keyword: :sig
+description: A helpful signature expander
+shortcut: cmd shift s
+```
+
+```paste
+Best regards,
+John
+```
+"#;
+        let result = parse_codefence_metadata(content);
+
+        assert!(result.metadata.is_some());
+        assert!(result.errors.is_empty());
+        let metadata = result.metadata.unwrap();
+        assert_eq!(metadata.name, Some("My Script".to_string()));
+        assert_eq!(metadata.keyword, Some(":sig".to_string()));
+        assert_eq!(
+            metadata.description,
+            Some("A helpful signature expander".to_string())
+        );
+        assert_eq!(metadata.shortcut, Some("cmd shift s".to_string()));
+    }
+
+    #[test]
+    fn test_simple_format_expand_alias() {
+        // "expand" and "snippet" should also work as aliases for "keyword"
+        let content1 = "```metadata\nexpand: !test\n```";
+        let result1 = parse_codefence_metadata(content1);
+        assert_eq!(result1.metadata.unwrap().keyword, Some("!test".to_string()));
+
+        let content2 = "```metadata\nsnippet: :sig\n```";
+        let result2 = parse_codefence_metadata(content2);
+        assert_eq!(result2.metadata.unwrap().keyword, Some(":sig".to_string()));
+    }
+
+    #[test]
+    fn test_simple_format_with_comments() {
+        let content = r#"
+```metadata
+// This is a comment
+keyword: !testing
+// Another comment
+name: Test Script
+```
+"#;
+        let result = parse_codefence_metadata(content);
+
+        assert!(result.metadata.is_some());
+        let metadata = result.metadata.unwrap();
+        assert_eq!(metadata.keyword, Some("!testing".to_string()));
+        assert_eq!(metadata.name, Some("Test Script".to_string()));
     }
 
     #[test]

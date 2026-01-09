@@ -128,8 +128,8 @@ impl Default for BackgroundOpacity {
             title_bar: 0.30,        // Title bar areas
             search_box: 0.40,       // Search input backgrounds
             log_panel: 0.40,        // Log/terminal panels
-            selected: 0.15,         // Selected list item highlight
-            hover: 0.08,            // Hovered list item highlight
+            selected: 0.06,         // Selected list item highlight - subtle brightening
+            hover: 0.03,            // Hovered list item highlight - barely visible
             preview: 0.0,           // Preview panel (0 = fully transparent)
             dialog: 0.15, // Dialogs/popups - very low opacity, let vibrancy blur show through
             input: 0.30,  // Input fields
@@ -305,9 +305,10 @@ pub struct AccentColors {
     pub selected_subtle: HexColor,
 }
 
-/// Default subtle selection color (dark gray, barely visible)
+/// Default subtle selection color
+/// Uses white for near-invisible Raycast-like highlighting
 fn default_selected_subtle() -> HexColor {
-    0x2a2a2a
+    0xffffff // White - rendered at very low opacity for subtle brightening
 }
 
 /// Border and UI element colors
@@ -689,7 +690,7 @@ impl ColorScheme {
             },
             accent: AccentColors {
                 selected: 0xfbbf24,        // Script Kit primary: #fbbf24 (yellow/gold)
-                selected_subtle: 0x2a2a2a, // Subtle dark gray for list selection backgrounds
+                selected_subtle: 0xffffff, // White - near-invisible brightening like Raycast
             },
             ui: UIColors {
                 border: 0x464647,
@@ -721,7 +722,7 @@ impl ColorScheme {
             },
             accent: AccentColors {
                 selected: 0x0078d4,
-                selected_subtle: 0xe8e8e8, // Subtle light gray for list selections
+                selected_subtle: 0xffffff, // White - near-invisible brightening like Raycast
             },
             ui: UIColors {
                 border: 0xd0d0d0,

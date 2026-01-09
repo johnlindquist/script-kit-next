@@ -2,7 +2,7 @@
 //!
 //! Provides a consistent, well-tested system for variable substitution in templates
 //! across the entire application. Used by:
-//! - Text expansion/snippets (expand_manager.rs)
+//! - Text expansion/snippets (keyword_manager.rs)
 //! - Template prompts (prompts/template.rs)
 //! - Future template features
 //!

@@ -78,8 +78,8 @@ fn test_opacity_defaults() {
     assert_eq!(opacity.title_bar, 0.30);
     assert_eq!(opacity.search_box, 0.40);
     assert_eq!(opacity.log_panel, 0.40);
-    assert_eq!(opacity.selected, 0.15);
-    assert_eq!(opacity.hover, 0.08);
+    assert_eq!(opacity.selected, 0.06); // Subtle brightening like Raycast
+    assert_eq!(opacity.hover, 0.03); // Barely visible hover
     assert_eq!(opacity.preview, 0.0);
     assert_eq!(opacity.dialog, 0.15);
     assert_eq!(opacity.input, 0.30);
