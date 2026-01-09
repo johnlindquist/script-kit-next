@@ -4,7 +4,7 @@
 //! cursor rendering, per-cell colors, and control character handling.
 
 use gpui::{
-    div, prelude::*, px, rgb, Context, FocusHandle, Focusable, MouseButton, MouseDownEvent,
+    div, prelude::*, px, rgb, rgba, Context, FocusHandle, Focusable, MouseButton, MouseDownEvent,
     MouseMoveEvent, MouseUpEvent, Pixels, Render, ScrollDelta, ScrollWheelEvent, SharedString,
     Timer, Window,
 };
@@ -442,7 +442,8 @@ impl TermPrompt {
         let colors = &self.theme.colors;
         // Colors for special cells (cursor, selection) - default cells are transparent for vibrancy
         let cursor_bg = rgb(colors.accent.selected);
-        let selection_bg = rgb(colors.accent.selected_subtle);
+        // Use low-opacity for vibrancy support (see VIBRANCY.md)
+        let selection_bg = rgba((colors.accent.selected_subtle << 8) | 0x0f); // ~6% opacity
         let default_fg = rgb(colors.text.primary);
 
         // Convert theme defaults to u32 for comparison with cell colors.

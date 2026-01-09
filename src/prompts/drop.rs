@@ -5,7 +5,7 @@
 //! - Display dropped file information
 //! - Submit file paths
 
-use gpui::{div, prelude::*, px, rgb, Context, FocusHandle, Focusable, Render, Window};
+use gpui::{div, prelude::*, px, rgb, rgba, Context, FocusHandle, Focusable, Render, Window};
 use std::sync::Arc;
 
 use crate::designs::{get_tokens, DesignVariant};
@@ -166,9 +166,9 @@ impl Render for DropPrompt {
             .clone()
             .unwrap_or_else(|| "Drag and drop files to upload".to_string());
 
-        // Drop zone styling
+        // Drop zone styling - use low-opacity for vibrancy support (see VIBRANCY.md)
         let drop_zone_bg = if self.is_drag_over {
-            rgb(self.theme.colors.accent.selected_subtle)
+            rgba((self.theme.colors.accent.selected_subtle << 8) | 0x0f) // ~6% opacity
         } else {
             rgb(self.theme.colors.background.search_box)
         };

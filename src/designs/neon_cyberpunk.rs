@@ -176,9 +176,9 @@ impl NeonCyberpunkRenderer {
     ) -> impl IntoElement {
         let colors = Self::list_item_colors();
 
-        // Background color based on selection state
+        // Background color based on selection state - use low-opacity for vibrancy (see VIBRANCY.md)
         let bg_color = if is_selected {
-            rgb(colors.background_selected)
+            rgba((colors.background_selected << 8) | 0x0f) // ~6% opacity
         } else {
             rgba(0x00000000)
         };

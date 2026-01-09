@@ -7,7 +7,7 @@
 //! - Submit returns the filled template string
 
 use gpui::{
-    div, prelude::*, px, rgb, Context, FocusHandle, Focusable, Render, SharedString, Window,
+    div, prelude::*, px, rgb, rgba, Context, FocusHandle, Focusable, Render, SharedString, Window,
 };
 use regex::Regex;
 use std::collections::HashSet;
@@ -334,8 +334,10 @@ impl Render for TemplatePrompt {
                     SharedString::from(value.clone())
                 };
 
+                // Use low-opacity for vibrancy support (see VIBRANCY.md)
                 let field_bg = if is_current {
-                    rgb(self.theme.colors.accent.selected_subtle)
+                    rgba((self.theme.colors.accent.selected_subtle << 8) | 0x0f)
+                // ~6% opacity
                 } else {
                     rgb(self.theme.colors.background.search_box)
                 };

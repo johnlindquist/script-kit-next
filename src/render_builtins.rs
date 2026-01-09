@@ -1795,8 +1795,11 @@ impl ScriptListApp {
                                             .gap(px(design_spacing_clone.gap_md));
 
                                         if is_selected {
-                                            item_div = item_div
-                                                .bg(rgb(design_colors_clone.background_selected));
+                                            // Use low-opacity for vibrancy support (see VIBRANCY.md)
+                                            item_div = item_div.bg(rgba(
+                                                (design_colors_clone.background_selected << 8)
+                                                    | 0x0f,
+                                            )); // ~6% opacity
                                         }
 
                                         item_div

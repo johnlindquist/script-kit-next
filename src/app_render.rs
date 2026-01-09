@@ -1269,7 +1269,8 @@ fn render_group_header_item(
         .gap(px(spacing.gap_md));
 
     if is_selected {
-        item_div = item_div.bg(rgb(colors.background_selected));
+        // Use low-opacity white for vibrancy support (see VIBRANCY.md)
+        item_div = item_div.bg(rgba((colors.background_selected << 8) | 0x0f)); // ~6% opacity
     }
 
     // Create the preview element based on the style
