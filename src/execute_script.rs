@@ -773,13 +773,13 @@ impl ScriptListApp {
                                         );
                                         file_search::list_directory(
                                             query,
-                                            file_search::DEFAULT_LIMIT,
+                                            file_search::DEFAULT_CACHE_LIMIT,
                                         )
                                     } else {
                                         file_search::search_files(
                                             query,
                                             only_in.as_deref(),
-                                            file_search::DEFAULT_LIMIT,
+                                            file_search::DEFAULT_CACHE_LIMIT,
                                         )
                                     };
 

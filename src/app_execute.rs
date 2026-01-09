@@ -1064,9 +1064,27 @@ impl ScriptListApp {
                 "EXEC",
                 &format!("Detected directory path, listing: {}", query),
             );
-            file_search::list_directory(&query, file_search::DEFAULT_LIMIT)
+            // Verify path is actually a directory before listing
+            let expanded = file_search::expand_path(&query);
+            let is_real_dir = expanded
+                .as_deref()
+                .map(|p| std::path::Path::new(p).is_dir())
+                .unwrap_or(false);
+
+            let dir_results = file_search::list_directory(&query, file_search::DEFAULT_CACHE_LIMIT);
+
+            // Fallback to Spotlight search if path looks like directory but isn't
+            if dir_results.is_empty() && !is_real_dir {
+                logging::log(
+                    "EXEC",
+                    "Path mode not a real directory; falling back to Spotlight search",
+                );
+                file_search::search_files(&query, None, file_search::DEFAULT_CACHE_LIMIT)
+            } else {
+                dir_results
+            }
         } else {
-            file_search::search_files(&query, None, file_search::DEFAULT_LIMIT)
+            file_search::search_files(&query, None, file_search::DEFAULT_CACHE_LIMIT)
         };
         logging::log(
             "EXEC",

@@ -371,50 +371,58 @@ impl ScriptListApp {
                 {
                     if let Some(app) = app_entity.upgrade() {
                         app.update(cx, |this, cx| {
-                            // Handle Tab in FileSearchView for directory navigation
+                            // Handle Tab/Shift+Tab in FileSearchView for directory/file navigation
+                            // CRITICAL: ALWAYS consume Tab/Shift+Tab to prevent focus traversal
                             if let AppView::FileSearchView {
                                 query,
                                 selected_index,
                             } = &mut this.current_view
                             {
+                                // ALWAYS stop propagation for Tab/Shift+Tab in FileSearchView
+                                // This prevents Tab from falling through to focus traversal
+                                cx.stop_propagation();
+
                                 if has_shift {
-                                    // Shift+Tab: Go up one directory level
-                                    if let Some(parsed) =
-                                        crate::file_search::parse_directory_path(query)
+                                    // Shift+Tab: Go up one directory level using parent_dir_display helper
+                                    // This handles ~/, /, ./, ../ and regular paths correctly
+                                    if let Some(parent_path) =
+                                        crate::file_search::parent_dir_display(query)
                                     {
-                                        let current_dir = parsed.directory.trim_end_matches('/');
+                                        crate::logging::log(
+                                            "KEY",
+                                            &format!(
+                                                "Shift+Tab: Navigating up from '{}' to '{}'",
+                                                query, parent_path
+                                            ),
+                                        );
 
-                                        if let Some(last_slash) = current_dir.rfind('/') {
-                                            let parent_path = if last_slash == 0 {
-                                                "/".to_string()
-                                            } else if current_dir.starts_with('~')
-                                                && last_slash == 1
-                                            {
-                                                "~/".to_string()
-                                            } else {
-                                                format!("{}/", &current_dir[..last_slash])
-                                            };
+                                        // Update the input - handle_filter_input_change will:
+                                        // - Update query
+                                        // - Reset selected_index to 0
+                                        // - Detect directory change
+                                        // - Trigger async directory load
+                                        this.gpui_input_state.update(cx, |state, cx| {
+                                            state.set_value(parent_path.clone(), window, cx);
+                                            // Ensure cursor is at end with no selection after programmatic set_value
+                                            // This prevents issues where GPUI might leave caret at wrong position
+                                            let len = parent_path.len();
+                                            state.set_selection(len, len, window, cx);
+                                        });
 
-                                            crate::logging::log(
-                                                "KEY",
-                                                &format!("Shift+Tab: Going up to: {}", parent_path),
-                                            );
-
-                                            // Just update the input - handle_filter_input_change will:
-                                            // - Update query
-                                            // - Reset selected_index to 0
-                                            // - Detect directory change
-                                            // - Trigger async directory load
-                                            this.gpui_input_state.update(cx, |state, cx| {
-                                                state.set_value(parent_path, window, cx);
-                                            });
-
-                                            cx.notify();
-                                            cx.stop_propagation();
-                                        }
+                                        cx.notify();
+                                    } else {
+                                        // At root (/ or ~/) - no parent to navigate to
+                                        // Key is consumed (stop_propagation called above) but no action taken
+                                        crate::logging::log(
+                                            "KEY",
+                                            &format!(
+                                                "Shift+Tab: Already at root '{}', no-op",
+                                                query
+                                            ),
+                                        );
                                     }
                                 } else {
-                                    // Tab: Enter selected directory
+                                    // Tab: Enter directory OR autocomplete file name
                                     // Get filtered results to find selected item
                                     let filter_pattern = if let Some(parsed) =
                                         crate::file_search::parse_directory_path(query)
@@ -436,10 +444,16 @@ impl ScriptListApp {
                                             this.cached_file_results.iter().enumerate().collect()
                                         };
 
+                                    // Defensive bounds check: clamp selected_index if out of bounds
+                                    let filtered_len = filtered_results.len();
+                                    if filtered_len > 0 && *selected_index >= filtered_len {
+                                        *selected_index = filtered_len - 1;
+                                    }
+
                                     if let Some((_, file)) = filtered_results.get(*selected_index) {
                                         if file.file_type == crate::file_search::FileType::Directory
                                         {
-                                            // Use shorten_path to keep ~ instead of expanding to /Users/...
+                                            // Directory: Enter it (append /)
                                             let shortened =
                                                 crate::file_search::shorten_path(&file.path);
                                             let new_path = format!("{}/", shortened);
@@ -448,18 +462,43 @@ impl ScriptListApp {
                                                 &format!("Tab: Entering directory: {}", new_path),
                                             );
 
-                                            // Just update the input - handle_filter_input_change will:
-                                            // - Update query
-                                            // - Reset selected_index to 0
-                                            // - Detect directory change
-                                            // - Trigger async directory load
+                                            // Update the input - handle_filter_input_change handles the rest
                                             this.gpui_input_state.update(cx, |state, cx| {
-                                                state.set_value(new_path, window, cx);
+                                                state.set_value(new_path.clone(), window, cx);
+                                                // Ensure cursor is at end with no selection after programmatic set_value
+                                                let len = new_path.len();
+                                                state.set_selection(len, len, window, cx);
                                             });
 
                                             cx.notify();
-                                            cx.stop_propagation();
+                                        } else {
+                                            // File: Autocomplete the full path (terminal-style tab completion)
+                                            let shortened =
+                                                crate::file_search::shorten_path(&file.path);
+                                            crate::logging::log(
+                                                "KEY",
+                                                &format!(
+                                                    "Tab: Autocompleting file path: {}",
+                                                    shortened
+                                                ),
+                                            );
+
+                                            // Set the input to the file's full path
+                                            this.gpui_input_state.update(cx, |state, cx| {
+                                                state.set_value(shortened.clone(), window, cx);
+                                                // Ensure cursor is at end with no selection after programmatic set_value
+                                                let len = shortened.len();
+                                                state.set_selection(len, len, window, cx);
+                                            });
+
+                                            cx.notify();
                                         }
+                                    } else {
+                                        // No selection - just consume the key
+                                        crate::logging::log(
+                                            "KEY",
+                                            "Tab: No selection to autocomplete, no-op",
+                                        );
                                     }
                                 }
                                 return;
@@ -670,26 +709,21 @@ impl ScriptListApp {
 
                         // Handle Cmd+K to toggle actions popup
                         if has_cmd && key == "k" {
-                            if let AppView::FileSearchView { selected_index, .. } =
-                                &this.current_view
+                            if let AppView::FileSearchView {
+                                selected_index,
+                                query,
+                            } = &mut this.current_view
                             {
-                                // Get the selected file for toggle
-                                let filter_pattern =
-                                    if let AppView::FileSearchView { query, .. } =
-                                        &this.current_view
-                                    {
-                                        if let Some(parsed) =
-                                            crate::file_search::parse_directory_path(query)
-                                        {
-                                            parsed.filter
-                                        } else if !query.is_empty() {
-                                            Some(query.clone())
-                                        } else {
-                                            None
-                                        }
-                                    } else {
-                                        None
-                                    };
+                                // Get the filter pattern for directory path parsing
+                                let filter_pattern = if let Some(parsed) =
+                                    crate::file_search::parse_directory_path(query)
+                                {
+                                    parsed.filter
+                                } else if !query.is_empty() {
+                                    Some(query.clone())
+                                } else {
+                                    None
+                                };
 
                                 let filtered_results: Vec<_> =
                                     if let Some(ref pattern) = filter_pattern {
@@ -700,6 +734,12 @@ impl ScriptListApp {
                                     } else {
                                         this.cached_file_results.iter().enumerate().collect()
                                     };
+
+                                // Defensive bounds check: clamp selected_index if out of bounds
+                                let filtered_len = filtered_results.len();
+                                if filtered_len > 0 && *selected_index >= filtered_len {
+                                    *selected_index = filtered_len - 1;
+                                }
 
                                 if let Some((_, file)) = filtered_results.get(*selected_index) {
                                     let file_clone = (*file).clone();
@@ -1935,6 +1975,9 @@ impl ScriptListApp {
                             self.cached_file_results.clear();
                             self.file_search_current_dir = Some(parsed.directory.clone());
                             self.file_search_loading = true;
+                            // Reset scroll immediately to prevent stale scroll position
+                            self.file_search_scroll_handle
+                                .scroll_to_item(0, ScrollStrategy::Top);
                             cx.notify();
 
                             let dir_to_list = parsed.directory.clone();
@@ -1946,7 +1989,7 @@ impl ScriptListApp {
                                 std::thread::spawn(move || {
                                     let results = crate::file_search::list_directory(
                                         &dir_to_list,
-                                        crate::file_search::DEFAULT_LIMIT * 2, // Get more for filtering
+                                        crate::file_search::DEFAULT_CACHE_LIMIT,
                                     );
                                     let _ = tx.send(results);
                                 });
@@ -1959,6 +2002,15 @@ impl ScriptListApp {
                                                 this.update(cx, |app, cx| {
                                                     app.cached_file_results = results;
                                                     app.file_search_loading = false;
+                                                    // Reset selected_index when async results arrive
+                                                    // to prevent bounds issues if results shrink
+                                                    if let AppView::FileSearchView {
+                                                        selected_index,
+                                                        ..
+                                                    } = &mut app.current_view
+                                                    {
+                                                        *selected_index = 0;
+                                                    }
                                                     app.file_search_scroll_handle
                                                         .scroll_to_item(0, ScrollStrategy::Top);
                                                     cx.notify();
@@ -1999,7 +2051,7 @@ impl ScriptListApp {
                             let results = crate::file_search::search_files(
                                 &query_for_thread,
                                 None,
-                                crate::file_search::DEFAULT_LIMIT,
+                                crate::file_search::DEFAULT_CACHE_LIMIT,
                             );
                             let _ = tx.send(results);
                         });
@@ -2026,6 +2078,15 @@ impl ScriptListApp {
                                                     );
                                                     app.cached_file_results = results;
                                                     app.file_search_loading = false;
+                                                    // Reset selected_index when async results arrive
+                                                    // to prevent bounds issues if results shrink
+                                                    if let AppView::FileSearchView {
+                                                        selected_index,
+                                                        ..
+                                                    } = &mut app.current_view
+                                                    {
+                                                        *selected_index = 0;
+                                                    }
                                                     app.file_search_scroll_handle
                                                         .scroll_to_item(0, ScrollStrategy::Top);
                                                     cx.notify();
@@ -2140,6 +2201,9 @@ impl ScriptListApp {
         self.filter_text = text.clone();
         self.gpui_input_state.update(cx, |state, cx| {
             state.set_value(text.clone(), window, cx);
+            // Ensure cursor is at end with no selection after programmatic set_value
+            let len = text.len();
+            state.set_selection(len, len, window, cx);
         });
         self.suppress_filter_events = false;
         self.pending_filter_sync = false;
@@ -2210,6 +2274,9 @@ impl ScriptListApp {
         self.suppress_filter_events = true;
         self.gpui_input_state.update(cx, |state, cx| {
             state.set_value(desired.clone(), window, cx);
+            // Ensure cursor is at end with no selection after programmatic set_value
+            let len = desired.len();
+            state.set_selection(len, len, window, cx);
         });
         self.suppress_filter_events = false;
         self.pending_filter_sync = false;
@@ -2362,9 +2429,16 @@ impl ScriptListApp {
                 // Check if query looks like a directory path
                 // If so, list directory contents instead of searching
                 let results = if crate::file_search::is_directory_path(&text) {
-                    crate::file_search::list_directory(&text, crate::file_search::DEFAULT_LIMIT)
+                    crate::file_search::list_directory(
+                        &text,
+                        crate::file_search::DEFAULT_CACHE_LIMIT,
+                    )
                 } else {
-                    crate::file_search::search_files(&text, None, crate::file_search::DEFAULT_LIMIT)
+                    crate::file_search::search_files(
+                        &text,
+                        None,
+                        crate::file_search::DEFAULT_CACHE_LIMIT,
+                    )
                 };
                 logging::log(
                     "EXEC",

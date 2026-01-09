@@ -3,8 +3,9 @@
 //! This module provides file search functionality using macOS's mdfind command,
 //! which interfaces with the Spotlight index for fast file searching.
 
+use std::io::{BufRead, BufReader};
 use std::path::Path;
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::time::UNIX_EPOCH;
 use tracing::{debug, instrument, warn};
 
@@ -109,8 +110,44 @@ pub struct FileMetadata {
     pub writable: bool,
 }
 
-/// Default limit for search results
+/// Default limit for UI display (final visible results after filtering)
+#[allow(dead_code)]
 pub const DEFAULT_LIMIT: usize = 50;
+
+/// Default cache limit for fetching candidates before filtering
+/// We fetch more results initially so fuzzy filtering can find matches
+#[allow(dead_code)]
+pub const DEFAULT_CACHE_LIMIT: usize = 2000;
+
+/// Check if the query looks like an advanced mdfind query (with operators)
+/// If so, pass it through directly; otherwise wrap as filename query
+fn looks_like_advanced_mdquery(q: &str) -> bool {
+    let q = q.trim();
+    q.contains("kMDItem")
+        || q.contains("==")
+        || q.contains("!=")
+        || q.contains(">=")
+        || q.contains("<=")
+        || q.contains("&&")
+        || q.contains("||")
+}
+
+/// Escape special characters for mdfind query string literals
+fn escape_md_string(s: &str) -> String {
+    s.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
+/// Build an mdfind query from user input
+/// - If input looks like advanced query syntax, pass through as-is
+/// - Otherwise, wrap as case-insensitive filename contains query
+fn build_mdquery(user_query: &str) -> String {
+    let q = user_query.trim();
+    if looks_like_advanced_mdquery(q) {
+        return q.to_string();
+    }
+    let escaped = escape_md_string(q);
+    format!(r#"kMDItemFSName == "*{}*"c"#, escaped)
+}
 
 // NOTE: escape_query() was removed because:
 // 1. It was unused dead code
@@ -180,8 +217,11 @@ fn detect_file_type(path: &Path) -> FileType {
 
 /// Search for files using macOS mdfind (Spotlight)
 ///
+/// Uses streaming to avoid buffering all results when only `limit` are needed.
+/// Converts simple queries to filename-matching mdfind queries.
+///
 /// # Arguments
-/// * `query` - Search query string
+/// * `query` - Search query string (will be converted to filename query if simple)
 /// * `onlyin` - Optional directory to limit search scope
 /// * `limit` - Maximum number of results to return
 ///
@@ -197,6 +237,10 @@ pub fn search_files(query: &str, onlyin: Option<&str>, limit: usize) -> Vec<File
         return Vec::new();
     }
 
+    // Convert user query to proper mdfind query (filename matching)
+    let mdquery = build_mdquery(query);
+    debug!(mdquery = %mdquery, "Built mdfind query");
+
     let mut cmd = Command::new("mdfind");
 
     // Add -onlyin if specified
@@ -204,38 +248,60 @@ pub fn search_files(query: &str, onlyin: Option<&str>, limit: usize) -> Vec<File
         cmd.arg("-onlyin").arg(dir);
     }
 
-    // Add the query (no escaping needed as Command handles it)
-    cmd.arg(query);
+    // Add the query
+    cmd.arg(&mdquery);
 
-    debug!(command = ?cmd, "Executing mdfind");
+    // Set up streaming: pipe stdout instead of buffering
+    cmd.stdout(Stdio::piped());
+    cmd.stderr(Stdio::piped());
 
-    let output = match cmd.output() {
-        Ok(output) => output,
+    debug!(command = ?cmd, "Spawning mdfind");
+
+    let mut child = match cmd.spawn() {
+        Ok(child) => child,
         Err(e) => {
-            warn!(error = %e, "Failed to execute mdfind");
+            warn!(error = %e, "Failed to spawn mdfind");
             return Vec::new();
         }
     };
 
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        warn!(stderr = %stderr, "mdfind returned non-zero exit status");
-        return Vec::new();
-    }
+    // Take stdout for streaming reads
+    let stdout = match child.stdout.take() {
+        Some(stdout) => stdout,
+        None => {
+            warn!("Failed to capture mdfind stdout");
+            let _ = child.kill();
+            let _ = child.wait();
+            return Vec::new();
+        }
+    };
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
+    let reader = BufReader::new(stdout);
     let mut results = Vec::new();
 
-    // NOTE: .lines() already strips newline characters (\n, \r\n).
-    // We intentionally do NOT call trim() because macOS paths CAN contain
-    // leading/trailing spaces (rare but valid). Trimming would corrupt such paths.
-    for line in stdout.lines().take(limit) {
+    // Stream line-by-line, stopping after limit
+    for line_result in reader.lines() {
+        if results.len() >= limit {
+            break;
+        }
+
+        let line = match line_result {
+            Ok(line) => line,
+            Err(e) => {
+                debug!(error = %e, "Error reading mdfind output line");
+                continue;
+            }
+        };
+
         // Only skip truly empty lines, not lines with spaces
+        // NOTE: .lines() already strips newline characters (\n, \r\n).
+        // We intentionally do NOT call trim() because macOS paths CAN contain
+        // leading/trailing spaces (rare but valid).
         if line.is_empty() {
             continue;
         }
 
-        let path = Path::new(line);
+        let path = Path::new(&line);
 
         // Get file metadata
         let (size, modified) = match std::fs::metadata(path) {
@@ -261,13 +327,21 @@ pub fn search_files(query: &str, onlyin: Option<&str>, limit: usize) -> Vec<File
         let file_type = detect_file_type(path);
 
         results.push(FileResult {
-            path: line.to_string(),
+            path: line,
             name,
             size,
             modified,
             file_type,
         });
     }
+
+    // Clean up the child process
+    // If we stopped early (hit limit), kill the process
+    if results.len() >= limit {
+        let _ = child.kill();
+    }
+    // Wait for process to fully exit (prevents zombies)
+    let _ = child.wait();
 
     debug!(result_count = results.len(), "Search completed");
     results
@@ -569,6 +643,113 @@ pub fn show_info(path: &str) -> Result<(), String> {
     }
 }
 
+// ============================================================================
+// Path Navigation Helpers
+// These are pure string manipulation helpers for directory navigation UI.
+// They work with display paths (containing ~ or relative paths) without IO.
+// ============================================================================
+
+/// Ensure a path string ends with a trailing slash
+///
+/// Used to normalize directory paths for consistent display and navigation.
+///
+/// # Examples
+/// - `/foo/bar` → `/foo/bar/`
+/// - `~/dev/` → `~/dev/` (unchanged)
+/// - `` → `/` (empty becomes root)
+/// - `~` → `~/`
+#[allow(dead_code)]
+pub fn ensure_trailing_slash(path: &str) -> String {
+    if path.is_empty() {
+        return "/".to_string();
+    }
+    if path.ends_with('/') {
+        path.to_string()
+    } else {
+        format!("{}/", path)
+    }
+}
+
+/// Get the parent directory path for Shift+Tab navigation
+///
+/// This is a pure string operation for display paths. It handles:
+/// - Tilde paths (`~/foo/` → `~/`)
+/// - Absolute paths (`/foo/bar/` → `/foo/`)
+/// - Relative paths (`./` → `../`, `../` → `../../`)
+///
+/// Returns `None` for root paths that have no parent:
+/// - `/` (filesystem root)
+/// - `~/` (home directory root)
+///
+/// # Arguments
+/// * `dir_with_slash` - Directory path (ideally ending with `/`, but handles without)
+///
+/// # Returns
+/// * `Some(parent_path)` - Parent directory path ending with `/`
+/// * `None` - If this is a root path with no parent
+#[allow(dead_code)]
+pub fn parent_dir_display(dir_with_slash: &str) -> Option<String> {
+    // Normalize: ensure we're working with a trailing-slash path
+    let normalized = if dir_with_slash.ends_with('/') {
+        dir_with_slash.to_string()
+    } else {
+        format!("{}/", dir_with_slash)
+    };
+
+    // Handle root cases that have no parent
+    if normalized == "/" || normalized == "~/" {
+        return None;
+    }
+
+    // Handle relative paths specially
+    if normalized == "./" {
+        // Current dir -> parent dir
+        return Some("../".to_string());
+    }
+
+    if normalized == "../" {
+        // One level up -> two levels up
+        return Some("../../".to_string());
+    }
+
+    // Handle ../ chains: ../../ -> ../../../
+    if normalized.starts_with("../") {
+        // Count existing ../ segments and add one more
+        return Some(format!("../{}", normalized));
+    }
+
+    // For regular paths (absolute or tilde), find the parent by removing last segment
+    // e.g., "/foo/bar/" -> "/foo/", "~/dev/kit/" -> "~/dev/"
+
+    // Remove trailing slash for easier processing
+    let without_trailing = normalized.trim_end_matches('/');
+
+    // Find the last slash (which separates parent from current dir)
+    if let Some(last_slash_pos) = without_trailing.rfind('/') {
+        // Special case: tilde prefix
+        if without_trailing.starts_with("~/") {
+            if last_slash_pos == 1 {
+                // "~/foo" -> last_slash at 1 -> parent is "~/"
+                return Some("~/".to_string());
+            }
+            // "~/foo/bar" -> parent is "~/foo/"
+            return Some(format!("{}/", &without_trailing[..last_slash_pos]));
+        }
+
+        // Absolute path case
+        if last_slash_pos == 0 {
+            // "/foo" -> parent is "/"
+            return Some("/".to_string());
+        }
+
+        // General case: "/foo/bar" -> "/foo/"
+        return Some(format!("{}/", &without_trailing[..last_slash_pos]));
+    }
+
+    // No slash found - shouldn't happen for valid directory paths
+    None
+}
+
 /// Shorten a path for display by using ~ for home directory
 #[allow(dead_code)]
 pub fn shorten_path(path: &str) -> String {
@@ -635,19 +816,25 @@ pub fn expand_path(path: &str) -> Option<String> {
     None
 }
 
+/// Internal cap to prevent runaway directory listings
+const MAX_DIRECTORY_ENTRIES: usize = 5000;
+
 /// List contents of a directory
 ///
 /// Returns files and directories sorted with directories first, then by name.
 /// Handles ~ expansion and relative paths.
 ///
+/// NOTE: Does NOT truncate results. Callers should apply their own limit
+/// after scoring/filtering. An internal cap of 5000 entries prevents runaway.
+///
 /// # Arguments
 /// * `dir_path` - Directory path (can include ~, ., ..)
-/// * `limit` - Maximum number of results to return
+/// * `_limit` - DEPRECATED: No longer used (kept for API compatibility)
 ///
 /// # Returns
 /// Vector of FileResult structs for directory contents
-#[instrument(skip_all, fields(dir_path = %dir_path, limit = limit))]
-pub fn list_directory(dir_path: &str, limit: usize) -> Vec<FileResult> {
+#[instrument(skip_all, fields(dir_path = %dir_path, limit = _limit))]
+pub fn list_directory(dir_path: &str, _limit: usize) -> Vec<FileResult> {
     debug!("Starting directory listing");
 
     // Expand the path
@@ -734,8 +921,10 @@ pub fn list_directory(dir_path: &str, limit: usize) -> Vec<FileResult> {
         }
     });
 
-    // Apply limit
-    results.truncate(limit);
+    // Apply internal cap to prevent runaway (callers truncate after filtering)
+    if results.len() > MAX_DIRECTORY_ENTRIES {
+        results.truncate(MAX_DIRECTORY_ENTRIES);
+    }
 
     debug!(result_count = results.len(), "Directory listing completed");
     results
@@ -932,7 +1121,94 @@ pub fn filter_results_nucleo_simple<'a>(
 mod tests {
     use super::*;
 
-    // NOTE: escape_query tests removed along with the function
+    // ========================================================================
+    // Query Builder Tests
+    // ========================================================================
+
+    #[test]
+    fn test_looks_like_advanced_mdquery_detects_kmditem() {
+        assert!(looks_like_advanced_mdquery("kMDItemFSName == 'test'"));
+        assert!(looks_like_advanced_mdquery(
+            "kMDItemContentType == 'public.image'"
+        ));
+    }
+
+    #[test]
+    fn test_looks_like_advanced_mdquery_detects_operators() {
+        assert!(looks_like_advanced_mdquery("name == test"));
+        assert!(looks_like_advanced_mdquery("size != 0"));
+        assert!(looks_like_advanced_mdquery("date >= 2024"));
+        assert!(looks_like_advanced_mdquery("size <= 1000"));
+        assert!(looks_like_advanced_mdquery("type == image && size > 1000"));
+        assert!(looks_like_advanced_mdquery("ext == jpg || ext == png"));
+    }
+
+    #[test]
+    fn test_looks_like_advanced_mdquery_simple_queries() {
+        // Simple text queries should NOT be detected as advanced
+        assert!(!looks_like_advanced_mdquery("hello"));
+        assert!(!looks_like_advanced_mdquery("my document"));
+        assert!(!looks_like_advanced_mdquery("test.txt"));
+        assert!(!looks_like_advanced_mdquery("file-name"));
+    }
+
+    #[test]
+    fn test_escape_md_string_basic() {
+        assert_eq!(escape_md_string("hello"), "hello");
+        assert_eq!(escape_md_string("test file"), "test file");
+    }
+
+    #[test]
+    fn test_escape_md_string_quotes() {
+        assert_eq!(escape_md_string(r#"file"name"#), r#"file\"name"#);
+        assert_eq!(escape_md_string(r#""quoted""#), r#"\"quoted\""#);
+    }
+
+    #[test]
+    fn test_escape_md_string_backslashes() {
+        assert_eq!(escape_md_string(r"path\to\file"), r"path\\to\\file");
+        assert_eq!(escape_md_string(r"\escaped\"), r"\\escaped\\");
+    }
+
+    #[test]
+    fn test_escape_md_string_mixed() {
+        assert_eq!(escape_md_string(r#"file\"name"#), r#"file\\\"name"#);
+    }
+
+    #[test]
+    fn test_build_mdquery_simple_query() {
+        let query = build_mdquery("hello");
+        assert_eq!(query, r#"kMDItemFSName == "*hello*"c"#);
+    }
+
+    #[test]
+    fn test_build_mdquery_with_spaces() {
+        let query = build_mdquery("my document");
+        assert_eq!(query, r#"kMDItemFSName == "*my document*"c"#);
+    }
+
+    #[test]
+    fn test_build_mdquery_passes_through_advanced() {
+        let advanced = "kMDItemFSName == 'test.txt'";
+        let query = build_mdquery(advanced);
+        assert_eq!(query, advanced); // Should pass through unchanged
+    }
+
+    #[test]
+    fn test_build_mdquery_with_special_chars() {
+        let query = build_mdquery(r#"file"name"#);
+        assert_eq!(query, r#"kMDItemFSName == "*file\"name*"c"#);
+    }
+
+    #[test]
+    fn test_build_mdquery_trims_whitespace() {
+        let query = build_mdquery("  hello  ");
+        assert_eq!(query, r#"kMDItemFSName == "*hello*"c"#);
+    }
+
+    // ========================================================================
+    // File Type Detection Tests
+    // ========================================================================
 
     #[test]
     fn test_detect_file_type_image() {
@@ -1302,9 +1578,15 @@ mod tests {
 
     #[test]
     fn test_list_directory_limit() {
-        // Test limit is respected
+        // limit parameter is deprecated - list_directory no longer truncates
+        // Callers should apply their own limit after filtering/scoring
+        // We just verify that it doesn't panic and returns reasonable results
         let results = list_directory("/", 3);
-        assert!(results.len() <= 3, "Should respect limit");
+        // Should return all entries (up to internal cap) not just 3
+        // The "/" directory typically has multiple entries
+        assert!(!results.is_empty(), "Root directory should have entries");
+        // Verify internal cap works (5000)
+        assert!(results.len() <= 5000, "Should respect internal cap of 5000");
     }
 
     #[test]
@@ -1517,5 +1799,91 @@ mod tests {
         // /tmp should be a directory on Unix systems
         #[cfg(unix)]
         assert!(info.is_dir);
+    }
+
+    // ========================================================================
+    // Path Utility Tests (ensure_trailing_slash, parent_dir_display)
+    // ========================================================================
+
+    #[test]
+    fn test_ensure_trailing_slash_already_has_slash() {
+        assert_eq!(ensure_trailing_slash("/foo/bar/"), "/foo/bar/");
+        assert_eq!(ensure_trailing_slash("~/dev/"), "~/dev/");
+        assert_eq!(ensure_trailing_slash("/"), "/");
+        assert_eq!(ensure_trailing_slash("~/"), "~/");
+    }
+
+    #[test]
+    fn test_ensure_trailing_slash_needs_slash() {
+        assert_eq!(ensure_trailing_slash("/foo/bar"), "/foo/bar/");
+        assert_eq!(ensure_trailing_slash("~/dev"), "~/dev/");
+        assert_eq!(ensure_trailing_slash(".."), "../");
+        assert_eq!(ensure_trailing_slash("."), "./");
+    }
+
+    #[test]
+    fn test_ensure_trailing_slash_edge_cases() {
+        // Empty string
+        assert_eq!(ensure_trailing_slash(""), "/");
+        // Single tilde
+        assert_eq!(ensure_trailing_slash("~"), "~/");
+    }
+
+    #[test]
+    fn test_parent_dir_display_root() {
+        // "/" has no parent
+        assert_eq!(parent_dir_display("/"), None);
+    }
+
+    #[test]
+    fn test_parent_dir_display_home_root() {
+        // "~/" has no parent (home directory is treated as root)
+        assert_eq!(parent_dir_display("~/"), None);
+    }
+
+    #[test]
+    fn test_parent_dir_display_relative_parent() {
+        // "../" -> "../../"
+        assert_eq!(parent_dir_display("../"), Some("../../".to_string()));
+    }
+
+    #[test]
+    fn test_parent_dir_display_relative_current() {
+        // "./" -> "../"
+        assert_eq!(parent_dir_display("./"), Some("../".to_string()));
+    }
+
+    #[test]
+    fn test_parent_dir_display_tilde_subdir() {
+        // "~/foo/" -> "~/"
+        assert_eq!(parent_dir_display("~/foo/"), Some("~/".to_string()));
+        // "~/foo/bar/" -> "~/foo/"
+        assert_eq!(parent_dir_display("~/foo/bar/"), Some("~/foo/".to_string()));
+    }
+
+    #[test]
+    fn test_parent_dir_display_absolute_subdir() {
+        // "/foo/bar/" -> "/foo/"
+        assert_eq!(parent_dir_display("/foo/bar/"), Some("/foo/".to_string()));
+        // "/foo/" -> "/"
+        assert_eq!(parent_dir_display("/foo/"), Some("/".to_string()));
+    }
+
+    #[test]
+    fn test_parent_dir_display_multiple_levels() {
+        // Deep paths
+        assert_eq!(parent_dir_display("/a/b/c/d/"), Some("/a/b/c/".to_string()));
+        assert_eq!(
+            parent_dir_display("~/projects/rust/kit/"),
+            Some("~/projects/rust/".to_string())
+        );
+    }
+
+    #[test]
+    fn test_parent_dir_display_no_trailing_slash() {
+        // Paths without trailing slash should still work (normalize first)
+        // The function expects trailing slash, but should handle edge cases gracefully
+        assert_eq!(parent_dir_display("/foo/bar"), Some("/foo/".to_string()));
+        assert_eq!(parent_dir_display("~/foo"), Some("~/".to_string()));
     }
 }

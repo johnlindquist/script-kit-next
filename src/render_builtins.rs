@@ -2084,6 +2084,8 @@ impl ScriptListApp {
                     // Sync input and reset placeholder to default
                     this.gpui_input_state.update(cx, |state, cx| {
                         state.set_value("", window, cx);
+                        // Ensure cursor is at start (empty string, so 0..0)
+                        state.set_selection(0, 0, window, cx);
                         state.set_placeholder(DEFAULT_PLACEHOLDER.to_string(), window, cx);
                     });
                     this.update_window_size();
@@ -2123,24 +2125,14 @@ impl ScriptListApp {
                     } else {
                         this.cached_file_results.iter().enumerate().collect()
                     };
-                    let filtered_len = filtered_results.len();
+                    let _filtered_len = filtered_results.len();
 
                     match key_str.as_str() {
-                        "up" | "arrowup" => {
-                            if *selected_index > 0 {
-                                *selected_index -= 1;
-                                this.file_search_scroll_handle
-                                    .scroll_to_item(*selected_index, ScrollStrategy::Nearest);
-                                cx.notify();
-                            }
-                        }
-                        "down" | "arrowdown" => {
-                            if *selected_index + 1 < filtered_len {
-                                *selected_index += 1;
-                                this.file_search_scroll_handle
-                                    .scroll_to_item(*selected_index, ScrollStrategy::Nearest);
-                                cx.notify();
-                            }
+                        // Arrow keys are handled by arrow_interceptor in app_impl.rs
+                        // which calls stop_propagation(). This is the single source of truth
+                        // for arrow key handling in FileSearchView.
+                        "up" | "arrowup" | "down" | "arrowdown" => {
+                            // Already handled by interceptor, no-op here
                         }
                         // Tab/Shift+Tab handled by intercept_keystrokes in app_impl.rs
                         // (interceptor fires BEFORE input component can capture Tab)

@@ -313,6 +313,18 @@ pub fn get_builtin_fallbacks() -> Vec<BuiltinFallback> {
             priority: 22,
         },
         BuiltinFallback {
+            id: "search-google-ai",
+            name: "Search Google AI",
+            description: "Search Google AI for this text",
+            icon: "sparkles",
+            action: FallbackAction::SearchUrl {
+                template: "http://g.ai/?q={query}".to_string(),
+            },
+            condition: FallbackCondition::Always,
+            enabled: true,
+            priority: 29,
+        },
+        BuiltinFallback {
             id: "search-google",
             name: "Search Google",
             description: "Search Google for this text",
@@ -362,7 +374,7 @@ mod tests {
     #[test]
     fn test_get_builtin_fallbacks_count() {
         let fallbacks = get_builtin_fallbacks();
-        assert_eq!(fallbacks.len(), 9, "Should have 9 built-in fallbacks");
+        assert_eq!(fallbacks.len(), 10, "Should have 10 built-in fallbacks");
     }
 
     #[test]
@@ -412,6 +424,7 @@ mod tests {
         assert!(ids.contains(&"add-to-notes"));
         assert!(ids.contains(&"copy-to-clipboard"));
         assert!(ids.contains(&"search-google"));
+        assert!(ids.contains(&"search-google-ai"));
         assert!(ids.contains(&"search-duckduckgo"));
 
         // Should NOT include conditional fallbacks
@@ -501,6 +514,51 @@ mod tests {
             }
             _ => panic!("Expected OpenUrl result"),
         }
+    }
+
+    #[test]
+    fn test_execute_search_google_ai() {
+        let fallbacks = get_builtin_fallbacks();
+        let google_ai = fallbacks
+            .iter()
+            .find(|f| f.id == "search-google-ai")
+            .unwrap();
+
+        let result = google_ai.execute("hello world").unwrap();
+        match result {
+            FallbackResult::OpenUrl { url } => {
+                assert!(url.contains("g.ai"));
+                assert!(url.contains("hello%20world"));
+            }
+            _ => panic!("Expected OpenUrl result"),
+        }
+    }
+
+    #[test]
+    fn test_search_google_ai_in_applicable_fallbacks() {
+        let fallbacks = get_applicable_fallbacks("test query");
+
+        let ids: Vec<&str> = fallbacks.iter().map(|f| f.id).collect();
+        assert!(
+            ids.contains(&"search-google-ai"),
+            "search-google-ai should be in applicable fallbacks"
+        );
+    }
+
+    #[test]
+    fn test_search_google_ai_priority() {
+        let fallbacks = get_applicable_fallbacks("test");
+
+        // search-google-ai (priority 29) should come before search-google (priority 30)
+        let google_ai_pos = fallbacks.iter().position(|f| f.id == "search-google-ai");
+        let google_pos = fallbacks.iter().position(|f| f.id == "search-google");
+
+        assert!(google_ai_pos.is_some());
+        assert!(google_pos.is_some());
+        assert!(
+            google_ai_pos.unwrap() < google_pos.unwrap(),
+            "search-google-ai should come before search-google"
+        );
     }
 
     #[test]

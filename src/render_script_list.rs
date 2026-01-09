@@ -701,8 +701,11 @@ impl ScriptListApp {
                                 tracing::debug!(entry = %text, "Input history: navigate up");
                                 this.filter_text = text.clone();
                                 let text_for_input = text.clone();
+                                let text_len = text_for_input.len();
                                 this.gpui_input_state.update(cx, |state, input_cx| {
                                     state.set_value(text_for_input, window, input_cx);
+                                    // Ensure cursor is at end with no selection after programmatic set_value
+                                    state.set_selection(text_len, text_len, window, input_cx);
                                 });
                                 // Reset selection since results will change
                                 this.selected_index = 0;
@@ -732,8 +735,11 @@ impl ScriptListApp {
                                 tracing::debug!(entry = %text, "Input history: navigate down");
                                 this.filter_text = text.clone();
                                 let text_for_input = text.clone();
+                                let text_len = text_for_input.len();
                                 this.gpui_input_state.update(cx, |state, input_cx| {
                                     state.set_value(text_for_input, window, input_cx);
+                                    // Ensure cursor is at end with no selection after programmatic set_value
+                                    state.set_selection(text_len, text_len, window, input_cx);
                                 });
                                 // Reset selection since results will change
                                 this.selected_index = 0;
@@ -748,6 +754,8 @@ impl ScriptListApp {
                                 this.filter_text.clear();
                                 this.gpui_input_state.update(cx, |state, input_cx| {
                                     state.set_value(String::new(), window, input_cx);
+                                    // Ensure cursor is at start (empty string, so 0..0)
+                                    state.set_selection(0, 0, window, input_cx);
                                 });
                                 // Reset selection since results will change
                                 this.selected_index = 0;
