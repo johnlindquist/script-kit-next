@@ -121,8 +121,21 @@ impl KeywordMatcher {
     /// # Returns
     /// `Some(MatchResult)` if a trigger was matched, `None` otherwise
     pub fn process_keystroke(&mut self, c: char) -> Option<MatchResult> {
+        // Log every keystroke for debugging
+        tracing::debug!(
+            category = "KEYWORD",
+            char = ?c,
+            char_code = c as u32,
+            "KeywordMatcher received keystroke"
+        );
+
         // Check for buffer-clearing characters
         if BUFFER_CLEAR_CHARS.contains(&c) {
+            tracing::debug!(
+                category = "KEYWORD",
+                char = ?c,
+                "Buffer-clearing character, clearing buffer"
+            );
             self.clear_buffer();
             return None;
         }
@@ -136,18 +149,48 @@ impl KeywordMatcher {
             self.buffer = self.buffer.chars().skip(excess).collect();
         }
 
+        // Log buffer state after adding character
+        tracing::debug!(
+            category = "KEYWORD",
+            buffer = %self.buffer,
+            buffer_len = self.buffer.len(),
+            trigger_count = self.triggers.len(),
+            "Buffer state after keystroke"
+        );
+
         // Check for matches - look for triggers at the end of the buffer
         self.check_for_match()
     }
 
     /// Check if the buffer ends with any registered trigger
     fn check_for_match(&self) -> Option<MatchResult> {
+        // Log all registered triggers for debugging
+        let trigger_list: Vec<&String> = self.triggers.keys().collect();
+        tracing::debug!(
+            category = "KEYWORD",
+            triggers = ?trigger_list,
+            buffer = %self.buffer,
+            "Checking buffer against {} triggers",
+            self.triggers.len()
+        );
+
         // Check each trigger to see if the buffer ends with it
         for (trigger, path) in &self.triggers {
-            if self.buffer.ends_with(trigger) {
-                debug!(
+            let ends_with = self.buffer.ends_with(trigger);
+            tracing::trace!(
+                category = "KEYWORD",
+                trigger = %trigger,
+                buffer = %self.buffer,
+                ends_with = ends_with,
+                "Checking trigger"
+            );
+
+            if ends_with {
+                tracing::debug!(
+                    category = "KEYWORD",
                     trigger = %trigger,
                     buffer = %self.buffer,
+                    path = %path.display(),
                     "Trigger matched"
                 );
 
@@ -158,6 +201,12 @@ impl KeywordMatcher {
                 });
             }
         }
+
+        tracing::trace!(
+            category = "KEYWORD",
+            buffer = %self.buffer,
+            "No trigger match found"
+        );
 
         None
     }

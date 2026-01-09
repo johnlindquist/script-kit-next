@@ -11,6 +11,7 @@ use tracing::{debug, instrument, warn};
 
 use glob::glob;
 
+use crate::scriptlet_metadata::parse_codefence_metadata;
 use crate::scriptlets as scriptlet_parser;
 use crate::setup::get_kit_path;
 
@@ -109,7 +110,20 @@ pub(crate) fn parse_scriptlet_section(
     }
 
     // Extract metadata from HTML comments
-    let metadata = extract_html_comment_metadata(section);
+    let html_metadata = extract_html_comment_metadata(section);
+
+    // Also try codefence metadata (```metadata ... ```)
+    let codefence_result = parse_codefence_metadata(section);
+    let typed_metadata = codefence_result.metadata;
+
+    // Log what we found for debugging
+    tracing::debug!(
+        category = "KEYWORD",
+        name = %name,
+        html_keyword = ?html_metadata.get("keyword"),
+        codefence_keyword = ?typed_metadata.as_ref().and_then(|t| t.keyword.as_ref()),
+        "Parsing scriptlet section metadata"
+    );
 
     // Extract code block
     let (tool, code) = extract_code_block(section)?;
@@ -120,17 +134,41 @@ pub(crate) fn parse_scriptlet_section(
     // Build file_path with anchor if source_path is provided
     let file_path = source_path.map(|p| format!("{}#{}", p.display(), command));
 
+    // Prefer codefence metadata over HTML comment metadata for keyword
+    let keyword = typed_metadata
+        .as_ref()
+        .and_then(|t| t.keyword.clone())
+        .or_else(|| html_metadata.get("keyword").cloned());
+
+    if keyword.is_some() {
+        tracing::debug!(
+            category = "KEYWORD",
+            name = %name,
+            keyword = ?keyword,
+            "Found keyword trigger in scriptlet"
+        );
+    }
+
     Some(Scriptlet {
         name,
-        description: metadata.get("description").cloned(),
+        description: typed_metadata
+            .as_ref()
+            .and_then(|t| t.description.clone())
+            .or_else(|| html_metadata.get("description").cloned()),
         code,
         tool,
-        shortcut: metadata.get("shortcut").cloned(),
-        keyword: metadata.get("keyword").cloned(),
+        shortcut: typed_metadata
+            .as_ref()
+            .and_then(|t| t.shortcut.clone())
+            .or_else(|| html_metadata.get("shortcut").cloned()),
+        keyword,
         group: None,
         file_path,
         command: Some(command),
-        alias: metadata.get("alias").cloned(),
+        alias: typed_metadata
+            .as_ref()
+            .and_then(|t| t.alias.clone())
+            .or_else(|| html_metadata.get("alias").cloned()),
     })
 }
 

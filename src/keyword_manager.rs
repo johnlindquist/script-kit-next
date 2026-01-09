@@ -263,27 +263,38 @@ impl KeywordManager {
 
         // Create keyboard monitor with callback
         let mut monitor = KeyboardMonitor::new(move |event: KeyEvent| {
-            // Log every keystroke for debugging
-            debug!(
+            // Log every keystroke for debugging - use INFO level to ensure visibility
+            tracing::debug!(
+                category = "KEYWORD",
                 character = ?event.character,
                 key_code = event.key_code,
                 command = event.command,
                 control = event.control,
                 option = event.option,
-                "Keyboard event received"
+                shift = event.shift,
+                "KeyboardMonitor event received"
             );
 
             // Only process printable characters (ignore modifier keys, etc.)
             if let Some(ref character) = event.character {
                 // Skip if any modifier is held (except shift for capitals)
                 if event.command || event.control || event.option {
-                    debug!(character = %character, "Skipping due to modifier key");
+                    tracing::debug!(
+                        category = "KEYWORD",
+                        character = %character,
+                        "Skipping due to modifier key"
+                    );
                     return;
                 }
 
                 // Process each character in the string (usually just 1)
                 for c in character.chars() {
-                    debug!(char = ?c, "Processing character");
+                    tracing::debug!(
+                        category = "KEYWORD",
+                        char = ?c,
+                        char_code = c as u32,
+                        "Processing character in KeywordManager"
+                    );
                     // Feed to matcher
                     let match_result = {
                         let mut matcher_guard = matcher.lock().unwrap();
@@ -292,7 +303,8 @@ impl KeywordManager {
 
                     // Handle match if found
                     if let Some(result) = match_result {
-                        debug!(
+                        tracing::debug!(
+                            category = "KEYWORD",
                             trigger = %result.trigger,
                             chars_to_delete = result.chars_to_delete,
                             "Trigger matched, performing expansion"
