@@ -2170,7 +2170,7 @@ impl ScriptListApp {
                         let (tx, rx) = std::sync::mpsc::channel();
                         let query_for_thread = search_query.clone();
                         std::thread::spawn(move || {
-                            let results = crate::file_search::search_files(
+                            let results = crate::file_search::search_files_native(
                                 &query_for_thread,
                                 None,
                                 crate::file_search::DEFAULT_SEARCH_LIMIT,
@@ -2576,7 +2576,7 @@ impl ScriptListApp {
                         crate::file_search::DEFAULT_CACHE_LIMIT,
                     )
                 } else {
-                    crate::file_search::search_files(
+                    crate::file_search::search_files_native(
                         &text,
                         None,
                         crate::file_search::DEFAULT_SEARCH_LIMIT,

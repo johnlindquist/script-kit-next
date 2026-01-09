@@ -1079,14 +1079,14 @@ impl ScriptListApp {
             if dir_results.is_empty() && !is_real_dir {
                 logging::log(
                     "EXEC",
-                    "Path mode not a real directory; falling back to Spotlight search",
+                    "Path mode not a real directory; falling back to native search",
                 );
-                file_search::search_files(&query, None, file_search::DEFAULT_SEARCH_LIMIT)
+                file_search::search_files_native(&query, None, file_search::DEFAULT_SEARCH_LIMIT)
             } else {
                 dir_results
             }
         } else {
-            file_search::search_files(&query, None, file_search::DEFAULT_SEARCH_LIMIT)
+            file_search::search_files_native(&query, None, file_search::DEFAULT_SEARCH_LIMIT)
         };
         logging::log(
             "EXEC",

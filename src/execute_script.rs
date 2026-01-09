@@ -776,7 +776,7 @@ impl ScriptListApp {
                                             file_search::DEFAULT_CACHE_LIMIT,
                                         )
                                     } else {
-                                        file_search::search_files(
+                                        file_search::search_files_native(
                                             query,
                                             only_in.as_deref(),
                                             file_search::DEFAULT_SEARCH_LIMIT,
