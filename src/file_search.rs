@@ -502,7 +502,10 @@ pub fn search_files_native(query: &str, onlyin: Option<&str>, limit: usize) -> V
         Err(arc) => arc.lock().unwrap().clone(),
     };
 
-    debug!(result_count = final_results.len(), "Native search completed");
+    debug!(
+        result_count = final_results.len(),
+        "Native search completed"
+    );
     final_results
 }
 
@@ -1720,7 +1723,10 @@ mod tests {
         let results = search_files_native("xyznonexistent12345", Some("/Applications"), 10);
         let elapsed = start.elapsed();
 
-        assert!(results.is_empty(), "Should find no results for nonsense query");
+        assert!(
+            results.is_empty(),
+            "Should find no results for nonsense query"
+        );
         assert!(
             elapsed.as_secs() < 5,
             "Search should complete in <5s, took {:?}",
