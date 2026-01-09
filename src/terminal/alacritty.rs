@@ -898,6 +898,24 @@ impl TerminalHandle {
         state.term.mode().contains(TermMode::BRACKETED_PASTE)
     }
 
+    /// Check if application cursor mode (DECCKM) is enabled.
+    ///
+    /// When application cursor mode is enabled, arrow keys send different
+    /// escape sequences:
+    /// - Normal mode: `\x1b[A` (up), `\x1b[B` (down), `\x1b[C` (right), `\x1b[D` (left)
+    /// - Application mode: `\x1bOA` (up), `\x1bOB` (down), `\x1bOC` (right), `\x1bOD` (left)
+    ///
+    /// Many terminal applications (vim, less, htop, fzf) enable this mode
+    /// to properly receive arrow key input.
+    ///
+    /// # Returns
+    ///
+    /// `true` if the terminal is in application cursor mode.
+    pub fn is_application_cursor_mode(&self) -> bool {
+        let state = self.state.lock().unwrap();
+        state.term.mode().contains(TermMode::APP_CURSOR)
+    }
+
     /// Updates the theme adapter for focus state.
     ///
     /// # Arguments
@@ -1688,6 +1706,32 @@ mod tests {
             "DEFAULT_SCROLLBACK_LINES changed!"
         );
         assert_eq!(PTY_READ_BUFFER_SIZE, 4096, "PTY_READ_BUFFER_SIZE changed!");
+    }
+
+    // ========================================================================
+    // Application Cursor Mode Tests (TDD)
+    // ========================================================================
+
+    #[test]
+    fn test_is_application_cursor_mode_default_off() {
+        // By default, terminals start in normal cursor mode (DECCKM off)
+        let result = TerminalHandle::new(80, 24);
+        if let Ok(terminal) = result {
+            assert!(
+                !terminal.is_application_cursor_mode(),
+                "Terminal should start in normal cursor mode (DECCKM off)"
+            );
+        }
+    }
+
+    #[test]
+    fn test_is_application_cursor_mode_method_exists() {
+        // Verify the is_application_cursor_mode method exists and returns bool
+        let result = TerminalHandle::new(80, 24);
+        if let Ok(terminal) = result {
+            let _mode: bool = terminal.is_application_cursor_mode();
+            // Just verify it compiles and returns bool
+        }
     }
 
     #[test]

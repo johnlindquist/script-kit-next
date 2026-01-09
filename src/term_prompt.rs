@@ -770,16 +770,31 @@ impl Render for TermPrompt {
                     // No cx.notify() needed - timer handles refresh at 30fps
                 } else {
                     // Handle special keys
+                    // Check if terminal is in application cursor mode (DECCKM)
+                    // Many apps (vim, less, htop, fzf) enable this mode for arrow keys
+                    let app_cursor = this.terminal.is_application_cursor_mode();
+
+                    // Arrow keys and Home/End have different sequences in application mode:
+                    // Normal mode: \x1b[A (CSI A)
+                    // Application mode: \x1bOA (SS3 A)
                     let bytes: Option<&[u8]> = match key_str.as_str() {
                         "enter" => Some(b"\r"),
                         "backspace" => Some(b"\x7f"),
                         "tab" => Some(b"\t"),
-                        "up" | "arrowup" => Some(b"\x1b[A"),
-                        "down" | "arrowdown" => Some(b"\x1b[B"),
-                        "right" | "arrowright" => Some(b"\x1b[C"),
-                        "left" | "arrowleft" => Some(b"\x1b[D"),
-                        "home" => Some(b"\x1b[H"),
-                        "end" => Some(b"\x1b[F"),
+                        // Arrow keys: use application mode sequences when DECCKM is set
+                        "up" | "arrowup" => Some(if app_cursor { b"\x1bOA" } else { b"\x1b[A" }),
+                        "down" | "arrowdown" => {
+                            Some(if app_cursor { b"\x1bOB" } else { b"\x1b[B" })
+                        }
+                        "right" | "arrowright" => {
+                            Some(if app_cursor { b"\x1bOC" } else { b"\x1b[C" })
+                        }
+                        "left" | "arrowleft" => {
+                            Some(if app_cursor { b"\x1bOD" } else { b"\x1b[D" })
+                        }
+                        // Home/End also have application mode variants
+                        "home" => Some(if app_cursor { b"\x1bOH" } else { b"\x1b[H" }),
+                        "end" => Some(if app_cursor { b"\x1bOF" } else { b"\x1b[F" }),
                         "pageup" => Some(b"\x1b[5~"),
                         "pagedown" => Some(b"\x1b[6~"),
                         "delete" => Some(b"\x1b[3~"),
