@@ -2244,7 +2244,7 @@ impl ScriptListApp {
             self.cached_fallbacks.clear();
         }
 
-        self.update_window_size();
+        self.update_window_size_deferred(window, cx);
         cx.notify();
     }
 
@@ -2287,39 +2287,36 @@ impl ScriptListApp {
         cx.notify();
     }
 
-    /// Update window size based on current view and item count.
-    /// This implements dynamic window resizing:
-    /// - Script list: resize based on filtered results (including section headers)
-    /// - Arg prompt: resize based on filtered choices
-    /// - Div/Editor/Term: use full height
-    fn update_window_size(&mut self) {
-        let (view_type, item_count) = match &self.current_view {
+    /// Calculate view type and item count for window sizing.
+    /// Extracted from update_window_size for reuse.
+    fn calculate_window_size_params(&mut self) -> Option<(ViewType, usize)> {
+        match &self.current_view {
             AppView::ScriptList => {
                 // Get grouped results which includes section headers (cached)
                 let (grouped_items, _) = self.get_grouped_results_cached();
                 let count = grouped_items.len();
-                (ViewType::ScriptList, count)
+                Some((ViewType::ScriptList, count))
             }
             AppView::ArgPrompt { choices, .. } => {
                 let filtered = self.get_filtered_arg_choices(choices);
                 if filtered.is_empty() && choices.is_empty() {
-                    (ViewType::ArgPromptNoChoices, 0)
+                    Some((ViewType::ArgPromptNoChoices, 0))
                 } else {
-                    (ViewType::ArgPromptWithChoices, filtered.len())
+                    Some((ViewType::ArgPromptWithChoices, filtered.len()))
                 }
             }
-            AppView::DivPrompt { .. } => (ViewType::DivPrompt, 0),
-            AppView::FormPrompt { .. } => (ViewType::DivPrompt, 0), // Use DivPrompt size for forms
-            AppView::EditorPrompt { .. } => (ViewType::EditorPrompt, 0),
-            AppView::SelectPrompt { .. } => (ViewType::ArgPromptWithChoices, 0),
-            AppView::PathPrompt { .. } => (ViewType::DivPrompt, 0),
-            AppView::EnvPrompt { .. } => (ViewType::ArgPromptNoChoices, 0), // Env prompt is a simple input
-            AppView::DropPrompt { .. } => (ViewType::DivPrompt, 0), // Drop prompt uses div size for drop zone
-            AppView::TemplatePrompt { .. } => (ViewType::DivPrompt, 0), // Template prompt uses div size
-            AppView::TermPrompt { .. } => (ViewType::TermPrompt, 0),
+            AppView::DivPrompt { .. } => Some((ViewType::DivPrompt, 0)),
+            AppView::FormPrompt { .. } => Some((ViewType::DivPrompt, 0)), // Use DivPrompt size for forms
+            AppView::EditorPrompt { .. } => Some((ViewType::EditorPrompt, 0)),
+            AppView::SelectPrompt { .. } => Some((ViewType::ArgPromptWithChoices, 0)),
+            AppView::PathPrompt { .. } => Some((ViewType::DivPrompt, 0)),
+            AppView::EnvPrompt { .. } => Some((ViewType::ArgPromptNoChoices, 0)), // Env prompt is a simple input
+            AppView::DropPrompt { .. } => Some((ViewType::DivPrompt, 0)), // Drop prompt uses div size for drop zone
+            AppView::TemplatePrompt { .. } => Some((ViewType::DivPrompt, 0)), // Template prompt uses div size
+            AppView::TermPrompt { .. } => Some((ViewType::TermPrompt, 0)),
             AppView::ActionsDialog => {
                 // Actions dialog is an overlay, don't resize
-                return;
+                None
             }
             // P0 FIX: Clipboard history and app launcher use standard height (same as script list)
             // View state only - data comes from self fields
@@ -2334,7 +2331,7 @@ impl ScriptListApp {
                         .filter(|e| e.text_preview.to_lowercase().contains(&filter_lower))
                         .count()
                 };
-                (ViewType::ScriptList, filtered_count)
+                Some((ViewType::ScriptList, filtered_count))
             }
             AppView::AppLauncherView { filter, .. } => {
                 let apps = &self.apps;
@@ -2346,7 +2343,7 @@ impl ScriptListApp {
                         .filter(|a| a.name.to_lowercase().contains(&filter_lower))
                         .count()
                 };
-                (ViewType::ScriptList, filtered_count)
+                Some((ViewType::ScriptList, filtered_count))
             }
             AppView::WindowSwitcherView { filter, .. } => {
                 let windows = &self.cached_windows;
@@ -2362,7 +2359,7 @@ impl ScriptListApp {
                         })
                         .count()
                 };
-                (ViewType::ScriptList, filtered_count)
+                Some((ViewType::ScriptList, filtered_count))
             }
             AppView::DesignGalleryView { filter, .. } => {
                 // Calculate total gallery items (separators + icons)
@@ -2374,10 +2371,10 @@ impl ScriptListApp {
                     // For now, return total - filtering can be added later
                     total_items
                 };
-                (ViewType::ScriptList, filtered_count)
+                Some((ViewType::ScriptList, filtered_count))
             }
-            AppView::ScratchPadView { .. } => (ViewType::EditorPrompt, 0),
-            AppView::QuickTerminalView { .. } => (ViewType::TermPrompt, 0),
+            AppView::ScratchPadView { .. } => Some((ViewType::EditorPrompt, 0)),
+            AppView::QuickTerminalView { .. } => Some((ViewType::TermPrompt, 0)),
             AppView::FileSearchView { ref query, .. } => {
                 let results = &self.cached_file_results;
                 let filtered_count = if query.is_empty() {
@@ -2389,12 +2386,36 @@ impl ScriptListApp {
                         .filter(|r| r.name.to_lowercase().contains(&query_lower))
                         .count()
                 };
-                (ViewType::ScriptList, filtered_count)
+                Some((ViewType::ScriptList, filtered_count))
             }
-        };
+        }
+    }
 
-        let target_height = height_for_view(view_type, item_count);
-        resize_first_window_to_height(target_height);
+    /// Update window size using deferred execution (SAFE during render/event cycles).
+    ///
+    /// Uses Window::defer to schedule the resize at the end of the current effect cycle,
+    /// preventing RefCell borrow conflicts that can occur when calling platform APIs
+    /// during GPUI's render or event processing.
+    ///
+    /// Use this version when you have access to `window` and `cx`.
+    fn update_window_size_deferred(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some((view_type, item_count)) = self.calculate_window_size_params() {
+            crate::window_resize::defer_resize_to_view(view_type, item_count, window, &mut *cx);
+        }
+    }
+
+    /// Update window size synchronously.
+    ///
+    /// SAFETY: Only call from async handlers (cx.spawn closures, message handlers)
+    /// that run OUTSIDE the GPUI render cycle. Calling during render will cause
+    /// RefCell borrow panics.
+    ///
+    /// Prefer `update_window_size_deferred` when you have window/cx access.
+    fn update_window_size(&mut self) {
+        if let Some((view_type, item_count)) = self.calculate_window_size_params() {
+            let target_height = height_for_view(view_type, item_count);
+            resize_first_window_to_height(target_height);
+        }
     }
 
     fn set_prompt_input(&mut self, text: String, cx: &mut Context<Self>) {
@@ -4349,9 +4370,14 @@ export default {
         self.main_list_state.scroll_to_reveal_item(0);
         self.last_scrolled_index = Some(0);
 
-        // Resize window for script list content
+        // Resize window for script list content.
+        // SAFETY: This sync resize is safe because reset_to_script_list is called from:
+        // 1. Message handlers (handle_prompt_message) - run outside render cycle
+        // 2. Visibility management (show/hide) - run outside render cycle
+        // 3. Script completion handlers - run outside render cycle
+        // Using sync resize here because most callers don't have window access.
         let count = self.scripts.len() + self.scriptlets.len();
-        resize_first_window_to_height(height_for_view(ViewType::ScriptList, count));
+        crate::window_resize::resize_to_view_sync(ViewType::ScriptList, count);
 
         // Clear output
         self.last_output = None;

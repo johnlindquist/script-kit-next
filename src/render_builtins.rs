@@ -2088,7 +2088,7 @@ impl ScriptListApp {
                         state.set_selection(0, 0, window, cx);
                         state.set_placeholder(DEFAULT_PLACEHOLDER.to_string(), window, cx);
                     });
-                    this.update_window_size();
+                    this.update_window_size_deferred(window, cx);
                     cx.notify();
                     return;
                 }

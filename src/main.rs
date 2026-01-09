@@ -2529,7 +2529,7 @@ fn main() {
                                             filter: String::new(),
                                             selected_index: 0,
                                         };
-                                        view.update_window_size();
+                                        view.update_window_size_deferred(window, ctx);
                                     }
                                     // P0 FIX: Store data in self, view holds only state
                                     "clipboard" | "clipboard-history" | "clipboardhistory" => {
@@ -2539,7 +2539,7 @@ fn main() {
                                             filter: String::new(),
                                             selected_index: 0,
                                         };
-                                        view.update_window_size();
+                                        view.update_window_size_deferred(window, ctx);
                                     }
                                     // P0 FIX: Use existing self.apps, view holds only state
                                     "apps" | "app-launcher" | "applauncher" => {
@@ -2547,7 +2547,7 @@ fn main() {
                                             filter: String::new(),
                                             selected_index: 0,
                                         };
-                                        view.update_window_size();
+                                        view.update_window_size_deferred(window, ctx);
                                     }
                                     "file-search" | "filesearch" | "files" | "searchfiles" => {
                                         view.open_file_search(String::new(), ctx);
