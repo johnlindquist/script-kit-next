@@ -2472,7 +2472,7 @@ impl ScriptListApp {
                         ),
                     )
                     // Right-side element styled to match main menu's "Ask AI" button height
-                    // Using fixed min-width to prevent layout shift when content changes
+                    // Using fixed width to prevent layout shift when content changes
                     .child(
                         div()
                             .flex()
@@ -2480,16 +2480,13 @@ impl ScriptListApp {
                             .items_center()
                             .justify_end()
                             .py(px(4.))
-                            .min_w(px(70.)) // Fixed width prevents layout shift
-                            .child(if is_loading {
-                                Spinner::new().with_size(Size::Small).into_any_element()
-                            } else {
+                            .w(px(70.)) // Fixed width prevents layout shift
+                            .child(
                                 div()
                                     .text_sm()
                                     .text_color(rgb(text_dimmed))
-                                    .child(format!("{} files", filtered_len))
-                                    .into_any_element()
-                            }),
+                                    .child(format!("{} files", filtered_len)),
+                            ),
                     )
             })
             // Divider
@@ -2501,7 +2498,7 @@ impl ScriptListApp {
             )
             // Main content: loading state OR empty state OR 50/50 split
             .child(if is_loading && filtered_len == 0 {
-                // Loading state: full-width centered spinner (no split)
+                // Loading state: full-width centered (no split, clean appearance)
                 div()
                     .flex_1()
                     .w_full()
@@ -2511,17 +2508,9 @@ impl ScriptListApp {
                     .min_h(px(0.))
                     .child(
                         div()
-                            .flex()
-                            .flex_col()
-                            .items_center()
-                            .gap(px(12.))
-                            .child(Spinner::new().with_size(Size::Large))
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .text_color(rgb(text_dimmed))
-                                    .child("Searching..."),
-                            ),
+                            .text_sm()
+                            .text_color(rgb(text_dimmed))
+                            .child("Searching..."),
                     )
             } else if filtered_len == 0 {
                 // Empty state: single centered message (no awkward 50/50 split)
