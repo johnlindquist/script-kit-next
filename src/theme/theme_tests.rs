@@ -431,10 +431,18 @@ fn test_input_field_cursor_color() {
     let scheme = ColorScheme::dark_default();
     let colors = scheme.input_field_colors();
 
-    // Cursor should be cyan (0x00ffff)
-    // In rgba, cyan has g=1.0, b=1.0, r=0.0
-    assert!(colors.cursor.g > 0.9);
-    assert!(colors.cursor.b > 0.9);
+    // Cursor should use accent color (0xfbbf24 - yellow/gold for Script Kit)
+    // This provides visual consistency with selection highlights
+    // Yellow/gold has r > 0.9, g > 0.7, b < 0.3
+    assert!(colors.cursor.r > 0.9, "cursor red channel should be high");
+    assert!(
+        colors.cursor.g > 0.7,
+        "cursor green channel should be moderately high"
+    );
+    assert!(
+        colors.cursor.b < 0.3,
+        "cursor blue channel should be low for gold/yellow"
+    );
 }
 
 // ========================================================================

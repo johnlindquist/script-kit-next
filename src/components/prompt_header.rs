@@ -35,6 +35,8 @@ pub struct PromptHeaderColors {
     pub search_box_bg: u32,
     /// Border color
     pub border: u32,
+    /// Logo icon color (for icons on accent background)
+    pub logo_icon: u32,
 }
 
 impl PromptHeaderColors {
@@ -48,6 +50,8 @@ impl PromptHeaderColors {
             background: theme.colors.background.main,
             search_box_bg: theme.colors.background.search_box,
             border: theme.colors.ui.border,
+            // Black for maximum contrast on yellow/gold accent background
+            logo_icon: 0x000000,
         }
     }
 
@@ -61,6 +65,7 @@ impl PromptHeaderColors {
             background: colors.background,
             search_box_bg: colors.background_secondary,
             border: colors.border,
+            logo_icon: colors.text_on_accent,
         }
     }
 }
@@ -75,6 +80,7 @@ impl Default for PromptHeaderColors {
             background: 0x1e1e1e,
             search_box_bg: 0x2d2d30,
             border: 0x464647,
+            logo_icon: 0x000000, // Black for contrast on yellow
         }
     }
 }
@@ -523,7 +529,8 @@ impl PromptHeader {
                 svg()
                     .external_path(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/logo.svg"))
                     .size(px(13.))
-                    .text_color(rgb(0x000000)), // Black logo inside yellow
+                    // Use logo_icon color from theme/design for contrast on accent background
+                    .text_color(rgb(self.colors.logo_icon)),
             )
     }
 }

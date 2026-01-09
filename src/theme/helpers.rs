@@ -33,6 +33,10 @@ pub struct ListItemColors {
     pub text_accent: Rgba,
     /// Border color for separators
     pub border: Rgba,
+    /// Warning background color (for confirmation overlays)
+    pub warning_bg: Rgba,
+    /// Text color for content displayed on accent/colored backgrounds
+    pub text_on_accent: Rgba,
 }
 
 #[allow(dead_code)]
@@ -60,6 +64,10 @@ impl ListItemColors {
             text_dimmed: rgb(colors.text.dimmed),
             text_accent: rgb(colors.accent.selected),
             border: rgb(colors.ui.border),
+            warning_bg: rgb(colors.ui.warning),
+            // For dark themes, white text on warning/accent backgrounds provides good contrast
+            // Theme default is 0xffffff (white) which works well on yellow/orange backgrounds
+            text_on_accent: rgb(colors.text.primary),
         }
     }
 
@@ -128,7 +136,8 @@ impl InputFieldColors {
             text: rgb(colors.text.primary),
             placeholder: rgb(colors.text.muted),
             border: rgba((colors.ui.border << 8) | 0x60),
-            cursor: rgb(0x00ffff), // Cyan cursor
+            // Use accent color for cursor - provides visual consistency with selection
+            cursor: rgb(colors.accent.selected),
         }
     }
 }

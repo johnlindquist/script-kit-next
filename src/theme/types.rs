@@ -282,6 +282,14 @@ pub struct TextColors {
     /// Dimmed text color (#666666)
     #[serde(with = "hex_color_serde")]
     pub dimmed: HexColor,
+    /// Text color for content on accent backgrounds (#FFFFFF - white for dark themes)
+    /// Used for text on selected items, warning banners, etc.
+    #[serde(with = "hex_color_serde", default = "default_text_on_accent")]
+    pub on_accent: HexColor,
+}
+
+fn default_text_on_accent() -> HexColor {
+    0xffffff // White provides good contrast on most accent colors
 }
 
 /// Accent and highlight colors
@@ -677,6 +685,7 @@ impl ColorScheme {
                 tertiary: 0x999999,
                 muted: 0x808080,
                 dimmed: 0x666666,
+                on_accent: 0xffffff, // White text on accent backgrounds
             },
             accent: AccentColors {
                 selected: 0xfbbf24,        // Script Kit primary: #fbbf24 (yellow/gold)
@@ -708,6 +717,7 @@ impl ColorScheme {
                 tertiary: 0x666666,
                 muted: 0x999999,
                 dimmed: 0xcccccc,
+                on_accent: 0xffffff, // White text on accent backgrounds (works on blue accent)
             },
             accent: AccentColors {
                 selected: 0x0078d4,
@@ -755,6 +765,7 @@ impl ColorScheme {
                 tertiary: darken_hex(self.text.tertiary),
                 muted: darken_hex(self.text.muted),
                 dimmed: darken_hex(self.text.dimmed),
+                on_accent: darken_hex(self.text.on_accent),
             },
             accent: AccentColors {
                 selected: darken_hex(self.accent.selected),

@@ -183,7 +183,7 @@ impl AppShell {
 
         // Logo
         if spec.show_logo {
-            header = header.child(Self::render_logo(colors.accent_hex));
+            header = header.child(Self::render_logo(colors.accent_hex, colors.logo_icon_hex));
         }
 
         header.into_any_element()
@@ -217,7 +217,7 @@ impl AppShell {
     }
 
     /// Render the Script Kit logo
-    fn render_logo(accent: u32) -> AnyElement {
+    fn render_logo(accent: u32, logo_icon: u32) -> AnyElement {
         div()
             .w(px(21.0))
             .h(px(21.0))
@@ -230,7 +230,7 @@ impl AppShell {
                 gpui::svg()
                     .external_path(utils::get_logo_path())
                     .size(px(13.0))
-                    .text_color(gpui::rgb(0x000000)),
+                    .text_color(gpui::rgb(logo_icon)),
             )
             .into_any_element()
     }
@@ -268,7 +268,10 @@ impl AppShell {
         let mut left_side = hstack().gap(px(8.0)).items_center();
 
         if spec.show_logo {
-            left_side = left_side.child(Self::render_footer_logo(colors.accent_hex));
+            left_side = left_side.child(Self::render_footer_logo(
+                colors.accent_hex,
+                colors.logo_icon_hex,
+            ));
         }
 
         if let Some(ref helper) = spec.helper_text {
@@ -356,7 +359,7 @@ impl AppShell {
     }
 
     /// Render the footer logo (slightly smaller than header logo)
-    fn render_footer_logo(accent: u32) -> AnyElement {
+    fn render_footer_logo(accent: u32, logo_icon: u32) -> AnyElement {
         div()
             .w(px(20.0))
             .h(px(20.0))
@@ -369,7 +372,7 @@ impl AppShell {
                 gpui::svg()
                     .external_path(utils::get_logo_path())
                     .size(px(13.0))
-                    .text_color(gpui::rgb(0x000000)),
+                    .text_color(gpui::rgb(logo_icon)),
             )
             .into_any_element()
     }

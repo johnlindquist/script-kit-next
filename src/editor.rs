@@ -1005,8 +1005,8 @@ impl EditorPrompt {
                     };
                     // Use contrasting text color for selected item
                     let text_color = if is_selected {
-                        // White text on accent background for better contrast
-                        rgb(0xffffff)
+                        // Use on_accent color for text on accent backgrounds
+                        rgb(colors.text.on_accent)
                     } else {
                         rgb(colors.text.primary)
                     };

@@ -232,7 +232,8 @@ impl EnvPrompt {
                 .child(
                     div()
                         .bg(rgba((accent_color << 8) | 0x60))
-                        .text_color(rgb(0xffffff))
+                        // Use primary text color for selection - already set from theme
+                        .text_color(rgb(text_primary))
                         .child(selected),
                 )
                 .when(!after.is_empty(), |d: Div| d.child(div().child(after)))

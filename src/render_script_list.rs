@@ -272,8 +272,7 @@ impl ScriptListApp {
 
                                         // Wrap with confirmation overlay if pending
                                         let final_element = if is_pending_confirmation && is_selected {
-                                            // Create confirmation overlay
-                                            let warning_bg = rgb(0xB85C00); // Orange/warning background
+                                            // Create confirmation overlay using theme warning color
                                             let confirm_name = match result {
                                                 scripts::SearchResult::BuiltIn(bm) => {
                                                     format!("⚠️ Confirm {}? (Enter)", bm.entry.name)
@@ -287,11 +286,11 @@ impl ScriptListApp {
                                                 .flex()
                                                 .items_center()
                                                 .px(px(16.))
-                                                .bg(warning_bg)
+                                                .bg(rgb(theme_colors.warning_bg))
                                                 .rounded_md()
                                                 .child(
                                                     div()
-                                                        .text_color(gpui::white())
+                                                        .text_color(rgb(theme_colors.text_on_accent))
                                                         .font_weight(gpui::FontWeight::SEMIBOLD)
                                                         .text_size(px(14.))
                                                         .child(confirm_name)

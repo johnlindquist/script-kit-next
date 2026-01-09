@@ -12,7 +12,7 @@
 //! - Filter notes as user types in search
 
 use gpui::{
-    div, prelude::*, px, rgb, rgba, App, Context, Entity, FocusHandle, Focusable, IntoElement,
+    div, prelude::*, px, rgba, App, Context, Entity, FocusHandle, Focusable, IntoElement,
     KeyDownEvent, MouseButton, ParentElement, Render, Styled, Subscription, Window,
 };
 use gpui_component::{
@@ -308,13 +308,14 @@ impl BrowsePanel {
                     this.select_current(cx);
                 }),
             )
-            // Current note indicator (red dot)
+            // Current note indicator (accent dot)
             .child(
                 div()
                     .w(px(8.))
                     .h(px(8.))
                     .rounded_full()
-                    .when(note.is_current, |d| d.bg(rgb(0xff4444)))
+                    // Use theme accent color for current note indicator
+                    .when(note.is_current, |d| d.bg(cx.theme().accent))
                     .when(!note.is_current, |d| d.bg(gpui::transparent_black())),
             )
             // Title

@@ -96,11 +96,18 @@ pub struct HeaderColors {
     pub background: Hsla,
     pub search_box_bg: Hsla,
     pub border: Hsla,
+    /// Color for icons/text displayed on accent background (logo icon)
+    pub logo_icon: Hsla,
+    pub logo_icon_hex: u32,
 }
 
 impl HeaderColors {
     pub fn from_theme(theme: &Theme) -> Self {
         let colors = &theme.colors;
+        // Logo icon color: For Script Kit, we use black (0x000000) on gold/yellow
+        // accent background for brand consistency and maximum contrast.
+        // This could be made configurable via theme in the future.
+        let logo_icon_hex = 0x000000u32; // Black for contrast on yellow/gold
         Self {
             text_primary: colors.text.primary.to_rgb(),
             text_muted: colors.text.muted.to_rgb(),
@@ -110,6 +117,8 @@ impl HeaderColors {
             background: colors.background.main.to_rgb(),
             search_box_bg: colors.background.search_box.to_rgb(),
             border: colors.ui.border.to_rgb(),
+            logo_icon: logo_icon_hex.to_rgb(),
+            logo_icon_hex,
         }
     }
 }
@@ -123,11 +132,17 @@ pub struct FooterColors {
     pub border: Hsla,
     pub border_hex: u32,
     pub background: Hsla,
+    /// Color for icons/text displayed on accent background (logo icon)
+    pub logo_icon: Hsla,
+    pub logo_icon_hex: u32,
 }
 
 impl FooterColors {
     pub fn from_theme(theme: &Theme) -> Self {
         let colors = &theme.colors;
+        // Logo icon color: For Script Kit, we use black (0x000000) on gold/yellow
+        // accent background for brand consistency and maximum contrast.
+        let logo_icon_hex = 0x000000u32; // Black for contrast on yellow/gold
         Self {
             accent: colors.accent.selected.to_rgb(),
             accent_hex: colors.accent.selected,
@@ -135,6 +150,8 @@ impl FooterColors {
             border: colors.ui.border.to_rgb(),
             border_hex: colors.ui.border,
             background: colors.background.main.to_rgb(),
+            logo_icon: logo_icon_hex.to_rgb(),
+            logo_icon_hex,
         }
     }
 }

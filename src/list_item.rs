@@ -230,6 +230,10 @@ pub struct ListItemColors {
     pub selected_opacity: f32,
     /// Opacity for hovered item background (from theme.opacity.hover)
     pub hover_opacity: f32,
+    /// Warning background color (for confirmation overlays, alerts)
+    pub warning_bg: u32,
+    /// Text color for content displayed on accent/warning backgrounds
+    pub text_on_accent: u32,
 }
 
 impl ListItemColors {
@@ -247,6 +251,9 @@ impl ListItemColors {
             background_selected: theme.colors.accent.selected_subtle,
             selected_opacity: opacity.selected,
             hover_opacity: opacity.hover,
+            warning_bg: theme.colors.ui.warning,
+            // White text provides good contrast on warning/accent backgrounds in dark themes
+            text_on_accent: theme.colors.text.primary,
         }
     }
 
@@ -264,6 +271,8 @@ impl ListItemColors {
             background_selected: colors.background_selected,
             selected_opacity: 0.95, // Default - visible selection
             hover_opacity: 0.85,    // Default - visible hover
+            warning_bg: colors.warning,
+            text_on_accent: colors.text_on_accent,
         }
     }
 }
