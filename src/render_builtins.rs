@@ -673,13 +673,15 @@ impl ScriptListApp {
                                 )
                         };
 
+                        // Image container - use very subtle background for vibrancy
+                        let image_bg_alpha = (opacity.main * 255.0 * 0.15) as u32; // 15% of main opacity
                         panel = panel.child(
                             div()
                                 .w_full()
                                 .flex_1()
                                 .p(px(spacing.padding_lg))
                                 .rounded(px(visual.radius_md))
-                                .bg(rgba((bg_search_box << 8) | 0x80))
+                                .bg(rgba((bg_search_box << 8) | image_bg_alpha))
                                 .flex()
                                 .items_center()
                                 .justify_center()
