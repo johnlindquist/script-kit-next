@@ -2051,7 +2051,7 @@ impl ScriptListApp {
                             let results = crate::file_search::search_files(
                                 &query_for_thread,
                                 None,
-                                crate::file_search::DEFAULT_CACHE_LIMIT,
+                                crate::file_search::DEFAULT_SEARCH_LIMIT,
                             );
                             let _ = tx.send(results);
                         });
@@ -2437,7 +2437,7 @@ impl ScriptListApp {
                     crate::file_search::search_files(
                         &text,
                         None,
-                        crate::file_search::DEFAULT_CACHE_LIMIT,
+                        crate::file_search::DEFAULT_SEARCH_LIMIT,
                     )
                 };
                 logging::log(

@@ -779,7 +779,7 @@ impl ScriptListApp {
                                         file_search::search_files(
                                             query,
                                             only_in.as_deref(),
-                                            file_search::DEFAULT_CACHE_LIMIT,
+                                            file_search::DEFAULT_SEARCH_LIMIT,
                                         )
                                     };
 

@@ -114,9 +114,13 @@ pub struct FileMetadata {
 #[allow(dead_code)]
 pub const DEFAULT_LIMIT: usize = 50;
 
-/// Default cache limit for fetching candidates before filtering
-/// We fetch more results initially so fuzzy filtering can find matches
-#[allow(dead_code)]
+/// Limit for interactive mdfind searches
+/// Smaller than directory listing because each result requires a stat() call
+/// 500 results is plenty for fuzzy filtering and keeps response time <1s
+pub const DEFAULT_SEARCH_LIMIT: usize = 500;
+
+/// Default cache limit for directory listing (fast operation, can handle more)
+/// Directory listing is cheaper than mdfind search (single readdir vs many stat calls)
 pub const DEFAULT_CACHE_LIMIT: usize = 2000;
 
 /// Check if the query looks like an advanced mdfind query (with operators)

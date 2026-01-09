@@ -2200,13 +2200,40 @@ impl ScriptListApp {
         // Use uniform_list for virtualized scrolling
         // Show appropriate state based on loading and results
         let list_element = if is_loading && filtered_len == 0 {
-            // Loading state - show "Searching..." instead of empty list
+            // Loading state - show subtle loading indicator with pulsing dots
             div()
                 .w_full()
-                .py(px(design_spacing.padding_xl))
-                .text_center()
-                .text_color(rgb(text_dimmed))
-                .child("Searching...")
+                .h_full()
+                .flex()
+                .flex_col()
+                .items_center()
+                .justify_center()
+                .gap(px(12.))
+                .child(
+                    // Pulsing dots indicator
+                    div()
+                        .flex()
+                        .flex_row()
+                        .gap(px(6.))
+                        .child(
+                            div()
+                                .size(px(8.))
+                                .rounded_full()
+                                .bg(rgba((text_dimmed << 8) | 0x60)),
+                        )
+                        .child(
+                            div()
+                                .size(px(8.))
+                                .rounded_full()
+                                .bg(rgba((text_dimmed << 8) | 0x40)),
+                        )
+                        .child(
+                            div()
+                                .size(px(8.))
+                                .rounded_full()
+                                .bg(rgba((text_dimmed << 8) | 0x20)),
+                        ),
+                )
                 .into_any_element()
         } else if filtered_len == 0 {
             // No results and not loading
@@ -2423,6 +2450,9 @@ impl ScriptListApp {
                                 ),
                         ),
                 )
+        } else if is_loading {
+            // When loading, show empty preview (no distracting message)
+            div().flex_1()
         } else {
             div().flex_1().flex().items_center().justify_center().child(
                 div()
@@ -2484,9 +2514,34 @@ impl ScriptListApp {
                                 .text_sm()
                                 .text_color(rgb(text_dimmed))
                                 .child(if is_loading {
-                                    "Searching...".to_string()
+                                    // Show pulsing dots instead of text when loading
+                                    div()
+                                        .flex()
+                                        .flex_row()
+                                        .gap(px(4.))
+                                        .child(
+                                            div()
+                                                .size(px(6.))
+                                                .rounded_full()
+                                                .bg(rgba((text_dimmed << 8) | 0x80)),
+                                        )
+                                        .child(
+                                            div()
+                                                .size(px(6.))
+                                                .rounded_full()
+                                                .bg(rgba((text_dimmed << 8) | 0x50)),
+                                        )
+                                        .child(
+                                            div()
+                                                .size(px(6.))
+                                                .rounded_full()
+                                                .bg(rgba((text_dimmed << 8) | 0x30)),
+                                        )
+                                        .into_any_element()
                                 } else {
-                                    format!("{} files", filtered_len)
+                                    div()
+                                        .child(format!("{} files", filtered_len))
+                                        .into_any_element()
                                 }),
                         ),
                     )

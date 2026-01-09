@@ -1079,12 +1079,12 @@ impl ScriptListApp {
                     "EXEC",
                     "Path mode not a real directory; falling back to Spotlight search",
                 );
-                file_search::search_files(&query, None, file_search::DEFAULT_CACHE_LIMIT)
+                file_search::search_files(&query, None, file_search::DEFAULT_SEARCH_LIMIT)
             } else {
                 dir_results
             }
         } else {
-            file_search::search_files(&query, None, file_search::DEFAULT_CACHE_LIMIT)
+            file_search::search_files(&query, None, file_search::DEFAULT_SEARCH_LIMIT)
         };
         logging::log(
             "EXEC",
