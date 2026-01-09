@@ -680,6 +680,21 @@ impl ScriptListApp {
                                     cx.stop_propagation();
                                 }
                                 AppView::ScriptList => {
+                                    // CRITICAL: If actions popup is open, route to actions dialog instead
+                                    if this.show_actions_popup {
+                                        if let Some(ref dialog) = this.actions_dialog {
+                                            if key == "up" || key == "arrowup" {
+                                                dialog.update(cx, |d, cx| d.move_up(cx));
+                                            } else if key == "down" || key == "arrowdown" {
+                                                dialog.update(cx, |d, cx| d.move_down(cx));
+                                            }
+                                            // Notify the actions window to re-render
+                                            crate::actions::notify_actions_window(cx);
+                                        }
+                                        cx.stop_propagation();
+                                        return;
+                                    }
+
                                     // Main menu: handle list navigation + input history
                                     let (grouped_items, _) = this.get_grouped_results_cached();
                                     let total_items = grouped_items.len();
