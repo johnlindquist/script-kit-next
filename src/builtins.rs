@@ -1383,7 +1383,7 @@ mod tests {
 
         // Check that script command entries exist
         assert!(entries.iter().any(|e| e.id == "builtin-new-script"));
-        assert!(entries.iter().any(|e| e.id == "builtin-new-scriptlet"));
+        assert!(entries.iter().any(|e| e.id == "builtin-new-extension"));
     }
 
     #[test]
