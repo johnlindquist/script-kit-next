@@ -255,7 +255,7 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
         );
     }
 
-    // Script-only actions (not available for built-ins, apps, windows)
+    // Script-only actions (not available for built-ins, apps, windows, scriptlets)
     if script.is_script {
         actions.push(
             Action::new(
@@ -292,6 +292,39 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
                 "copy_path",
                 "Copy Path",
                 Some("Copy script path to clipboard".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌘⇧C"),
+        );
+    }
+
+    // Scriptlet-specific actions (work with the markdown file containing the scriptlet)
+    if script.is_scriptlet {
+        actions.push(
+            Action::new(
+                "edit_scriptlet",
+                "Edit Scriptlet",
+                Some("Open the markdown file in $EDITOR".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌘E"),
+        );
+
+        actions.push(
+            Action::new(
+                "reveal_scriptlet_in_finder",
+                "Reveal in Finder",
+                Some("Show scriptlet bundle in Finder".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌘⇧F"),
+        );
+
+        actions.push(
+            Action::new(
+                "copy_scriptlet_path",
+                "Copy Path",
+                Some("Copy scriptlet bundle path to clipboard".to_string()),
                 ActionCategory::ScriptContext,
             )
             .with_shortcut("⌘⇧C"),
@@ -372,6 +405,33 @@ mod tests {
         assert!(actions.iter().any(|a| a.id == "run_script"));
         assert!(actions.iter().any(|a| a.id == "copy_deeplink"));
         assert!(actions.iter().any(|a| a.id == "add_shortcut"));
+
+        // Should NOT have script-only actions
+        assert!(!actions.iter().any(|a| a.id == "edit_script"));
+        assert!(!actions.iter().any(|a| a.id == "view_logs"));
+        assert!(!actions.iter().any(|a| a.id == "reveal_in_finder"));
+        assert!(!actions.iter().any(|a| a.id == "copy_path"));
+    }
+
+    #[test]
+    fn test_get_scriptlet_context_actions() {
+        // Scriptlets should have scriptlet-specific actions
+        let scriptlet = ScriptInfo::scriptlet("Open GitHub", "/path/to/url.md", None);
+        let actions = get_script_context_actions(&scriptlet);
+
+        // Should have run, copy_deeplink, and add_shortcut (no shortcut by default)
+        assert!(actions.iter().any(|a| a.id == "run_script"));
+        assert!(actions.iter().any(|a| a.id == "copy_deeplink"));
+        assert!(actions.iter().any(|a| a.id == "add_shortcut"));
+
+        // Should have scriptlet-specific actions
+        assert!(actions.iter().any(|a| a.id == "edit_scriptlet"));
+        assert!(actions.iter().any(|a| a.id == "reveal_scriptlet_in_finder"));
+        assert!(actions.iter().any(|a| a.id == "copy_scriptlet_path"));
+
+        // Verify edit_scriptlet has correct title
+        let edit_action = actions.iter().find(|a| a.id == "edit_scriptlet").unwrap();
+        assert_eq!(edit_action.title, "Edit Scriptlet");
 
         // Should NOT have script-only actions
         assert!(!actions.iter().any(|a| a.id == "edit_script"));

@@ -22,6 +22,9 @@ pub struct ScriptInfo {
     /// Whether this is a real script file (true) or a built-in command (false)
     /// Built-in commands (like Clipboard History, App Launcher) have limited actions
     pub is_script: bool,
+    /// Whether this is a scriptlet (snippet from markdown file)
+    /// Scriptlets have their own actions (Edit Scriptlet, etc.) that work with the markdown file
+    pub is_scriptlet: bool,
     /// The verb to use for the primary action (e.g., "Run", "Launch", "Switch to")
     /// Defaults to "Run" for scripts
     pub action_verb: String,
@@ -37,6 +40,7 @@ impl ScriptInfo {
             name: name.into(),
             path: path.into(),
             is_script: true,
+            is_scriptlet: false,
             action_verb: "Run".to_string(),
             shortcut: None,
         }
@@ -53,6 +57,24 @@ impl ScriptInfo {
             name: name.into(),
             path: path.into(),
             is_script: true,
+            is_scriptlet: false,
+            action_verb: "Run".to_string(),
+            shortcut,
+        }
+    }
+
+    /// Create a ScriptInfo for a scriptlet (snippet from markdown file)
+    /// Scriptlets have their own actions that work with the source markdown file
+    pub fn scriptlet(
+        name: impl Into<String>,
+        markdown_path: impl Into<String>,
+        shortcut: Option<String>,
+    ) -> Self {
+        ScriptInfo {
+            name: name.into(),
+            path: markdown_path.into(),
+            is_script: false,
+            is_scriptlet: true,
             action_verb: "Run".to_string(),
             shortcut,
         }
@@ -66,6 +88,7 @@ impl ScriptInfo {
             name: name.into(),
             path: String::new(),
             is_script: false,
+            is_scriptlet: false,
             action_verb: "Run".to_string(),
             shortcut: None,
         }
@@ -82,6 +105,7 @@ impl ScriptInfo {
             name: name.into(),
             path: path.into(),
             is_script,
+            is_scriptlet: false,
             action_verb: "Run".to_string(),
             shortcut: None,
         }
@@ -98,6 +122,7 @@ impl ScriptInfo {
             name: name.into(),
             path: path.into(),
             is_script,
+            is_scriptlet: false,
             action_verb: action_verb.into(),
             shortcut: None,
         }
@@ -116,6 +141,7 @@ impl ScriptInfo {
             name: name.into(),
             path: path.into(),
             is_script,
+            is_scriptlet: false,
             action_verb: action_verb.into(),
             shortcut,
         }
@@ -187,6 +213,7 @@ mod tests {
         assert_eq!(script.name, "test-script");
         assert_eq!(script.path, "/path/to/test-script.ts");
         assert!(script.is_script);
+        assert!(!script.is_scriptlet);
         assert!(script.shortcut.is_none());
     }
 
@@ -198,7 +225,24 @@ mod tests {
             Some("cmd+shift+t".to_string()),
         );
         assert_eq!(script.name, "test-script");
+        assert!(script.is_script);
+        assert!(!script.is_scriptlet);
         assert_eq!(script.shortcut, Some("cmd+shift+t".to_string()));
+    }
+
+    #[test]
+    fn test_script_info_scriptlet() {
+        let scriptlet = ScriptInfo::scriptlet(
+            "Open GitHub",
+            "/path/to/url.md#open-github",
+            Some("cmd+g".to_string()),
+        );
+        assert_eq!(scriptlet.name, "Open GitHub");
+        assert_eq!(scriptlet.path, "/path/to/url.md#open-github");
+        assert!(!scriptlet.is_script);
+        assert!(scriptlet.is_scriptlet);
+        assert_eq!(scriptlet.shortcut, Some("cmd+g".to_string()));
+        assert_eq!(scriptlet.action_verb, "Run");
     }
 
     #[test]
@@ -207,6 +251,7 @@ mod tests {
         assert_eq!(builtin.name, "Clipboard History");
         assert_eq!(builtin.path, "");
         assert!(!builtin.is_script);
+        assert!(!builtin.is_scriptlet);
         assert!(builtin.shortcut.is_none());
     }
 
@@ -214,10 +259,12 @@ mod tests {
     fn test_script_info_with_is_script() {
         let script = ScriptInfo::with_is_script("my-script", "/path/to/script.ts", true);
         assert!(script.is_script);
+        assert!(!script.is_scriptlet);
         assert!(script.shortcut.is_none());
 
         let builtin = ScriptInfo::with_is_script("App Launcher", "", false);
         assert!(!builtin.is_script);
+        assert!(!builtin.is_scriptlet);
     }
 
     #[test]
@@ -230,6 +277,7 @@ mod tests {
             Some("cmd+k".to_string()),
         );
         assert_eq!(script.action_verb, "Launch");
+        assert!(!script.is_scriptlet);
         assert_eq!(script.shortcut, Some("cmd+k".to_string()));
     }
 
