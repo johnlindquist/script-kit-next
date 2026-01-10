@@ -10,8 +10,8 @@
 //! Design: Matches ArgPrompt-no-choices (single input line, minimal height)
 
 use gpui::{
-    div, prelude::*, px, rgb, rgba, svg, Context, Div, FocusHandle, Focusable, Render,
-    SharedString, Window,
+    div, prelude::*, px, rgb, rgba, Context, Div, FocusHandle, Focusable, Render, SharedString,
+    Window,
 };
 use std::sync::Arc;
 
@@ -20,8 +20,7 @@ use crate::components::TextInputState;
 use crate::designs::{get_tokens, DesignVariant};
 use crate::logging;
 use crate::panel::{
-    CURSOR_GAP_X, CURSOR_HEIGHT_LG, CURSOR_MARGIN_Y, CURSOR_WIDTH, HEADER_GAP, HEADER_PADDING_X,
-    HEADER_PADDING_Y,
+    CURSOR_HEIGHT_LG, CURSOR_MARGIN_Y, CURSOR_WIDTH, HEADER_GAP, HEADER_PADDING_X, HEADER_PADDING_Y,
 };
 use crate::theme;
 
@@ -313,7 +312,6 @@ impl Render for EnvPrompt {
         // Use design tokens for consistent styling (matches ArgPrompt)
         let text_primary = design_colors.text_primary;
         let text_muted = design_colors.text_muted;
-        let text_dimmed = design_colors.text_dimmed;
         let accent_color = design_colors.accent;
 
         // Build placeholder text: "Enter {KEY}" or custom prompt, with lock icon for secrets
@@ -361,14 +359,16 @@ impl Render for EnvPrompt {
                     .flex_row()
                     .items_center()
                     .gap(px(HEADER_GAP))
-                    // Input area with cursor and selection
-                    .child(
+                    // Input area with cursor and selection (matches ArgPrompt - no buttons/logo in header)
+                    .child({
+                        let input_height = CURSOR_HEIGHT_LG + (CURSOR_MARGIN_Y * 2.0);
                         div()
                             .flex_1()
                             .flex()
                             .flex_row()
                             .items_center()
-                            .text_lg()
+                            .h(px(input_height)) // Fixed height for consistent vertical centering
+                            .text_xl() // Match ArgPrompt text size
                             .text_color(if input_is_empty {
                                 rgb(text_muted)
                             } else {
@@ -378,57 +378,28 @@ impl Render for EnvPrompt {
                             .when(input_is_empty, |d: Div| {
                                 d.child(
                                     div()
-                                        .w(px(CURSOR_WIDTH))
-                                        .h(px(CURSOR_HEIGHT_LG))
-                                        .my(px(CURSOR_MARGIN_Y))
-                                        .mr(px(CURSOR_GAP_X))
-                                        .bg(rgb(text_primary)),
+                                        .flex()
+                                        .flex_row()
+                                        .items_center()
+                                        .child(
+                                            div()
+                                                .w(px(CURSOR_WIDTH))
+                                                .h(px(CURSOR_HEIGHT_LG))
+                                                .bg(rgb(text_primary)),
+                                        )
+                                        .child(
+                                            div()
+                                                .ml(px(-(CURSOR_WIDTH))) // Overlay cursor
+                                                .text_color(rgb(text_muted))
+                                                .child(placeholder.clone()),
+                                        ),
                                 )
-                                .child(div().child(placeholder.clone()))
                             })
                             // When has text: show text with cursor/selection
                             .when(!input_is_empty, |d: Div| {
                                 d.child(self.render_input_text(text_primary, accent_color))
-                            }),
-                    )
-                    // Submit button area (matches ArgPrompt style)
-                    .child(
-                        div()
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .child(
-                                div()
-                                    .text_color(rgb(accent_color))
-                                    .text_sm()
-                                    .child("Submit"),
-                            )
-                            .child(
-                                div()
-                                    .ml(px(4.))
-                                    .px(px(4.))
-                                    .py(px(2.))
-                                    .rounded(px(4.))
-                                    .bg(rgba((text_dimmed << 8) | 0x30))
-                                    .text_color(rgb(text_muted))
-                                    .text_xs()
-                                    .child("↵"),
-                            )
-                            .child(
-                                div()
-                                    .mx(px(4.))
-                                    .text_color(rgba((text_dimmed << 8) | 0x60))
-                                    .text_sm()
-                                    .child("|"),
-                            ),
-                    )
-                    // Script Kit logo
-                    .child(
-                        svg()
-                            .path(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/logo.svg"))
-                            .size(px(16.))
-                            .text_color(rgb(accent_color)),
-                    ),
+                            })
+                    }),
             )
             // Footer with submit action (directly after header, no spacer)
             .child({
