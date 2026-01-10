@@ -174,6 +174,7 @@ impl WindowInfo {
 /// Tiling positions for windows
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TilePosition {
+    // Half positions
     /// Left half of the screen
     LeftHalf,
     /// Right half of the screen
@@ -182,6 +183,8 @@ pub enum TilePosition {
     TopHalf,
     /// Bottom half of the screen
     BottomHalf,
+
+    // Quadrant positions
     /// Top-left quadrant
     TopLeft,
     /// Top-right quadrant
@@ -190,6 +193,41 @@ pub enum TilePosition {
     BottomLeft,
     /// Bottom-right quadrant
     BottomRight,
+
+    // Horizontal thirds positions
+    /// Left third of the screen
+    LeftThird,
+    /// Center third of the screen (horizontal)
+    CenterThird,
+    /// Right third of the screen
+    RightThird,
+
+    // Vertical thirds positions
+    /// Top third of the screen
+    TopThird,
+    /// Middle third of the screen (vertical)
+    MiddleThird,
+    /// Bottom third of the screen
+    BottomThird,
+
+    // Horizontal two-thirds positions
+    /// First two-thirds of the screen (left side)
+    FirstTwoThirds,
+    /// Last two-thirds of the screen (right side)
+    LastTwoThirds,
+
+    // Vertical two-thirds positions
+    /// Top two-thirds of the screen
+    TopTwoThirds,
+    /// Bottom two-thirds of the screen
+    BottomTwoThirds,
+
+    // Centered positions
+    /// Centered on screen (60% of screen dimensions)
+    Center,
+    /// Almost maximize (90% with margins)
+    AlmostMaximize,
+
     /// Fullscreen (covers entire display)
     Fullscreen,
 }
@@ -1068,6 +1106,125 @@ pub fn focus_window(window_id: u32) -> Result<()> {
     Ok(())
 }
 
+/// Move a window to the next display (cycles through available displays).
+#[instrument]
+pub fn move_to_next_display(window_id: u32) -> Result<()> {
+    move_to_adjacent_display(window_id, true)
+}
+
+/// Move a window to the previous display (cycles through available displays).
+#[instrument]
+pub fn move_to_previous_display(window_id: u32) -> Result<()> {
+    move_to_adjacent_display(window_id, false)
+}
+
+/// Internal helper to move window to adjacent display
+fn move_to_adjacent_display(window_id: u32, next: bool) -> Result<()> {
+    let window = get_cached_window(window_id)
+        .or_else(|| {
+            let _ = list_windows();
+            get_cached_window(window_id)
+        })
+        .context("Window not found")?;
+
+    let (current_x, current_y) = get_window_position(window).unwrap_or((0, 0));
+    let (current_width, current_height) = get_window_size(window).unwrap_or((800, 600));
+
+    let displays = get_all_display_bounds()?;
+    if displays.len() <= 1 {
+        info!(window_id, "Only one display, cannot move to adjacent");
+        return Ok(());
+    }
+
+    let current_display_idx = displays
+        .iter()
+        .position(|d| {
+            current_x >= d.x
+                && current_x < d.x + d.width as i32
+                && current_y >= d.y
+                && current_y < d.y + d.height as i32
+        })
+        .unwrap_or(0);
+
+    let target_idx = if next {
+        (current_display_idx + 1) % displays.len()
+    } else if current_display_idx == 0 {
+        displays.len() - 1
+    } else {
+        current_display_idx - 1
+    };
+
+    let current_display = &displays[current_display_idx];
+    let target_display = &displays[target_idx];
+
+    let rel_x = (current_x - current_display.x) as f64 / current_display.width as f64;
+    let rel_y = (current_y - current_display.y) as f64 / current_display.height as f64;
+
+    let new_x = target_display.x + (rel_x * target_display.width as f64) as i32;
+    let new_y = target_display.y + (rel_y * target_display.height as f64) as i32;
+
+    let scale_x = target_display.width as f64 / current_display.width as f64;
+    let scale_y = target_display.height as f64 / current_display.height as f64;
+    let new_width = (current_width as f64 * scale_x).min(target_display.width as f64) as u32;
+    let new_height = (current_height as f64 * scale_y).min(target_display.height as f64) as u32;
+
+    set_window_position(window, new_x, new_y)?;
+    set_window_size(window, new_width, new_height)?;
+
+    info!(
+        window_id,
+        from_display = current_display_idx,
+        to_display = target_idx,
+        "Moved window to {} display",
+        if next { "next" } else { "previous" }
+    );
+    Ok(())
+}
+
+/// Get bounds for all available displays
+fn get_all_display_bounds() -> Result<Vec<Bounds>> {
+    let mut displays = Vec::new();
+
+    unsafe {
+        use objc::runtime::{Class, Object};
+        use objc::{msg_send, sel, sel_impl};
+
+        let nsscreen_class = Class::get("NSScreen").context("Failed to get NSScreen class")?;
+        let screens: *mut Object = msg_send![nsscreen_class, screens];
+        if screens.is_null() {
+            bail!("Failed to get screens");
+        }
+
+        let screen_count: usize = msg_send![screens, count];
+        if screen_count == 0 {
+            bail!("No screens found");
+        }
+
+        let primary_screen: *mut Object = msg_send![screens, objectAtIndex: 0usize];
+        let primary_frame: CGRect = msg_send![primary_screen, frame];
+        let primary_height = primary_frame.size.height;
+
+        for i in 0..screen_count {
+            let screen: *mut Object = msg_send![screens, objectAtIndex: i];
+            if screen.is_null() {
+                continue;
+            }
+
+            let visible_frame: CGRect = msg_send![screen, visibleFrame];
+            let cg_y = primary_height - (visible_frame.origin.y + visible_frame.size.height);
+
+            displays.push(Bounds {
+                x: visible_frame.origin.x as i32,
+                y: cg_y as i32,
+                width: visible_frame.size.width as u32,
+                height: visible_frame.size.height as u32,
+            });
+        }
+    }
+
+    Ok(displays)
+}
+
 // ============================================================================
 // Helper Functions for Display Bounds
 // ============================================================================
@@ -1221,8 +1378,13 @@ fn get_visible_display_bounds_fallback(x: i32, y: i32) -> Bounds {
 fn calculate_tile_bounds(display: &Bounds, position: TilePosition) -> Bounds {
     let half_width = display.width / 2;
     let half_height = display.height / 2;
+    let third_width = display.width / 3;
+    let third_height = display.height / 3;
+    let two_thirds_width = (display.width * 2) / 3;
+    let two_thirds_height = (display.height * 2) / 3;
 
     match position {
+        // Half positions
         TilePosition::LeftHalf => Bounds {
             x: display.x,
             y: display.y,
@@ -1247,6 +1409,8 @@ fn calculate_tile_bounds(display: &Bounds, position: TilePosition) -> Bounds {
             width: display.width,
             height: half_height,
         },
+
+        // Quadrant positions
         TilePosition::TopLeft => Bounds {
             x: display.x,
             y: display.y,
@@ -1271,6 +1435,101 @@ fn calculate_tile_bounds(display: &Bounds, position: TilePosition) -> Bounds {
             width: half_width,
             height: half_height,
         },
+
+        // Horizontal thirds positions
+        TilePosition::LeftThird => Bounds {
+            x: display.x,
+            y: display.y,
+            width: third_width,
+            height: display.height,
+        },
+        TilePosition::CenterThird => Bounds {
+            x: display.x + third_width as i32,
+            y: display.y,
+            width: third_width,
+            height: display.height,
+        },
+        TilePosition::RightThird => Bounds {
+            x: display.x + (two_thirds_width) as i32,
+            y: display.y,
+            width: third_width,
+            height: display.height,
+        },
+
+        // Vertical thirds positions
+        TilePosition::TopThird => Bounds {
+            x: display.x,
+            y: display.y,
+            width: display.width,
+            height: third_height,
+        },
+        TilePosition::MiddleThird => Bounds {
+            x: display.x,
+            y: display.y + third_height as i32,
+            width: display.width,
+            height: third_height,
+        },
+        TilePosition::BottomThird => Bounds {
+            x: display.x,
+            y: display.y + two_thirds_height as i32,
+            width: display.width,
+            height: third_height,
+        },
+
+        // Horizontal two-thirds positions
+        TilePosition::FirstTwoThirds => Bounds {
+            x: display.x,
+            y: display.y,
+            width: two_thirds_width,
+            height: display.height,
+        },
+        TilePosition::LastTwoThirds => Bounds {
+            x: display.x + third_width as i32,
+            y: display.y,
+            width: two_thirds_width,
+            height: display.height,
+        },
+
+        // Vertical two-thirds positions
+        TilePosition::TopTwoThirds => Bounds {
+            x: display.x,
+            y: display.y,
+            width: display.width,
+            height: two_thirds_height,
+        },
+        TilePosition::BottomTwoThirds => Bounds {
+            x: display.x,
+            y: display.y + third_height as i32,
+            width: display.width,
+            height: two_thirds_height,
+        },
+
+        // Centered positions
+        TilePosition::Center => {
+            // 60% of screen, centered
+            let width = (display.width * 60) / 100;
+            let height = (display.height * 60) / 100;
+            let x_offset = (display.width - width) / 2;
+            let y_offset = (display.height - height) / 2;
+            Bounds {
+                x: display.x + x_offset as i32,
+                y: display.y + y_offset as i32,
+                width,
+                height,
+            }
+        }
+        TilePosition::AlmostMaximize => {
+            // 90% of screen with margins
+            let margin_x = (display.width * 5) / 100; // 5% margin on each side
+            let margin_y = (display.height * 5) / 100;
+            Bounds {
+                x: display.x + margin_x as i32,
+                y: display.y + margin_y as i32,
+                width: display.width - (margin_x * 2),
+                height: display.height - (margin_y * 2),
+            }
+        }
+
         TilePosition::Fullscreen => *display,
     }
 }
