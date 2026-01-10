@@ -15,6 +15,7 @@ use gpui::{
 };
 use std::sync::Arc;
 
+use crate::components::prompt_footer::{PromptFooter, PromptFooterColors, PromptFooterConfig};
 use crate::components::TextInputState;
 use crate::designs::{get_tokens, DesignVariant};
 use crate::logging;
@@ -429,5 +430,17 @@ impl Render for EnvPrompt {
                             .text_color(rgb(accent_color)),
                     ),
             )
+            // Spacer to push footer to bottom
+            .child(div().flex_1())
+            // Footer with submit action
+            .child({
+                let footer_colors = PromptFooterColors::from_theme(&self.theme);
+                let footer_config = PromptFooterConfig::new()
+                    .primary_label("Submit")
+                    .primary_shortcut("↵")
+                    .show_secondary(false); // No secondary action for env prompt
+
+                PromptFooter::new(footer_config, footer_colors)
+            })
     }
 }
