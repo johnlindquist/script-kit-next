@@ -1301,6 +1301,17 @@ impl ScriptListApp {
                                         choices,
                                         multiple: multiple.unwrap_or(false),
                                     }),
+                                    Message::Confirm {
+                                        id,
+                                        message,
+                                        confirm_text,
+                                        cancel_text,
+                                    } => Some(PromptMessage::ShowConfirm {
+                                        id,
+                                        message,
+                                        confirm_text,
+                                        cancel_text,
+                                    }),
                                     Message::Exit { .. } => Some(PromptMessage::ScriptExit),
                                     Message::ForceSubmit { value } => {
                                         Some(PromptMessage::ForceSubmit { value })
