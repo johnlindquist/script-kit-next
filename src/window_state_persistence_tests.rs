@@ -214,8 +214,14 @@ mod tests {
             };
 
             // Save different positions for each display
-            save_main_position_for_display(&display1, PersistedWindowBounds::new(100.0, 100.0, 750.0, 475.0));
-            save_main_position_for_display(&display2, PersistedWindowBounds::new(300.0, 300.0, 750.0, 475.0));
+            save_main_position_for_display(
+                &display1,
+                PersistedWindowBounds::new(100.0, 100.0, 750.0, 475.0),
+            );
+            save_main_position_for_display(
+                &display2,
+                PersistedWindowBounds::new(300.0, 300.0, 750.0, 475.0),
+            );
 
             // Verify each display has its own position
             let loaded1 = get_main_position_for_display(&display1).unwrap();

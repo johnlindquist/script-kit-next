@@ -383,10 +383,7 @@ fn show_main_window_helper(
             platform::calculate_eye_line_bounds_on_mouse_display(window_size)
         }
     } else {
-        logging::log(
-            "VISIBILITY",
-            "Could not get mouse position, using eye-line",
-        );
+        logging::log("VISIBILITY", "Could not get mouse position, using eye-line");
         platform::calculate_eye_line_bounds_on_mouse_display(window_size)
     };
     platform::move_first_window_to_bounds(&bounds);
@@ -478,7 +475,10 @@ fn hide_main_window_helper(app_entity: Entity<ScriptListApp>, cx: &mut App) {
             );
             window_state::save_main_position_for_display(display, bounds);
         } else {
-            logging::log("VISIBILITY", "Could not determine display for window position");
+            logging::log(
+                "VISIBILITY",
+                "Could not determine display for window position",
+            );
         }
     } else {
         logging::log("VISIBILITY", "Could not get window bounds for saving");
