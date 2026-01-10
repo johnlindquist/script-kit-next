@@ -15,6 +15,7 @@ use std::sync::Arc;
 
 use crate::components::TextInputState;
 use crate::logging;
+use crate::prompts::markdown::render_markdown;
 use crate::protocol::{ChatMessagePosition, ChatMessageRole, ChatPromptMessage};
 use crate::theme;
 use crate::ui_foundation::get_vibrancy_background;
@@ -806,25 +807,25 @@ impl ChatPrompt {
         }
         // AI response (only show if no error, or show partial if stream interrupted)
         else if let Some(ref response) = turn.assistant_response {
-            let mut response_div = div()
-                .text_sm()
-                .text_color(rgb(colors.text_primary))
-                .child(response.clone());
-
-            // Add streaming indicator
-            if turn.streaming {
-                if response.is_empty() {
-                    response_div = response_div.child(
-                        div().text_xs().opacity(0.6).child("Thinking..."),
-                    );
-                } else {
-                    response_div = response_div.child(
-                        div().text_color(rgb(colors.accent_color)).child("▌"),
-                    );
-                }
+            // Use markdown rendering for assistant responses
+            if turn.streaming && response.is_empty() {
+                // Empty streaming state
+                content = content.child(
+                    div().text_xs().opacity(0.6).child("Thinking..."),
+                );
+            } else if turn.streaming {
+                // Streaming with content - render markdown + cursor
+                content = content.child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .child(render_markdown(response, colors))
+                        .child(div().text_color(rgb(colors.accent_color)).child("▌")),
+                );
+            } else {
+                // Complete response - full markdown rendering
+                content = content.child(render_markdown(response, colors));
             }
-
-            content = content.child(response_div);
         }
 
         // Copy button (appears on right side) - copies assistant response

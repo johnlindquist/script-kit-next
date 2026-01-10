@@ -20,6 +20,7 @@ pub mod chat;
 pub mod div;
 mod drop;
 pub mod env;
+pub mod markdown;
 mod path;
 mod select;
 mod template;
