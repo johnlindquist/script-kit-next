@@ -13,6 +13,7 @@
 
 use gpui::{point, px, Bounds, Pixels, WindowBounds};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 
@@ -132,13 +133,17 @@ impl PersistedWindowBounds {
 pub struct WindowStateFile {
     #[serde(default = "default_version")]
     pub version: u32,
+    /// Legacy main window position (for backwards compatibility)
     pub main: Option<PersistedWindowBounds>,
+    /// Main window positions stored per display (keyed by display dimensions, e.g., "2560x1440")
+    #[serde(default)]
+    pub main_per_display: HashMap<String, PersistedWindowBounds>,
     pub notes: Option<PersistedWindowBounds>,
     pub ai: Option<PersistedWindowBounds>,
 }
 
 fn default_version() -> u32 {
-    1
+    2 // Version 2 adds per-display support
 }
 
 // ============================================================================
@@ -267,6 +272,131 @@ pub fn reset_all_positions() {
 /// Check if any window positions have been customized
 pub fn has_custom_positions() -> bool {
     load_state_file().is_some_and(|s| s.main.is_some() || s.notes.is_some() || s.ai.is_some())
+}
+
+// ============================================================================
+// Per-Display Position Storage (Main Window Only)
+// ============================================================================
+
+/// Generate a stable key for a display based on its dimensions.
+/// Format: "WIDTHxHEIGHT" (e.g., "2560x1440")
+///
+/// Using dimensions only (not origin) because:
+/// - Origins change when display arrangements change
+/// - Dimensions are stable across reboots
+/// - If two displays have the same resolution, they share position (acceptable trade-off)
+pub fn display_key(display: &DisplayBounds) -> String {
+    format!("{}x{}", display.width as u32, display.height as u32)
+}
+
+/// Find which display contains the given point (typically mouse cursor).
+/// Returns None if point is not on any display.
+pub fn find_display_containing_point(
+    x: f64,
+    y: f64,
+    displays: &[DisplayBounds],
+) -> Option<&DisplayBounds> {
+    for display in displays {
+        let in_x = x >= display.origin_x && x < display.origin_x + display.width;
+        let in_y = y >= display.origin_y && y < display.origin_y + display.height;
+        if in_x && in_y {
+            return Some(display);
+        }
+    }
+    None
+}
+
+/// Find which display contains the center of the given bounds.
+/// Falls back to display with most overlap, then first display.
+pub fn find_display_for_bounds<'a>(
+    bounds: &PersistedWindowBounds,
+    displays: &'a [DisplayBounds],
+) -> Option<&'a DisplayBounds> {
+    find_best_display_for_bounds(bounds, displays)
+}
+
+/// Save main window position for a specific display.
+/// This is the primary API for per-display persistence.
+pub fn save_main_position_for_display(display: &DisplayBounds, bounds: PersistedWindowBounds) {
+    let key = display_key(display);
+    let mut state = load_state_file().unwrap_or_default();
+    state.version = 2;
+    state.main_per_display.insert(key.clone(), bounds);
+    // Also update legacy main for backwards compatibility
+    state.main = Some(bounds);
+    save_state_file(&state);
+    logging::log(
+        "WINDOW_STATE",
+        &format!(
+            "Saved main position for display {}: ({:.0}, {:.0}) {}x{}",
+            key, bounds.x, bounds.y, bounds.width, bounds.height
+        ),
+    );
+}
+
+/// Get main window position for a specific display.
+/// Returns None if no position was saved for this display.
+#[allow(dead_code)]
+pub fn get_main_position_for_display(display: &DisplayBounds) -> Option<PersistedWindowBounds> {
+    let state = load_state_file()?;
+    let key = display_key(display);
+    let saved = state.main_per_display.get(&key).copied();
+    if saved.is_some() {
+        logging::log(
+            "WINDOW_STATE",
+            &format!("Found saved position for display {}", key),
+        );
+    }
+    saved
+}
+
+/// Get the best main window position for the mouse display.
+/// Tries per-display position first, then falls back to legacy position.
+/// Returns None if no saved position exists for this display.
+pub fn get_main_position_for_mouse_display(
+    mouse_x: f64,
+    mouse_y: f64,
+    displays: &[DisplayBounds],
+) -> Option<(PersistedWindowBounds, DisplayBounds)> {
+    let display = find_display_containing_point(mouse_x, mouse_y, displays)?;
+    let key = display_key(display);
+
+    let state = load_state_file()?;
+
+    // Try per-display position first
+    if let Some(saved) = state.main_per_display.get(&key) {
+        logging::log(
+            "WINDOW_STATE",
+            &format!(
+                "Restoring per-display position for {}: ({:.0}, {:.0})",
+                key, saved.x, saved.y
+            ),
+        );
+        return Some((*saved, display.clone()));
+    }
+
+    // Fall back to legacy position if it's on this display
+    if let Some(legacy) = state.main {
+        let legacy_bounds_temp = legacy;
+        if let Some(legacy_display) = find_best_display_for_bounds(&legacy_bounds_temp, displays) {
+            if display_key(legacy_display) == key {
+                logging::log(
+                    "WINDOW_STATE",
+                    &format!(
+                        "Using legacy position for display {}: ({:.0}, {:.0})",
+                        key, legacy.x, legacy.y
+                    ),
+                );
+                return Some((legacy, display.clone()));
+            }
+        }
+    }
+
+    logging::log(
+        "WINDOW_STATE",
+        &format!("No saved position for display {}", key),
+    );
+    None
 }
 
 // ============================================================================

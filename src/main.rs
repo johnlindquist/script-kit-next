@@ -344,9 +344,51 @@ fn show_main_window_helper(
     // 2. Move to active space (macOS)
     platform::ensure_move_to_active_space();
 
-    // 3. Position at eye-line on mouse display
+    // 3. Position window - try per-display saved position first, then fall back to eye-line
     let window_size = gpui::size(px(750.), initial_window_height());
-    let bounds = platform::calculate_eye_line_bounds_on_mouse_display(window_size);
+    let displays = platform::get_macos_displays();
+    let bounds = if let Some((mouse_x, mouse_y)) = platform::get_global_mouse_position() {
+        // Try to restore saved position for the mouse display
+        if let Some((saved, display)) =
+            window_state::get_main_position_for_mouse_display(mouse_x, mouse_y, &displays)
+        {
+            // Validate the saved position is still visible
+            if window_state::is_bounds_visible(&saved, &displays) {
+                logging::log(
+                    "VISIBILITY",
+                    &format!(
+                        "Restoring saved position for display {}: ({:.0}, {:.0})",
+                        window_state::display_key(&display),
+                        saved.x,
+                        saved.y
+                    ),
+                );
+                // Use saved position but with current window height (may have changed)
+                gpui::Bounds {
+                    origin: gpui::point(px(saved.x as f32), px(saved.y as f32)),
+                    size: window_size,
+                }
+            } else {
+                logging::log(
+                    "VISIBILITY",
+                    "Saved position no longer visible, using eye-line",
+                );
+                platform::calculate_eye_line_bounds_on_mouse_display(window_size)
+            }
+        } else {
+            logging::log(
+                "VISIBILITY",
+                "No saved position for this display, using eye-line",
+            );
+            platform::calculate_eye_line_bounds_on_mouse_display(window_size)
+        }
+    } else {
+        logging::log(
+            "VISIBILITY",
+            "Could not get mouse position, using eye-line",
+        );
+        platform::calculate_eye_line_bounds_on_mouse_display(window_size)
+    };
     platform::move_first_window_to_bounds(&bounds);
 
     // 4. Configure as floating panel (first time only)
@@ -405,11 +447,12 @@ fn show_main_window_helper(
 /// Hide the main window with proper state management.
 ///
 /// This is the canonical way to hide the main window. It:
-/// 1. Sets MAIN_WINDOW_VISIBLE state to false
-/// 2. Cancels any active prompt (if in prompt mode)
-/// 3. Resets to script list
-/// 4. Uses hide_main_window() if Notes/AI windows are open (to avoid hiding them)
-/// 5. Uses cx.hide() if no secondary windows are open
+/// 1. Saves window position for the current display (per-display persistence)
+/// 2. Sets MAIN_WINDOW_VISIBLE state to false
+/// 3. Cancels any active prompt (if in prompt mode)
+/// 4. Resets to script list
+/// 5. Uses hide_main_window() if Notes/AI windows are open (to avoid hiding them)
+/// 6. Uses cx.hide() if no secondary windows are open
 ///
 /// # Arguments
 /// * `app_entity` - The ScriptListApp entity
@@ -417,10 +460,34 @@ fn show_main_window_helper(
 fn hide_main_window_helper(app_entity: Entity<ScriptListApp>, cx: &mut App) {
     logging::log("VISIBILITY", "hide_main_window_helper called");
 
-    // 1. Set visibility state
+    // 1. Save window position for the current display BEFORE hiding
+    if let Some((x, y, width, height)) = platform::get_main_window_bounds() {
+        let displays = platform::get_macos_displays();
+        let bounds = window_state::PersistedWindowBounds::new(x, y, width, height);
+
+        // Find which display the window center is on
+        if let Some(display) = window_state::find_display_for_bounds(&bounds, &displays) {
+            logging::log(
+                "VISIBILITY",
+                &format!(
+                    "Saving position for display {}: ({:.0}, {:.0})",
+                    window_state::display_key(display),
+                    x,
+                    y
+                ),
+            );
+            window_state::save_main_position_for_display(display, bounds);
+        } else {
+            logging::log("VISIBILITY", "Could not determine display for window position");
+        }
+    } else {
+        logging::log("VISIBILITY", "Could not get window bounds for saving");
+    }
+
+    // 2. Set visibility state
     set_main_window_visible(false);
 
-    // 2. Check secondary windows BEFORE the update closure
+    // 3. Check secondary windows BEFORE the update closure
     let notes_open = notes::is_notes_window_open();
     let ai_open = ai::is_ai_window_open();
     logging::log(
@@ -431,7 +498,7 @@ fn hide_main_window_helper(app_entity: Entity<ScriptListApp>, cx: &mut App) {
         ),
     );
 
-    // 3. Cancel prompt and reset UI
+    // 4. Cancel prompt and reset UI
     app_entity.update(cx, |view, ctx| {
         if view.is_in_prompt() {
             logging::log("VISIBILITY", "Canceling prompt before hiding");
@@ -440,7 +507,7 @@ fn hide_main_window_helper(app_entity: Entity<ScriptListApp>, cx: &mut App) {
         view.reset_to_script_list(ctx);
     });
 
-    // 4. Hide appropriately based on secondary windows
+    // 5. Hide appropriately based on secondary windows
     if notes_open || ai_open {
         logging::log(
             "VISIBILITY",
@@ -1034,6 +1101,9 @@ struct ScriptListApp {
     gpui_input_focused: bool,
     #[allow(dead_code)]
     gpui_input_subscriptions: Vec<Subscription>,
+    /// Subscription for window bounds changes (saves position on drag)
+    #[allow(dead_code)]
+    bounds_subscription: Option<Subscription>,
     /// Suppress handling of programmatic InputEvent::Change updates.
     suppress_filter_events: bool,
     /// Sync gpui input text on next render when window access is available.
@@ -1878,6 +1948,33 @@ fn main() {
                     let focus_handle = view.focus_handle(ctx);
                     win.focus(&focus_handle, ctx);
                     logging::log("APP", "Focus set on ScriptListApp via Root");
+
+                    // Subscribe to window bounds changes to save position when user drags the window.
+                    // This persists the position per-display so it can be restored on next show.
+                    // Store subscription in view to keep it alive.
+                    view.bounds_subscription = Some(ctx.observe_window_bounds(win, |_view, win, _ctx| {
+                        // Only save if window is visible (avoid saving during initial positioning)
+                        if is_main_window_visible() {
+                            if let Some((x, y, width, height)) = platform::get_main_window_bounds() {
+                                let displays = platform::get_macos_displays();
+                                let bounds = window_state::PersistedWindowBounds::new(x, y, width, height);
+                                if let Some(display) = window_state::find_display_for_bounds(&bounds, &displays) {
+                                    logging::log(
+                                        "WINDOW_BOUNDS",
+                                        &format!(
+                                            "Bounds changed - saving position for display {}: ({:.0}, {:.0})",
+                                            window_state::display_key(display),
+                                            x,
+                                            y
+                                        ),
+                                    );
+                                    window_state::save_main_position_for_display(display, bounds);
+                                }
+                            }
+                        }
+                        // Suppress unused variable warning - we need win to access window bounds
+                        let _ = win;
+                    }));
                 });
             })
             .unwrap();
@@ -2506,10 +2603,42 @@ fn main() {
                                 script_kit_gpui::set_main_window_visible(true);
                                 platform::ensure_move_to_active_space();
 
-                                // Use Window::defer via window_ops to coalesce and defer window move.
-                                // This avoids RefCell borrow conflicts from synchronous macOS window operations.
+                                // Position window - try per-display saved position first, then fall back to eye-line
                                 let window_size = gpui::size(px(750.), initial_window_height());
-                                let bounds = platform::calculate_eye_line_bounds_on_mouse_display(window_size);
+                                let displays = platform::get_macos_displays();
+                                let bounds = if let Some((mouse_x, mouse_y)) = platform::get_global_mouse_position() {
+                                    // Try to restore saved position for the mouse display
+                                    if let Some((saved, display)) =
+                                        window_state::get_main_position_for_mouse_display(mouse_x, mouse_y, &displays)
+                                    {
+                                        // Validate the saved position is still visible
+                                        if window_state::is_bounds_visible(&saved, &displays) {
+                                            logging::log(
+                                                "STDIN",
+                                                &format!(
+                                                    "Restoring saved position for display {}: ({:.0}, {:.0})",
+                                                    window_state::display_key(&display),
+                                                    saved.x,
+                                                    saved.y
+                                                ),
+                                            );
+                                            // Use saved position but with current window height (may have changed)
+                                            gpui::Bounds {
+                                                origin: gpui::point(px(saved.x as f32), px(saved.y as f32)),
+                                                size: window_size,
+                                            }
+                                        } else {
+                                            logging::log("STDIN", "Saved position no longer visible, using eye-line");
+                                            platform::calculate_eye_line_bounds_on_mouse_display(window_size)
+                                        }
+                                    } else {
+                                        logging::log("STDIN", "No saved position for this display, using eye-line");
+                                        platform::calculate_eye_line_bounds_on_mouse_display(window_size)
+                                    }
+                                } else {
+                                    logging::log("STDIN", "Could not get mouse position, using eye-line");
+                                    platform::calculate_eye_line_bounds_on_mouse_display(window_size)
+                                };
                                 window_ops::queue_move(bounds, window, ctx);
 
                                 if !PANEL_CONFIGURED.load(std::sync::atomic::Ordering::SeqCst) {
@@ -2527,6 +2656,25 @@ fn main() {
                             ExternalCommand::Hide { ref request_id } => {
                                 let rid = request_id.as_deref().unwrap_or("-");
                                 logging::log("STDIN", &format!("[{}] Hiding main window", rid));
+
+                                // Save window position for the current display BEFORE hiding
+                                if let Some((x, y, width, height)) = platform::get_main_window_bounds() {
+                                    let displays = platform::get_macos_displays();
+                                    let bounds = window_state::PersistedWindowBounds::new(x, y, width, height);
+                                    if let Some(display) = window_state::find_display_for_bounds(&bounds, &displays) {
+                                        logging::log(
+                                            "STDIN",
+                                            &format!(
+                                                "Saving position for display {}: ({:.0}, {:.0})",
+                                                window_state::display_key(display),
+                                                x,
+                                                y
+                                            ),
+                                        );
+                                        window_state::save_main_position_for_display(display, bounds);
+                                    }
+                                }
+
                                 script_kit_gpui::set_main_window_visible(false);
 
                                 // Check if Notes or AI windows are open
@@ -2651,6 +2799,14 @@ fn main() {
                                                     if !view.filter_text.is_empty() {
                                                         view.clear_filter(window, ctx);
                                                     } else {
+                                                        // Save window position for the current display BEFORE hiding
+                                                        if let Some((x, y, width, height)) = platform::get_main_window_bounds() {
+                                                            let displays = platform::get_macos_displays();
+                                                            let bounds = window_state::PersistedWindowBounds::new(x, y, width, height);
+                                                            if let Some(display) = window_state::find_display_for_bounds(&bounds, &displays) {
+                                                                window_state::save_main_position_for_display(display, bounds);
+                                                            }
+                                                        }
                                                         script_kit_gpui::set_main_window_visible(false);
                                                         ctx.hide();
                                                     }
