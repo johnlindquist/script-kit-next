@@ -2092,12 +2092,14 @@ impl ScriptListApp {
 
                         if dir_changed {
                             // Directory changed - need to load new directory contents
-                            // DON'T clear results - keep showing old results until new ones arrive
-                            // This prevents the jarring flash of empty/loading state during transitions
-                            // The async task will atomically replace results when ready
+                            // MUST clear results to prevent showing wrong directory contents
+                            // (old results + new filter = wrong data shown to user)
+                            // The loading state will show "Searching..." instead
+                            self.cached_file_results.clear();
                             self.file_search_current_dir = Some(parsed.directory.clone());
                             self.file_search_loading = true;
-                            // Don't reset scroll yet - wait until results arrive
+                            self.file_search_scroll_handle
+                                .scroll_to_item(0, ScrollStrategy::Top);
                             cx.notify();
 
                             let dir_to_list = parsed.directory.clone();
