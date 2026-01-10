@@ -103,11 +103,6 @@ open = "5"
 # Math expression evaluation for calculate fallback
 meval = "0.2"
 
-# Fast file system traversal (same library powering fd and ripgrep)
-# Used for native file search without requiring external fd binary
-ignore = "0.4"
-num_cpus = "1.16"
-
 # Storybook infrastructure (compile-time story registration + CLI)
 inventory = "0.3"  # Compile-time story registration (same pattern as Zed)
 clap = { version = "4", features = ["derive"] }  # CLI argument parsing

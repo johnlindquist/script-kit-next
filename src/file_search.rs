@@ -1,22 +1,11 @@
-//! File Search Module
+//! File Search Module using macOS Spotlight (mdfind)
 //!
-//! This module provides file search functionality using:
-//! - **Native search** via the `ignore` crate (same library powering fd and ripgrep)
-//! - **Spotlight search** via macOS's mdfind command (for advanced metadata queries)
-//!
-//! The native search is preferred for simple filename queries because:
-//! - No external dependencies (compiled into the binary)
-//! - Fast "no results" feedback (sub-100ms)
-//! - No PATH issues (common with GUI apps)
-//! - Parallel traversal for large directories
+//! This module provides file search functionality using macOS's mdfind command,
+//! which interfaces with the Spotlight index for fast file searching.
 
-use ignore::{WalkBuilder, WalkState};
-use std::collections::HashSet;
 use std::io::{BufRead, BufReader};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::{Command, Stdio};
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
 use std::time::UNIX_EPOCH;
 use tracing::{debug, instrument, warn};
 
@@ -360,262 +349,6 @@ pub fn search_files(query: &str, onlyin: Option<&str>, limit: usize) -> Vec<File
 
     debug!(result_count = results.len(), "Search completed");
     results
-}
-
-// ============================================================================
-// Native File Search (using ignore crate - same library as fd/ripgrep)
-// ============================================================================
-
-/// Default roots for native file search.
-/// These provide broad coverage without full `/` traversal.
-fn default_search_roots() -> Vec<PathBuf> {
-    let mut roots = Vec::new();
-
-    // Home directory (most user files are here)
-    if let Some(home) = dirs::home_dir() {
-        roots.push(home);
-    }
-
-    // System application directories
-    for p in [
-        "/Applications",
-        "/System/Applications",
-        "/Library",
-        "/System/Library",
-    ] {
-        let pb = PathBuf::from(p);
-        if pb.is_dir() {
-            roots.push(pb);
-        }
-    }
-
-    roots
-}
-
-/// Detect file type with pre-fetched metadata (avoids extra stat calls)
-fn detect_file_type_with_meta(path: &Path, exists: bool, is_dir: bool) -> FileType {
-    let extension = path
-        .extension()
-        .and_then(|e| e.to_str())
-        .map(|e| e.to_lowercase());
-
-    // macOS .app bundles are directories but should be classified as Applications
-    if extension.as_deref() == Some("app") {
-        return FileType::Application;
-    }
-
-    if is_dir {
-        return FileType::Directory;
-    }
-
-    match extension.as_deref() {
-        Some(
-            "png" | "jpg" | "jpeg" | "gif" | "bmp" | "webp" | "svg" | "ico" | "tiff" | "heic"
-            | "heif",
-        ) => FileType::Image,
-        Some(
-            "pdf" | "doc" | "docx" | "xls" | "xlsx" | "ppt" | "pptx" | "txt" | "rtf" | "odt"
-            | "ods" | "odp" | "pages" | "numbers" | "key",
-        ) => FileType::Document,
-        Some("mp3" | "wav" | "aac" | "flac" | "ogg" | "wma" | "m4a" | "aiff") => FileType::Audio,
-        Some("mp4" | "mov" | "avi" | "mkv" | "wmv" | "flv" | "webm" | "m4v" | "mpeg" | "mpg") => {
-            FileType::Video
-        }
-        Some(_) => FileType::File,
-        None => {
-            if exists {
-                FileType::File
-            } else {
-                FileType::Other
-            }
-        }
-    }
-}
-
-/// Search for files using native filesystem traversal (powered by ignore crate).
-///
-/// This is the preferred search method for simple filename queries because:
-/// - No external dependencies (fd binary not required)
-/// - Fast "no results" feedback (sub-100ms even for non-matching queries)
-/// - No PATH issues (compiled into the binary)
-/// - Parallel traversal for performance
-///
-/// For advanced Spotlight metadata queries (kMDItem...), falls back to mdfind.
-///
-/// # Arguments
-/// * `query` - Search query (case-insensitive substring match on filename)
-/// * `onlyin` - Optional directory to limit search scope
-/// * `limit` - Maximum number of results to return
-///
-/// # Returns
-/// Vector of FileResult structs containing file information
-#[instrument(skip_all, fields(query = %query, onlyin = ?onlyin, limit = limit))]
-pub fn search_files_native(query: &str, onlyin: Option<&str>, limit: usize) -> Vec<FileResult> {
-    let q = query.trim();
-
-    if q.is_empty() || limit == 0 {
-        return Vec::new();
-    }
-
-    // If user is doing Spotlight metadata queries, only mdfind can answer
-    if looks_like_advanced_mdquery(q) {
-        debug!("Advanced mdquery detected, falling back to mdfind");
-        return search_files(q, onlyin, limit);
-    }
-
-    let pattern = q.to_lowercase();
-    debug!(pattern = %pattern, "Starting native file search");
-
-    // Determine search roots
-    let roots: Vec<PathBuf> = if let Some(dir) = onlyin {
-        expand_path(dir)
-            .map(PathBuf::from)
-            .filter(|p| p.is_dir())
-            .into_iter()
-            .collect()
-    } else {
-        default_search_roots()
-    };
-
-    if roots.is_empty() {
-        debug!("No valid search roots found");
-        return Vec::new();
-    }
-
-    // Shared state for parallel traversal
-    let results = Arc::new(Mutex::new(Vec::new()));
-    let seen = Arc::new(Mutex::new(HashSet::new()));
-    let count = Arc::new(AtomicUsize::new(0));
-
-    // Search each root
-    for root in roots {
-        if count.load(Ordering::Relaxed) >= limit {
-            break;
-        }
-
-        let remaining = limit - count.load(Ordering::Relaxed);
-        search_in_root(&root, &pattern, remaining, &results, &seen, &count);
-    }
-
-    let final_results = match Arc::try_unwrap(results) {
-        Ok(mutex) => mutex.into_inner().unwrap(),
-        Err(arc) => arc.lock().unwrap().clone(),
-    };
-
-    debug!(
-        result_count = final_results.len(),
-        "Native search completed"
-    );
-    final_results
-}
-
-/// Search within a single root directory using parallel traversal
-fn search_in_root(
-    root: &Path,
-    pattern: &str,
-    limit: usize,
-    results: &Arc<Mutex<Vec<FileResult>>>,
-    seen: &Arc<Mutex<HashSet<String>>>,
-    count: &Arc<AtomicUsize>,
-) {
-    let walker = WalkBuilder::new(root)
-        .hidden(false) // Include hidden files for comprehensive search
-        .git_ignore(true) // Respect .gitignore
-        .git_global(true) // Respect global gitignore
-        .git_exclude(true) // Respect .git/info/exclude
-        .ignore(true) // Respect .ignore files
-        .threads(num_cpus::get().min(8)) // Parallel traversal, cap at 8 threads
-        .build_parallel();
-
-    let pattern = pattern.to_string();
-    let results_clone = Arc::clone(results);
-    let seen_clone = Arc::clone(seen);
-    let count_clone = Arc::clone(count);
-
-    walker.run(|| {
-        let pattern = pattern.clone();
-        let results = Arc::clone(&results_clone);
-        let seen = Arc::clone(&seen_clone);
-        let count = Arc::clone(&count_clone);
-
-        Box::new(move |entry_result| {
-            // Check if we've hit the limit
-            if count.load(Ordering::Relaxed) >= limit {
-                return WalkState::Quit;
-            }
-
-            let entry = match entry_result {
-                Ok(e) => e,
-                Err(_) => return WalkState::Continue,
-            };
-
-            let path = entry.path();
-
-            // Get filename and check for match
-            let name = match path.file_name().and_then(|n| n.to_str()) {
-                Some(n) => n,
-                None => return WalkState::Continue,
-            };
-
-            // Case-insensitive substring match (like fd --fixed-strings --ignore-case)
-            if !name.to_lowercase().contains(&pattern) {
-                return WalkState::Continue;
-            }
-
-            let path_str = match path.to_str() {
-                Some(s) => s.to_string(),
-                None => return WalkState::Continue,
-            };
-
-            // Deduplicate
-            {
-                let mut seen_guard = seen.lock().unwrap();
-                if !seen_guard.insert(path_str.clone()) {
-                    return WalkState::Continue;
-                }
-            }
-
-            // Get metadata
-            let (size, modified, exists, is_dir) = match std::fs::metadata(path) {
-                Ok(meta) => {
-                    let size = meta.len();
-                    let modified = meta
-                        .modified()
-                        .ok()
-                        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
-                        .map(|d| d.as_secs())
-                        .unwrap_or(0);
-                    (size, modified, true, meta.is_dir())
-                }
-                Err(_) => (0, 0, false, false),
-            };
-
-            let file_type = detect_file_type_with_meta(path, exists, is_dir);
-
-            let result = FileResult {
-                path: path_str,
-                name: name.to_string(),
-                size,
-                modified,
-                file_type,
-            };
-
-            // Add to results
-            {
-                let mut results_guard = results.lock().unwrap();
-                if results_guard.len() < limit {
-                    results_guard.push(result);
-                    count.fetch_add(1, Ordering::Relaxed);
-                }
-            }
-
-            if count.load(Ordering::Relaxed) >= limit {
-                WalkState::Quit
-            } else {
-                WalkState::Continue
-            }
-        })
-    });
 }
 
 /// Get detailed metadata for a specific file
@@ -1247,20 +980,12 @@ pub fn parse_directory_path(path: &str) -> Option<ParsedDirPath> {
 
     // Handle paths ending with / - they're complete directory paths
     if trimmed.ends_with('/') {
-        // Normalize to remove trailing slash (except for root /)
-        let normalized = if trimmed == "/" {
-            "/".to_string()
-        } else {
-            trimmed.trim_end_matches('/').to_string()
-        };
         // Verify the directory exists
-        if let Some(expanded) = expand_path(&normalized) {
+        if let Some(expanded) = expand_path(trimmed.trim_end_matches('/')) {
             let p = Path::new(&expanded);
             if p.is_dir() {
                 return Some(ParsedDirPath {
-                    // Return normalized directory (no trailing slash except root)
-                    // This ensures "~/dev/" and "~/dev" are treated as the same directory
-                    directory: normalized,
+                    directory: trimmed.to_string(),
                     filter: None,
                 });
             }
@@ -1275,14 +1000,13 @@ pub fn parse_directory_path(path: &str) -> Option<ParsedDirPath> {
         let potential_filter = &trimmed[last_slash_idx + 1..];
 
         // Verify parent directory exists
-        // Normalize to remove trailing slash (except for root /)
-        let parent_normalized = if parent == "/" {
-            "/".to_string()
+        let parent_to_check = if parent == "/" {
+            "/"
         } else {
-            parent.trim_end_matches('/').to_string()
+            parent.trim_end_matches('/')
         };
 
-        if let Some(expanded) = expand_path(&parent_normalized) {
+        if let Some(expanded) = expand_path(parent_to_check) {
             let p = Path::new(&expanded);
             if p.is_dir() {
                 let filter = if potential_filter.is_empty() {
@@ -1291,9 +1015,7 @@ pub fn parse_directory_path(path: &str) -> Option<ParsedDirPath> {
                     Some(potential_filter.to_string())
                 };
                 return Some(ParsedDirPath {
-                    // Return normalized directory (no trailing slash except root)
-                    // This ensures "~" and "~/" are treated as the same directory
-                    directory: parent_normalized,
+                    directory: parent.to_string(),
                     filter,
                 });
             }
@@ -1620,129 +1342,6 @@ mod tests {
         // We don't assert specific results as they may vary,
         // but the function should not panic
         assert!(results.len() <= 5);
-    }
-
-    // ========================================================================
-    // Native File Search Tests (ignore crate)
-    // ========================================================================
-
-    #[test]
-    fn test_search_files_native_empty_query() {
-        let results = search_files_native("", None, 10);
-        assert!(results.is_empty());
-    }
-
-    #[test]
-    fn test_search_files_native_zero_limit() {
-        let results = search_files_native("test", None, 0);
-        assert!(results.is_empty());
-    }
-
-    #[test]
-    fn test_search_files_native_whitespace_query() {
-        let results = search_files_native("   ", None, 10);
-        assert!(results.is_empty());
-    }
-
-    #[test]
-    fn test_search_files_native_advanced_query_fallback() {
-        // Advanced queries should fall back to mdfind
-        // This just verifies it doesn't panic; actual results depend on mdfind
-        let results = search_files_native("kMDItemFSName == 'test'", None, 1);
-        // Should not panic - either returns results or empty
-        assert!(results.len() <= 1);
-    }
-
-    #[test]
-    fn test_default_search_roots() {
-        let roots = default_search_roots();
-        // Should at least have home directory
-        assert!(!roots.is_empty());
-        // Home directory should be included
-        if let Some(home) = dirs::home_dir() {
-            assert!(roots.contains(&home));
-        }
-    }
-
-    #[test]
-    fn test_detect_file_type_with_meta_application() {
-        let path = Path::new("/Applications/Safari.app");
-        let file_type = detect_file_type_with_meta(path, true, true);
-        assert_eq!(file_type, FileType::Application);
-    }
-
-    #[test]
-    fn test_detect_file_type_with_meta_directory() {
-        let path = Path::new("/Users/test/Documents");
-        let file_type = detect_file_type_with_meta(path, true, true);
-        assert_eq!(file_type, FileType::Directory);
-    }
-
-    #[test]
-    fn test_detect_file_type_with_meta_image() {
-        let path = Path::new("/test/photo.png");
-        let file_type = detect_file_type_with_meta(path, true, false);
-        assert_eq!(file_type, FileType::Image);
-    }
-
-    #[test]
-    fn test_detect_file_type_with_meta_document() {
-        let path = Path::new("/test/report.pdf");
-        let file_type = detect_file_type_with_meta(path, true, false);
-        assert_eq!(file_type, FileType::Document);
-    }
-
-    #[cfg(target_os = "macos")]
-    #[test]
-    fn test_search_files_native_in_directory() {
-        // Search in /tmp which should always exist and have at least some files
-        let results = search_files_native(".", Some("/tmp"), 5);
-        // Should complete without panicking
-        assert!(results.len() <= 5);
-    }
-
-    #[cfg(target_os = "macos")]
-    #[test]
-    fn test_search_files_native_nonexistent_onlyin() {
-        // Searching in a non-existent directory should return empty
-        let results = search_files_native("test", Some("/this/path/does/not/exist"), 10);
-        assert!(results.is_empty());
-    }
-
-    #[cfg(all(target_os = "macos", feature = "slow-tests"))]
-    #[test]
-    fn test_search_files_native_applications() {
-        // Search for .app bundles in /Applications
-        let results = search_files_native(".app", Some("/Applications"), 10);
-        // Should find some applications
-        assert!(!results.is_empty(), "Should find apps in /Applications");
-        // First result should be an application
-        assert_eq!(
-            results[0].file_type,
-            FileType::Application,
-            "Should detect .app as Application"
-        );
-    }
-
-    #[cfg(all(target_os = "macos", feature = "slow-tests"))]
-    #[test]
-    fn test_search_files_native_no_match_fast() {
-        use std::time::Instant;
-
-        // Searching for a nonsense string should return quickly (not hang)
-        let start = Instant::now();
-        let results = search_files_native("xyznonexistent12345", Some("/Applications"), 10);
-        let elapsed = start.elapsed();
-
-        assert!(
-            results.is_empty(),
-            "Should find no results for nonsense query"
-        );
-        assert!(
-            elapsed.as_secs() < 5,
-            "Search should complete in <5s, took {:?}",
-            elapsed
-        );
     }
 
     #[cfg(all(target_os = "macos", feature = "slow-tests"))]
@@ -2290,95 +1889,5 @@ mod tests {
         // The function expects trailing slash, but should handle edge cases gracefully
         assert_eq!(parent_dir_display("/foo/bar"), Some("/foo/".to_string()));
         assert_eq!(parent_dir_display("~/foo"), Some("~/".to_string()));
-    }
-
-    // ========================================================================
-    // Parse Directory Path Normalization Tests
-    // These tests ensure consistent directory strings to prevent UI flash
-    // ========================================================================
-
-    #[test]
-    fn test_parse_directory_path_home_normalization() {
-        // "~" and "~/" should return the same normalized directory
-        let result_tilde = parse_directory_path("~");
-        let result_tilde_slash = parse_directory_path("~/");
-
-        // Both should return Some with directory "~" (no trailing slash)
-        assert!(result_tilde.is_some());
-        assert!(result_tilde_slash.is_some());
-
-        // The directories should be identical to prevent UI flash when typing
-        assert_eq!(
-            result_tilde.as_ref().unwrap().directory,
-            result_tilde_slash.as_ref().unwrap().directory,
-            "~` and ~/ should normalize to the same directory string"
-        );
-    }
-
-    #[test]
-    fn test_parse_directory_path_filter_same_directory() {
-        // "~/" and "~/d" should have the SAME normalized directory
-        // This is the exact case that was causing the UI flash bug
-        let result_home = parse_directory_path("~/");
-        let result_home_filter = parse_directory_path("~/d");
-
-        assert!(result_home.is_some());
-        assert!(result_home_filter.is_some());
-
-        let home = result_home.unwrap();
-        let home_filter = result_home_filter.unwrap();
-
-        // Directory strings must be identical
-        assert_eq!(
-            home.directory, home_filter.directory,
-            "~/` and ~/d should have the same directory string to prevent flash"
-        );
-
-        // First should have no filter, second should have "d"
-        assert_eq!(home.filter, None);
-        assert_eq!(home_filter.filter, Some("d".to_string()));
-    }
-
-    #[test]
-    fn test_parse_directory_path_subdirectory_normalization() {
-        // ~/dev/ and ~/dev/foo should have the same parent directory
-        let _result_dev_slash = parse_directory_path("~/dev/");
-        let _result_dev_filter = parse_directory_path("~/dev/foo");
-
-        // ~/dev/ might not exist, so we test the pattern with /tmp instead
-        // /tmp should exist on all Unix systems
-        if let (Some(tmp), Some(tmp_filter)) = (
-            parse_directory_path("/tmp/"),
-            parse_directory_path("/tmp/test"),
-        ) {
-            assert_eq!(
-                tmp.directory, tmp_filter.directory,
-                "/tmp/ and /tmp/test should have the same directory string"
-            );
-            assert_eq!(tmp.filter, None);
-            assert_eq!(tmp_filter.filter, Some("test".to_string()));
-        }
-    }
-
-    #[test]
-    fn test_parse_directory_path_no_trailing_slash_in_directory() {
-        // Directories should be normalized without trailing slash (except root)
-        let result = parse_directory_path("/tmp/foo");
-        if let Some(parsed) = result {
-            // Directory should not have trailing slash
-            assert!(
-                !parsed.directory.ends_with('/') || parsed.directory == "/",
-                "Directory should not have trailing slash: {}",
-                parsed.directory
-            );
-        }
-
-        // Root is special case - it should keep its slash
-        let root = parse_directory_path("/foo");
-        if let Some(parsed) = root {
-            // For root, the directory is "/" which ends with slash
-            // But /foo would have parent "/" - that's fine
-            assert_eq!(parsed.directory, "/");
-        }
     }
 }
