@@ -36,6 +36,9 @@ const EMBEDDED_GUIDE_MD: &str = include_str!("../kit-init/GUIDE.md");
 /// Embedded CleanShot X extension (built-in extension that ships with the app)
 const EMBEDDED_CLEANSHOT_EXTENSION: &str = include_str!("../kit-init/extensions/cleanshot/main.md");
 
+/// Embedded 1Password extension (built-in extension that ships with the app)
+const EMBEDDED_1PASSWORD_EXTENSION: &str = include_str!("../kit-init/extensions/1password/main.md");
+
 /// Embedded AGENTS.md guide for AI agents writing user scripts
 const EMBEDDED_AGENTS_MD: &str = r###"# Script Kit User Scripts Guide
 
@@ -992,6 +995,8 @@ pub fn ensure_kit_setup() -> SetupResult {
         kit_dir.join("kit").join("main").join("agents"),
         // Built-in CleanShot extension kit
         kit_dir.join("kit").join("cleanshot").join("extensions"),
+        // Built-in 1Password extension kit
+        kit_dir.join("kit").join("1password").join("extensions"),
         kit_dir.join("sdk"),
         kit_dir.join("db"),
         kit_dir.join("logs"),
@@ -1018,6 +1023,20 @@ pub fn ensure_kit_setup() -> SetupResult {
         EMBEDDED_CLEANSHOT_EXTENSION,
         &mut warnings,
         "kit/cleanshot/extensions/main.md",
+    );
+
+    // App-managed: Built-in 1Password extension (refresh if changed)
+    // This extension ships with the app and provides password manager CLI commands
+    let onepassword_path = kit_dir
+        .join("kit")
+        .join("1password")
+        .join("extensions")
+        .join("main.md");
+    write_string_if_changed(
+        &onepassword_path,
+        EMBEDDED_1PASSWORD_EXTENSION,
+        &mut warnings,
+        "kit/1password/extensions/main.md",
     );
 
     // User-owned: config.ts (only create if missing)
@@ -2097,6 +2116,31 @@ mod tests {
         assert!(
             cleanshot_content.contains("cleanshot://record-screen"),
             "CleanShot extension should have Record Screen command"
+        );
+
+        // Verify 1Password built-in extension
+        let onepassword_dir = kit_dir.join("1password").join("extensions");
+        assert!(
+            onepassword_dir.exists(),
+            "kit/1password/extensions/ should exist"
+        );
+        let onepassword_extension = onepassword_dir.join("main.md");
+        assert!(
+            onepassword_extension.exists(),
+            "kit/1password/extensions/main.md should exist"
+        );
+        let onepassword_content = fs::read_to_string(&onepassword_extension).unwrap();
+        assert!(
+            onepassword_content.contains("1Password"),
+            "1Password extension should have 1Password title"
+        );
+        assert!(
+            onepassword_content.contains("op item list"),
+            "1Password extension should have item list command"
+        );
+        assert!(
+            onepassword_content.contains("op whoami"),
+            "1Password extension should have whoami command"
         );
 
         std::env::remove_var(SK_PATH_ENV);
