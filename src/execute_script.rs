@@ -1,3 +1,108 @@
+/// Convert protocol TilePosition to window_control TilePosition
+fn protocol_tile_to_window_control(pos: &protocol::TilePosition) -> window_control::TilePosition {
+    use protocol::TilePosition as P;
+    use window_control::TilePosition as WC;
+    match pos {
+        P::Left => WC::LeftHalf,
+        P::Right => WC::RightHalf,
+        P::Top => WC::TopHalf,
+        P::Bottom => WC::BottomHalf,
+        P::TopLeft => WC::TopLeft,
+        P::TopRight => WC::TopRight,
+        P::BottomLeft => WC::BottomLeft,
+        P::BottomRight => WC::BottomRight,
+        P::LeftThird => WC::LeftThird,
+        P::CenterThird => WC::CenterThird,
+        P::RightThird => WC::RightThird,
+        P::TopThird => WC::TopThird,
+        P::MiddleThird => WC::MiddleThird,
+        P::BottomThird => WC::BottomThird,
+        P::FirstTwoThirds => WC::FirstTwoThirds,
+        P::LastTwoThirds => WC::LastTwoThirds,
+        P::TopTwoThirds => WC::TopTwoThirds,
+        P::BottomTwoThirds => WC::BottomTwoThirds,
+        P::Center => WC::Center,
+        P::AlmostMaximize => WC::AlmostMaximize,
+        // Maximize fills the entire visible screen area (fullscreen)
+        P::Maximize => WC::Fullscreen,
+    }
+}
+
+/// Standard macOS menu bar height in points (consistent since macOS 10.0)
+/// Note: This is an approximation - the actual height can vary with accessibility settings
+const MACOS_MENU_BAR_HEIGHT: i32 = 24;
+
+/// Get information about all displays/monitors
+fn get_displays() -> anyhow::Result<Vec<protocol::DisplayInfo>> {
+    #[cfg(target_os = "macos")]
+    {
+        use core_graphics::display::CGDisplay;
+
+        let display_ids = CGDisplay::active_displays()
+            .map_err(|_| anyhow::anyhow!("Failed to get active displays"))?;
+
+        let mut displays = Vec::new();
+        let main_display_id = CGDisplay::main().id;
+
+        for (index, &display_id) in display_ids.iter().enumerate() {
+            let display = CGDisplay::new(display_id);
+            let bounds = display.bounds();
+            let is_primary = display_id == main_display_id;
+
+            // Estimate visible bounds by subtracting menu bar height from the top
+            // This is an approximation - dock and menu bar sizes can vary with settings
+            let visible_y = bounds.origin.y as i32 + MACOS_MENU_BAR_HEIGHT;
+            let visible_height = (bounds.size.height as u32).saturating_sub(MACOS_MENU_BAR_HEIGHT as u32);
+
+            displays.push(protocol::DisplayInfo {
+                display_id,
+                name: format!("Display {}", index + 1),
+                is_primary,
+                bounds: protocol::TargetWindowBounds {
+                    x: bounds.origin.x as i32,
+                    y: bounds.origin.y as i32,
+                    width: bounds.size.width as u32,
+                    height: bounds.size.height as u32,
+                },
+                visible_bounds: protocol::TargetWindowBounds {
+                    x: bounds.origin.x as i32,
+                    y: visible_y,
+                    width: bounds.size.width as u32,
+                    height: visible_height,
+                },
+                // Scale factor is typically 2.0 for Retina displays, 1.0 otherwise
+                // We can't easily detect this from CGDisplay, so we'll leave it as None
+                scale_factor: None,
+            });
+        }
+
+        Ok(displays)
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        // Fallback for non-macOS platforms
+        Ok(vec![protocol::DisplayInfo {
+            display_id: 0,
+            name: "Primary Display".to_string(),
+            is_primary: true,
+            bounds: protocol::TargetWindowBounds {
+                x: 0,
+                y: 0,
+                width: 1920,
+                height: 1080,
+            },
+            visible_bounds: protocol::TargetWindowBounds {
+                x: 0,
+                y: 24,
+                width: 1920,
+                height: 1056,
+            },
+            scale_factor: Some(1.0),
+        }])
+    }
+}
+
 impl ScriptListApp {
     fn execute_interactive(&mut self, script: &scripts::Script, cx: &mut Context<Self>) {
         logging::log(
@@ -670,6 +775,7 @@ impl ScriptListApp {
                                     action,
                                     window_id,
                                     bounds,
+                                    tile_position,
                                 } = &msg
                                 {
                                     logging::log(
@@ -725,6 +831,28 @@ impl ScriptListApp {
                                                 Err(anyhow::anyhow!("Missing window_id or bounds"))
                                             }
                                         }
+                                        protocol::WindowActionType::Tile => {
+                                            if let (Some(id), Some(pos)) = (window_id, tile_position) {
+                                                let wc_pos = protocol_tile_to_window_control(pos);
+                                                window_control::tile_window(*id, wc_pos)
+                                            } else {
+                                                Err(anyhow::anyhow!("Missing window_id or tile_position"))
+                                            }
+                                        }
+                                        protocol::WindowActionType::MoveToNextDisplay => {
+                                            if let Some(id) = window_id {
+                                                window_control::move_to_next_display(*id)
+                                            } else {
+                                                Err(anyhow::anyhow!("Missing window_id"))
+                                            }
+                                        }
+                                        protocol::WindowActionType::MoveToPreviousDisplay => {
+                                            if let Some(id) = window_id {
+                                                window_control::move_to_previous_display(*id)
+                                            } else {
+                                                Err(anyhow::anyhow!("Missing window_id"))
+                                            }
+                                        }
                                     };
 
                                     let response = match result {
@@ -744,6 +872,89 @@ impl ScriptListApp {
                                                 "Failed to send window action response: {}",
                                                 e
                                             ),
+                                        );
+                                    }
+                                    continue;
+                                }
+
+                                // Handle DisplayList directly (no UI needed)
+                                if let Message::DisplayList { request_id } = &msg {
+                                    logging::log(
+                                        "EXEC",
+                                        &format!("DisplayList request: {}", request_id),
+                                    );
+
+                                    let response = match get_displays() {
+                                        Ok(displays) => {
+                                            Message::display_list_result(request_id.clone(), displays)
+                                        }
+                                        Err(e) => {
+                                            logging::log(
+                                                "ERROR",
+                                                &format!("Failed to get displays: {}", e),
+                                            );
+                                            // Return empty list on error
+                                            Message::display_list_result(request_id.clone(), vec![])
+                                        }
+                                    };
+
+                                    if let Err(e) = reader_response_tx.send(response) {
+                                        logging::log(
+                                            "EXEC",
+                                            &format!("Failed to send display list response: {}", e),
+                                        );
+                                    }
+                                    continue;
+                                }
+
+                                // Handle FrontmostWindow directly (no UI needed)
+                                if let Message::FrontmostWindow { request_id } = &msg {
+                                    logging::log(
+                                        "EXEC",
+                                        &format!("FrontmostWindow request: {}", request_id),
+                                    );
+
+                                    let response = match window_control::get_frontmost_window_of_previous_app() {
+                                        Ok(Some(window)) => {
+                                            let window_info = protocol::SystemWindowInfo {
+                                                window_id: window.id,
+                                                title: window.title,
+                                                app_name: window.app,
+                                                bounds: Some(protocol::TargetWindowBounds {
+                                                    x: window.bounds.x,
+                                                    y: window.bounds.y,
+                                                    width: window.bounds.width,
+                                                    height: window.bounds.height,
+                                                }),
+                                                is_minimized: None,
+                                                is_active: Some(true),
+                                            };
+                                            Message::frontmost_window_result(
+                                                request_id.clone(),
+                                                Some(window_info),
+                                                None,
+                                            )
+                                        }
+                                        Ok(None) => {
+                                            Message::frontmost_window_result(
+                                                request_id.clone(),
+                                                None,
+                                                Some("No frontmost window found".to_string()),
+                                            )
+                                        }
+                                        Err(e) => {
+                                            Message::frontmost_window_result(
+                                                request_id.clone(),
+                                                None,
+                                                Some(e.to_string()),
+                                            )
+                                        }
+                                    };
+
+                                    if let Err(e) = reader_response_tx.send(response) {
+                                        logging::log(
+                                            "EXEC",
+                                            &format!("Failed to send frontmost window response: {}", e),
                                         );
                                     }
                                     continue;

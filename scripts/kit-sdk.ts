@@ -201,17 +201,54 @@ export interface TargetWindowBounds {
   height: number;
 }
 
-export type TilePosition = 
+export type TilePosition =
+  // Half positions
   | 'left'
   | 'right'
   | 'top'
   | 'bottom'
+  // Quadrant positions
   | 'top-left'
   | 'top-right'
   | 'bottom-left'
   | 'bottom-right'
+  // Horizontal thirds
+  | 'left-third'
+  | 'center-third'
+  | 'right-third'
+  // Vertical thirds
+  | 'top-third'
+  | 'middle-third'
+  | 'bottom-third'
+  // Horizontal two-thirds
+  | 'first-two-thirds'
+  | 'last-two-thirds'
+  // Vertical two-thirds
+  | 'top-two-thirds'
+  | 'bottom-two-thirds'
+  // Centered positions
   | 'center'
+  | 'almost-maximize'
+  // Full screen
   | 'maximize';
+
+/**
+ * Information about a display/monitor
+ */
+export interface DisplayInfo {
+  /** Display ID */
+  displayId: number;
+  /** Display name (e.g., "Built-in Retina Display") */
+  name: string;
+  /** Whether this is the primary display */
+  isPrimary: boolean;
+  /** Full display bounds (total resolution) */
+  bounds: TargetWindowBounds;
+  /** Visible bounds (excluding menu bar and dock) */
+  visibleBounds: TargetWindowBounds;
+  /** Scale factor (e.g., 2.0 for Retina) */
+  scaleFactor?: number;
+}
 
 // =============================================================================
 // File Search Types
@@ -1711,9 +1748,10 @@ interface WindowListMessage {
 interface WindowActionMessage {
   type: 'windowAction';
   requestId: string;
-  action: 'focus' | 'close' | 'minimize' | 'maximize' | 'resize' | 'move';
+  action: 'focus' | 'close' | 'minimize' | 'maximize' | 'resize' | 'move' | 'tile' | 'moveToNextDisplay' | 'moveToPreviousDisplay';
   windowId?: number;
   bounds?: TargetWindowBounds;
+  tilePosition?: TilePosition;
 }
 
 // =============================================================================
@@ -2673,11 +2711,36 @@ declare global {
    * @param position - Tile position (left, right, top-left, etc.)
    */
   function tileWindow(windowId: number, position: TilePosition): Promise<void>;
-  
+
+  /**
+   * Get information about all connected displays/monitors
+   * @returns Array of display information including bounds and visibility
+   */
+  function getDisplays(): Promise<DisplayInfo[]>;
+
+  /**
+   * Get the frontmost window of the app that was active before Script Kit appeared
+   * This is useful for window management commands that operate on the user's previous window
+   * @returns The frontmost window info, or null if no window is found
+   */
+  function getFrontmostWindow(): Promise<SystemWindowInfo | null>;
+
+  /**
+   * Move a window to the next display/monitor
+   * @param windowId - The ID of the window to move
+   */
+  function moveToNextDisplay(windowId: number): Promise<void>;
+
+  /**
+   * Move a window to the previous display/monitor
+   * @param windowId - The ID of the window to move
+   */
+  function moveToPreviousDisplay(windowId: number): Promise<void>;
+
   // =============================================================================
   // File Search Functions
   // =============================================================================
-  
+
   /**
    * Search for files using Spotlight/mdfind
    * @param query - Search query string
@@ -5169,71 +5232,176 @@ globalThis.resizeWindow = async function resizeWindow(windowId: number, width: n
 };
 
 /**
- * Calculate bounds for tiling a window to a specific screen position
+ * Tile a window to a specific screen position.
+ * Uses the native tiling implementation which calculates bounds based on actual screen dimensions.
+ * @param windowId - The ID of the window to tile
+ * @param position - The tile position
  */
-function calculateTileBounds(position: TilePosition, screenWidth: number, screenHeight: number): TargetWindowBounds {
-  const halfWidth = Math.floor(screenWidth / 2);
-  const halfHeight = Math.floor(screenHeight / 2);
-  
-  switch (position) {
-    case 'left':
-      return { x: 0, y: 0, width: halfWidth, height: screenHeight };
-    case 'right':
-      return { x: halfWidth, y: 0, width: halfWidth, height: screenHeight };
-    case 'top':
-      return { x: 0, y: 0, width: screenWidth, height: halfHeight };
-    case 'bottom':
-      return { x: 0, y: halfHeight, width: screenWidth, height: halfHeight };
-    case 'top-left':
-      return { x: 0, y: 0, width: halfWidth, height: halfHeight };
-    case 'top-right':
-      return { x: halfWidth, y: 0, width: halfWidth, height: halfHeight };
-    case 'bottom-left':
-      return { x: 0, y: halfHeight, width: halfWidth, height: halfHeight };
-    case 'bottom-right':
-      return { x: halfWidth, y: halfHeight, width: halfWidth, height: halfHeight };
-    case 'center':
-      const centerWidth = Math.floor(screenWidth * 0.6);
-      const centerHeight = Math.floor(screenHeight * 0.6);
-      return { 
-        x: Math.floor((screenWidth - centerWidth) / 2), 
-        y: Math.floor((screenHeight - centerHeight) / 2), 
-        width: centerWidth, 
-        height: centerHeight 
-      };
-    case 'maximize':
-      return { x: 0, y: 0, width: screenWidth, height: screenHeight };
-    default:
-      return { x: 0, y: 0, width: screenWidth, height: screenHeight };
-  }
-}
-
 globalThis.tileWindow = async function tileWindow(windowId: number, position: TilePosition): Promise<void> {
-  // Get screen dimensions - for now use reasonable defaults
-  // In a real implementation, this would query the actual screen size
-  const screenWidth = 1920;
-  const screenHeight = 1080;
-  
-  const bounds = calculateTileBounds(position, screenWidth, screenHeight);
-
   const id = nextId();
 
   return new Promise((resolve, reject) => {
-    addPending(id, (msg: SubmitMessage) => {
-      if (msg.value && msg.value.startsWith('ERROR:')) {
-        reject(new Error(msg.value.substring(6).trim()));
+    addPending(id, (msg: ResponseMessage) => {
+      if (msg.type === 'windowActionResult') {
+        const resultMsg = msg as { success?: boolean; error?: string };
+        if (resultMsg.success === false && resultMsg.error) {
+          reject(new Error(resultMsg.error));
+        } else {
+          resolve();
+        }
+        return;
+      }
+      // Fallback
+      const submitMsg = msg as SubmitMessage;
+      if (submitMsg.value && submitMsg.value.startsWith('ERROR:')) {
+        reject(new Error(submitMsg.value.substring(6).trim()));
       } else {
         resolve();
       }
     }, { value: '' });
 
-    // Combine move and resize into a single action
+    const message = {
+      type: 'windowAction',
+      requestId: id,
+      action: 'tile',
+      windowId,
+      tilePosition: position,
+    };
+
+    send(message);
+  });
+};
+
+/**
+ * Get information about all connected displays/monitors.
+ * @returns Array of display information including bounds and visibility
+ */
+globalThis.getDisplays = async function getDisplays(): Promise<DisplayInfo[]> {
+  const id = nextId();
+
+  return new Promise((resolve) => {
+    addPending(id, (msg: ResponseMessage) => {
+      if (msg.type === 'displayListResult') {
+        const resultMsg = msg as { displays?: DisplayInfo[] };
+        resolve(resultMsg.displays ?? []);
+        return;
+      }
+      // Fallback
+      resolve([]);
+    }, { displays: [] });
+
+    const message = {
+      type: 'displayList',
+      requestId: id,
+    };
+
+    send(message);
+  });
+};
+
+/**
+ * Get the frontmost window of the app that was active before Script Kit appeared.
+ * This is useful for window management commands that operate on the user's previous window.
+ * @returns The frontmost window info, or null if no window is found
+ */
+globalThis.getFrontmostWindow = async function getFrontmostWindow(): Promise<SystemWindowInfo | null> {
+  const id = nextId();
+
+  return new Promise((resolve, reject) => {
+    addPending(id, (msg: ResponseMessage) => {
+      if (msg.type === 'frontmostWindowResult') {
+        const resultMsg = msg as { window?: SystemWindowInfo; error?: string };
+        if (resultMsg.error) {
+          // Return null instead of rejecting - no frontmost window is not an error
+          resolve(null);
+        } else {
+          resolve(resultMsg.window ?? null);
+        }
+        return;
+      }
+      // Fallback
+      resolve(null);
+    }, { window: null });
+
+    const message = {
+      type: 'frontmostWindow',
+      requestId: id,
+    };
+
+    send(message);
+  });
+};
+
+/**
+ * Move a window to the next display/monitor.
+ * @param windowId - The ID of the window to move
+ */
+globalThis.moveToNextDisplay = async function moveToNextDisplay(windowId: number): Promise<void> {
+  const id = nextId();
+
+  return new Promise((resolve, reject) => {
+    addPending(id, (msg: ResponseMessage) => {
+      if (msg.type === 'windowActionResult') {
+        const resultMsg = msg as { success?: boolean; error?: string };
+        if (resultMsg.success === false && resultMsg.error) {
+          reject(new Error(resultMsg.error));
+        } else {
+          resolve();
+        }
+        return;
+      }
+      // Fallback
+      const submitMsg = msg as SubmitMessage;
+      if (submitMsg.value && submitMsg.value.startsWith('ERROR:')) {
+        reject(new Error(submitMsg.value.substring(6).trim()));
+      } else {
+        resolve();
+      }
+    }, { value: '' });
+
     const message: WindowActionMessage = {
       type: 'windowAction',
       requestId: id,
-      action: 'resize',
+      action: 'moveToNextDisplay',
       windowId,
-      bounds,
+    };
+
+    send(message);
+  });
+};
+
+/**
+ * Move a window to the previous display/monitor.
+ * @param windowId - The ID of the window to move
+ */
+globalThis.moveToPreviousDisplay = async function moveToPreviousDisplay(windowId: number): Promise<void> {
+  const id = nextId();
+
+  return new Promise((resolve, reject) => {
+    addPending(id, (msg: ResponseMessage) => {
+      if (msg.type === 'windowActionResult') {
+        const resultMsg = msg as { success?: boolean; error?: string };
+        if (resultMsg.success === false && resultMsg.error) {
+          reject(new Error(resultMsg.error));
+        } else {
+          resolve();
+        }
+        return;
+      }
+      // Fallback
+      const submitMsg = msg as SubmitMessage;
+      if (submitMsg.value && submitMsg.value.startsWith('ERROR:')) {
+        reject(new Error(submitMsg.value.substring(6).trim()));
+      } else {
+        resolve();
+      }
+    }, { value: '' });
+
+    const message: WindowActionMessage = {
+      type: 'windowAction',
+      requestId: id,
+      action: 'moveToPreviousDisplay',
+      windowId,
     };
 
     send(message);
@@ -5731,6 +5899,10 @@ declare global {
   function moveWindow(windowId: number, x: number, y: number): Promise<void>;
   function resizeWindow(windowId: number, width: number, height: number): Promise<void>;
   function tileWindow(windowId: number, position: TilePosition): Promise<void>;
+  function getDisplays(): Promise<DisplayInfo[]>;
+  function getFrontmostWindow(): Promise<SystemWindowInfo | null>;
+  function moveToNextDisplay(windowId: number): Promise<void>;
+  function moveToPreviousDisplay(windowId: number): Promise<void>;
 
   // File Search
   function fileSearch(query: string, options?: FindOptions): Promise<FileSearchResult[]>;
