@@ -43,6 +43,18 @@ const EMBEDDED_1PASSWORD_EXTENSION: &str = include_str!("../kit-init/extensions/
 const EMBEDDED_QUICKLINKS_EXTENSION: &str =
     include_str!("../kit-init/extensions/quicklinks/main.md");
 
+/// Embedded Window Management extension (built-in extension that ships with the app)
+const EMBEDDED_WINDOW_MANAGEMENT_EXTENSION: &str =
+    include_str!("../kit-init/extensions/window-management/main.md");
+
+/// Embedded Conductor extension (built-in extension that ships with the app)
+const EMBEDDED_CONDUCTOR_EXTENSION: &str =
+    include_str!("../kit-init/extensions/conductor/main.md");
+
+/// Embedded AI Text Tools extension (built-in extension that ships with the app)
+const EMBEDDED_AI_TEXT_TOOLS_EXTENSION: &str =
+    include_str!("../kit-init/extensions/ai-text-tools/main.md");
+
 /// Embedded AGENTS.md guide for AI agents writing user scripts
 const EMBEDDED_AGENTS_MD: &str = r###"# Script Kit User Scripts Guide
 
@@ -1003,6 +1015,18 @@ pub fn ensure_kit_setup() -> SetupResult {
         kit_dir.join("kit").join("1password").join("extensions"),
         // Built-in Quick Links extension kit
         kit_dir.join("kit").join("quicklinks").join("extensions"),
+        // Built-in Window Management extension kit
+        kit_dir
+            .join("kit")
+            .join("window-management")
+            .join("extensions"),
+        // Built-in Conductor extension kit
+        kit_dir.join("kit").join("conductor").join("extensions"),
+        // Built-in AI Text Tools extension kit
+        kit_dir
+            .join("kit")
+            .join("ai-text-tools")
+            .join("extensions"),
         kit_dir.join("sdk"),
         kit_dir.join("db"),
         kit_dir.join("logs"),
@@ -1057,6 +1081,48 @@ pub fn ensure_kit_setup() -> SetupResult {
         EMBEDDED_QUICKLINKS_EXTENSION,
         &mut warnings,
         "kit/quicklinks/extensions/main.md",
+    );
+
+    // App-managed: Built-in Window Management extension (refresh if changed)
+    // This extension ships with the app and provides window tiling and positioning
+    let window_management_path = kit_dir
+        .join("kit")
+        .join("window-management")
+        .join("extensions")
+        .join("main.md");
+    write_string_if_changed(
+        &window_management_path,
+        EMBEDDED_WINDOW_MANAGEMENT_EXTENSION,
+        &mut warnings,
+        "kit/window-management/extensions/main.md",
+    );
+
+    // App-managed: Built-in Conductor extension (refresh if changed)
+    // This extension ships with the app and provides Conductor integration
+    let conductor_path = kit_dir
+        .join("kit")
+        .join("conductor")
+        .join("extensions")
+        .join("main.md");
+    write_string_if_changed(
+        &conductor_path,
+        EMBEDDED_CONDUCTOR_EXTENSION,
+        &mut warnings,
+        "kit/conductor/extensions/main.md",
+    );
+
+    // App-managed: Built-in AI Text Tools extension (refresh if changed)
+    // This extension ships with the app and provides AI-powered text transformations
+    let ai_text_tools_path = kit_dir
+        .join("kit")
+        .join("ai-text-tools")
+        .join("extensions")
+        .join("main.md");
+    write_string_if_changed(
+        &ai_text_tools_path,
+        EMBEDDED_AI_TEXT_TOOLS_EXTENSION,
+        &mut warnings,
+        "kit/ai-text-tools/extensions/main.md",
     );
 
     // User-owned: config.ts (only create if missing)
