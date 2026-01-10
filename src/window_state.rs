@@ -271,7 +271,12 @@ pub fn reset_all_positions() {
 
 /// Check if any window positions have been customized
 pub fn has_custom_positions() -> bool {
-    load_state_file().is_some_and(|s| s.main.is_some() || s.notes.is_some() || s.ai.is_some())
+    load_state_file().is_some_and(|s| {
+        s.main.is_some()
+            || !s.main_per_display.is_empty()
+            || s.notes.is_some()
+            || s.ai.is_some()
+    })
 }
 
 // ============================================================================
