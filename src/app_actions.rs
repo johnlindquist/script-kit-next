@@ -721,8 +721,10 @@ impl ScriptListApp {
                                     &format!("Failed to save frecency after reset: {}", e),
                                 );
                             }
-                            // Invalidate the grouped cache so the UI updates
+                            // Invalidate the grouped cache AND refresh scripts to rebuild the list
+                            // This ensures the item is immediately removed from the Suggested section
                             self.invalidate_grouped_cache();
+                            self.refresh_scripts(cx);
                             logging::log(
                                 "UI",
                                 &format!("Reset ranking for: {}", script_info.name),
@@ -746,7 +748,9 @@ impl ScriptListApp {
                 } else {
                     self.last_output = Some(SharedString::from("No item selected"));
                 }
-                self.hide_main_and_reset(cx);
+                // Don't hide main window - stay in the main menu so user can see the change
+                // The actions dialog is already closed by setting current_view = AppView::ScriptList
+                // at the start of handle_action()
             }
             _ => {
                 // Handle SDK actions using shared helper
