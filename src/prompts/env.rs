@@ -430,9 +430,7 @@ impl Render for EnvPrompt {
                             .text_color(rgb(accent_color)),
                     ),
             )
-            // Spacer to push footer to bottom
-            .child(div().flex_1())
-            // Footer with submit action
+            // Footer with submit action (directly after header, no spacer)
             .child({
                 let footer_colors = PromptFooterColors::from_theme(&self.theme);
                 let footer_config = PromptFooterConfig::new()
