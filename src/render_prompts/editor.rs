@@ -83,10 +83,13 @@ impl ScriptListApp {
                     return;
                 }
 
+                let modifiers = &event.keystroke.modifiers;
+
                 // Route to shared actions dialog handler (modal when open)
                 match this.route_key_to_actions_dialog(
                     key,
                     key_char,
+                    modifiers,
                     ActionsDialogHost::EditorPrompt,
                     window,
                     cx,

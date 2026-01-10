@@ -208,13 +208,77 @@ impl ScriptListApp {
                                 dialog.update(cx, |d, cx| d.handle_backspace(cx));
                             }
                             _ => {
-                                // Route character input to the dialog for search
-                                if let Some(ref key_char) = event.keystroke.key_char {
-                                    if let Some(ch) = key_char.chars().next() {
-                                        if !ch.is_control() {
-                                            dialog.update(cx, |d, cx| d.handle_char(ch, cx));
+                                let modifiers = &event.keystroke.modifiers;
+
+                                // Check for printable character input (only when no modifiers are held)
+                                // This prevents Cmd+E from being treated as typing 'e' into the search
+                                if !modifiers.platform && !modifiers.control && !modifiers.alt {
+                                    if let Some(ref key_char) = event.keystroke.key_char {
+                                        if let Some(ch) = key_char.chars().next() {
+                                            if !ch.is_control() {
+                                                dialog.update(cx, |d, cx| d.handle_char(ch, cx));
+                                            }
                                         }
                                     }
+                                    return;
+                                }
+
+                                // Check if keystroke matches any action shortcut in the dialog
+                                let key_lower = key_str.to_lowercase();
+                                let keystroke_shortcut =
+                                    shortcuts::keystroke_to_shortcut(&key_lower, modifiers);
+
+                                // Read dialog actions and look for matching shortcut
+                                let dialog_ref = dialog.read(cx);
+                                let mut matched_action: Option<String> = None;
+                                for action in &dialog_ref.actions {
+                                    if let Some(ref display_shortcut) = action.shortcut {
+                                        let normalized =
+                                            Self::normalize_display_shortcut(display_shortcut);
+                                        if normalized == keystroke_shortcut {
+                                            matched_action = Some(action.id.clone());
+                                            break;
+                                        }
+                                    }
+                                }
+                                let _ = dialog_ref;
+
+                                if let Some(action_id) = matched_action {
+                                    logging::log(
+                                        "ACTIONS",
+                                        &format!(
+                                            "Path actions dialog shortcut matched: {} -> {}",
+                                            keystroke_shortcut, action_id
+                                        ),
+                                    );
+
+                                    // Get path info before closing dialog
+                                    let path_info = path_entity.read(cx).get_selected_path_info();
+
+                                    // Close the dialog
+                                    this.show_actions_popup = false;
+                                    this.actions_dialog = None;
+                                    if let Ok(mut guard) = this.path_actions_showing.lock() {
+                                        *guard = false;
+                                    }
+
+                                    // Focus back to PathPrompt
+                                    if let AppView::PathPrompt { focus_handle, .. } =
+                                        &this.current_view
+                                    {
+                                        window.focus(focus_handle, cx);
+                                    }
+
+                                    // Execute the action
+                                    if let Some(info) = path_info {
+                                        this.execute_path_action(
+                                            &action_id,
+                                            &info,
+                                            &path_entity,
+                                            cx,
+                                        );
+                                    }
+                                    cx.notify();
                                 }
                             }
                         }

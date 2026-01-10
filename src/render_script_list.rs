@@ -589,22 +589,70 @@ impl ScriptListApp {
                                 return;
                             }
                             _ => {
-                                // Route character input to the dialog for search
-                                if let Some(ref key_char) = event.keystroke.key_char {
-                                    if let Some(ch) = key_char.chars().next() {
-                                        if !ch.is_control() {
-                                            dialog.update(cx, |d, cx| d.handle_char(ch, cx));
-                                            // Resize and notify actions window to re-render
-                                            let dialog_for_resize = dialog.clone();
-                                            cx.spawn(async move |_this, cx| {
-                                                cx.update(|cx| {
-                                                    resize_actions_window(cx, &dialog_for_resize);
+                                let modifiers = &event.keystroke.modifiers;
+
+                                // Check for printable character input (only when no modifiers are held)
+                                // This prevents Cmd+E from being treated as typing 'e' into the search
+                                if !modifiers.platform && !modifiers.control && !modifiers.alt {
+                                    if let Some(ref key_char) = event.keystroke.key_char {
+                                        if let Some(ch) = key_char.chars().next() {
+                                            if !ch.is_control() {
+                                                dialog.update(cx, |d, cx| d.handle_char(ch, cx));
+                                                // Resize and notify actions window to re-render
+                                                let dialog_for_resize = dialog.clone();
+                                                cx.spawn(async move |_this, cx| {
+                                                    cx.update(|cx| {
+                                                        resize_actions_window(cx, &dialog_for_resize);
+                                                    })
+                                                    .ok();
                                                 })
-                                                .ok();
-                                            })
-                                            .detach();
+                                                .detach();
+                                                return;
+                                            }
                                         }
                                     }
+                                }
+
+                                // Check if keystroke matches any action shortcut in the dialog
+                                // This allows Cmd+E, Cmd+L, etc. to execute the corresponding action
+                                let key_lower = key_str.to_lowercase();
+                                let keystroke_shortcut =
+                                    shortcuts::keystroke_to_shortcut(&key_lower, modifiers);
+
+                                // Read dialog actions and look for matching shortcut
+                                let dialog_ref = dialog.read(cx);
+                                let mut matched_action: Option<String> = None;
+                                for action in &dialog_ref.actions {
+                                    if let Some(ref display_shortcut) = action.shortcut {
+                                        let normalized =
+                                            Self::normalize_display_shortcut(display_shortcut);
+                                        if normalized == keystroke_shortcut {
+                                            matched_action = Some(action.id.clone());
+                                            break;
+                                        }
+                                    }
+                                }
+                                let _ = dialog_ref;
+
+                                if let Some(action_id) = matched_action {
+                                    logging::log(
+                                        "ACTIONS",
+                                        &format!(
+                                            "Actions dialog shortcut matched: {} -> {}",
+                                            keystroke_shortcut, action_id
+                                        ),
+                                    );
+                                    // Close the dialog
+                                    this.show_actions_popup = false;
+                                    this.actions_dialog = None;
+                                    cx.spawn(async move |_this, cx| {
+                                        cx.update(close_actions_window).ok();
+                                    })
+                                    .detach();
+                                    this.focus_main_filter(window, cx);
+                                    // Execute the action
+                                    this.handle_action(action_id, cx);
+                                    cx.notify();
                                 }
                                 return;
                             }

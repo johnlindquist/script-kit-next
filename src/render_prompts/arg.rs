@@ -144,6 +144,7 @@ impl ScriptListApp {
                 match this.route_key_to_actions_dialog(
                     key,
                     key_char,
+                    modifiers,
                     ActionsDialogHost::ArgPrompt,
                     window,
                     cx,
