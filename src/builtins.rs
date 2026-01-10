@@ -784,7 +784,9 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         "builtin-tile-top-left",
         "Top Left",
         "Move window to top-left quarter of screen",
-        vec!["top", "left", "quarter", "quadrant", "tile", "window", "corner"],
+        vec![
+            "top", "left", "quarter", "quadrant", "tile", "window", "corner",
+        ],
         BuiltInFeature::WindowAction(WindowActionType::TileTopLeft),
         "◰",
     ));
@@ -793,7 +795,9 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         "builtin-tile-top-right",
         "Top Right",
         "Move window to top-right quarter of screen",
-        vec!["top", "right", "quarter", "quadrant", "tile", "window", "corner"],
+        vec![
+            "top", "right", "quarter", "quadrant", "tile", "window", "corner",
+        ],
         BuiltInFeature::WindowAction(WindowActionType::TileTopRight),
         "◳",
     ));
@@ -802,7 +806,9 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         "builtin-tile-bottom-left",
         "Bottom Left",
         "Move window to bottom-left quarter of screen",
-        vec!["bottom", "left", "quarter", "quadrant", "tile", "window", "corner"],
+        vec![
+            "bottom", "left", "quarter", "quadrant", "tile", "window", "corner",
+        ],
         BuiltInFeature::WindowAction(WindowActionType::TileBottomLeft),
         "◱",
     ));
@@ -811,7 +817,9 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         "builtin-tile-bottom-right",
         "Bottom Right",
         "Move window to bottom-right quarter of screen",
-        vec!["bottom", "right", "quarter", "quadrant", "tile", "window", "corner"],
+        vec![
+            "bottom", "right", "quarter", "quadrant", "tile", "window", "corner",
+        ],
         BuiltInFeature::WindowAction(WindowActionType::TileBottomRight),
         "◲",
     ));
@@ -896,7 +904,9 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         "builtin-tile-top-two-thirds",
         "Top Two Thirds",
         "Move window to top two-thirds of screen",
-        vec!["top", "two", "thirds", "upper", "tile", "window", "tall", "vertical"],
+        vec![
+            "top", "two", "thirds", "upper", "tile", "window", "tall", "vertical",
+        ],
         BuiltInFeature::WindowAction(WindowActionType::TileTopTwoThirds),
         "⬒",
     ));
@@ -905,7 +915,9 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         "builtin-tile-bottom-two-thirds",
         "Bottom Two Thirds",
         "Move window to bottom two-thirds of screen",
-        vec!["bottom", "two", "thirds", "lower", "tile", "window", "tall", "vertical"],
+        vec![
+            "bottom", "two", "thirds", "lower", "tile", "window", "tall", "vertical",
+        ],
         BuiltInFeature::WindowAction(WindowActionType::TileBottomTwoThirds),
         "⬓",
     ));
@@ -924,7 +936,9 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         "builtin-almost-maximize",
         "Almost Maximize",
         "Expand window to 90% of screen with margins",
-        vec!["almost", "maximize", "large", "big", "margins", "window", "fill"],
+        vec![
+            "almost", "maximize", "large", "big", "margins", "window", "fill",
+        ],
         BuiltInFeature::WindowAction(WindowActionType::TileAlmostMaximize),
         "▣",
     ));
@@ -953,7 +967,9 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         "builtin-next-display",
         "Next Display",
         "Move window to next display",
-        vec!["next", "display", "monitor", "screen", "move", "window", "right"],
+        vec![
+            "next", "display", "monitor", "screen", "move", "window", "right",
+        ],
         BuiltInFeature::WindowAction(WindowActionType::MoveToNextDisplay),
         "⏭",
     ));
@@ -962,7 +978,9 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         "builtin-previous-display",
         "Previous Display",
         "Move window to previous display",
-        vec!["previous", "display", "monitor", "screen", "move", "window", "left"],
+        vec![
+            "previous", "display", "monitor", "screen", "move", "window", "left",
+        ],
         BuiltInFeature::WindowAction(WindowActionType::MoveToPreviousDisplay),
         "⏮",
     ));
@@ -1108,7 +1126,15 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         "Configure Vercel AI Gateway",
         "Set up your Vercel AI Gateway API key for AI Chat",
         vec![
-            "vercel", "api", "key", "gateway", "ai", "configure", "setup", "config", "settings",
+            "vercel",
+            "api",
+            "key",
+            "gateway",
+            "ai",
+            "configure",
+            "setup",
+            "config",
+            "settings",
         ],
         BuiltInFeature::SettingsCommand(SettingsCommandType::ConfigureVercelApiKey),
         "🔑",
@@ -1119,7 +1145,15 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         "Configure OpenAI API Key",
         "Set up your OpenAI API key for AI Chat",
         vec![
-            "openai", "api", "key", "gpt", "ai", "configure", "setup", "config", "settings",
+            "openai",
+            "api",
+            "key",
+            "gpt",
+            "ai",
+            "configure",
+            "setup",
+            "config",
+            "settings",
         ],
         BuiltInFeature::SettingsCommand(SettingsCommandType::ConfigureOpenAiApiKey),
         "🔑",
@@ -1130,7 +1164,15 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         "Configure Anthropic API Key",
         "Set up your Anthropic API key for AI Chat",
         vec![
-            "anthropic", "api", "key", "claude", "ai", "configure", "setup", "config", "settings",
+            "anthropic",
+            "api",
+            "key",
+            "claude",
+            "ai",
+            "configure",
+            "setup",
+            "config",
+            "settings",
         ],
         BuiltInFeature::SettingsCommand(SettingsCommandType::ConfigureAnthropicApiKey),
         "🔑",
