@@ -55,7 +55,7 @@ description: Display current Conductor workspace information
 -->
 
 ```ts
-import { isInsideConductor, getConductorEnv, getWorkspace } from '@scriptkit/kit/conductor';
+import { isInsideConductor, getConductorEnv, getWorkspace } from '../../conductor';
 
 if (!isInsideConductor()) {
   await div(`
@@ -119,7 +119,7 @@ description: Get an available port from Conductor's allocated range
 -->
 
 ```ts
-import { isInsideConductor, getPort } from '@scriptkit/kit/conductor';
+import { isInsideConductor, getPort } from '../../conductor';
 
 if (!isInsideConductor()) {
   await div(`
@@ -162,7 +162,7 @@ description: View the current conductor.json configuration
 -->
 
 ```ts
-import { readConfig, hasConfig, getConfigPath } from '@scriptkit/kit/conductor';
+import { readConfig, hasConfig, getConfigPath } from '../../conductor';
 
 const configPath = getConfigPath();
 const exists = await hasConfig();
@@ -198,7 +198,7 @@ description: Create a new conductor.json with common defaults
 -->
 
 ```ts
-import { initConfig, hasConfig, getConfigPath } from '@scriptkit/kit/conductor';
+import { initConfig, hasConfig, getConfigPath } from '../../conductor';
 
 const configPath = getConfigPath();
 const exists = await hasConfig();
@@ -252,7 +252,7 @@ description: List all Conductor workspaces on this machine
 -->
 
 ```ts
-import { listWorkspaces, getConductorRoot } from '@scriptkit/kit/conductor';
+import { listWorkspaces, getConductorRoot } from '../../conductor';
 
 const root = getConductorRoot();
 const workspaces = await listWorkspaces();
@@ -293,7 +293,7 @@ description: Check if Conductor is installed and running
 -->
 
 ```ts
-import { isInstalled, isRunning, getVersion } from '@scriptkit/kit/conductor';
+import { isInstalled, isRunning, getVersion } from '../../conductor';
 
 const installed = await isInstalled();
 const running = await isRunning();
@@ -343,7 +343,7 @@ description: View configured Conductor hooks
 -->
 
 ```ts
-import { listAllHooks, ensureHooksDir } from '@scriptkit/kit/conductor';
+import { listAllHooks, ensureHooksDir } from '../../conductor';
 
 const allHooks = await listAllHooks();
 const hookTypes = Object.keys(allHooks);
@@ -393,7 +393,7 @@ description: Open the current Conductor workspace in your editor
 -->
 
 ```ts
-import { isInsideConductor, getConductorEnv } from '@scriptkit/kit/conductor';
+import { isInsideConductor, getConductorEnv } from '../../conductor';
 
 if (!isInsideConductor()) {
   await div(`
@@ -429,7 +429,7 @@ description: Copy a Conductor environment variable to clipboard
 -->
 
 ```ts
-import { isInsideConductor, getConductorEnv, CONDUCTOR_ENV_VARS } from '@scriptkit/kit/conductor';
+import { isInsideConductor, getConductorEnv, CONDUCTOR_ENV_VARS } from '../../conductor';
 
 if (!isInsideConductor()) {
   await div(`
