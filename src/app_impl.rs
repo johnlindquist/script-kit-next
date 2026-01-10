@@ -102,6 +102,22 @@ impl ScriptListApp {
                                             elapsed.as_secs_f64() * 1000.0
                                         ),
                                     );
+                                    // CRITICAL: Sync list state after cache invalidation
+                                    // Without this, the GPUI list component doesn't know
+                                    // about the new apps and may render stale item counts
+                                    let old_count = app.main_list_state.item_count();
+                                    app.sync_list_state();
+                                    let new_count = app.main_list_state.item_count();
+                                    app.validate_selection_bounds(cx);
+                                    logging::log(
+                                        "APP",
+                                        &format!(
+                                            "List state synced after app load: {} -> {} items (filter='{}')",
+                                            old_count,
+                                            new_count,
+                                            app.computed_filter_text
+                                        ),
+                                    );
                                     cx.notify();
                                 })
                             });
@@ -1205,6 +1221,11 @@ impl ScriptListApp {
         self.invalidate_filter_cache();
         self.invalidate_grouped_cache();
 
+        // Sync list component state and validate selection
+        // This ensures the GPUI list component knows about the new app count
+        self.sync_list_state();
+        self.validate_selection_bounds(cx);
+
         logging::log(
             "APP",
             &format!("Apps refreshed: {} applications loaded", self.apps.len()),
@@ -1405,6 +1426,10 @@ impl ScriptListApp {
         // Invalidate caches
         self.invalidate_filter_cache();
         self.invalidate_grouped_cache();
+
+        // Sync list component state so GPUI renders the correct item count
+        self.sync_list_state();
+        self.validate_selection_bounds(cx);
 
         // Rebuild alias/shortcut registries for this file's scriptlets
         let conflicts = self.rebuild_registries();

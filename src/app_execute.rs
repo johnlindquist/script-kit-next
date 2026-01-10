@@ -63,6 +63,11 @@ impl ScriptListApp {
                 // Refresh apps list when opening launcher
                 self.apps = app_launcher::scan_applications().clone();
                 logging::log("EXEC", &format!("Loaded {} applications", self.apps.len()));
+                // Invalidate caches since apps changed
+                self.invalidate_filter_cache();
+                self.invalidate_grouped_cache();
+                // Sync list state so when user returns to ScriptList, the count is correct
+                self.sync_list_state();
                 // Clear the shared input for fresh search (sync on next render)
                 self.filter_text = String::new();
                 self.pending_filter_sync = true;
