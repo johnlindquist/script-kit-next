@@ -3,7 +3,7 @@
 //! This module provides functions for loading scripts from the
 //! ~/.scriptkit/*/scripts/ directories.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tracing::{debug, instrument, warn};
 
@@ -12,6 +12,7 @@ use glob::glob;
 use crate::setup::get_kit_path;
 
 use super::metadata::extract_metadata_full;
+use super::scriptlet_loader::extract_kit_from_path;
 use super::types::Script;
 
 /// Reads scripts from ~/.scriptkit/*/scripts/ directories
@@ -45,7 +46,7 @@ pub fn read_scripts() -> Vec<Arc<Script>> {
 
     // Read scripts from each kit's scripts directory
     for scripts_dir in script_dirs {
-        read_scripts_from_dir(&scripts_dir, &mut scripts);
+        read_scripts_from_dir(&scripts_dir, &kit_path, &mut scripts);
     }
 
     // Sort by name
@@ -57,7 +58,16 @@ pub fn read_scripts() -> Vec<Arc<Script>> {
 
 /// Read scripts from a single directory and append to the scripts vector
 /// H1 Optimization: Creates Arc-wrapped Scripts for cheap cloning.
-pub(crate) fn read_scripts_from_dir(scripts_dir: &PathBuf, scripts: &mut Vec<Arc<Script>>) {
+///
+/// # Arguments
+/// * `scripts_dir` - Path to the scripts directory (e.g., ~/.scriptkit/kit/main/scripts)
+/// * `kit_path` - Root kit path for extracting kit name (e.g., ~/.scriptkit)
+/// * `scripts` - Vector to append loaded scripts to
+pub(crate) fn read_scripts_from_dir(
+    scripts_dir: &PathBuf,
+    kit_path: &Path,
+    scripts: &mut Vec<Arc<Script>>,
+) {
     // Read the directory contents
     match std::fs::read_dir(scripts_dir) {
         Ok(entries) => {
@@ -82,6 +92,9 @@ pub(crate) fn read_scripts_from_dir(scripts_dir: &PathBuf, scripts: &mut Vec<Arc
                                                 .name
                                                 .unwrap_or_else(|| filename_str.to_string());
 
+                                            // Extract kit name from path
+                                            let kit_name = extract_kit_from_path(&path, kit_path);
+
                                             scripts.push(Arc::new(Script {
                                                 name,
                                                 path: path.clone(),
@@ -92,6 +105,7 @@ pub(crate) fn read_scripts_from_dir(scripts_dir: &PathBuf, scripts: &mut Vec<Arc
                                                 shortcut: script_metadata.shortcut,
                                                 typed_metadata,
                                                 schema,
+                                                kit_name,
                                             }));
                                         }
                                     }

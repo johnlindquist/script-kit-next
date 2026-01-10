@@ -1060,6 +1060,7 @@ mod tests {
                 shortcut: None,
                 typed_metadata: None,
                 schema: Some(schema),
+                kit_name: None,
             }
         }
 
@@ -1242,6 +1243,7 @@ mod tests {
                 shortcut: None,
                 typed_metadata: None,
                 schema: None, // No schema!
+                kit_name: None,
             };
 
             let scripts = wrap_scripts(vec![
@@ -1300,6 +1302,7 @@ mod tests {
                 shortcut: None,
                 typed_metadata: None,
                 schema: None,
+                kit_name: None,
             }
         }
 
