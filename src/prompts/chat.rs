@@ -1,13 +1,14 @@
 //! ChatPrompt - Raycast-style chat interface
 //!
 //! Features:
-//! - Message bubbles (user on right, assistant on left)
-//! - Streaming response support with typing indicator
-//! - Text input at bottom
+//! - Input at TOP (not bottom)
+//! - Messages bundled as conversation turns (user prompt + AI response in same container)
+//! - Full-width containers (not bubbles)
+//! - Footer with model selector and "Continue in Chat"
 
 use gpui::{
-    div, prelude::*, px, rgb, rgba, Context, FocusHandle, Focusable, Hsla, KeyDownEvent, Point,
-    Render, ScrollHandle, Window,
+    div, prelude::*, px, rgb, rgba, Context, FocusHandle, Focusable, Hsla, KeyDownEvent, Render,
+    ScrollHandle, Window,
 };
 use std::sync::Arc;
 
@@ -20,6 +21,15 @@ use crate::ui_foundation::get_vibrancy_background;
 /// Callback type for when user submits a message: (prompt_id, message_text)
 pub type ChatSubmitCallback = Arc<dyn Fn(String, String) + Send + Sync>;
 
+/// A conversation turn: user prompt + optional AI response
+#[derive(Clone, Debug)]
+pub struct ConversationTurn {
+    pub user_prompt: String,
+    pub assistant_response: Option<String>,
+    pub model: Option<String>,
+    pub streaming: bool,
+}
+
 /// ChatPrompt - Raycast-style chat interface
 pub struct ChatPrompt {
     pub id: String,
@@ -27,12 +37,12 @@ pub struct ChatPrompt {
     pub placeholder: Option<String>,
     pub hint: Option<String>,
     pub footer: Option<String>,
+    pub model: Option<String>,
     pub focus_handle: FocusHandle,
     pub input: TextInputState,
     pub on_submit: ChatSubmitCallback,
     pub theme: Arc<theme::Theme>,
     pub scroll_handle: ScrollHandle,
-    scroll_offset: Point<f32>,
     prompt_colors: theme::PromptColors,
     streaming_message_id: Option<String>,
 }
@@ -58,25 +68,25 @@ impl ChatPrompt {
             placeholder,
             hint,
             footer,
+            model: Some("GPT-4o mini".to_string()),
             focus_handle,
             input: TextInputState::new(),
             on_submit,
             theme,
             scroll_handle: ScrollHandle::new(),
-            scroll_offset: Point::default(),
             prompt_colors,
             streaming_message_id: None,
         }
     }
 
     pub fn add_message(&mut self, message: ChatPromptMessage, cx: &mut Context<Self>) {
-        logging::log("CHAT", &format!("Adding message: {:?}", message.position));
+        logging::log("CHAT", &format!("Adding message: {:?}", message.get_position()));
         self.messages.push(message);
+        self.scroll_handle.scroll_to_bottom();
         cx.notify();
     }
 
     pub fn start_streaming(&mut self, message_id: String, position: ChatMessagePosition, cx: &mut Context<Self>) {
-        // Determine role from position
         let role = match position {
             ChatMessagePosition::Right => Some(ChatMessageRole::User),
             ChatMessagePosition::Left => Some(ChatMessageRole::Assistant),
@@ -89,13 +99,14 @@ impl ChatPrompt {
             text: String::new(),
             position,
             name: None,
-            model: None,
+            model: self.model.clone(),
             streaming: true,
             error: None,
             created_at: Some(chrono::Utc::now().to_rfc3339()),
         };
         self.messages.push(message);
         self.streaming_message_id = Some(message_id);
+        self.scroll_handle.scroll_to_bottom();
         cx.notify();
     }
 
@@ -103,6 +114,7 @@ impl ChatPrompt {
         if self.streaming_message_id.as_deref() == Some(message_id) {
             if let Some(msg) = self.messages.iter_mut().rev().find(|m| m.id.as_deref() == Some(message_id)) {
                 msg.append_content(chunk);
+                self.scroll_handle.scroll_to_bottom();
                 cx.notify();
             }
         }
@@ -134,119 +146,211 @@ impl ChatPrompt {
         (self.on_submit)(self.id.clone(), text);
     }
 
-    fn render_message(&self, message: &ChatPromptMessage) -> impl IntoElement {
-        let colors = &self.prompt_colors;
-        let is_user = message.is_user();
-        let content = message.get_content();
+    /// Group messages into conversation turns (user + assistant pairs)
+    fn get_conversation_turns(&self) -> Vec<ConversationTurn> {
+        let mut turns = Vec::new();
+        let mut i = 0;
 
-        // Error messages have special styling
-        if let Some(ref error) = message.error {
-            let error_bg = rgba(0xDC262680);
-            return div()
-                .w_full()
-                .flex()
-                .my(px(4.0))
-                .child(
-                    div()
-                        .max_w(px(400.0))
-                        .px(px(12.0))
-                        .py(px(8.0))
-                        .bg(error_bg)
-                        .rounded(px(12.0))
-                        .text_sm()
-                        .text_color(Hsla::white())
-                        .child(format!("⚠ {}", error)),
-                );
-        }
+        while i < self.messages.len() {
+            let msg = &self.messages[i];
 
-        let bubble_bg = if is_user {
-            rgba((colors.accent_color << 8) | 0xE0)
-        } else {
-            rgba((colors.code_bg << 8) | 0xC0)
-        };
+            if msg.is_user() {
+                // Start a new turn with this user message
+                let user_prompt = msg.get_content().to_string();
+                let mut turn = ConversationTurn {
+                    user_prompt,
+                    assistant_response: None,
+                    model: None,
+                    streaming: false,
+                };
 
-        let text_color: Hsla = if is_user { Hsla::white() } else { rgb(colors.text_primary).into() };
+                // Look for the next assistant response
+                if i + 1 < self.messages.len() {
+                    let next_msg = &self.messages[i + 1];
+                    if !next_msg.is_user() {
+                        turn.assistant_response = Some(next_msg.get_content().to_string());
+                        turn.model = next_msg.model.clone();
+                        turn.streaming = next_msg.streaming;
+                        i += 1;
+                    }
+                }
 
-        // Build the bubble content
-        let mut bubble_content = div().flex().flex_col().gap(px(2.0));
-
-        // Add name/model header if present
-        if message.name.is_some() || message.model.is_some() {
-            let mut header = div().flex().flex_row().gap(px(8.0)).text_xs().opacity(0.7);
-            if let Some(ref name) = message.name {
-                header = header.child(name.clone());
+                turns.push(turn);
+            } else {
+                // Standalone assistant message (no user prompt before it)
+                // This happens for system-initiated messages
+                let turn = ConversationTurn {
+                    user_prompt: String::new(),
+                    assistant_response: Some(msg.get_content().to_string()),
+                    model: msg.model.clone(),
+                    streaming: msg.streaming,
+                };
+                turns.push(turn);
             }
-            if let Some(ref model) = message.model {
-                header = header.child(format!("· {}", model));
-            }
-            bubble_content = bubble_content.child(header);
+
+            i += 1;
         }
 
-        // Add the message content
-        bubble_content = bubble_content.child(content.to_string());
-
-        // Add streaming indicator
-        if message.streaming && content.is_empty() {
-            bubble_content = bubble_content.child(div().text_xs().opacity(0.6).child("..."));
-        } else if message.streaming {
-            bubble_content = bubble_content.child(div().text_xs().opacity(0.6).child("▌"));
-        }
-
-        let bubble = div()
-            .max_w(px(400.0))
-            .px(px(12.0))
-            .py(px(8.0))
-            .bg(bubble_bg)
-            .rounded(px(12.0))
-            .text_sm()
-            .text_color(text_color)
-            .child(bubble_content);
-
-        let mut row = div().w_full().flex().my(px(4.0));
-        if is_user {
-            row = row.flex_row_reverse();
-        }
-        row.child(bubble)
+        turns
     }
 
+    /// Render a conversation turn (user prompt + AI response bundled)
+    fn render_turn(&self, turn: &ConversationTurn) -> impl IntoElement {
+        let colors = &self.prompt_colors;
+
+        let container_bg = rgba((colors.code_bg << 8) | 0x60);
+
+        let mut content = div().flex().flex_col().gap(px(4.0));
+
+        // User prompt (small, bold) - only if not empty
+        if !turn.user_prompt.is_empty() {
+            content = content.child(
+                div()
+                    .text_sm()
+                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                    .text_color(rgb(colors.text_secondary))
+                    .child(turn.user_prompt.clone()),
+            );
+        }
+
+        // AI response
+        if let Some(ref response) = turn.assistant_response {
+            let mut response_div = div()
+                .text_sm()
+                .text_color(rgb(colors.text_primary))
+                .child(response.clone());
+
+            // Add streaming indicator
+            if turn.streaming {
+                if response.is_empty() {
+                    response_div = response_div.child(
+                        div().text_xs().opacity(0.6).child("Thinking..."),
+                    );
+                } else {
+                    response_div = response_div.child(
+                        div().text_color(rgb(colors.accent_color)).child("▌"),
+                    );
+                }
+            }
+
+            content = content.child(response_div);
+        }
+
+        // The full-width container
+        div()
+            .w_full()
+            .px(px(12.0))
+            .py(px(10.0))
+            .bg(container_bg)
+            .rounded(px(8.0))
+            .child(content)
+    }
+
+    /// Render the input field at the top
     fn render_input(&self, _cx: &Context<Self>) -> impl IntoElement {
         let colors = &self.prompt_colors;
         let text = self.input.text();
         let cursor_pos = self.input.cursor();
         let chars: Vec<char> = text.chars().collect();
-        let text_primary = colors.text_primary;
-        let accent = colors.accent_color;
 
-        // Build input with cursor
         let mut input_content = div().flex().flex_row().items_center();
 
         // Text before cursor
         if cursor_pos > 0 {
             let before: String = chars[..cursor_pos].iter().collect();
-            input_content = input_content.child(div().text_color(rgb(text_primary)).child(before));
+            input_content = input_content.child(
+                div().text_color(rgb(colors.text_primary)).child(before),
+            );
         }
 
         // Cursor
         input_content = input_content.child(
-            div().w(px(2.0)).h(px(16.0)).bg(rgb(accent))
+            div().w(px(2.0)).h(px(16.0)).bg(rgb(colors.accent_color)),
         );
 
         // Text after cursor
         if cursor_pos < chars.len() {
             let after: String = chars[cursor_pos..].iter().collect();
-            input_content = input_content.child(div().text_color(rgb(text_primary)).child(after));
+            input_content = input_content.child(
+                div().text_color(rgb(colors.text_primary)).child(after),
+            );
         }
 
         // Placeholder if empty
         if text.is_empty() {
-            let placeholder = self.placeholder.clone().unwrap_or_else(|| "Type a message...".into());
+            let placeholder = self.placeholder.clone().unwrap_or_else(|| "Ask follow-up...".into());
             input_content = div()
-                .text_color(rgb(colors.text_tertiary))
-                .child(placeholder)
-                .child(div().w(px(2.0)).h(px(16.0)).bg(rgb(accent)));
+                .flex()
+                .flex_row()
+                .items_center()
+                .child(
+                    div().text_color(rgb(colors.text_tertiary)).child(placeholder),
+                )
+                .child(div().w(px(2.0)).h(px(16.0)).bg(rgb(colors.accent_color)));
         }
 
         input_content
+    }
+
+    /// Render the footer with model selector and Continue in Chat
+    fn render_footer(&self) -> impl IntoElement {
+        let colors = &self.prompt_colors;
+
+        div()
+            .w_full()
+            .flex()
+            .flex_row()
+            .items_center()
+            .justify_between()
+            .px(px(12.0))
+            .py(px(8.0))
+            .border_t_1()
+            .border_color(rgba((colors.quote_border << 8) | 0x40))
+            .child(
+                // Model selector (left side)
+                div()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .gap(px(6.0))
+                    .child(
+                        div()
+                            .w(px(8.0))
+                            .h(px(8.0))
+                            .rounded_full()
+                            .bg(rgb(colors.accent_color)),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(colors.text_secondary))
+                            .child(self.model.clone().unwrap_or_else(|| "Model".into())),
+                    ),
+            )
+            .child(
+                // Continue in Chat (right side)
+                div()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .gap(px(8.0))
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(colors.text_tertiary))
+                            .child("Continue in Chat"),
+                    )
+                    .child(
+                        div()
+                            .px(px(6.0))
+                            .py(px(2.0))
+                            .bg(rgba((colors.code_bg << 8) | 0x80))
+                            .rounded(px(4.0))
+                            .text_xs()
+                            .text_color(rgb(colors.text_tertiary))
+                            .child("⌘↵"),
+                    ),
+            )
     }
 }
 
@@ -266,9 +370,11 @@ impl Render for ChatPrompt {
 
             match key.as_str() {
                 "enter" if !event.keystroke.modifiers.shift => this.handle_submit(cx),
-                "backspace" => { this.input.backspace(); cx.notify(); }
+                "backspace" => {
+                    this.input.backspace();
+                    cx.notify();
+                }
                 _ => {
-                    // Handle regular character input via key_char
                     if let Some(ch_str) = key_char {
                         for ch in ch_str.chars() {
                             if ch.is_ascii_graphic() || ch == ' ' {
@@ -283,43 +389,66 @@ impl Render for ChatPrompt {
 
         let container_bg: Option<Hsla> = get_vibrancy_background(&self.theme).map(Hsla::from);
 
-        let mut message_list = div().flex().flex_col().gap(px(8.0)).w_full().px(px(12.0)).py(px(8.0));
-        for message in &self.messages {
-            message_list = message_list.child(self.render_message(message));
+        // Input area at TOP
+        let input_area = div()
+            .w_full()
+            .px(px(12.0))
+            .py(px(10.0))
+            .border_b_1()
+            .border_color(rgba((colors.quote_border << 8) | 0x40))
+            .child(self.render_input(cx));
+
+        // Message list (conversation turns)
+        let turns = self.get_conversation_turns();
+        let mut message_list = div()
+            .flex()
+            .flex_col()
+            .gap(px(8.0))
+            .w_full()
+            .px(px(12.0))
+            .py(px(12.0));
+
+        for turn in &turns {
+            message_list = message_list.child(self.render_turn(turn));
         }
 
-        if self.messages.is_empty() {
+        // Empty state
+        if turns.is_empty() {
             message_list = message_list.child(
-                div().flex_1().items_center().justify_center()
-                    .text_color(rgb(colors.text_tertiary)).text_sm()
-                    .child(self.placeholder.clone().unwrap_or_else(|| "Start a conversation...".into()))
+                div()
+                    .flex_1()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .text_color(rgb(colors.text_tertiary))
+                    .text_sm()
+                    .child("Type a question to start..."),
             );
         }
 
-        let input_area = div()
-            .w_full().px(px(12.0)).py(px(8.0))
-            .border_t_1().border_color(rgb(colors.quote_border))
-            .bg(rgba((colors.code_bg << 8) | 0x40))
-            .child(self.render_input(cx));
-
         div()
             .id("chat-prompt")
-            .flex().flex_col().w_full().h_full()
+            .flex()
+            .flex_col()
+            .w_full()
+            .h_full()
             .when_some(container_bg, |d, bg| d.bg(bg))
             .key_context("chat_prompt")
             .track_focus(&self.focus_handle)
             .on_key_down(handle_key)
-            .when_some(self.hint.clone(), |d, hint| {
-                d.child(div().w_full().px(px(12.0)).py(px(8.0))
-                    .border_b_1().border_color(rgb(colors.quote_border))
-                    .text_sm().text_color(rgb(colors.text_secondary)).child(hint))
-            })
-            .child(div().id("chat-messages").flex_1().min_h(px(0.)).overflow_y_scroll()
-                .track_scroll(&self.scroll_handle).child(message_list))
-            .when_some(self.footer.clone(), |d, footer| {
-                d.child(div().w_full().px(px(12.0)).py(px(4.0))
-                    .text_xs().text_color(rgb(colors.text_tertiary)).child(footer))
-            })
+            // Input at TOP
             .child(input_area)
+            // Scrollable message area
+            .child(
+                div()
+                    .id("chat-messages")
+                    .flex_1()
+                    .min_h(px(0.))
+                    .overflow_y_scroll()
+                    .track_scroll(&self.scroll_handle)
+                    .child(message_list),
+            )
+            // Footer with model selector and Continue in Chat
+            .child(self.render_footer())
     }
 }
