@@ -3716,6 +3716,7 @@ export default {
                 shortcut: None,
                 typed_metadata: None,
                 schema: None,
+                kit_name: None,
             };
 
             self.execute_interactive(&script, cx);
@@ -3939,6 +3940,7 @@ export default {
                 shortcut: None,
                 typed_metadata: None,
                 schema: None,
+                kit_name: None,
             };
 
             self.execute_interactive(&script, cx);

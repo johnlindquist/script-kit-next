@@ -2883,8 +2883,8 @@ fn test_get_grouped_results_empty_filter_grouped_view() {
     // Grouped should have SCRIPTS section (no SUGGESTED since frecency is empty)
     assert!(!grouped.is_empty());
 
-    // First item should be SCRIPTS section header (since inputs are scripts only)
-    assert!(matches!(&grouped[0], GroupedListItem::SectionHeader(s) if s == "SCRIPTS"));
+    // First item should be MAIN section header (scripts without kit_name default to "main" kit)
+    assert!(matches!(&grouped[0], GroupedListItem::SectionHeader(s) if s == "MAIN"));
 }
 
 #[test]
@@ -2955,7 +2955,8 @@ fn test_get_grouped_results_with_frecency() {
         .collect();
 
     assert!(section_headers.contains(&"SUGGESTED"));
-    assert!(section_headers.contains(&"SCRIPTS"));
+    // Scripts without kit_name default to "main" kit, so we get "MAIN" section instead of "SCRIPTS"
+    assert!(section_headers.contains(&"MAIN"));
 }
 
 #[test]
@@ -3049,10 +3050,11 @@ fn test_get_grouped_results_frecency_script_appears_before_builtins() {
         })
         .collect();
 
-    // Should have SUGGESTED, SCRIPTS, and COMMANDS sections
+    // Should have SUGGESTED, MAIN (kit-based section), and COMMANDS sections
+    // Scripts without kit_name default to "main" kit, so we get "MAIN" section instead of "SCRIPTS"
     assert!(
-        section_headers.contains(&"SCRIPTS"),
-        "Should have SCRIPTS section for non-recent script. Headers: {:?}",
+        section_headers.contains(&"MAIN"),
+        "Should have MAIN section for non-recent script. Headers: {:?}",
         section_headers
     );
     assert!(
@@ -3261,11 +3263,12 @@ fn test_get_grouped_results_selection_priority_with_frecency() {
         })
         .collect();
 
-    // First 3 items should be: SUGGESTED header, frecency item, SCRIPTS header (for non-recent scripts)
+    // First 3 items should be: SUGGESTED header, frecency item, MAIN header (kit-based section)
+    // Scripts without kit_name default to "main" kit
     assert_eq!(
         &grouped_names[..3],
-        &["[SUGGESTED]", "zebra-script", "[SCRIPTS]"],
-        "First 3 items should be: SUGGESTED header, frecency item, SCRIPTS header. Got: {:?}",
+        &["[SUGGESTED]", "zebra-script", "[MAIN]"],
+        "First 3 items should be: SUGGESTED header, frecency item, MAIN header. Got: {:?}",
         grouped_names
     );
 }
@@ -3331,18 +3334,19 @@ fn test_get_grouped_results_no_frecency_items_in_type_sections() {
         })
         .collect();
 
-    // First should be SCRIPTS header (scripts come before commands in order)
+    // First should be MAIN header (scripts without kit_name default to "main" kit)
     assert_eq!(
-        grouped_names[0], "[SCRIPTS]",
-        "First item should be SCRIPTS header when no frecency. Got: {:?}",
+        grouped_names[0], "[MAIN]",
+        "First item should be MAIN header when no frecency. Got: {:?}",
         grouped_names
     );
 
-    // Expected structure: [SCRIPTS], alpha-script, zebra-script, [COMMANDS], App Launcher, Clipboard History
+    // Expected structure: [MAIN], alpha-script, zebra-script, [COMMANDS], App Launcher, Clipboard History
+    // Scripts without kit_name default to "main" kit, so we get "MAIN" section instead of "SCRIPTS"
     assert_eq!(
         grouped_names,
         vec![
-            "[SCRIPTS]",
+            "[MAIN]",
             "alpha-script",
             "zebra-script",
             "[COMMANDS]",

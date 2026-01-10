@@ -2,9 +2,16 @@
 //!
 //! This module provides functions for grouping search results into
 //! sections like RECENT, SCRIPTS, APPS, etc.
+//!
+//! When the filter is empty (grouped view), items are organized by their source kit:
+//! - SUGGESTED (frecency-based recent items)
+//! - {KIT_NAME} (e.g., CLEANSHOT, MAIN - containing scripts and scriptlets from that kit)
+//! - COMMANDS (built-ins and window controls)
+//! - APPS (installed applications)
+//! - AGENTS (AI agents)
 
 use std::cmp::Ordering;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tracing::{debug, instrument};
 
@@ -175,7 +182,7 @@ pub fn get_grouped_results(
         return (grouped, results);
     }
 
-    // Grouped view mode: create SUGGESTED and type-based sections
+    // Grouped view mode: create SUGGESTED and kit-based sections
     let mut grouped = Vec::new();
 
     // Get suggested items from frecency store (respecting config)
@@ -210,10 +217,19 @@ pub fn get_grouped_results(
         }
     };
 
-    // Find indices of results that are "suggested" and categorize non-suggested by type
+    // Helper to get kit name from a result
+    let get_kit_name = |result: &SearchResult| -> Option<String> {
+        match result {
+            SearchResult::Script(sm) => sm.script.kit_name.clone(),
+            SearchResult::Scriptlet(sm) => sm.scriptlet.group.clone(),
+            _ => None,
+        }
+    };
+
+    // Find indices of results that are "suggested" and categorize non-suggested by kit or type
     let mut suggested_indices: Vec<(usize, f64)> = Vec::new();
-    let mut scripts_indices: Vec<usize> = Vec::new();
-    let mut scriptlets_indices: Vec<usize> = Vec::new();
+    // Kit-based grouping: HashMap<kit_name, Vec<index>>
+    let mut kit_indices: HashMap<String, Vec<usize>> = HashMap::new();
     let mut commands_indices: Vec<usize> = Vec::new();
     let mut apps_indices: Vec<usize> = Vec::new();
     let mut agents_indices: Vec<usize> = Vec::new();
@@ -237,10 +253,13 @@ pub fn get_grouped_results(
             if score >= min_score && suggested_paths.contains(&path) && !is_excluded_builtin {
                 suggested_indices.push((idx, score));
             } else {
-                // Categorize by SearchResult variant
+                // Categorize by kit (for scripts/scriptlets) or by type (for others)
                 match result {
-                    SearchResult::Script(_) => scripts_indices.push(idx),
-                    SearchResult::Scriptlet(_) => scriptlets_indices.push(idx),
+                    SearchResult::Script(_) | SearchResult::Scriptlet(_) => {
+                        // Group by kit name (default to "main" if no kit specified)
+                        let kit = get_kit_name(result).unwrap_or_else(|| "main".to_string());
+                        kit_indices.entry(kit).or_default().push(idx);
+                    }
                     SearchResult::BuiltIn(_) | SearchResult::Window(_) => {
                         commands_indices.push(idx)
                     }
@@ -253,8 +272,10 @@ pub fn get_grouped_results(
         } else {
             // If no path, categorize by type (shouldn't happen, but handle gracefully)
             match result {
-                SearchResult::Script(_) => scripts_indices.push(idx),
-                SearchResult::Scriptlet(_) => scriptlets_indices.push(idx),
+                SearchResult::Script(_) | SearchResult::Scriptlet(_) => {
+                    let kit = get_kit_name(result).unwrap_or_else(|| "main".to_string());
+                    kit_indices.entry(kit).or_default().push(idx);
+                }
                 SearchResult::BuiltIn(_) | SearchResult::Window(_) => commands_indices.push(idx),
                 SearchResult::App(_) => apps_indices.push(idx),
                 SearchResult::Agent(_) => agents_indices.push(idx),
@@ -270,7 +291,7 @@ pub fn get_grouped_results(
     // Limit suggested items to max_items from config
     suggested_indices.truncate(suggested_config.max_items);
 
-    // Sort each type section alphabetically by name (case-insensitive)
+    // Sort each section alphabetically by name (case-insensitive)
     let sort_alphabetically = |indices: &mut Vec<usize>| {
         indices.sort_by(|&a, &b| {
             results[a]
@@ -280,13 +301,27 @@ pub fn get_grouped_results(
         });
     };
 
-    sort_alphabetically(&mut scripts_indices);
-    sort_alphabetically(&mut scriptlets_indices);
+    // Sort items within each kit section
+    for indices in kit_indices.values_mut() {
+        sort_alphabetically(indices);
+    }
     sort_alphabetically(&mut commands_indices);
     sort_alphabetically(&mut apps_indices);
     sort_alphabetically(&mut agents_indices);
 
-    // Build grouped list: SUGGESTED first (if enabled), then SCRIPTS, SCRIPTLETS, COMMANDS, APPS
+    // Get kit names sorted alphabetically (but "main" comes last for better UX)
+    let mut kit_names: Vec<&String> = kit_indices.keys().collect();
+    kit_names.sort_by(|a, b| {
+        // "main" kit goes last, others sorted alphabetically
+        match (a.as_str(), b.as_str()) {
+            ("main", "main") => Ordering::Equal,
+            ("main", _) => Ordering::Greater,
+            (_, "main") => Ordering::Less,
+            _ => a.to_lowercase().cmp(&b.to_lowercase()),
+        }
+    });
+
+    // Build grouped list: SUGGESTED first (if enabled), then kit sections, COMMANDS, APPS, AGENTS
     if suggested_config.enabled && !suggested_indices.is_empty() {
         grouped.push(GroupedListItem::SectionHeader("SUGGESTED".to_string()));
         for (idx, _score) in &suggested_indices {
@@ -294,17 +329,16 @@ pub fn get_grouped_results(
         }
     }
 
-    if !scripts_indices.is_empty() {
-        grouped.push(GroupedListItem::SectionHeader("SCRIPTS".to_string()));
-        for idx in &scripts_indices {
-            grouped.push(GroupedListItem::Item(*idx));
-        }
-    }
-
-    if !scriptlets_indices.is_empty() {
-        grouped.push(GroupedListItem::SectionHeader("SCRIPTLETS".to_string()));
-        for idx in &scriptlets_indices {
-            grouped.push(GroupedListItem::Item(*idx));
+    // Add kit-based sections (e.g., "CLEANSHOT", "MAIN")
+    for kit_name in &kit_names {
+        if let Some(indices) = kit_indices.get(*kit_name) {
+            if !indices.is_empty() {
+                // Use uppercase kit name as section header
+                grouped.push(GroupedListItem::SectionHeader(kit_name.to_uppercase()));
+                for idx in indices {
+                    grouped.push(GroupedListItem::Item(*idx));
+                }
+            }
         }
     }
 
@@ -329,15 +363,18 @@ pub fn get_grouped_results(
         }
     }
 
+    // Calculate kit counts for logging
+    let kit_count: usize = kit_indices.values().map(|v| v.len()).sum();
+
     debug!(
         suggested_count = suggested_indices.len(),
-        scripts_count = scripts_indices.len(),
-        scriptlets_count = scriptlets_indices.len(),
+        kit_sections = kit_names.len(),
+        kit_items_count = kit_count,
         commands_count = commands_indices.len(),
         apps_count = apps_indices.len(),
         agents_count = agents_indices.len(),
         total_grouped = grouped.len(),
-        "Grouped view: created type-based sections"
+        "Grouped view: created kit-based sections"
     );
 
     (grouped, results)
