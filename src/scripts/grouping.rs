@@ -1,14 +1,16 @@
 //! Result grouping for the main menu
 //!
 //! This module provides functions for grouping search results into
-//! sections like RECENT, SCRIPTS, APPS, etc.
+//! sections based on their source kit.
 //!
 //! When the filter is empty (grouped view), items are organized by their source kit:
 //! - SUGGESTED (frecency-based recent items)
-//! - {KIT_NAME} (e.g., CLEANSHOT, MAIN - containing scripts and scriptlets from that kit)
+//! - {KIT_NAME} (e.g., CLEANSHOT, MAIN - containing scripts, scriptlets, AND agents from that kit)
 //! - COMMANDS (built-ins and window controls)
 //! - APPS (installed applications)
-//! - AGENTS (AI agents)
+//!
+//! Note: Scripts, scriptlets, and agents are all grouped under their source kit section.
+//! The "main" kit appears last in the kit-based sections.
 
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
@@ -217,22 +219,22 @@ pub fn get_grouped_results(
         }
     };
 
-    // Helper to get kit name from a result
+    // Helper to get kit name from a result (scripts, scriptlets, and agents)
     let get_kit_name = |result: &SearchResult| -> Option<String> {
         match result {
             SearchResult::Script(sm) => sm.script.kit_name.clone(),
             SearchResult::Scriptlet(sm) => sm.scriptlet.group.clone(),
+            SearchResult::Agent(am) => am.agent.kit.clone(),
             _ => None,
         }
     };
 
     // Find indices of results that are "suggested" and categorize non-suggested by kit or type
     let mut suggested_indices: Vec<(usize, f64)> = Vec::new();
-    // Kit-based grouping: HashMap<kit_name, Vec<index>>
+    // Kit-based grouping: HashMap<kit_name, Vec<index>> (includes scripts, scriptlets, and agents)
     let mut kit_indices: HashMap<String, Vec<usize>> = HashMap::new();
     let mut commands_indices: Vec<usize> = Vec::new();
     let mut apps_indices: Vec<usize> = Vec::new();
-    let mut agents_indices: Vec<usize> = Vec::new();
 
     // Get excluded commands for filtering builtins from SUGGESTED section
     let excluded_commands = &suggested_config.excluded_commands;
@@ -253,9 +255,9 @@ pub fn get_grouped_results(
             if score >= min_score && suggested_paths.contains(&path) && !is_excluded_builtin {
                 suggested_indices.push((idx, score));
             } else {
-                // Categorize by kit (for scripts/scriptlets) or by type (for others)
+                // Categorize by kit (for scripts/scriptlets/agents) or by type (for others)
                 match result {
-                    SearchResult::Script(_) | SearchResult::Scriptlet(_) => {
+                    SearchResult::Script(_) | SearchResult::Scriptlet(_) | SearchResult::Agent(_) => {
                         // Group by kit name (default to "main" if no kit specified)
                         let kit = get_kit_name(result).unwrap_or_else(|| "main".to_string());
                         kit_indices.entry(kit).or_default().push(idx);
@@ -264,7 +266,6 @@ pub fn get_grouped_results(
                         commands_indices.push(idx)
                     }
                     SearchResult::App(_) => apps_indices.push(idx),
-                    SearchResult::Agent(_) => agents_indices.push(idx),
                     // Fallbacks should never appear in grouped view - they're search-mode only
                     SearchResult::Fallback(_) => {}
                 }
@@ -272,13 +273,12 @@ pub fn get_grouped_results(
         } else {
             // If no path, categorize by type (shouldn't happen, but handle gracefully)
             match result {
-                SearchResult::Script(_) | SearchResult::Scriptlet(_) => {
+                SearchResult::Script(_) | SearchResult::Scriptlet(_) | SearchResult::Agent(_) => {
                     let kit = get_kit_name(result).unwrap_or_else(|| "main".to_string());
                     kit_indices.entry(kit).or_default().push(idx);
                 }
                 SearchResult::BuiltIn(_) | SearchResult::Window(_) => commands_indices.push(idx),
                 SearchResult::App(_) => apps_indices.push(idx),
-                SearchResult::Agent(_) => agents_indices.push(idx),
                 // Fallbacks should never appear in grouped view - they're search-mode only
                 SearchResult::Fallback(_) => {}
             }
@@ -307,7 +307,6 @@ pub fn get_grouped_results(
     }
     sort_alphabetically(&mut commands_indices);
     sort_alphabetically(&mut apps_indices);
-    sort_alphabetically(&mut agents_indices);
 
     // Get kit names sorted alphabetically (but "main" comes last for better UX)
     let mut kit_names: Vec<&String> = kit_indices.keys().collect();
@@ -356,12 +355,7 @@ pub fn get_grouped_results(
         }
     }
 
-    if !agents_indices.is_empty() {
-        grouped.push(GroupedListItem::SectionHeader("AGENTS".to_string()));
-        for idx in &agents_indices {
-            grouped.push(GroupedListItem::Item(*idx));
-        }
-    }
+    // Note: Agents are now grouped by kit, no separate AGENTS section
 
     // Calculate kit counts for logging
     let kit_count: usize = kit_indices.values().map(|v| v.len()).sum();
@@ -372,9 +366,8 @@ pub fn get_grouped_results(
         kit_items_count = kit_count,
         commands_count = commands_indices.len(),
         apps_count = apps_indices.len(),
-        agents_count = agents_indices.len(),
         total_grouped = grouped.len(),
-        "Grouped view: created kit-based sections"
+        "Grouped view: created kit-based sections (scripts, scriptlets, agents grouped by kit)"
     );
 
     (grouped, results)
