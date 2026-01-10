@@ -707,6 +707,51 @@ impl ScriptListApp {
                     self.last_output = Some(SharedString::from("No item selected"));
                 }
             }
+            "reset_ranking" => {
+                logging::log("UI", "Reset ranking action");
+                // Get the frecency path from the focused script info
+                if let Some(script_info) = self.get_focused_script_info() {
+                    if let Some(ref frecency_path) = script_info.frecency_path {
+                        // Remove the frecency entry for this item
+                        if self.frecency_store.remove(frecency_path).is_some() {
+                            // Save the updated frecency store
+                            if let Err(e) = self.frecency_store.save() {
+                                logging::log(
+                                    "ERROR",
+                                    &format!("Failed to save frecency after reset: {}", e),
+                                );
+                            }
+                            // Invalidate the grouped cache AND refresh scripts to rebuild the list
+                            // This ensures the item is immediately removed from the Suggested section
+                            self.invalidate_grouped_cache();
+                            self.refresh_scripts(cx);
+                            logging::log(
+                                "UI",
+                                &format!("Reset ranking for: {}", script_info.name),
+                            );
+                            self.last_output = Some(SharedString::from(format!(
+                                "Ranking reset for \"{}\"",
+                                script_info.name
+                            )));
+                        } else {
+                            logging::log(
+                                "UI",
+                                &format!("No frecency entry found for: {}", frecency_path),
+                            );
+                            self.last_output =
+                                Some(SharedString::from("Item has no ranking to reset"));
+                        }
+                    } else {
+                        self.last_output =
+                            Some(SharedString::from("Item has no ranking to reset"));
+                    }
+                } else {
+                    self.last_output = Some(SharedString::from("No item selected"));
+                }
+                // Don't hide main window - stay in the main menu so user can see the change
+                // The actions dialog is already closed by setting current_view = AppView::ScriptList
+                // at the start of handle_action()
+            }
             _ => {
                 // Handle SDK actions using shared helper
                 self.trigger_sdk_action_internal(&action_id);
