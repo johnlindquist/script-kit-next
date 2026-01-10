@@ -15,7 +15,6 @@ Powerful screenshot and screen recording commands for CleanShot X.
 
 <!--
 description: Open CleanShot X all-in-one capture mode
-shortcut: cmd shift 5
 -->
 
 ```open
@@ -28,7 +27,6 @@ cleanshot://all-in-one
 
 <!--
 description: Capture a selected area of the screen
-shortcut: cmd shift 4
 -->
 
 ```open
@@ -53,7 +51,6 @@ cleanshot://capture-window
 
 <!--
 description: Capture the entire screen
-shortcut: cmd shift 3
 -->
 
 ```open

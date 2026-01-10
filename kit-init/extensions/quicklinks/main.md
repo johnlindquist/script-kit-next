@@ -15,7 +15,6 @@ Instantly open your most frequently used websites.
 
 <!--
 description: Open Google Search
-shortcut: cmd shift g
 -->
 
 ```open
@@ -76,7 +75,6 @@ https://www.youtube.com
 
 <!--
 description: Open GitHub
-shortcut: cmd shift h
 -->
 
 ```open

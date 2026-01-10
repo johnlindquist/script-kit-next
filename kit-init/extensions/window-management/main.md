@@ -15,7 +15,6 @@ Organize and position windows with keyboard shortcuts. All commands operate on t
 
 <!--
 description: Tile window to left half of screen
-shortcut: ctrl alt left
 -->
 
 ```ts
@@ -31,7 +30,6 @@ if (win) {
 
 <!--
 description: Tile window to right half of screen
-shortcut: ctrl alt right
 -->
 
 ```ts
@@ -47,7 +45,6 @@ if (win) {
 
 <!--
 description: Tile window to top half of screen
-shortcut: ctrl alt up
 -->
 
 ```ts
@@ -63,7 +60,6 @@ if (win) {
 
 <!--
 description: Tile window to bottom half of screen
-shortcut: ctrl alt down
 -->
 
 ```ts
@@ -81,7 +77,6 @@ if (win) {
 
 <!--
 description: Tile window to top-left quadrant
-shortcut: ctrl alt u
 -->
 
 ```ts
@@ -97,7 +92,6 @@ if (win) {
 
 <!--
 description: Tile window to top-right quadrant
-shortcut: ctrl alt i
 -->
 
 ```ts
@@ -113,7 +107,6 @@ if (win) {
 
 <!--
 description: Tile window to bottom-left quadrant
-shortcut: ctrl alt j
 -->
 
 ```ts
@@ -129,7 +122,6 @@ if (win) {
 
 <!--
 description: Tile window to bottom-right quadrant
-shortcut: ctrl alt k
 -->
 
 ```ts
@@ -147,7 +139,6 @@ if (win) {
 
 <!--
 description: Tile window to left third of screen
-shortcut: ctrl alt 1
 -->
 
 ```ts
@@ -163,7 +154,6 @@ if (win) {
 
 <!--
 description: Tile window to center third of screen
-shortcut: ctrl alt 2
 -->
 
 ```ts
@@ -179,7 +169,6 @@ if (win) {
 
 <!--
 description: Tile window to right third of screen
-shortcut: ctrl alt 3
 -->
 
 ```ts
@@ -197,7 +186,6 @@ if (win) {
 
 <!--
 description: Tile window to top third of screen
-shortcut: ctrl alt 7
 -->
 
 ```ts
@@ -213,7 +201,6 @@ if (win) {
 
 <!--
 description: Tile window to middle third of screen
-shortcut: ctrl alt 8
 -->
 
 ```ts
@@ -229,7 +216,6 @@ if (win) {
 
 <!--
 description: Tile window to bottom third of screen
-shortcut: ctrl alt 9
 -->
 
 ```ts
@@ -247,7 +233,6 @@ if (win) {
 
 <!--
 description: Tile window to first two-thirds of screen (left)
-shortcut: ctrl alt [
 -->
 
 ```ts
@@ -263,7 +248,6 @@ if (win) {
 
 <!--
 description: Tile window to last two-thirds of screen (right)
-shortcut: ctrl alt ]
 -->
 
 ```ts
@@ -279,7 +263,6 @@ if (win) {
 
 <!--
 description: Tile window to top two-thirds of screen
-shortcut: ctrl alt shift up
 -->
 
 ```ts
@@ -295,7 +278,6 @@ if (win) {
 
 <!--
 description: Tile window to bottom two-thirds of screen
-shortcut: ctrl alt shift down
 -->
 
 ```ts
@@ -313,7 +295,6 @@ if (win) {
 
 <!--
 description: Center window on screen (60% size)
-shortcut: ctrl alt c
 -->
 
 ```ts
@@ -329,7 +310,6 @@ if (win) {
 
 <!--
 description: Maximize window with small margin
-shortcut: ctrl alt m
 -->
 
 ```ts
@@ -345,7 +325,6 @@ if (win) {
 
 <!--
 description: Maximize window to fill screen
-shortcut: ctrl alt return
 -->
 
 ```ts
@@ -363,7 +342,6 @@ if (win) {
 
 <!--
 description: Move window to next display/monitor
-shortcut: ctrl alt n
 -->
 
 ```ts
@@ -379,7 +357,6 @@ if (win) {
 
 <!--
 description: Move window to previous display/monitor
-shortcut: ctrl alt p
 -->
 
 ```ts
@@ -397,7 +374,6 @@ if (win) {
 
 <!--
 description: Minimize the frontmost window
-shortcut: ctrl alt h
 -->
 
 ```ts
@@ -413,7 +389,6 @@ if (win) {
 
 <!--
 description: Close the frontmost window
-shortcut: ctrl alt w
 -->
 
 ```ts

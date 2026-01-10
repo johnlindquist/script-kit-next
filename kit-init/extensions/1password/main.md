@@ -17,7 +17,6 @@ Access your passwords, generate secure credentials, and manage vaults using the 
 
 <!--
 description: Open 1Password Quick Access overlay
-shortcut: cmd shift space
 -->
 
 ```applescript
