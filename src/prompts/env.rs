@@ -409,7 +409,17 @@ impl Render for EnvPrompt {
                     .primary_shortcut("↵")
                     .show_secondary(false); // No secondary action for env prompt
 
-                PromptFooter::new(footer_config, footer_colors)
+                // Add click handler for Submit button
+                let handle = cx.entity().downgrade();
+                PromptFooter::new(footer_config, footer_colors).on_primary_click(Box::new(
+                    move |_, _window, cx| {
+                        if let Some(entity) = handle.upgrade() {
+                            entity.update(cx, |this, _cx| {
+                                this.submit();
+                            });
+                        }
+                    },
+                ))
             })
     }
 }
