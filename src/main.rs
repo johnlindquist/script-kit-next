@@ -1229,6 +1229,8 @@ struct ScriptListApp {
 enum AliasMatch {
     Script(Arc<scripts::Script>),
     Scriptlet(Arc<scripts::Scriptlet>),
+    BuiltIn(Arc<builtins::BuiltInEntry>),
+    App(Arc<app_launcher::AppInfo>),
 }
 
 // Core ScriptListApp implementation extracted to app_impl.rs

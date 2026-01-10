@@ -1722,10 +1722,38 @@ impl ScriptListApp {
         let alias_lower = alias.to_lowercase();
 
         // O(1) lookup in registry
-        if let Some(path) = self.alias_registry.get(&alias_lower) {
+        if let Some(command_id) = self.alias_registry.get(&alias_lower) {
+            // Check for builtin/{id} command IDs
+            if let Some(builtin_id) = command_id.strip_prefix("builtin/") {
+                let config = crate::config::BuiltInConfig::default();
+                if let Some(entry) = builtins::get_builtin_entries(&config)
+                    .into_iter()
+                    .find(|e| e.id == builtin_id)
+                {
+                    logging::log(
+                        "ALIAS",
+                        &format!("Found builtin match: '{}' -> '{}'", alias, entry.name),
+                    );
+                    return Some(AliasMatch::BuiltIn(std::sync::Arc::new(entry)));
+                }
+            }
+
+            // Check for app/{bundle_id} command IDs
+            if let Some(bundle_id) = command_id.strip_prefix("app/") {
+                if let Some(app) = self.apps.iter().find(|a| {
+                    a.bundle_id.as_deref() == Some(bundle_id)
+                }) {
+                    logging::log(
+                        "ALIAS",
+                        &format!("Found app match: '{}' -> '{}'", alias, app.name),
+                    );
+                    return Some(AliasMatch::App(std::sync::Arc::new(app.clone())));
+                }
+            }
+
             // Find the script/scriptlet by path
             for script in &self.scripts {
-                if script.path.to_string_lossy() == *path {
+                if script.path.to_string_lossy() == *command_id {
                     logging::log(
                         "ALIAS",
                         &format!("Found script match: '{}' -> '{}'", alias, script.name),
@@ -1737,7 +1765,7 @@ impl ScriptListApp {
             // Check scriptlets by file_path or name
             for scriptlet in &self.scriptlets {
                 let scriptlet_path = scriptlet.file_path.as_ref().unwrap_or(&scriptlet.name);
-                if scriptlet_path == path {
+                if scriptlet_path == command_id {
                     logging::log(
                         "ALIAS",
                         &format!("Found scriptlet match: '{}' -> '{}'", alias, scriptlet.name),
@@ -1746,12 +1774,12 @@ impl ScriptListApp {
                 }
             }
 
-            // Path in registry but not found in current scripts (stale entry)
+            // Command ID in registry but not found (stale entry)
             logging::log(
                 "ALIAS",
                 &format!(
                     "Stale registry entry: '{}' -> '{}' (not found)",
-                    alias, path
+                    alias, command_id
                 ),
             );
         }
@@ -2296,6 +2324,12 @@ impl ScriptListApp {
                         }
                         AliasMatch::Scriptlet(scriptlet) => {
                             self.execute_scriptlet(&scriptlet, cx);
+                        }
+                        AliasMatch::BuiltIn(entry) => {
+                            self.execute_builtin(&entry, cx);
+                        }
+                        AliasMatch::App(app) => {
+                            self.execute_app(&app, cx);
                         }
                     }
                     self.clear_filter(window, cx);
