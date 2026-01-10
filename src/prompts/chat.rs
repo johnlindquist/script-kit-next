@@ -298,14 +298,33 @@ impl ChatPrompt {
             content = content.child(response_div);
         }
 
-        // The full-width container
+        // Copy button (appears on right side)
+        let copy_button = div()
+            .flex()
+            .items_center()
+            .justify_center()
+            .w(px(24.0))
+            .h(px(24.0))
+            .rounded(px(4.0))
+            .cursor_pointer()
+            .opacity(0.5)
+            .hover(|s| s.opacity(1.0).bg(rgba((colors.code_bg << 8) | 0x80)))
+            .text_xs()
+            .text_color(rgb(colors.text_tertiary))
+            .child("📋");
+
+        // The full-width container with copy button
         div()
             .w_full()
             .px(px(12.0))
             .py(px(10.0))
             .bg(container_bg)
             .rounded(px(8.0))
-            .child(content)
+            .flex()
+            .flex_row()
+            .gap(px(8.0))
+            .child(content.flex_1())
+            .child(copy_button)
     }
 
     /// Render the input field at the top
