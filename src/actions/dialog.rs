@@ -1160,12 +1160,16 @@ impl Render for ActionsDialog {
             .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
         let total_height = items_height + search_box_height + header_height + border_height;
 
-        // Build header row (Raycast-style context title)
+        // Build header row (section header style - non-interactive label)
+        // Styled to match render_section_header() from list_item.rs:
+        // - Smaller font (text_xs)
+        // - Semibold weight
+        // - Dimmed color (visually distinct from actionable items)
         let header_container = self.context_title.as_ref().map(|title| {
             let header_text = if self.design_variant == DesignVariant::Default {
-                rgb(self.theme.colors.text.primary)
+                rgb(self.theme.colors.text.dimmed)
             } else {
-                rgb(colors.text_primary)
+                rgb(colors.text_dimmed)
             };
             let header_border = if self.design_variant == DesignVariant::Default {
                 rgba(hex_with_alpha(self.theme.colors.ui.border, 0x40))
@@ -1176,15 +1180,18 @@ impl Render for ActionsDialog {
             div()
                 .w_full()
                 .h(px(HEADER_HEIGHT))
-                .px(px(spacing.item_padding_x))
+                .px(px(16.0)) // Match section header padding from list_item.rs
+                .pt(px(8.0)) // Top padding for visual separation
+                .pb(px(4.0)) // Bottom padding
                 .flex()
-                .items_center()
+                .flex_col()
+                .justify_center()
                 .border_b_1()
                 .border_color(header_border)
                 .child(
                     div()
-                        .text_sm()
-                        .font_weight(gpui::FontWeight::MEDIUM)
+                        .text_xs() // Smaller font like section headers
+                        .font_weight(gpui::FontWeight::SEMIBOLD) // Semibold like section headers
                         .text_color(header_text)
                         .child(title.clone()),
                 )

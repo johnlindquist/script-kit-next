@@ -18,8 +18,8 @@ pub const SEARCH_INPUT_HEIGHT: f32 = 44.0;
 /// Width of the left accent bar for selected items (legacy, kept for reference)
 pub const ACCENT_BAR_WIDTH: f32 = 3.0;
 
-/// Height for the header row showing context title
-pub const HEADER_HEIGHT: f32 = 44.0;
+/// Height for the header row showing context title (matches section header style)
+pub const HEADER_HEIGHT: f32 = 24.0;
 
 /// Horizontal inset for action rows (creates rounded pill appearance)
 pub const ACTION_ROW_INSET: f32 = 6.0;
