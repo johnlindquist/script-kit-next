@@ -1907,7 +1907,8 @@ pub fn open_path_with_system_default(path: &str) {
 ///
 /// # Returns
 /// A tuple of (png_data, width, height) on success.
-pub fn capture_screen_screenshot() -> Result<(Vec<u8>, u32, u32), Box<dyn std::error::Error + Send + Sync>> {
+pub fn capture_screen_screenshot(
+) -> Result<(Vec<u8>, u32, u32), Box<dyn std::error::Error + Send + Sync>> {
     use image::codecs::png::PngEncoder;
     use image::ImageEncoder;
     use xcap::Monitor;
@@ -1915,10 +1916,7 @@ pub fn capture_screen_screenshot() -> Result<(Vec<u8>, u32, u32), Box<dyn std::e
     let monitors = Monitor::all()?;
 
     // Get the primary monitor (first one, usually the main display)
-    let monitor = monitors
-        .into_iter()
-        .next()
-        .ok_or("No monitors found")?;
+    let monitor = monitors.into_iter().next().ok_or("No monitors found")?;
 
     tracing::debug!(
         name = %monitor.name().unwrap_or_default(),
@@ -2090,18 +2088,42 @@ pub fn get_focused_browser_tab_url() -> Result<String, Box<dyn std::error::Error
 
     // Map process name to application name and the AppleScript to get URL
     let (app_name, url_script) = match frontmost_app.as_str() {
-        "Safari" => ("Safari", r#"tell application "Safari" to return URL of front document"#),
-        "Google Chrome" => ("Google Chrome", r#"tell application "Google Chrome" to return URL of active tab of front window"#),
-        "Arc" => ("Arc", r#"tell application "Arc" to return URL of active tab of front window"#),
-        "Brave Browser" => ("Brave Browser", r#"tell application "Brave Browser" to return URL of active tab of front window"#),
+        "Safari" => (
+            "Safari",
+            r#"tell application "Safari" to return URL of front document"#,
+        ),
+        "Google Chrome" => (
+            "Google Chrome",
+            r#"tell application "Google Chrome" to return URL of active tab of front window"#,
+        ),
+        "Arc" => (
+            "Arc",
+            r#"tell application "Arc" to return URL of active tab of front window"#,
+        ),
+        "Brave Browser" => (
+            "Brave Browser",
+            r#"tell application "Brave Browser" to return URL of active tab of front window"#,
+        ),
         "Firefox" => {
             // Firefox doesn't support AppleScript well - return an error with helpful message
             return Err("Firefox doesn't fully support AppleScript for URL retrieval. Try Safari or Chrome.".into());
         }
-        "Microsoft Edge" => ("Microsoft Edge", r#"tell application "Microsoft Edge" to return URL of active tab of front window"#),
-        "Chromium" => ("Chromium", r#"tell application "Chromium" to return URL of active tab of front window"#),
-        "Vivaldi" => ("Vivaldi", r#"tell application "Vivaldi" to return URL of active tab of front window"#),
-        "Opera" => ("Opera", r#"tell application "Opera" to return URL of active tab of front window"#),
+        "Microsoft Edge" => (
+            "Microsoft Edge",
+            r#"tell application "Microsoft Edge" to return URL of active tab of front window"#,
+        ),
+        "Chromium" => (
+            "Chromium",
+            r#"tell application "Chromium" to return URL of active tab of front window"#,
+        ),
+        "Vivaldi" => (
+            "Vivaldi",
+            r#"tell application "Vivaldi" to return URL of active tab of front window"#,
+        ),
+        "Opera" => (
+            "Opera",
+            r#"tell application "Opera" to return URL of active tab of front window"#,
+        ),
         _ => {
             return Err(format!(
                 "Frontmost app '{}' is not a supported browser. Supported: Safari, Chrome, Arc, Brave, Edge, Vivaldi, Opera",

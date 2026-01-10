@@ -188,7 +188,10 @@ static AI_PENDING_COMMANDS: std::sync::OnceLock<std::sync::Mutex<Vec<AiCommand>>
 #[allow(clippy::enum_variant_names)]
 enum AiCommand {
     SetSearch(String),
-    SetInput { text: String, submit: bool },
+    SetInput {
+        text: String,
+        submit: bool,
+    },
     /// Set input with an attached image (base64 encoded PNG)
     SetInputWithImage {
         text: String,
