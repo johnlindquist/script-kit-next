@@ -379,7 +379,7 @@ fn show_main_window_helper(
         reset_resize_debounce();
 
         // Handle NEEDS_RESET: if set (e.g., script completed while hidden),
-        // reset to script list. Otherwise, ensure window size is correct.
+        // reset to script list.
         if NEEDS_RESET
             .compare_exchange(true, false, Ordering::SeqCst, Ordering::SeqCst)
             .is_ok()
@@ -389,14 +389,13 @@ fn show_main_window_helper(
                 "NEEDS_RESET was true - resetting to script list",
             );
             view.reset_to_script_list(ctx);
-        } else {
-            // Ensure window size matches current view
-            // FIX: Use deferred resize via window_ops to avoid RefCell borrow conflicts.
-            // We need Window access for defer, so use window.update().
-            let _ = window.update(ctx, |_root, win, win_cx| {
-                defer_resize_to_view(ViewType::ScriptList, 0, win, win_cx);
-            });
         }
+
+        // Always ensure window size matches current view using deferred resize.
+        // This uses Window::defer to avoid RefCell borrow conflicts.
+        let _ = window.update(ctx, |_root, win, win_cx| {
+            defer_resize_to_view(ViewType::ScriptList, 0, win, win_cx);
+        });
     });
 
     logging::log("VISIBILITY", "Main window shown and focused");
