@@ -17,7 +17,7 @@
 pub mod base;
 pub mod div;
 mod drop;
-mod env;
+pub mod env;
 mod path;
 mod select;
 mod template;

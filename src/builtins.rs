@@ -127,6 +127,12 @@ pub enum FrecencyCommandType {
 pub enum SettingsCommandType {
     /// Reset all window positions to defaults
     ResetWindowPositions,
+    /// Configure Vercel AI Gateway API key
+    ConfigureVercelApiKey,
+    /// Configure OpenAI API key
+    ConfigureOpenAiApiKey,
+    /// Configure Anthropic API key
+    ConfigureAnthropicApiKey,
 }
 
 /// Utility command types for quick access tools
@@ -889,6 +895,40 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "🔄",
         ));
     }
+
+    // API Key Configuration
+    entries.push(BuiltInEntry::new_with_icon(
+        "builtin-configure-vercel-api",
+        "Configure Vercel AI Gateway",
+        "Set up your Vercel AI Gateway API key for AI Chat",
+        vec![
+            "vercel", "api", "key", "gateway", "ai", "configure", "setup", "config", "settings",
+        ],
+        BuiltInFeature::SettingsCommand(SettingsCommandType::ConfigureVercelApiKey),
+        "🔑",
+    ));
+
+    entries.push(BuiltInEntry::new_with_icon(
+        "builtin-configure-openai-api",
+        "Configure OpenAI API Key",
+        "Set up your OpenAI API key for AI Chat",
+        vec![
+            "openai", "api", "key", "gpt", "ai", "configure", "setup", "config", "settings",
+        ],
+        BuiltInFeature::SettingsCommand(SettingsCommandType::ConfigureOpenAiApiKey),
+        "🔑",
+    ));
+
+    entries.push(BuiltInEntry::new_with_icon(
+        "builtin-configure-anthropic-api",
+        "Configure Anthropic API Key",
+        "Set up your Anthropic API key for AI Chat",
+        vec![
+            "anthropic", "api", "key", "claude", "ai", "configure", "setup", "config", "settings",
+        ],
+        BuiltInFeature::SettingsCommand(SettingsCommandType::ConfigureAnthropicApiKey),
+        "🔑",
+    ));
 
     // =========================================================================
     // Utility Commands
