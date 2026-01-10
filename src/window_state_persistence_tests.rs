@@ -131,6 +131,7 @@ mod tests {
             let state = WindowStateFile {
                 version: 1,
                 main: Some(PersistedWindowBounds::new(100.0, 200.0, 750.0, 475.0)),
+                main_per_display: std::collections::HashMap::new(),
                 notes: None,
                 ai: None,
             };
@@ -152,5 +153,114 @@ mod tests {
             reset_all_positions();
             assert!(!has_custom_positions());
         });
+    }
+
+    #[test]
+    fn test_display_key_generation() {
+        let display = DisplayBounds {
+            origin_x: 0.0,
+            origin_y: 0.0,
+            width: 2560.0,
+            height: 1440.0,
+        };
+        assert_eq!(display_key(&display), "2560x1440");
+
+        let display2 = DisplayBounds {
+            origin_x: 2560.0,
+            origin_y: 0.0,
+            width: 1920.0,
+            height: 1080.0,
+        };
+        assert_eq!(display_key(&display2), "1920x1080");
+    }
+
+    #[test]
+    fn test_per_display_save_and_load() {
+        with_temp_state_dir(|| {
+            let display = DisplayBounds {
+                origin_x: 0.0,
+                origin_y: 0.0,
+                width: 2560.0,
+                height: 1440.0,
+            };
+            let bounds = PersistedWindowBounds::new(100.0, 200.0, 750.0, 475.0);
+
+            // Save position for this display
+            save_main_position_for_display(&display, bounds);
+
+            // Load and verify
+            let loaded = get_main_position_for_display(&display);
+            assert!(loaded.is_some());
+            let loaded = loaded.unwrap();
+            assert!((loaded.x - 100.0).abs() < 0.1);
+            assert!((loaded.y - 200.0).abs() < 0.1);
+        });
+    }
+
+    #[test]
+    fn test_per_display_multiple_displays() {
+        with_temp_state_dir(|| {
+            let display1 = DisplayBounds {
+                origin_x: 0.0,
+                origin_y: 0.0,
+                width: 2560.0,
+                height: 1440.0,
+            };
+            let display2 = DisplayBounds {
+                origin_x: 2560.0,
+                origin_y: 0.0,
+                width: 1920.0,
+                height: 1080.0,
+            };
+
+            // Save different positions for each display
+            save_main_position_for_display(
+                &display1,
+                PersistedWindowBounds::new(100.0, 100.0, 750.0, 475.0),
+            );
+            save_main_position_for_display(
+                &display2,
+                PersistedWindowBounds::new(300.0, 300.0, 750.0, 475.0),
+            );
+
+            // Verify each display has its own position
+            let loaded1 = get_main_position_for_display(&display1).unwrap();
+            let loaded2 = get_main_position_for_display(&display2).unwrap();
+
+            assert!((loaded1.x - 100.0).abs() < 0.1);
+            assert!((loaded2.x - 300.0).abs() < 0.1);
+        });
+    }
+
+    #[test]
+    fn test_find_display_containing_point() {
+        let displays = vec![
+            DisplayBounds {
+                origin_x: 0.0,
+                origin_y: 0.0,
+                width: 1920.0,
+                height: 1080.0,
+            },
+            DisplayBounds {
+                origin_x: 1920.0,
+                origin_y: 0.0,
+                width: 2560.0,
+                height: 1440.0,
+            },
+        ];
+
+        // Point on first display
+        let found = find_display_containing_point(500.0, 500.0, &displays);
+        assert!(found.is_some());
+        assert!((found.unwrap().width - 1920.0).abs() < 0.1);
+
+        // Point on second display
+        let found = find_display_containing_point(2500.0, 500.0, &displays);
+        assert!(found.is_some());
+        assert!((found.unwrap().width - 2560.0).abs() < 0.1);
+
+        // Point not on any display
+        let found = find_display_containing_point(-100.0, -100.0, &displays);
+        assert!(found.is_none());
     }
 }
