@@ -35,7 +35,8 @@ pub use types::{AgentMatch, FallbackConfig, Script, Scriptlet, SearchResult};
 pub use loader::read_scripts;
 
 // Re-export scriptlet loader functions (always used)
-pub use scriptlet_loader::{load_scriptlets, read_scriptlets, read_scriptlets_from_file};
+// Note: read_scriptlets() is deprecated in favor of load_scriptlets() which loads from ALL kits
+pub use scriptlet_loader::{load_scriptlets, read_scriptlets_from_file};
 
 // Re-export search functions (always used)
 pub use search::{
