@@ -1662,7 +1662,7 @@ impl ScriptListApp {
         if self.preview_cache_path.as_deref() == Some(script_path)
             && !self.preview_cache_lines.is_empty()
         {
-            logging::log_debug("CACHE", &format!("Preview cache HIT for '{}'", script_path));
+            // NOTE: Removed cache HIT log - fires every render, only log MISS for diagnostics
             return &self.preview_cache_lines;
         }
 
