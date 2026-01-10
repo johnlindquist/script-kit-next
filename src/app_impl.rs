@@ -1516,12 +1516,8 @@ impl ScriptListApp {
                     ),
                 );
             }
-        } else {
-            logging::log_debug(
-                "CACHE",
-                &format!("Filter cache HIT for '{}'", self.filter_text),
-            );
         }
+        // NOTE: Removed cache HIT log - fires every render, only log MISS for diagnostics
         &self.cached_filtered_results
     }
 
@@ -1543,10 +1539,8 @@ impl ScriptListApp {
     ) -> (Arc<[GroupedListItem]>, Arc<[scripts::SearchResult]>) {
         // P3: Key off computed_filter_text for two-stage filtering
         if self.computed_filter_text == self.grouped_cache_key {
-            logging::log_debug(
-                "CACHE",
-                &format!("Grouped cache HIT for '{}'", self.computed_filter_text),
-            );
+            // NOTE: Removed cache HIT log - fires every render frame, causing log spam.
+            // Cache hits are normal operation. Only log cache MISS (below) for diagnostics.
             return (
                 self.cached_grouped_items.clone(),
                 self.cached_grouped_flat_results.clone(),
@@ -1668,7 +1662,7 @@ impl ScriptListApp {
         if self.preview_cache_path.as_deref() == Some(script_path)
             && !self.preview_cache_lines.is_empty()
         {
-            logging::log_debug("CACHE", &format!("Preview cache HIT for '{}'", script_path));
+            // NOTE: Removed cache HIT log - fires every render, only log MISS for diagnostics
             return &self.preview_cache_lines;
         }
 

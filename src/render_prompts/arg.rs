@@ -307,13 +307,7 @@ impl ScriptListApp {
         let arg_selected_index = self.arg_selected_index;
         let filtered_choices = self.get_filtered_arg_choices_owned();
         let filtered_choices_len = filtered_choices.len();
-        logging::log_debug(
-            "UI",
-            &format!(
-                "P0: Arg prompt has {} filtered choices",
-                filtered_choices_len
-            ),
-        );
+        // NOTE: Removed per-render log - fires every render frame during cursor blink
 
         // P0: Build virtualized choice list using uniform_list
         let list_element: AnyElement = if filtered_choices_len == 0 {
@@ -332,10 +326,7 @@ impl ScriptListApp {
                 "arg-choices",
                 filtered_choices_len,
                 move |visible_range, _window, _cx| {
-                    logging::log_debug(
-                        "SCROLL",
-                        &format!("P0: Arg choices visible range: {:?}", visible_range.clone()),
-                    );
+                    // NOTE: Removed visible range log - fires per render frame
                     visible_range
                         .map(|ix| {
                             if let Some((_, choice)) = filtered_choices.get(ix) {

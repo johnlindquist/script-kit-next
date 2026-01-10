@@ -875,14 +875,7 @@ impl Render for ActionsDialog {
             let selected_index = self.selected_index;
             let filtered_len = self.filtered_actions.len();
             let design_variant = self.design_variant;
-
-            logging::log_debug(
-                "ACTIONS_SCROLL",
-                &format!(
-                    "Rendering uniform_list: {} items, selected={}",
-                    filtered_len, selected_index
-                ),
-            );
+            // NOTE: Removed per-render log - fires every render frame during cursor blink
 
             // Calculate scrollbar parameters
             // Container height for actions (excluding search box)
@@ -916,14 +909,7 @@ impl Render for ActionsDialog {
                 filtered_len,
                 cx.processor(
                     move |this: &mut ActionsDialog, visible_range, _window, _cx| {
-                        logging::log_debug(
-                            "ACTIONS_SCROLL",
-                            &format!(
-                                "Actions visible range: {:?} (total={})",
-                                visible_range,
-                                this.filtered_actions.len()
-                            ),
-                        );
+                        // NOTE: Removed visible range log - fires per render frame
 
                         // Get tokens for list item rendering
                         let item_tokens = get_tokens(design_variant);
