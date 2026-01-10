@@ -694,7 +694,23 @@ impl AiApp {
 
     /// Submit the current input as a message
     fn submit_message(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let content = self.input_state.read(cx).value().to_string();
+        let mut content = self.input_state.read(cx).value().to_string();
+
+        // If there's a pending image, note it in the message content
+        // Full multimodal API support would require provider changes
+        let has_image = self.pending_image.is_some();
+        if let Some(ref image_base64) = self.pending_image {
+            // Calculate approximate image size for display
+            let image_size_kb = image_base64.len() / 1024;
+            content = format!(
+                "{}\n\n📷 [Image attached: ~{}KB base64 data]",
+                content, image_size_kb
+            );
+            crate::logging::log(
+                "AI",
+                &format!("Message includes attached image (~{}KB)", image_size_kb),
+            );
+        }
 
         if content.trim().is_empty() {
             return;
@@ -757,14 +773,16 @@ impl AiApp {
         // Update chat timestamp and move to top of list
         self.touch_and_reorder_chat(chat_id);
 
-        // Clear the input
+        // Clear the input and any pending image
         self.input_state.update(cx, |state, cx| {
             state.set_value("", window, cx);
         });
+        self.pending_image = None;
 
         info!(
             chat_id = %chat_id,
             content_len = content.len(),
+            has_image = has_image,
             "User message submitted"
         );
 
