@@ -2474,12 +2474,8 @@ process.stdin.on('data', (chunk: string) => {
         if (id && pending.has(id)) {
           const resolver = removePending(id);
           if (resolver) {
-            // For submit messages, pass the value directly
-            if (msg.type === 'submit') {
-              resolver((msg as SubmitMessage).value ?? undefined);
-            } else {
-              resolver(msg);
-            }
+            // Pass the full message object so resolvers can check msg.value, msg.type, etc.
+            resolver(msg);
           }
         }
         
@@ -3555,8 +3551,8 @@ globalThis.div = async function div(
   }
   
   return new Promise((resolve) => {
-    addPending(id, (value?: any) => {
-      resolve(value);
+    addPending(id, (msg: SubmitMessage) => {
+      resolve(msg?.value);
     }, undefined); // Auto-submit: div just dismisses, no value needed
 
     const message: DivMessage = {
