@@ -308,19 +308,15 @@ pub fn get_grouped_results(
     sort_alphabetically(&mut commands_indices);
     sort_alphabetically(&mut apps_indices);
 
-    // Get kit names sorted alphabetically (but "main" comes last for better UX)
-    let mut kit_names: Vec<&String> = kit_indices.keys().collect();
-    kit_names.sort_by(|a, b| {
-        // "main" kit goes last, others sorted alphabetically
-        match (a.as_str(), b.as_str()) {
-            ("main", "main") => Ordering::Equal,
-            ("main", _) => Ordering::Greater,
-            (_, "main") => Ordering::Less,
-            _ => a.to_lowercase().cmp(&b.to_lowercase()),
-        }
-    });
+    // Get non-main kit names sorted alphabetically
+    let mut other_kit_names: Vec<&String> = kit_indices
+        .keys()
+        .filter(|k| k.as_str() != "main")
+        .collect();
+    other_kit_names.sort_by_key(|a| a.to_lowercase());
 
-    // Build grouped list: SUGGESTED first (if enabled), then kit sections, COMMANDS, APPS, AGENTS
+    // Build grouped list in order: SUGGESTED, MAIN, COMMANDS, other kits, APPS
+    // 1. SUGGESTED (frecency-based)
     if suggested_config.enabled && !suggested_indices.is_empty() {
         grouped.push(GroupedListItem::SectionHeader("SUGGESTED".to_string()));
         for (idx, _score) in &suggested_indices {
@@ -328,8 +324,26 @@ pub fn get_grouped_results(
         }
     }
 
-    // Add kit-based sections (e.g., "CLEANSHOT", "MAIN")
-    for kit_name in &kit_names {
+    // 2. MAIN kit (if it has items)
+    if let Some(main_indices) = kit_indices.get("main") {
+        if !main_indices.is_empty() {
+            grouped.push(GroupedListItem::SectionHeader("MAIN".to_string()));
+            for idx in main_indices {
+                grouped.push(GroupedListItem::Item(*idx));
+            }
+        }
+    }
+
+    // 3. COMMANDS (built-ins and window controls)
+    if !commands_indices.is_empty() {
+        grouped.push(GroupedListItem::SectionHeader("COMMANDS".to_string()));
+        for idx in &commands_indices {
+            grouped.push(GroupedListItem::Item(*idx));
+        }
+    }
+
+    // 4. Other kit sections (CLEANSHOT, etc.) - alphabetically sorted
+    for kit_name in &other_kit_names {
         if let Some(indices) = kit_indices.get(*kit_name) {
             if !indices.is_empty() {
                 // Use uppercase kit name as section header
@@ -341,13 +355,7 @@ pub fn get_grouped_results(
         }
     }
 
-    if !commands_indices.is_empty() {
-        grouped.push(GroupedListItem::SectionHeader("COMMANDS".to_string()));
-        for idx in &commands_indices {
-            grouped.push(GroupedListItem::Item(*idx));
-        }
-    }
-
+    // 5. APPS (installed applications)
     if !apps_indices.is_empty() {
         grouped.push(GroupedListItem::SectionHeader("APPS".to_string()));
         for idx in &apps_indices {
@@ -362,7 +370,7 @@ pub fn get_grouped_results(
 
     debug!(
         suggested_count = suggested_indices.len(),
-        kit_sections = kit_names.len(),
+        kit_sections = kit_indices.len(),
         kit_items_count = kit_count,
         commands_count = commands_indices.len(),
         apps_count = apps_indices.len(),
