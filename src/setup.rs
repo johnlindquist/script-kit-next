@@ -55,6 +55,16 @@ const EMBEDDED_CONDUCTOR_EXTENSION: &str =
 const EMBEDDED_AI_TEXT_TOOLS_EXTENSION: &str =
     include_str!("../kit-init/extensions/ai-text-tools/main.md");
 
+/// Embedded Conductor SDK module - provides TypeScript APIs for Conductor integration
+/// Used by conductor extension scriptlets via `import from '../../conductor'`
+const EMBEDDED_CONDUCTOR_SDK_INDEX: &str = include_str!("../kit-init/conductor/index.ts");
+const EMBEDDED_CONDUCTOR_SDK_CONFIG: &str = include_str!("../kit-init/conductor/config.ts");
+const EMBEDDED_CONDUCTOR_SDK_ENV: &str = include_str!("../kit-init/conductor/env.ts");
+const EMBEDDED_CONDUCTOR_SDK_HOOKS: &str = include_str!("../kit-init/conductor/hooks.ts");
+const EMBEDDED_CONDUCTOR_SDK_LAUNCH: &str = include_str!("../kit-init/conductor/launch.ts");
+const EMBEDDED_CONDUCTOR_SDK_TYPES: &str = include_str!("../kit-init/conductor/types.ts");
+const EMBEDDED_CONDUCTOR_SDK_README: &str = include_str!("../kit-init/conductor/README.md");
+
 /// Embedded AGENTS.md guide for AI agents writing user scripts
 const EMBEDDED_AGENTS_MD: &str = r###"# Script Kit User Scripts Guide
 
@@ -1123,6 +1133,53 @@ pub fn ensure_kit_setup() -> SetupResult {
         EMBEDDED_AI_TEXT_TOOLS_EXTENSION,
         &mut warnings,
         "kit/ai-text-tools/extensions/main.md",
+    );
+
+    // App-managed: Conductor SDK module (refresh if changed)
+    // Provides TypeScript APIs for Conductor integration, used by conductor extension
+    // scriptlets via `import from '../../conductor'`
+    let conductor_sdk_dir = kit_dir.join("kit").join("conductor");
+    write_string_if_changed(
+        &conductor_sdk_dir.join("index.ts"),
+        EMBEDDED_CONDUCTOR_SDK_INDEX,
+        &mut warnings,
+        "kit/conductor/index.ts",
+    );
+    write_string_if_changed(
+        &conductor_sdk_dir.join("config.ts"),
+        EMBEDDED_CONDUCTOR_SDK_CONFIG,
+        &mut warnings,
+        "kit/conductor/config.ts",
+    );
+    write_string_if_changed(
+        &conductor_sdk_dir.join("env.ts"),
+        EMBEDDED_CONDUCTOR_SDK_ENV,
+        &mut warnings,
+        "kit/conductor/env.ts",
+    );
+    write_string_if_changed(
+        &conductor_sdk_dir.join("hooks.ts"),
+        EMBEDDED_CONDUCTOR_SDK_HOOKS,
+        &mut warnings,
+        "kit/conductor/hooks.ts",
+    );
+    write_string_if_changed(
+        &conductor_sdk_dir.join("launch.ts"),
+        EMBEDDED_CONDUCTOR_SDK_LAUNCH,
+        &mut warnings,
+        "kit/conductor/launch.ts",
+    );
+    write_string_if_changed(
+        &conductor_sdk_dir.join("types.ts"),
+        EMBEDDED_CONDUCTOR_SDK_TYPES,
+        &mut warnings,
+        "kit/conductor/types.ts",
+    );
+    write_string_if_changed(
+        &conductor_sdk_dir.join("README.md"),
+        EMBEDDED_CONDUCTOR_SDK_README,
+        &mut warnings,
+        "kit/conductor/README.md",
     );
 
     // User-owned: config.ts (only create if missing)
