@@ -5,6 +5,7 @@
 //! - Messages bundled as conversation turns (user prompt + AI response in same container)
 //! - Full-width containers (not bubbles)
 //! - Footer with model selector and "Continue in Chat"
+//! - Actions menu (⌘+K) with model picker
 
 use gpui::{
     div, prelude::*, px, rgb, rgba, Context, FocusHandle, Focusable, Hsla, KeyDownEvent, Render,
@@ -17,6 +18,63 @@ use crate::logging;
 use crate::protocol::{ChatMessagePosition, ChatMessageRole, ChatPromptMessage};
 use crate::theme;
 use crate::ui_foundation::get_vibrancy_background;
+
+/// Available AI models for the chat
+#[derive(Clone, Debug, PartialEq)]
+pub struct ChatModel {
+    pub id: String,
+    pub name: String,
+    pub provider: String,
+}
+
+impl ChatModel {
+    pub fn new(id: impl Into<String>, name: impl Into<String>, provider: impl Into<String>) -> Self {
+        Self {
+            id: id.into(),
+            name: name.into(),
+            provider: provider.into(),
+        }
+    }
+}
+
+/// Default models available in the chat
+pub fn default_models() -> Vec<ChatModel> {
+    vec![
+        ChatModel::new("gpt-4o-mini", "GPT-4o mini", "OpenAI"),
+        ChatModel::new("gpt-4o", "GPT-4o", "OpenAI"),
+        ChatModel::new("claude-3-haiku", "Claude 3 Haiku", "Anthropic"),
+        ChatModel::new("claude-3-sonnet", "Claude 3 Sonnet", "Anthropic"),
+    ]
+}
+
+/// Action item in the actions menu
+#[derive(Clone, Debug)]
+pub struct ChatAction {
+    pub id: String,
+    pub label: String,
+    pub shortcut: Option<String>,
+    pub is_separator: bool,
+}
+
+impl ChatAction {
+    pub fn new(id: impl Into<String>, label: impl Into<String>, shortcut: Option<&str>) -> Self {
+        Self {
+            id: id.into(),
+            label: label.into(),
+            shortcut: shortcut.map(|s| s.to_string()),
+            is_separator: false,
+        }
+    }
+
+    pub fn separator() -> Self {
+        Self {
+            id: String::new(),
+            label: String::new(),
+            shortcut: None,
+            is_separator: true,
+        }
+    }
+}
 
 /// Callback type for when user submits a message: (prompt_id, message_text)
 pub type ChatSubmitCallback = Arc<dyn Fn(String, String) + Send + Sync>;
@@ -44,6 +102,7 @@ pub struct ChatPrompt {
     pub hint: Option<String>,
     pub footer: Option<String>,
     pub model: Option<String>,
+    pub models: Vec<ChatModel>,
     pub title: Option<String>,
     pub focus_handle: FocusHandle,
     pub input: TextInputState,
@@ -55,6 +114,9 @@ pub struct ChatPrompt {
     prompt_colors: theme::PromptColors,
     streaming_message_id: Option<String>,
     last_copied_response: Option<String>,
+    // Actions menu state
+    actions_menu_open: bool,
+    actions_menu_selected: usize,
 }
 
 impl ChatPrompt {
@@ -72,13 +134,17 @@ impl ChatPrompt {
         let prompt_colors = theme.colors.prompt_colors();
         logging::log("PROMPTS", &format!("ChatPrompt::new id={}", id));
 
+        let models = default_models();
+        let default_model = models.first().map(|m| m.name.clone());
+
         Self {
             id,
             messages,
             placeholder,
             hint,
             footer,
-            model: Some("GPT-4o mini".to_string()),
+            model: default_model,
+            models,
             title: Some("Chat".to_string()),
             focus_handle,
             input: TextInputState::new(),
@@ -90,7 +156,18 @@ impl ChatPrompt {
             prompt_colors,
             streaming_message_id: None,
             last_copied_response: None,
+            actions_menu_open: false,
+            actions_menu_selected: 0,
         }
+    }
+
+    /// Set custom models for the chat
+    pub fn with_models(mut self, models: Vec<ChatModel>) -> Self {
+        self.models = models;
+        if self.model.is_none() {
+            self.model = self.models.first().map(|m| m.name.clone());
+        }
+        self
     }
 
     /// Set the escape callback
@@ -206,6 +283,316 @@ impl ChatPrompt {
     fn handle_clear(&mut self, cx: &mut Context<Self>) {
         logging::log("CHAT", "Clearing conversation (⌘+⌫)");
         self.clear_messages(cx);
+    }
+
+    // ============================================
+    // Actions Menu Methods
+    // ============================================
+
+    fn toggle_actions_menu(&mut self, cx: &mut Context<Self>) {
+        self.actions_menu_open = !self.actions_menu_open;
+        self.actions_menu_selected = 0;
+        logging::log("CHAT", &format!("Actions menu: {}", if self.actions_menu_open { "opened" } else { "closed" }));
+        cx.notify();
+    }
+
+    fn close_actions_menu(&mut self, cx: &mut Context<Self>) {
+        if self.actions_menu_open {
+            self.actions_menu_open = false;
+            cx.notify();
+        }
+    }
+
+    /// Get the list of action items for the menu
+    fn get_actions(&self) -> Vec<ChatAction> {
+        vec![
+            ChatAction::new("continue", "Continue in Chat", Some("⌘ ↵")),
+            ChatAction::new("copy", "Copy Last Response", Some("⌘ C")),
+            ChatAction::new("clear", "Clear Conversation", Some("⌘ ⌫")),
+        ]
+    }
+
+    /// Get total selectable items (models + actions)
+    fn get_menu_item_count(&self) -> usize {
+        self.models.len() + self.get_actions().len()
+    }
+
+    fn actions_menu_up(&mut self, cx: &mut Context<Self>) {
+        if self.actions_menu_selected > 0 {
+            self.actions_menu_selected -= 1;
+            cx.notify();
+        }
+    }
+
+    fn actions_menu_down(&mut self, cx: &mut Context<Self>) {
+        let max = self.get_menu_item_count().saturating_sub(1);
+        if self.actions_menu_selected < max {
+            self.actions_menu_selected += 1;
+            cx.notify();
+        }
+    }
+
+    fn actions_menu_select(&mut self, cx: &mut Context<Self>) {
+        let selected = self.actions_menu_selected;
+        let model_count = self.models.len();
+
+        if selected < model_count {
+            // Selected a model
+            let model = &self.models[selected];
+            self.model = Some(model.name.clone());
+            logging::log("CHAT", &format!("Selected model: {}", model.name));
+            self.close_actions_menu(cx);
+        } else {
+            // Selected an action
+            let action_idx = selected - model_count;
+            let actions = self.get_actions();
+            if action_idx < actions.len() {
+                let action = &actions[action_idx];
+                logging::log("CHAT", &format!("Selected action: {}", action.id));
+                match action.id.as_str() {
+                    "continue" => {
+                        self.close_actions_menu(cx);
+                        self.handle_continue_in_chat(cx);
+                    }
+                    "copy" => {
+                        self.handle_copy_last_response(cx);
+                        self.close_actions_menu(cx);
+                    }
+                    "clear" => {
+                        self.handle_clear(cx);
+                        self.close_actions_menu(cx);
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    /// Handle clicking on a specific model in the menu
+    fn select_model_by_index(&mut self, index: usize, cx: &mut Context<Self>) {
+        if index < self.models.len() {
+            let model = &self.models[index];
+            self.model = Some(model.name.clone());
+            logging::log("CHAT", &format!("Selected model: {}", model.name));
+            self.close_actions_menu(cx);
+        }
+    }
+
+    /// Handle clicking on a specific action in the menu
+    fn select_action_by_id(&mut self, action_id: &str, cx: &mut Context<Self>) {
+        match action_id {
+            "continue" => {
+                self.close_actions_menu(cx);
+                self.handle_continue_in_chat(cx);
+            }
+            "copy" => {
+                self.handle_copy_last_response(cx);
+                self.close_actions_menu(cx);
+            }
+            "clear" => {
+                self.handle_clear(cx);
+                self.close_actions_menu(cx);
+            }
+            _ => {}
+        }
+    }
+
+    /// Render the actions menu overlay
+    fn render_actions_menu(&self, cx: &Context<Self>) -> impl IntoElement {
+        let colors = &self.prompt_colors;
+        let model_count = self.models.len();
+        let current_model = self.model.clone().unwrap_or_default();
+
+        let menu_bg = rgba((colors.code_bg << 8) | 0xF0);
+        let hover_bg = rgba((colors.accent_color << 8) | 0x20);
+        let selected_bg = rgba((colors.accent_color << 8) | 0x40);
+        let border_color = rgba((colors.quote_border << 8) | 0x60);
+
+        let mut menu = div()
+            .absolute()
+            .bottom(px(50.0)) // Position above footer
+            .left(px(12.0))
+            .right(px(12.0))
+            .bg(menu_bg)
+            .border_1()
+            .border_color(border_color)
+            .rounded(px(8.0))
+            .shadow_lg()
+            .flex()
+            .flex_col()
+            .overflow_hidden();
+
+        // Header
+        menu = menu.child(
+            div()
+                .w_full()
+                .px(px(12.0))
+                .py(px(8.0))
+                .border_b_1()
+                .border_color(border_color)
+                .flex()
+                .flex_row()
+                .items_center()
+                .justify_between()
+                .child(
+                    div()
+                        .text_xs()
+                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                        .text_color(rgb(colors.text_secondary))
+                        .child("Actions"),
+                )
+                .child(
+                    div()
+                        .px(px(6.0))
+                        .py(px(2.0))
+                        .bg(rgba((colors.code_bg << 8) | 0x80))
+                        .rounded(px(4.0))
+                        .text_xs()
+                        .text_color(rgb(colors.text_tertiary))
+                        .child("⌘ K"),
+                ),
+        );
+
+        // Models section
+        for (i, model) in self.models.iter().enumerate() {
+            let is_selected = i == self.actions_menu_selected;
+            let is_current = model.name == current_model;
+
+            let row_bg = if is_selected {
+                Some(selected_bg)
+            } else {
+                None
+            };
+
+            let model_name = model.name.clone();
+            let index = i;
+
+            menu = menu.child(
+                div()
+                    .id(format!("model-{}", i))
+                    .w_full()
+                    .px(px(12.0))
+                    .py(px(8.0))
+                    .when_some(row_bg, |d, bg| d.bg(bg))
+                    .hover(|s| s.bg(hover_bg))
+                    .cursor_pointer()
+                    .on_click(cx.listener(move |this, _, _window, cx| {
+                        this.select_model_by_index(index, cx);
+                    }))
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .justify_between()
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .gap(px(8.0))
+                            .child(
+                                // Radio button
+                                div()
+                                    .w(px(14.0))
+                                    .h(px(14.0))
+                                    .rounded_full()
+                                    .border_1()
+                                    .border_color(if is_current {
+                                        rgb(colors.accent_color)
+                                    } else {
+                                        rgb(colors.text_tertiary)
+                                    })
+                                    .when(is_current, |d| {
+                                        d.child(
+                                            div()
+                                                .w(px(8.0))
+                                                .h(px(8.0))
+                                                .m(px(2.0))
+                                                .rounded_full()
+                                                .bg(rgb(colors.accent_color)),
+                                        )
+                                    }),
+                            )
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .text_color(rgb(colors.text_primary))
+                                    .child(model_name),
+                            ),
+                    )
+                    .when(is_current, |d| {
+                        d.child(
+                            div()
+                                .text_xs()
+                                .text_color(rgb(colors.text_tertiary))
+                                .child("✓"),
+                        )
+                    }),
+            );
+        }
+
+        // Separator
+        menu = menu.child(
+            div()
+                .w_full()
+                .h(px(1.0))
+                .bg(border_color),
+        );
+
+        // Actions section
+        let actions = self.get_actions();
+        for (i, action) in actions.iter().enumerate() {
+            if action.is_separator {
+                menu = menu.child(div().w_full().h(px(1.0)).bg(border_color));
+                continue;
+            }
+
+            let menu_index = model_count + i;
+            let is_selected = menu_index == self.actions_menu_selected;
+
+            let row_bg = if is_selected {
+                Some(selected_bg)
+            } else {
+                None
+            };
+
+            let action_id = action.id.clone();
+            let action_label = action.label.clone();
+            let shortcut = action.shortcut.clone();
+
+            menu = menu.child(
+                div()
+                    .id(format!("action-{}", i))
+                    .w_full()
+                    .px(px(12.0))
+                    .py(px(8.0))
+                    .when_some(row_bg, |d, bg| d.bg(bg))
+                    .hover(|s| s.bg(hover_bg))
+                    .cursor_pointer()
+                    .on_click(cx.listener(move |this, _, _window, cx| {
+                        this.select_action_by_id(&action_id, cx);
+                    }))
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .justify_between()
+                    .child(
+                        div()
+                            .text_sm()
+                            .text_color(rgb(colors.text_primary))
+                            .child(action_label),
+                    )
+                    .when_some(shortcut, |d, s| {
+                        d.child(
+                            div()
+                                .text_xs()
+                                .text_color(rgb(colors.text_tertiary))
+                                .child(s),
+                        )
+                    }),
+            );
+        }
+
+        menu
     }
 
     /// Group messages into conversation turns (user + assistant pairs)
@@ -477,14 +864,31 @@ impl Render for ChatPrompt {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let colors = &self.prompt_colors;
 
-        let handle_key = cx.listener(|this, event: &KeyDownEvent, _window, cx| {
+        let actions_menu_open = self.actions_menu_open;
+
+        let handle_key = cx.listener(move |this, event: &KeyDownEvent, _window, cx| {
             let key = event.keystroke.key.to_lowercase();
             let key_char = event.keystroke.key_char.as_deref();
             let has_cmd = event.keystroke.modifiers.platform; // ⌘ on macOS
 
+            // Handle actions menu keys when open
+            if actions_menu_open {
+                match key.as_str() {
+                    "escape" => this.close_actions_menu(cx),
+                    "up" | "arrowup" => this.actions_menu_up(cx),
+                    "down" | "arrowdown" => this.actions_menu_down(cx),
+                    "enter" => this.actions_menu_select(cx),
+                    "k" if has_cmd => this.toggle_actions_menu(cx),
+                    _ => {}
+                }
+                return;
+            }
+
             match key.as_str() {
                 // Escape - close chat
                 "escape" => this.handle_escape(cx),
+                // ⌘+K - Toggle actions menu
+                "k" if has_cmd => this.toggle_actions_menu(cx),
                 // ⌘+Enter - Continue in Chat
                 "enter" if has_cmd => this.handle_continue_in_chat(cx),
                 // Enter - Submit message
@@ -554,8 +958,11 @@ impl Render for ChatPrompt {
             );
         }
 
+        let show_actions_menu = self.actions_menu_open;
+
         div()
             .id("chat-prompt")
+            .relative() // For absolute positioning of actions menu
             .flex()
             .flex_col()
             .w_full()
@@ -580,5 +987,7 @@ impl Render for ChatPrompt {
             )
             // Footer with model selector and Continue in Chat
             .child(self.render_footer())
+            // Actions menu overlay (when open)
+            .when(show_actions_menu, |d| d.child(self.render_actions_menu(cx)))
     }
 }
