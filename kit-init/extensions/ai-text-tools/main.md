@@ -21,8 +21,6 @@ shortcut: ctrl shift i
 -->
 
 ```ts
-import '../../scripts/kit-sdk';
-
 const text = await getSelectedText();
 if (!text?.trim()) {
   await hud('No text selected');
@@ -45,8 +43,6 @@ shortcut: ctrl shift e
 -->
 
 ```ts
-import '../../scripts/kit-sdk';
-
 const text = await getSelectedText();
 if (!text?.trim()) {
   await hud('No text selected');
@@ -69,8 +65,6 @@ shortcut: ctrl shift g
 -->
 
 ```ts
-import '../../scripts/kit-sdk';
-
 const text = await getSelectedText();
 if (!text?.trim()) {
   await hud('No text selected');
@@ -93,8 +87,6 @@ shortcut: ctrl shift s
 -->
 
 ```ts
-import '../../scripts/kit-sdk';
-
 const text = await getSelectedText();
 if (!text?.trim()) {
   await hud('No text selected');
@@ -117,8 +109,6 @@ shortcut: ctrl shift c
 -->
 
 ```ts
-import '../../scripts/kit-sdk';
-
 const text = await getSelectedText();
 if (!text?.trim()) {
   await hud('No text selected');
@@ -141,8 +131,6 @@ shortcut: ctrl shift t
 -->
 
 ```ts
-import '../../scripts/kit-sdk';
-
 const text = await getSelectedText();
 if (!text?.trim()) {
   await hud('No text selected');
@@ -165,8 +153,6 @@ shortcut: ctrl shift p
 -->
 
 ```ts
-import '../../scripts/kit-sdk';
-
 const text = await getSelectedText();
 if (!text?.trim()) {
   await hud('No text selected');
