@@ -129,7 +129,7 @@ description: Open the annotation editor
 -->
 
 ```open
-cleanshot://annotate
+cleanshot://open-annotate
 ```
 
 ---
@@ -177,7 +177,7 @@ description: Show the quick access overlay
 -->
 
 ```open
-cleanshot://quick-access-overlay
+cleanshot://add-quick-access-overlay
 ```
 
 ---
@@ -194,12 +194,12 @@ cleanshot://toggle-desktop-icons
 
 ---
 
-## Send Captured Area to AI Chat
+## Capture Area for AI
 
 <!--
-description: Capture an area and send it to AI for analysis
+description: Capture an area (use with Raycast AI or paste into AI chat)
 -->
 
 ```open
-cleanshot://capture-area-to-ai
+cleanshot://capture-area
 ```
