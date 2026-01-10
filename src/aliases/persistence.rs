@@ -219,7 +219,9 @@ mod tests {
         for alias in valid_aliases {
             // Just verify they're valid strings
             assert!(!alias.is_empty());
-            assert!(alias.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_'));
+            assert!(alias
+                .chars()
+                .all(|c| c.is_alphanumeric() || c == '-' || c == '_'));
         }
     }
 }

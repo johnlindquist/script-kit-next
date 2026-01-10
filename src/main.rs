@@ -30,6 +30,7 @@ extern crate objc;
 mod actions;
 mod agents;
 mod ai;
+mod aliases;
 mod components;
 mod config;
 mod designs;
@@ -58,7 +59,6 @@ mod scripts;
 #[cfg(target_os = "macos")]
 mod selected_text;
 mod setup;
-mod aliases;
 mod shortcuts;
 mod stdin_commands;
 mod syntax;
