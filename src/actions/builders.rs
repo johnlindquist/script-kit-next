@@ -255,6 +255,42 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
         );
     }
 
+    // Dynamic alias actions based on whether an alias already exists
+    // If NO alias: Show "Add Alias"
+    // If HAS alias: Show "Update Alias" and "Remove Alias"
+    if script.alias.is_some() {
+        // Has existing alias - show Update and Remove options
+        actions.push(
+            Action::new(
+                "update_alias",
+                "Update Alias",
+                Some("Change the alias trigger".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌘⇧A"),
+        );
+        actions.push(
+            Action::new(
+                "remove_alias",
+                "Remove Alias",
+                Some("Remove the current alias".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌘⌥A"),
+        );
+    } else {
+        // No alias - show Add option
+        actions.push(
+            Action::new(
+                "add_alias",
+                "Add Alias",
+                Some("Set an alias trigger (type alias + space to run)".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌘⇧A"),
+        );
+    }
+
     // Script-only actions (not available for built-ins, apps, windows, scriptlets)
     if script.is_script {
         actions.push(
@@ -376,6 +412,10 @@ mod tests {
         assert!(actions.iter().any(|a| a.id == "add_shortcut"));
         assert!(!actions.iter().any(|a| a.id == "update_shortcut"));
         assert!(!actions.iter().any(|a| a.id == "remove_shortcut"));
+        // Dynamic alias action - no alias means "Add"
+        assert!(actions.iter().any(|a| a.id == "add_alias"));
+        assert!(!actions.iter().any(|a| a.id == "update_alias"));
+        assert!(!actions.iter().any(|a| a.id == "remove_alias"));
         assert!(actions.iter().any(|a| a.id == "copy_deeplink"));
     }
 
@@ -401,10 +441,11 @@ mod tests {
         let builtin = ScriptInfo::builtin("Clipboard History");
         let actions = get_script_context_actions(&builtin);
 
-        // Should have run, copy_deeplink, and add_shortcut (no shortcut by default)
+        // Should have run, copy_deeplink, add_shortcut, and add_alias (no shortcut/alias by default)
         assert!(actions.iter().any(|a| a.id == "run_script"));
         assert!(actions.iter().any(|a| a.id == "copy_deeplink"));
         assert!(actions.iter().any(|a| a.id == "add_shortcut"));
+        assert!(actions.iter().any(|a| a.id == "add_alias"));
 
         // Should NOT have script-only actions
         assert!(!actions.iter().any(|a| a.id == "edit_script"));
@@ -416,7 +457,7 @@ mod tests {
     #[test]
     fn test_get_scriptlet_context_actions() {
         // Scriptlets should have scriptlet-specific actions
-        let scriptlet = ScriptInfo::scriptlet("Open GitHub", "/path/to/url.md", None);
+        let scriptlet = ScriptInfo::scriptlet("Open GitHub", "/path/to/url.md", None, None);
         let actions = get_script_context_actions(&scriptlet);
 
         // Should have run, copy_deeplink, and add_shortcut (no shortcut by default)
@@ -438,6 +479,42 @@ mod tests {
         assert!(!actions.iter().any(|a| a.id == "view_logs"));
         assert!(!actions.iter().any(|a| a.id == "reveal_in_finder"));
         assert!(!actions.iter().any(|a| a.id == "copy_path"));
+    }
+
+    #[test]
+    fn test_get_script_context_actions_with_alias() {
+        // Script with alias should show "Update Alias" and "Remove Alias" options
+        let script = ScriptInfo::with_shortcut_and_alias(
+            "my-script",
+            "/path/to/my-script.ts",
+            None,
+            Some("ms".to_string()),
+        );
+        let actions = get_script_context_actions(&script);
+
+        // Dynamic alias actions - has alias means "Update" and "Remove"
+        assert!(!actions.iter().any(|a| a.id == "add_alias"));
+        assert!(actions.iter().any(|a| a.id == "update_alias"));
+        assert!(actions.iter().any(|a| a.id == "remove_alias"));
+    }
+
+    #[test]
+    fn test_get_builtin_context_actions_with_alias() {
+        // Built-in with alias should show "Update Alias" and "Remove Alias"
+        let builtin = ScriptInfo::with_all(
+            "Clipboard History",
+            "builtin:clipboard-history",
+            false,
+            "Open",
+            None,
+            Some("ch".to_string()),
+        );
+        let actions = get_script_context_actions(&builtin);
+
+        // Should have alias actions for update/remove
+        assert!(!actions.iter().any(|a| a.id == "add_alias"));
+        assert!(actions.iter().any(|a| a.id == "update_alias"));
+        assert!(actions.iter().any(|a| a.id == "remove_alias"));
     }
 
     #[test]

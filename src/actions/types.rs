@@ -31,6 +31,9 @@ pub struct ScriptInfo {
     /// Current keyboard shortcut assigned to this script/item (if any)
     /// Used to determine which shortcut actions to show in the actions menu
     pub shortcut: Option<String>,
+    /// Current alias assigned to this script/item (if any)
+    /// Used to determine which alias actions to show in the actions menu
+    pub alias: Option<String>,
 }
 
 impl ScriptInfo {
@@ -43,6 +46,7 @@ impl ScriptInfo {
             is_scriptlet: false,
             action_verb: "Run".to_string(),
             shortcut: None,
+            alias: None,
         }
     }
 
@@ -60,6 +64,7 @@ impl ScriptInfo {
             is_scriptlet: false,
             action_verb: "Run".to_string(),
             shortcut,
+            alias: None,
         }
     }
 
@@ -69,6 +74,7 @@ impl ScriptInfo {
         name: impl Into<String>,
         markdown_path: impl Into<String>,
         shortcut: Option<String>,
+        alias: Option<String>,
     ) -> Self {
         ScriptInfo {
             name: name.into(),
@@ -77,6 +83,26 @@ impl ScriptInfo {
             is_scriptlet: true,
             action_verb: "Run".to_string(),
             shortcut,
+            alias,
+        }
+    }
+
+    /// Create a ScriptInfo for a real script file with shortcut and alias info
+    #[allow(dead_code)]
+    pub fn with_shortcut_and_alias(
+        name: impl Into<String>,
+        path: impl Into<String>,
+        shortcut: Option<String>,
+        alias: Option<String>,
+    ) -> Self {
+        ScriptInfo {
+            name: name.into(),
+            path: path.into(),
+            is_script: true,
+            is_scriptlet: false,
+            action_verb: "Run".to_string(),
+            shortcut,
+            alias,
         }
     }
 
@@ -91,6 +117,7 @@ impl ScriptInfo {
             is_scriptlet: false,
             action_verb: "Run".to_string(),
             shortcut: None,
+            alias: None,
         }
     }
 
@@ -108,6 +135,7 @@ impl ScriptInfo {
             is_scriptlet: false,
             action_verb: "Run".to_string(),
             shortcut: None,
+            alias: None,
         }
     }
 
@@ -125,6 +153,7 @@ impl ScriptInfo {
             is_scriptlet: false,
             action_verb: action_verb.into(),
             shortcut: None,
+            alias: None,
         }
     }
 
@@ -144,6 +173,28 @@ impl ScriptInfo {
             is_scriptlet: false,
             action_verb: action_verb.into(),
             shortcut,
+            alias: None,
+        }
+    }
+
+    /// Create a ScriptInfo with all options including custom action verb, shortcut, and alias
+    #[allow(dead_code)]
+    pub fn with_all(
+        name: impl Into<String>,
+        path: impl Into<String>,
+        is_script: bool,
+        action_verb: impl Into<String>,
+        shortcut: Option<String>,
+        alias: Option<String>,
+    ) -> Self {
+        ScriptInfo {
+            name: name.into(),
+            path: path.into(),
+            is_script,
+            is_scriptlet: false,
+            action_verb: action_verb.into(),
+            shortcut,
+            alias,
         }
     }
 }
@@ -215,6 +266,7 @@ mod tests {
         assert!(script.is_script);
         assert!(!script.is_scriptlet);
         assert!(script.shortcut.is_none());
+        assert!(script.alias.is_none());
     }
 
     #[test]
@@ -236,12 +288,14 @@ mod tests {
             "Open GitHub",
             "/path/to/url.md#open-github",
             Some("cmd+g".to_string()),
+            Some("gh".to_string()),
         );
         assert_eq!(scriptlet.name, "Open GitHub");
         assert_eq!(scriptlet.path, "/path/to/url.md#open-github");
         assert!(!scriptlet.is_script);
         assert!(scriptlet.is_scriptlet);
         assert_eq!(scriptlet.shortcut, Some("cmd+g".to_string()));
+        assert_eq!(scriptlet.alias, Some("gh".to_string()));
         assert_eq!(scriptlet.action_verb, "Run");
     }
 
@@ -253,6 +307,7 @@ mod tests {
         assert!(!builtin.is_script);
         assert!(!builtin.is_scriptlet);
         assert!(builtin.shortcut.is_none());
+        assert!(builtin.alias.is_none());
     }
 
     #[test]
@@ -301,5 +356,36 @@ mod tests {
         assert_eq!(action.description, Some("desc".to_string()));
         assert_eq!(action.category, ActionCategory::ScriptContext);
         assert!(action.shortcut.is_none());
+    }
+
+    #[test]
+    fn test_script_info_with_shortcut_and_alias() {
+        let script = ScriptInfo::with_shortcut_and_alias(
+            "test-script",
+            "/path/to/test-script.ts",
+            Some("cmd+shift+t".to_string()),
+            Some("ts".to_string()),
+        );
+        assert_eq!(script.name, "test-script");
+        assert_eq!(script.shortcut, Some("cmd+shift+t".to_string()));
+        assert_eq!(script.alias, Some("ts".to_string()));
+    }
+
+    #[test]
+    fn test_script_info_with_all() {
+        let script = ScriptInfo::with_all(
+            "App Launcher",
+            "builtin:app-launcher",
+            false,
+            "Open",
+            Some("cmd+space".to_string()),
+            Some("apps".to_string()),
+        );
+        assert_eq!(script.name, "App Launcher");
+        assert_eq!(script.path, "builtin:app-launcher");
+        assert!(!script.is_script);
+        assert_eq!(script.action_verb, "Open");
+        assert_eq!(script.shortcut, Some("cmd+space".to_string()));
+        assert_eq!(script.alias, Some("apps".to_string()));
     }
 }

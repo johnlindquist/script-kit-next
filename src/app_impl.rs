@@ -339,6 +339,8 @@ impl ScriptListApp {
             shortcut_recorder_state: None,
             // Shortcut recorder entity - persisted to maintain focus
             shortcut_recorder_entity: None,
+            // Alias input state - starts as None (no alias input showing)
+            alias_input_state: None,
             // Input history for shell-like up/down navigation
             input_history: {
                 let mut history = input_history::InputHistory::new();
@@ -1720,10 +1722,38 @@ impl ScriptListApp {
         let alias_lower = alias.to_lowercase();
 
         // O(1) lookup in registry
-        if let Some(path) = self.alias_registry.get(&alias_lower) {
+        if let Some(command_id) = self.alias_registry.get(&alias_lower) {
+            // Check for builtin/{id} command IDs
+            if let Some(builtin_id) = command_id.strip_prefix("builtin/") {
+                let config = crate::config::BuiltInConfig::default();
+                if let Some(entry) = builtins::get_builtin_entries(&config)
+                    .into_iter()
+                    .find(|e| e.id == builtin_id)
+                {
+                    logging::log(
+                        "ALIAS",
+                        &format!("Found builtin match: '{}' -> '{}'", alias, entry.name),
+                    );
+                    return Some(AliasMatch::BuiltIn(std::sync::Arc::new(entry)));
+                }
+            }
+
+            // Check for app/{bundle_id} command IDs
+            if let Some(bundle_id) = command_id.strip_prefix("app/") {
+                if let Some(app) = self.apps.iter().find(|a| {
+                    a.bundle_id.as_deref() == Some(bundle_id)
+                }) {
+                    logging::log(
+                        "ALIAS",
+                        &format!("Found app match: '{}' -> '{}'", alias, app.name),
+                    );
+                    return Some(AliasMatch::App(std::sync::Arc::new(app.clone())));
+                }
+            }
+
             // Find the script/scriptlet by path
             for script in &self.scripts {
-                if script.path.to_string_lossy() == *path {
+                if script.path.to_string_lossy() == *command_id {
                     logging::log(
                         "ALIAS",
                         &format!("Found script match: '{}' -> '{}'", alias, script.name),
@@ -1735,7 +1765,7 @@ impl ScriptListApp {
             // Check scriptlets by file_path or name
             for scriptlet in &self.scriptlets {
                 let scriptlet_path = scriptlet.file_path.as_ref().unwrap_or(&scriptlet.name);
-                if scriptlet_path == path {
+                if scriptlet_path == command_id {
                     logging::log(
                         "ALIAS",
                         &format!("Found scriptlet match: '{}' -> '{}'", alias, scriptlet.name),
@@ -1744,12 +1774,12 @@ impl ScriptListApp {
                 }
             }
 
-            // Path in registry but not found in current scripts (stale entry)
+            // Command ID in registry but not found (stale entry)
             logging::log(
                 "ALIAS",
                 &format!(
                     "Stale registry entry: '{}' -> '{}' (not found)",
-                    alias, path
+                    alias, command_id
                 ),
             );
         }
@@ -2294,6 +2324,12 @@ impl ScriptListApp {
                         }
                         AliasMatch::Scriptlet(scriptlet) => {
                             self.execute_scriptlet(&scriptlet, cx);
+                        }
+                        AliasMatch::BuiltIn(entry) => {
+                            self.execute_builtin(&entry, cx);
+                        }
+                        AliasMatch::App(app) => {
+                            self.execute_app(&app, cx);
                         }
                     }
                     self.clear_filter(window, cx);
@@ -3488,6 +3524,270 @@ export default {
         self.close_shortcut_recorder(cx);
     }
 
+    /// Show the alias input overlay for configuring a command alias.
+    ///
+    /// The alias input allows users to set a text alias that can be typed
+    /// in the main menu to quickly run a command.
+    fn show_alias_input(
+        &mut self,
+        command_id: String,
+        command_name: String,
+        cx: &mut Context<Self>,
+    ) {
+        logging::log(
+            "ALIAS",
+            &format!(
+                "Showing alias input for '{}' (id: {})",
+                command_name, command_id
+            ),
+        );
+
+        // Load existing alias if any
+        let existing_alias = crate::aliases::load_alias_overrides()
+            .ok()
+            .and_then(|overrides| overrides.get(&command_id).cloned())
+            .unwrap_or_default();
+
+        // Store state
+        self.alias_input_state = Some(AliasInputState {
+            command_id,
+            command_name,
+            alias_text: existing_alias,
+        });
+
+        // Close actions popup if open
+        self.show_actions_popup = false;
+        self.actions_dialog = None;
+
+        cx.notify();
+    }
+
+    /// Close the alias input and clear state.
+    pub fn close_alias_input(&mut self, cx: &mut Context<Self>) {
+        if self.alias_input_state.is_some() {
+            logging::log("ALIAS", "Closing alias input");
+            self.alias_input_state = None;
+            cx.notify();
+        }
+    }
+
+    /// Update the alias text in the input state.
+    /// Currently unused - will be connected when real text input is added.
+    #[allow(dead_code)]
+    fn update_alias_text(&mut self, text: String, cx: &mut Context<Self>) {
+        if let Some(ref mut state) = self.alias_input_state {
+            state.alias_text = text;
+            cx.notify();
+        }
+    }
+
+    /// Save the current alias and close the input.
+    fn save_alias(&mut self, cx: &mut Context<Self>) {
+        let Some(ref state) = self.alias_input_state else {
+            logging::log("ALIAS", "No alias input state when trying to save");
+            return;
+        };
+
+        let command_id = state.command_id.clone();
+        let command_name = state.command_name.clone();
+        let alias_text = state.alias_text.trim().to_string();
+
+        if alias_text.is_empty() {
+            // Empty alias means remove it
+            match crate::aliases::remove_alias_override(&command_id) {
+                Ok(()) => {
+                    logging::log("ALIAS", &format!("Removed alias for: {}", command_id));
+                    self.show_hud("Alias removed".to_string(), Some(2000), cx);
+                }
+                Err(e) => {
+                    logging::log("ERROR", &format!("Failed to remove alias: {}", e));
+                    self.show_hud(format!("Failed to remove alias: {}", e), Some(4000), cx);
+                }
+            }
+        } else {
+            // Validate alias: should be alphanumeric with optional hyphens/underscores
+            if !alias_text
+                .chars()
+                .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+            {
+                self.show_hud(
+                    "Alias must contain only letters, numbers, hyphens, or underscores".to_string(),
+                    Some(4000),
+                    cx,
+                );
+                return;
+            }
+
+            logging::log(
+                "ALIAS",
+                &format!(
+                    "Saving alias for '{}' ({}): {}",
+                    command_name, command_id, alias_text
+                ),
+            );
+
+            match crate::aliases::save_alias_override(&command_id, &alias_text) {
+                Ok(()) => {
+                    logging::log("ALIAS", "Alias saved to aliases.json");
+                    self.show_hud(
+                        format!("Alias set: {} → {}", alias_text, command_name),
+                        Some(2000),
+                        cx,
+                    );
+                    // Refresh scripts to update the alias registry
+                    self.refresh_scripts(cx);
+                }
+                Err(e) => {
+                    logging::log("ERROR", &format!("Failed to save alias: {}", e));
+                    self.show_hud(format!("Failed to save alias: {}", e), Some(4000), cx);
+                }
+            }
+        }
+
+        // Close the input and restore focus
+        self.close_alias_input(cx);
+    }
+
+    /// Render the alias input overlay if state is set.
+    ///
+    /// Returns None if no alias input is active.
+    fn render_alias_input_overlay(
+        &mut self,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Option<gpui::AnyElement> {
+        let state = self.alias_input_state.as_ref()?;
+        let command_name = state.command_name.clone();
+        let alias_text = state.alias_text.clone();
+
+        // Get design tokens for styling
+        let tokens = crate::designs::get_tokens(self.current_design);
+        let colors = tokens.colors();
+        let spacing = tokens.spacing();
+        let typography = tokens.typography();
+        let visual = tokens.visual();
+
+        // Create save handler
+        let on_save = cx.listener(|this, _: &gpui::ClickEvent, _window, cx| {
+            this.save_alias(cx);
+        });
+
+        // Create cancel handler
+        let on_cancel = cx.listener(|this, _: &gpui::ClickEvent, _window, cx| {
+            this.close_alias_input(cx);
+        });
+
+        // Create key handler for Enter/Escape
+        let on_key = cx.listener(|this, event: &gpui::KeyDownEvent, _window, cx| {
+            let key = event.keystroke.key.as_str();
+            match key {
+                "enter" | "Enter" => {
+                    this.save_alias(cx);
+                }
+                "escape" | "Escape" => {
+                    this.close_alias_input(cx);
+                }
+                _ => {}
+            }
+        });
+
+        // Build the overlay UI
+        Some(
+            div()
+                .id("alias-input-overlay")
+                .absolute()
+                .inset_0()
+                .flex()
+                .items_center()
+                .justify_center()
+                .bg(gpui::rgba(0x00000080)) // Semi-transparent background
+                .on_key_down(on_key)
+                .child(
+                    div()
+                        .id("alias-input-modal")
+                        .flex()
+                        .flex_col()
+                        .w(gpui::px(400.0))
+                        .p(gpui::px(spacing.padding_xl))
+                        .bg(gpui::rgb(colors.background))
+                        .rounded(gpui::px(visual.radius_lg))
+                        .border_1()
+                        .border_color(gpui::rgb(colors.border))
+                        .gap(gpui::px(spacing.gap_md))
+                        // Header
+                        .child(
+                            div()
+                                .text_lg()
+                                .font_weight(gpui::FontWeight::SEMIBOLD)
+                                .text_color(gpui::rgb(colors.text_primary))
+                                .font_family(typography.font_family)
+                                .child(format!("Set Alias for \"{}\"", command_name)),
+                        )
+                        // Description
+                        .child(
+                            div()
+                                .text_sm()
+                                .text_color(gpui::rgb(colors.text_muted))
+                                .font_family(typography.font_family)
+                                .child("Type the alias + space in the main menu to run this command"),
+                        )
+                        // Input field (simplified - just show the current value)
+                        .child(
+                            div()
+                                .id("alias-input-field")
+                                .w_full()
+                                .px(gpui::px(spacing.padding_md))
+                                .py(gpui::px(spacing.padding_sm))
+                                .bg(gpui::rgb(colors.background_secondary))
+                                .rounded(gpui::px(visual.radius_md))
+                                .border_1()
+                                .border_color(gpui::rgb(colors.border))
+                                .text_color(gpui::rgb(colors.text_primary))
+                                .font_family(typography.font_family)
+                                .child(if alias_text.is_empty() {
+                                    div()
+                                        .text_color(gpui::rgb(colors.text_dimmed))
+                                        .child("Enter alias (e.g., 'ch' for Clipboard History)")
+                                } else {
+                                    div().child(alias_text.clone())
+                                }),
+                        )
+                        // Buttons
+                        .child(
+                            div()
+                                .flex()
+                                .gap(gpui::px(spacing.gap_sm))
+                                .justify_end()
+                                .child(
+                                    div()
+                                        .id("cancel-button")
+                                        .px(gpui::px(spacing.padding_md))
+                                        .py(gpui::px(spacing.padding_sm))
+                                        .rounded(gpui::px(visual.radius_md))
+                                        .bg(gpui::rgb(colors.background_tertiary))
+                                        .text_color(gpui::rgb(colors.text_primary))
+                                        .cursor_pointer()
+                                        .on_click(on_cancel)
+                                        .child("Cancel"),
+                                )
+                                .child(
+                                    div()
+                                        .id("save-button")
+                                        .px(gpui::px(spacing.padding_md))
+                                        .py(gpui::px(spacing.padding_sm))
+                                        .rounded(gpui::px(visual.radius_md))
+                                        .bg(gpui::rgb(colors.accent))
+                                        .text_color(gpui::rgb(colors.text_on_accent))
+                                        .cursor_pointer()
+                                        .on_click(on_save)
+                                        .child("Save"),
+                                ),
+                        ),
+                )
+                .into_any_element(),
+        )
+    }
+
     /// Execute a path action from the actions dialog
     /// Handles actions like copy_path, open_in_finder, open_in_editor, etc.
     fn execute_path_action(
@@ -4585,6 +4885,36 @@ export default {
                         .clone()
                         .unwrap_or_else(|| scriptlet.name.clone());
                     self.shortcut_registry.insert(shortcut_lower, path);
+                }
+            }
+        }
+
+        // Load alias overrides from ~/.scriptkit/aliases.json
+        // These provide aliases for built-ins, apps, and other commands
+        // that don't have their own alias metadata
+        if let Ok(alias_overrides) = crate::aliases::load_alias_overrides() {
+            for (command_id, alias) in alias_overrides {
+                let alias_lower = alias.to_lowercase();
+                if let Some(existing_path) = self.alias_registry.get(&alias_lower) {
+                    conflicts.push(format!(
+                        "Alias conflict: '{}' already used by {}",
+                        alias,
+                        std::path::Path::new(existing_path)
+                            .file_name()
+                            .map(|s| s.to_string_lossy().to_string())
+                            .unwrap_or_else(|| existing_path.clone())
+                    ));
+                    logging::log(
+                        "ALIAS",
+                        &format!(
+                            "Conflict: alias '{}' for {} blocked (already used by {})",
+                            alias, command_id, existing_path
+                        ),
+                    );
+                } else {
+                    // Use the command_id as the path identifier
+                    // This allows find_alias_match to find built-ins and apps
+                    self.alias_registry.insert(alias_lower, command_id);
                 }
             }
         }

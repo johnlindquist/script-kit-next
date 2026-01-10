@@ -380,6 +380,106 @@ impl ScriptListApp {
                     self.last_output = Some(SharedString::from("No item selected"));
                 }
             }
+            // Alias actions: add_alias, update_alias open the alias input
+            "add_alias" | "update_alias" => {
+                logging::log("UI", &format!("{} action", action_id));
+                if let Some(result) = self.get_selected_result() {
+                    let (command_id, command_name) = match result {
+                        scripts::SearchResult::Script(m) => {
+                            (format!("script/{}", m.script.name), m.script.name.clone())
+                        }
+                        scripts::SearchResult::Scriptlet(m) => {
+                            (format!("scriptlet/{}", m.scriptlet.name), m.scriptlet.name.clone())
+                        }
+                        scripts::SearchResult::BuiltIn(m) => {
+                            (format!("builtin/{}", m.entry.id), m.entry.name.clone())
+                        }
+                        scripts::SearchResult::App(m) => {
+                            let id = if let Some(ref bundle_id) = m.app.bundle_id {
+                                format!("app/{}", bundle_id)
+                            } else {
+                                format!("app/{}", m.app.name.to_lowercase().replace(' ', "-"))
+                            };
+                            (id, m.app.name.clone())
+                        }
+                        scripts::SearchResult::Agent(m) => {
+                            (format!("agent/{}", m.agent.name), m.agent.name.clone())
+                        }
+                        scripts::SearchResult::Window(_) => {
+                            self.last_output =
+                                Some(SharedString::from("Window aliases not supported - windows are transient"));
+                            return;
+                        }
+                        scripts::SearchResult::Fallback(m) => {
+                            (format!("fallback/{}", m.fallback.name()), m.fallback.name().to_string())
+                        }
+                    };
+                    self.show_alias_input(command_id, command_name, cx);
+                } else {
+                    self.last_output = Some(SharedString::from("No item selected"));
+                }
+            }
+            // "remove_alias" removes the existing alias from persistence
+            "remove_alias" => {
+                logging::log("UI", "Remove alias action");
+                if let Some(result) = self.get_selected_result() {
+                    let command_id_opt = match result {
+                        scripts::SearchResult::Script(m) => {
+                            Some(format!("script/{}", m.script.name))
+                        }
+                        scripts::SearchResult::Scriptlet(m) => {
+                            Some(format!("scriptlet/{}", m.scriptlet.name))
+                        }
+                        scripts::SearchResult::BuiltIn(m) => {
+                            Some(format!("builtin/{}", m.entry.id))
+                        }
+                        scripts::SearchResult::App(m) => {
+                            if let Some(ref bundle_id) = m.app.bundle_id {
+                                Some(format!("app/{}", bundle_id))
+                            } else {
+                                Some(format!(
+                                    "app/{}",
+                                    m.app.name.to_lowercase().replace(' ', "-")
+                                ))
+                            }
+                        }
+                        scripts::SearchResult::Agent(m) => Some(format!("agent/{}", m.agent.name)),
+                        scripts::SearchResult::Window(_) => {
+                            self.last_output =
+                                Some(SharedString::from("Window aliases not supported"));
+                            None
+                        }
+                        scripts::SearchResult::Fallback(m) => {
+                            Some(format!("fallback/{}", m.fallback.name()))
+                        }
+                    };
+
+                    if let Some(command_id) = command_id_opt {
+                        // Remove the alias override from persistence
+                        match crate::aliases::remove_alias_override(&command_id) {
+                            Ok(()) => {
+                                logging::log(
+                                    "ALIAS",
+                                    &format!("Removed alias for: {}", command_id),
+                                );
+                                self.last_output = Some(SharedString::from("Alias removed"));
+                                // Refresh scripts to update alias display and registry
+                                self.refresh_scripts(cx);
+                            }
+                            Err(e) => {
+                                logging::log("ERROR", &format!("Failed to remove alias: {}", e));
+                                self.last_output = Some(SharedString::from(format!(
+                                    "Failed to remove alias: {}",
+                                    e
+                                )));
+                            }
+                        }
+                    }
+                    self.hide_main_and_reset(cx);
+                } else {
+                    self.last_output = Some(SharedString::from("No item selected"));
+                }
+            }
             "edit_script" => {
                 logging::log("UI", "Edit script action");
                 if let Some(result) = self.get_selected_result() {
