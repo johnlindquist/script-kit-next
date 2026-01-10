@@ -376,6 +376,7 @@ impl ScriptListApp {
                         );
 
                         let result = match action_type {
+                            // Half positions
                             WindowActionType::TileLeft => window_control::tile_window(
                                 target_window.id,
                                 TilePosition::LeftHalf,
@@ -391,11 +392,97 @@ impl ScriptListApp {
                                 target_window.id,
                                 TilePosition::BottomHalf,
                             ),
+
+                            // Quadrant positions
+                            WindowActionType::TileTopLeft => window_control::tile_window(
+                                target_window.id,
+                                TilePosition::TopLeft,
+                            ),
+                            WindowActionType::TileTopRight => window_control::tile_window(
+                                target_window.id,
+                                TilePosition::TopRight,
+                            ),
+                            WindowActionType::TileBottomLeft => window_control::tile_window(
+                                target_window.id,
+                                TilePosition::BottomLeft,
+                            ),
+                            WindowActionType::TileBottomRight => window_control::tile_window(
+                                target_window.id,
+                                TilePosition::BottomRight,
+                            ),
+
+                            // Thirds positions
+                            WindowActionType::TileLeftThird => window_control::tile_window(
+                                target_window.id,
+                                TilePosition::LeftThird,
+                            ),
+                            WindowActionType::TileCenterThird => window_control::tile_window(
+                                target_window.id,
+                                TilePosition::CenterThird,
+                            ),
+                            WindowActionType::TileRightThird => window_control::tile_window(
+                                target_window.id,
+                                TilePosition::RightThird,
+                            ),
+
+                            // Vertical thirds positions
+                            WindowActionType::TileTopThird => window_control::tile_window(
+                                target_window.id,
+                                TilePosition::TopThird,
+                            ),
+                            WindowActionType::TileMiddleThird => window_control::tile_window(
+                                target_window.id,
+                                TilePosition::MiddleThird,
+                            ),
+                            WindowActionType::TileBottomThird => window_control::tile_window(
+                                target_window.id,
+                                TilePosition::BottomThird,
+                            ),
+
+                            // Horizontal two-thirds positions
+                            WindowActionType::TileFirstTwoThirds => window_control::tile_window(
+                                target_window.id,
+                                TilePosition::FirstTwoThirds,
+                            ),
+                            WindowActionType::TileLastTwoThirds => window_control::tile_window(
+                                target_window.id,
+                                TilePosition::LastTwoThirds,
+                            ),
+
+                            // Vertical two-thirds positions
+                            WindowActionType::TileTopTwoThirds => window_control::tile_window(
+                                target_window.id,
+                                TilePosition::TopTwoThirds,
+                            ),
+                            WindowActionType::TileBottomTwoThirds => window_control::tile_window(
+                                target_window.id,
+                                TilePosition::BottomTwoThirds,
+                            ),
+
+                            // Centered positions
+                            WindowActionType::TileCenter => window_control::tile_window(
+                                target_window.id,
+                                TilePosition::Center,
+                            ),
+                            WindowActionType::TileAlmostMaximize => window_control::tile_window(
+                                target_window.id,
+                                TilePosition::AlmostMaximize,
+                            ),
+
+                            // Full window operations
                             WindowActionType::Maximize => {
                                 window_control::maximize_window(target_window.id)
                             }
                             WindowActionType::Minimize => {
                                 window_control::minimize_window(target_window.id)
+                            }
+
+                            // Display operations
+                            WindowActionType::MoveToNextDisplay => {
+                                window_control::move_to_next_display(target_window.id)
+                            }
+                            WindowActionType::MoveToPreviousDisplay => {
+                                window_control::move_to_previous_display(target_window.id)
                             }
                         };
 

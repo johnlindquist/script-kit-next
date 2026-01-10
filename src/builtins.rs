@@ -74,12 +74,47 @@ pub enum SystemActionType {
 /// Window action types for window management
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WindowActionType {
+    // Half positions
     TileLeft,
     TileRight,
     TileTop,
     TileBottom,
+
+    // Quadrant positions
+    TileTopLeft,
+    TileTopRight,
+    TileBottomLeft,
+    TileBottomRight,
+
+    // Horizontal thirds positions
+    TileLeftThird,
+    TileCenterThird,
+    TileRightThird,
+
+    // Vertical thirds positions
+    TileTopThird,
+    TileMiddleThird,
+    TileBottomThird,
+
+    // Horizontal two-thirds positions
+    TileFirstTwoThirds,
+    TileLastTwoThirds,
+
+    // Vertical two-thirds positions
+    TileTopTwoThirds,
+    TileBottomTwoThirds,
+
+    // Centered positions
+    TileCenter,
+    TileAlmostMaximize,
+
+    // Full window operations
     Maximize,
     Minimize,
+
+    // Display operations
+    MoveToNextDisplay,
+    MoveToPreviousDisplay,
 }
 
 /// Notes window command types
@@ -707,58 +742,229 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
     // Window Actions (for frontmost window)
     // =========================================================================
 
+    // --- Half positions ---
     entries.push(BuiltInEntry::new_with_icon(
         "builtin-tile-left",
-        "Tile Window Left",
-        "Tile the frontmost window to the left half",
-        vec!["tile", "left", "window", "half", "snap"],
+        "Left Half",
+        "Move window to left half of screen",
+        vec!["left", "half", "tile", "window", "snap", "split"],
         BuiltInFeature::WindowAction(WindowActionType::TileLeft),
         "◧",
     ));
 
     entries.push(BuiltInEntry::new_with_icon(
         "builtin-tile-right",
-        "Tile Window Right",
-        "Tile the frontmost window to the right half",
-        vec!["tile", "right", "window", "half", "snap"],
+        "Right Half",
+        "Move window to right half of screen",
+        vec!["right", "half", "tile", "window", "snap", "split"],
         BuiltInFeature::WindowAction(WindowActionType::TileRight),
         "◨",
     ));
 
     entries.push(BuiltInEntry::new_with_icon(
         "builtin-tile-top",
-        "Tile Window Top",
-        "Tile the frontmost window to the top half",
-        vec!["tile", "top", "window", "half", "snap"],
+        "Top Half",
+        "Move window to top half of screen",
+        vec!["top", "half", "tile", "window", "snap", "upper"],
         BuiltInFeature::WindowAction(WindowActionType::TileTop),
         "⬒",
     ));
 
     entries.push(BuiltInEntry::new_with_icon(
         "builtin-tile-bottom",
-        "Tile Window Bottom",
-        "Tile the frontmost window to the bottom half",
-        vec!["tile", "bottom", "window", "half", "snap"],
+        "Bottom Half",
+        "Move window to bottom half of screen",
+        vec!["bottom", "half", "tile", "window", "snap", "lower"],
         BuiltInFeature::WindowAction(WindowActionType::TileBottom),
         "⬓",
     ));
 
+    // --- Quadrant positions ---
+    entries.push(BuiltInEntry::new_with_icon(
+        "builtin-tile-top-left",
+        "Top Left",
+        "Move window to top-left quarter of screen",
+        vec!["top", "left", "quarter", "quadrant", "tile", "window", "corner"],
+        BuiltInFeature::WindowAction(WindowActionType::TileTopLeft),
+        "◰",
+    ));
+
+    entries.push(BuiltInEntry::new_with_icon(
+        "builtin-tile-top-right",
+        "Top Right",
+        "Move window to top-right quarter of screen",
+        vec!["top", "right", "quarter", "quadrant", "tile", "window", "corner"],
+        BuiltInFeature::WindowAction(WindowActionType::TileTopRight),
+        "◳",
+    ));
+
+    entries.push(BuiltInEntry::new_with_icon(
+        "builtin-tile-bottom-left",
+        "Bottom Left",
+        "Move window to bottom-left quarter of screen",
+        vec!["bottom", "left", "quarter", "quadrant", "tile", "window", "corner"],
+        BuiltInFeature::WindowAction(WindowActionType::TileBottomLeft),
+        "◱",
+    ));
+
+    entries.push(BuiltInEntry::new_with_icon(
+        "builtin-tile-bottom-right",
+        "Bottom Right",
+        "Move window to bottom-right quarter of screen",
+        vec!["bottom", "right", "quarter", "quadrant", "tile", "window", "corner"],
+        BuiltInFeature::WindowAction(WindowActionType::TileBottomRight),
+        "◲",
+    ));
+
+    // --- Thirds positions ---
+    entries.push(BuiltInEntry::new_with_icon(
+        "builtin-tile-left-third",
+        "Left Third",
+        "Move window to left third of screen",
+        vec!["left", "third", "tile", "window", "narrow"],
+        BuiltInFeature::WindowAction(WindowActionType::TileLeftThird),
+        "⫿",
+    ));
+
+    entries.push(BuiltInEntry::new_with_icon(
+        "builtin-tile-center-third",
+        "Center Third",
+        "Move window to center third of screen",
+        vec!["center", "middle", "third", "tile", "window"],
+        BuiltInFeature::WindowAction(WindowActionType::TileCenterThird),
+        "☰",
+    ));
+
+    entries.push(BuiltInEntry::new_with_icon(
+        "builtin-tile-right-third",
+        "Right Third",
+        "Move window to right third of screen",
+        vec!["right", "third", "tile", "window", "narrow"],
+        BuiltInFeature::WindowAction(WindowActionType::TileRightThird),
+        "⫾",
+    ));
+
+    // --- Vertical thirds positions ---
+    entries.push(BuiltInEntry::new_with_icon(
+        "builtin-tile-top-third",
+        "Top Third",
+        "Move window to top third of screen",
+        vec!["top", "third", "tile", "window", "upper", "vertical"],
+        BuiltInFeature::WindowAction(WindowActionType::TileTopThird),
+        "⬔",
+    ));
+
+    entries.push(BuiltInEntry::new_with_icon(
+        "builtin-tile-middle-third",
+        "Middle Third",
+        "Move window to middle third of screen",
+        vec!["middle", "center", "third", "tile", "window", "vertical"],
+        BuiltInFeature::WindowAction(WindowActionType::TileMiddleThird),
+        "▬",
+    ));
+
+    entries.push(BuiltInEntry::new_with_icon(
+        "builtin-tile-bottom-third",
+        "Bottom Third",
+        "Move window to bottom third of screen",
+        vec!["bottom", "third", "tile", "window", "lower", "vertical"],
+        BuiltInFeature::WindowAction(WindowActionType::TileBottomThird),
+        "⬕",
+    ));
+
+    // --- Horizontal two-thirds positions ---
+    entries.push(BuiltInEntry::new_with_icon(
+        "builtin-tile-first-two-thirds",
+        "First Two Thirds",
+        "Move window to left two-thirds of screen",
+        vec!["first", "two", "thirds", "left", "tile", "window", "wide"],
+        BuiltInFeature::WindowAction(WindowActionType::TileFirstTwoThirds),
+        "◫",
+    ));
+
+    entries.push(BuiltInEntry::new_with_icon(
+        "builtin-tile-last-two-thirds",
+        "Last Two Thirds",
+        "Move window to right two-thirds of screen",
+        vec!["last", "two", "thirds", "right", "tile", "window", "wide"],
+        BuiltInFeature::WindowAction(WindowActionType::TileLastTwoThirds),
+        "◪",
+    ));
+
+    // --- Vertical two-thirds positions ---
+    entries.push(BuiltInEntry::new_with_icon(
+        "builtin-tile-top-two-thirds",
+        "Top Two Thirds",
+        "Move window to top two-thirds of screen",
+        vec!["top", "two", "thirds", "upper", "tile", "window", "tall", "vertical"],
+        BuiltInFeature::WindowAction(WindowActionType::TileTopTwoThirds),
+        "⬒",
+    ));
+
+    entries.push(BuiltInEntry::new_with_icon(
+        "builtin-tile-bottom-two-thirds",
+        "Bottom Two Thirds",
+        "Move window to bottom two-thirds of screen",
+        vec!["bottom", "two", "thirds", "lower", "tile", "window", "tall", "vertical"],
+        BuiltInFeature::WindowAction(WindowActionType::TileBottomTwoThirds),
+        "⬓",
+    ));
+
+    // --- Centered positions ---
+    entries.push(BuiltInEntry::new_with_icon(
+        "builtin-tile-center",
+        "Center",
+        "Center window on screen (60% size)",
+        vec!["center", "middle", "tile", "window", "reasonable"],
+        BuiltInFeature::WindowAction(WindowActionType::TileCenter),
+        "◎",
+    ));
+
+    entries.push(BuiltInEntry::new_with_icon(
+        "builtin-almost-maximize",
+        "Almost Maximize",
+        "Expand window to 90% of screen with margins",
+        vec!["almost", "maximize", "large", "big", "margins", "window", "fill"],
+        BuiltInFeature::WindowAction(WindowActionType::TileAlmostMaximize),
+        "▣",
+    ));
+
+    // --- Full window operations ---
     entries.push(BuiltInEntry::new_with_icon(
         "builtin-maximize-window",
-        "Maximize Window",
-        "Maximize the frontmost window",
-        vec!["maximize", "window", "fullscreen", "expand"],
+        "Maximize",
+        "Maximize window to fill screen",
+        vec!["maximize", "window", "fullscreen", "expand", "fill"],
         BuiltInFeature::WindowAction(WindowActionType::Maximize),
         "⬜",
     ));
 
     entries.push(BuiltInEntry::new_with_icon(
         "builtin-minimize-window",
-        "Minimize Window",
-        "Minimize the frontmost window",
+        "Minimize",
+        "Minimize window to dock",
         vec!["minimize", "window", "dock", "hide"],
         BuiltInFeature::WindowAction(WindowActionType::Minimize),
         "➖",
+    ));
+
+    // --- Display operations ---
+    entries.push(BuiltInEntry::new_with_icon(
+        "builtin-next-display",
+        "Next Display",
+        "Move window to next display",
+        vec!["next", "display", "monitor", "screen", "move", "window", "right"],
+        BuiltInFeature::WindowAction(WindowActionType::MoveToNextDisplay),
+        "⏭",
+    ));
+
+    entries.push(BuiltInEntry::new_with_icon(
+        "builtin-previous-display",
+        "Previous Display",
+        "Move window to previous display",
+        vec!["previous", "display", "monitor", "screen", "move", "window", "left"],
+        BuiltInFeature::WindowAction(WindowActionType::MoveToPreviousDisplay),
+        "⏮",
     ));
 
     // =========================================================================
