@@ -48,6 +48,8 @@ impl ScriptListApp {
                     filter: String::new(),
                     selected_index: 0,
                 };
+                // Mark as opened from main menu - ESC will return to main menu
+                self.opened_from_main_menu = true;
                 // Use standard height for clipboard history view
                 resize_to_view_sync(ViewType::ScriptList, 0);
                 // Focus the main filter input so cursor blinks and typing works
@@ -69,6 +71,8 @@ impl ScriptListApp {
                     filter: String::new(),
                     selected_index: 0,
                 };
+                // Mark as opened from main menu - ESC will return to main menu
+                self.opened_from_main_menu = true;
                 // Use standard height for app launcher view
                 resize_to_view_sync(ViewType::ScriptList, 0);
                 // Focus the main filter input so cursor blinks and typing works
@@ -114,6 +118,8 @@ impl ScriptListApp {
                             filter: String::new(),
                             selected_index: 0,
                         };
+                        // Mark as opened from main menu - ESC will return to main menu
+                        self.opened_from_main_menu = true;
                         // Use standard height for window switcher view
                         resize_to_view_sync(ViewType::ScriptList, 0);
                         // Focus the main filter input so cursor blinks and typing works
@@ -139,6 +145,8 @@ impl ScriptListApp {
                     filter: String::new(),
                     selected_index: 0,
                 };
+                // Mark as opened from main menu - ESC will return to main menu
+                self.opened_from_main_menu = true;
                 // Use standard height for design gallery view
                 resize_to_view_sync(ViewType::ScriptList, 0);
                 cx.notify();
@@ -841,9 +849,13 @@ impl ScriptListApp {
 
                 match cmd_type {
                     UtilityCommandType::ScratchPad => {
+                        // Mark as opened from main menu - ESC will return to main menu
+                        self.opened_from_main_menu = true;
                         self.open_scratch_pad(cx);
                     }
                     UtilityCommandType::QuickTerminal => {
+                        // Mark as opened from main menu - ESC will return to main menu
+                        self.opened_from_main_menu = true;
                         self.open_quick_terminal(cx);
                     }
                 }
@@ -854,6 +866,8 @@ impl ScriptListApp {
             // =========================================================================
             builtins::BuiltInFeature::FileSearch => {
                 logging::log("EXEC", "Opening File Search");
+                // Mark as opened from main menu - ESC will return to main menu
+                self.opened_from_main_menu = true;
                 self.open_file_search(String::new(), cx);
             }
         }

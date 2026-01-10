@@ -158,7 +158,7 @@ impl ScriptListApp {
         let handle_key = cx.listener(
             move |this: &mut Self,
                   event: &gpui::KeyDownEvent,
-                  _window: &mut Window,
+                  window: &mut Window,
                   cx: &mut Context<Self>| {
                 // If the shortcut recorder is active, don't process any key events.
                 // The recorder has its own key handlers and should receive all key events.
@@ -166,12 +166,25 @@ impl ScriptListApp {
                     return;
                 }
 
-                // Global shortcuts (Cmd+W, ESC for dismissable views)
-                if this.handle_global_shortcut_with_options(event, true, cx) {
+                let key_str = event.keystroke.key.to_lowercase();
+                let has_cmd = event.keystroke.modifiers.platform;
+
+                // ESC: Use go_back_or_close for consistent navigation behavior
+                // If opened from main menu → return to main menu
+                // If opened via hotkey/protocol → close window
+                if key_str == "escape" && !this.show_actions_popup {
+                    logging::log("KEY", "ESC in ClipboardHistory");
+                    this.go_back_or_close(window, cx);
                     return;
                 }
 
-                let key_str = event.keystroke.key.to_lowercase();
+                // Cmd+W always closes window
+                if has_cmd && key_str == "w" {
+                    logging::log("KEY", "Cmd+W - closing window");
+                    this.close_and_reset_window(cx);
+                    return;
+                }
+
                 logging::log("KEY", &format!("ClipboardHistory key: '{}'", key_str));
 
                 // P0 FIX: View state only - data comes from this.cached_clipboard_entries
@@ -746,7 +759,7 @@ impl ScriptListApp {
         let handle_key = cx.listener(
             move |this: &mut Self,
                   event: &gpui::KeyDownEvent,
-                  _window: &mut Window,
+                  window: &mut Window,
                   cx: &mut Context<Self>| {
                 // If the shortcut recorder is active, don't process any key events.
                 // The recorder has its own key handlers and should receive all key events.
@@ -754,13 +767,25 @@ impl ScriptListApp {
                     return;
                 }
 
-                // Global shortcuts (Cmd+W) - handled first regardless of view state
-                // Global shortcuts (Cmd+W, ESC for dismissable views)
-                if this.handle_global_shortcut_with_options(event, true, cx) {
+                let key_str = event.keystroke.key.to_lowercase();
+                let has_cmd = event.keystroke.modifiers.platform;
+
+                // ESC: Use go_back_or_close for consistent navigation behavior
+                // If opened from main menu → return to main menu
+                // If opened via hotkey/protocol → close window
+                if key_str == "escape" && !this.show_actions_popup {
+                    logging::log("KEY", "ESC in AppLauncher");
+                    this.go_back_or_close(window, cx);
                     return;
                 }
 
-                let key_str = event.keystroke.key.to_lowercase();
+                // Cmd+W always closes window
+                if has_cmd && key_str == "w" {
+                    logging::log("KEY", "Cmd+W - closing window");
+                    this.close_and_reset_window(cx);
+                    return;
+                }
+
                 logging::log("KEY", &format!("AppLauncher key: '{}'", key_str));
 
                 // P0 FIX: View state only - data comes from this.apps
@@ -1063,7 +1088,7 @@ impl ScriptListApp {
         let handle_key = cx.listener(
             move |this: &mut Self,
                   event: &gpui::KeyDownEvent,
-                  _window: &mut Window,
+                  window: &mut Window,
                   cx: &mut Context<Self>| {
                 // If the shortcut recorder is active, don't process any key events.
                 // The recorder has its own key handlers and should receive all key events.
@@ -1071,12 +1096,25 @@ impl ScriptListApp {
                     return;
                 }
 
-                // Global shortcuts (Cmd+W, ESC for dismissable views)
-                if this.handle_global_shortcut_with_options(event, true, cx) {
+                let key_str = event.keystroke.key.to_lowercase();
+                let has_cmd = event.keystroke.modifiers.platform;
+
+                // ESC: Use go_back_or_close for consistent navigation behavior
+                // If opened from main menu → return to main menu
+                // If opened via hotkey/protocol → close window
+                if key_str == "escape" && !this.show_actions_popup {
+                    logging::log("KEY", "ESC in WindowSwitcher");
+                    this.go_back_or_close(window, cx);
                     return;
                 }
 
-                let key_str = event.keystroke.key.to_lowercase();
+                // Cmd+W always closes window
+                if has_cmd && key_str == "w" {
+                    logging::log("KEY", "Cmd+W - closing window");
+                    this.close_and_reset_window(cx);
+                    return;
+                }
+
                 logging::log("KEY", &format!("WindowSwitcher key: '{}'", key_str));
 
                 // P0 FIX: View state only - data comes from this.cached_windows
@@ -1598,7 +1636,7 @@ impl ScriptListApp {
         let handle_key = cx.listener(
             move |this: &mut Self,
                   event: &gpui::KeyDownEvent,
-                  _window: &mut Window,
+                  window: &mut Window,
                   cx: &mut Context<Self>| {
                 // If the shortcut recorder is active, don't process any key events.
                 // The recorder has its own key handlers and should receive all key events.
@@ -1606,13 +1644,25 @@ impl ScriptListApp {
                     return;
                 }
 
-                // Global shortcuts (Cmd+W) - handled first regardless of view state
-                // Global shortcuts (Cmd+W, ESC for dismissable views)
-                if this.handle_global_shortcut_with_options(event, true, cx) {
+                let key_str = event.keystroke.key.to_lowercase();
+                let has_cmd = event.keystroke.modifiers.platform;
+
+                // ESC: Use go_back_or_close for consistent navigation behavior
+                // If opened from main menu → return to main menu
+                // If opened via hotkey/protocol → close window
+                if key_str == "escape" && !this.show_actions_popup {
+                    logging::log("KEY", "ESC in DesignGallery");
+                    this.go_back_or_close(window, cx);
                     return;
                 }
 
-                let key_str = event.keystroke.key.to_lowercase();
+                // Cmd+W always closes window
+                if has_cmd && key_str == "w" {
+                    logging::log("KEY", "Cmd+W - closing window");
+                    this.close_and_reset_window(cx);
+                    return;
+                }
+
                 logging::log("KEY", &format!("DesignGallery key: '{}'", key_str));
 
                 if let AppView::DesignGalleryView {
@@ -2082,27 +2132,17 @@ impl ScriptListApp {
                     }
                 }
 
-                // ESC goes back to main menu (not close window)
+                // ESC: Use go_back_or_close for consistent navigation behavior
+                // If opened from main menu → return to main menu
+                // If opened via hotkey/protocol → close window
                 if key_str == "escape" {
-                    logging::log("KEY", "ESC in FileSearch - returning to main menu");
-                    // Cancel any pending search
+                    logging::log("KEY", "ESC in FileSearch");
+                    // Cancel any pending search and clear cached results
                     this.file_search_debounce_task = None;
                     this.file_search_loading = false;
-                    // Clear cached results
                     this.cached_file_results.clear();
-                    // Return to main menu
-                    this.current_view = AppView::ScriptList;
-                    this.filter_text.clear();
-                    this.selected_index = 0;
-                    // Sync input and reset placeholder to default
-                    this.gpui_input_state.update(cx, |state, cx| {
-                        state.set_value("", window, cx);
-                        // Ensure cursor is at start (empty string, so 0..0)
-                        state.set_selection(0, 0, window, cx);
-                        state.set_placeholder(DEFAULT_PLACEHOLDER.to_string(), window, cx);
-                    });
-                    this.update_window_size_deferred(window, cx);
-                    cx.notify();
+                    // Use consistent navigation: go back or close based on how view was opened
+                    this.go_back_or_close(window, cx);
                     return;
                 }
 

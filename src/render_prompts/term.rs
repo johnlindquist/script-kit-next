@@ -39,6 +39,25 @@ impl ScriptListApp {
                     return;
                 }
 
+                let key_str = event.keystroke.key.to_lowercase();
+                let has_cmd = event.keystroke.modifiers.platform;
+
+                // For QuickTerminalView (built-in utility): ESC returns to main menu or closes window
+                // This is different from TermPrompt (SDK prompt) which doesn't respond to ESC
+                if matches!(this.current_view, AppView::QuickTerminalView { .. }) {
+                    if key_str == "escape" && !this.show_actions_popup {
+                        logging::log("KEY", "ESC in QuickTerminalView");
+                        this.go_back_or_close(window, cx);
+                        return;
+                    }
+
+                    if has_cmd && key_str == "w" {
+                        logging::log("KEY", "Cmd+W - closing window");
+                        this.close_and_reset_window(cx);
+                        return;
+                    }
+                }
+
                 // Global shortcuts (Cmd+W only - term is NOT dismissable with ESC)
                 // Note: When actions popup is open, ESC should close the popup
                 if !this.show_actions_popup
