@@ -2259,6 +2259,27 @@ fn main() {
             logging::log("DEEPLINK", "Deeplink listener exiting (channel closed)");
         }).detach();
 
+        // Show window listener - handles requests to show main window after script exit
+        // This is needed because prompt_handler doesn't have access to show_main_window_helper
+        let app_entity_for_show = app_entity.clone();
+        let window_for_show = window;
+        cx.spawn(async move |cx: &mut gpui::AsyncApp| {
+            logging::log("VISIBILITY", "Show window listener started (event-driven)");
+            let (_, rx) = script_kit_gpui::show_window_channel();
+            while let Ok(()) = rx.recv().await {
+                logging::log(
+                    "VISIBILITY",
+                    "Show window request received - bringing main menu back",
+                );
+                let app_entity_inner = app_entity_for_show.clone();
+                let window_inner = window_for_show;
+                let _ = cx.update(move |cx: &mut gpui::App| {
+                    show_main_window_helper(window_inner, app_entity_inner, cx);
+                });
+            }
+            logging::log("VISIBILITY", "Show window listener exiting (channel closed)");
+        }).detach();
+
         // Appearance change watcher - event-driven with async_channel
         // Only spawn if watcher started successfully
         if appearance_watcher_ok {

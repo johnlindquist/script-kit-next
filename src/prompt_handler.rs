@@ -368,14 +368,18 @@ impl ScriptListApp {
             PromptMessage::ScriptExit => {
                 logging::log("VISIBILITY", "=== ScriptExit message received ===");
                 let was_visible = script_kit_gpui::is_main_window_visible();
+                let script_hid_window = script_kit_gpui::script_requested_hide();
                 logging::log(
                     "VISIBILITY",
-                    &format!("WINDOW_VISIBLE was: {}", was_visible),
+                    &format!(
+                        "WINDOW_VISIBLE was: {}, SCRIPT_REQUESTED_HIDE was: {}",
+                        was_visible, script_hid_window
+                    ),
                 );
 
-                // CRITICAL: Update visibility state so hotkey toggle works correctly
-                script_kit_gpui::set_main_window_visible(false);
-                logging::log("VISIBILITY", "WINDOW_VISIBLE set to: false");
+                // Reset the script-requested-hide flag
+                script_kit_gpui::set_script_requested_hide(false);
+                logging::log("VISIBILITY", "SCRIPT_REQUESTED_HIDE reset to: false");
 
                 // Set flag so next hotkey show will reset to script list
                 NEEDS_RESET.store(true, Ordering::SeqCst);
@@ -384,12 +388,23 @@ impl ScriptListApp {
                 self.reset_to_script_list(cx);
                 logging::log("VISIBILITY", "reset_to_script_list() called");
 
-                // Hide window when script completes - scripts only stay active while code is running
-                cx.hide();
-                logging::log(
-                    "VISIBILITY",
-                    "cx.hide() called - window hidden on script completion",
-                );
+                // If the script had hidden the window (e.g., for getSelectedText),
+                // request showing the main window so the menu comes back
+                if script_hid_window {
+                    logging::log(
+                        "VISIBILITY",
+                        "Script had hidden window - requesting show main window",
+                    );
+                    script_kit_gpui::request_show_main_window();
+                } else {
+                    // Script didn't hide window, so it was user-initiated hide or already visible
+                    // Just update visibility state - don't force show
+                    script_kit_gpui::set_main_window_visible(false);
+                    logging::log(
+                        "VISIBILITY",
+                        "Script didn't hide window - keeping current visibility state",
+                    );
+                }
             }
             PromptMessage::HideWindow => {
                 logging::log("VISIBILITY", "=== HideWindow message received ===");
@@ -402,6 +417,10 @@ impl ScriptListApp {
                 // CRITICAL: Update visibility state so hotkey toggle works correctly
                 script_kit_gpui::set_main_window_visible(false);
                 logging::log("VISIBILITY", "WINDOW_VISIBLE set to: false");
+
+                // Mark that script requested hide - so ScriptExit knows to show window again
+                script_kit_gpui::set_script_requested_hide(true);
+                logging::log("VISIBILITY", "SCRIPT_REQUESTED_HIDE set to: true");
 
                 // Set flag so next hotkey show will reset to script list
                 NEEDS_RESET.store(true, Ordering::SeqCst);
