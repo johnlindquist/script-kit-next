@@ -29,6 +29,7 @@ extern crate objc;
 
 mod actions;
 mod agents;
+mod confirm;
 mod ai;
 mod aliases;
 mod components;

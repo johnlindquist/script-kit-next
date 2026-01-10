@@ -1233,6 +1233,18 @@ export interface ArgConfig {
 }
 
 /**
+ * Configuration object for confirm() dialog
+ */
+export interface ConfirmConfig {
+  /** The message to display */
+  message: string;
+  /** Text for the confirm button (default: "OK") */
+  confirmText?: string;
+  /** Text for the cancel button (default: "Cancel") */
+  cancelText?: string;
+}
+
+/**
  * Function that generates choices - can be sync or async
  * If it takes an input parameter, it's called on each keystroke for filtering
  */
@@ -1351,6 +1363,14 @@ interface SelectMessage {
   placeholder: string;
   choices: Choice[];
   multiple: boolean;
+}
+
+interface ConfirmMessage {
+  type: 'confirm';
+  id: string;
+  message: string;
+  confirmText?: string;
+  cancelText?: string;
 }
 
 interface FieldsMessage {
@@ -2407,7 +2427,35 @@ declare global {
    * ]);
    */
   function div(html?: string | DivConfig, actions?: Action[]): Promise<string | void>;
-  
+
+  /**
+   * Show a confirmation dialog with Yes/No buttons.
+   *
+   * Returns true if the user confirms, false if they cancel.
+   * Keyboard shortcuts: Enter = confirm, Escape = cancel, Tab/Arrow = switch buttons.
+   *
+   * @example
+   * // Simple usage
+   * const confirmed = await confirm("Delete this file?");
+   * if (confirmed) { // proceed }
+   *
+   * @example
+   * // With custom button text
+   * const proceed = await confirm({
+   *   message: "Overwrite existing file?",
+   *   confirmText: "Overwrite",
+   *   cancelText: "Keep Original"
+   * });
+   *
+   * @example
+   * // Shorthand with custom buttons
+   * const yes = await confirm("Continue?", "Yes", "No");
+   */
+  function confirm(): Promise<boolean>;
+  function confirm(message: string): Promise<boolean>;
+  function confirm(message: string, confirmText: string, cancelText: string): Promise<boolean>;
+  function confirm(config: ConfirmConfig): Promise<boolean>;
+
   /**
    * Convert Markdown to HTML
    */
@@ -3371,6 +3419,90 @@ globalThis.div = async function div(
     };
     
     send(message);
+  });
+};
+
+/**
+ * Show a confirmation dialog with Yes/No buttons.
+ *
+ * Returns true if the user confirms, false if they cancel.
+ * Keyboard shortcuts: Enter = confirm, Escape = cancel, Tab/Arrow keys = switch buttons.
+ *
+ * @example
+ * ```typescript
+ * // Simple usage
+ * const confirmed = await confirm("Delete this file?");
+ * if (confirmed) {
+ *   // proceed with deletion
+ * }
+ *
+ * // With custom button text
+ * const proceed = await confirm({
+ *   message: "Overwrite existing file?",
+ *   confirmText: "Overwrite",
+ *   cancelText: "Keep Original"
+ * });
+ *
+ * // Shorthand with custom buttons
+ * const yes = await confirm("Continue?", "Yes", "No");
+ * ```
+ *
+ * @param messageOrConfig - Message string or ConfirmConfig object
+ * @param confirmText - Optional text for the confirm button (default: "OK")
+ * @param cancelText - Optional text for the cancel button (default: "Cancel")
+ * @returns Promise resolving to true (confirmed) or false (cancelled)
+ */
+globalThis.confirm = async function confirm(
+  messageOrConfig?: string | ConfirmConfig,
+  confirmText?: string,
+  cancelText?: string
+): Promise<boolean> {
+  const id = nextId();
+
+  // Parse arguments to extract message and button text
+  let message: string;
+  let confirmBtn: string | undefined;
+  let cancelBtn: string | undefined;
+
+  if (messageOrConfig === undefined) {
+    // confirm() - no arguments, show generic confirmation
+    message = 'Are you sure?';
+  } else if (typeof messageOrConfig === 'string') {
+    // confirm('message') or confirm('message', 'OK', 'Cancel')
+    message = messageOrConfig;
+    confirmBtn = confirmText;
+    cancelBtn = cancelText;
+  } else {
+    // confirm({ message, confirmText, cancelText })
+    message = messageOrConfig.message;
+    confirmBtn = messageOrConfig.confirmText;
+    cancelBtn = messageOrConfig.cancelText;
+  }
+
+  // Auto-submit value: false (user didn't explicitly confirm)
+  const autoSubmitValue = { value: 'false' };
+
+  return new Promise((resolve) => {
+    addPending(id, (msg: SubmitMessage) => {
+      // If user pressed Escape (value is null), treat as cancel
+      if (msg.value === null) {
+        resolve(false);
+        return;
+      }
+      // Parse the boolean value from the string
+      const confirmed = msg.value === 'true';
+      resolve(confirmed);
+    }, autoSubmitValue);
+
+    const confirmMessage: ConfirmMessage = {
+      type: 'confirm',
+      id,
+      message,
+      confirmText: confirmBtn,
+      cancelText: cancelBtn,
+    };
+
+    send(confirmMessage);
   });
 };
 

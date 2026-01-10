@@ -183,6 +183,27 @@ pub enum Message {
         multiple: Option<bool>,
     },
 
+    /// Confirmation dialog with yes/no choice
+    ///
+    /// Shows a modal dialog with a message and two buttons (confirm/cancel).
+    /// Returns true if confirmed, false if cancelled.
+    ///
+    /// # Example
+    /// ```json
+    /// {"type":"confirm","id":"123","message":"Delete this file?","confirmText":"Delete","cancelText":"Keep"}
+    /// ```
+    #[serde(rename = "confirm")]
+    Confirm {
+        id: String,
+        message: String,
+        /// Text for the confirm button (default: "OK")
+        #[serde(rename = "confirmText", skip_serializing_if = "Option::is_none")]
+        confirm_text: Option<String>,
+        /// Text for the cancel button (default: "Cancel")
+        #[serde(rename = "cancelText", skip_serializing_if = "Option::is_none")]
+        cancel_text: Option<String>,
+    },
+
     // ============================================================
     // FORM PROMPTS
     // ============================================================
