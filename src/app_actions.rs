@@ -490,6 +490,123 @@ impl ScriptListApp {
                     self.file_search_actions_path = None;
                 }
             }
+            // Scriptlet-specific actions
+            "edit_scriptlet" => {
+                logging::log("UI", "Edit scriptlet action");
+                if let Some(result) = self.get_selected_result() {
+                    if let scripts::SearchResult::Scriptlet(m) = result {
+                        if let Some(ref file_path) = m.scriptlet.file_path {
+                            // Extract just the path without the anchor (e.g., "/path/to/file.md#slug" -> "/path/to/file.md")
+                            let path_str = file_path.split('#').next().unwrap_or(file_path);
+                            let path = std::path::PathBuf::from(path_str);
+                            self.edit_script(&path);
+                            self.hide_main_and_reset(cx);
+                        } else {
+                            self.last_output =
+                                Some(SharedString::from("Scriptlet has no source file path"));
+                        }
+                    } else {
+                        self.last_output =
+                            Some(SharedString::from("Selected item is not a scriptlet"));
+                    }
+                } else {
+                    self.last_output = Some(SharedString::from("No item selected"));
+                }
+            }
+            "reveal_scriptlet_in_finder" => {
+                logging::log("UI", "Reveal scriptlet in Finder action");
+                if let Some(result) = self.get_selected_result() {
+                    if let scripts::SearchResult::Scriptlet(m) = result {
+                        if let Some(ref file_path) = m.scriptlet.file_path {
+                            // Extract just the path without the anchor
+                            let path_str = file_path.split('#').next().unwrap_or(file_path);
+                            let path = std::path::Path::new(path_str);
+                            self.reveal_in_finder(path);
+                            self.last_output = Some(SharedString::from("Revealed in Finder"));
+                            self.hide_main_and_reset(cx);
+                        } else {
+                            self.last_output =
+                                Some(SharedString::from("Scriptlet has no source file path"));
+                        }
+                    } else {
+                        self.last_output =
+                            Some(SharedString::from("Selected item is not a scriptlet"));
+                    }
+                } else {
+                    self.last_output = Some(SharedString::from("No item selected"));
+                }
+            }
+            "copy_scriptlet_path" => {
+                logging::log("UI", "Copy scriptlet path action");
+                if let Some(result) = self.get_selected_result() {
+                    if let scripts::SearchResult::Scriptlet(m) = result {
+                        if let Some(ref file_path) = m.scriptlet.file_path {
+                            // Extract just the path without the anchor
+                            let path_str = file_path.split('#').next().unwrap_or(file_path);
+
+                            #[cfg(target_os = "macos")]
+                            {
+                                match self.pbcopy(path_str) {
+                                    Ok(_) => {
+                                        logging::log(
+                                            "UI",
+                                            &format!(
+                                                "Copied scriptlet path to clipboard: {}",
+                                                path_str
+                                            ),
+                                        );
+                                        self.last_output = Some(SharedString::from(format!(
+                                            "Copied: {}",
+                                            path_str
+                                        )));
+                                    }
+                                    Err(e) => {
+                                        logging::log("ERROR", &format!("pbcopy failed: {}", e));
+                                        self.last_output =
+                                            Some(SharedString::from("Failed to copy path"));
+                                    }
+                                }
+                            }
+
+                            #[cfg(not(target_os = "macos"))]
+                            {
+                                use arboard::Clipboard;
+                                match Clipboard::new().and_then(|mut c| c.set_text(path_str)) {
+                                    Ok(_) => {
+                                        logging::log(
+                                            "UI",
+                                            &format!(
+                                                "Copied scriptlet path to clipboard: {}",
+                                                path_str
+                                            ),
+                                        );
+                                        self.last_output = Some(SharedString::from(format!(
+                                            "Copied: {}",
+                                            path_str
+                                        )));
+                                    }
+                                    Err(e) => {
+                                        logging::log(
+                                            "ERROR",
+                                            &format!("Failed to copy path: {}", e),
+                                        );
+                                        self.last_output =
+                                            Some(SharedString::from("Failed to copy path"));
+                                    }
+                                }
+                            }
+                        } else {
+                            self.last_output =
+                                Some(SharedString::from("Scriptlet has no source file path"));
+                        }
+                    } else {
+                        self.last_output =
+                            Some(SharedString::from("Selected item is not a scriptlet"));
+                    }
+                } else {
+                    self.last_output = Some(SharedString::from("No item selected"));
+                }
+            }
             _ => {
                 // Handle SDK actions using shared helper
                 self.trigger_sdk_action_internal(&action_id);
