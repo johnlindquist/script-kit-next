@@ -314,6 +314,46 @@ pub enum WindowActionType {
     Maximize,
     Resize,
     Move,
+    Tile,
+    #[serde(rename = "moveToNextDisplay")]
+    MoveToNextDisplay,
+    #[serde(rename = "moveToPreviousDisplay")]
+    MoveToPreviousDisplay,
+}
+
+/// Tile position for window tiling operations
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "kebab-case")]
+pub enum TilePosition {
+    // Half positions
+    Left,
+    Right,
+    Top,
+    Bottom,
+    // Quadrant positions
+    TopLeft,
+    TopRight,
+    BottomLeft,
+    BottomRight,
+    // Horizontal thirds
+    LeftThird,
+    CenterThird,
+    RightThird,
+    // Vertical thirds
+    TopThird,
+    MiddleThird,
+    BottomThird,
+    // Horizontal two-thirds
+    FirstTwoThirds,
+    LastTwoThirds,
+    // Vertical two-thirds
+    TopTwoThirds,
+    BottomTwoThirds,
+    // Centered positions
+    Center,
+    AlmostMaximize,
+    // Full screen
+    Maximize,
 }
 
 /// Mouse data for mouse actions
@@ -471,6 +511,27 @@ pub struct SystemWindowInfo {
     pub is_minimized: Option<bool>,
     #[serde(rename = "isActive", skip_serializing_if = "Option::is_none")]
     pub is_active: Option<bool>,
+}
+
+/// Display/monitor information
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct DisplayInfo {
+    /// Display ID
+    #[serde(rename = "displayId")]
+    pub display_id: u32,
+    /// Display name (e.g., "Built-in Retina Display")
+    pub name: String,
+    /// Whether this is the primary display
+    #[serde(rename = "isPrimary")]
+    pub is_primary: bool,
+    /// Full display bounds (total resolution)
+    pub bounds: TargetWindowBounds,
+    /// Visible bounds (excluding menu bar and dock)
+    #[serde(rename = "visibleBounds")]
+    pub visible_bounds: TargetWindowBounds,
+    /// Scale factor (e.g., 2.0 for Retina)
+    #[serde(rename = "scaleFactor", skip_serializing_if = "Option::is_none")]
+    pub scale_factor: Option<f64>,
 }
 
 /// File search result entry

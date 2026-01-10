@@ -550,6 +550,9 @@ pub enum Message {
         window_id: Option<u32>,
         #[serde(skip_serializing_if = "Option::is_none")]
         bounds: Option<TargetWindowBounds>,
+        /// Tile position for tile action
+        #[serde(rename = "tilePosition", skip_serializing_if = "Option::is_none")]
+        tile_position: Option<TilePosition>,
     },
 
     /// Response with list of system windows
@@ -566,6 +569,42 @@ pub enum Message {
         #[serde(rename = "requestId")]
         request_id: String,
         success: bool,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        error: Option<String>,
+        /// Window info returned for frontmostWindow requests
+        #[serde(skip_serializing_if = "Option::is_none")]
+        window: Option<SystemWindowInfo>,
+    },
+
+    /// Request list of displays/monitors
+    #[serde(rename = "displayList")]
+    DisplayList {
+        #[serde(rename = "requestId")]
+        request_id: String,
+    },
+
+    /// Response with list of displays
+    #[serde(rename = "displayListResult")]
+    DisplayListResult {
+        #[serde(rename = "requestId")]
+        request_id: String,
+        displays: Vec<DisplayInfo>,
+    },
+
+    /// Request frontmost window of the previous app (before Script Kit was shown)
+    #[serde(rename = "frontmostWindow")]
+    FrontmostWindow {
+        #[serde(rename = "requestId")]
+        request_id: String,
+    },
+
+    /// Response with frontmost window info
+    #[serde(rename = "frontmostWindowResult")]
+    FrontmostWindowResult {
+        #[serde(rename = "requestId")]
+        request_id: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        window: Option<SystemWindowInfo>,
         #[serde(skip_serializing_if = "Option::is_none")]
         error: Option<String>,
     },
@@ -1673,6 +1712,22 @@ impl Message {
             action,
             window_id,
             bounds,
+            tile_position: None,
+        }
+    }
+
+    /// Create a window tile action
+    pub fn window_tile_action(
+        request_id: String,
+        window_id: Option<u32>,
+        tile_position: TilePosition,
+    ) -> Self {
+        Message::WindowAction {
+            request_id,
+            action: WindowActionType::Tile,
+            window_id,
+            bounds: None,
+            tile_position: Some(tile_position),
         }
     }
 
@@ -1690,6 +1745,7 @@ impl Message {
             request_id,
             success: true,
             error: None,
+            window: None,
         }
     }
 
@@ -1699,6 +1755,38 @@ impl Message {
             request_id,
             success: false,
             error: Some(error),
+            window: None,
+        }
+    }
+
+    /// Create a display list request
+    pub fn display_list(request_id: String) -> Self {
+        Message::DisplayList { request_id }
+    }
+
+    /// Create a display list response
+    pub fn display_list_result(request_id: String, displays: Vec<DisplayInfo>) -> Self {
+        Message::DisplayListResult {
+            request_id,
+            displays,
+        }
+    }
+
+    /// Create a frontmost window request
+    pub fn frontmost_window(request_id: String) -> Self {
+        Message::FrontmostWindow { request_id }
+    }
+
+    /// Create a frontmost window response
+    pub fn frontmost_window_result(
+        request_id: String,
+        window: Option<SystemWindowInfo>,
+        error: Option<String>,
+    ) -> Self {
+        Message::FrontmostWindowResult {
+            request_id,
+            window,
+            error,
         }
     }
 
