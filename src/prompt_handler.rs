@@ -1190,7 +1190,7 @@ impl ScriptListApp {
                 self.focused_input = FocusedInput::None; // EnvPrompt has its own focus handling
                 self.pending_focus = Some(FocusTarget::EnvPrompt);
 
-                resize_to_view_sync(ViewType::ArgPromptNoChoices, 0);
+                // EnvPrompt: never resize - keep whatever window size was set
                 cx.notify();
             }
             PromptMessage::ShowDrop {

@@ -2505,7 +2505,7 @@ impl ScriptListApp {
             AppView::EditorPrompt { .. } => Some((ViewType::EditorPrompt, 0)),
             AppView::SelectPrompt { .. } => Some((ViewType::ArgPromptWithChoices, 0)),
             AppView::PathPrompt { .. } => Some((ViewType::DivPrompt, 0)),
-            AppView::EnvPrompt { .. } => Some((ViewType::ArgPromptNoChoices, 0)), // Env prompt is a simple input
+            AppView::EnvPrompt { .. } => None, // EnvPrompt: never resize
             AppView::DropPrompt { .. } => Some((ViewType::DivPrompt, 0)), // Drop prompt uses div size for drop zone
             AppView::TemplatePrompt { .. } => Some((ViewType::DivPrompt, 0)), // Template prompt uses div size
             AppView::TermPrompt { .. } => Some((ViewType::TermPrompt, 0)),
