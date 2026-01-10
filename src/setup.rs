@@ -37,7 +37,8 @@ const EMBEDDED_GUIDE_MD: &str = include_str!("../kit-init/GUIDE.md");
 const EMBEDDED_CLEANSHOT_EXTENSION: &str = include_str!("../kit-init/extensions/cleanshot/main.md");
 
 /// Embedded Quick Links extension (built-in extension that ships with the app)
-const EMBEDDED_QUICKLINKS_EXTENSION: &str = include_str!("../kit-init/extensions/quicklinks/main.md");
+const EMBEDDED_QUICKLINKS_EXTENSION: &str =
+    include_str!("../kit-init/extensions/quicklinks/main.md");
 
 /// Embedded AGENTS.md guide for AI agents writing user scripts
 const EMBEDDED_AGENTS_MD: &str = r###"# Script Kit User Scripts Guide
