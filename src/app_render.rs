@@ -1097,10 +1097,11 @@ impl ScriptListApp {
         if let Some(idx) = result_idx {
             if let Some(result) = flat_results.get(idx) {
                 match result {
-                    scripts::SearchResult::Script(m) => Some(ScriptInfo::with_shortcut(
+                    scripts::SearchResult::Script(m) => Some(ScriptInfo::with_shortcut_and_alias(
                         &m.script.name,
                         m.script.path.to_string_lossy(),
                         m.script.shortcut.clone(),
+                        m.script.alias.clone(),
                     )),
                     scripts::SearchResult::Scriptlet(m) => {
                         // Scriptlets use the markdown file path for edit/reveal actions
@@ -1115,28 +1116,33 @@ impl ScriptListApp {
                             &m.scriptlet.name,
                             markdown_path,
                             m.scriptlet.shortcut.clone(),
+                            m.scriptlet.alias.clone(),
                         ))
                     }
                     scripts::SearchResult::BuiltIn(m) => {
                         // Built-ins use their id as identifier
                         // is_script=false: no editable file, hide "Edit Script" etc.
-                        // Look up shortcut from overrides for dynamic action menu
+                        // Look up shortcut and alias from overrides for dynamic action menu
                         let command_id = format!("builtin/{}", &m.entry.id);
                         let shortcut = crate::shortcuts::load_shortcut_overrides()
                             .ok()
                             .and_then(|o| o.get(&command_id).map(|s| s.to_string()));
-                        Some(ScriptInfo::with_action_verb_and_shortcut(
+                        let alias = crate::aliases::load_alias_overrides()
+                            .ok()
+                            .and_then(|o| o.get(&command_id).cloned());
+                        Some(ScriptInfo::with_all(
                             &m.entry.name,
                             format!("builtin:{}", &m.entry.id),
                             false,
                             "Run",
                             shortcut,
+                            alias,
                         ))
                     }
                     scripts::SearchResult::App(m) => {
                         // Apps use their path as identifier
                         // is_script=false: apps aren't editable scripts
-                        // Look up shortcut from overrides for dynamic action menu
+                        // Look up shortcut and alias from overrides for dynamic action menu
                         let command_id = if let Some(ref bundle_id) = m.app.bundle_id {
                             format!("app/{}", bundle_id)
                         } else {
@@ -1145,12 +1151,16 @@ impl ScriptListApp {
                         let shortcut = crate::shortcuts::load_shortcut_overrides()
                             .ok()
                             .and_then(|o| o.get(&command_id).map(|s| s.to_string()));
-                        Some(ScriptInfo::with_action_verb_and_shortcut(
+                        let alias = crate::aliases::load_alias_overrides()
+                            .ok()
+                            .and_then(|o| o.get(&command_id).cloned());
+                        Some(ScriptInfo::with_all(
                             &m.app.name,
                             m.app.path.to_string_lossy().to_string(),
                             false,
                             "Launch",
                             shortcut,
+                            alias,
                         ))
                     }
                     scripts::SearchResult::Window(m) => {
