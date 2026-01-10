@@ -2841,6 +2841,7 @@ impl ScriptListApp {
         &mut self,
         key: &str,
         key_char: Option<&str>,
+        modifiers: &gpui::Modifiers,
         host: ActionsDialogHost,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -2902,14 +2903,94 @@ impl ScriptListApp {
             return ActionsRoute::Handled;
         }
 
-        // Check for printable character input
-        if let Some(ch) = printable_char(key_char) {
-            dialog.update(cx, |d, cx| d.handle_char(ch, cx));
-            return ActionsRoute::Handled;
+        // Check for printable character input (only when no modifiers are held)
+        // This prevents Cmd+E from being treated as typing 'e' into the search
+        if !modifiers.platform && !modifiers.control && !modifiers.alt {
+            if let Some(ch) = printable_char(key_char) {
+                dialog.update(cx, |d, cx| d.handle_char(ch, cx));
+                return ActionsRoute::Handled;
+            }
+        }
+
+        // Check if keystroke matches any action shortcut in the dialog
+        // This allows Cmd+E, Cmd+L, etc. to execute the corresponding action
+        let key_lower = key.to_lowercase();
+        let keystroke_shortcut = shortcuts::keystroke_to_shortcut(&key_lower, modifiers);
+
+        // Read dialog actions and look for matching shortcut
+        // First pass: find the match (if any) while holding the borrow
+        let matched_action_id: Option<String> = {
+            let dialog_ref = dialog.read(cx);
+            dialog_ref.actions.iter().find_map(|action| {
+                action.shortcut.as_ref().and_then(|display_shortcut| {
+                    let normalized = Self::normalize_display_shortcut(display_shortcut);
+                    if normalized == keystroke_shortcut {
+                        Some(action.id.clone())
+                    } else {
+                        None
+                    }
+                })
+            })
+        }; // dialog_ref borrow released here
+
+        // Second pass: execute the action if found (borrow released)
+        if let Some(action_id) = matched_action_id {
+            logging::log(
+                "ACTIONS",
+                &format!(
+                    "Actions dialog shortcut matched: {} -> {} (host={:?})",
+                    keystroke_shortcut, action_id, host
+                ),
+            );
+
+            // Built-in actions always close the dialog
+            self.close_actions_popup(host, window, cx);
+
+            return ActionsRoute::Execute { action_id };
         }
 
         // Modal behavior: swallow all other keys while popup is open
         ActionsRoute::Handled
+    }
+
+    /// Convert a display shortcut (⌘⇧E) to normalized form (cmd+shift+e)
+    fn normalize_display_shortcut(display: &str) -> String {
+        let mut parts: Vec<&str> = Vec::new();
+        let mut key_char: Option<char> = None;
+
+        for ch in display.chars() {
+            match ch {
+                '⌘' => parts.push("cmd"),
+                '⌃' => parts.push("ctrl"),
+                '⌥' => parts.push("alt"),
+                '⇧' => parts.push("shift"),
+                '↵' => key_char = Some('e'), // Enter - map to 'enter' below
+                '⎋' => key_char = Some('`'), // Escape placeholder
+                '⇥' => key_char = Some('t'), // Tab placeholder
+                '⌫' => key_char = Some('b'), // Backspace placeholder
+                _ => key_char = Some(ch),
+            }
+        }
+
+        // Sort modifiers alphabetically (matches keystroke_to_shortcut order)
+        parts.sort();
+
+        let mut result = parts.join("+");
+        if let Some(k) = key_char {
+            if !result.is_empty() {
+                result.push('+');
+            }
+            // Handle special keys
+            match k {
+                'e' if display.contains('↵') => result.push_str("enter"),
+                '`' if display.contains('⎋') => result.push_str("escape"),
+                't' if display.contains('⇥') => result.push_str("tab"),
+                'b' if display.contains('⌫') => result.push_str("backspace"),
+                _ => result.push_str(&k.to_lowercase().to_string()),
+            }
+        }
+
+        result
     }
 
     /// Close the actions popup and restore focus based on host type.
