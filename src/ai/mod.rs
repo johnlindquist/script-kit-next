@@ -35,6 +35,7 @@
 pub mod config;
 pub mod model;
 pub mod providers;
+pub mod sdk_handlers;
 pub mod storage;
 pub mod window;
 
@@ -55,3 +56,6 @@ pub use window::{
     close_ai_window, is_ai_window_open, open_ai_window, set_ai_input, set_ai_input_with_image,
     set_ai_search,
 };
+
+// Re-export SDK handler
+pub use sdk_handlers::try_handle_ai_message;
