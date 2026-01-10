@@ -13,7 +13,7 @@ use std::sync::Arc;
 
 use crate::components::TextInputState;
 use crate::logging;
-use crate::protocol::{ChatMessagePosition, ChatPromptMessage};
+use crate::protocol::{ChatMessagePosition, ChatMessageRole, ChatPromptMessage};
 use crate::theme;
 use crate::ui_foundation::get_vibrancy_background;
 
@@ -76,12 +76,23 @@ impl ChatPrompt {
     }
 
     pub fn start_streaming(&mut self, message_id: String, position: ChatMessagePosition, cx: &mut Context<Self>) {
+        // Determine role from position
+        let role = match position {
+            ChatMessagePosition::Right => Some(ChatMessageRole::User),
+            ChatMessagePosition::Left => Some(ChatMessageRole::Assistant),
+        };
+
         let message = ChatPromptMessage {
             id: Some(message_id.clone()),
+            role,
+            content: Some(String::new()),
             text: String::new(),
             position,
             name: None,
+            model: None,
             streaming: true,
+            error: None,
+            created_at: Some(chrono::Utc::now().to_rfc3339()),
         };
         self.messages.push(message);
         self.streaming_message_id = Some(message_id);
@@ -91,7 +102,7 @@ impl ChatPrompt {
     pub fn append_chunk(&mut self, message_id: &str, chunk: &str, cx: &mut Context<Self>) {
         if self.streaming_message_id.as_deref() == Some(message_id) {
             if let Some(msg) = self.messages.iter_mut().rev().find(|m| m.id.as_deref() == Some(message_id)) {
-                msg.text.push_str(chunk);
+                msg.append_content(chunk);
                 cx.notify();
             }
         }
@@ -125,7 +136,28 @@ impl ChatPrompt {
 
     fn render_message(&self, message: &ChatPromptMessage) -> impl IntoElement {
         let colors = &self.prompt_colors;
-        let is_user = message.position == ChatMessagePosition::Right;
+        let is_user = message.is_user();
+        let content = message.get_content();
+
+        // Error messages have special styling
+        if let Some(ref error) = message.error {
+            let error_bg = rgba(0xDC262680);
+            return div()
+                .w_full()
+                .flex()
+                .my(px(4.0))
+                .child(
+                    div()
+                        .max_w(px(400.0))
+                        .px(px(12.0))
+                        .py(px(8.0))
+                        .bg(error_bg)
+                        .rounded(px(12.0))
+                        .text_sm()
+                        .text_color(Hsla::white())
+                        .child(format!("⚠ {}", error)),
+                );
+        }
 
         let bubble_bg = if is_user {
             rgba((colors.accent_color << 8) | 0xE0)
@@ -135,7 +167,32 @@ impl ChatPrompt {
 
         let text_color: Hsla = if is_user { Hsla::white() } else { rgb(colors.text_primary).into() };
 
-        let mut bubble = div()
+        // Build the bubble content
+        let mut bubble_content = div().flex().flex_col().gap(px(2.0));
+
+        // Add name/model header if present
+        if message.name.is_some() || message.model.is_some() {
+            let mut header = div().flex().flex_row().gap(px(8.0)).text_xs().opacity(0.7);
+            if let Some(ref name) = message.name {
+                header = header.child(name.clone());
+            }
+            if let Some(ref model) = message.model {
+                header = header.child(format!("· {}", model));
+            }
+            bubble_content = bubble_content.child(header);
+        }
+
+        // Add the message content
+        bubble_content = bubble_content.child(content.to_string());
+
+        // Add streaming indicator
+        if message.streaming && content.is_empty() {
+            bubble_content = bubble_content.child(div().text_xs().opacity(0.6).child("..."));
+        } else if message.streaming {
+            bubble_content = bubble_content.child(div().text_xs().opacity(0.6).child("▌"));
+        }
+
+        let bubble = div()
             .max_w(px(400.0))
             .px(px(12.0))
             .py(px(8.0))
@@ -143,11 +200,7 @@ impl ChatPrompt {
             .rounded(px(12.0))
             .text_sm()
             .text_color(text_color)
-            .child(message.text.clone());
-
-        if message.streaming && message.text.is_empty() {
-            bubble = bubble.child(div().text_xs().opacity(0.6).child("..."));
-        }
+            .child(bubble_content);
 
         let mut row = div().w_full().flex().my(px(4.0));
         if is_user {

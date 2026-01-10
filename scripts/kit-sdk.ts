@@ -49,45 +49,111 @@ export interface FileInfo {
 }
 
 // =============================================================================
-// Chat Types (TIER 4A)
+// Chat Types (TIER 4A) - AI SDK Compatible
 // =============================================================================
 
-/** Message displayed in the chat UI */
+/** AI SDK compatible message role */
+export type ChatMessageRole = 'system' | 'user' | 'assistant' | 'tool';
+
+/** AI SDK CoreMessage - pass directly to generateText({ messages }) */
+export interface CoreMessage {
+  role: ChatMessageRole;
+  content: string;
+}
+
+/** Message displayed in the chat UI - AI SDK compatible with Script Kit extensions */
 export interface ChatMessage {
   /** Unique message identifier (auto-generated if not provided) */
   id?: string;
-  /** Message text content (supports markdown) */
-  text: string;
-  /** Position: 'left' (assistant/other) or 'right' (user) */
-  position: 'left' | 'right';
+
+  // === AI SDK Compatible Fields ===
+  /** Message role (AI SDK format) - takes precedence over position if set */
+  role?: ChatMessageRole;
+  /** Message content (AI SDK format) - alias for text */
+  content?: string;
+
+  // === Script Kit Fields (backwards compatible) ===
+  /** Message text content (supports markdown) - use content for AI SDK compat */
+  text?: string;
+  /** Position: 'left' (assistant/other) or 'right' (user) - derived from role if not set */
+  position?: 'left' | 'right';
+
+  // === Metadata ===
   /** Optional sender name */
   name?: string;
+  /** Model that generated this message (assistant only) */
+  model?: string;
   /** Whether this message is currently streaming */
   streaming?: boolean;
+  /** Error message if generation failed */
+  error?: string;
+  /** Creation timestamp (ISO 8601) */
+  createdAt?: string;
+}
+
+/** Result returned from chat() */
+export interface ChatResult {
+  /** AI SDK compatible messages - pass directly to generateText({ messages }) */
+  messages: CoreMessage[];
+  /** UI messages with metadata */
+  uiMessages: ChatMessage[];
+  /** Convenience: last user message */
+  lastUserMessage: string;
+  /** Convenience: last assistant message */
+  lastAssistantMessage: string;
+  /** Model used (if any) */
+  model?: string;
+  /** How the chat ended: 'escape' or 'continue' */
+  action: 'escape' | 'continue';
+  /** Conversation ID for database persistence */
+  conversationId?: string;
 }
 
 /** Configuration options for the chat() prompt */
 export interface ChatOptions {
+  // === Messages (AI SDK compatible) ===
+  /** Initial messages to display (supports both ChatMessage and CoreMessage formats) */
+  messages?: (ChatMessage | CoreMessage)[];
+  /** System prompt shorthand - convenience for adding a system message */
+  system?: string;
+
+  // === Model Configuration ===
+  /** Default model to use */
+  model?: string;
+  /** Available models in actions menu */
+  models?: string[];
+
+  // === UI Configuration ===
   /** Placeholder text for the input field */
   placeholder?: string;
-  /** Initial messages to display */
-  messages?: ChatMessage[];
   /** Hint text (shown in header) */
   hint?: string;
   /** Footer text */
   footer?: string;
   /** Actions for the actions panel (Cmd+K) */
   actions?: Action[];
+
+  // === Behavior ===
+  /** Save conversation to database (default: true) */
+  saveHistory?: boolean;
+
+  // === Callbacks ===
   /** Called when chat opens (before user interaction) */
   onInit?: () => Promise<void>;
   /** Called when user submits a message */
   onMessage?: (text: string) => Promise<void>;
+  /** Called when a chunk is received during streaming */
+  onChunk?: (chunk: string) => void;
+  /** Called when a message is finished */
+  onFinish?: (message: ChatMessage) => void;
+  /** Called when an error occurs */
+  onError?: (error: Error) => void;
 }
 
 /** Controller for interacting with an active chat session */
 export interface ChatController {
   /** Add a message to the chat */
-  addMessage(msg: ChatMessage): void;
+  addMessage(msg: ChatMessage | CoreMessage): void;
   /** Start streaming a message (returns message ID for subsequent chunks) */
   startStream(position?: 'left' | 'right'): string;
   /** Append text to a streaming message */
@@ -4584,23 +4650,72 @@ let chatMessageIdCounter = 0;
 // Type for chat function with controller methods
 interface ChatFunction {
   (options?: ChatOptions): Promise<string>;
-  addMessage(msg: ChatMessage): void;
+  addMessage(msg: ChatMessage | CoreMessage): void;
   startStream(position?: 'left' | 'right'): string;
   appendChunk(messageId: string, chunk: string): void;
   completeStream(messageId: string): void;
   clear(): void;
+  /** Get messages in AI SDK CoreMessage format */
+  getMessages(): CoreMessage[];
+  /** Get full chat result including metadata */
+  getResult(): ChatResult;
 }
+
+/** Convert CoreMessage or ChatMessage to normalized ChatMessage */
+function normalizeMessage(msg: ChatMessage | CoreMessage, index: number): ChatMessage {
+  // If it's a CoreMessage (has role and content but no text or position)
+  if ('role' in msg && 'content' in msg && !('text' in msg)) {
+    const coreMsg = msg as CoreMessage;
+    return {
+      id: `msg-${index}`,
+      role: coreMsg.role,
+      content: coreMsg.content,
+      text: coreMsg.content,
+      position: coreMsg.role === 'user' ? 'right' : 'left',
+      createdAt: new Date().toISOString(),
+    };
+  }
+  // It's already a ChatMessage
+  const chatMsg = msg as ChatMessage;
+  return {
+    ...chatMsg,
+    id: chatMsg.id || `msg-${index}`,
+    // Ensure text and content are in sync
+    text: chatMsg.text || chatMsg.content || '',
+    content: chatMsg.content || chatMsg.text || '',
+    // Derive position from role if not set
+    position: chatMsg.position || (chatMsg.role === 'user' ? 'right' : 'left'),
+  };
+}
+
+/** Convert ChatMessage to CoreMessage for AI SDK compat */
+function toCoreMessage(msg: ChatMessage): CoreMessage {
+  const role = msg.role || (msg.position === 'right' ? 'user' : 'assistant');
+  return {
+    role,
+    content: msg.content || msg.text || '',
+  };
+}
+
+// Track messages in the current chat session
+let chatMessages: ChatMessage[] = [];
 
 // The chat function with attached controller methods
 const chatFn: ChatFunction = async function chat(options?: ChatOptions): Promise<string> {
   const id = nextId();
   currentChatId = id;
+  chatMessages = [];
 
-  // Build initial messages with IDs
-  const initialMessages = (options?.messages || []).map((msg, i) => ({
-    ...msg,
-    id: msg.id || `init-${i}`,
-  }));
+  // Build initial messages with IDs and normalize format
+  const inputMessages = options?.messages || [];
+
+  // If system prompt shorthand is provided, prepend it
+  if (options?.system) {
+    inputMessages.unshift({ role: 'system' as const, content: options.system });
+  }
+
+  const initialMessages = inputMessages.map((msg, i) => normalizeMessage(msg, i));
+  chatMessages = [...initialMessages];
 
   // Send the initial chat message to open the UI
   const message: ChatMessageType = {
@@ -4631,17 +4746,26 @@ const chatFn: ChatFunction = async function chat(options?: ChatOptions): Promise
             return;
           }
 
+          // Track the user message
+          const userMsg: ChatMessage = {
+            id: `user-${chatMessageIdCounter++}`,
+            role: 'user',
+            content: msg.text,
+            text: msg.text,
+            position: 'right',
+            createdAt: new Date().toISOString(),
+          };
+          chatMessages.push(userMsg);
+
           // Call onMessage callback
           await options.onMessage!(msg.text);
 
           // Continue listening for more messages
-          // (chat stays open until script explicitly closes it)
         }
       };
 
       // Add handler for chatSubmit messages
       addPending(id, (msg: SubmitMessage) => {
-        // Legacy submit handler - resolve with value
         if (msg.value === null) {
           currentChatId = null;
           process.exit(0);
@@ -4650,7 +4774,6 @@ const chatFn: ChatFunction = async function chat(options?: ChatOptions): Promise
         currentChatId = null;
       }, { value: '' });
 
-      // Also listen for chatSubmit via process event
       process.on('chatSubmit' as any, handleMessage);
     });
   }
@@ -4669,18 +4792,19 @@ const chatFn: ChatFunction = async function chat(options?: ChatOptions): Promise
 };
 
 // Controller method: Add a message to the chat
-chatFn.addMessage = function addMessage(msg: ChatMessage): void {
+chatFn.addMessage = function addMessage(msg: ChatMessage | CoreMessage): void {
   if (currentChatId === null) {
     throw new Error('chat.addMessage() called outside of a chat session');
   }
 
+  // Normalize the message
+  const normalized = normalizeMessage(msg, chatMessageIdCounter++);
+  chatMessages.push(normalized);
+
   const message: ChatAddMessageType = {
     type: 'chatMessage',
     id: currentChatId,
-    message: {
-      ...msg,
-      id: msg.id || `msg-${chatMessageIdCounter++}`,
-    },
+    message: normalized,
   };
   send(message);
 };
@@ -4692,6 +4816,19 @@ chatFn.startStream = function startStream(position: 'left' | 'right' = 'left'): 
   }
 
   const messageId = `stream-${chatMessageIdCounter++}`;
+
+  // Track the streaming message
+  const streamMsg: ChatMessage = {
+    id: messageId,
+    role: position === 'right' ? 'user' : 'assistant',
+    content: '',
+    text: '',
+    position,
+    streaming: true,
+    createdAt: new Date().toISOString(),
+  };
+  chatMessages.push(streamMsg);
+
   const message: ChatStreamStartType = {
     type: 'chatStreamStart',
     id: currentChatId,
@@ -4706,6 +4843,13 @@ chatFn.startStream = function startStream(position: 'left' | 'right' = 'left'): 
 chatFn.appendChunk = function appendChunk(messageId: string, chunk: string): void {
   if (currentChatId === null) {
     throw new Error('chat.appendChunk() called outside of a chat session');
+  }
+
+  // Update the tracked message
+  const msg = chatMessages.find((m) => m.id === messageId);
+  if (msg) {
+    msg.content = (msg.content || '') + chunk;
+    msg.text = (msg.text || '') + chunk;
   }
 
   const message: ChatStreamChunkType = {
@@ -4723,6 +4867,12 @@ chatFn.completeStream = function completeStream(messageId: string): void {
     throw new Error('chat.completeStream() called outside of a chat session');
   }
 
+  // Update the tracked message
+  const msg = chatMessages.find((m) => m.id === messageId);
+  if (msg) {
+    msg.streaming = false;
+  }
+
   const message: ChatStreamCompleteType = {
     type: 'chatStreamComplete',
     id: currentChatId,
@@ -4737,11 +4887,34 @@ chatFn.clear = function clear(): void {
     throw new Error('chat.clear() called outside of a chat session');
   }
 
+  // Clear tracked messages
+  chatMessages = [];
+
   const message: ChatClearType = {
     type: 'chatClear',
     id: currentChatId,
   };
   send(message);
+};
+
+// Helper: Get messages as AI SDK CoreMessages
+chatFn.getMessages = function getMessages(): CoreMessage[] {
+  return chatMessages.map(toCoreMessage);
+};
+
+// Helper: Get full chat result
+chatFn.getResult = function getResult(): ChatResult {
+  const userMsgs = chatMessages.filter((m) => m.role === 'user' || m.position === 'right');
+  const assistantMsgs = chatMessages.filter((m) => m.role === 'assistant' || (m.position === 'left' && m.role !== 'system'));
+
+  return {
+    messages: chatMessages.map(toCoreMessage),
+    uiMessages: chatMessages,
+    lastUserMessage: userMsgs[userMsgs.length - 1]?.content || userMsgs[userMsgs.length - 1]?.text || '',
+    lastAssistantMessage: assistantMsgs[assistantMsgs.length - 1]?.content || assistantMsgs[assistantMsgs.length - 1]?.text || '',
+    model: assistantMsgs[assistantMsgs.length - 1]?.model,
+    action: 'escape',
+  };
 };
 
 // Expose as global
