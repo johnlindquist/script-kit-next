@@ -1258,16 +1258,13 @@ fn get_visible_display_bounds(x: i32, y: i32) -> Bounds {
             return get_visible_display_bounds_fallback(x, y);
         }
 
-        // CRITICAL: Use the PRIMARY screen (screens[0]) for coordinate conversion, NOT mainScreen.
-        // - mainScreen: The screen with the currently focused window (changes with focus!)
-        // - screens[0]: The primary screen where Cocoa's coordinate origin (0,0) is located
-        //
-        // Cocoa coordinates have origin at bottom-left of PRIMARY screen.
-        // If we use mainScreen (which can change when Script Kit activates), the coordinate
-        // conversion breaks for windows on other displays, causing incorrect tiling bounds.
-        let primary_screen: *mut Object = msg_send![screens, objectAtIndex: 0usize];
-        let primary_frame: CGRect = msg_send![primary_screen, frame];
-        let primary_height = primary_frame.size.height;
+        // Get the main screen height for coordinate conversion (do this once outside the loop)
+        let main_screen: *mut Object = msg_send![nsscreen_class, mainScreen];
+        let main_frame: CGRect = msg_send![main_screen, frame];
+        let main_height = main_frame.size.height;
+
+        // Convert CG y to Cocoa y (once, outside the loop)
+        let cocoa_y = main_height - y as f64;
 
         // Find the screen containing the point
         for i in 0..screen_count {
@@ -1276,17 +1273,8 @@ fn get_visible_display_bounds(x: i32, y: i32) -> Bounds {
                 continue;
             }
 
-            // Get the full frame (in Cocoa coordinates - origin at bottom-left of primary)
+            // Get the full frame (in Cocoa coordinates - origin at bottom-left)
             let frame: CGRect = msg_send![screen, frame];
-
-            // Convert point to Cocoa coordinates for comparison
-            // Cocoa Y increases upward, CoreGraphics Y increases downward
-            // CG origin is at top-left of primary screen
-            // Cocoa origin is at bottom-left of primary screen
-            // We need to check if (x, y) in CG coords falls within this screen
-
-            // Convert CG y to Cocoa y using PRIMARY screen height
-            let cocoa_y = primary_height - y as f64;
 
             // Check if point is within this screen's frame
             if (x as f64) >= frame.origin.x
@@ -1298,10 +1286,10 @@ fn get_visible_display_bounds(x: i32, y: i32) -> Bounds {
                 let visible_frame: CGRect = msg_send![screen, visibleFrame];
 
                 // Convert Cocoa coordinates back to CoreGraphics coordinates
-                // CG origin is at top-left of PRIMARY screen
-                // Cocoa origin.y is distance from bottom of PRIMARY screen
-                // CG y = primary_height - (cocoa_y + height)
-                let cg_y = primary_height - (visible_frame.origin.y + visible_frame.size.height);
+                // CG origin is at top-left of main screen
+                // Cocoa origin.y is distance from bottom of main screen
+                // CG y = main_height - (cocoa_y + height)
+                let cg_y = main_height - (visible_frame.origin.y + visible_frame.size.height);
 
                 debug!(
                     screen_index = i,

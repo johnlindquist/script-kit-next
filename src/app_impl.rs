@@ -706,6 +706,9 @@ impl ScriptListApp {
                                     }
 
                                     // Main menu: handle list navigation + input history
+                                    let (grouped_items, _) = this.get_grouped_results_cached();
+                                    let total_items = grouped_items.len();
+
                                     if key == "up" || key == "arrowup" {
                                         // Input history: only when filter empty AND at top of list
                                         if this.filter_text.is_empty() && this.selected_index == 0 {
@@ -735,8 +738,13 @@ impl ScriptListApp {
                                                 return;
                                             }
                                         }
-                                        // Normal up navigation (use move_selection_up to skip headers)
-                                        this.move_selection_up(cx);
+                                        // Normal up navigation
+                                        if this.selected_index > 0 {
+                                            this.selected_index -= 1;
+                                            this.main_list_state
+                                                .scroll_to_reveal_item(this.selected_index);
+                                            cx.notify();
+                                        }
                                     } else if key == "down" || key == "arrowdown" {
                                         // Down during history navigation returns to newer entries
                                         if this.input_history.current_index().is_some() {
@@ -786,8 +794,13 @@ impl ScriptListApp {
                                                 return;
                                             }
                                         }
-                                        // Normal down navigation (use move_selection_down to skip headers)
-                                        this.move_selection_down(cx);
+                                        // Normal down navigation
+                                        if this.selected_index + 1 < total_items {
+                                            this.selected_index += 1;
+                                            this.main_list_state
+                                                .scroll_to_reveal_item(this.selected_index);
+                                            cx.notify();
+                                        }
                                     }
                                     cx.stop_propagation();
                                 }
