@@ -2108,10 +2108,13 @@ impl ScriptListApp {
                 let key_char = event.keystroke.key_char.as_deref();
                 let has_cmd = event.keystroke.modifiers.platform;
 
+                let modifiers = &event.keystroke.modifiers;
+
                 // Route keys to actions dialog first if it's open
                 match this.route_key_to_actions_dialog(
                     &key_str,
                     key_char,
+                    modifiers,
                     ActionsDialogHost::FileSearch,
                     window,
                     cx,
