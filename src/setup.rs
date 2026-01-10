@@ -33,6 +33,10 @@ const EMBEDDED_PACKAGE_JSON: &str = r#"{
 /// Embedded GUIDE.md comprehensive user guide
 const EMBEDDED_GUIDE_MD: &str = include_str!("../kit-init/GUIDE.md");
 
+/// Embedded CleanShot X extension (built-in extension that ships with the app)
+const EMBEDDED_CLEANSHOT_EXTENSION: &str =
+    include_str!("../kit-init/extensions/cleanshot/main.md");
+
 /// Embedded AGENTS.md guide for AI agents writing user scripts
 const EMBEDDED_AGENTS_MD: &str = r###"# Script Kit User Scripts Guide
 
@@ -987,6 +991,8 @@ pub fn ensure_kit_setup() -> SetupResult {
         kit_dir.join("kit").join("main").join("scripts"),
         kit_dir.join("kit").join("main").join("extensions"),
         kit_dir.join("kit").join("main").join("agents"),
+        // Built-in CleanShot extension kit
+        kit_dir.join("kit").join("cleanshot").join("extensions"),
         kit_dir.join("sdk"),
         kit_dir.join("db"),
         kit_dir.join("logs"),
@@ -1000,6 +1006,20 @@ pub fn ensure_kit_setup() -> SetupResult {
     // App-managed: SDK (refresh if changed)
     let sdk_path = kit_dir.join("sdk").join("kit-sdk.ts");
     write_string_if_changed(&sdk_path, EMBEDDED_SDK, &mut warnings, "sdk/kit-sdk.ts");
+
+    // App-managed: Built-in CleanShot X extension (refresh if changed)
+    // This extension ships with the app and provides screenshot/recording commands
+    let cleanshot_path = kit_dir
+        .join("kit")
+        .join("cleanshot")
+        .join("extensions")
+        .join("main.md");
+    write_string_if_changed(
+        &cleanshot_path,
+        EMBEDDED_CLEANSHOT_EXTENSION,
+        &mut warnings,
+        "kit/cleanshot/extensions/main.md",
+    );
 
     // User-owned: config.ts (only create if missing)
     // Located in kit/ directory so it can be version controlled with user scripts
@@ -2053,6 +2073,31 @@ mod tests {
         assert!(
             claude_content.contains("NOT the original Script Kit"),
             "CLAUDE.md should warn about v1 vs v2"
+        );
+
+        // Verify CleanShot X built-in extension
+        let cleanshot_dir = kit_dir.join("cleanshot").join("extensions");
+        assert!(
+            cleanshot_dir.exists(),
+            "kit/cleanshot/extensions/ should exist"
+        );
+        let cleanshot_extension = cleanshot_dir.join("main.md");
+        assert!(
+            cleanshot_extension.exists(),
+            "kit/cleanshot/extensions/main.md should exist"
+        );
+        let cleanshot_content = fs::read_to_string(&cleanshot_extension).unwrap();
+        assert!(
+            cleanshot_content.contains("CleanShot X"),
+            "CleanShot extension should have CleanShot X title"
+        );
+        assert!(
+            cleanshot_content.contains("cleanshot://capture-area"),
+            "CleanShot extension should have Capture Area command"
+        );
+        assert!(
+            cleanshot_content.contains("cleanshot://record-screen"),
+            "CleanShot extension should have Record Screen command"
         );
 
         std::env::remove_var(SK_PATH_ENV);

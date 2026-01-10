@@ -11,7 +11,9 @@ impl ScriptListApp {
         let scripts_elapsed = load_start.elapsed();
 
         let scriptlets_start = std::time::Instant::now();
-        let scriptlets = scripts::read_scriptlets();
+        // Use load_scriptlets() to load from ALL kits (kit/*/extensions/*.md)
+        // This includes built-in extensions like CleanShot and user extensions
+        let scriptlets = scripts::load_scriptlets();
         let scriptlets_elapsed = scriptlets_start.elapsed();
 
         let theme = std::sync::Arc::new(theme::load_theme());
@@ -40,12 +42,12 @@ impl ScriptListApp {
         ));
         logging::log(
             "APP",
-            &format!("Loaded {} scripts from ~/.scriptkit/scripts", scripts.len()),
+            &format!("Loaded {} scripts from ~/.scriptkit/kit/*/scripts", scripts.len()),
         );
         logging::log(
             "APP",
             &format!(
-                "Loaded {} scriptlets from ~/.scriptkit/scriptlets/scriptlets.md",
+                "Loaded {} scriptlets from ~/.scriptkit/kit/*/extensions",
                 scriptlets.len()
             ),
         );
@@ -1163,7 +1165,8 @@ impl ScriptListApp {
 
     fn refresh_scripts(&mut self, cx: &mut Context<Self>) {
         self.scripts = scripts::read_scripts();
-        self.scriptlets = scripts::read_scriptlets();
+        // Use load_scriptlets() to load from ALL kits (kit/*/extensions/*.md)
+        self.scriptlets = scripts::load_scriptlets();
         self.invalidate_filter_cache();
         self.invalidate_grouped_cache();
 

@@ -31,7 +31,7 @@ use tracing::{debug, error, info, instrument, warn};
 // Import from crate (these are declared in main.rs)
 use crate::keyboard_monitor::{KeyEvent, KeyboardMonitor, KeyboardMonitorError};
 use crate::keyword_matcher::KeywordMatcher;
-use crate::scripts::read_scriptlets;
+use crate::scripts::load_scriptlets;
 use crate::template_variables::substitute_variables;
 use crate::text_injector::{TextInjector, TextInjectorConfig};
 
@@ -123,7 +123,7 @@ impl KeywordManager {
         }
     }
 
-    /// Load scriptlets with keyword metadata from ~/.scriptkit/scriptlets/
+    /// Load scriptlets with keyword metadata from ~/.scriptkit/kit/*/extensions/
     ///
     /// This scans all markdown files and registers any scriptlet that has
     /// an `keyword` metadata field as a trigger.
@@ -131,7 +131,8 @@ impl KeywordManager {
     pub fn load_scriptlets(&mut self) -> Result<usize> {
         info!("Loading scriptlets with keyword triggers");
 
-        let scriptlets = read_scriptlets();
+        // Use load_scriptlets() to load from ALL kits (kit/*/extensions/*.md)
+        let scriptlets = load_scriptlets();
         let mut loaded_count = 0;
 
         for scriptlet in scriptlets {
