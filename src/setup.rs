@@ -39,6 +39,10 @@ const EMBEDDED_CLEANSHOT_EXTENSION: &str = include_str!("../kit-init/extensions/
 /// Embedded 1Password extension (built-in extension that ships with the app)
 const EMBEDDED_1PASSWORD_EXTENSION: &str = include_str!("../kit-init/extensions/1password/main.md");
 
+/// Embedded Quick Links extension (built-in extension that ships with the app)
+const EMBEDDED_QUICKLINKS_EXTENSION: &str =
+    include_str!("../kit-init/extensions/quicklinks/main.md");
+
 /// Embedded AGENTS.md guide for AI agents writing user scripts
 const EMBEDDED_AGENTS_MD: &str = r###"# Script Kit User Scripts Guide
 
@@ -997,6 +1001,8 @@ pub fn ensure_kit_setup() -> SetupResult {
         kit_dir.join("kit").join("cleanshot").join("extensions"),
         // Built-in 1Password extension kit
         kit_dir.join("kit").join("1password").join("extensions"),
+        // Built-in Quick Links extension kit
+        kit_dir.join("kit").join("quicklinks").join("extensions"),
         kit_dir.join("sdk"),
         kit_dir.join("db"),
         kit_dir.join("logs"),
@@ -1037,6 +1043,20 @@ pub fn ensure_kit_setup() -> SetupResult {
         EMBEDDED_1PASSWORD_EXTENSION,
         &mut warnings,
         "kit/1password/extensions/main.md",
+    );
+
+    // App-managed: Built-in Quick Links extension (refresh if changed)
+    // This extension ships with the app and provides quick access to common websites
+    let quicklinks_path = kit_dir
+        .join("kit")
+        .join("quicklinks")
+        .join("extensions")
+        .join("main.md");
+    write_string_if_changed(
+        &quicklinks_path,
+        EMBEDDED_QUICKLINKS_EXTENSION,
+        &mut warnings,
+        "kit/quicklinks/extensions/main.md",
     );
 
     // User-owned: config.ts (only create if missing)
@@ -2141,6 +2161,31 @@ mod tests {
         assert!(
             onepassword_content.contains("op whoami"),
             "1Password extension should have whoami command"
+        );
+
+        // Verify Quick Links built-in extension
+        let quicklinks_dir = kit_dir.join("quicklinks").join("extensions");
+        assert!(
+            quicklinks_dir.exists(),
+            "kit/quicklinks/extensions/ should exist"
+        );
+        let quicklinks_extension = quicklinks_dir.join("main.md");
+        assert!(
+            quicklinks_extension.exists(),
+            "kit/quicklinks/extensions/main.md should exist"
+        );
+        let quicklinks_content = fs::read_to_string(&quicklinks_extension).unwrap();
+        assert!(
+            quicklinks_content.contains("Quick Links"),
+            "Quick Links extension should have Quick Links title"
+        );
+        assert!(
+            quicklinks_content.contains("https://github.com"),
+            "Quick Links extension should have GitHub link"
+        );
+        assert!(
+            quicklinks_content.contains("https://www.google.com"),
+            "Quick Links extension should have Google link"
         );
 
         std::env::remove_var(SK_PATH_ENV);

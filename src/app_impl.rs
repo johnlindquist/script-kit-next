@@ -249,6 +249,7 @@ impl ScriptListApp {
             file_search_loading: false,
             file_search_debounce_task: None,
             file_search_current_dir: None,
+            file_search_frozen_filter: None,
             file_search_actions_path: None,
             show_actions_popup: false,
             actions_dialog: None,
@@ -346,12 +347,14 @@ impl ScriptListApp {
                 }
                 history
             },
-            // API key configuration state - starts as None (no configuration in progress)
+            // API key configuration state
             pending_api_key_config: None,
             // API key completion channel - for EnvPrompt callback to signal completion
             // The channel is created here and both ends are stored
             api_key_completion_sender: api_key_tx,
             api_key_completion_receiver: api_key_rx,
+            // Navigation tracking: starts false, set to true when opening built-in views from main menu
+            opened_from_main_menu: false,
         };
 
         // Build initial alias/shortcut registries (conflicts logged, not shown via HUD on startup)
@@ -708,6 +711,9 @@ impl ScriptListApp {
                                     }
 
                                     // Main menu: handle list navigation + input history
+                                    let (grouped_items, _) = this.get_grouped_results_cached();
+                                    let total_items = grouped_items.len();
+
                                     if key == "up" || key == "arrowup" {
                                         // Input history: only when filter empty AND at top of list
                                         if this.filter_text.is_empty() && this.selected_index == 0 {
@@ -737,8 +743,13 @@ impl ScriptListApp {
                                                 return;
                                             }
                                         }
-                                        // Normal up navigation (use move_selection_up to skip headers)
-                                        this.move_selection_up(cx);
+                                        // Normal up navigation
+                                        if this.selected_index > 0 {
+                                            this.selected_index -= 1;
+                                            this.main_list_state
+                                                .scroll_to_reveal_item(this.selected_index);
+                                            cx.notify();
+                                        }
                                     } else if key == "down" || key == "arrowdown" {
                                         // Down during history navigation returns to newer entries
                                         if this.input_history.current_index().is_some() {
@@ -788,8 +799,13 @@ impl ScriptListApp {
                                                 return;
                                             }
                                         }
-                                        // Normal down navigation (use move_selection_down to skip headers)
-                                        this.move_selection_down(cx);
+                                        // Normal down navigation
+                                        if this.selected_index + 1 < total_items {
+                                            this.selected_index += 1;
+                                            this.main_list_state
+                                                .scroll_to_reveal_item(this.selected_index);
+                                            cx.notify();
+                                        }
                                     }
                                     cx.stop_propagation();
                                 }
@@ -2076,6 +2092,17 @@ impl ScriptListApp {
                 selected_index,
             } => {
                 if *query != new_text {
+                    // Get old filter BEFORE updating query (for frozen filter during transitions)
+                    let old_filter = if let Some(old_parsed) =
+                        crate::file_search::parse_directory_path(query)
+                    {
+                        old_parsed.filter
+                    } else if !query.is_empty() {
+                        Some(query.clone())
+                    } else {
+                        None
+                    };
+
                     // Update query immediately for responsive UI
                     *query = new_text.clone();
                     *selected_index = 0;
@@ -2092,14 +2119,13 @@ impl ScriptListApp {
 
                         if dir_changed {
                             // Directory changed - need to load new directory contents
-                            // Clear old results to prevent flash of wrong directory items
-                            // The render will show "Loading..." when loading with empty results
-                            self.cached_file_results.clear();
+                            // DON'T clear results - keep old results with frozen filter
+                            // This prevents visual flash during directory transitions
+                            // Freeze the OLD filter so old results display correctly
+                            self.file_search_frozen_filter = Some(old_filter);
                             self.file_search_current_dir = Some(parsed.directory.clone());
                             self.file_search_loading = true;
-                            // Reset scroll immediately to prevent stale scroll position
-                            self.file_search_scroll_handle
-                                .scroll_to_item(0, ScrollStrategy::Top);
+                            // Don't reset scroll - keep position stable during transition
                             cx.notify();
 
                             let dir_to_list = parsed.directory.clone();
@@ -2124,6 +2150,8 @@ impl ScriptListApp {
                                                 this.update(cx, |app, cx| {
                                                     app.cached_file_results = results;
                                                     app.file_search_loading = false;
+                                                    // Clear frozen filter - now using real results
+                                                    app.file_search_frozen_filter = None;
                                                     // Reset selected_index when async results arrive
                                                     // to prevent bounds issues if results shrink
                                                     if let AppView::FileSearchView {
@@ -2148,7 +2176,8 @@ impl ScriptListApp {
                             self.file_search_debounce_task = Some(task);
                         } else {
                             // Same directory - just filter existing results (instant!)
-                            // Filtering is done in render based on query
+                            // Clear any frozen filter since we're not in transition
+                            self.file_search_frozen_filter = None;
                             self.file_search_loading = false;
                             cx.notify();
                         }
@@ -2812,6 +2841,7 @@ impl ScriptListApp {
         &mut self,
         key: &str,
         key_char: Option<&str>,
+        modifiers: &gpui::Modifiers,
         host: ActionsDialogHost,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -2873,14 +2903,94 @@ impl ScriptListApp {
             return ActionsRoute::Handled;
         }
 
-        // Check for printable character input
-        if let Some(ch) = printable_char(key_char) {
-            dialog.update(cx, |d, cx| d.handle_char(ch, cx));
-            return ActionsRoute::Handled;
+        // Check for printable character input (only when no modifiers are held)
+        // This prevents Cmd+E from being treated as typing 'e' into the search
+        if !modifiers.platform && !modifiers.control && !modifiers.alt {
+            if let Some(ch) = printable_char(key_char) {
+                dialog.update(cx, |d, cx| d.handle_char(ch, cx));
+                return ActionsRoute::Handled;
+            }
+        }
+
+        // Check if keystroke matches any action shortcut in the dialog
+        // This allows Cmd+E, Cmd+L, etc. to execute the corresponding action
+        let key_lower = key.to_lowercase();
+        let keystroke_shortcut = shortcuts::keystroke_to_shortcut(&key_lower, modifiers);
+
+        // Read dialog actions and look for matching shortcut
+        // First pass: find the match (if any) while holding the borrow
+        let matched_action_id: Option<String> = {
+            let dialog_ref = dialog.read(cx);
+            dialog_ref.actions.iter().find_map(|action| {
+                action.shortcut.as_ref().and_then(|display_shortcut| {
+                    let normalized = Self::normalize_display_shortcut(display_shortcut);
+                    if normalized == keystroke_shortcut {
+                        Some(action.id.clone())
+                    } else {
+                        None
+                    }
+                })
+            })
+        }; // dialog_ref borrow released here
+
+        // Second pass: execute the action if found (borrow released)
+        if let Some(action_id) = matched_action_id {
+            logging::log(
+                "ACTIONS",
+                &format!(
+                    "Actions dialog shortcut matched: {} -> {} (host={:?})",
+                    keystroke_shortcut, action_id, host
+                ),
+            );
+
+            // Built-in actions always close the dialog
+            self.close_actions_popup(host, window, cx);
+
+            return ActionsRoute::Execute { action_id };
         }
 
         // Modal behavior: swallow all other keys while popup is open
         ActionsRoute::Handled
+    }
+
+    /// Convert a display shortcut (⌘⇧E) to normalized form (cmd+shift+e)
+    fn normalize_display_shortcut(display: &str) -> String {
+        let mut parts: Vec<&str> = Vec::new();
+        let mut key_char: Option<char> = None;
+
+        for ch in display.chars() {
+            match ch {
+                '⌘' => parts.push("cmd"),
+                '⌃' => parts.push("ctrl"),
+                '⌥' => parts.push("alt"),
+                '⇧' => parts.push("shift"),
+                '↵' => key_char = Some('e'), // Enter - map to 'enter' below
+                '⎋' => key_char = Some('`'), // Escape placeholder
+                '⇥' => key_char = Some('t'), // Tab placeholder
+                '⌫' => key_char = Some('b'), // Backspace placeholder
+                _ => key_char = Some(ch),
+            }
+        }
+
+        // Sort modifiers alphabetically (matches keystroke_to_shortcut order)
+        parts.sort();
+
+        let mut result = parts.join("+");
+        if let Some(k) = key_char {
+            if !result.is_empty() {
+                result.push('+');
+            }
+            // Handle special keys
+            match k {
+                'e' if display.contains('↵') => result.push_str("enter"),
+                '`' if display.contains('⎋') => result.push_str("escape"),
+                't' if display.contains('⇥') => result.push_str("tab"),
+                'b' if display.contains('⌫') => result.push_str("backspace"),
+                _ => result.push_str(&k.to_lowercase().to_string()),
+            }
+        }
+
+        result
     }
 
     /// Close the actions popup and restore focus based on host type.
@@ -3716,6 +3826,7 @@ export default {
                 shortcut: None,
                 typed_metadata: None,
                 schema: None,
+                kit_name: None,
             };
 
             self.execute_interactive(&script, cx);
@@ -3939,6 +4050,7 @@ export default {
                 shortcut: None,
                 typed_metadata: None,
                 schema: None,
+                kit_name: None,
             };
 
             self.execute_interactive(&script, cx);
@@ -4196,6 +4308,38 @@ export default {
             cx.hide();
         }
         logging::log("VISIBILITY", "=== Window closed ===");
+    }
+
+    /// Go back to main menu or close window depending on how the view was opened.
+    ///
+    /// If the current built-in view was opened from the main menu, this returns to the
+    /// main menu (ScriptList). If it was opened directly via hotkey or protocol command,
+    /// this closes the window entirely.
+    ///
+    /// This provides consistent UX: pressing ESC always "goes back" one step.
+    fn go_back_or_close(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.opened_from_main_menu {
+            logging::log("KEY", "ESC - returning to main menu (opened from main menu)");
+            // Return to main menu
+            self.current_view = AppView::ScriptList;
+            self.filter_text.clear();
+            self.selected_index = 0;
+            // Reset the flag since we're now in main menu
+            self.opened_from_main_menu = false;
+            // Sync input and reset placeholder to default
+            self.gpui_input_state.update(cx, |state, cx| {
+                state.set_value("", window, cx);
+                state.set_selection(0, 0, window, cx);
+                state.set_placeholder(DEFAULT_PLACEHOLDER.to_string(), window, cx);
+            });
+            self.update_window_size_deferred(window, cx);
+            self.pending_focus = Some(FocusTarget::MainFilter);
+            self.focused_input = FocusedInput::MainFilter;
+            cx.notify();
+        } else {
+            logging::log("KEY", "ESC - closing window (opened directly via hotkey/protocol)");
+            self.close_and_reset_window(cx);
+        }
     }
 
     /// Handle global keyboard shortcuts with configurable dismissability

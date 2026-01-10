@@ -45,6 +45,25 @@ impl ScriptListApp {
                     return;
                 }
 
+                let key_str = event.keystroke.key.to_lowercase();
+                let has_cmd = event.keystroke.modifiers.platform;
+
+                // For ScratchPadView (built-in utility): ESC returns to main menu or closes window
+                // This is different from EditorPrompt (SDK prompt) which doesn't respond to ESC
+                if matches!(this.current_view, AppView::ScratchPadView { .. }) {
+                    if key_str == "escape" && !this.show_actions_popup {
+                        logging::log("KEY", "ESC in ScratchPadView");
+                        this.go_back_or_close(window, cx);
+                        return;
+                    }
+
+                    if has_cmd && key_str == "w" {
+                        logging::log("KEY", "Cmd+W - closing window");
+                        this.close_and_reset_window(cx);
+                        return;
+                    }
+                }
+
                 // Global shortcuts (Cmd+W only - editor is NOT dismissable with ESC)
                 // Note: When actions popup is open, ESC should close the popup
                 if !this.show_actions_popup
@@ -64,10 +83,13 @@ impl ScriptListApp {
                     return;
                 }
 
+                let modifiers = &event.keystroke.modifiers;
+
                 // Route to shared actions dialog handler (modal when open)
                 match this.route_key_to_actions_dialog(
                     key,
                     key_char,
+                    modifiers,
                     ActionsDialogHost::EditorPrompt,
                     window,
                     cx,
