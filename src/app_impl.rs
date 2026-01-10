@@ -1631,9 +1631,11 @@ impl ScriptListApp {
     /// P1: Invalidate grouped results cache (call when scripts/scriptlets/apps change)
     fn invalidate_grouped_cache(&mut self) {
         logging::log_debug("CACHE", "Grouped cache INVALIDATED");
+        // Set grouped_cache_key to a sentinel that won't match computed_filter_text.
+        // This ensures the cache check (computed_filter_text == grouped_cache_key) fails,
+        // forcing a recompute on the next get_grouped_results_cached() call.
+        // DO NOT set computed_filter_text here - that would cause both to match (false cache HIT).
         self.grouped_cache_key = String::from("\0_INVALIDATED_\0");
-        // Also reset computed_filter_text to force recompute
-        self.computed_filter_text = String::from("\0_INVALIDATED_\0");
     }
 
     /// Get the currently selected search result, correctly mapping from grouped index.
