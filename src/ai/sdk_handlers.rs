@@ -312,9 +312,13 @@ pub fn try_handle_ai_message(msg: &Message) -> Option<Message> {
             *permanent,
         )),
 
-        Message::AiGetStreamingStatus { request_id, chat_id } => Some(
-            handle_ai_get_streaming_status(request_id.clone(), chat_id.clone()),
-        ),
+        Message::AiGetStreamingStatus {
+            request_id,
+            chat_id,
+        } => Some(handle_ai_get_streaming_status(
+            request_id.clone(),
+            chat_id.clone(),
+        )),
 
         // These need UI thread - return None
         Message::AiFocus { .. }

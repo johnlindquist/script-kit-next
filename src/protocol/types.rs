@@ -1309,12 +1309,7 @@ pub struct AiChatInfo {
 
 impl AiChatInfo {
     /// Create a new AiChatInfo with required fields
-    pub fn new(
-        id: String,
-        title: String,
-        model_id: String,
-        provider: String,
-    ) -> Self {
+    pub fn new(id: String, title: String, model_id: String, provider: String) -> Self {
         let now = chrono::Utc::now().to_rfc3339();
         AiChatInfo {
             id,

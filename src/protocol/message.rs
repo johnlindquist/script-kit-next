@@ -936,7 +936,6 @@ pub enum Message {
     // ============================================================
     // AI CHAT SDK API
     // ============================================================
-
     /// Check if AI window is open (SDK → App)
     #[serde(rename = "aiIsOpen")]
     AiIsOpen {
