@@ -235,6 +235,7 @@ impl ScriptListApp {
             gpui_input_state,
             gpui_input_focused: false,
             gpui_input_subscriptions: vec![gpui_input_subscription],
+            bounds_subscription: None, // Set later after window setup
             suppress_filter_events: false,
             pending_filter_sync: false,
             pending_placeholder: None,
