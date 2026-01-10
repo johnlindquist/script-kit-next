@@ -86,14 +86,23 @@ pub enum WindowActionType {
     TileBottomLeft,
     TileBottomRight,
 
-    // Thirds positions
+    // Horizontal thirds positions
     TileLeftThird,
     TileCenterThird,
     TileRightThird,
 
-    // Two-thirds positions
+    // Vertical thirds positions
+    TileTopThird,
+    TileMiddleThird,
+    TileBottomThird,
+
+    // Horizontal two-thirds positions
     TileFirstTwoThirds,
     TileLastTwoThirds,
+
+    // Vertical two-thirds positions
+    TileTopTwoThirds,
+    TileBottomTwoThirds,
 
     // Centered positions
     TileCenter,
@@ -835,7 +844,35 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         "⫾",
     ));
 
-    // --- Two-thirds positions ---
+    // --- Vertical thirds positions ---
+    entries.push(BuiltInEntry::new_with_icon(
+        "builtin-tile-top-third",
+        "Top Third",
+        "Move window to top third of screen",
+        vec!["top", "third", "tile", "window", "upper", "vertical"],
+        BuiltInFeature::WindowAction(WindowActionType::TileTopThird),
+        "⬔",
+    ));
+
+    entries.push(BuiltInEntry::new_with_icon(
+        "builtin-tile-middle-third",
+        "Middle Third",
+        "Move window to middle third of screen",
+        vec!["middle", "center", "third", "tile", "window", "vertical"],
+        BuiltInFeature::WindowAction(WindowActionType::TileMiddleThird),
+        "▬",
+    ));
+
+    entries.push(BuiltInEntry::new_with_icon(
+        "builtin-tile-bottom-third",
+        "Bottom Third",
+        "Move window to bottom third of screen",
+        vec!["bottom", "third", "tile", "window", "lower", "vertical"],
+        BuiltInFeature::WindowAction(WindowActionType::TileBottomThird),
+        "⬕",
+    ));
+
+    // --- Horizontal two-thirds positions ---
     entries.push(BuiltInEntry::new_with_icon(
         "builtin-tile-first-two-thirds",
         "First Two Thirds",
@@ -852,6 +889,25 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         vec!["last", "two", "thirds", "right", "tile", "window", "wide"],
         BuiltInFeature::WindowAction(WindowActionType::TileLastTwoThirds),
         "◪",
+    ));
+
+    // --- Vertical two-thirds positions ---
+    entries.push(BuiltInEntry::new_with_icon(
+        "builtin-tile-top-two-thirds",
+        "Top Two Thirds",
+        "Move window to top two-thirds of screen",
+        vec!["top", "two", "thirds", "upper", "tile", "window", "tall", "vertical"],
+        BuiltInFeature::WindowAction(WindowActionType::TileTopTwoThirds),
+        "⬒",
+    ));
+
+    entries.push(BuiltInEntry::new_with_icon(
+        "builtin-tile-bottom-two-thirds",
+        "Bottom Two Thirds",
+        "Move window to bottom two-thirds of screen",
+        vec!["bottom", "two", "thirds", "lower", "tile", "window", "tall", "vertical"],
+        BuiltInFeature::WindowAction(WindowActionType::TileBottomTwoThirds),
+        "⬓",
     ));
 
     // --- Centered positions ---

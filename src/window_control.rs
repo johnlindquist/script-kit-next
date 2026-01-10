@@ -194,19 +194,33 @@ pub enum TilePosition {
     /// Bottom-right quadrant
     BottomRight,
 
-    // Thirds positions
+    // Horizontal thirds positions
     /// Left third of the screen
     LeftThird,
-    /// Center third of the screen
+    /// Center third of the screen (horizontal)
     CenterThird,
     /// Right third of the screen
     RightThird,
 
-    // Two-thirds positions
+    // Vertical thirds positions
+    /// Top third of the screen
+    TopThird,
+    /// Middle third of the screen (vertical)
+    MiddleThird,
+    /// Bottom third of the screen
+    BottomThird,
+
+    // Horizontal two-thirds positions
     /// First two-thirds of the screen (left side)
     FirstTwoThirds,
     /// Last two-thirds of the screen (right side)
     LastTwoThirds,
+
+    // Vertical two-thirds positions
+    /// Top two-thirds of the screen
+    TopTwoThirds,
+    /// Bottom two-thirds of the screen
+    BottomTwoThirds,
 
     // Centered positions
     /// Centered on screen (60% of screen dimensions)
@@ -1365,7 +1379,9 @@ fn calculate_tile_bounds(display: &Bounds, position: TilePosition) -> Bounds {
     let half_width = display.width / 2;
     let half_height = display.height / 2;
     let third_width = display.width / 3;
+    let third_height = display.height / 3;
     let two_thirds_width = (display.width * 2) / 3;
+    let two_thirds_height = (display.height * 2) / 3;
 
     match position {
         // Half positions
@@ -1420,7 +1436,7 @@ fn calculate_tile_bounds(display: &Bounds, position: TilePosition) -> Bounds {
             height: half_height,
         },
 
-        // Thirds positions
+        // Horizontal thirds positions
         TilePosition::LeftThird => Bounds {
             x: display.x,
             y: display.y,
@@ -1440,7 +1456,27 @@ fn calculate_tile_bounds(display: &Bounds, position: TilePosition) -> Bounds {
             height: display.height,
         },
 
-        // Two-thirds positions
+        // Vertical thirds positions
+        TilePosition::TopThird => Bounds {
+            x: display.x,
+            y: display.y,
+            width: display.width,
+            height: third_height,
+        },
+        TilePosition::MiddleThird => Bounds {
+            x: display.x,
+            y: display.y + third_height as i32,
+            width: display.width,
+            height: third_height,
+        },
+        TilePosition::BottomThird => Bounds {
+            x: display.x,
+            y: display.y + two_thirds_height as i32,
+            width: display.width,
+            height: third_height,
+        },
+
+        // Horizontal two-thirds positions
         TilePosition::FirstTwoThirds => Bounds {
             x: display.x,
             y: display.y,
@@ -1452,6 +1488,20 @@ fn calculate_tile_bounds(display: &Bounds, position: TilePosition) -> Bounds {
             y: display.y,
             width: two_thirds_width,
             height: display.height,
+        },
+
+        // Vertical two-thirds positions
+        TilePosition::TopTwoThirds => Bounds {
+            x: display.x,
+            y: display.y,
+            width: display.width,
+            height: two_thirds_height,
+        },
+        TilePosition::BottomTwoThirds => Bounds {
+            x: display.x,
+            y: display.y + third_height as i32,
+            width: display.width,
+            height: two_thirds_height,
         },
 
         // Centered positions

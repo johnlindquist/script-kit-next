@@ -425,7 +425,21 @@ impl ScriptListApp {
                                 TilePosition::RightThird,
                             ),
 
-                            // Two-thirds positions
+                            // Vertical thirds positions
+                            WindowActionType::TileTopThird => window_control::tile_window(
+                                target_window.id,
+                                TilePosition::TopThird,
+                            ),
+                            WindowActionType::TileMiddleThird => window_control::tile_window(
+                                target_window.id,
+                                TilePosition::MiddleThird,
+                            ),
+                            WindowActionType::TileBottomThird => window_control::tile_window(
+                                target_window.id,
+                                TilePosition::BottomThird,
+                            ),
+
+                            // Horizontal two-thirds positions
                             WindowActionType::TileFirstTwoThirds => window_control::tile_window(
                                 target_window.id,
                                 TilePosition::FirstTwoThirds,
@@ -433,6 +447,16 @@ impl ScriptListApp {
                             WindowActionType::TileLastTwoThirds => window_control::tile_window(
                                 target_window.id,
                                 TilePosition::LastTwoThirds,
+                            ),
+
+                            // Vertical two-thirds positions
+                            WindowActionType::TileTopTwoThirds => window_control::tile_window(
+                                target_window.id,
+                                TilePosition::TopTwoThirds,
+                            ),
+                            WindowActionType::TileBottomTwoThirds => window_control::tile_window(
+                                target_window.id,
+                                TilePosition::BottomTwoThirds,
                             ),
 
                             // Centered positions
