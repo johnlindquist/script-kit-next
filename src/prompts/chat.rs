@@ -85,6 +85,9 @@ pub type ChatEscapeCallback = Arc<dyn Fn(String) + Send + Sync>;
 /// Callback type for "Continue in Chat": (prompt_id)
 pub type ChatContinueCallback = Arc<dyn Fn(String) + Send + Sync>;
 
+/// Callback type for retry: (prompt_id, message_id)
+pub type ChatRetryCallback = Arc<dyn Fn(String, String) + Send + Sync>;
+
 /// A conversation turn: user prompt + optional AI response
 #[derive(Clone, Debug)]
 pub struct ConversationTurn {
@@ -92,6 +95,63 @@ pub struct ConversationTurn {
     pub assistant_response: Option<String>,
     pub model: Option<String>,
     pub streaming: bool,
+    pub error: Option<String>,
+    pub message_id: Option<String>,
+}
+
+/// Error types for chat operations
+#[derive(Clone, Debug, PartialEq)]
+pub enum ChatErrorType {
+    NoApiKey,
+    NetworkError,
+    StreamInterrupted,
+    RateLimited,
+    InvalidModel,
+    TokenLimit,
+    Unknown,
+}
+
+impl ChatErrorType {
+    pub fn from_error_string(s: &str) -> Self {
+        let s_lower = s.to_lowercase();
+        if s_lower.contains("api key") || s_lower.contains("unauthorized") || s_lower.contains("401") {
+            ChatErrorType::NoApiKey
+        } else if s_lower.contains("network") || s_lower.contains("connection") || s_lower.contains("timeout") {
+            ChatErrorType::NetworkError
+        } else if s_lower.contains("interrupt") || s_lower.contains("abort") {
+            ChatErrorType::StreamInterrupted
+        } else if s_lower.contains("rate limit") || s_lower.contains("429") {
+            ChatErrorType::RateLimited
+        } else if s_lower.contains("model") || s_lower.contains("invalid") {
+            ChatErrorType::InvalidModel
+        } else if s_lower.contains("token") || s_lower.contains("too long") || s_lower.contains("length") {
+            ChatErrorType::TokenLimit
+        } else {
+            ChatErrorType::Unknown
+        }
+    }
+
+    pub fn display_message(&self) -> &'static str {
+        match self {
+            ChatErrorType::NoApiKey => "⚠ API key not configured. Set up your API key to continue.",
+            ChatErrorType::NetworkError => "⚠ Network error. Check your connection and try again.",
+            ChatErrorType::StreamInterrupted => "⚠ Response interrupted. Click retry to continue.",
+            ChatErrorType::RateLimited => "⚠ Rate limited. Please wait a moment and try again.",
+            ChatErrorType::InvalidModel => "⚠ Model unavailable. Using default model.",
+            ChatErrorType::TokenLimit => "⚠ Message too long. Try a shorter prompt.",
+            ChatErrorType::Unknown => "⚠ Something went wrong. Please try again.",
+        }
+    }
+
+    pub fn can_retry(&self) -> bool {
+        matches!(
+            self,
+            ChatErrorType::NetworkError
+                | ChatErrorType::StreamInterrupted
+                | ChatErrorType::RateLimited
+                | ChatErrorType::Unknown
+        )
+    }
 }
 
 /// ChatPrompt - Raycast-style chat interface
@@ -109,6 +169,7 @@ pub struct ChatPrompt {
     pub on_submit: ChatSubmitCallback,
     pub on_escape: Option<ChatEscapeCallback>,
     pub on_continue: Option<ChatContinueCallback>,
+    pub on_retry: Option<ChatRetryCallback>,
     pub theme: Arc<theme::Theme>,
     pub scroll_handle: ScrollHandle,
     prompt_colors: theme::PromptColors,
@@ -151,6 +212,7 @@ impl ChatPrompt {
             on_submit,
             on_escape: None,
             on_continue: None,
+            on_retry: None,
             theme,
             scroll_handle: ScrollHandle::new(),
             prompt_colors,
@@ -179,6 +241,12 @@ impl ChatPrompt {
     /// Set the continue callback
     pub fn with_continue_callback(mut self, callback: ChatContinueCallback) -> Self {
         self.on_continue = Some(callback);
+        self
+    }
+
+    /// Set the retry callback
+    pub fn with_retry_callback(mut self, callback: ChatRetryCallback) -> Self {
+        self.on_retry = Some(callback);
         self
     }
 
@@ -242,6 +310,26 @@ impl ChatPrompt {
     pub fn clear_messages(&mut self, cx: &mut Context<Self>) {
         self.messages.clear();
         self.streaming_message_id = None;
+        cx.notify();
+    }
+
+    /// Set an error on a message (typically on streaming failure)
+    pub fn set_message_error(&mut self, message_id: &str, error: String, cx: &mut Context<Self>) {
+        if let Some(msg) = self.messages.iter_mut().rev().find(|m| m.id.as_deref() == Some(message_id)) {
+            msg.error = Some(error);
+            msg.streaming = false; // Stop streaming indicator
+        }
+        if self.streaming_message_id.as_deref() == Some(message_id) {
+            self.streaming_message_id = None;
+        }
+        cx.notify();
+    }
+
+    /// Clear error from a message (before retry)
+    pub fn clear_message_error(&mut self, message_id: &str, cx: &mut Context<Self>) {
+        if let Some(msg) = self.messages.iter_mut().rev().find(|m| m.id.as_deref() == Some(message_id)) {
+            msg.error = None;
+        }
         cx.notify();
     }
 
@@ -611,6 +699,8 @@ impl ChatPrompt {
                     assistant_response: None,
                     model: None,
                     streaming: false,
+                    error: None,
+                    message_id: msg.id.clone(),
                 };
 
                 // Look for the next assistant response
@@ -620,6 +710,8 @@ impl ChatPrompt {
                         turn.assistant_response = Some(next_msg.get_content().to_string());
                         turn.model = next_msg.model.clone();
                         turn.streaming = next_msg.streaming;
+                        turn.error = next_msg.error.clone();
+                        turn.message_id = next_msg.id.clone().or(turn.message_id);
                         i += 1;
                     }
                 }
@@ -633,6 +725,8 @@ impl ChatPrompt {
                     assistant_response: Some(msg.get_content().to_string()),
                     model: msg.model.clone(),
                     streaming: msg.streaming,
+                    error: msg.error.clone(),
+                    message_id: msg.id.clone(),
                 };
                 turns.push(turn);
             }
@@ -649,6 +743,9 @@ impl ChatPrompt {
 
         let container_bg = rgba((colors.code_bg << 8) | 0x60);
         let copy_hover_bg = rgba((colors.code_bg << 8) | 0x80);
+        let error_bg = rgba(0xEF44_4440); // Red with transparency
+        let retry_hover_bg = rgba((colors.accent_color << 8) | 0x40);
+        let has_retry_callback = self.on_retry.is_some();
 
         let mut content = div().flex().flex_col().gap(px(4.0));
 
@@ -663,8 +760,52 @@ impl ChatPrompt {
             );
         }
 
-        // AI response
-        if let Some(ref response) = turn.assistant_response {
+        // Error state - show error message with optional retry button
+        if let Some(ref error_str) = turn.error {
+            let error_type = ChatErrorType::from_error_string(error_str);
+            let error_message = error_type.display_message();
+            let can_retry = error_type.can_retry() && has_retry_callback;
+
+            let mut error_row = div()
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap(px(8.0))
+                .child(
+                    div()
+                        .text_sm()
+                        .text_color(rgb(0xEF4444)) // Red
+                        .child(error_message.to_string()),
+                );
+
+            // Add retry button if applicable
+            if can_retry {
+                let message_id = turn.message_id.clone();
+                error_row = error_row.child(
+                    div()
+                        .id(format!("retry-turn-{}", turn_index))
+                        .px(px(8.0))
+                        .py(px(4.0))
+                        .bg(error_bg)
+                        .rounded(px(4.0))
+                        .cursor_pointer()
+                        .hover(|s| s.bg(retry_hover_bg))
+                        .text_xs()
+                        .font_weight(gpui::FontWeight::MEDIUM)
+                        .text_color(rgb(colors.text_primary))
+                        .child("Retry")
+                        .on_click(cx.listener(move |this, _, _window, _cx| {
+                            if let Some(msg_id) = &message_id {
+                                this.handle_retry(msg_id.clone());
+                            }
+                        })),
+                );
+            }
+
+            content = content.child(error_row);
+        }
+        // AI response (only show if no error, or show partial if stream interrupted)
+        else if let Some(ref response) = turn.assistant_response {
             let mut response_div = div()
                 .text_sm()
                 .text_color(rgb(colors.text_primary))
@@ -717,6 +858,14 @@ impl ChatPrompt {
             .gap(px(8.0))
             .child(content.flex_1())
             .child(copy_button)
+    }
+
+    /// Handle retry for a failed message
+    fn handle_retry(&self, message_id: String) {
+        logging::log("CHAT", &format!("Retry requested for message: {}", message_id));
+        if let Some(ref callback) = self.on_retry {
+            callback(self.id.clone(), message_id);
+        }
     }
 
     /// Copy the assistant response from a specific turn
