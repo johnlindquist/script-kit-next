@@ -15,7 +15,6 @@ Integration tools for [Conductor](https://conductor.build) - run parallel Claude
 
 <!--
 description: Launch Conductor app
-shortcut: cmd shift c
 -->
 
 ```open
