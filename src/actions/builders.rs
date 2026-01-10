@@ -416,11 +416,7 @@ mod tests {
     #[test]
     fn test_get_scriptlet_context_actions() {
         // Scriptlets should have scriptlet-specific actions
-        let scriptlet = ScriptInfo::scriptlet(
-            "Open GitHub",
-            "/path/to/url.md",
-            None,
-        );
+        let scriptlet = ScriptInfo::scriptlet("Open GitHub", "/path/to/url.md", None);
         let actions = get_script_context_actions(&scriptlet);
 
         // Should have run, copy_deeplink, and add_shortcut (no shortcut by default)
