@@ -21,7 +21,12 @@ shortcut: ctrl shift i
 -->
 
 ```ts
-const text = await getSelectedText();
+let text: string | undefined;
+try {
+  text = await getSelectedText();
+} catch {
+  // Fall through - text will be undefined (e.g., accessibility permission denied)
+}
 if (!text?.trim()) {
   await hud('No text selected');
   exit();
@@ -43,7 +48,12 @@ shortcut: ctrl shift e
 -->
 
 ```ts
-const text = await getSelectedText();
+let text: string | undefined;
+try {
+  text = await getSelectedText();
+} catch {
+  // Fall through - text will be undefined (e.g., accessibility permission denied)
+}
 if (!text?.trim()) {
   await hud('No text selected');
   exit();
@@ -65,7 +75,12 @@ shortcut: ctrl shift g
 -->
 
 ```ts
-const text = await getSelectedText();
+let text: string | undefined;
+try {
+  text = await getSelectedText();
+} catch {
+  // Fall through - text will be undefined (e.g., accessibility permission denied)
+}
 if (!text?.trim()) {
   await hud('No text selected');
   exit();
@@ -87,7 +102,12 @@ shortcut: ctrl shift s
 -->
 
 ```ts
-const text = await getSelectedText();
+let text: string | undefined;
+try {
+  text = await getSelectedText();
+} catch {
+  // Fall through - text will be undefined (e.g., accessibility permission denied)
+}
 if (!text?.trim()) {
   await hud('No text selected');
   exit();
@@ -109,7 +129,12 @@ shortcut: ctrl shift c
 -->
 
 ```ts
-const text = await getSelectedText();
+let text: string | undefined;
+try {
+  text = await getSelectedText();
+} catch {
+  // Fall through - text will be undefined (e.g., accessibility permission denied)
+}
 if (!text?.trim()) {
   await hud('No text selected');
   exit();
@@ -131,7 +156,12 @@ shortcut: ctrl shift t
 -->
 
 ```ts
-const text = await getSelectedText();
+let text: string | undefined;
+try {
+  text = await getSelectedText();
+} catch {
+  // Fall through - text will be undefined (e.g., accessibility permission denied)
+}
 if (!text?.trim()) {
   await hud('No text selected');
   exit();
@@ -153,7 +183,12 @@ shortcut: ctrl shift p
 -->
 
 ```ts
-const text = await getSelectedText();
+let text: string | undefined;
+try {
+  text = await getSelectedText();
+} catch {
+  // Fall through - text will be undefined (e.g., accessibility permission denied)
+}
 if (!text?.trim()) {
   await hud('No text selected');
   exit();
