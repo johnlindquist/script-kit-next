@@ -1069,6 +1069,11 @@ struct ScriptListApp {
     file_search_debounce_task: Option<gpui::Task<()>>,
     // Current directory being listed (for instant filter mode)
     file_search_current_dir: Option<String>,
+    // Frozen filter during directory transitions (prevents wrong results flash)
+    // When Some, use this filter instead of deriving from query
+    // Outer Option: None = use query filter, Some = use frozen filter
+    // Inner Option: None = no filter, Some(s) = filter by s
+    file_search_frozen_filter: Option<Option<String>>,
     // Path of the file selected for actions (for file search actions handling)
     file_search_actions_path: Option<String>,
     // Actions popup overlay
@@ -1197,6 +1202,9 @@ struct ScriptListApp {
     /// Receiver for API key configuration completion signals
     /// Checked by timer to trigger toast and view reset
     api_key_completion_receiver: mpsc::Receiver<(String, bool)>,
+    /// Whether the current built-in view was opened from the main menu.
+    /// When true, ESC returns to main menu. When false (opened via hotkey/protocol), ESC closes window.
+    opened_from_main_menu: bool,
 }
 
 /// Result of alias matching - either a Script or Scriptlet
@@ -2516,6 +2524,8 @@ fn main() {
                             }
                             ExternalCommand::TriggerBuiltin { ref name } => {
                                 logging::log("STDIN", &format!("Triggering built-in: '{}'", name));
+                                // Opened via protocol command - ESC should close window (not return to main menu)
+                                view.opened_from_main_menu = false;
                                 // Match built-in name and trigger the corresponding feature
                                 match name.to_lowercase().as_str() {
                                     "design-gallery" | "designgallery" | "design gallery" => {
