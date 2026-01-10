@@ -59,7 +59,7 @@ impl ScriptListApp {
 
         let theme = &self.theme;
 
-        logging::log_debug("PERF", "P4: Using ListItemColors for render closure");
+        // NOTE: Removed P4 perf log - called every render frame, causing log spam
 
         // Build script list using uniform_list for proper virtualized scrolling
         // Use design tokens for empty state styling
