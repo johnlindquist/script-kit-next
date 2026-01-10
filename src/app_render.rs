@@ -1103,11 +1103,17 @@ impl ScriptListApp {
                         m.script.shortcut.clone(),
                     )),
                     scripts::SearchResult::Scriptlet(m) => {
-                        // Scriptlets don't have a path, use name as identifier
-                        // Pass shortcut info for dynamic action menu
-                        Some(ScriptInfo::with_shortcut(
+                        // Scriptlets use the markdown file path for edit/reveal actions
+                        // Extract the path without anchor for file operations
+                        let markdown_path = m
+                            .scriptlet
+                            .file_path
+                            .as_ref()
+                            .map(|p| p.split('#').next().unwrap_or(p).to_string())
+                            .unwrap_or_else(|| format!("scriptlet:{}", &m.scriptlet.name));
+                        Some(ScriptInfo::scriptlet(
                             &m.scriptlet.name,
-                            format!("scriptlet:{}", &m.scriptlet.name),
+                            markdown_path,
                             m.scriptlet.shortcut.clone(),
                         ))
                     }
