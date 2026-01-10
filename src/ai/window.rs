@@ -185,9 +185,16 @@ static AI_PENDING_COMMANDS: std::sync::OnceLock<std::sync::Mutex<Vec<AiCommand>>
 
 /// Commands that can be sent to the AI window (for testing)
 #[derive(Clone)]
+#[allow(clippy::enum_variant_names)]
 enum AiCommand {
     SetSearch(String),
     SetInput { text: String, submit: bool },
+    /// Set input with an attached image (base64 encoded PNG)
+    SetInputWithImage {
+        text: String,
+        image_base64: String,
+        submit: bool,
+    },
 }
 
 fn get_pending_commands() -> &'static std::sync::Mutex<Vec<AiCommand>> {
@@ -290,6 +297,9 @@ pub struct AiApp {
 
     /// Theme revision seen - used to detect theme changes and recompute cached values
     theme_rev_seen: u64,
+
+    /// Pending image attachment (base64 encoded PNG) to include with next message
+    pending_image: Option<String>,
 }
 
 impl AiApp {
@@ -403,6 +413,7 @@ impl AiApp {
             last_persisted_bounds: None,
             last_bounds_save: std::time::Instant::now(),
             theme_rev_seen: crate::theme::service::theme_revision(),
+            pending_image: None,
         }
     }
 
@@ -1904,6 +1915,32 @@ impl Render for AiApp {
                         crate::logging::log("AI", "Message submitted - streaming started");
                     }
                 }
+                AiCommand::SetInputWithImage {
+                    text,
+                    image_base64,
+                    submit,
+                } => {
+                    self.input_state.update(cx, |state, cx| {
+                        state.set_value(text.clone(), window, cx);
+                    });
+                    // Store the pending image to be included with the next message
+                    self.pending_image = Some(image_base64.clone());
+                    crate::logging::log(
+                        "AI",
+                        &format!(
+                            "Input set with image: {} chars text, {} chars base64",
+                            text.len(),
+                            image_base64.len()
+                        ),
+                    );
+                    if submit {
+                        self.submit_message(window, cx);
+                        crate::logging::log(
+                            "AI",
+                            "Message with image submitted - streaming started",
+                        );
+                    }
+                }
             }
         }
 
@@ -2183,6 +2220,34 @@ pub fn set_ai_input(cx: &mut App, text: &str, submit: bool) {
         });
     } else {
         logging::log("AI", "Cannot set input - AI window not open");
+    }
+}
+
+/// Set the main input text with an attached image in the AI window and optionally submit.
+/// The image should be base64 encoded PNG data.
+/// Used by AI commands like "Send Screen to AI Chat".
+pub fn set_ai_input_with_image(cx: &mut App, text: &str, image_base64: &str, submit: bool) {
+    use crate::logging;
+
+    // Queue the command and notify the window to process it in render()
+    push_ai_command(AiCommand::SetInputWithImage {
+        text: text.to_string(),
+        image_base64: image_base64.to_string(),
+        submit,
+    });
+
+    // Notify the window to process the command
+    let handle = {
+        let slot = AI_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
+        slot.lock().ok().and_then(|g| *g)
+    };
+
+    if let Some(handle) = handle {
+        let _ = handle.update(cx, |_root, _window, cx| {
+            cx.notify();
+        });
+    } else {
+        logging::log("AI", "Cannot set input with image - AI window not open");
     }
 }
 

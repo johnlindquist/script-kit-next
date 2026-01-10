@@ -134,6 +134,22 @@ pub enum AiCommandType {
     OpenAi,
     NewConversation,
     ClearConversation,
+    /// Send a screenshot of the entire screen to AI Chat
+    SendScreenToAi,
+    /// Send a screenshot of the focused window to AI Chat
+    SendFocusedWindowToAi,
+    /// Send the currently selected text to AI Chat
+    SendSelectedTextToAi,
+    /// Send the focused browser tab URL/content to AI Chat
+    SendBrowserTabToAi,
+    /// Send a selected screen area to AI Chat (interactive selection)
+    SendScreenAreaToAi,
+    /// Create a new AI chat preset/template
+    CreateAiPreset,
+    /// Import AI chat presets from file
+    ImportAiPresets,
+    /// Search through saved AI chat presets
+    SearchAiPresets,
 }
 
 /// Script creation command types
@@ -1027,6 +1043,137 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         vec!["new", "conversation", "chat", "ai"],
         BuiltInFeature::AiCommand(AiCommandType::NewConversation),
         "💬",
+    ));
+
+    entries.push(BuiltInEntry::new_with_icon(
+        "builtin-send-screen-to-ai",
+        "Send Screen to AI Chat",
+        "Capture the screen and send to AI Chat",
+        vec![
+            "send",
+            "screen",
+            "screenshot",
+            "ai",
+            "chat",
+            "capture",
+            "image",
+        ],
+        BuiltInFeature::AiCommand(AiCommandType::SendScreenToAi),
+        "📸",
+    ));
+
+    entries.push(BuiltInEntry::new_with_icon(
+        "builtin-send-window-to-ai",
+        "Send Focused Window to AI Chat",
+        "Capture the focused window and send to AI Chat",
+        vec![
+            "send",
+            "window",
+            "focused",
+            "ai",
+            "chat",
+            "capture",
+            "screenshot",
+        ],
+        BuiltInFeature::AiCommand(AiCommandType::SendFocusedWindowToAi),
+        "🪟",
+    ));
+
+    entries.push(BuiltInEntry::new_with_icon(
+        "builtin-send-selected-text-to-ai",
+        "Send Selected Text to AI Chat",
+        "Send the currently selected text to AI Chat",
+        vec![
+            "send",
+            "selected",
+            "text",
+            "selection",
+            "ai",
+            "chat",
+            "copy",
+        ],
+        BuiltInFeature::AiCommand(AiCommandType::SendSelectedTextToAi),
+        "📝",
+    ));
+
+    entries.push(BuiltInEntry::new_with_icon(
+        "builtin-send-browser-tab-to-ai",
+        "Send Focused Browser Tab to AI Chat",
+        "Send the current browser tab URL to AI Chat",
+        vec![
+            "send",
+            "browser",
+            "tab",
+            "url",
+            "safari",
+            "chrome",
+            "ai",
+            "chat",
+            "web",
+        ],
+        BuiltInFeature::AiCommand(AiCommandType::SendBrowserTabToAi),
+        "🌐",
+    ));
+
+    entries.push(BuiltInEntry::new_with_icon(
+        "builtin-send-screen-area-to-ai",
+        "Send Screen Area to AI Chat",
+        "Select a screen area and send to AI Chat",
+        vec![
+            "send",
+            "screen",
+            "area",
+            "region",
+            "selection",
+            "ai",
+            "chat",
+            "capture",
+        ],
+        BuiltInFeature::AiCommand(AiCommandType::SendScreenAreaToAi),
+        "⬚",
+    ));
+
+    entries.push(BuiltInEntry::new_with_icon(
+        "builtin-create-ai-preset",
+        "Create AI Chat Preset",
+        "Create a new AI chat preset with custom settings",
+        vec![
+            "create",
+            "ai",
+            "preset",
+            "template",
+            "chat",
+            "new",
+            "save",
+        ],
+        BuiltInFeature::AiCommand(AiCommandType::CreateAiPreset),
+        "➕",
+    ));
+
+    entries.push(BuiltInEntry::new_with_icon(
+        "builtin-import-ai-presets",
+        "Import AI Chat Presets",
+        "Import AI chat presets from a file",
+        vec!["import", "ai", "preset", "presets", "chat", "load", "file"],
+        BuiltInFeature::AiCommand(AiCommandType::ImportAiPresets),
+        "📥",
+    ));
+
+    entries.push(BuiltInEntry::new_with_icon(
+        "builtin-search-ai-presets",
+        "Search AI Chat Presets",
+        "Search through saved AI chat presets",
+        vec![
+            "search",
+            "ai",
+            "preset",
+            "presets",
+            "chat",
+            "find",
+            "templates",
+        ],
+        BuiltInFeature::AiCommand(AiCommandType::SearchAiPresets),
+        "🔍",
     ));
 
     // =========================================================================
