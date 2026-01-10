@@ -58,6 +58,7 @@ mod scripts;
 #[cfg(target_os = "macos")]
 mod selected_text;
 mod setup;
+mod aliases;
 mod shortcuts;
 mod stdin_commands;
 mod syntax;
@@ -858,6 +859,20 @@ struct ShortcutRecorderState {
     command_name: String,
 }
 
+/// State for the inline alias input overlay.
+///
+/// When this is Some, the alias input modal is displayed.
+/// Used for configuring command aliases.
+#[derive(Debug, Clone)]
+struct AliasInputState {
+    /// The unique command identifier (e.g., "builtin/clipboard-history", "app/com.apple.Safari")
+    command_id: String,
+    /// Human-readable name of the command being configured
+    command_name: String,
+    /// Current alias text being edited
+    alias_text: String,
+}
+
 /// Messages sent from the prompt poller back to the main app
 #[derive(Debug, Clone)]
 enum PromptMessage {
@@ -1191,6 +1206,8 @@ struct ScriptListApp {
     /// The shortcut recorder entity (persisted to maintain focus)
     shortcut_recorder_entity:
         Option<Entity<crate::components::shortcut_recorder::ShortcutRecorder>>,
+    /// Alias input state - when Some, shows the alias input modal
+    alias_input_state: Option<AliasInputState>,
     /// Input history for shell-like up/down navigation through previous inputs
     input_history: input_history::InputHistory,
     /// Pending API key configuration - tracks which provider is being configured
@@ -1436,6 +1453,9 @@ impl Render for ScriptListApp {
         // Build shortcut recorder overlay if state is set
         let shortcut_recorder_overlay = self.render_shortcut_recorder_overlay(window, cx);
 
+        // Build alias input overlay if state is set
+        let alias_input_overlay = self.render_alias_input_overlay(window, cx);
+
         div()
             .w_full()
             .h_full()
@@ -1448,6 +1468,10 @@ impl Render for ScriptListApp {
             .child(div().flex_1().w_full().min_h(px(0.)).child(main_content))
             // Shortcut recorder overlay (on top of main content when recording)
             .when_some(shortcut_recorder_overlay, |container, overlay| {
+                container.child(overlay)
+            })
+            // Alias input overlay (on top of main content when entering alias)
+            .when_some(alias_input_overlay, |container, overlay| {
                 container.child(overlay)
             })
             .when_some(grid_config, |container, config| {
