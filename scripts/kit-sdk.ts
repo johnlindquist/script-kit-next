@@ -2100,6 +2100,21 @@ interface ChatStreamCompleteType {
   messageId: string;
 }
 
+/** Set error on a message */
+interface ChatSetErrorType {
+  type: 'chatSetError';
+  id: string;
+  messageId: string;
+  error: string;
+}
+
+/** Clear error from a message */
+interface ChatClearErrorType {
+  type: 'chatClearError';
+  id: string;
+  messageId: string;
+}
+
 /** Clear all messages */
 interface ChatClearType {
   type: 'chatClear';
@@ -2825,8 +2840,14 @@ declare global {
   interface ChatFunction {
     (options?: ChatOptions): Promise<string>;
     addMessage(msg: ChatMessage): void;
-    setInput(text: string): void;
-    submit(): void;
+    startStream(position?: 'left' | 'right'): string;
+    appendChunk(messageId: string, chunk: string): void;
+    completeStream(messageId: string): void;
+    clear(): void;
+    setError(messageId: string, error: string): void;
+    clearError(messageId: string): void;
+    getMessages(): CoreMessage[];
+    getResult(): ChatResult;
   }
   
   /**
@@ -4655,6 +4676,10 @@ interface ChatFunction {
   appendChunk(messageId: string, chunk: string): void;
   completeStream(messageId: string): void;
   clear(): void;
+  /** Set an error on a message (typically during streaming failure) */
+  setError(messageId: string, error: string): void;
+  /** Clear error from a message (before retry) */
+  clearError(messageId: string): void;
   /** Get messages in AI SDK CoreMessage format */
   getMessages(): CoreMessage[];
   /** Get full chat result including metadata */
@@ -4893,6 +4918,48 @@ chatFn.clear = function clear(): void {
   const message: ChatClearType = {
     type: 'chatClear',
     id: currentChatId,
+  };
+  send(message);
+};
+
+// Controller method: Set error on a message (typically during streaming failure)
+chatFn.setError = function setError(messageId: string, error: string): void {
+  if (currentChatId === null) {
+    throw new Error('chat.setError() called outside of a chat session');
+  }
+
+  // Update the tracked message
+  const msg = chatMessages.find((m) => m.id === messageId);
+  if (msg) {
+    msg.error = error;
+    msg.streaming = false;
+  }
+
+  const message: ChatSetErrorType = {
+    type: 'chatSetError',
+    id: currentChatId,
+    messageId,
+    error,
+  };
+  send(message);
+};
+
+// Controller method: Clear error from a message (before retry)
+chatFn.clearError = function clearError(messageId: string): void {
+  if (currentChatId === null) {
+    throw new Error('chat.clearError() called outside of a chat session');
+  }
+
+  // Update the tracked message
+  const msg = chatMessages.find((m) => m.id === messageId);
+  if (msg) {
+    msg.error = undefined;
+  }
+
+  const message: ChatClearErrorType = {
+    type: 'chatClearError',
+    id: currentChatId,
+    messageId,
   };
   send(message);
 };

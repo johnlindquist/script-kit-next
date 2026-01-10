@@ -359,6 +359,28 @@ pub enum Message {
         id: String,
     },
 
+    /// Set error on a message (SDK → App)
+    #[serde(rename = "chatSetError")]
+    ChatSetError {
+        /// Chat prompt ID
+        id: String,
+        /// Message ID to set error on
+        #[serde(rename = "messageId")]
+        message_id: String,
+        /// Error message
+        error: String,
+    },
+
+    /// Clear error from a message (SDK → App)
+    #[serde(rename = "chatClearError")]
+    ChatClearError {
+        /// Chat prompt ID
+        id: String,
+        /// Message ID to clear error from
+        #[serde(rename = "messageId")]
+        message_id: String,
+    },
+
     /// User submitted a message in chat (App → SDK)
     ///
     /// Sent when the user presses Enter in the chat input.

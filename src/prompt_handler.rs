@@ -1584,6 +1584,26 @@ impl ScriptListApp {
                     }
                 }
             }
+            PromptMessage::ChatSetError { id, message_id, error } => {
+                logging::log("CHAT", &format!("ChatSetError for {} msg={}: {}", id, message_id, error));
+                if let AppView::ChatPrompt { id: view_id, entity } = &self.current_view {
+                    if view_id == &id {
+                        entity.update(cx, |chat, cx| {
+                            chat.set_message_error(&message_id, error.clone(), cx);
+                        });
+                    }
+                }
+            }
+            PromptMessage::ChatClearError { id, message_id } => {
+                logging::log("CHAT", &format!("ChatClearError for {} msg={}", id, message_id));
+                if let AppView::ChatPrompt { id: view_id, entity } = &self.current_view {
+                    if view_id == &id {
+                        entity.update(cx, |chat, cx| {
+                            chat.clear_message_error(&message_id, cx);
+                        });
+                    }
+                }
+            }
             PromptMessage::ShowHud { text, duration_ms } => {
                 self.show_hud(text, duration_ms, cx);
             }

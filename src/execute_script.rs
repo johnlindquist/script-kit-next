@@ -1376,6 +1376,12 @@ impl ScriptListApp {
                                     Message::ChatClear { id } => {
                                         Some(PromptMessage::ChatClear { id })
                                     }
+                                    Message::ChatSetError { id, message_id, error } => {
+                                        Some(PromptMessage::ChatSetError { id, message_id, error })
+                                    }
+                                    Message::ChatClearError { id, message_id } => {
+                                        Some(PromptMessage::ChatClearError { id, message_id })
+                                    }
                                     // ChatSubmit goes from App → SDK, not SDK → App
                                     Message::ChatSubmit { .. } => None,
                                     other => {

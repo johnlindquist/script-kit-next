@@ -1067,6 +1067,17 @@ enum PromptMessage {
     ChatClear {
         id: String,
     },
+    /// Set error on a message
+    ChatSetError {
+        id: String,
+        message_id: String,
+        error: String,
+    },
+    /// Clear error from a message
+    ChatClearError {
+        id: String,
+        message_id: String,
+    },
     HideWindow,
     OpenBrowser {
         url: String,
