@@ -1427,6 +1427,10 @@ impl ScriptListApp {
         self.invalidate_filter_cache();
         self.invalidate_grouped_cache();
 
+        // Sync list component state so GPUI renders the correct item count
+        self.sync_list_state();
+        self.validate_selection_bounds(cx);
+
         // Rebuild alias/shortcut registries for this file's scriptlets
         let conflicts = self.rebuild_registries();
         for conflict in conflicts {
