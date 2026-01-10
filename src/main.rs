@@ -1040,6 +1040,9 @@ enum PromptMessage {
         hint: Option<String>,
         footer: Option<String>,
         actions: Option<Vec<ProtocolAction>>,
+        model: Option<String>,
+        models: Vec<String>,
+        save_history: bool,
     },
     /// Add a message to an active chat prompt
     ChatAddMessage {

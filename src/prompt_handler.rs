@@ -1486,11 +1486,14 @@ impl ScriptListApp {
                 hint,
                 footer,
                 actions,
+                model,
+                models,
+                save_history: _save_history, // TODO: Use when database persistence is implemented
             } => {
-                tracing::info!(id, ?placeholder, message_count = messages.len(), "ShowChat received");
+                tracing::info!(id, ?placeholder, message_count = messages.len(), ?model, model_count = models.len(), "ShowChat received");
                 logging::log(
                     "UI",
-                    &format!("ShowChat prompt received: {} ({} messages)", id, messages.len()),
+                    &format!("ShowChat prompt received: {} ({} messages, {} models)", id, messages.len(), models.len()),
                 );
 
                 // Store SDK actions for the actions panel (Cmd+K)
@@ -1515,9 +1518,9 @@ impl ScriptListApp {
                         }
                     });
 
-                // Create ChatPrompt entity
+                // Create ChatPrompt entity with configured models
                 let focus_handle = self.focus_handle.clone();
-                let chat_prompt = prompts::ChatPrompt::new(
+                let mut chat_prompt = prompts::ChatPrompt::new(
                     id.clone(),
                     placeholder,
                     messages,
@@ -1527,6 +1530,15 @@ impl ScriptListApp {
                     chat_submit_callback,
                     std::sync::Arc::clone(&self.theme),
                 );
+
+                // Apply model configuration from SDK
+                if !models.is_empty() {
+                    chat_prompt = chat_prompt.with_model_names(models);
+                }
+                if let Some(default_model) = model {
+                    chat_prompt = chat_prompt.with_default_model(default_model);
+                }
+
                 let entity = cx.new(|_| chat_prompt);
                 self.current_view = AppView::ChatPrompt { id, entity };
                 self.focused_input = FocusedInput::None;

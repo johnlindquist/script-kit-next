@@ -233,6 +233,26 @@ impl ChatPrompt {
         self
     }
 
+    /// Set models from string names (creates ChatModel entries with name=id)
+    pub fn with_model_names(mut self, model_names: Vec<String>) -> Self {
+        if !model_names.is_empty() {
+            self.models = model_names
+                .into_iter()
+                .map(|name| ChatModel::new(name.clone(), name.clone(), "Custom"))
+                .collect();
+            if self.model.is_none() {
+                self.model = self.models.first().map(|m| m.name.clone());
+            }
+        }
+        self
+    }
+
+    /// Set the default model
+    pub fn with_default_model(mut self, model: String) -> Self {
+        self.model = Some(model);
+        self
+    }
+
     /// Set the escape callback
     pub fn with_escape_callback(mut self, callback: ChatEscapeCallback) -> Self {
         self.on_escape = Some(callback);

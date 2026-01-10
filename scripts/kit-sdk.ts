@@ -2068,6 +2068,9 @@ interface ChatMessageType {
   hint?: string;
   footer?: string;
   actions?: Action[];
+  model?: string;
+  models?: string[];
+  saveHistory?: boolean;
 }
 
 /** Add a message to an active chat */
@@ -2838,7 +2841,7 @@ declare global {
    * Chat function interface with attached controller methods
    */
   interface ChatFunction {
-    (options?: ChatOptions): Promise<string>;
+    (options?: ChatOptions): Promise<ChatResult>;
     addMessage(msg: ChatMessage): void;
     startStream(position?: 'left' | 'right'): string;
     appendChunk(messageId: string, chunk: string): void;
@@ -4670,7 +4673,7 @@ let chatMessageIdCounter = 0;
 
 // Type for chat function with controller methods
 interface ChatFunction {
-  (options?: ChatOptions): Promise<string>;
+  (options?: ChatOptions): Promise<ChatResult>;
   addMessage(msg: ChatMessage | CoreMessage): void;
   startStream(position?: 'left' | 'right'): string;
   appendChunk(messageId: string, chunk: string): void;
@@ -4725,10 +4728,32 @@ function toCoreMessage(msg: ChatMessage): CoreMessage {
 // Track messages in the current chat session
 let chatMessages: ChatMessage[] = [];
 
+// Store conversation ID and model for result
+let currentConversationId: string | undefined;
+let currentModel: string | undefined;
+
+// Helper to build ChatResult
+function buildChatResult(action: 'escape' | 'continue'): ChatResult {
+  const userMsgs = chatMessages.filter((m) => m.role === 'user' || m.position === 'right');
+  const assistantMsgs = chatMessages.filter((m) => m.role === 'assistant' || (m.position === 'left' && m.role !== 'system'));
+
+  return {
+    messages: chatMessages.map(toCoreMessage),
+    uiMessages: chatMessages,
+    lastUserMessage: userMsgs[userMsgs.length - 1]?.content || userMsgs[userMsgs.length - 1]?.text || '',
+    lastAssistantMessage: assistantMsgs[assistantMsgs.length - 1]?.content || assistantMsgs[assistantMsgs.length - 1]?.text || '',
+    model: currentModel,
+    action,
+    conversationId: currentConversationId,
+  };
+}
+
 // The chat function with attached controller methods
-const chatFn: ChatFunction = async function chat(options?: ChatOptions): Promise<string> {
+const chatFn: ChatFunction = async function chat(options?: ChatOptions): Promise<ChatResult> {
   const id = nextId();
   currentChatId = id;
+  currentConversationId = `conv-${id}`;
+  currentModel = options?.model;
   chatMessages = [];
 
   // Build initial messages with IDs and normalize format
@@ -4751,6 +4776,9 @@ const chatFn: ChatFunction = async function chat(options?: ChatOptions): Promise
     hint: options?.hint,
     footer: options?.footer,
     actions: options?.actions,
+    model: options?.model,
+    models: options?.models,
+    saveHistory: options?.saveHistory ?? true,
   };
   send(message);
 
@@ -4764,10 +4792,10 @@ const chatFn: ChatFunction = async function chat(options?: ChatOptions): Promise
     return new Promise((resolve) => {
       const handleMessage = async (msg: { type: string; id: string; text: string }) => {
         if (msg.type === 'chatSubmit' && msg.id === id) {
-          // If user pressed Escape (text is empty or undefined), exit
+          // If user pressed Escape (text is empty or undefined), return with escape action
           if (!msg.text) {
             currentChatId = null;
-            process.exit(0);
+            resolve(buildChatResult('escape'));
             return;
           }
 
@@ -4791,12 +4819,12 @@ const chatFn: ChatFunction = async function chat(options?: ChatOptions): Promise
 
       // Add handler for chatSubmit messages
       addPending(id, (msg: SubmitMessage) => {
-        if (msg.value === null) {
-          currentChatId = null;
-          process.exit(0);
-        }
-        resolve(msg.value ?? '');
         currentChatId = null;
+        if (msg.value === null) {
+          resolve(buildChatResult('escape'));
+        } else {
+          resolve(buildChatResult('continue'));
+        }
       }, { value: '' });
 
       process.on('chatSubmit' as any, handleMessage);
@@ -4806,12 +4834,12 @@ const chatFn: ChatFunction = async function chat(options?: ChatOptions): Promise
   // Simple mode: wait for single submission
   return new Promise((resolve) => {
     addPending(id, (msg: SubmitMessage) => {
-      if (msg.value === null) {
-        currentChatId = null;
-        process.exit(0);
-      }
-      resolve(msg.value ?? '');
       currentChatId = null;
+      if (msg.value === null) {
+        resolve(buildChatResult('escape'));
+      } else {
+        resolve(buildChatResult('continue'));
+      }
     }, { value: '' });
   });
 };
@@ -7281,7 +7309,7 @@ declare global {
   function env(name: string, defaultValue?: string): Promise<string>;
 
   // Chat (TIER 4A)
-  function chat(options?: ChatOptions): Promise<string>;
+  function chat(options?: ChatOptions): Promise<ChatResult>;
 
   // Widget/Term/Media (TIER 4B)
   function widget(html: string, options?: WidgetOptions): Promise<WidgetController>;

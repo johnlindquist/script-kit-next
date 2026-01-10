@@ -1712,7 +1712,7 @@ pub enum ChatMessagePosition {
 /// Configuration options for the chat prompt
 ///
 /// Used with the Chat message to configure the chat interface.
-#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ChatPromptConfig {
     /// Placeholder text for the input field
@@ -1733,6 +1733,36 @@ pub struct ChatPromptConfig {
     /// Optional actions for the actions panel (Cmd+K)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub actions: Vec<ProtocolAction>,
+    /// Default model to use
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    /// Available models in actions menu
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub models: Vec<String>,
+    /// Save conversation to database (default: true)
+    #[serde(default = "default_save_history")]
+    pub save_history: bool,
+}
+
+/// Default value for save_history (true)
+fn default_save_history() -> bool {
+    true
+}
+
+impl Default for ChatPromptConfig {
+    fn default() -> Self {
+        Self {
+            placeholder: None,
+            messages: Vec::new(),
+            auto_focus: false,
+            hint: None,
+            footer: None,
+            actions: Vec::new(),
+            model: None,
+            models: Vec::new(),
+            save_history: true,
+        }
+    }
 }
 
 impl ChatPromptConfig {
@@ -1740,11 +1770,8 @@ impl ChatPromptConfig {
     pub fn with_placeholder(placeholder: impl Into<String>) -> Self {
         Self {
             placeholder: Some(placeholder.into()),
-            messages: Vec::new(),
             auto_focus: true,
-            hint: None,
-            footer: None,
-            actions: Vec::new(),
+            ..Default::default()
         }
     }
 
@@ -1769,6 +1796,24 @@ impl ChatPromptConfig {
     /// Add actions for the actions panel
     pub fn with_actions(mut self, actions: Vec<ProtocolAction>) -> Self {
         self.actions = actions;
+        self
+    }
+
+    /// Set the default model
+    pub fn with_model(mut self, model: impl Into<String>) -> Self {
+        self.model = Some(model.into());
+        self
+    }
+
+    /// Set available models
+    pub fn with_models(mut self, models: Vec<String>) -> Self {
+        self.models = models;
+        self
+    }
+
+    /// Set whether to save conversation to database
+    pub fn with_save_history(mut self, save: bool) -> Self {
+        self.save_history = save;
         self
     }
 }

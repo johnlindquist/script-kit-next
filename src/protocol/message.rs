@@ -296,6 +296,15 @@ pub enum Message {
         /// Optional actions for the actions panel (Cmd+K to open)
         #[serde(default, skip_serializing_if = "Option::is_none")]
         actions: Option<Vec<ProtocolAction>>,
+        /// Default model to use
+        #[serde(skip_serializing_if = "Option::is_none")]
+        model: Option<String>,
+        /// Available models in actions menu
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        models: Vec<String>,
+        /// Save conversation to database (default: true)
+        #[serde(rename = "saveHistory", default)]
+        save_history: bool,
     },
 
     /// Add a message to the chat (SDK → App)
@@ -1917,6 +1926,9 @@ impl Message {
             hint: None,
             footer: None,
             actions: None,
+            model: None,
+            models: Vec::new(),
+            save_history: true,
         }
     }
 
@@ -1929,6 +1941,9 @@ impl Message {
             hint: None,
             footer: None,
             actions: None,
+            model: None,
+            models: Vec::new(),
+            save_history: true,
         }
     }
 
@@ -1945,6 +1960,9 @@ impl Message {
             } else {
                 Some(config.actions)
             },
+            model: config.model,
+            models: config.models,
+            save_history: config.save_history,
         }
     }
 

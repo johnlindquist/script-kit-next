@@ -1341,6 +1341,9 @@ impl ScriptListApp {
                                         hint,
                                         footer,
                                         actions,
+                                        model,
+                                        models,
+                                        save_history,
                                     } => Some(PromptMessage::ShowChat {
                                         id,
                                         placeholder,
@@ -1348,6 +1351,9 @@ impl ScriptListApp {
                                         hint,
                                         footer,
                                         actions,
+                                        model,
+                                        models,
+                                        save_history,
                                     }),
                                     Message::ChatMessage { id, message } => {
                                         Some(PromptMessage::ChatAddMessage { id, message })
