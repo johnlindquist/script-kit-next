@@ -1496,6 +1496,291 @@ interface LayoutInfoResultMessage {
   timestamp: string;
 }
 
+// =============================================================================
+// AI CHAT SDK API Message Types
+// =============================================================================
+
+interface AiIsOpenMessage {
+  type: 'aiIsOpen';
+  requestId: string;
+}
+
+interface AiIsOpenResultMessage {
+  type: 'aiIsOpenResult';
+  requestId: string;
+  isOpen: boolean;
+  activeChatId?: string;
+}
+
+interface AiGetActiveChatMessage {
+  type: 'aiGetActiveChat';
+  requestId: string;
+}
+
+interface AiActiveChatResultMessage {
+  type: 'aiActiveChatResult';
+  requestId: string;
+  chat?: AiChatInfo;
+}
+
+interface AiListChatsMessage {
+  type: 'aiListChats';
+  requestId: string;
+  limit?: number;
+  includeDeleted?: boolean;
+}
+
+interface AiChatListResultMessage {
+  type: 'aiChatListResult';
+  requestId: string;
+  chats: AiChatInfo[];
+  totalCount: number;
+}
+
+interface AiGetConversationMessage {
+  type: 'aiGetConversation';
+  requestId: string;
+  chatId?: string;
+  limit?: number;
+}
+
+interface AiConversationResultMessage {
+  type: 'aiConversationResult';
+  requestId: string;
+  chatId: string;
+  messages: AiMessageInfo[];
+  hasMore: boolean;
+}
+
+interface AiStartChatMessage {
+  type: 'aiStartChat';
+  requestId: string;
+  message: string;
+  systemPrompt?: string;
+  image?: string;
+  modelId?: string;
+  noResponse?: boolean;
+}
+
+interface AiChatCreatedMessage {
+  type: 'aiChatCreated';
+  requestId: string;
+  chatId: string;
+  title: string;
+  modelId: string;
+  provider: string;
+  streamingStarted: boolean;
+}
+
+interface AiAppendMessageMessage {
+  type: 'aiAppendMessage';
+  requestId: string;
+  chatId: string;
+  content: string;
+  role: 'user' | 'assistant' | 'system';
+}
+
+interface AiMessageAppendedMessage {
+  type: 'aiMessageAppended';
+  requestId: string;
+  messageId: string;
+  chatId: string;
+}
+
+interface AiSendMessageMessage {
+  type: 'aiSendMessage';
+  requestId: string;
+  chatId: string;
+  content: string;
+  image?: string;
+}
+
+interface AiMessageSentMessage {
+  type: 'aiMessageSent';
+  requestId: string;
+  userMessageId: string;
+  chatId: string;
+  streamingStarted: boolean;
+}
+
+interface AiSetSystemPromptMessage {
+  type: 'aiSetSystemPrompt';
+  requestId: string;
+  chatId: string;
+  prompt: string;
+}
+
+interface AiSystemPromptSetMessage {
+  type: 'aiSystemPromptSet';
+  requestId: string;
+  success: boolean;
+  error?: string;
+}
+
+interface AiFocusMessage {
+  type: 'aiFocus';
+  requestId: string;
+}
+
+interface AiFocusResultMessage {
+  type: 'aiFocusResult';
+  requestId: string;
+  success: boolean;
+  wasOpen: boolean;
+}
+
+interface AiGetStreamingStatusMessage {
+  type: 'aiGetStreamingStatus';
+  requestId: string;
+  chatId?: string;
+}
+
+interface AiStreamingStatusResultMessage {
+  type: 'aiStreamingStatusResult';
+  requestId: string;
+  isStreaming: boolean;
+  chatId?: string;
+  partialContent?: string;
+}
+
+interface AiDeleteChatMessage {
+  type: 'aiDeleteChat';
+  requestId: string;
+  chatId: string;
+  permanent?: boolean;
+}
+
+interface AiChatDeletedMessage {
+  type: 'aiChatDeleted';
+  requestId: string;
+  success: boolean;
+  error?: string;
+}
+
+interface AiSubscribeMessage {
+  type: 'aiSubscribe';
+  requestId: string;
+  events: string[];
+  chatId?: string;
+}
+
+interface AiSubscribedMessage {
+  type: 'aiSubscribed';
+  requestId: string;
+  subscriptionId: string;
+  events: string[];
+}
+
+interface AiUnsubscribeMessage {
+  type: 'aiUnsubscribe';
+  requestId: string;
+}
+
+interface AiUnsubscribedMessage {
+  type: 'aiUnsubscribed';
+  requestId: string;
+}
+
+interface AiStreamChunkMessage {
+  type: 'aiStreamChunk';
+  subscriptionId: string;
+  chatId: string;
+  chunk: string;
+  accumulatedContent: string;
+}
+
+interface AiStreamCompleteMessage {
+  type: 'aiStreamComplete';
+  subscriptionId: string;
+  chatId: string;
+  messageId: string;
+  fullContent: string;
+  tokensUsed?: number;
+}
+
+interface AiNewMessageMessage {
+  type: 'aiNewMessage';
+  subscriptionId: string;
+  chatId: string;
+  message: AiMessageInfo;
+}
+
+interface AiErrorMessage {
+  type: 'aiError';
+  subscriptionId?: string;
+  requestId?: string;
+  code: string;
+  message: string;
+}
+
+// AI Chat SDK API Data Types
+interface AiChatInfo {
+  id: string;
+  title: string;
+  modelId: string;
+  provider: string;
+  createdAt: string;
+  updatedAt: string;
+  isDeleted: boolean;
+  preview?: string;
+  messageCount: number;
+}
+
+interface AiMessageInfo {
+  id: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  createdAt: string;
+  tokensUsed?: number;
+}
+
+interface AiChatOptions {
+  /** Optional system prompt */
+  systemPrompt?: string;
+  /** File path to image - SDK reads and base64 encodes */
+  imagePath?: string;
+  /** Model ID (e.g., "claude-3-5-sonnet-20241022") */
+  modelId?: string;
+  /** If true, don't trigger AI response */
+  noResponse?: boolean;
+}
+
+interface AiStartChatResult {
+  chatId: string;
+  title: string;
+  modelId: string;
+  provider: string;
+  streamingStarted: boolean;
+}
+
+interface AiStreamChunkEvent {
+  chatId: string;
+  chunk: string;
+  accumulatedContent: string;
+}
+
+interface AiStreamCompleteEvent {
+  chatId: string;
+  messageId: string;
+  fullContent: string;
+  tokensUsed?: number;
+}
+
+interface AiMessageEvent {
+  chatId: string;
+  message: AiMessageInfo;
+}
+
+interface AiErrorEvent {
+  code: string;
+  message: string;
+}
+
+type AiEventType = 'streamChunk' | 'streamComplete' | 'message' | 'error';
+type AiEventHandler = (
+  event: AiStreamChunkEvent | AiStreamCompleteEvent | AiMessageEvent | AiErrorEvent
+) => void;
+
 interface KeyboardMessage {
   type: 'keyboard';
   action: 'type' | 'tap';
@@ -2033,7 +2318,12 @@ process.stdin.on('data', (chunk: string) => {
         if (msg.type === 'actionTriggered') {
           (globalThis as any).__handleActionTriggered(msg as ActionTriggeredMessage);
         }
-        
+
+        // Handle AI SDK events (streamChunk, streamComplete, newMessage, error)
+        if (msg.type?.startsWith('ai') && (globalThis as any)._handleAiEvent) {
+          (globalThis as any)._handleAiEvent(msg);
+        }
+
         // Also emit a custom event for widget handlers
         if ((msg as any).type === 'widgetEvent') {
           process.emit('widgetEvent' as any, msg);
@@ -2470,7 +2760,47 @@ declare global {
    * @returns LayoutInfo with component tree and window information
    */
   function getLayoutInfo(): Promise<LayoutInfo>;
-  
+
+  // =============================================================================
+  // AI Chat SDK API
+  // =============================================================================
+
+  /** Check if the AI chat window is currently open */
+  function aiIsOpen(): Promise<{ isOpen: boolean; activeChatId?: string }>;
+
+  /** Get information about the currently active chat */
+  function aiGetActiveChat(): Promise<AiChatInfo | null>;
+
+  /** List all chats from AI chat storage */
+  function aiListChats(limit?: number, includeDeleted?: boolean): Promise<AiChatInfo[]>;
+
+  /** Get messages from a specific chat or the active chat */
+  function aiGetConversation(chatId?: string, limit?: number): Promise<AiMessageInfo[]>;
+
+  /** Start a new AI chat conversation with an initial message */
+  function aiStartChat(message: string, options?: AiChatOptions): Promise<AiStartChatResult>;
+
+  /** Append a message to an existing chat without triggering AI response */
+  function aiAppendMessage(chatId: string, content: string, role: 'user' | 'assistant' | 'system'): Promise<string>;
+
+  /** Send a message to an existing chat and trigger an AI response */
+  function aiSendMessage(chatId: string, content: string, imagePath?: string): Promise<{ userMessageId: string; streamingStarted: boolean }>;
+
+  /** Set or update the system prompt for a chat */
+  function aiSetSystemPrompt(chatId: string, prompt: string): Promise<void>;
+
+  /** Focus the AI chat window, opening it if necessary */
+  function aiFocus(): Promise<{ wasOpen: boolean }>;
+
+  /** Get the current streaming status for a chat */
+  function aiGetStreamingStatus(chatId?: string): Promise<{ isStreaming: boolean; chatId?: string; partialContent?: string }>;
+
+  /** Delete a chat from AI chat storage */
+  function aiDeleteChat(chatId: string, permanent?: boolean): Promise<void>;
+
+  /** Subscribe to AI chat events for real-time streaming updates */
+  function aiOn(eventType: AiEventType, handler: AiEventHandler, chatId?: string): Promise<() => void>;
+
   /**
    * Force submit the current prompt with a value
    * @param value - Value to submit
@@ -4638,6 +4968,585 @@ globalThis.getLayoutInfo = async function getLayoutInfo(): Promise<LayoutInfo> {
   });
 };
 
+// =============================================================================
+// AI Chat SDK API
+// =============================================================================
+
+/**
+ * Check if the AI chat window is currently open.
+ *
+ * @returns Object indicating if window is open and the active chat ID if any
+ */
+globalThis.aiIsOpen = async function aiIsOpen(): Promise<{ isOpen: boolean; activeChatId?: string }> {
+  const requestId = nextId();
+
+  const mockResult = {
+    type: 'aiIsOpenResult',
+    isOpen: false,
+  };
+
+  return new Promise((resolve) => {
+    addPending(requestId, (msg: ResponseMessage) => {
+      if (msg.type === 'aiIsOpenResult') {
+        const resultMsg = msg as AiIsOpenResultMessage;
+        resolve({
+          isOpen: resultMsg.isOpen,
+          activeChatId: resultMsg.activeChatId,
+        });
+        return;
+      }
+      resolve({ isOpen: false });
+    }, mockResult);
+
+    const message: AiIsOpenMessage = {
+      type: 'aiIsOpen',
+      requestId,
+    };
+    send(message);
+  });
+};
+
+/**
+ * Get information about the currently active chat in the AI window.
+ * Works directly from SQLite storage - window doesn't need to be open.
+ *
+ * @returns Chat info if there's an active chat, null otherwise
+ */
+globalThis.aiGetActiveChat = async function aiGetActiveChat(): Promise<AiChatInfo | null> {
+  const requestId = nextId();
+
+  const mockResult = {
+    type: 'aiActiveChatResult',
+    chat: null,
+  };
+
+  return new Promise((resolve) => {
+    addPending(requestId, (msg: ResponseMessage) => {
+      if (msg.type === 'aiActiveChatResult') {
+        const resultMsg = msg as AiActiveChatResultMessage;
+        resolve(resultMsg.chat ?? null);
+        return;
+      }
+      resolve(null);
+    }, mockResult);
+
+    const message: AiGetActiveChatMessage = {
+      type: 'aiGetActiveChat',
+      requestId,
+    };
+    send(message);
+  });
+};
+
+/**
+ * List all chats from the AI chat storage.
+ * Works directly from SQLite storage - window doesn't need to be open.
+ *
+ * @param limit - Maximum number of chats to return (default: 50)
+ * @param includeDeleted - If true, include soft-deleted chats (default: false)
+ * @returns Array of chat info objects
+ */
+globalThis.aiListChats = async function aiListChats(
+  limit?: number,
+  includeDeleted?: boolean
+): Promise<AiChatInfo[]> {
+  const requestId = nextId();
+
+  const mockResult = {
+    type: 'aiChatListResult',
+    chats: [],
+    totalCount: 0,
+  };
+
+  return new Promise((resolve) => {
+    addPending(requestId, (msg: ResponseMessage) => {
+      if (msg.type === 'aiChatListResult') {
+        const resultMsg = msg as AiChatListResultMessage;
+        resolve(resultMsg.chats ?? []);
+        return;
+      }
+      resolve([]);
+    }, mockResult);
+
+    const message: AiListChatsMessage = {
+      type: 'aiListChats',
+      requestId,
+      limit,
+      includeDeleted: includeDeleted ?? false,
+    };
+    send(message);
+  });
+};
+
+/**
+ * Get messages from a specific chat or the active chat.
+ * Works directly from SQLite storage - window doesn't need to be open.
+ *
+ * @param chatId - Specific chat ID, or omit to use active chat
+ * @param limit - Maximum number of messages to return (default: 100)
+ * @returns Array of message info objects
+ */
+globalThis.aiGetConversation = async function aiGetConversation(
+  chatId?: string,
+  limit?: number
+): Promise<AiMessageInfo[]> {
+  const requestId = nextId();
+
+  const mockResult = {
+    type: 'aiConversationResult',
+    chatId: chatId ?? '',
+    messages: [],
+    hasMore: false,
+  };
+
+  return new Promise((resolve) => {
+    addPending(requestId, (msg: ResponseMessage) => {
+      if (msg.type === 'aiConversationResult') {
+        const resultMsg = msg as AiConversationResultMessage;
+        resolve(resultMsg.messages ?? []);
+        return;
+      }
+      resolve([]);
+    }, mockResult);
+
+    const message: AiGetConversationMessage = {
+      type: 'aiGetConversation',
+      requestId,
+      chatId,
+      limit,
+    };
+    send(message);
+  });
+};
+
+/**
+ * Start a new AI chat conversation with an initial message.
+ * Opens the AI window if not already open.
+ *
+ * @param message - The initial message to send
+ * @param options - Optional configuration for the chat
+ * @returns Information about the created chat
+ */
+globalThis.aiStartChat = async function aiStartChat(
+  message: string,
+  options?: AiChatOptions
+): Promise<AiStartChatResult> {
+  const requestId = nextId();
+
+  // Read and encode image if path provided
+  let imageBase64: string | undefined;
+  if (options?.imagePath) {
+    try {
+      const fs = await import('fs');
+      const imageBuffer = fs.readFileSync(options.imagePath);
+      imageBase64 = imageBuffer.toString('base64');
+    } catch (err) {
+      console.error(`Failed to read image at ${options.imagePath}:`, err);
+    }
+  }
+
+  const mockResult = {
+    type: 'aiChatCreated',
+    chatId: 'mock-chat-id',
+    title: 'New Chat',
+    modelId: options?.modelId ?? 'claude-3-5-sonnet-20241022',
+    provider: 'anthropic',
+    streamingStarted: false,
+  };
+
+  return new Promise((resolve) => {
+    addPending(requestId, (msg: ResponseMessage) => {
+      if (msg.type === 'aiChatCreated') {
+        const resultMsg = msg as AiChatCreatedMessage;
+        resolve({
+          chatId: resultMsg.chatId,
+          title: resultMsg.title,
+          modelId: resultMsg.modelId,
+          provider: resultMsg.provider,
+          streamingStarted: resultMsg.streamingStarted,
+        });
+        return;
+      }
+      resolve({
+        chatId: 'unknown',
+        title: 'New Chat',
+        modelId: options?.modelId ?? 'unknown',
+        provider: 'unknown',
+        streamingStarted: false,
+      });
+    }, mockResult);
+
+    const sendMessage: AiStartChatMessage = {
+      type: 'aiStartChat',
+      requestId,
+      message,
+      systemPrompt: options?.systemPrompt,
+      image: imageBase64,
+      modelId: options?.modelId,
+      noResponse: options?.noResponse ?? false,
+    };
+    send(sendMessage);
+  });
+};
+
+/**
+ * Append a message to an existing chat without triggering an AI response.
+ * Useful for programmatically building conversation history.
+ *
+ * @param chatId - The chat to append to
+ * @param content - The message content
+ * @param role - Message role: 'user', 'assistant', or 'system'
+ * @returns The ID of the appended message
+ */
+globalThis.aiAppendMessage = async function aiAppendMessage(
+  chatId: string,
+  content: string,
+  role: 'user' | 'assistant' | 'system'
+): Promise<string> {
+  const requestId = nextId();
+
+  const mockResult = {
+    type: 'aiMessageAppended',
+    messageId: 'mock-message-id',
+    chatId,
+  };
+
+  return new Promise((resolve) => {
+    addPending(requestId, (msg: ResponseMessage) => {
+      if (msg.type === 'aiMessageAppended') {
+        const resultMsg = msg as AiMessageAppendedMessage;
+        resolve(resultMsg.messageId);
+        return;
+      }
+      resolve('unknown');
+    }, mockResult);
+
+    const sendMsg: AiAppendMessageMessage = {
+      type: 'aiAppendMessage',
+      requestId,
+      chatId,
+      content,
+      role,
+    };
+    send(sendMsg);
+  });
+};
+
+/**
+ * Send a message to an existing chat and trigger an AI response.
+ *
+ * @param chatId - The chat to send to
+ * @param content - The message content
+ * @param imagePath - Optional path to an image to attach
+ * @returns The user message ID and whether streaming started
+ */
+globalThis.aiSendMessage = async function aiSendMessage(
+  chatId: string,
+  content: string,
+  imagePath?: string
+): Promise<{ userMessageId: string; streamingStarted: boolean }> {
+  const requestId = nextId();
+
+  // Read and encode image if path provided
+  let imageBase64: string | undefined;
+  if (imagePath) {
+    try {
+      const fs = await import('fs');
+      const imageBuffer = fs.readFileSync(imagePath);
+      imageBase64 = imageBuffer.toString('base64');
+    } catch (err) {
+      console.error(`Failed to read image at ${imagePath}:`, err);
+    }
+  }
+
+  const mockResult = {
+    type: 'aiMessageSent',
+    userMessageId: 'mock-user-message-id',
+    chatId,
+    streamingStarted: false,
+  };
+
+  return new Promise((resolve) => {
+    addPending(requestId, (msg: ResponseMessage) => {
+      if (msg.type === 'aiMessageSent') {
+        const resultMsg = msg as AiMessageSentMessage;
+        resolve({
+          userMessageId: resultMsg.userMessageId,
+          streamingStarted: resultMsg.streamingStarted,
+        });
+        return;
+      }
+      resolve({ userMessageId: 'unknown', streamingStarted: false });
+    }, mockResult);
+
+    const sendMsg: AiSendMessageMessage = {
+      type: 'aiSendMessage',
+      requestId,
+      chatId,
+      content,
+      image: imageBase64,
+    };
+    send(sendMsg);
+  });
+};
+
+/**
+ * Set or update the system prompt for a chat.
+ *
+ * @param chatId - The chat to update
+ * @param prompt - The system prompt content
+ */
+globalThis.aiSetSystemPrompt = async function aiSetSystemPrompt(
+  chatId: string,
+  prompt: string
+): Promise<void> {
+  const requestId = nextId();
+
+  const mockResult = {
+    type: 'aiSystemPromptSet',
+    success: true,
+  };
+
+  return new Promise((resolve) => {
+    addPending(requestId, () => {
+      resolve();
+    }, mockResult);
+
+    const sendMsg: AiSetSystemPromptMessage = {
+      type: 'aiSetSystemPrompt',
+      requestId,
+      chatId,
+      prompt,
+    };
+    send(sendMsg);
+  });
+};
+
+/**
+ * Focus the AI chat window, opening it if necessary.
+ *
+ * @returns Whether the window was already open
+ */
+globalThis.aiFocus = async function aiFocus(): Promise<{ wasOpen: boolean }> {
+  const requestId = nextId();
+
+  const mockResult = {
+    type: 'aiFocusResult',
+    success: true,
+    wasOpen: false,
+  };
+
+  return new Promise((resolve) => {
+    addPending(requestId, (msg: ResponseMessage) => {
+      if (msg.type === 'aiFocusResult') {
+        const resultMsg = msg as AiFocusResultMessage;
+        resolve({ wasOpen: resultMsg.wasOpen });
+        return;
+      }
+      resolve({ wasOpen: false });
+    }, mockResult);
+
+    const sendMsg: AiFocusMessage = {
+      type: 'aiFocus',
+      requestId,
+    };
+    send(sendMsg);
+  });
+};
+
+/**
+ * Get the current streaming status for a chat.
+ *
+ * @param chatId - Specific chat ID, or omit to check active chat
+ * @returns Streaming status and partial content if streaming
+ */
+globalThis.aiGetStreamingStatus = async function aiGetStreamingStatus(
+  chatId?: string
+): Promise<{ isStreaming: boolean; chatId?: string; partialContent?: string }> {
+  const requestId = nextId();
+
+  const mockResult = {
+    type: 'aiStreamingStatusResult',
+    isStreaming: false,
+  };
+
+  return new Promise((resolve) => {
+    addPending(requestId, (msg: ResponseMessage) => {
+      if (msg.type === 'aiStreamingStatusResult') {
+        const resultMsg = msg as AiStreamingStatusResultMessage;
+        resolve({
+          isStreaming: resultMsg.isStreaming,
+          chatId: resultMsg.chatId,
+          partialContent: resultMsg.partialContent,
+        });
+        return;
+      }
+      resolve({ isStreaming: false });
+    }, mockResult);
+
+    const sendMsg: AiGetStreamingStatusMessage = {
+      type: 'aiGetStreamingStatus',
+      requestId,
+      chatId,
+    };
+    send(sendMsg);
+  });
+};
+
+/**
+ * Delete a chat from the AI chat storage.
+ *
+ * @param chatId - The chat to delete
+ * @param permanent - If true, permanently delete; otherwise soft-delete (default: false)
+ */
+globalThis.aiDeleteChat = async function aiDeleteChat(
+  chatId: string,
+  permanent?: boolean
+): Promise<void> {
+  const requestId = nextId();
+
+  const mockResult = {
+    type: 'aiChatDeleted',
+    success: true,
+  };
+
+  return new Promise((resolve) => {
+    addPending(requestId, () => {
+      resolve();
+    }, mockResult);
+
+    const sendMsg: AiDeleteChatMessage = {
+      type: 'aiDeleteChat',
+      requestId,
+      chatId,
+      permanent: permanent ?? false,
+    };
+    send(sendMsg);
+  });
+};
+
+// Subscription tracking for aiOn
+const aiSubscriptions = new Map<string, { eventTypes: AiEventType[]; handler: AiEventHandler }>();
+
+/**
+ * Subscribe to AI chat events for real-time streaming updates.
+ *
+ * @param eventType - The event type to subscribe to
+ * @param handler - Callback function for events
+ * @param chatId - Optional specific chat to watch (default: all chats)
+ * @returns Unsubscribe function
+ */
+globalThis.aiOn = async function aiOn(
+  eventType: AiEventType,
+  handler: AiEventHandler,
+  chatId?: string
+): Promise<() => void> {
+  const requestId = nextId();
+
+  const mockResult = {
+    type: 'aiSubscribed',
+    subscriptionId: `sub-${requestId}`,
+    events: [eventType],
+  };
+
+  return new Promise((resolve) => {
+    addPending(requestId, (msg: ResponseMessage) => {
+      if (msg.type === 'aiSubscribed') {
+        const resultMsg = msg as AiSubscribedMessage;
+        const subscriptionId = resultMsg.subscriptionId;
+
+        // Store the subscription handler
+        aiSubscriptions.set(subscriptionId, {
+          eventTypes: [eventType],
+          handler,
+        });
+
+        // Return unsubscribe function
+        resolve(async () => {
+          aiSubscriptions.delete(subscriptionId);
+          const unsubRequestId = nextId();
+          send({
+            type: 'aiUnsubscribe',
+            requestId: unsubRequestId,
+          } as AiUnsubscribeMessage);
+        });
+        return;
+      }
+      resolve(() => {});
+    }, mockResult);
+
+    const sendMsg: AiSubscribeMessage = {
+      type: 'aiSubscribe',
+      requestId,
+      events: [eventType],
+      chatId,
+    };
+    send(sendMsg);
+  });
+};
+
+// Internal handler for AI events (called from stdin message handler)
+function handleAiEvent(msg: ResponseMessage): boolean {
+  switch (msg.type) {
+    case 'aiStreamChunk': {
+      const event = msg as AiStreamChunkMessage;
+      for (const [, sub] of aiSubscriptions) {
+        if (sub.eventTypes.includes('streamChunk')) {
+          sub.handler({
+            chatId: event.chatId,
+            chunk: event.chunk,
+            accumulatedContent: event.accumulatedContent,
+          });
+        }
+      }
+      return true;
+    }
+    case 'aiStreamComplete': {
+      const event = msg as AiStreamCompleteMessage;
+      for (const [, sub] of aiSubscriptions) {
+        if (sub.eventTypes.includes('streamComplete')) {
+          sub.handler({
+            chatId: event.chatId,
+            messageId: event.messageId,
+            fullContent: event.fullContent,
+            tokensUsed: event.tokensUsed,
+          });
+        }
+      }
+      return true;
+    }
+    case 'aiNewMessage': {
+      const event = msg as AiNewMessageMessage;
+      for (const [, sub] of aiSubscriptions) {
+        if (sub.eventTypes.includes('message')) {
+          sub.handler({
+            chatId: event.chatId,
+            message: event.message,
+          });
+        }
+      }
+      return true;
+    }
+    case 'aiError': {
+      const event = msg as AiErrorMessage;
+      for (const [, sub] of aiSubscriptions) {
+        if (sub.eventTypes.includes('error')) {
+          sub.handler({
+            code: event.code,
+            message: event.message,
+          });
+        }
+      }
+      return true;
+    }
+    default:
+      return false;
+  }
+}
+
+// Export for internal use
+(globalThis as any)._handleAiEvent = handleAiEvent;
+
 // Prompt Control
 globalThis.submit = function submit(value: unknown): void {
   const message: ForceSubmitMessage = { type: 'forceSubmit', value };
@@ -5933,6 +6842,20 @@ declare global {
   function setInput(text: string): void;
   function captureScreenshot(options?: ScreenshotOptions): Promise<ScreenshotData>;
   function getLayoutInfo(): Promise<LayoutInfo>;
+
+  // AI Chat SDK
+  function aiIsOpen(): Promise<{ isOpen: boolean; activeChatId?: string }>;
+  function aiGetActiveChat(): Promise<AiChatInfo | null>;
+  function aiListChats(limit?: number, includeDeleted?: boolean): Promise<AiChatInfo[]>;
+  function aiGetConversation(chatId?: string, limit?: number): Promise<AiMessageInfo[]>;
+  function aiStartChat(message: string, options?: AiChatOptions): Promise<AiStartChatResult>;
+  function aiAppendMessage(chatId: string, content: string, role: 'user' | 'assistant' | 'system'): Promise<string>;
+  function aiSendMessage(chatId: string, content: string, imagePath?: string): Promise<{ userMessageId: string; streamingStarted: boolean }>;
+  function aiSetSystemPrompt(chatId: string, prompt: string): Promise<void>;
+  function aiFocus(): Promise<{ wasOpen: boolean }>;
+  function aiGetStreamingStatus(chatId?: string): Promise<{ isStreaming: boolean; chatId?: string; partialContent?: string }>;
+  function aiDeleteChat(chatId: string, permanent?: boolean): Promise<void>;
+  function aiOn(eventType: AiEventType, handler: AiEventHandler, chatId?: string): Promise<() => void>;
 
   // Utilities
   function uuid(): string;

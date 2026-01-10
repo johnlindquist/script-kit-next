@@ -1102,6 +1102,21 @@ impl ScriptListApp {
                                     continue;
                                 }
 
+                                // Handle AI SDK messages that can be processed directly
+                                if let Some(response) = crate::ai::try_handle_ai_message(&msg) {
+                                    logging::log(
+                                        "EXEC",
+                                        &format!("AI SDK message handled: {:?}", msg),
+                                    );
+                                    if let Err(e) = reader_response_tx.send(response) {
+                                        logging::log(
+                                            "EXEC",
+                                            &format!("Failed to send AI SDK response: {}", e),
+                                        );
+                                    }
+                                    continue;
+                                }
+
                                 // Handle GetState - needs UI state, forward to UI thread
                                 if let Message::GetState { request_id } = &msg {
                                     logging::log(
