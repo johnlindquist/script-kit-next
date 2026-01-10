@@ -849,9 +849,13 @@ impl ScriptListApp {
 
                 match cmd_type {
                     UtilityCommandType::ScratchPad => {
+                        // Mark as opened from main menu - ESC will return to main menu
+                        self.opened_from_main_menu = true;
                         self.open_scratch_pad(cx);
                     }
                     UtilityCommandType::QuickTerminal => {
+                        // Mark as opened from main menu - ESC will return to main menu
+                        self.opened_from_main_menu = true;
                         self.open_quick_terminal(cx);
                     }
                 }
