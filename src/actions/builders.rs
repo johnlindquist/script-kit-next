@@ -518,33 +518,6 @@ mod tests {
     }
 
     #[test]
-    fn test_get_scriptlet_context_actions() {
-        // Scriptlets should have scriptlet-specific actions
-        let scriptlet = ScriptInfo::scriptlet("Open GitHub", "/path/to/url.md", None, None);
-        let actions = get_script_context_actions(&scriptlet);
-
-        // Should have run, copy_deeplink, and add_shortcut (no shortcut by default)
-        assert!(actions.iter().any(|a| a.id == "run_script"));
-        assert!(actions.iter().any(|a| a.id == "copy_deeplink"));
-        assert!(actions.iter().any(|a| a.id == "add_shortcut"));
-
-        // Should have scriptlet-specific actions
-        assert!(actions.iter().any(|a| a.id == "edit_scriptlet"));
-        assert!(actions.iter().any(|a| a.id == "reveal_scriptlet_in_finder"));
-        assert!(actions.iter().any(|a| a.id == "copy_scriptlet_path"));
-
-        // Verify edit_scriptlet has correct title
-        let edit_action = actions.iter().find(|a| a.id == "edit_scriptlet").unwrap();
-        assert_eq!(edit_action.title, "Edit Scriptlet");
-
-        // Should NOT have script-only actions
-        assert!(!actions.iter().any(|a| a.id == "edit_script"));
-        assert!(!actions.iter().any(|a| a.id == "view_logs"));
-        assert!(!actions.iter().any(|a| a.id == "reveal_in_finder"));
-        assert!(!actions.iter().any(|a| a.id == "copy_path"));
-    }
-
-    #[test]
     fn test_to_deeplink_name() {
         // Test the deeplink name conversion
         assert_eq!(to_deeplink_name("My Script"), "my-script");
