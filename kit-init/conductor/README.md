@@ -9,12 +9,13 @@ This extension is bundled with Script Kit at `~/.scriptkit/kit/conductor`.
 ## Quick Start
 
 ```ts
+// When used within the Conductor extension (scriptlets):
 import {
   isInsideConductor,
   getConductorEnv,
   getPort,
   launch,
-} from '@scriptkit/kit/conductor';
+} from '../../conductor';
 
 // Check if running inside a Conductor workspace
 if (isInsideConductor()) {

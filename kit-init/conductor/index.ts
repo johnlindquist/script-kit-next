@@ -4,17 +4,18 @@
  * Integrate Script Kit with Conductor (https://conductor.build)
  * for parallel AI coding agent workflows.
  *
- * @module @scriptkit/conductor
+ * @module conductor
  *
  * @example
  * ```ts
+ * // Within the Conductor extension (scriptlets):
  * import {
  *   isInsideConductor,
  *   getConductorEnv,
  *   getPort,
  *   readConfig,
  *   launch,
- * } from '@scriptkit/kit/conductor';
+ * } from '../../conductor';
  *
  * // Check if running in Conductor
  * if (isInsideConductor()) {
@@ -112,7 +113,7 @@ export const VERSION = '1.0.0';
  *
  * @example
  * ```ts
- * import { conductor } from '@scriptkit/kit/conductor';
+ * import { conductor } from '../../conductor';
  *
  * // Returns environment info or throws helpful error
  * const env = conductor.require();
