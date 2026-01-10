@@ -257,7 +257,9 @@ pub fn get_grouped_results(
             } else {
                 // Categorize by kit (for scripts/scriptlets/agents) or by type (for others)
                 match result {
-                    SearchResult::Script(_) | SearchResult::Scriptlet(_) | SearchResult::Agent(_) => {
+                    SearchResult::Script(_)
+                    | SearchResult::Scriptlet(_)
+                    | SearchResult::Agent(_) => {
                         // Group by kit name (default to "main" if no kit specified)
                         let kit = get_kit_name(result).unwrap_or_else(|| "main".to_string());
                         kit_indices.entry(kit).or_default().push(idx);
