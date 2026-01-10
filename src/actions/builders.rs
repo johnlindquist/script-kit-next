@@ -754,8 +754,9 @@ mod tests {
     #[test]
     fn test_reset_ranking_for_app() {
         // App with is_suggested should show "Reset Ranking" action
-        let app = ScriptInfo::with_action_verb("Safari", "/Applications/Safari.app", false, "Launch")
-            .with_frecency(true, Some("/Applications/Safari.app".to_string()));
+        let app =
+            ScriptInfo::with_action_verb("Safari", "/Applications/Safari.app", false, "Launch")
+                .with_frecency(true, Some("/Applications/Safari.app".to_string()));
 
         let actions = get_script_context_actions(&app);
 
@@ -769,9 +770,8 @@ mod tests {
     #[test]
     fn test_reset_ranking_for_window() {
         // Window with is_suggested should show "Reset Ranking" action
-        let window =
-            ScriptInfo::with_action_verb("My Document", "window:123", false, "Switch to")
-                .with_frecency(true, Some("window:Preview:My Document".to_string()));
+        let window = ScriptInfo::with_action_verb("My Document", "window:123", false, "Switch to")
+            .with_frecency(true, Some("window:Preview:My Document".to_string()));
 
         let actions = get_script_context_actions(&window);
 
