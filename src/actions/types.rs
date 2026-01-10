@@ -34,6 +34,12 @@ pub struct ScriptInfo {
     /// Current alias assigned to this script/item (if any)
     /// Used to determine which alias actions to show in the actions menu
     pub alias: Option<String>,
+    /// Whether this item appears in the "Suggested" section (has frecency data)
+    /// Used to show/hide the "Reset Ranking" action
+    pub is_suggested: bool,
+    /// The frecency path used to track this item's usage
+    /// Used by "Reset Ranking" to know which frecency entry to remove
+    pub frecency_path: Option<String>,
 }
 
 impl ScriptInfo {
@@ -47,6 +53,8 @@ impl ScriptInfo {
             action_verb: "Run".to_string(),
             shortcut: None,
             alias: None,
+            is_suggested: false,
+            frecency_path: None,
         }
     }
 
@@ -65,6 +73,8 @@ impl ScriptInfo {
             action_verb: "Run".to_string(),
             shortcut,
             alias: None,
+            is_suggested: false,
+            frecency_path: None,
         }
     }
 
@@ -84,6 +94,8 @@ impl ScriptInfo {
             action_verb: "Run".to_string(),
             shortcut,
             alias,
+            is_suggested: false,
+            frecency_path: None,
         }
     }
 
@@ -103,6 +115,8 @@ impl ScriptInfo {
             action_verb: "Run".to_string(),
             shortcut,
             alias,
+            is_suggested: false,
+            frecency_path: None,
         }
     }
 
@@ -118,6 +132,8 @@ impl ScriptInfo {
             action_verb: "Run".to_string(),
             shortcut: None,
             alias: None,
+            is_suggested: false,
+            frecency_path: None,
         }
     }
 
@@ -136,6 +152,8 @@ impl ScriptInfo {
             action_verb: "Run".to_string(),
             shortcut: None,
             alias: None,
+            is_suggested: false,
+            frecency_path: None,
         }
     }
 
@@ -154,6 +172,8 @@ impl ScriptInfo {
             action_verb: action_verb.into(),
             shortcut: None,
             alias: None,
+            is_suggested: false,
+            frecency_path: None,
         }
     }
 
@@ -174,6 +194,8 @@ impl ScriptInfo {
             action_verb: action_verb.into(),
             shortcut,
             alias: None,
+            is_suggested: false,
+            frecency_path: None,
         }
     }
 
@@ -195,7 +217,16 @@ impl ScriptInfo {
             action_verb: action_verb.into(),
             shortcut,
             alias,
+            is_suggested: false,
+            frecency_path: None,
         }
+    }
+
+    /// Set whether this item is suggested (has frecency data) and its frecency path
+    pub fn with_frecency(mut self, is_suggested: bool, frecency_path: Option<String>) -> Self {
+        self.is_suggested = is_suggested;
+        self.frecency_path = frecency_path;
+        self
     }
 }
 
@@ -387,5 +418,51 @@ mod tests {
         assert_eq!(script.action_verb, "Open");
         assert_eq!(script.shortcut, Some("cmd+space".to_string()));
         assert_eq!(script.alias, Some("apps".to_string()));
+    }
+
+    #[test]
+    fn test_script_info_with_frecency() {
+        // Test with_frecency builder method
+        let script = ScriptInfo::new("test-script", "/path/to/script.ts")
+            .with_frecency(true, Some("/path/to/script.ts".to_string()));
+
+        assert!(script.is_suggested);
+        assert_eq!(script.frecency_path, Some("/path/to/script.ts".to_string()));
+    }
+
+    #[test]
+    fn test_script_info_default_frecency_values() {
+        // Test that default values are correct (not suggested, no frecency path)
+        let script = ScriptInfo::new("test-script", "/path/to/script.ts");
+        assert!(!script.is_suggested);
+        assert!(script.frecency_path.is_none());
+
+        let scriptlet = ScriptInfo::scriptlet("Open GitHub", "/path/to/url.md", None, None);
+        assert!(!scriptlet.is_suggested);
+        assert!(scriptlet.frecency_path.is_none());
+
+        let builtin = ScriptInfo::builtin("Clipboard History");
+        assert!(!builtin.is_suggested);
+        assert!(builtin.frecency_path.is_none());
+    }
+
+    #[test]
+    fn test_script_info_frecency_chaining() {
+        // Test that with_frecency can be chained with other constructors
+        let script = ScriptInfo::with_shortcut_and_alias(
+            "test-script",
+            "/path/to/test.ts",
+            Some("cmd+t".to_string()),
+            Some("ts".to_string()),
+        )
+        .with_frecency(true, Some("frecency:path".to_string()));
+
+        // Original fields preserved
+        assert_eq!(script.shortcut, Some("cmd+t".to_string()));
+        assert_eq!(script.alias, Some("ts".to_string()));
+
+        // Frecency fields set
+        assert!(script.is_suggested);
+        assert_eq!(script.frecency_path, Some("frecency:path".to_string()));
     }
 }
