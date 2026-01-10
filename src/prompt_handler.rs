@@ -1488,12 +1488,12 @@ impl ScriptListApp {
                 actions,
                 model,
                 models,
-                save_history: _save_history, // TODO: Use when database persistence is implemented
+                save_history,
             } => {
-                tracing::info!(id, ?placeholder, message_count = messages.len(), ?model, model_count = models.len(), "ShowChat received");
+                tracing::info!(id, ?placeholder, message_count = messages.len(), ?model, model_count = models.len(), save_history, "ShowChat received");
                 logging::log(
                     "UI",
-                    &format!("ShowChat prompt received: {} ({} messages, {} models)", id, messages.len(), models.len()),
+                    &format!("ShowChat prompt received: {} ({} messages, {} models, save={})", id, messages.len(), models.len(), save_history),
                 );
 
                 // Store SDK actions for the actions panel (Cmd+K)
@@ -1538,6 +1538,9 @@ impl ScriptListApp {
                 if let Some(default_model) = model {
                     chat_prompt = chat_prompt.with_default_model(default_model);
                 }
+
+                // Configure history saving
+                chat_prompt = chat_prompt.with_save_history(save_history);
 
                 let entity = cx.new(|_| chat_prompt);
                 self.current_view = AppView::ChatPrompt { id, entity };

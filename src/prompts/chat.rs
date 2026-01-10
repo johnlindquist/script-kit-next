@@ -13,6 +13,7 @@ use gpui::{
 };
 use std::sync::Arc;
 
+use crate::ai::{self, Chat, ChatSource, Message, MessageRole};
 use crate::components::TextInputState;
 use crate::logging;
 use crate::prompts::markdown::render_markdown;
@@ -179,6 +180,8 @@ pub struct ChatPrompt {
     // Actions menu state
     actions_menu_open: bool,
     actions_menu_selected: usize,
+    // Database persistence
+    save_history: bool,
 }
 
 impl ChatPrompt {
@@ -221,6 +224,7 @@ impl ChatPrompt {
             last_copied_response: None,
             actions_menu_open: false,
             actions_menu_selected: 0,
+            save_history: true, // Default to saving
         }
     }
 
@@ -274,6 +278,12 @@ impl ChatPrompt {
     /// Set the title
     pub fn with_title(mut self, title: impl Into<String>) -> Self {
         self.title = Some(title.into());
+        self
+    }
+
+    /// Set whether to save chat history to the database
+    pub fn with_save_history(mut self, save: bool) -> Self {
+        self.save_history = save;
         self
     }
 
@@ -366,9 +376,71 @@ impl ChatPrompt {
 
     fn handle_escape(&mut self, _cx: &mut Context<Self>) {
         logging::log("CHAT", "Escape pressed - closing chat");
+
+        // Save conversation to database if save_history is enabled
+        if self.save_history {
+            self.save_to_database();
+        }
+
         if let Some(ref callback) = self.on_escape {
             callback(self.id.clone());
         }
+    }
+
+    /// Save the current conversation to the AI chats database
+    fn save_to_database(&self) {
+        // Only save if we have messages
+        if self.messages.is_empty() {
+            logging::log("CHAT", "No messages to save");
+            return;
+        }
+
+        // Initialize the AI database if needed
+        if let Err(e) = ai::init_ai_db() {
+            logging::log("CHAT", &format!("Failed to init AI db: {}", e));
+            return;
+        }
+
+        // Generate title from first user message
+        let title = self.messages.iter()
+            .find(|m| m.is_user())
+            .map(|m| Chat::generate_title_from_content(m.get_content()))
+            .unwrap_or_else(|| "Chat Prompt Conversation".to_string());
+
+        // Determine the model and provider
+        let model_id = self.model.clone().unwrap_or_else(|| "unknown".to_string());
+        let provider = self.models.iter()
+            .find(|m| m.name == model_id || m.id == model_id)
+            .map(|m| m.provider.clone())
+            .unwrap_or_else(|| "unknown".to_string());
+
+        // Create the chat record with ChatPrompt source
+        let chat = Chat::new(&model_id, &provider)
+            .with_source(ChatSource::ChatPrompt);
+        let mut chat = chat;
+        chat.set_title(&title);
+
+        // Save the chat
+        if let Err(e) = ai::create_chat(&chat) {
+            logging::log("CHAT", &format!("Failed to save chat: {}", e));
+            return;
+        }
+
+        // Save all messages
+        for (i, msg) in self.messages.iter().enumerate() {
+            let role = if msg.is_user() {
+                MessageRole::User
+            } else {
+                MessageRole::Assistant
+            };
+
+            let message = Message::new(chat.id, role, msg.get_content());
+            if let Err(e) = ai::save_message(&message) {
+                logging::log("CHAT", &format!("Failed to save message {}: {}", i, e));
+            }
+        }
+
+        logging::log("CHAT", &format!("Saved conversation with {} messages (id: {})", self.messages.len(), chat.id));
     }
 
     fn handle_continue_in_chat(&mut self, _cx: &mut Context<Self>) {
