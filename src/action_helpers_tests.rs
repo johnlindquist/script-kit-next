@@ -21,7 +21,7 @@ fn make_script(name: &str, path: &str) -> Arc<Script> {
         shortcut: None,
         typed_metadata: None,
         schema: None,
-        group: None,
+        kit_name: None,
     })
 }
 

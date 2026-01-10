@@ -12,26 +12,8 @@ use glob::glob;
 use crate::setup::get_kit_path;
 
 use super::metadata::extract_metadata_full;
+use super::scriptlet_loader::extract_kit_from_path;
 use super::types::Script;
-
-/// Extract kit name from a scripts directory path
-/// e.g., ~/.scriptkit/kit/my-kit/scripts -> Some("my-kit")
-pub(crate) fn extract_kit_from_scripts_dir(scripts_dir: &Path, kit_root: &Path) -> Option<String> {
-    let kit_prefix = format!("{}/kit/", kit_root.to_string_lossy());
-    let path_str = scripts_dir.to_string_lossy().to_string();
-
-    if path_str.starts_with(&kit_prefix) {
-        // Extract the kit name from the path
-        // Path structure is: <kit_root>/kit/<kit-name>/scripts
-        let relative = &path_str[kit_prefix.len()..];
-        let parts: Vec<&str> = relative.split('/').collect();
-
-        if !parts.is_empty() {
-            return Some(parts[0].to_string());
-        }
-    }
-    None
-}
 
 /// Reads scripts from ~/.scriptkit/*/scripts/ directories
 /// Returns a sorted list of Arc-wrapped Script structs for .ts and .js files
@@ -64,9 +46,7 @@ pub fn read_scripts() -> Vec<Arc<Script>> {
 
     // Read scripts from each kit's scripts directory
     for scripts_dir in script_dirs {
-        // Extract kit name from the directory path
-        let kit_name = extract_kit_from_scripts_dir(&scripts_dir, &kit_path);
-        read_scripts_from_dir(&scripts_dir, kit_name.as_deref(), &mut scripts);
+        read_scripts_from_dir(&scripts_dir, &kit_path, &mut scripts);
     }
 
     // Sort by name
@@ -80,12 +60,12 @@ pub fn read_scripts() -> Vec<Arc<Script>> {
 /// H1 Optimization: Creates Arc-wrapped Scripts for cheap cloning.
 ///
 /// # Arguments
-/// * `scripts_dir` - Path to the scripts directory
-/// * `kit_name` - Optional kit name extracted from the directory path
+/// * `scripts_dir` - Path to the scripts directory (e.g., ~/.scriptkit/kit/main/scripts)
+/// * `kit_path` - Root kit path for extracting kit name (e.g., ~/.scriptkit)
 /// * `scripts` - Vector to append loaded scripts to
 pub(crate) fn read_scripts_from_dir(
     scripts_dir: &PathBuf,
-    kit_name: Option<&str>,
+    kit_path: &Path,
     scripts: &mut Vec<Arc<Script>>,
 ) {
     // Read the directory contents
@@ -112,6 +92,9 @@ pub(crate) fn read_scripts_from_dir(
                                                 .name
                                                 .unwrap_or_else(|| filename_str.to_string());
 
+                                            // Extract kit name from path
+                                            let kit_name = extract_kit_from_path(&path, kit_path);
+
                                             scripts.push(Arc::new(Script {
                                                 name,
                                                 path: path.clone(),
@@ -122,7 +105,7 @@ pub(crate) fn read_scripts_from_dir(
                                                 shortcut: script_metadata.shortcut,
                                                 typed_metadata,
                                                 schema,
-                                                group: kit_name.map(|s| s.to_string()),
+                                                kit_name,
                                             }));
                                         }
                                     }

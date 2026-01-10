@@ -160,7 +160,7 @@ mod tests {
                 ..Default::default()
             }),
             schema: None,
-            group: None,
+            kit_name: None,
         })
     }
 
@@ -176,7 +176,7 @@ mod tests {
             shortcut: None,
             typed_metadata: None,
             schema: None,
-            group: None,
+            kit_name: None,
         })
     }
 
