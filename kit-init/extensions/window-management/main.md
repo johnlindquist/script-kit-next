@@ -191,6 +191,56 @@ if (win) {
 }
 ```
 
+## Third Tiling (Vertical)
+
+### Tile Top Third
+
+<!--
+description: Tile window to top third of screen
+shortcut: ctrl alt 7
+-->
+
+```ts
+import '../../scripts/kit-sdk';
+
+const win = await getFrontmostWindow();
+if (win) {
+  await tileWindow(win.windowId, 'top-third');
+}
+```
+
+### Tile Middle Third
+
+<!--
+description: Tile window to middle third of screen
+shortcut: ctrl alt 8
+-->
+
+```ts
+import '../../scripts/kit-sdk';
+
+const win = await getFrontmostWindow();
+if (win) {
+  await tileWindow(win.windowId, 'middle-third');
+}
+```
+
+### Tile Bottom Third
+
+<!--
+description: Tile window to bottom third of screen
+shortcut: ctrl alt 9
+-->
+
+```ts
+import '../../scripts/kit-sdk';
+
+const win = await getFrontmostWindow();
+if (win) {
+  await tileWindow(win.windowId, 'bottom-third');
+}
+```
+
 ## Two-Thirds Tiling
 
 ### Tile First Two Thirds
@@ -222,6 +272,38 @@ import '../../scripts/kit-sdk';
 const win = await getFrontmostWindow();
 if (win) {
   await tileWindow(win.windowId, 'last-two-thirds');
+}
+```
+
+### Tile Top Two Thirds
+
+<!--
+description: Tile window to top two-thirds of screen
+shortcut: ctrl alt shift up
+-->
+
+```ts
+import '../../scripts/kit-sdk';
+
+const win = await getFrontmostWindow();
+if (win) {
+  await tileWindow(win.windowId, 'top-two-thirds');
+}
+```
+
+### Tile Bottom Two Thirds
+
+<!--
+description: Tile window to bottom two-thirds of screen
+shortcut: ctrl alt shift down
+-->
+
+```ts
+import '../../scripts/kit-sdk';
+
+const win = await getFrontmostWindow();
+if (win) {
+  await tileWindow(win.windowId, 'bottom-two-thirds');
 }
 ```
 
