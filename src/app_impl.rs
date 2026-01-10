@@ -5028,14 +5028,10 @@ export default {
             .scroll_to_reveal_item(self.selected_index);
         self.last_scrolled_index = Some(self.selected_index);
 
-        // Resize window for script list content.
-        // SAFETY: This sync resize is safe because reset_to_script_list is called from:
-        // 1. Message handlers (handle_prompt_message) - run outside render cycle
-        // 2. Visibility management (show/hide) - run outside render cycle
-        // 3. Script completion handlers - run outside render cycle
-        // Using sync resize here because most callers don't have window access.
-        let count = self.scripts.len() + self.scriptlets.len();
-        crate::window_resize::resize_to_view_sync(ViewType::ScriptList, count);
+        // NOTE: Window resize is NOT done here to avoid RefCell borrow conflicts.
+        // Callers that need resize should use deferred resize via window_ops::queue_resize
+        // after the update closure completes. The show_main_window_helper handles this
+        // for the visibility flow. Other callers rely on next render to resize.
 
         // Clear output
         self.last_output = None;
