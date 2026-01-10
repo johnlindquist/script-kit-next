@@ -714,6 +714,30 @@ impl ScriptListApp {
                         self.reset_to_script_list(cx);
                         cx.notify();
                     }
+                    SettingsCommandType::ConfigureVercelApiKey => {
+                        self.show_api_key_prompt(
+                            "SCRIPT_KIT_VERCEL_API_KEY",
+                            "Enter your Vercel AI Gateway API key",
+                            "Vercel AI Gateway",
+                            cx,
+                        );
+                    }
+                    SettingsCommandType::ConfigureOpenAiApiKey => {
+                        self.show_api_key_prompt(
+                            "SCRIPT_KIT_OPENAI_API_KEY",
+                            "Enter your OpenAI API key",
+                            "OpenAI",
+                            cx,
+                        );
+                    }
+                    SettingsCommandType::ConfigureAnthropicApiKey => {
+                        self.show_api_key_prompt(
+                            "SCRIPT_KIT_ANTHROPIC_API_KEY",
+                            "Enter your Anthropic API key",
+                            "Anthropic",
+                            cx,
+                        );
+                    }
                 }
             }
 
@@ -790,6 +814,106 @@ impl ScriptListApp {
             logging::log("EXEC", &format!("Focused window: {}", window.title));
             self.close_and_reset_window(cx);
         }
+    }
+
+    /// Show an API key configuration prompt.
+    ///
+    /// This creates an EnvPrompt that stores the key in the system keyring.
+    /// Once stored, the key will be available to:
+    /// - AI Chat window (via DetectedKeys::from_environment)
+    /// - Scripts using `await env("SCRIPT_KIT_*_API_KEY")`
+    fn show_api_key_prompt(
+        &mut self,
+        key_name: &str,
+        prompt_text: &str,
+        provider_name: &str,
+        cx: &mut Context<Self>,
+    ) {
+        logging::log(
+            "EXEC",
+            &format!("Showing API key prompt for: {}", provider_name),
+        );
+
+        let id = format!("configure-{}", key_name.to_lowercase());
+        let key = key_name.to_string();
+        let prompt = Some(prompt_text.to_string());
+        let secret = true; // API keys are always secrets
+
+        // Store provider name for success message after completion
+        self.pending_api_key_config = Some(provider_name.to_string());
+
+        // Create submit callback that signals completion
+        // The actual toast and view reset happens in handle_api_key_completion
+        let completion_sender = self.api_key_completion_sender.clone();
+        let provider_for_callback = provider_name.to_string();
+        let submit_callback: std::sync::Arc<dyn Fn(String, Option<String>) + Send + Sync> =
+            std::sync::Arc::new(move |_id, value| {
+                // Value being Some means the user submitted a value (key was saved)
+                // Value being None means the user cancelled
+                let success = value.is_some();
+                logging::log(
+                    "EXEC",
+                    &format!(
+                        "API key config callback: provider={}, success={}",
+                        provider_for_callback, success
+                    ),
+                );
+                // Signal completion to the app
+                let _ = completion_sender.try_send((provider_for_callback.clone(), success));
+            });
+
+        // Create EnvPrompt entity
+        let focus_handle = self.focus_handle.clone();
+        let env_prompt = prompts::EnvPrompt::new(
+            id.clone(),
+            key.clone(),
+            prompt,
+            secret,
+            focus_handle,
+            submit_callback,
+            std::sync::Arc::clone(&self.theme),
+        );
+
+        // Check if key already exists in keyring
+        if let Some(existing) = prompts::env::get_secret(&key) {
+            if !existing.is_empty() {
+                // Key already configured - show info toast and offer to reconfigure
+                logging::log(
+                    "EXEC",
+                    &format!("{} API key already configured", provider_name),
+                );
+                // Still show the prompt so user can update if they want
+            }
+        }
+
+        let entity = cx.new(|_| env_prompt);
+        self.current_view = AppView::EnvPrompt { id, entity };
+        self.focused_input = FocusedInput::None; // EnvPrompt has its own focus handling
+        self.pending_focus = Some(FocusTarget::EnvPrompt);
+
+        resize_to_view_sync(ViewType::ArgPromptNoChoices, 0);
+        cx.notify();
+    }
+
+    /// Handle API key configuration completion.
+    /// Called when the EnvPrompt callback signals completion.
+    fn handle_api_key_completion(&mut self, provider: String, success: bool, cx: &mut Context<Self>) {
+        self.pending_api_key_config = None;
+
+        if success {
+            // Show success toast
+            self.toast_manager.push(
+                components::toast::Toast::success(
+                    format!("{} API key saved successfully", provider),
+                    &self.theme,
+                )
+                .duration_ms(Some(3000)),
+            );
+        }
+
+        // Return to main menu
+        self.reset_to_script_list(cx);
+        cx.notify();
     }
 
     /// Get the scratch pad file path
@@ -1079,14 +1203,14 @@ impl ScriptListApp {
             if dir_results.is_empty() && !is_real_dir {
                 logging::log(
                     "EXEC",
-                    "Path mode not a real directory; falling back to native search",
+                    "Path mode not a real directory; falling back to Spotlight search",
                 );
-                file_search::search_files_native(&query, None, file_search::DEFAULT_SEARCH_LIMIT)
+                file_search::search_files(&query, None, file_search::DEFAULT_SEARCH_LIMIT)
             } else {
                 dir_results
             }
         } else {
-            file_search::search_files_native(&query, None, file_search::DEFAULT_SEARCH_LIMIT)
+            file_search::search_files(&query, None, file_search::DEFAULT_SEARCH_LIMIT)
         };
         logging::log(
             "EXEC",

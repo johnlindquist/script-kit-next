@@ -1,18 +1,30 @@
 //! AI provider configuration and environment variable detection.
 //!
 //! This module handles automatic discovery of AI provider API keys from environment
-//! variables using the `SCRIPT_KIT_*_API_KEY` pattern for security.
+//! variables and the system keyring using the `SCRIPT_KIT_*_API_KEY` pattern for security.
+//!
+//! # Key Detection Order
+//!
+//! API keys are detected in the following order (first found wins):
+//! 1. Environment variable (`SCRIPT_KIT_*_API_KEY`)
+//! 2. System keyring (macOS Keychain via `com.scriptkit.env` service)
+//!
+//! This allows users to either set environment variables in their shell profile
+//! or use the built-in "Configure API Key" commands which store in the keyring.
 //!
 //! # Environment Variable Pattern
 //!
 //! API keys are detected with the `SCRIPT_KIT_` prefix:
 //! - `SCRIPT_KIT_OPENAI_API_KEY` -> OpenAI provider
 //! - `SCRIPT_KIT_ANTHROPIC_API_KEY` -> Anthropic provider
+//! - `SCRIPT_KIT_VERCEL_API_KEY` -> Vercel AI Gateway
 //!
 //! This prefix ensures users explicitly configure keys for Script Kit,
 //! rather than accidentally exposing keys from other applications.
 
 use std::env;
+
+use crate::prompts::env::get_secret;
 
 /// Represents a detected AI provider configuration.
 #[derive(Clone)]
@@ -134,6 +146,23 @@ fn read_env_nonempty(name: &str) -> Option<String> {
         .filter(|s| !s.is_empty())
 }
 
+/// Read an API key from environment variable or system keyring.
+///
+/// Checks in order:
+/// 1. Environment variable (for users who set keys in shell profile)
+/// 2. System keyring (for users who use built-in "Configure API Key" commands)
+///
+/// Returns the first non-empty value found, or `None` if not configured.
+fn read_key_env_or_keyring(name: &str) -> Option<String> {
+    // First check environment variable
+    if let Some(value) = read_env_nonempty(name) {
+        return Some(value);
+    }
+
+    // Fall back to keyring
+    get_secret(name)
+}
+
 /// Detected API keys from environment.
 #[derive(Default)]
 pub struct DetectedKeys {
@@ -159,17 +188,22 @@ impl std::fmt::Debug for DetectedKeys {
 }
 
 impl DetectedKeys {
-    /// Scan environment variables for API keys.
+    /// Scan environment variables and system keyring for API keys.
     ///
-    /// Looks for the `SCRIPT_KIT_*_API_KEY` pattern and collects all found keys.
+    /// Looks for the `SCRIPT_KIT_*_API_KEY` pattern in:
+    /// 1. Environment variables (for users who set keys in shell profile)
+    /// 2. System keyring (for users who use built-in "Configure API Key" commands)
+    ///
+    /// This allows the SDK's `await env("SCRIPT_KIT_VERCEL_API_KEY")` to store keys
+    /// in the keyring, and have the AI Chat window automatically pick them up.
     pub fn from_environment() -> Self {
         Self {
-            openai: read_env_nonempty(env_vars::OPENAI_API_KEY),
-            anthropic: read_env_nonempty(env_vars::ANTHROPIC_API_KEY),
-            google: read_env_nonempty(env_vars::GOOGLE_API_KEY),
-            groq: read_env_nonempty(env_vars::GROQ_API_KEY),
-            openrouter: read_env_nonempty(env_vars::OPENROUTER_API_KEY),
-            vercel: read_env_nonempty(env_vars::VERCEL_API_KEY),
+            openai: read_key_env_or_keyring(env_vars::OPENAI_API_KEY),
+            anthropic: read_key_env_or_keyring(env_vars::ANTHROPIC_API_KEY),
+            google: read_key_env_or_keyring(env_vars::GOOGLE_API_KEY),
+            groq: read_key_env_or_keyring(env_vars::GROQ_API_KEY),
+            openrouter: read_key_env_or_keyring(env_vars::OPENROUTER_API_KEY),
+            vercel: read_key_env_or_keyring(env_vars::VERCEL_API_KEY),
         }
     }
 

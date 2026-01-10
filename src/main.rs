@@ -1069,11 +1069,6 @@ struct ScriptListApp {
     file_search_debounce_task: Option<gpui::Task<()>>,
     // Current directory being listed (for instant filter mode)
     file_search_current_dir: Option<String>,
-    // Frozen filter during directory transitions (prevents wrong results flash)
-    // When Some, use this filter instead of deriving from query
-    // Outer Option: None = use query filter, Some = use frozen filter
-    // Inner Option: None = no filter, Some(s) = filter by s
-    file_search_frozen_filter: Option<Option<String>>,
     // Path of the file selected for actions (for file search actions handling)
     file_search_actions_path: Option<String>,
     // Actions popup overlay
@@ -1193,6 +1188,15 @@ struct ScriptListApp {
         Option<Entity<crate::components::shortcut_recorder::ShortcutRecorder>>,
     /// Input history for shell-like up/down navigation through previous inputs
     input_history: input_history::InputHistory,
+    /// Pending API key configuration - tracks which provider is being configured
+    /// Used to show success toast after EnvPrompt completes
+    pending_api_key_config: Option<String>,
+    /// Sender for API key configuration completion signals
+    /// The EnvPrompt callback uses this to signal when done
+    api_key_completion_sender: mpsc::SyncSender<(String, bool)>,
+    /// Receiver for API key configuration completion signals
+    /// Checked by timer to trigger toast and view reset
+    api_key_completion_receiver: mpsc::Receiver<(String, bool)>,
 }
 
 /// Result of alias matching - either a Script or Scriptlet
@@ -1234,6 +1238,12 @@ impl Render for ScriptListApp {
         // Flush any pending toasts to gpui-component's NotificationList
         // This is needed because toast push sites don't have window access
         self.flush_pending_toasts(window, cx);
+
+        // Check for API key configuration completion (from built-in commands)
+        // The EnvPrompt callback signals completion via channel
+        if let Ok((provider, success)) = self.api_key_completion_receiver.try_recv() {
+            self.handle_api_key_completion(provider, success, cx);
+        }
 
         // Focus-lost auto-dismiss: Close dismissable prompts when the main window loses focus
         // This includes focus loss to other app windows like Notes/AI.
