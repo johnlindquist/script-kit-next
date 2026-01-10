@@ -644,10 +644,11 @@ impl ChatPrompt {
     }
 
     /// Render a conversation turn (user prompt + AI response bundled)
-    fn render_turn(&self, turn: &ConversationTurn) -> impl IntoElement {
+    fn render_turn(&self, turn: &ConversationTurn, turn_index: usize, cx: &Context<Self>) -> impl IntoElement {
         let colors = &self.prompt_colors;
 
         let container_bg = rgba((colors.code_bg << 8) | 0x60);
+        let copy_hover_bg = rgba((colors.code_bg << 8) | 0x80);
 
         let mut content = div().flex().flex_col().gap(px(4.0));
 
@@ -685,8 +686,9 @@ impl ChatPrompt {
             content = content.child(response_div);
         }
 
-        // Copy button (appears on right side)
+        // Copy button (appears on right side) - copies assistant response
         let copy_button = div()
+            .id(format!("copy-turn-{}", turn_index))
             .flex()
             .items_center()
             .justify_center()
@@ -695,10 +697,13 @@ impl ChatPrompt {
             .rounded(px(4.0))
             .cursor_pointer()
             .opacity(0.5)
-            .hover(|s| s.opacity(1.0).bg(rgba((colors.code_bg << 8) | 0x80)))
+            .hover(|s| s.opacity(1.0).bg(copy_hover_bg))
             .text_xs()
             .text_color(rgb(colors.text_tertiary))
-            .child("📋");
+            .child("📋")
+            .on_click(cx.listener(move |this, _, _window, cx| {
+                this.copy_turn_response(turn_index, cx);
+            }));
 
         // The full-width container with copy button
         div()
@@ -712,6 +717,23 @@ impl ChatPrompt {
             .gap(px(8.0))
             .child(content.flex_1())
             .child(copy_button)
+    }
+
+    /// Copy the assistant response from a specific turn
+    fn copy_turn_response(&mut self, turn_index: usize, cx: &mut Context<Self>) {
+        let turns = self.get_conversation_turns();
+        if let Some(turn) = turns.get(turn_index) {
+            if let Some(ref response) = turn.assistant_response {
+                let content = response.clone();
+                logging::log("CHAT", &format!("Copied turn {} response: {} chars", turn_index, content.len()));
+                cx.write_to_clipboard(gpui::ClipboardItem::new_string(content));
+            } else if !turn.user_prompt.is_empty() {
+                // If no assistant response, copy the user prompt
+                let content = turn.user_prompt.clone();
+                logging::log("CHAT", &format!("Copied turn {} user prompt: {} chars", turn_index, content.len()));
+                cx.write_to_clipboard(gpui::ClipboardItem::new_string(content));
+            }
+        }
     }
 
     /// Render the input field at the top
@@ -940,8 +962,8 @@ impl Render for ChatPrompt {
             .px(px(12.0))
             .py(px(12.0));
 
-        for turn in &turns {
-            message_list = message_list.child(self.render_turn(turn));
+        for (i, turn) in turns.iter().enumerate() {
+            message_list = message_list.child(self.render_turn(turn, i, cx));
         }
 
         // Empty state
