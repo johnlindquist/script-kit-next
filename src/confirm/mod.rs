@@ -22,9 +22,5 @@ mod constants;
 mod dialog;
 mod window;
 
-pub use constants::*;
-pub use dialog::{ConfirmCallback, ConfirmDialog};
-pub use window::{
-    close_confirm_window, get_confirm_window_handle, is_confirm_window_open, notify_confirm_window,
-    open_confirm_window, ConfirmWindow,
-};
+pub use dialog::ConfirmCallback;
+pub use window::open_confirm_window;

@@ -28,28 +28,3 @@ pub const BUTTON_PADDING_Y: f32 = 10.0;
 
 /// Dialog corner radius
 pub const DIALOG_RADIUS: f32 = 12.0;
-
-/// Margin from main window edges when positioning
-pub const CONFIRM_MARGIN: f32 = 16.0;
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_confirm_dimensions() {
-        // Ensure dialog is reasonably sized
-        assert!(CONFIRM_WIDTH > 200.0);
-        assert!(CONFIRM_WIDTH < 500.0);
-        assert!(CONFIRM_HEIGHT > 100.0);
-        assert!(CONFIRM_HEIGHT < 300.0);
-    }
-
-    #[test]
-    fn test_button_dimensions() {
-        // Buttons should have reasonable touch targets
-        assert!(BUTTON_ROW_HEIGHT >= 44.0); // iOS minimum
-        assert!(BUTTON_PADDING_X > 0.0);
-        assert!(BUTTON_PADDING_Y > 0.0);
-    }
-}

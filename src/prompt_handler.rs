@@ -1377,6 +1377,90 @@ impl ScriptListApp {
                 resize_to_view_sync(view_type, choice_count);
                 cx.notify();
             }
+            PromptMessage::ShowConfirm {
+                id,
+                message,
+                confirm_text,
+                cancel_text,
+            } => {
+                logging::log(
+                    "CONFIRM",
+                    &format!(
+                        "ShowConfirm prompt: id={}, message={:?}",
+                        id, message
+                    ),
+                );
+
+                // Create callback to send response and close the confirm window
+                let response_sender = self.response_sender.clone();
+                let prompt_id = id.clone();
+                let on_choice: ConfirmCallback = std::sync::Arc::new(move |confirmed: bool| {
+                    logging::log(
+                        "CONFIRM",
+                        &format!("User choice: {} (id={})", if confirmed { "confirmed" } else { "cancelled" }, prompt_id),
+                    );
+                    if let Some(ref sender) = response_sender {
+                        let value = if confirmed { Some("true".to_string()) } else { Some("false".to_string()) };
+                        let response = Message::Submit { id: prompt_id.clone(), value };
+                        match sender.try_send(response) {
+                            Ok(()) => {
+                                logging::log("CONFIRM", "Submit message sent");
+                            }
+                            Err(std::sync::mpsc::TrySendError::Full(_)) => {
+                                logging::log("WARN", "Response channel full - confirm response dropped");
+                            }
+                            Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
+                                logging::log("UI", "Response channel disconnected - script exited");
+                            }
+                        }
+                    }
+                });
+
+                // Get main window bounds from native API for positioning
+                let main_bounds = if let Some((x, y, w, h)) = platform::get_main_window_bounds() {
+                    gpui::Bounds {
+                        origin: gpui::Point { x: gpui::px(x as f32), y: gpui::px(y as f32) },
+                        size: gpui::Size { width: gpui::px(w as f32), height: gpui::px(h as f32) },
+                    }
+                } else {
+                    // Fallback to centered on primary display
+                    gpui::Bounds {
+                        origin: gpui::Point { x: gpui::px(200.0), y: gpui::px(200.0) },
+                        size: gpui::Size { width: gpui::px(750.0), height: gpui::px(500.0) },
+                    }
+                };
+                let display_id: Option<gpui::DisplayId> = None; // Use primary display
+
+                // Clone callback for the close handler
+                let on_choice_for_close = on_choice.clone();
+
+                // Open confirm window via spawn
+                cx.spawn(async move |_this, cx| {
+                    cx.update(|cx| {
+                        match open_confirm_window(
+                            cx,
+                            main_bounds,
+                            display_id,
+                            message,
+                            confirm_text,
+                            cancel_text,
+                            on_choice_for_close,
+                        ) {
+                            Ok((_handle, _dialog)) => {
+                                logging::log("CONFIRM", "Confirm popup window opened");
+                            }
+                            Err(e) => {
+                                logging::log(
+                                    "ERROR",
+                                    &format!("Failed to open confirm window: {}", e),
+                                );
+                            }
+                        }
+                    }).ok();
+                }).detach();
+
+                cx.notify();
+            }
             PromptMessage::ShowHud { text, duration_ms } => {
                 self.show_hud(text, duration_ms, cx);
             }

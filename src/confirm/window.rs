@@ -198,6 +198,7 @@ pub fn close_confirm_window(cx: &mut App) {
 }
 
 /// Check if the confirm window is currently open
+#[allow(dead_code)]
 pub fn is_confirm_window_open() -> bool {
     if let Some(window_storage) = CONFIRM_WINDOW.get() {
         if let Ok(guard) = window_storage.lock() {
@@ -208,6 +209,7 @@ pub fn is_confirm_window_open() -> bool {
 }
 
 /// Get the confirm window handle if it exists
+#[allow(dead_code)]
 pub fn get_confirm_window_handle() -> Option<WindowHandle<Root>> {
     if let Some(window_storage) = CONFIRM_WINDOW.get() {
         if let Ok(guard) = window_storage.lock() {
@@ -218,6 +220,7 @@ pub fn get_confirm_window_handle() -> Option<WindowHandle<Root>> {
 }
 
 /// Notify the confirm window to re-render
+#[allow(dead_code)]
 pub fn notify_confirm_window(cx: &mut App) {
     if let Some(handle) = get_confirm_window_handle() {
         let _ = handle.update(cx, |_root, _window, cx| {

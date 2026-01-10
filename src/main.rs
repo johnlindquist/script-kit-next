@@ -203,6 +203,7 @@ use actions::{
     close_actions_window, is_actions_window_open, notify_actions_window, open_actions_window,
     resize_actions_window, ActionsDialog, ScriptInfo,
 };
+use confirm::{open_confirm_window, ConfirmCallback};
 use panel::{
     CURSOR_GAP_X, CURSOR_HEIGHT_LG, CURSOR_MARGIN_Y, CURSOR_WIDTH, DEFAULT_PLACEHOLDER, HEADER_GAP,
     HEADER_PADDING_X, HEADER_PADDING_Y,
@@ -948,6 +949,13 @@ enum PromptMessage {
         placeholder: Option<String>,
         choices: Vec<Choice>,
         multiple: bool,
+    },
+    /// Confirmation dialog with yes/no choice
+    ShowConfirm {
+        id: String,
+        message: String,
+        confirm_text: Option<String>,
+        cancel_text: Option<String>,
     },
     HideWindow,
     OpenBrowser {

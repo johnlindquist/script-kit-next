@@ -177,8 +177,9 @@ impl Render for ConfirmDialog {
             .text_color(secondary_text)
             .text_sm()
             .child(cancel_str)
-            .on_click(cx.listener(|this, _e, _w, _cx| {
+            .on_click(cx.listener(|this, _e, window, _cx| {
                 this.cancel();
+                window.remove_window();
             }));
 
         // Confirm button (primary action)
@@ -206,8 +207,9 @@ impl Render for ConfirmDialog {
             .text_sm()
             .font_weight(gpui::FontWeight::MEDIUM)
             .child(confirm_str)
-            .on_click(cx.listener(|this, _e, _w, _cx| {
+            .on_click(cx.listener(|this, _e, window, _cx| {
                 this.confirm();
+                window.remove_window();
             }));
 
         // Button row
@@ -233,6 +235,36 @@ impl Render for ConfirmDialog {
             .overflow_hidden()
             .track_focus(&self.focus_handle)
             .key_context("confirm_dialog")
+            // Keyboard event handling
+            .on_key_down(cx.listener(|this, event: &gpui::KeyDownEvent, window, cx| {
+                let key = event.keystroke.key.as_str();
+                logging::log("CONFIRM", &format!("Key pressed: {}", key));
+                match key {
+                    // Enter = submit current selection and close
+                    "enter" | "Enter" => {
+                        this.submit();
+                        window.remove_window();
+                    }
+                    // Escape = cancel and close
+                    "escape" | "Escape" => {
+                        this.cancel();
+                        window.remove_window();
+                    }
+                    // Tab = toggle focus between buttons
+                    "tab" | "Tab" => {
+                        this.toggle_focus(cx);
+                    }
+                    // Left arrow = focus cancel button
+                    "left" | "arrowleft" | "Left" | "ArrowLeft" => {
+                        this.focus_cancel(cx);
+                    }
+                    // Right arrow = focus confirm button
+                    "right" | "arrowright" | "Right" | "ArrowRight" => {
+                        this.focus_confirm(cx);
+                    }
+                    _ => {}
+                }
+            }))
             // Message
             .child(
                 div()
