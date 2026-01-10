@@ -199,6 +199,10 @@ impl ScriptListApp {
             }
         });
 
+        // Create channel for API key configuration completion signals
+        // Small buffer (4) prevents blocking, more than enough for normal use
+        let (api_key_tx, api_key_rx) = mpsc::sync_channel(4);
+
         let mut app = ScriptListApp {
             scripts,
             scriptlets,
@@ -243,7 +247,6 @@ impl ScriptListApp {
             file_search_loading: false,
             file_search_debounce_task: None,
             file_search_current_dir: None,
-            file_search_frozen_filter: None,
             file_search_actions_path: None,
             show_actions_popup: false,
             actions_dialog: None,
@@ -341,6 +344,12 @@ impl ScriptListApp {
                 }
                 history
             },
+            // API key configuration state - starts as None (no configuration in progress)
+            pending_api_key_config: None,
+            // API key completion channel - for EnvPrompt callback to signal completion
+            // The channel is created here and both ends are stored
+            api_key_completion_sender: api_key_tx,
+            api_key_completion_receiver: api_key_rx,
         };
 
         // Build initial alias/shortcut registries (conflicts logged, not shown via HUD on startup)
@@ -2077,17 +2086,6 @@ impl ScriptListApp {
                 selected_index,
             } => {
                 if *query != new_text {
-                    // Get old filter BEFORE updating query (for frozen filter during transitions)
-                    let old_filter = if let Some(old_parsed) =
-                        crate::file_search::parse_directory_path(query)
-                    {
-                        old_parsed.filter
-                    } else if !query.is_empty() {
-                        Some(query.clone())
-                    } else {
-                        None
-                    };
-
                     // Update query immediately for responsive UI
                     *query = new_text.clone();
                     *selected_index = 0;
@@ -2104,13 +2102,14 @@ impl ScriptListApp {
 
                         if dir_changed {
                             // Directory changed - need to load new directory contents
-                            // DON'T clear results - keep old results with frozen filter
-                            // This prevents visual flash during directory transitions
-                            // Freeze the OLD filter so old results display correctly
-                            self.file_search_frozen_filter = Some(old_filter);
+                            // Clear old results to prevent flash of wrong directory items
+                            // The render will show "Loading..." when loading with empty results
+                            self.cached_file_results.clear();
                             self.file_search_current_dir = Some(parsed.directory.clone());
                             self.file_search_loading = true;
-                            // Don't reset scroll - keep position stable during transition
+                            // Reset scroll immediately to prevent stale scroll position
+                            self.file_search_scroll_handle
+                                .scroll_to_item(0, ScrollStrategy::Top);
                             cx.notify();
 
                             let dir_to_list = parsed.directory.clone();
@@ -2135,8 +2134,6 @@ impl ScriptListApp {
                                                 this.update(cx, |app, cx| {
                                                     app.cached_file_results = results;
                                                     app.file_search_loading = false;
-                                                    // Clear frozen filter - now using real results
-                                                    app.file_search_frozen_filter = None;
                                                     // Reset selected_index when async results arrive
                                                     // to prevent bounds issues if results shrink
                                                     if let AppView::FileSearchView {
@@ -2161,8 +2158,7 @@ impl ScriptListApp {
                             self.file_search_debounce_task = Some(task);
                         } else {
                             // Same directory - just filter existing results (instant!)
-                            // Clear any frozen filter since we're not in transition
-                            self.file_search_frozen_filter = None;
+                            // Filtering is done in render based on query
                             self.file_search_loading = false;
                             cx.notify();
                         }
