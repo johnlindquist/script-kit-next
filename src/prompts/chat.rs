@@ -21,6 +21,12 @@ use crate::ui_foundation::get_vibrancy_background;
 /// Callback type for when user submits a message: (prompt_id, message_text)
 pub type ChatSubmitCallback = Arc<dyn Fn(String, String) + Send + Sync>;
 
+/// Callback type for when user presses Escape: (prompt_id)
+pub type ChatEscapeCallback = Arc<dyn Fn(String) + Send + Sync>;
+
+/// Callback type for "Continue in Chat": (prompt_id)
+pub type ChatContinueCallback = Arc<dyn Fn(String) + Send + Sync>;
+
 /// A conversation turn: user prompt + optional AI response
 #[derive(Clone, Debug)]
 pub struct ConversationTurn {
@@ -38,13 +44,17 @@ pub struct ChatPrompt {
     pub hint: Option<String>,
     pub footer: Option<String>,
     pub model: Option<String>,
+    pub title: Option<String>,
     pub focus_handle: FocusHandle,
     pub input: TextInputState,
     pub on_submit: ChatSubmitCallback,
+    pub on_escape: Option<ChatEscapeCallback>,
+    pub on_continue: Option<ChatContinueCallback>,
     pub theme: Arc<theme::Theme>,
     pub scroll_handle: ScrollHandle,
     prompt_colors: theme::PromptColors,
     streaming_message_id: Option<String>,
+    last_copied_response: Option<String>,
 }
 
 impl ChatPrompt {
@@ -69,14 +79,36 @@ impl ChatPrompt {
             hint,
             footer,
             model: Some("GPT-4o mini".to_string()),
+            title: Some("Chat".to_string()),
             focus_handle,
             input: TextInputState::new(),
             on_submit,
+            on_escape: None,
+            on_continue: None,
             theme,
             scroll_handle: ScrollHandle::new(),
             prompt_colors,
             streaming_message_id: None,
+            last_copied_response: None,
         }
+    }
+
+    /// Set the escape callback
+    pub fn with_escape_callback(mut self, callback: ChatEscapeCallback) -> Self {
+        self.on_escape = Some(callback);
+        self
+    }
+
+    /// Set the continue callback
+    pub fn with_continue_callback(mut self, callback: ChatContinueCallback) -> Self {
+        self.on_continue = Some(callback);
+        self
+    }
+
+    /// Set the title
+    pub fn with_title(mut self, title: impl Into<String>) -> Self {
+        self.title = Some(title.into());
+        self
     }
 
     pub fn add_message(&mut self, message: ChatPromptMessage, cx: &mut Context<Self>) {
@@ -144,6 +176,36 @@ impl ChatPrompt {
         logging::log("CHAT", &format!("User submitted: {}", text));
         self.input.clear();
         (self.on_submit)(self.id.clone(), text);
+    }
+
+    fn handle_escape(&mut self, _cx: &mut Context<Self>) {
+        logging::log("CHAT", "Escape pressed - closing chat");
+        if let Some(ref callback) = self.on_escape {
+            callback(self.id.clone());
+        }
+    }
+
+    fn handle_continue_in_chat(&mut self, _cx: &mut Context<Self>) {
+        logging::log("CHAT", "Continue in Chat - opening AI window");
+        if let Some(ref callback) = self.on_continue {
+            callback(self.id.clone());
+        }
+    }
+
+    fn handle_copy_last_response(&mut self, cx: &mut Context<Self>) {
+        // Find the last assistant message
+        if let Some(last_assistant) = self.messages.iter().rev().find(|m| !m.is_user()) {
+            let content = last_assistant.get_content().to_string();
+            self.last_copied_response = Some(content.clone());
+            logging::log("CHAT", &format!("Copied response: {} chars", content.len()));
+            // Copy to clipboard via cx
+            cx.write_to_clipboard(gpui::ClipboardItem::new_string(content));
+        }
+    }
+
+    fn handle_clear(&mut self, cx: &mut Context<Self>) {
+        logging::log("CHAT", "Clearing conversation (⌘+⌫)");
+        self.clear_messages(cx);
     }
 
     /// Group messages into conversation turns (user + assistant pairs)
@@ -292,6 +354,38 @@ impl ChatPrompt {
         input_content
     }
 
+    /// Render the header with back button and title
+    fn render_header(&self) -> impl IntoElement {
+        let colors = &self.prompt_colors;
+        let title = self.title.clone().unwrap_or_else(|| "Chat".into());
+
+        div()
+            .w_full()
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap(px(8.0))
+            .px(px(12.0))
+            .py(px(8.0))
+            .border_b_1()
+            .border_color(rgba((colors.quote_border << 8) | 0x40))
+            .child(
+                // Back arrow
+                div()
+                    .text_sm()
+                    .text_color(rgb(colors.text_secondary))
+                    .child("←"),
+            )
+            .child(
+                // Title
+                div()
+                    .text_sm()
+                    .font_weight(gpui::FontWeight::MEDIUM)
+                    .text_color(rgb(colors.text_primary))
+                    .child(title),
+            )
+    }
+
     /// Render the footer with model selector and Continue in Chat
     fn render_footer(&self) -> impl IntoElement {
         let colors = &self.prompt_colors;
@@ -367,14 +461,29 @@ impl Render for ChatPrompt {
         let handle_key = cx.listener(|this, event: &KeyDownEvent, _window, cx| {
             let key = event.keystroke.key.to_lowercase();
             let key_char = event.keystroke.key_char.as_deref();
+            let has_cmd = event.keystroke.modifiers.platform; // ⌘ on macOS
 
             match key.as_str() {
+                // Escape - close chat
+                "escape" => this.handle_escape(cx),
+                // ⌘+Enter - Continue in Chat
+                "enter" if has_cmd => this.handle_continue_in_chat(cx),
+                // Enter - Submit message
                 "enter" if !event.keystroke.modifiers.shift => this.handle_submit(cx),
+                // ⌘+C - Copy last response
+                "c" if has_cmd => this.handle_copy_last_response(cx),
+                // ⌘+Backspace - Clear conversation
+                "backspace" if has_cmd => this.handle_clear(cx),
+                // Regular backspace
                 "backspace" => {
                     this.input.backspace();
                     cx.notify();
                 }
                 _ => {
+                    // Ignore command shortcuts (don't insert characters)
+                    if has_cmd {
+                        return;
+                    }
                     if let Some(ch_str) = key_char {
                         for ch in ch_str.chars() {
                             if ch.is_ascii_graphic() || ch == ' ' {
@@ -436,7 +545,9 @@ impl Render for ChatPrompt {
             .key_context("chat_prompt")
             .track_focus(&self.focus_handle)
             .on_key_down(handle_key)
-            // Input at TOP
+            // Header with back button and title
+            .child(self.render_header())
+            // Input area
             .child(input_area)
             // Scrollable message area
             .child(
