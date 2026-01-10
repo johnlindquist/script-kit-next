@@ -382,6 +382,16 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
         .with_shortcut("⌘⇧D"),
     );
 
+    // Reset Ranking - only available for items that are suggested (have frecency data)
+    if script.is_suggested {
+        actions.push(Action::new(
+            "reset_ranking",
+            "Reset Ranking",
+            Some("Remove this item from Suggested section".to_string()),
+            ActionCategory::ScriptContext,
+        ));
+    }
+
     actions
 }
 
@@ -660,5 +670,141 @@ mod tests {
             let show_info_action = actions.iter().find(|a| a.id == "show_info").unwrap();
             assert_eq!(show_info_action.shortcut.as_ref().unwrap(), "⌘I");
         }
+    }
+
+    #[test]
+    fn test_reset_ranking_not_shown_when_not_suggested() {
+        // Script without is_suggested should NOT show "Reset Ranking" action
+        let script = ScriptInfo::new("test-script", "/path/to/test-script.ts");
+        assert!(!script.is_suggested);
+
+        let actions = get_script_context_actions(&script);
+
+        // Should NOT have reset_ranking action
+        assert!(
+            !actions.iter().any(|a| a.id == "reset_ranking"),
+            "reset_ranking should not be shown when is_suggested is false"
+        );
+    }
+
+    #[test]
+    fn test_reset_ranking_shown_when_suggested() {
+        // Script with is_suggested should show "Reset Ranking" action
+        let script = ScriptInfo::new("test-script", "/path/to/test-script.ts")
+            .with_frecency(true, Some("/path/to/test-script.ts".to_string()));
+        assert!(script.is_suggested);
+
+        let actions = get_script_context_actions(&script);
+
+        // Should have reset_ranking action
+        assert!(
+            actions.iter().any(|a| a.id == "reset_ranking"),
+            "reset_ranking should be shown when is_suggested is true"
+        );
+
+        // Verify action details
+        let reset_action = actions.iter().find(|a| a.id == "reset_ranking").unwrap();
+        assert_eq!(reset_action.title, "Reset Ranking");
+        assert_eq!(
+            reset_action.description,
+            Some("Remove this item from Suggested section".to_string())
+        );
+    }
+
+    #[test]
+    fn test_with_frecency_builder() {
+        // Test the with_frecency builder method
+        let script = ScriptInfo::new("test", "/path/to/test.ts")
+            .with_frecency(true, Some("frecency:path".to_string()));
+
+        assert!(script.is_suggested);
+        assert_eq!(script.frecency_path, Some("frecency:path".to_string()));
+    }
+
+    #[test]
+    fn test_reset_ranking_for_scriptlet() {
+        // Scriptlet with is_suggested should show "Reset Ranking" action
+        let scriptlet = ScriptInfo::scriptlet("Open GitHub", "/path/to/url.md", None, None)
+            .with_frecency(true, Some("scriptlet:Open GitHub".to_string()));
+
+        let actions = get_script_context_actions(&scriptlet);
+
+        // Should have reset_ranking action for suggested scriptlet
+        assert!(
+            actions.iter().any(|a| a.id == "reset_ranking"),
+            "reset_ranking should be shown for suggested scriptlets"
+        );
+    }
+
+    #[test]
+    fn test_reset_ranking_for_builtin() {
+        // Built-in with is_suggested should show "Reset Ranking" action
+        let builtin = ScriptInfo::builtin("Clipboard History")
+            .with_frecency(true, Some("builtin:Clipboard History".to_string()));
+
+        let actions = get_script_context_actions(&builtin);
+
+        // Should have reset_ranking action for suggested built-in
+        assert!(
+            actions.iter().any(|a| a.id == "reset_ranking"),
+            "reset_ranking should be shown for suggested built-ins"
+        );
+    }
+
+    #[test]
+    fn test_reset_ranking_for_app() {
+        // App with is_suggested should show "Reset Ranking" action
+        let app =
+            ScriptInfo::with_action_verb("Safari", "/Applications/Safari.app", false, "Launch")
+                .with_frecency(true, Some("/Applications/Safari.app".to_string()));
+
+        let actions = get_script_context_actions(&app);
+
+        // Should have reset_ranking action for suggested app
+        assert!(
+            actions.iter().any(|a| a.id == "reset_ranking"),
+            "reset_ranking should be shown for suggested apps"
+        );
+    }
+
+    #[test]
+    fn test_reset_ranking_for_window() {
+        // Window with is_suggested should show "Reset Ranking" action
+        let window = ScriptInfo::with_action_verb("My Document", "window:123", false, "Switch to")
+            .with_frecency(true, Some("window:Preview:My Document".to_string()));
+
+        let actions = get_script_context_actions(&window);
+
+        // Should have reset_ranking action for suggested window
+        assert!(
+            actions.iter().any(|a| a.id == "reset_ranking"),
+            "reset_ranking should be shown for suggested windows"
+        );
+    }
+
+    #[test]
+    fn test_reset_ranking_for_agent() {
+        // Agent with is_suggested should show "Reset Ranking" action
+        let agent = ScriptInfo::new("My Agent", "agent:/path/to/agent")
+            .with_frecency(true, Some("agent:/path/to/agent".to_string()));
+
+        let actions = get_script_context_actions(&agent);
+
+        // Should have reset_ranking action for suggested agent
+        assert!(
+            actions.iter().any(|a| a.id == "reset_ranking"),
+            "reset_ranking should be shown for suggested agents"
+        );
+    }
+
+    #[test]
+    fn test_reset_ranking_frecency_path_preserved() {
+        // Verify that the frecency_path is correctly preserved through the builder
+        let script = ScriptInfo::new("test", "/path/to/test.ts")
+            .with_frecency(true, Some("/path/to/test.ts".to_string()));
+
+        // Frecency path should be exactly what we set
+        assert_eq!(script.frecency_path, Some("/path/to/test.ts".to_string()));
+        assert!(script.is_suggested);
     }
 }
