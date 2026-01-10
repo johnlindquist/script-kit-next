@@ -274,9 +274,103 @@ pub enum Message {
     // ============================================================
     // MEDIA PROMPTS
     // ============================================================
-    /// Chat interface
+    /// Chat interface with message history and streaming support
+    ///
+    /// Displays a Raycast-style chat interface where users can send messages
+    /// and receive responses (potentially streamed). Supports markdown rendering.
     #[serde(rename = "chat")]
-    Chat { id: String },
+    Chat {
+        id: String,
+        /// Placeholder text for the input field
+        #[serde(skip_serializing_if = "Option::is_none")]
+        placeholder: Option<String>,
+        /// Initial messages to display
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        messages: Vec<ChatPromptMessage>,
+        /// Hint text (shown in header)
+        #[serde(skip_serializing_if = "Option::is_none")]
+        hint: Option<String>,
+        /// Footer text
+        #[serde(skip_serializing_if = "Option::is_none")]
+        footer: Option<String>,
+        /// Optional actions for the actions panel (Cmd+K to open)
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        actions: Option<Vec<ProtocolAction>>,
+    },
+
+    /// Add a message to the chat (SDK → App)
+    ///
+    /// Sent by the SDK to add a new message to the chat interface.
+    /// Use for both user-generated messages and assistant responses.
+    #[serde(rename = "chatMessage")]
+    ChatMessage {
+        /// Chat prompt ID this message belongs to
+        id: String,
+        /// The message to add
+        message: ChatPromptMessage,
+    },
+
+    /// Start streaming a message (SDK → App)
+    ///
+    /// Creates a new streaming message in the chat. Subsequent
+    /// chatStreamChunk messages will append to this message.
+    #[serde(rename = "chatStreamStart")]
+    ChatStreamStart {
+        /// Chat prompt ID
+        id: String,
+        /// Unique message ID for this stream
+        #[serde(rename = "messageId")]
+        message_id: String,
+        /// Position: "left" (assistant) or "right" (user)
+        #[serde(default)]
+        position: ChatMessagePosition,
+    },
+
+    /// Stream a chunk of text to an active message (SDK → App)
+    ///
+    /// Appends text to the currently streaming message.
+    #[serde(rename = "chatStreamChunk")]
+    ChatStreamChunk {
+        /// Chat prompt ID
+        id: String,
+        /// Message ID being streamed to
+        #[serde(rename = "messageId")]
+        message_id: String,
+        /// Text chunk to append
+        chunk: String,
+    },
+
+    /// Complete streaming for a message (SDK → App)
+    ///
+    /// Marks the streaming message as complete.
+    #[serde(rename = "chatStreamComplete")]
+    ChatStreamComplete {
+        /// Chat prompt ID
+        id: String,
+        /// Message ID that completed
+        #[serde(rename = "messageId")]
+        message_id: String,
+    },
+
+    /// Clear all messages in the chat (SDK → App)
+    #[serde(rename = "chatClear")]
+    ChatClear {
+        /// Chat prompt ID to clear
+        id: String,
+    },
+
+    /// User submitted a message in chat (App → SDK)
+    ///
+    /// Sent when the user presses Enter in the chat input.
+    /// The SDK should handle this and potentially respond with
+    /// chatMessage or chatStreamStart/chatStreamChunk/chatStreamComplete.
+    #[serde(rename = "chatSubmit")]
+    ChatSubmit {
+        /// Chat prompt ID
+        id: String,
+        /// The text the user submitted
+        text: String,
+    },
 
     /// Terminal emulator
     #[serde(rename = "term")]
@@ -1552,6 +1646,12 @@ impl Message {
             | Message::Env { id, .. }
             // Media prompts
             | Message::Chat { id, .. }
+            | Message::ChatMessage { id, .. }
+            | Message::ChatStreamStart { id, .. }
+            | Message::ChatStreamChunk { id, .. }
+            | Message::ChatStreamComplete { id, .. }
+            | Message::ChatClear { id, .. }
+            | Message::ChatSubmit { id, .. }
             | Message::Term { id, .. }
             | Message::Widget { id, .. }
             | Message::Webcam { id, .. }
@@ -1788,7 +1888,84 @@ impl Message {
 
     /// Create a chat prompt message
     pub fn chat(id: String) -> Self {
-        Message::Chat { id }
+        Message::Chat {
+            id,
+            placeholder: None,
+            messages: Vec::new(),
+            hint: None,
+            footer: None,
+            actions: None,
+        }
+    }
+
+    /// Create a chat prompt message with placeholder
+    pub fn chat_with_placeholder(id: String, placeholder: impl Into<String>) -> Self {
+        Message::Chat {
+            id,
+            placeholder: Some(placeholder.into()),
+            messages: Vec::new(),
+            hint: None,
+            footer: None,
+            actions: None,
+        }
+    }
+
+    /// Create a chat prompt message with configuration
+    pub fn chat_with_config(id: String, config: ChatPromptConfig) -> Self {
+        Message::Chat {
+            id,
+            placeholder: config.placeholder,
+            messages: config.messages,
+            hint: config.hint,
+            footer: config.footer,
+            actions: if config.actions.is_empty() {
+                None
+            } else {
+                Some(config.actions)
+            },
+        }
+    }
+
+    /// Create a chat message to add to the chat
+    pub fn chat_message(id: String, message: ChatPromptMessage) -> Self {
+        Message::ChatMessage { id, message }
+    }
+
+    /// Create a chat stream start message
+    pub fn chat_stream_start(
+        id: String,
+        message_id: String,
+        position: ChatMessagePosition,
+    ) -> Self {
+        Message::ChatStreamStart {
+            id,
+            message_id,
+            position,
+        }
+    }
+
+    /// Create a chat stream chunk message
+    pub fn chat_stream_chunk(id: String, message_id: String, chunk: String) -> Self {
+        Message::ChatStreamChunk {
+            id,
+            message_id,
+            chunk,
+        }
+    }
+
+    /// Create a chat stream complete message
+    pub fn chat_stream_complete(id: String, message_id: String) -> Self {
+        Message::ChatStreamComplete { id, message_id }
+    }
+
+    /// Create a chat clear message
+    pub fn chat_clear(id: String) -> Self {
+        Message::ChatClear { id }
+    }
+
+    /// Create a chat submit message (App → SDK)
+    pub fn chat_submit(id: String, text: String) -> Self {
+        Message::ChatSubmit { id, text }
     }
 
     /// Create a term prompt message

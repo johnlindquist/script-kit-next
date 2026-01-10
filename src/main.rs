@@ -788,6 +788,12 @@ enum AppView {
         id: String,
         entity: Entity<TemplatePrompt>,
     },
+    /// Showing chat prompt for conversational interfaces
+    ChatPrompt {
+        #[allow(dead_code)]
+        id: String,
+        entity: Entity<prompts::ChatPrompt>,
+    },
     /// Showing clipboard history
     /// P0 FIX: View state only - data comes from clipboard_history module cache
     ClipboardHistoryView {
@@ -876,6 +882,8 @@ enum FocusTarget {
     TemplatePrompt,
     /// Focus the term prompt
     TermPrompt,
+    /// Focus the chat prompt
+    ChatPrompt,
 }
 
 /// Identifies which prompt type is hosting the actions dialog.
@@ -1023,6 +1031,41 @@ enum PromptMessage {
         message: String,
         confirm_text: Option<String>,
         cancel_text: Option<String>,
+    },
+    /// Chat prompt for conversational interfaces (Raycast-style)
+    ShowChat {
+        id: String,
+        placeholder: Option<String>,
+        messages: Vec<protocol::ChatPromptMessage>,
+        hint: Option<String>,
+        footer: Option<String>,
+        actions: Option<Vec<ProtocolAction>>,
+    },
+    /// Add a message to an active chat prompt
+    ChatAddMessage {
+        id: String,
+        message: protocol::ChatPromptMessage,
+    },
+    /// Start streaming a message in chat
+    ChatStreamStart {
+        id: String,
+        message_id: String,
+        position: protocol::ChatMessagePosition,
+    },
+    /// Append chunk to streaming message
+    ChatStreamChunk {
+        id: String,
+        message_id: String,
+        chunk: String,
+    },
+    /// Complete streaming for a message
+    ChatStreamComplete {
+        id: String,
+        message_id: String,
+    },
+    /// Clear all messages in chat
+    ChatClear {
+        id: String,
     },
     HideWindow,
     OpenBrowser {
@@ -1440,6 +1483,9 @@ impl Render for ScriptListApp {
             }
             AppView::TemplatePrompt { entity, .. } => {
                 self.render_template_prompt(entity, cx).into_any_element()
+            }
+            AppView::ChatPrompt { entity, .. } => {
+                self.render_chat_prompt(entity, cx).into_any_element()
             }
             // P0 FIX: View state only - data comes from self.cached_clipboard_entries
             AppView::ClipboardHistoryView {

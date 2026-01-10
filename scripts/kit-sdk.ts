@@ -52,20 +52,50 @@ export interface FileInfo {
 // Chat Types (TIER 4A)
 // =============================================================================
 
+/** Message displayed in the chat UI */
 export interface ChatMessage {
+  /** Unique message identifier (auto-generated if not provided) */
+  id?: string;
+  /** Message text content (supports markdown) */
   text: string;
+  /** Position: 'left' (assistant/other) or 'right' (user) */
   position: 'left' | 'right';
+  /** Optional sender name */
+  name?: string;
+  /** Whether this message is currently streaming */
+  streaming?: boolean;
 }
 
+/** Configuration options for the chat() prompt */
 export interface ChatOptions {
+  /** Placeholder text for the input field */
+  placeholder?: string;
+  /** Initial messages to display */
+  messages?: ChatMessage[];
+  /** Hint text (shown in header) */
+  hint?: string;
+  /** Footer text */
+  footer?: string;
+  /** Actions for the actions panel (Cmd+K) */
+  actions?: Action[];
+  /** Called when chat opens (before user interaction) */
   onInit?: () => Promise<void>;
-  onSubmit?: (input: string) => Promise<void>;
+  /** Called when user submits a message */
+  onMessage?: (text: string) => Promise<void>;
 }
 
+/** Controller for interacting with an active chat session */
 export interface ChatController {
+  /** Add a message to the chat */
   addMessage(msg: ChatMessage): void;
-  setInput(text: string): void;
-  submit(): void;
+  /** Start streaming a message (returns message ID for subsequent chunks) */
+  startStream(position?: 'left' | 'right'): string;
+  /** Append text to a streaming message */
+  appendChunk(messageId: string, chunk: string): void;
+  /** Complete a streaming message */
+  completeStream(messageId: string): void;
+  /** Clear all messages */
+  clear(): void;
 }
 
 // =============================================================================
@@ -1963,16 +1993,51 @@ type ResponseMessage =
   | ScreenshotResultMessage
   | ActionTriggeredMessage;
 
+/** Initial chat message to show the prompt */
 interface ChatMessageType {
   type: 'chat';
   id: string;
+  placeholder?: string;
+  messages?: ChatMessage[];
+  hint?: string;
+  footer?: string;
+  actions?: Action[];
 }
 
-interface ChatActionMessage {
-  type: 'chatAction';
+/** Add a message to an active chat */
+interface ChatAddMessageType {
+  type: 'chatMessage';
   id: string;
-  action: 'addMessage' | 'setInput' | 'submit';
-  data?: ChatMessage | string;
+  message: ChatMessage;
+}
+
+/** Start streaming a message */
+interface ChatStreamStartType {
+  type: 'chatStreamStart';
+  id: string;
+  messageId: string;
+  position: 'left' | 'right';
+}
+
+/** Append chunk to streaming message */
+interface ChatStreamChunkType {
+  type: 'chatStreamChunk';
+  id: string;
+  messageId: string;
+  chunk: string;
+}
+
+/** Complete streaming for a message */
+interface ChatStreamCompleteType {
+  type: 'chatStreamComplete';
+  id: string;
+  messageId: string;
+}
+
+/** Clear all messages */
+interface ChatClearType {
+  type: 'chatClear';
+  id: string;
 }
 
 // =============================================================================
@@ -4513,16 +4578,39 @@ globalThis.mouse = {
 
 // Current active chat session ID (for controller methods)
 let currentChatId: string | null = null;
+// Message ID counter for streaming
+let chatMessageIdCounter = 0;
+
+// Type for chat function with controller methods
+interface ChatFunction {
+  (options?: ChatOptions): Promise<string>;
+  addMessage(msg: ChatMessage): void;
+  startStream(position?: 'left' | 'right'): string;
+  appendChunk(messageId: string, chunk: string): void;
+  completeStream(messageId: string): void;
+  clear(): void;
+}
 
 // The chat function with attached controller methods
-const chatFn = async function chat(options?: ChatOptions): Promise<string> {
+const chatFn: ChatFunction = async function chat(options?: ChatOptions): Promise<string> {
   const id = nextId();
   currentChatId = id;
+
+  // Build initial messages with IDs
+  const initialMessages = (options?.messages || []).map((msg, i) => ({
+    ...msg,
+    id: msg.id || `init-${i}`,
+  }));
 
   // Send the initial chat message to open the UI
   const message: ChatMessageType = {
     type: 'chat',
     id,
+    placeholder: options?.placeholder,
+    messages: initialMessages,
+    hint: options?.hint,
+    footer: options?.footer,
+    actions: options?.actions,
   };
   send(message);
 
@@ -4531,76 +4619,133 @@ const chatFn = async function chat(options?: ChatOptions): Promise<string> {
     await options.onInit();
   }
 
-  // Auto-submit value: empty string (user would type something)
-  const autoSubmitValue = { value: '' };
+  // If onMessage is provided, set up a loop to handle user messages
+  if (options?.onMessage) {
+    return new Promise((resolve) => {
+      const handleMessage = async (msg: { type: string; id: string; text: string }) => {
+        if (msg.type === 'chatSubmit' && msg.id === id) {
+          // If user pressed Escape (text is empty or undefined), exit
+          if (!msg.text) {
+            currentChatId = null;
+            process.exit(0);
+            return;
+          }
 
-  // Wait for user submission
+          // Call onMessage callback
+          await options.onMessage!(msg.text);
+
+          // Continue listening for more messages
+          // (chat stays open until script explicitly closes it)
+        }
+      };
+
+      // Add handler for chatSubmit messages
+      addPending(id, (msg: SubmitMessage) => {
+        // Legacy submit handler - resolve with value
+        if (msg.value === null) {
+          currentChatId = null;
+          process.exit(0);
+        }
+        resolve(msg.value ?? '');
+        currentChatId = null;
+      }, { value: '' });
+
+      // Also listen for chatSubmit via process event
+      process.on('chatSubmit' as any, handleMessage);
+    });
+  }
+
+  // Simple mode: wait for single submission
   return new Promise((resolve) => {
     addPending(id, (msg: SubmitMessage) => {
-      // If user pressed Escape (value is null), exit the script
       if (msg.value === null) {
+        currentChatId = null;
         process.exit(0);
       }
-      const value = msg.value ?? '';
-
-      // Call onSubmit if provided
-      if (options?.onSubmit) {
-        options.onSubmit(value).then(() => {
-          resolve(value);
-        });
-      } else {
-        resolve(value);
-      }
-
+      resolve(msg.value ?? '');
       currentChatId = null;
-    }, autoSubmitValue);
+    }, { value: '' });
   });
 };
 
-// Attach controller methods to the chat function
+// Controller method: Add a message to the chat
 chatFn.addMessage = function addMessage(msg: ChatMessage): void {
   if (currentChatId === null) {
     throw new Error('chat.addMessage() called outside of a chat session');
   }
-  
-  const message: ChatActionMessage = {
-    type: 'chatAction',
+
+  const message: ChatAddMessageType = {
+    type: 'chatMessage',
     id: currentChatId,
-    action: 'addMessage',
-    data: msg,
+    message: {
+      ...msg,
+      id: msg.id || `msg-${chatMessageIdCounter++}`,
+    },
   };
   send(message);
 };
 
-chatFn.setInput = function setInput(text: string): void {
+// Controller method: Start streaming a message
+chatFn.startStream = function startStream(position: 'left' | 'right' = 'left'): string {
   if (currentChatId === null) {
-    throw new Error('chat.setInput() called outside of a chat session');
+    throw new Error('chat.startStream() called outside of a chat session');
   }
-  
-  const message: ChatActionMessage = {
-    type: 'chatAction',
+
+  const messageId = `stream-${chatMessageIdCounter++}`;
+  const message: ChatStreamStartType = {
+    type: 'chatStreamStart',
     id: currentChatId,
-    action: 'setInput',
-    data: text,
+    messageId,
+    position,
+  };
+  send(message);
+  return messageId;
+};
+
+// Controller method: Append chunk to streaming message
+chatFn.appendChunk = function appendChunk(messageId: string, chunk: string): void {
+  if (currentChatId === null) {
+    throw new Error('chat.appendChunk() called outside of a chat session');
+  }
+
+  const message: ChatStreamChunkType = {
+    type: 'chatStreamChunk',
+    id: currentChatId,
+    messageId,
+    chunk,
   };
   send(message);
 };
 
-chatFn.submit = function submit(): void {
+// Controller method: Complete streaming for a message
+chatFn.completeStream = function completeStream(messageId: string): void {
   if (currentChatId === null) {
-    throw new Error('chat.submit() called outside of a chat session');
+    throw new Error('chat.completeStream() called outside of a chat session');
   }
-  
-  const message: ChatActionMessage = {
-    type: 'chatAction',
+
+  const message: ChatStreamCompleteType = {
+    type: 'chatStreamComplete',
     id: currentChatId,
-    action: 'submit',
+    messageId,
+  };
+  send(message);
+};
+
+// Controller method: Clear all messages
+chatFn.clear = function clear(): void {
+  if (currentChatId === null) {
+    throw new Error('chat.clear() called outside of a chat session');
+  }
+
+  const message: ChatClearType = {
+    type: 'chatClear',
+    id: currentChatId,
   };
   send(message);
 };
 
 // Expose as global
-(globalThis as unknown as { chat: typeof chatFn }).chat = chatFn;
+(globalThis as unknown as { chat: ChatFunction }).chat = chatFn;
 
 // =============================================================================
 // TIER 4B: Widget/Term/Media Prompts

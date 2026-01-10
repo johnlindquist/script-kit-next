@@ -759,6 +759,16 @@ impl ScriptListApp {
                         -1,
                         None,
                     ),
+                    AppView::ChatPrompt { id, .. } => (
+                        "chat".to_string(),
+                        Some(id.clone()),
+                        None,
+                        String::new(),
+                        0,
+                        0,
+                        -1,
+                        None,
+                    ),
                     AppView::ActionsDialog => (
                         "actions".to_string(),
                         None,
@@ -1468,6 +1478,111 @@ impl ScriptListApp {
                 }).detach();
 
                 cx.notify();
+            }
+            PromptMessage::ShowChat {
+                id,
+                placeholder,
+                messages,
+                hint,
+                footer,
+                actions,
+            } => {
+                tracing::info!(id, ?placeholder, message_count = messages.len(), "ShowChat received");
+                logging::log(
+                    "UI",
+                    &format!("ShowChat prompt received: {} ({} messages)", id, messages.len()),
+                );
+
+                // Store SDK actions for the actions panel (Cmd+K)
+                self.sdk_actions = actions;
+
+                // Create submit callback for chat prompt
+                let response_sender = self.response_sender.clone();
+                let chat_submit_callback: prompts::ChatSubmitCallback =
+                    std::sync::Arc::new(move |id, text| {
+                        if let Some(ref sender) = response_sender {
+                            // Send ChatSubmit message back to SDK
+                            let response = Message::ChatSubmit { id, text };
+                            match sender.try_send(response) {
+                                Ok(()) => {}
+                                Err(std::sync::mpsc::TrySendError::Full(_)) => {
+                                    logging::log("WARN", "Response channel full - chat response dropped");
+                                }
+                                Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
+                                    logging::log("UI", "Response channel disconnected - script exited");
+                                }
+                            }
+                        }
+                    });
+
+                // Create ChatPrompt entity
+                let focus_handle = self.focus_handle.clone();
+                let chat_prompt = prompts::ChatPrompt::new(
+                    id.clone(),
+                    placeholder,
+                    messages,
+                    hint,
+                    footer,
+                    focus_handle,
+                    chat_submit_callback,
+                    std::sync::Arc::clone(&self.theme),
+                );
+                let entity = cx.new(|_| chat_prompt);
+                self.current_view = AppView::ChatPrompt { id, entity };
+                self.focused_input = FocusedInput::None;
+                self.pending_focus = Some(FocusTarget::ChatPrompt);
+
+                resize_to_view_sync(ViewType::DivPrompt, 0);
+                cx.notify();
+            }
+            PromptMessage::ChatAddMessage { id, message } => {
+                logging::log("CHAT", &format!("ChatAddMessage for {}", id));
+                if let AppView::ChatPrompt { id: view_id, entity } = &self.current_view {
+                    if view_id == &id {
+                        entity.update(cx, |chat, cx| {
+                            chat.add_message(message, cx);
+                        });
+                    }
+                }
+            }
+            PromptMessage::ChatStreamStart { id, message_id, position } => {
+                logging::log("CHAT", &format!("ChatStreamStart for {} msg={}", id, message_id));
+                if let AppView::ChatPrompt { id: view_id, entity } = &self.current_view {
+                    if view_id == &id {
+                        entity.update(cx, |chat, cx| {
+                            chat.start_streaming(message_id, position, cx);
+                        });
+                    }
+                }
+            }
+            PromptMessage::ChatStreamChunk { id, message_id, chunk } => {
+                if let AppView::ChatPrompt { id: view_id, entity } = &self.current_view {
+                    if view_id == &id {
+                        entity.update(cx, |chat, cx| {
+                            chat.append_chunk(&message_id, &chunk, cx);
+                        });
+                    }
+                }
+            }
+            PromptMessage::ChatStreamComplete { id, message_id } => {
+                logging::log("CHAT", &format!("ChatStreamComplete for {} msg={}", id, message_id));
+                if let AppView::ChatPrompt { id: view_id, entity } = &self.current_view {
+                    if view_id == &id {
+                        entity.update(cx, |chat, cx| {
+                            chat.complete_streaming(&message_id, cx);
+                        });
+                    }
+                }
+            }
+            PromptMessage::ChatClear { id } => {
+                logging::log("CHAT", &format!("ChatClear for {}", id));
+                if let AppView::ChatPrompt { id: view_id, entity } = &self.current_view {
+                    if view_id == &id {
+                        entity.update(cx, |chat, cx| {
+                            chat.clear_messages(cx);
+                        });
+                    }
+                }
             }
             PromptMessage::ShowHud { text, duration_ms } => {
                 self.show_hud(text, duration_ms, cx);

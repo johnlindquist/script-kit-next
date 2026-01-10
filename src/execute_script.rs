@@ -1333,6 +1333,51 @@ impl ScriptListApp {
                                         Some(PromptMessage::ShowGrid { options })
                                     }
                                     Message::HideGrid => Some(PromptMessage::HideGrid),
+                                    // Chat prompt messages
+                                    Message::Chat {
+                                        id,
+                                        placeholder,
+                                        messages,
+                                        hint,
+                                        footer,
+                                        actions,
+                                    } => Some(PromptMessage::ShowChat {
+                                        id,
+                                        placeholder,
+                                        messages,
+                                        hint,
+                                        footer,
+                                        actions,
+                                    }),
+                                    Message::ChatMessage { id, message } => {
+                                        Some(PromptMessage::ChatAddMessage { id, message })
+                                    }
+                                    Message::ChatStreamStart {
+                                        id,
+                                        message_id,
+                                        position,
+                                    } => Some(PromptMessage::ChatStreamStart {
+                                        id,
+                                        message_id,
+                                        position,
+                                    }),
+                                    Message::ChatStreamChunk {
+                                        id,
+                                        message_id,
+                                        chunk,
+                                    } => Some(PromptMessage::ChatStreamChunk {
+                                        id,
+                                        message_id,
+                                        chunk,
+                                    }),
+                                    Message::ChatStreamComplete { id, message_id } => {
+                                        Some(PromptMessage::ChatStreamComplete { id, message_id })
+                                    }
+                                    Message::ChatClear { id } => {
+                                        Some(PromptMessage::ChatClear { id })
+                                    }
+                                    // ChatSubmit goes from App → SDK, not SDK → App
+                                    Message::ChatSubmit { .. } => None,
                                     other => {
                                         // Get the message type name for user feedback
                                         let msg_type = format!("{:?}", other);

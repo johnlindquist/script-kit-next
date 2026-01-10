@@ -1472,6 +1472,159 @@ impl AiMessageInfo {
 }
 
 // ============================================================
+// CHAT PROMPT TYPES
+// ============================================================
+
+/// A chat message displayed in the ChatPrompt
+///
+/// Used for both user messages and assistant responses in the chat interface.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatPromptMessage {
+    /// Unique message identifier (UUID)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+    /// Message text content (supports markdown)
+    pub text: String,
+    /// Position in the chat: "left" (assistant/other) or "right" (user)
+    pub position: ChatMessagePosition,
+    /// Optional name/label for the message sender
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// Whether this message is currently streaming (partial content)
+    #[serde(default)]
+    pub streaming: bool,
+}
+
+impl ChatPromptMessage {
+    /// Create a new user message (right-aligned)
+    pub fn user(text: impl Into<String>) -> Self {
+        Self {
+            id: Some(uuid::Uuid::new_v4().to_string()),
+            text: text.into(),
+            position: ChatMessagePosition::Right,
+            name: None,
+            streaming: false,
+        }
+    }
+
+    /// Create a new assistant message (left-aligned)
+    pub fn assistant(text: impl Into<String>) -> Self {
+        Self {
+            id: Some(uuid::Uuid::new_v4().to_string()),
+            text: text.into(),
+            position: ChatMessagePosition::Left,
+            name: None,
+            streaming: false,
+        }
+    }
+
+    /// Create a streaming assistant message (content still arriving)
+    pub fn streaming(text: impl Into<String>) -> Self {
+        Self {
+            id: Some(uuid::Uuid::new_v4().to_string()),
+            text: text.into(),
+            position: ChatMessagePosition::Left,
+            name: None,
+            streaming: true,
+        }
+    }
+
+    /// Set the message ID
+    pub fn with_id(mut self, id: impl Into<String>) -> Self {
+        self.id = Some(id.into());
+        self
+    }
+
+    /// Set the sender name
+    pub fn with_name(mut self, name: impl Into<String>) -> Self {
+        self.name = Some(name.into());
+        self
+    }
+
+    /// Mark as streaming
+    pub fn with_streaming(mut self, streaming: bool) -> Self {
+        self.streaming = streaming;
+        self
+    }
+}
+
+/// Position of a chat message (alignment)
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum ChatMessagePosition {
+    /// Left-aligned (assistant/other messages)
+    #[default]
+    Left,
+    /// Right-aligned (user messages)
+    Right,
+}
+
+/// Configuration options for the chat prompt
+///
+/// Used with the Chat message to configure the chat interface.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatPromptConfig {
+    /// Placeholder text for the input field
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub placeholder: Option<String>,
+    /// Initial messages to display
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub messages: Vec<ChatPromptMessage>,
+    /// Whether to focus the input on open
+    #[serde(default)]
+    pub auto_focus: bool,
+    /// Hint text (shown in header)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hint: Option<String>,
+    /// Footer text
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub footer: Option<String>,
+    /// Optional actions for the actions panel (Cmd+K)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub actions: Vec<ProtocolAction>,
+}
+
+impl ChatPromptConfig {
+    /// Create a new ChatPromptConfig with a placeholder
+    pub fn with_placeholder(placeholder: impl Into<String>) -> Self {
+        Self {
+            placeholder: Some(placeholder.into()),
+            messages: Vec::new(),
+            auto_focus: true,
+            hint: None,
+            footer: None,
+            actions: Vec::new(),
+        }
+    }
+
+    /// Add an initial message
+    pub fn add_message(mut self, msg: ChatPromptMessage) -> Self {
+        self.messages.push(msg);
+        self
+    }
+
+    /// Set hint text
+    pub fn with_hint(mut self, hint: impl Into<String>) -> Self {
+        self.hint = Some(hint.into());
+        self
+    }
+
+    /// Set footer text
+    pub fn with_footer(mut self, footer: impl Into<String>) -> Self {
+        self.footer = Some(footer.into());
+        self
+    }
+
+    /// Add actions for the actions panel
+    pub fn with_actions(mut self, actions: Vec<ProtocolAction>) -> Self {
+        self.actions = actions;
+        self
+    }
+}
+
+// ============================================================
 // MENU BAR INTEGRATION
 // ============================================================
 
