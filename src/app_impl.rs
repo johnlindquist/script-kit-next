@@ -243,6 +243,7 @@ impl ScriptListApp {
             file_search_loading: false,
             file_search_debounce_task: None,
             file_search_current_dir: None,
+            file_search_frozen_filter: None,
             file_search_actions_path: None,
             show_actions_popup: false,
             actions_dialog: None,
@@ -2076,6 +2077,17 @@ impl ScriptListApp {
                 selected_index,
             } => {
                 if *query != new_text {
+                    // Get old filter BEFORE updating query (for frozen filter during transitions)
+                    let old_filter = if let Some(old_parsed) =
+                        crate::file_search::parse_directory_path(query)
+                    {
+                        old_parsed.filter
+                    } else if !query.is_empty() {
+                        Some(query.clone())
+                    } else {
+                        None
+                    };
+
                     // Update query immediately for responsive UI
                     *query = new_text.clone();
                     *selected_index = 0;
@@ -2092,14 +2104,13 @@ impl ScriptListApp {
 
                         if dir_changed {
                             // Directory changed - need to load new directory contents
-                            // MUST clear results to prevent showing wrong directory contents
-                            // (old results + new filter = wrong data shown to user)
-                            // The loading state will show "Searching..." instead
-                            self.cached_file_results.clear();
+                            // DON'T clear results - keep old results with frozen filter
+                            // This prevents visual flash during directory transitions
+                            // Freeze the OLD filter so old results display correctly
+                            self.file_search_frozen_filter = Some(old_filter);
                             self.file_search_current_dir = Some(parsed.directory.clone());
                             self.file_search_loading = true;
-                            self.file_search_scroll_handle
-                                .scroll_to_item(0, ScrollStrategy::Top);
+                            // Don't reset scroll - keep position stable during transition
                             cx.notify();
 
                             let dir_to_list = parsed.directory.clone();
@@ -2124,6 +2135,8 @@ impl ScriptListApp {
                                                 this.update(cx, |app, cx| {
                                                     app.cached_file_results = results;
                                                     app.file_search_loading = false;
+                                                    // Clear frozen filter - now using real results
+                                                    app.file_search_frozen_filter = None;
                                                     // Reset selected_index when async results arrive
                                                     // to prevent bounds issues if results shrink
                                                     if let AppView::FileSearchView {
@@ -2148,7 +2161,8 @@ impl ScriptListApp {
                             self.file_search_debounce_task = Some(task);
                         } else {
                             // Same directory - just filter existing results (instant!)
-                            // Filtering is done in render based on query
+                            // Clear any frozen filter since we're not in transition
+                            self.file_search_frozen_filter = None;
                             self.file_search_loading = false;
                             cx.notify();
                         }

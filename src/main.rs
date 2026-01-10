@@ -1069,6 +1069,11 @@ struct ScriptListApp {
     file_search_debounce_task: Option<gpui::Task<()>>,
     // Current directory being listed (for instant filter mode)
     file_search_current_dir: Option<String>,
+    // Frozen filter during directory transitions (prevents wrong results flash)
+    // When Some, use this filter instead of deriving from query
+    // Outer Option: None = use query filter, Some = use frozen filter
+    // Inner Option: None = no filter, Some(s) = filter by s
+    file_search_frozen_filter: Option<Option<String>>,
     // Path of the file selected for actions (for file search actions handling)
     file_search_actions_path: Option<String>,
     // Actions popup overlay

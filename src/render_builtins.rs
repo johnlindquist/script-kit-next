@@ -2019,7 +2019,12 @@ impl ScriptListApp {
         // Filter results based on query
         // When query is a directory path, extract the filter component for instant filtering
         // e.g., ~/dev/fin -> filter by "fin" on directory contents
-        let filter_pattern = if let Some(parsed) = crate::file_search::parse_directory_path(query) {
+        // During directory transitions, use frozen filter to prevent showing wrong results
+        let filter_pattern = if let Some(ref frozen) = self.file_search_frozen_filter {
+            // Use frozen filter during directory transitions
+            // This keeps old results displaying correctly while new results load
+            frozen.clone()
+        } else if let Some(parsed) = crate::file_search::parse_directory_path(query) {
             parsed.filter // Some("fin") or None
         } else if !query.is_empty() {
             // Not a directory path - use query as filter for search results
