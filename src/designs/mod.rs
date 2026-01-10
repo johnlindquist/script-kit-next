@@ -336,13 +336,9 @@ pub fn render_design_item(
     is_hovered: bool,
     list_colors: ListItemColors,
 ) -> AnyElement {
-    crate::logging::log_debug(
-        "DESIGN",
-        &format!(
-            "Rendering item {} with design {:?}, selected={}, hovered={}",
-            index, variant, is_selected, is_hovered
-        ),
-    );
+    // NOTE: Removed per-item DEBUG log that was causing log spam.
+    // This function is called for every visible list item on every render frame.
+    // With cursor blink triggering renders every 530ms, this logged 8-9 items × 2 renders/sec.
 
     match variant {
         DesignVariant::Minimal => {
