@@ -90,10 +90,10 @@ pub fn open_confirm_window(
     let window_width = px(CONFIRM_WIDTH);
     let window_height = px(CONFIRM_HEIGHT);
 
-    let window_x = main_window_bounds.origin.x
-        + (main_window_bounds.size.width - window_width) / 2.0;
-    let window_y = main_window_bounds.origin.y
-        + (main_window_bounds.size.height - window_height) / 2.0;
+    let window_x =
+        main_window_bounds.origin.x + (main_window_bounds.size.width - window_width) / 2.0;
+    let window_y =
+        main_window_bounds.origin.y + (main_window_bounds.size.height - window_height) / 2.0;
 
     let bounds = Bounds {
         origin: Point {

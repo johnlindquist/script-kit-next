@@ -97,7 +97,10 @@ impl ConfirmDialog {
         let confirmed = self.focused_button == 1;
         logging::log(
             "CONFIRM",
-            &format!("User chose: {}", if confirmed { "confirm" } else { "cancel" }),
+            &format!(
+                "User chose: {}",
+                if confirmed { "confirm" } else { "cancel" }
+            ),
         );
         (self.on_choice)(confirmed);
     }

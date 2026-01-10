@@ -29,11 +29,11 @@ extern crate objc;
 
 mod actions;
 mod agents;
-mod confirm;
 mod ai;
 mod aliases;
 mod components;
 mod config;
+mod confirm;
 mod designs;
 mod editor;
 mod error;
