@@ -218,6 +218,7 @@ mod tests {
             shortcut: None,
             typed_metadata: None,
             schema: Some(schema),
+            kit_name: None,
         }
     }
 
@@ -251,6 +252,7 @@ mod tests {
             shortcut: None,
             typed_metadata: None,
             schema: None,
+            kit_name: None,
         }
     }
 
