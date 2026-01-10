@@ -273,6 +273,7 @@ mod tests {
             shortcut: None,
             typed_metadata: None,
             schema: None,
+            group: None,
         }
     }
 
@@ -524,6 +525,7 @@ mod tests {
                 input,
                 output: HashMap::new(),
             }),
+            group: None,
         };
 
         let entry: ScriptResourceEntry = (&script_with_schema).into();

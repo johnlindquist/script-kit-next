@@ -481,6 +481,7 @@ impl ScriptListApp {
                     shortcut: None,
                     typed_metadata: None,
                     schema: None,
+                    group: None,
                 };
 
                 logging::log("EXEC", &format!("Executing script: {}", script_name));

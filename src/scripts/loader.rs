@@ -3,7 +3,7 @@
 //! This module provides functions for loading scripts from the
 //! ~/.scriptkit/*/scripts/ directories.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tracing::{debug, instrument, warn};
 
@@ -13,6 +13,25 @@ use crate::setup::get_kit_path;
 
 use super::metadata::extract_metadata_full;
 use super::types::Script;
+
+/// Extract kit name from a scripts directory path
+/// e.g., ~/.scriptkit/kit/my-kit/scripts -> Some("my-kit")
+pub(crate) fn extract_kit_from_scripts_dir(scripts_dir: &Path, kit_root: &Path) -> Option<String> {
+    let kit_prefix = format!("{}/kit/", kit_root.to_string_lossy());
+    let path_str = scripts_dir.to_string_lossy().to_string();
+
+    if path_str.starts_with(&kit_prefix) {
+        // Extract the kit name from the path
+        // Path structure is: <kit_root>/kit/<kit-name>/scripts
+        let relative = &path_str[kit_prefix.len()..];
+        let parts: Vec<&str> = relative.split('/').collect();
+
+        if !parts.is_empty() {
+            return Some(parts[0].to_string());
+        }
+    }
+    None
+}
 
 /// Reads scripts from ~/.scriptkit/*/scripts/ directories
 /// Returns a sorted list of Arc-wrapped Script structs for .ts and .js files
@@ -45,7 +64,9 @@ pub fn read_scripts() -> Vec<Arc<Script>> {
 
     // Read scripts from each kit's scripts directory
     for scripts_dir in script_dirs {
-        read_scripts_from_dir(&scripts_dir, &mut scripts);
+        // Extract kit name from the directory path
+        let kit_name = extract_kit_from_scripts_dir(&scripts_dir, &kit_path);
+        read_scripts_from_dir(&scripts_dir, kit_name.as_deref(), &mut scripts);
     }
 
     // Sort by name
@@ -57,7 +78,16 @@ pub fn read_scripts() -> Vec<Arc<Script>> {
 
 /// Read scripts from a single directory and append to the scripts vector
 /// H1 Optimization: Creates Arc-wrapped Scripts for cheap cloning.
-pub(crate) fn read_scripts_from_dir(scripts_dir: &PathBuf, scripts: &mut Vec<Arc<Script>>) {
+///
+/// # Arguments
+/// * `scripts_dir` - Path to the scripts directory
+/// * `kit_name` - Optional kit name extracted from the directory path
+/// * `scripts` - Vector to append loaded scripts to
+pub(crate) fn read_scripts_from_dir(
+    scripts_dir: &PathBuf,
+    kit_name: Option<&str>,
+    scripts: &mut Vec<Arc<Script>>,
+) {
     // Read the directory contents
     match std::fs::read_dir(scripts_dir) {
         Ok(entries) => {
@@ -92,6 +122,7 @@ pub(crate) fn read_scripts_from_dir(scripts_dir: &PathBuf, scripts: &mut Vec<Arc
                                                 shortcut: script_metadata.shortcut,
                                                 typed_metadata,
                                                 schema,
+                                                group: kit_name.map(|s| s.to_string()),
                                             }));
                                         }
                                     }

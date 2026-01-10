@@ -29,6 +29,9 @@ pub struct Script {
     pub typed_metadata: Option<TypedMetadata>,
     /// Schema definition from `schema = { ... }` declaration in script
     pub schema: Option<Schema>,
+    /// Kit name from the directory structure (e.g., "main", "cleanshot")
+    /// Extracted from the path ~/.scriptkit/kit/<kit-name>/scripts/
+    pub group: Option<String>,
 }
 
 /// Represents a scriptlet parsed from a markdown file
