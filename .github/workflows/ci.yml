@@ -26,28 +26,37 @@ jobs:
   # Just verify code compiles and is formatted
   # ═══════════════════════════════════════════════════════════════════
 
-  fast-check:
-    name: Fast Check
+  # Fast format check (parallel with compile)
+  fast-fmt:
+    name: Format
     runs-on: macos-14
-    # Skip if full-ci is requested (label or main branch)
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'full-ci') && github.ref != 'refs/heads/main' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --check
+
+  # Fast compile check (parallel with format)
+  fast-compile:
+    name: Compile
+    runs-on: macos-14
     if: ${{ !contains(github.event.pull_request.labels.*.name, 'full-ci') && github.ref != 'refs/heads/main' }}
     steps:
       - uses: actions/checkout@v4
 
       - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt
 
+      # Share cache with full CI for faster warm starts
       - uses: Swatinem/rust-cache@v2
         with:
-          shared-key: "macos-check"
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          shared-key: "macos-debug"
+          save-if: false
 
-      - name: Format check
-        run: cargo fmt --check
-
+      # Check lib + binary only (not tests) - faster for PR feedback
       - name: Compile check
-        run: cargo check --all-targets
+        run: cargo check
 
   # ═══════════════════════════════════════════════════════════════════
   # FULL CI (main branch or 'full-ci' label)
