@@ -468,6 +468,7 @@ mod tests {
             suggested: None,
             notes_hotkey: None,
             ai_hotkey: None,
+            logs_hotkey: None,
             commands: None,
         };
         assert_eq!(default_config.get_editor(), "code");
@@ -487,6 +488,7 @@ mod tests {
             suggested: None,
             notes_hotkey: None,
             ai_hotkey: None,
+            logs_hotkey: None,
             commands: None,
         };
         assert_eq!(custom_config.get_editor(), "vim");
