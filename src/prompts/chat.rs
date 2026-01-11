@@ -13,6 +13,7 @@ use gpui::{
 };
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 
 use crate::ai::providers::{ProviderMessage, ProviderRegistry};
 use crate::ai::{self, Chat, ChatSource, Message, MessageRole, ModelInfo};
@@ -203,6 +204,11 @@ pub struct ChatPrompt {
     selected_model: Option<ModelInfo>,
     builtin_streaming_content: String,
     builtin_is_streaming: bool,
+    // Auto-submit flag: when true, submit the input on first render (for Tab from main menu)
+    pending_submit: bool,
+    // Cursor blink state for input field
+    cursor_visible: bool,
+    cursor_blink_started: bool,
 }
 
 impl ChatPrompt {
@@ -252,7 +258,35 @@ impl ChatPrompt {
             selected_model: None,
             builtin_streaming_content: String::new(),
             builtin_is_streaming: false,
+            pending_submit: false,
+            cursor_visible: true,
+            cursor_blink_started: false,
         }
+    }
+
+    /// Start the cursor blink timer
+    pub fn start_cursor_blink(&mut self, cx: &mut Context<Self>) {
+        cx.spawn(async move |this, cx| {
+            loop {
+                Timer::after(Duration::from_millis(530)).await;
+                let result = cx.update(|cx| {
+                    this.update(cx, |chat, cx| {
+                        chat.cursor_visible = !chat.cursor_visible;
+                        cx.notify();
+                    })
+                });
+                // Stop blinking if the entity was dropped
+                if result.is_err() {
+                    break;
+                }
+            }
+        })
+        .detach();
+    }
+
+    /// Reset cursor to visible (called on user input to keep cursor visible while typing)
+    fn reset_cursor_blink(&mut self) {
+        self.cursor_visible = true;
     }
 
     /// Set custom models for the chat
@@ -350,6 +384,13 @@ impl ChatPrompt {
         self.provider_registry = Some(registry);
         self.available_models = available_models;
         self.selected_model = selected_model;
+        self
+    }
+
+    /// Set pending_submit flag - when true, auto-submit input on first render
+    /// Used for Tab from main menu to immediately send the query to AI
+    pub fn with_pending_submit(mut self, submit: bool) -> Self {
+        self.pending_submit = submit;
         self
     }
 
@@ -1317,6 +1358,7 @@ impl ChatPrompt {
         let text = self.input.text();
         let cursor_pos = self.input.cursor();
         let chars: Vec<char> = text.chars().collect();
+        let cursor_visible = self.cursor_visible;
 
         let mut input_content = div().flex().flex_row().items_center();
 
@@ -1327,9 +1369,12 @@ impl ChatPrompt {
                 input_content.child(div().text_color(rgb(colors.text_primary)).child(before));
         }
 
-        // Cursor
-        input_content =
-            input_content.child(div().w(px(2.0)).h(px(16.0)).bg(rgb(colors.accent_color)));
+        // Cursor (blinking)
+        let cursor = div()
+            .w(px(2.0))
+            .h(px(16.0))
+            .when(cursor_visible, |d| d.bg(rgb(colors.accent_color)));
+        input_content = input_content.child(cursor);
 
         // Text after cursor
         if cursor_pos < chars.len() {
@@ -1344,6 +1389,10 @@ impl ChatPrompt {
                 .placeholder
                 .clone()
                 .unwrap_or_else(|| "Ask follow-up...".into());
+            let cursor = div()
+                .w(px(2.0))
+                .h(px(16.0))
+                .when(cursor_visible, |d| d.bg(rgb(colors.accent_color)));
             input_content = div()
                 .flex()
                 .flex_row()
@@ -1353,7 +1402,7 @@ impl ChatPrompt {
                         .text_color(rgb(colors.text_tertiary))
                         .child(placeholder),
                 )
-                .child(div().w(px(2.0)).h(px(16.0)).bg(rgb(colors.accent_color)));
+                .child(cursor);
         }
 
         input_content
@@ -1461,6 +1510,22 @@ impl Focusable for ChatPrompt {
 
 impl Render for ChatPrompt {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        // Start cursor blink timer on first render
+        if !self.cursor_blink_started {
+            self.cursor_blink_started = true;
+            self.start_cursor_blink(cx);
+        }
+
+        // Process pending_submit on first render (used when Tab opens chat with query)
+        if self.pending_submit && !self.input.is_empty() {
+            self.pending_submit = false;
+            logging::log(
+                "CHAT",
+                "Processing pending_submit - auto-submitting query from Tab",
+            );
+            self.handle_submit(cx);
+        }
+
         let colors = &self.prompt_colors;
 
         let actions_menu_open = self.actions_menu_open;
@@ -1499,6 +1564,7 @@ impl Render for ChatPrompt {
                 // Regular backspace
                 "backspace" => {
                     this.input.backspace();
+                    this.reset_cursor_blink();
                     cx.notify();
                 }
                 _ => {
@@ -1512,6 +1578,7 @@ impl Render for ChatPrompt {
                                 this.input.insert_char(ch);
                             }
                         }
+                        this.reset_cursor_blink();
                         cx.notify();
                     }
                 }
