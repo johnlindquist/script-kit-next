@@ -7,9 +7,9 @@ icon: sparkles
 
 # AI Text Tools
 
-Transform selected text using AI. Select text in any application, trigger a command, and the AI window opens with your text and a specialized prompt.
+Transform selected text using AI with inline chat. Supports follow-up questions.
 
-**Requirements:** Configure an AI API key (`SCRIPT_KIT_ANTHROPIC_API_KEY` or `SCRIPT_KIT_OPENAI_API_KEY`).
+**Requirements:** Set `SCRIPT_KIT_ANTHROPIC_API_KEY` or `SCRIPT_KIT_OPENAI_API_KEY`.
 
 ---
 
@@ -21,25 +21,47 @@ shortcut: ctrl shift i
 -->
 
 ```ts
-let text: string | undefined;
-try {
-  text = await getSelectedText();
-} catch (e: any) {
-  if (e.message?.includes('Accessibility')) {
-    await hud('Enable Accessibility in System Preferences');
-    exit();
-  }
-  // Other errors - fall through
-}
-if (!text?.trim()) {
-  await hud('No text selected');
-  exit();
-}
+import { streamAiResponse, getModelName, type Message } from './stream-helper';
 
-await aiStartChat(`Please improve the following text. Focus on clarity, flow, and readability while maintaining the original meaning and tone:\n\n${text}`, {
-  systemPrompt: 'You are a professional editor specializing in clear, engaging writing. Improve the text\'s quality, grammar, and clarity while preserving the original voice and intent. Provide the improved version first, then briefly explain key changes.'
+let text = '';
+try { text = await getSelectedText(); } catch (e: any) {
+  if (e.message?.includes('Accessibility')) { await hud('Enable Accessibility'); exit(); }
+}
+if (!text?.trim()) { await hud('No text selected'); exit(); }
+
+const systemPrompt = `You are a professional editor. Improve text quality, grammar, and clarity while preserving voice. Provide improved version first, then explain key changes.`;
+const history: Message[] = [{ role: 'user', content: `Improve this text:\n\n${text}` }];
+
+await chat({
+  placeholder: 'Ask follow-up...',
+  hint: 'Improve Writing',
+  footer: getModelName(),
+  messages: [{ role: 'user', content: history[0].content }],
+  system: systemPrompt,
+  async onInit() {
+    const msgId = chat.startStream('left');
+    let response = '';
+    await streamAiResponse({
+      systemPrompt, userPrompt: history[0].content,
+      onChunk: (chunk) => { response += chunk; chat.appendChunk(msgId, chunk); },
+      onError: (err) => chat.setError(msgId, err),
+      onComplete: () => { chat.completeStream(msgId); history.push({ role: 'assistant', content: response }); },
+    });
+  },
+  async onMessage(input: string) {
+    // Show user message in chat, then stream AI response
+    chat.addMessage({ role: 'user', content: input });
+    history.push({ role: 'user', content: input });
+    const msgId = chat.startStream('left');
+    let response = '';
+    await streamAiResponse({
+      systemPrompt, messages: history,
+      onChunk: (chunk) => { response += chunk; chat.appendChunk(msgId, chunk); },
+      onError: (err) => chat.setError(msgId, err),
+      onComplete: () => { chat.completeStream(msgId); history.push({ role: 'assistant', content: response }); },
+    });
+  },
 });
-await aiFocus();
 ```
 
 ---
@@ -47,29 +69,52 @@ await aiFocus();
 ## Explain This
 
 <!--
-description: Get a clear explanation of selected text or concept
+description: Get a clear explanation of selected text
 shortcut: ctrl shift e
 -->
 
 ```ts
-let text: string | undefined;
-try {
-  text = await getSelectedText();
-} catch (e: any) {
-  if (e.message?.includes('Accessibility')) {
-    await hud('Enable Accessibility in System Preferences');
-    exit();
-  }
-}
-if (!text?.trim()) {
-  await hud('No text selected');
-  exit();
-}
+import { streamAiResponse, getModelName, type Message } from './stream-helper';
 
-await aiStartChat(`Please explain the following:\n\n${text}`, {
-  systemPrompt: 'You are a patient, knowledgeable teacher who explains concepts clearly. Provide explanations that are accessible yet thorough. Use analogies and examples when helpful. If the text is code, explain what it does and how it works.'
+let text = '';
+try { text = await getSelectedText(); } catch (e: any) {
+  if (e.message?.includes('Accessibility')) { await hud('Enable Accessibility'); exit(); }
+}
+if (!text?.trim()) { await hud('No text selected'); exit(); }
+
+const systemPrompt = `You are a patient teacher who explains concepts clearly. Use analogies when helpful. For code, explain what it does and how.`;
+const history: Message[] = [{ role: 'user', content: `Please explain:\n\n${text}` }];
+
+await chat({
+  placeholder: 'Ask follow-up...',
+  hint: 'Explain This',
+  footer: getModelName(),
+  messages: [{ role: 'user', content: history[0].content }],
+  system: systemPrompt,
+  async onInit() {
+    const msgId = chat.startStream('left');
+    let response = '';
+    await streamAiResponse({
+      systemPrompt, userPrompt: history[0].content,
+      onChunk: (chunk) => { response += chunk; chat.appendChunk(msgId, chunk); },
+      onError: (err) => chat.setError(msgId, err),
+      onComplete: () => { chat.completeStream(msgId); history.push({ role: 'assistant', content: response }); },
+    });
+  },
+  async onMessage(input: string) {
+    // Show user message in chat, then stream AI response
+    chat.addMessage({ role: 'user', content: input });
+    history.push({ role: 'user', content: input });
+    const msgId = chat.startStream('left');
+    let response = '';
+    await streamAiResponse({
+      systemPrompt, messages: history,
+      onChunk: (chunk) => { response += chunk; chat.appendChunk(msgId, chunk); },
+      onError: (err) => chat.setError(msgId, err),
+      onComplete: () => { chat.completeStream(msgId); history.push({ role: 'assistant', content: response }); },
+    });
+  },
 });
-await aiFocus();
 ```
 
 ---
@@ -82,24 +127,47 @@ shortcut: ctrl shift g
 -->
 
 ```ts
-let text: string | undefined;
-try {
-  text = await getSelectedText();
-} catch (e: any) {
-  if (e.message?.includes('Accessibility')) {
-    await hud('Enable Accessibility in System Preferences');
-    exit();
-  }
-}
-if (!text?.trim()) {
-  await hud('No text selected');
-  exit();
-}
+import { streamAiResponse, getModelName, type Message } from './stream-helper';
 
-await aiStartChat(`Please fix the grammar, spelling, and punctuation in the following text:\n\n${text}`, {
-  systemPrompt: 'You are a meticulous proofreader. Fix all grammar, spelling, and punctuation errors. Preserve the original style and tone. Provide the corrected text first, then list the corrections made.'
+let text = '';
+try { text = await getSelectedText(); } catch (e: any) {
+  if (e.message?.includes('Accessibility')) { await hud('Enable Accessibility'); exit(); }
+}
+if (!text?.trim()) { await hud('No text selected'); exit(); }
+
+const systemPrompt = `You are a meticulous proofreader. Fix grammar, spelling, punctuation. Preserve style. Provide corrected text first, then list changes.`;
+const history: Message[] = [{ role: 'user', content: `Fix grammar and spelling:\n\n${text}` }];
+
+await chat({
+  placeholder: 'Ask follow-up...',
+  hint: 'Fix Grammar',
+  footer: getModelName(),
+  messages: [{ role: 'user', content: history[0].content }],
+  system: systemPrompt,
+  async onInit() {
+    const msgId = chat.startStream('left');
+    let response = '';
+    await streamAiResponse({
+      systemPrompt, userPrompt: history[0].content,
+      onChunk: (chunk) => { response += chunk; chat.appendChunk(msgId, chunk); },
+      onError: (err) => chat.setError(msgId, err),
+      onComplete: () => { chat.completeStream(msgId); history.push({ role: 'assistant', content: response }); },
+    });
+  },
+  async onMessage(input: string) {
+    // Show user message in chat, then stream AI response
+    chat.addMessage({ role: 'user', content: input });
+    history.push({ role: 'user', content: input });
+    const msgId = chat.startStream('left');
+    let response = '';
+    await streamAiResponse({
+      systemPrompt, messages: history,
+      onChunk: (chunk) => { response += chunk; chat.appendChunk(msgId, chunk); },
+      onError: (err) => chat.setError(msgId, err),
+      onComplete: () => { chat.completeStream(msgId); history.push({ role: 'assistant', content: response }); },
+    });
+  },
 });
-await aiFocus();
 ```
 
 ---
@@ -112,24 +180,47 @@ shortcut: ctrl shift s
 -->
 
 ```ts
-let text: string | undefined;
-try {
-  text = await getSelectedText();
-} catch (e: any) {
-  if (e.message?.includes('Accessibility')) {
-    await hud('Enable Accessibility in System Preferences');
-    exit();
-  }
-}
-if (!text?.trim()) {
-  await hud('No text selected');
-  exit();
-}
+import { streamAiResponse, getModelName, type Message } from './stream-helper';
 
-await aiStartChat(`Please summarize the following text:\n\n${text}`, {
-  systemPrompt: 'You are skilled at distilling information to its essence. Provide a clear, concise summary that captures the main points. Use bullet points for multiple key ideas. The summary should be significantly shorter than the original while retaining the essential meaning.'
+let text = '';
+try { text = await getSelectedText(); } catch (e: any) {
+  if (e.message?.includes('Accessibility')) { await hud('Enable Accessibility'); exit(); }
+}
+if (!text?.trim()) { await hud('No text selected'); exit(); }
+
+const systemPrompt = `Distill information to its essence. Provide clear, concise summary. Use bullet points for multiple ideas. Much shorter than original.`;
+const history: Message[] = [{ role: 'user', content: `Summarize:\n\n${text}` }];
+
+await chat({
+  placeholder: 'Ask follow-up...',
+  hint: 'Summarize',
+  footer: getModelName(),
+  messages: [{ role: 'user', content: history[0].content }],
+  system: systemPrompt,
+  async onInit() {
+    const msgId = chat.startStream('left');
+    let response = '';
+    await streamAiResponse({
+      systemPrompt, userPrompt: history[0].content,
+      onChunk: (chunk) => { response += chunk; chat.appendChunk(msgId, chunk); },
+      onError: (err) => chat.setError(msgId, err),
+      onComplete: () => { chat.completeStream(msgId); history.push({ role: 'assistant', content: response }); },
+    });
+  },
+  async onMessage(input: string) {
+    // Show user message in chat, then stream AI response
+    chat.addMessage({ role: 'user', content: input });
+    history.push({ role: 'user', content: input });
+    const msgId = chat.startStream('left');
+    let response = '';
+    await streamAiResponse({
+      systemPrompt, messages: history,
+      onChunk: (chunk) => { response += chunk; chat.appendChunk(msgId, chunk); },
+      onError: (err) => chat.setError(msgId, err),
+      onComplete: () => { chat.completeStream(msgId); history.push({ role: 'assistant', content: response }); },
+    });
+  },
 });
-await aiFocus();
 ```
 
 ---
@@ -142,24 +233,47 @@ shortcut: ctrl shift c
 -->
 
 ```ts
-let text: string | undefined;
-try {
-  text = await getSelectedText();
-} catch (e: any) {
-  if (e.message?.includes('Accessibility')) {
-    await hud('Enable Accessibility in System Preferences');
-    exit();
-  }
-}
-if (!text?.trim()) {
-  await hud('No text selected');
-  exit();
-}
+import { streamAiResponse, getModelName, type Message } from './stream-helper';
 
-await aiStartChat(`Please make the following text more concise without losing important information:\n\n${text}`, {
-  systemPrompt: 'You are an expert at clear, economical writing. Remove redundancy, wordiness, and unnecessary phrases. Keep the essential meaning intact. Aim for at least 30% reduction in length while maintaining clarity and completeness.'
+let text = '';
+try { text = await getSelectedText(); } catch (e: any) {
+  if (e.message?.includes('Accessibility')) { await hud('Enable Accessibility'); exit(); }
+}
+if (!text?.trim()) { await hud('No text selected'); exit(); }
+
+const systemPrompt = `Expert at economical writing. Remove redundancy and wordiness. Keep essential meaning. Aim for 30%+ reduction.`;
+const history: Message[] = [{ role: 'user', content: `Make concise:\n\n${text}` }];
+
+await chat({
+  placeholder: 'Ask follow-up...',
+  hint: 'Make Concise',
+  footer: getModelName(),
+  messages: [{ role: 'user', content: history[0].content }],
+  system: systemPrompt,
+  async onInit() {
+    const msgId = chat.startStream('left');
+    let response = '';
+    await streamAiResponse({
+      systemPrompt, userPrompt: history[0].content,
+      onChunk: (chunk) => { response += chunk; chat.appendChunk(msgId, chunk); },
+      onError: (err) => chat.setError(msgId, err),
+      onComplete: () => { chat.completeStream(msgId); history.push({ role: 'assistant', content: response }); },
+    });
+  },
+  async onMessage(input: string) {
+    // Show user message in chat, then stream AI response
+    chat.addMessage({ role: 'user', content: input });
+    history.push({ role: 'user', content: input });
+    const msgId = chat.startStream('left');
+    let response = '';
+    await streamAiResponse({
+      systemPrompt, messages: history,
+      onChunk: (chunk) => { response += chunk; chat.appendChunk(msgId, chunk); },
+      onError: (err) => chat.setError(msgId, err),
+      onComplete: () => { chat.completeStream(msgId); history.push({ role: 'assistant', content: response }); },
+    });
+  },
 });
-await aiFocus();
 ```
 
 ---
@@ -172,24 +286,47 @@ shortcut: ctrl shift t
 -->
 
 ```ts
-let text: string | undefined;
-try {
-  text = await getSelectedText();
-} catch (e: any) {
-  if (e.message?.includes('Accessibility')) {
-    await hud('Enable Accessibility in System Preferences');
-    exit();
-  }
-}
-if (!text?.trim()) {
-  await hud('No text selected');
-  exit();
-}
+import { streamAiResponse, getModelName, type Message } from './stream-helper';
 
-await aiStartChat(`Please translate the following text to English:\n\n${text}`, {
-  systemPrompt: 'You are a professional translator. Translate the text to natural, fluent English while preserving the original meaning, tone, and nuance. If there are cultural references or idioms, explain them briefly. Provide the translation first, then note the source language.'
+let text = '';
+try { text = await getSelectedText(); } catch (e: any) {
+  if (e.message?.includes('Accessibility')) { await hud('Enable Accessibility'); exit(); }
+}
+if (!text?.trim()) { await hud('No text selected'); exit(); }
+
+const systemPrompt = `Professional translator. Natural, fluent English preserving meaning and tone. Explain cultural references. Note source language.`;
+const history: Message[] = [{ role: 'user', content: `Translate to English:\n\n${text}` }];
+
+await chat({
+  placeholder: 'Ask follow-up...',
+  hint: 'Translate',
+  footer: getModelName(),
+  messages: [{ role: 'user', content: history[0].content }],
+  system: systemPrompt,
+  async onInit() {
+    const msgId = chat.startStream('left');
+    let response = '';
+    await streamAiResponse({
+      systemPrompt, userPrompt: history[0].content,
+      onChunk: (chunk) => { response += chunk; chat.appendChunk(msgId, chunk); },
+      onError: (err) => chat.setError(msgId, err),
+      onComplete: () => { chat.completeStream(msgId); history.push({ role: 'assistant', content: response }); },
+    });
+  },
+  async onMessage(input: string) {
+    // Show user message in chat, then stream AI response
+    chat.addMessage({ role: 'user', content: input });
+    history.push({ role: 'user', content: input });
+    const msgId = chat.startStream('left');
+    let response = '';
+    await streamAiResponse({
+      systemPrompt, messages: history,
+      onChunk: (chunk) => { response += chunk; chat.appendChunk(msgId, chunk); },
+      onError: (err) => chat.setError(msgId, err),
+      onComplete: () => { chat.completeStream(msgId); history.push({ role: 'assistant', content: response }); },
+    });
+  },
 });
-await aiFocus();
 ```
 
 ---
@@ -202,22 +339,45 @@ shortcut: ctrl shift p
 -->
 
 ```ts
-let text: string | undefined;
-try {
-  text = await getSelectedText();
-} catch (e: any) {
-  if (e.message?.includes('Accessibility')) {
-    await hud('Enable Accessibility in System Preferences');
-    exit();
-  }
-}
-if (!text?.trim()) {
-  await hud('No text selected');
-  exit();
-}
+import { streamAiResponse, getModelName, type Message } from './stream-helper';
 
-await aiStartChat(`Please rewrite the following text in a professional, business-appropriate tone:\n\n${text}`, {
-  systemPrompt: 'You are a business communication expert. Rewrite the text to be professional, polished, and appropriate for workplace communication. Maintain the core message while adjusting tone, word choice, and structure for a professional context.'
+let text = '';
+try { text = await getSelectedText(); } catch (e: any) {
+  if (e.message?.includes('Accessibility')) { await hud('Enable Accessibility'); exit(); }
+}
+if (!text?.trim()) { await hud('No text selected'); exit(); }
+
+const systemPrompt = `Business communication expert. Rewrite to be professional and workplace-appropriate. Maintain core message, adjust tone and word choice.`;
+const history: Message[] = [{ role: 'user', content: `Rewrite professionally:\n\n${text}` }];
+
+await chat({
+  placeholder: 'Ask follow-up...',
+  hint: 'Professional Tone',
+  footer: getModelName(),
+  messages: [{ role: 'user', content: history[0].content }],
+  system: systemPrompt,
+  async onInit() {
+    const msgId = chat.startStream('left');
+    let response = '';
+    await streamAiResponse({
+      systemPrompt, userPrompt: history[0].content,
+      onChunk: (chunk) => { response += chunk; chat.appendChunk(msgId, chunk); },
+      onError: (err) => chat.setError(msgId, err),
+      onComplete: () => { chat.completeStream(msgId); history.push({ role: 'assistant', content: response }); },
+    });
+  },
+  async onMessage(input: string) {
+    // Show user message in chat, then stream AI response
+    chat.addMessage({ role: 'user', content: input });
+    history.push({ role: 'user', content: input });
+    const msgId = chat.startStream('left');
+    let response = '';
+    await streamAiResponse({
+      systemPrompt, messages: history,
+      onChunk: (chunk) => { response += chunk; chat.appendChunk(msgId, chunk); },
+      onError: (err) => chat.setError(msgId, err),
+      onComplete: () => { chat.completeStream(msgId); history.push({ role: 'assistant', content: response }); },
+    });
+  },
 });
-await aiFocus();
 ```
