@@ -3,45 +3,27 @@ name: CI
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - '.gitignore'
   pull_request:
     branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - '.gitignore'
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  check:
-    name: Check
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo check
-
-  clippy:
-    name: Clippy
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo clippy --all-targets -- -D warnings
-
-  test:
-    name: Test
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo test
-
+  # Fast format check (no compilation needed)
   fmt:
     name: Format
-    runs-on: macos-latest
+    runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -49,10 +31,26 @@ jobs:
           components: rustfmt
       - run: cargo fmt --check
 
+  # Combined lint + test job (clippy is superset of check, no need for separate check job)
+  lint-and-test:
+    name: Lint & Test
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings
+      - name: Tests
+        run: cargo test
+
+  # Runs in parallel with lint-and-test (no needs: dependency)
+  # Only needs the binary built, doesn't depend on Rust tests passing
   typescript-tests:
     name: TypeScript SDK Tests
-    runs-on: macos-latest
-    needs: [test]
+    runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -65,39 +63,39 @@ jobs:
       - name: Build binary
         run: cargo build
       - name: Run TypeScript SDK tests
-        run: bun run scripts/test-runner.ts
+        run: bun run scripts/test-runner.ts --parallel
         timeout-minutes: 5
 
   build-artifact:
     name: Build macOS Artifact
-    runs-on: macos-latest
+    runs-on: macos-14
     # Only run on push to main, not on PRs
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [check, clippy, test, fmt]
+    needs: [fmt, lint-and-test]
     steps:
       - uses: actions/checkout@v4
-      
+
       - uses: dtolnay/rust-toolchain@stable
-      
+
       - uses: Swatinem/rust-cache@v2
-      
+
       - name: Build release
         run: cargo build --release
-      
+
       - name: Install cargo-bundle
         run: cargo install cargo-bundle --git https://github.com/zed-industries/cargo-bundle.git --branch zed-deploy
-      
+
       - name: Create bundle
         run: cargo bundle --release
-      
+
       - name: Ad-hoc sign for artifact
         run: codesign --force --deep --sign - "target/release/bundle/osx/Script Kit.app"
-      
+
       - name: Create zip
         run: |
           cd target/release/bundle/osx
           zip -r Script-Kit-macos-dev.zip "Script Kit.app"
-      
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
