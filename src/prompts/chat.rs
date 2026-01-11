@@ -7,6 +7,7 @@
 //! - Footer with model selector and "Continue in Chat"
 //! - Actions menu (⌘+K) with model picker
 
+use crate::designs::icon_variations::IconName;
 use gpui::{
     div, prelude::*, px, rgb, rgba, svg, Context, FocusHandle, Focusable, Hsla, KeyDownEvent,
     Render, ScrollHandle, Timer, Window,
@@ -18,7 +19,6 @@ use std::time::Duration;
 use crate::ai::providers::{ProviderMessage, ProviderRegistry};
 use crate::ai::{self, Chat, ChatSource, Message, MessageRole, ModelInfo};
 use crate::components::TextInputState;
-use crate::designs::icon_variations::IconName;
 use crate::logging;
 use crate::prompts::markdown::render_markdown;
 use crate::protocol::{ChatMessagePosition, ChatMessageRole, ChatPromptMessage};
@@ -806,9 +806,35 @@ impl ChatPrompt {
         );
     }
 
-    fn handle_continue_in_chat(&mut self, _cx: &mut Context<Self>) {
+    fn handle_continue_in_chat(&mut self, cx: &mut Context<Self>) {
         logging::log("CHAT", "Continue in Chat - opening AI window");
-        if let Some(ref callback) = self.on_continue {
+
+        // Collect conversation history from messages
+        let messages: Vec<(MessageRole, String)> = self
+            .messages
+            .iter()
+            .map(|m| {
+                let role = if m.is_user() {
+                    MessageRole::User
+                } else {
+                    MessageRole::Assistant
+                };
+                (role, m.get_content().to_string())
+            })
+            .collect();
+
+        logging::log(
+            "CHAT",
+            &format!("Transferring {} messages to AI window", messages.len()),
+        );
+
+        // Open AI window with the chat history
+        if let Err(e) = ai::open_ai_window_with_chat(cx, messages) {
+            logging::log("CHAT", &format!("Failed to open AI window: {}", e));
+        }
+
+        // Close this prompt by calling the escape callback
+        if let Some(ref callback) = self.on_escape {
             callback(self.id.clone());
         }
     }
@@ -1387,7 +1413,7 @@ impl ChatPrompt {
                 input_content.child(div().text_color(rgb(colors.text_primary)).child(after));
         }
 
-        // Placeholder if empty
+        // Placeholder if empty - cursor appears BEFORE placeholder text
         if text.is_empty() {
             let placeholder = self
                 .placeholder
@@ -1397,16 +1423,11 @@ impl ChatPrompt {
                 .w(px(2.0))
                 .h(px(16.0))
                 .when(cursor_visible, |d| d.bg(rgb(colors.accent_color)));
-            input_content = div()
-                .flex()
-                .flex_row()
-                .items_center()
-                .child(
-                    div()
-                        .text_color(rgb(colors.text_tertiary))
-                        .child(placeholder),
-                )
-                .child(cursor);
+            input_content = div().flex().flex_row().items_center().child(cursor).child(
+                div()
+                    .text_color(rgb(colors.text_tertiary))
+                    .child(placeholder),
+            );
         }
 
         input_content

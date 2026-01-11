@@ -24,7 +24,7 @@
 
 use std::env;
 
-use crate::prompts::env::get_secret;
+use crate::secrets::get_secret;
 
 /// Represents a detected AI provider configuration.
 #[derive(Clone)]
@@ -268,18 +268,20 @@ pub mod default_models {
     }
 
     /// Get default Anthropic models.
+    /// NOTE: The FIRST model in this list is the default model for new chats
     pub fn anthropic() -> Vec<ModelInfo> {
         vec![
+            // Default: Claude 3.5 Haiku (fast, cheap, good quality)
             ModelInfo::new(
-                "claude-3-5-sonnet-20241022",
-                "Claude 3.5 Sonnet",
+                "claude-3-5-haiku-20241022",
+                "Claude 3.5 Haiku",
                 "anthropic",
                 true,
                 200_000,
             ),
             ModelInfo::new(
-                "claude-3-5-haiku-20241022",
-                "Claude 3.5 Haiku",
+                "claude-3-5-sonnet-20241022",
+                "Claude 3.5 Sonnet",
                 "anthropic",
                 true,
                 200_000,

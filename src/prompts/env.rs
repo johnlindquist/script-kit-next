@@ -1,8 +1,8 @@
-//! EnvPrompt - Environment variable prompt with keyring storage
+//! EnvPrompt - Environment variable prompt with encrypted storage
 //!
 //! Features:
 //! - Prompt for environment variable values
-//! - Secure storage via system keyring (keychain on macOS)
+//! - Secure storage via age-encrypted secrets (see crate::secrets)
 //! - Mask input for secret values
 //! - Remember values for future sessions
 //! - Full text selection and clipboard support (cmd+c/v/x, shift+arrows)
@@ -23,70 +23,10 @@ use crate::logging;
 use crate::panel::{
     CURSOR_HEIGHT_LG, CURSOR_MARGIN_Y, CURSOR_WIDTH, HEADER_GAP, HEADER_PADDING_X, HEADER_PADDING_Y,
 };
+use crate::secrets;
 use crate::theme;
 
 use super::SubmitCallback;
-
-/// Service name for keyring storage
-const KEYRING_SERVICE: &str = "com.scriptkit.env";
-
-/// Get a secret from the system keyring
-pub fn get_secret(key: &str) -> Option<String> {
-    let entry = keyring::Entry::new(KEYRING_SERVICE, key);
-    match entry {
-        Ok(entry) => match entry.get_password() {
-            Ok(value) => {
-                logging::log("KEYRING", &format!("Retrieved secret for key: {}", key));
-                Some(value)
-            }
-            Err(keyring::Error::NoEntry) => {
-                logging::log("KEYRING", &format!("No entry found for key: {}", key));
-                None
-            }
-            Err(e) => {
-                logging::log(
-                    "KEYRING",
-                    &format!("Error retrieving secret for key {}: {}", key, e),
-                );
-                None
-            }
-        },
-        Err(e) => {
-            logging::log(
-                "KEYRING",
-                &format!("Error creating keyring entry for key {}: {}", key, e),
-            );
-            None
-        }
-    }
-}
-
-/// Set a secret in the system keyring
-pub fn set_secret(key: &str, value: &str) -> Result<(), String> {
-    let entry = keyring::Entry::new(KEYRING_SERVICE, key)
-        .map_err(|e| format!("Failed to create keyring entry: {}", e))?;
-
-    entry
-        .set_password(value)
-        .map_err(|e| format!("Failed to store secret: {}", e))?;
-
-    logging::log("KEYRING", &format!("Stored secret for key: {}", key));
-    Ok(())
-}
-
-/// Delete a secret from the system keyring
-#[allow(dead_code)]
-pub fn delete_secret(key: &str) -> Result<(), String> {
-    let entry = keyring::Entry::new(KEYRING_SERVICE, key)
-        .map_err(|e| format!("Failed to create keyring entry: {}", e))?;
-
-    entry
-        .delete_credential()
-        .map_err(|e| format!("Failed to delete secret: {}", e))?;
-
-    logging::log("KEYRING", &format!("Deleted secret for key: {}", key));
-    Ok(())
-}
 
 /// EnvPrompt - Environment variable prompt with secure storage
 ///
@@ -160,7 +100,7 @@ impl EnvPrompt {
         }
         self.checked_keyring = true;
 
-        if let Some(value) = get_secret(&self.key) {
+        if let Some(value) = secrets::get_secret(&self.key) {
             logging::log(
                 "PROMPTS",
                 &format!("Found existing value in keyring for key: {}", self.key),
@@ -178,7 +118,7 @@ impl EnvPrompt {
         if !text.is_empty() {
             // Store in keyring if this is a secret
             if self.secret {
-                if let Err(e) = set_secret(&self.key, text) {
+                if let Err(e) = secrets::set_secret(&self.key, text) {
                     logging::log("ERROR", &format!("Failed to store secret: {}", e));
                 }
             }

@@ -773,25 +773,17 @@ impl AiProvider for VercelGatewayProvider {
         // Vercel Gateway supports various models from different providers.
         // These are curated defaults; the full list is available via GET https://ai-gateway.vercel.sh/v1/models
         // Model IDs are namespaced: provider/model (e.g., "openai/gpt-5", "anthropic/claude-sonnet-4.5")
+        // NOTE: The FIRST model in this list is the default model for new chats
         vec![
-            // OpenAI models
-            ModelInfo::new("openai/gpt-5", "GPT-5 (via Vercel)", "vercel", true, 400000),
+            // Default model: Claude 3.5 Haiku (fast, cheap, good quality)
             ModelInfo::new(
-                "openai/gpt-5-mini",
-                "GPT-5 mini (via Vercel)",
+                "anthropic/claude-3-5-haiku-20241022",
+                "Claude 3.5 Haiku (via Vercel)",
                 "vercel",
                 true,
-                400000,
+                200000,
             ),
-            ModelInfo::new(
-                "openai/gpt-4o",
-                "GPT-4o (via Vercel)",
-                "vercel",
-                true,
-                128000,
-            ),
-            ModelInfo::new("openai/o3", "o3 (via Vercel)", "vercel", true, 200000),
-            // Anthropic models
+            // Other Anthropic models
             ModelInfo::new(
                 "anthropic/claude-sonnet-4.5",
                 "Claude Sonnet 4.5 (via Vercel)",
@@ -813,6 +805,23 @@ impl AiProvider for VercelGatewayProvider {
                 true,
                 200000,
             ),
+            // OpenAI models
+            ModelInfo::new("openai/gpt-5", "GPT-5 (via Vercel)", "vercel", true, 400000),
+            ModelInfo::new(
+                "openai/gpt-5-mini",
+                "GPT-5 mini (via Vercel)",
+                "vercel",
+                true,
+                400000,
+            ),
+            ModelInfo::new(
+                "openai/gpt-4o",
+                "GPT-4o (via Vercel)",
+                "vercel",
+                true,
+                128000,
+            ),
+            ModelInfo::new("openai/o3", "o3 (via Vercel)", "vercel", true, 200000),
             // Google models
             ModelInfo::new(
                 "google/gemini-3-flash",

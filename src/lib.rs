@@ -210,6 +210,11 @@ pub mod ai;
 // Located in ~/.scriptkit/*/agents/*.md
 pub mod agents;
 
+// Secrets - age-encrypted secrets storage
+// Portable alternative to keyring, stores secrets at ~/.scriptkit/secrets.age
+// Uses scrypt passphrase-based encryption with machine-derived passphrase
+pub mod secrets;
+
 // macOS launch-at-login via SMAppService
 // Uses SMAppService on macOS 13+ for modern login item management
 pub mod login_item;

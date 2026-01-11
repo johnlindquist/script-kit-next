@@ -37,7 +37,7 @@ use objc::{msg_send, sel, sel_impl};
 use tracing::{debug, info};
 
 use super::config::ModelInfo;
-use super::model::{Chat, ChatId, Message, MessageRole};
+use super::model::{Chat, ChatId, ChatSource, Message, MessageRole};
 use super::providers::ProviderRegistry;
 use super::storage;
 
@@ -198,6 +198,8 @@ enum AiCommand {
         image_base64: String,
         submit: bool,
     },
+    /// Initialize the chat with pending messages from open_ai_window_with_chat
+    InitializeWithPendingChat,
 }
 
 fn get_pending_commands() -> &'static std::sync::Mutex<Vec<AiCommand>> {
@@ -588,6 +590,98 @@ impl AiApp {
                 }
             }
         }
+
+        cx.notify();
+    }
+
+    /// Initialize the chat window with pending messages from open_ai_window_with_chat.
+    ///
+    /// This creates a new chat with the provided messages and displays it immediately.
+    /// Used for "Continue in Chat" functionality to transfer a conversation.
+    fn initialize_with_pending_chat(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        // Take the pending messages from the global state
+        let pending_messages = get_pending_chat()
+            .lock()
+            .ok()
+            .and_then(|mut pending| pending.take());
+
+        let messages = match pending_messages {
+            Some(msgs) if !msgs.is_empty() => msgs,
+            _ => {
+                crate::logging::log("AI", "No pending messages to initialize chat with");
+                return;
+            }
+        };
+
+        crate::logging::log(
+            "AI",
+            &format!("Initializing chat with {} messages", messages.len()),
+        );
+
+        // Get model and provider from selected model, or use defaults
+        let (model_id, provider) = self
+            .selected_model
+            .as_ref()
+            .map(|m| (m.id.clone(), m.provider.clone()))
+            .unwrap_or_else(|| {
+                (
+                    "claude-3-5-sonnet-20241022".to_string(),
+                    "anthropic".to_string(),
+                )
+            });
+
+        // Create a new chat with the ChatPrompt source
+        let mut chat = Chat::new(&model_id, &provider);
+        chat.source = ChatSource::ChatPrompt;
+        let chat_id = chat.id;
+
+        // Generate title from the first user message (if any)
+        if let Some((_, content)) = messages.iter().find(|(role, _)| *role == MessageRole::User) {
+            let title = Chat::generate_title_from_content(content);
+            chat.set_title(&title);
+        }
+
+        // Save chat to storage
+        if let Err(e) = storage::create_chat(&chat) {
+            tracing::error!(error = %e, "Failed to create chat for transferred conversation");
+            return;
+        }
+
+        // Save all messages to storage and build the current_messages list
+        let mut saved_messages = Vec::new();
+        for (role, content) in messages {
+            let message = Message::new(chat_id, role, content);
+            if let Err(e) = storage::save_message(&message) {
+                tracing::error!(error = %e, "Failed to save message in transferred conversation");
+                continue;
+            }
+            saved_messages.push(message);
+        }
+
+        // Update message preview with the last message
+        if let Some(last_msg) = saved_messages.last() {
+            let preview: String = last_msg.content.chars().take(60).collect();
+            let preview = if preview.len() < last_msg.content.len() {
+                format!("{}...", preview.trim())
+            } else {
+                preview
+            };
+            self.message_previews.insert(chat_id, preview);
+        }
+
+        // Add chat to the list and select it
+        self.chats.insert(0, chat);
+        self.selected_chat_id = Some(chat_id);
+        self.current_messages = saved_messages;
+
+        // Scroll to bottom to show the latest messages
+        self.messages_scroll_handle.scroll_to_bottom();
+
+        info!(
+            chat_id = %chat_id,
+            message_count = self.current_messages.len(),
+            "Chat initialized with transferred conversation"
+        );
 
         cx.notify();
     }
@@ -2006,6 +2100,9 @@ impl Render for AiApp {
                         );
                     }
                 }
+                AiCommand::InitializeWithPendingChat => {
+                    self.initialize_with_pending_chat(window, cx);
+                }
             }
         }
 
@@ -2199,6 +2296,62 @@ pub fn open_ai_window(cx: &mut App) -> Result<()> {
     // NOTE: Theme hot-reload is now handled by the centralized ThemeService
     // (crate::theme::service::ensure_theme_service) which is started once at app init.
     // This eliminates per-window theme watcher tasks and their potential for leaks.
+
+    Ok(())
+}
+
+/// Pending chat to initialize after window opens.
+/// This is used by open_ai_window_with_chat to pass messages to the newly created window.
+#[allow(clippy::type_complexity)]
+static AI_PENDING_CHAT: std::sync::OnceLock<std::sync::Mutex<Option<Vec<(MessageRole, String)>>>> =
+    std::sync::OnceLock::new();
+
+fn get_pending_chat() -> &'static std::sync::Mutex<Option<Vec<(MessageRole, String)>>> {
+    AI_PENDING_CHAT.get_or_init(|| std::sync::Mutex::new(None))
+}
+
+/// Open the AI window with an existing conversation.
+///
+/// This function:
+/// 1. Opens the AI window (or brings it to front if already open)
+/// 2. Creates a new chat with the provided messages
+/// 3. Displays the chat immediately
+///
+/// Use this for "Continue in Chat" functionality to transfer a conversation
+/// from the chat prompt to the AI window.
+pub fn open_ai_window_with_chat(cx: &mut App, messages: Vec<(MessageRole, String)>) -> Result<()> {
+    use crate::logging;
+
+    logging::log(
+        "AI",
+        &format!(
+            "open_ai_window_with_chat called with {} messages",
+            messages.len()
+        ),
+    );
+
+    // Store the pending chat messages
+    if let Ok(mut pending) = get_pending_chat().lock() {
+        *pending = Some(messages);
+    }
+
+    // Open or bring the window to front
+    open_ai_window(cx)?;
+
+    // Queue a command to initialize the chat with pending messages
+    push_ai_command(AiCommand::InitializeWithPendingChat);
+
+    // Notify the window to process the command
+    let handle = {
+        let slot = AI_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
+        slot.lock().ok().and_then(|g| *g)
+    };
+
+    if let Some(handle) = handle {
+        let _ = handle.update(cx, |_root, _window, cx| {
+            cx.notify();
+        });
+    }
 
     Ok(())
 }
