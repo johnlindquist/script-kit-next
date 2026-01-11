@@ -7,6 +7,17 @@
 //! The passphrase is derived from machine-specific identifiers (hostname + app ID)
 //! for transparent encryption without requiring user interaction.
 //!
+//! ## Performance
+//!
+//! Secrets are cached in memory after first load to avoid repeated scrypt
+//! decryption (~1.3s per call). The cache is invalidated on write operations.
+//!
+//! ## Security
+//!
+//! - At-rest: Secrets encrypted with age/scrypt in ~/.scriptkit/secrets.age
+//! - In-memory: Decrypted cache (standard practice for desktop apps)
+//! - Cache cleared on app exit (process memory reclaimed by OS)
+//!
 //! API matches the keyring functions in prompts/env.rs for easy migration:
 //! - `get_secret(key: &str) -> Option<String>`
 //! - `set_secret(key: &str, value: &str) -> Result<(), String>`
@@ -18,8 +29,55 @@ use std::fs;
 use std::io::{Read, Write};
 use std::iter;
 use std::path::PathBuf;
+use std::sync::{Mutex, OnceLock};
 
 use crate::logging;
+
+/// In-memory cache of decrypted secrets.
+/// Avoids repeated scrypt decryption which takes ~1.3s per call.
+static SECRETS_CACHE: OnceLock<Mutex<Option<HashMap<String, String>>>> = OnceLock::new();
+
+/// Get the secrets cache mutex, initializing it if needed.
+fn secrets_cache() -> &'static Mutex<Option<HashMap<String, String>>> {
+    SECRETS_CACHE.get_or_init(|| Mutex::new(None))
+}
+
+/// Get cached secrets, loading from disk if not yet cached.
+fn get_cached_secrets() -> HashMap<String, String> {
+    let mut guard = secrets_cache().lock().expect("Secrets cache lock poisoned");
+    if let Some(ref secrets) = *guard {
+        return secrets.clone();
+    }
+
+    // First access - load from disk and cache
+    let secrets = load_secrets_from_disk();
+    *guard = Some(secrets.clone());
+    secrets
+}
+
+/// Update the cache after a write operation.
+fn update_cache(secrets: HashMap<String, String>) {
+    let mut guard = secrets_cache().lock().expect("Secrets cache lock poisoned");
+    *guard = Some(secrets);
+}
+
+/// Warm up the secrets cache (call at app startup).
+/// Loads and decrypts secrets in the background so they're ready when needed.
+pub fn warmup_cache() {
+    std::thread::spawn(|| {
+        let start = std::time::Instant::now();
+        let secrets = get_cached_secrets();
+        let elapsed = start.elapsed();
+        logging::log(
+            "SECRETS",
+            &format!(
+                "Warmed up secrets cache: {} keys in {:.2}s",
+                secrets.len(),
+                elapsed.as_secs_f64()
+            ),
+        );
+    });
+}
 
 /// App identifier used in passphrase derivation
 const APP_IDENTIFIER: &str = "com.scriptkit.secrets";
@@ -43,8 +101,9 @@ fn derive_passphrase() -> SecretString {
     SecretString::from(format!("{}:{}", hostname, APP_IDENTIFIER))
 }
 
-/// Load and decrypt the secrets store
-fn load_secrets() -> HashMap<String, String> {
+/// Load and decrypt the secrets store from disk.
+/// This is slow (~1.3s) due to scrypt. Use get_cached_secrets() instead.
+fn load_secrets_from_disk() -> HashMap<String, String> {
     let path = secrets_path();
 
     if !path.exists() {
@@ -154,7 +213,7 @@ fn save_secrets(secrets: &HashMap<String, String>) -> Result<(), String> {
 /// }
 /// ```
 pub fn get_secret(key: &str) -> Option<String> {
-    let secrets = load_secrets();
+    let secrets = get_cached_secrets();
     let result = secrets.get(key).cloned();
 
     if result.is_some() {
@@ -175,9 +234,12 @@ pub fn get_secret(key: &str) -> Option<String> {
 /// set_secret("OPENAI_API_KEY", "sk-...")?;
 /// ```
 pub fn set_secret(key: &str, value: &str) -> Result<(), String> {
-    let mut secrets = load_secrets();
+    let mut secrets = get_cached_secrets();
     secrets.insert(key.to_string(), value.to_string());
     save_secrets(&secrets)?;
+
+    // Update the in-memory cache
+    update_cache(secrets);
 
     logging::log("SECRETS", &format!("Stored secret for key: {}", key));
     Ok(())
@@ -193,10 +255,12 @@ pub fn set_secret(key: &str, value: &str) -> Result<(), String> {
 /// ```
 #[allow(dead_code)]
 pub fn delete_secret(key: &str) -> Result<(), String> {
-    let mut secrets = load_secrets();
+    let mut secrets = get_cached_secrets();
 
     if secrets.remove(key).is_some() {
         save_secrets(&secrets)?;
+        // Update the in-memory cache
+        update_cache(secrets);
         logging::log("SECRETS", &format!("Deleted secret for key: {}", key));
     } else {
         logging::log("SECRETS", &format!("No secret to delete for key: {}", key));
@@ -215,7 +279,7 @@ pub fn delete_secret(key: &str) -> Result<(), String> {
 /// ```
 #[allow(dead_code)]
 pub fn has_secret(key: &str) -> bool {
-    let secrets = load_secrets();
+    let secrets = get_cached_secrets();
     secrets.contains_key(key)
 }
 
@@ -232,7 +296,7 @@ pub fn has_secret(key: &str) -> bool {
 /// ```
 #[allow(dead_code)]
 pub fn list_secret_keys() -> Vec<String> {
-    let secrets = load_secrets();
+    let secrets = get_cached_secrets();
     secrets.keys().cloned().collect()
 }
 

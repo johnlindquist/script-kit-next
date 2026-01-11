@@ -1045,6 +1045,7 @@ impl ScriptListApp {
                             self.invalidate_grouped_cache();
                             // Reset the main input and window to clean state
                             self.reset_to_script_list(cx);
+                            resize_to_view_sync(ViewType::ScriptList, 0);
                             self.toast_manager.push(
                                 components::toast::Toast::success(
                                     "Suggested items cleared",
@@ -1085,8 +1086,9 @@ impl ScriptListApp {
                             .duration_ms(Some(3000)),
                         );
 
-                        // Reset window state
+                        // Reset window state and ensure correct height
                         self.reset_to_script_list(cx);
+                        resize_to_view_sync(ViewType::ScriptList, 0);
                         cx.notify();
                     }
                     SettingsCommandType::ConfigureVercelApiKey => {
@@ -1302,8 +1304,9 @@ impl ScriptListApp {
             );
         }
 
-        // Return to main menu
+        // Return to main menu and restore window height
         self.reset_to_script_list(cx);
+        resize_to_view_sync(ViewType::ScriptList, 0);
         cx.notify();
     }
 

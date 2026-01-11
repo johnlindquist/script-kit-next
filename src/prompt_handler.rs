@@ -398,11 +398,13 @@ impl ScriptListApp {
                     script_kit_gpui::request_show_main_window();
                 } else {
                     // Script didn't hide window, so it was user-initiated hide or already visible
-                    // Just update visibility state - don't force show
+                    // Restore window height to main menu size in case a prompt (like EnvPrompt)
+                    // had shrunk the window
+                    resize_to_view_sync(ViewType::ScriptList, 0);
                     script_kit_gpui::set_main_window_visible(false);
                     logging::log(
                         "VISIBILITY",
-                        "Script didn't hide window - keeping current visibility state",
+                        "Script didn't hide window - restored height and keeping visibility state",
                     );
                 }
             }
