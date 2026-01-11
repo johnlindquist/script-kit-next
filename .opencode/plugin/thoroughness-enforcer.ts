@@ -271,7 +271,7 @@ function extractSessionId(input: unknown): string | null {
   return obj?.sessionID || obj?.session_id || null
 }
 
-export const ThoroughnessEnforcer: Plugin = async (client) => {
+export const ThoroughnessEnforcer: Plugin = async ({ client }) => {
   return {
     // Track session events and user messages
     event: async ({ event }) => {
