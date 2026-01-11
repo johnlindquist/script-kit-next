@@ -645,13 +645,77 @@ fn flush_expired(
     }
 }
 
-/// Watches ~/.scriptkit/kit/*/scripts and ~/.scriptkit/kit/*/extensions directories for changes
+/// Discovered kit paths for watching
+#[derive(Clone)]
+struct KitWatchPaths {
+    kit_path: PathBuf,
+    scripts_paths: Vec<PathBuf>,
+    extensions_paths: Vec<PathBuf>,
+    agents_paths: Vec<PathBuf>,
+}
+
+/// Discovers all kit subdirectories under ~/.scriptkit/kit/
+/// Returns paths to all scripts/, extensions/, and agents/ directories that should be watched
+fn discover_kit_watch_paths() -> KitWatchPaths {
+    let kit_path = PathBuf::from(shellexpand::tilde("~/.scriptkit/kit").as_ref());
+    let mut scripts_paths = Vec::new();
+    let mut extensions_paths = Vec::new();
+    let mut agents_paths = Vec::new();
+
+    if let Ok(entries) = std::fs::read_dir(&kit_path) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                // Skip hidden directories and files
+                if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                    if name.starts_with('.') {
+                        continue;
+                    }
+                }
+
+                let scripts_dir = path.join("scripts");
+                let extensions_dir = path.join("extensions");
+                let agents_dir = path.join("agents");
+
+                // Add scripts directory if it exists
+                if scripts_dir.exists() {
+                    scripts_paths.push(scripts_dir);
+                }
+
+                // Add extensions directory (even if it doesn't exist yet, we'll track it)
+                extensions_paths.push(extensions_dir);
+
+                // Add agents directory (even if it doesn't exist yet, we'll track it)
+                agents_paths.push(agents_dir);
+            }
+        }
+    }
+
+    info!(
+        kit_path = %kit_path.display(),
+        scripts_count = scripts_paths.len(),
+        extensions_count = extensions_paths.len(),
+        agents_count = agents_paths.len(),
+        "Discovered kit directories to watch"
+    );
+
+    KitWatchPaths {
+        kit_path,
+        scripts_paths,
+        extensions_paths,
+        agents_paths,
+    }
+}
+
+/// Watches ~/.scriptkit/kit/*/scripts, ~/.scriptkit/kit/*/extensions, and
+/// ~/.scriptkit/kit/*/agents directories for changes
 ///
 /// Uses per-file trailing-edge debounce with storm coalescing.
 /// No separate flush thread - all debouncing in single recv_timeout loop.
 /// Properly shuts down via Stop control message.
 /// Includes supervisor restart with exponential backoff on transient errors.
-/// Dynamically watches extensions directory when it appears.
+/// Dynamically watches extensions and agents directories when they appear.
+/// Now watches ALL kit subdirectories, not just main.
 pub struct ScriptWatcher {
     tx: Option<Sender<ScriptReloadEvent>>,
     stop_flag: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
@@ -675,8 +739,10 @@ impl ScriptWatcher {
 
     /// Start watching the scripts directory for changes
     ///
-    /// This spawns a background thread that watches ~/.scriptkit/scripts recursively and sends
-    /// reload events through the receiver when scripts are added, modified, or deleted.
+    /// This spawns a background thread that watches ~/.scriptkit/kit/*/scripts,
+    /// ~/.scriptkit/kit/*/extensions, and ~/.scriptkit/kit/*/agents recursively
+    /// and sends reload events through the receiver when scripts are added,
+    /// modified, or deleted.
     /// On transient errors, the watcher will retry with exponential backoff.
     pub fn start(&mut self) -> NotifyResult<()> {
         let tx = self
@@ -688,13 +754,11 @@ impl ScriptWatcher {
         let thread_stop_flag = stop_flag.clone();
         self.stop_flag = Some(stop_flag);
 
-        let scripts_path =
-            PathBuf::from(shellexpand::tilde("~/.scriptkit/kit/main/scripts").as_ref());
-        let extensions_path =
-            PathBuf::from(shellexpand::tilde("~/.scriptkit/kit/main/extensions").as_ref());
+        // Discover all kit directories to watch
+        let paths = discover_kit_watch_paths();
 
         let thread_handle = thread::spawn(move || {
-            Self::supervisor_loop(scripts_path, extensions_path, tx, thread_stop_flag);
+            Self::supervisor_loop(paths, tx, thread_stop_flag);
         });
 
         self.watcher_thread = Some(thread_handle);
@@ -703,8 +767,7 @@ impl ScriptWatcher {
 
     /// Supervisor loop that restarts the watcher on failures with exponential backoff
     fn supervisor_loop(
-        scripts_path: PathBuf,
-        extensions_path: PathBuf,
+        paths: KitWatchPaths,
         out_tx: Sender<ScriptReloadEvent>,
         stop_flag: std::sync::Arc<std::sync::atomic::AtomicBool>,
     ) {
@@ -719,8 +782,7 @@ impl ScriptWatcher {
             let (control_tx, control_rx) = channel::<ControlMsg>();
 
             match Self::watch_loop(
-                scripts_path.clone(),
-                extensions_path.clone(),
+                paths.clone(),
                 out_tx.clone(),
                 control_rx,
                 control_tx,
@@ -760,13 +822,22 @@ impl ScriptWatcher {
 
     /// Internal watch loop running in background thread
     fn watch_loop(
-        scripts_path: PathBuf,
-        extensions_path: PathBuf,
+        paths: KitWatchPaths,
         out_tx: Sender<ScriptReloadEvent>,
         control_rx: Receiver<ControlMsg>,
         callback_tx: Sender<ControlMsg>,
         stop_flag: std::sync::Arc<std::sync::atomic::AtomicBool>,
     ) -> NotifyResult<()> {
+        use std::collections::HashSet;
+
+        // Destructure paths
+        let KitWatchPaths {
+            kit_path,
+            scripts_paths,
+            extensions_paths,
+            agents_paths,
+        } = paths;
+
         let mut watcher: Box<dyn Watcher> = Box::new(recommended_watcher({
             let tx = callback_tx.clone();
             move |res: notify::Result<notify::Event>| {
@@ -774,37 +845,89 @@ impl ScriptWatcher {
             }
         })?);
 
-        watcher.watch(&scripts_path, RecursiveMode::Recursive)?;
-
-        // Track whether we're watching extensions directory
-        let mut watching_extensions = false;
-        if extensions_path.exists() {
-            watcher.watch(&extensions_path, RecursiveMode::Recursive)?;
-            watching_extensions = true;
-            info!(
-                path = %extensions_path.display(),
-                recursive = true,
-                "Scriptlets watcher started"
-            );
-        }
-
-        // Also watch the parent directory (main/) for extensions dir creation
-        let main_path = extensions_path.parent().map(|p| p.to_path_buf());
-        if let Some(ref main) = main_path {
-            if main.exists() && !watching_extensions {
-                // Watch parent non-recursively to detect extensions dir creation
-                let _ = watcher.watch(main, RecursiveMode::NonRecursive);
-                debug!(
-                    path = %main.display(),
-                    "Watching main directory for extensions creation"
+        // Watch all scripts directories
+        for scripts_path in &scripts_paths {
+            if let Err(e) = watcher.watch(scripts_path, RecursiveMode::Recursive) {
+                warn!(
+                    error = %e,
+                    path = %scripts_path.display(),
+                    "Failed to watch scripts directory"
+                );
+            } else {
+                info!(
+                    path = %scripts_path.display(),
+                    recursive = true,
+                    "Script watcher started for directory"
                 );
             }
         }
 
+        // Track which extensions directories we're watching
+        let mut watching_extensions: HashSet<PathBuf> = HashSet::new();
+
+        // Watch existing extensions directories
+        for extensions_path in &extensions_paths {
+            if extensions_path.exists() {
+                if let Err(e) = watcher.watch(extensions_path, RecursiveMode::Recursive) {
+                    warn!(
+                        error = %e,
+                        path = %extensions_path.display(),
+                        "Failed to watch extensions directory"
+                    );
+                } else {
+                    watching_extensions.insert(extensions_path.clone());
+                    info!(
+                        path = %extensions_path.display(),
+                        recursive = true,
+                        "Scriptlets watcher started for directory"
+                    );
+                }
+            }
+        }
+
+        // Track which agents directories we're watching
+        let mut watching_agents: HashSet<PathBuf> = HashSet::new();
+
+        // Watch existing agents directories
+        for agents_path in &agents_paths {
+            if agents_path.exists() {
+                if let Err(e) = watcher.watch(agents_path, RecursiveMode::Recursive) {
+                    warn!(
+                        error = %e,
+                        path = %agents_path.display(),
+                        "Failed to watch agents directory"
+                    );
+                } else {
+                    watching_agents.insert(agents_path.clone());
+                    info!(
+                        path = %agents_path.display(),
+                        recursive = true,
+                        "Agents watcher started for directory"
+                    );
+                }
+            }
+        }
+
+        // Watch the kit parent directory to detect new kit directories being added
+        if kit_path.exists() {
+            let _ = watcher.watch(&kit_path, RecursiveMode::NonRecursive);
+            debug!(
+                path = %kit_path.display(),
+                "Watching kit directory for new kits"
+            );
+        }
+
+        // Keep track of all paths we should monitor for creation
+        let all_extensions_paths: HashSet<PathBuf> = extensions_paths.iter().cloned().collect();
+        let all_agents_paths: HashSet<PathBuf> = agents_paths.iter().cloned().collect();
+
         info!(
-            path = %scripts_path.display(),
-            recursive = true,
-            "Script watcher started"
+            scripts_count = scripts_paths.len(),
+            extensions_watching = watching_extensions.len(),
+            extensions_total = all_extensions_paths.len(),
+            agents_watching = watching_agents.len(),
+            agents_total = all_agents_paths.len(),
+            "Script watcher started for all kit directories"
         );
 
         let mut consecutive_errors: u32 = 0;
@@ -865,20 +988,112 @@ impl ScriptWatcher {
                     consecutive_errors = 0;
                     let kind = &event.kind;
 
-                    // Check if extensions directory was created
-                    if !watching_extensions && extensions_path.exists() {
-                        if let Err(e) = watcher.watch(&extensions_path, RecursiveMode::Recursive) {
-                            warn!(
-                                error = %e,
-                                path = %extensions_path.display(),
-                                "Failed to start watching extensions directory"
-                            );
-                        } else {
-                            watching_extensions = true;
-                            info!(
-                                path = %extensions_path.display(),
-                                "Extensions directory appeared, now watching"
-                            );
+                    // Check if any extensions directories we're tracking have been created
+                    for extensions_path in &all_extensions_paths {
+                        if !watching_extensions.contains(extensions_path)
+                            && extensions_path.exists()
+                        {
+                            if let Err(e) = watcher.watch(extensions_path, RecursiveMode::Recursive)
+                            {
+                                warn!(
+                                    error = %e,
+                                    path = %extensions_path.display(),
+                                    "Failed to start watching extensions directory"
+                                );
+                            } else {
+                                watching_extensions.insert(extensions_path.clone());
+                                info!(
+                                    path = %extensions_path.display(),
+                                    "Extensions directory appeared, now watching"
+                                );
+                            }
+                        }
+                    }
+
+                    // Check if any agents directories we're tracking have been created
+                    for agents_path in &all_agents_paths {
+                        if !watching_agents.contains(agents_path) && agents_path.exists() {
+                            if let Err(e) = watcher.watch(agents_path, RecursiveMode::Recursive) {
+                                warn!(
+                                    error = %e,
+                                    path = %agents_path.display(),
+                                    "Failed to start watching agents directory"
+                                );
+                            } else {
+                                watching_agents.insert(agents_path.clone());
+                                info!(
+                                    path = %agents_path.display(),
+                                    "Agents directory appeared, now watching"
+                                );
+                            }
+                        }
+                    }
+
+                    // Check for new kit directories being created under kit_path
+                    for path in event.paths.iter() {
+                        // If a new directory was created directly under kit_path
+                        if matches!(kind, notify::EventKind::Create(_)) {
+                            if let Some(parent) = path.parent() {
+                                if parent == kit_path && path.is_dir() {
+                                    // New kit directory created - watch its scripts, extensions, and agents
+                                    let scripts_dir = path.join("scripts");
+                                    let extensions_dir = path.join("extensions");
+                                    let agents_dir = path.join("agents");
+
+                                    if scripts_dir.exists() {
+                                        if let Err(e) =
+                                            watcher.watch(&scripts_dir, RecursiveMode::Recursive)
+                                        {
+                                            warn!(
+                                                error = %e,
+                                                path = %scripts_dir.display(),
+                                                "Failed to watch new kit scripts directory"
+                                            );
+                                        } else {
+                                            info!(
+                                                path = %scripts_dir.display(),
+                                                "New kit scripts directory detected, now watching"
+                                            );
+                                        }
+                                    }
+
+                                    if extensions_dir.exists() {
+                                        if let Err(e) =
+                                            watcher.watch(&extensions_dir, RecursiveMode::Recursive)
+                                        {
+                                            warn!(
+                                                error = %e,
+                                                path = %extensions_dir.display(),
+                                                "Failed to watch new kit extensions directory"
+                                            );
+                                        } else {
+                                            watching_extensions.insert(extensions_dir.clone());
+                                            info!(
+                                                path = %extensions_dir.display(),
+                                                "New kit extensions directory detected, now watching"
+                                            );
+                                        }
+                                    }
+
+                                    if agents_dir.exists() {
+                                        if let Err(e) =
+                                            watcher.watch(&agents_dir, RecursiveMode::Recursive)
+                                        {
+                                            warn!(
+                                                error = %e,
+                                                path = %agents_dir.display(),
+                                                "Failed to watch new kit agents directory"
+                                            );
+                                        } else {
+                                            watching_agents.insert(agents_dir.clone());
+                                            info!(
+                                                path = %agents_dir.display(),
+                                                "New kit agents directory detected, now watching"
+                                            );
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
 
