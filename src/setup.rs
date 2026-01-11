@@ -58,7 +58,8 @@ const EMBEDDED_AI_TEXT_TOOLS_EXTENSION: &str =
 const EMBEDDED_EXAMPLES_MAIN: &str = include_str!("../kit-init/extensions/examples/main.md");
 
 /// Embedded Examples extension - advanced scriptlet examples (built-in extension that ships with the app)
-const EMBEDDED_EXAMPLES_ADVANCED: &str = include_str!("../kit-init/extensions/examples/advanced.md");
+const EMBEDDED_EXAMPLES_ADVANCED: &str =
+    include_str!("../kit-init/extensions/examples/advanced.md");
 
 /// Embedded Examples extension - howto guide (built-in extension that ships with the app)
 const EMBEDDED_EXAMPLES_HOWTO: &str = include_str!("../kit-init/extensions/examples/howto.md");
