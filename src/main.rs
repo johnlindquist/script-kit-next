@@ -1376,6 +1376,12 @@ struct ScriptListApp {
     /// Whether the current built-in view was opened from the main menu.
     /// When true, ESC returns to main menu. When false (opened via hotkey/protocol), ESC closes window.
     opened_from_main_menu: bool,
+    /// Sender for inline chat escape signals
+    /// The ChatPrompt escape callback uses this to signal when ESC is pressed
+    inline_chat_escape_sender: mpsc::SyncSender<()>,
+    /// Receiver for inline chat escape signals
+    /// Checked by timer to trigger view reset
+    inline_chat_escape_receiver: mpsc::Receiver<()>,
 }
 
 /// Result of alias matching - either a Script or Scriptlet
@@ -1433,6 +1439,15 @@ impl Render for ScriptListApp {
             self.handle_builtin_confirmation(entry_id, confirmed, cx);
         }
 
+        // Check for inline chat escape (from built-in ChatPrompt)
+        // The ChatPrompt escape callback signals via channel
+        if self.inline_chat_escape_receiver.try_recv().is_ok() {
+            crate::logging::log(
+                "CHAT",
+                "Inline chat escape received - returning to main menu",
+            );
+            self.go_back_or_close(window, cx);
+        }
         // Focus-lost auto-dismiss: Close dismissable prompts when the main window loses focus
         // This includes focus loss to other app windows like Notes/AI.
         // When is_pinned is true, the window stays open on blur (only closes via ESC/Cmd+W)
