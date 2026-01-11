@@ -8,8 +8,8 @@
 //! - Actions menu (⌘+K) with model picker
 
 use gpui::{
-    div, prelude::*, px, rgb, rgba, Context, FocusHandle, Focusable, Hsla, KeyDownEvent, Render,
-    ScrollHandle, Timer, Window,
+    div, prelude::*, px, rgb, rgba, svg, Context, FocusHandle, Focusable, Hsla, KeyDownEvent,
+    Render, ScrollHandle, Timer, Window,
 };
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -18,6 +18,7 @@ use std::time::Duration;
 use crate::ai::providers::{ProviderMessage, ProviderRegistry};
 use crate::ai::{self, Chat, ChatSource, Message, MessageRole, ModelInfo};
 use crate::components::TextInputState;
+use crate::designs::icon_variations::IconName;
 use crate::logging;
 use crate::prompts::markdown::render_markdown;
 use crate::protocol::{ChatMessagePosition, ChatMessageRole, ChatPromptMessage};
@@ -1289,9 +1290,12 @@ impl ChatPrompt {
             .cursor_pointer()
             .opacity(0.5)
             .hover(|s| s.opacity(1.0).bg(copy_hover_bg))
-            .text_xs()
-            .text_color(rgb(colors.text_tertiary))
-            .child("📋")
+            .child(
+                svg()
+                    .external_path(IconName::Copy.external_path())
+                    .size(px(14.))
+                    .text_color(rgb(colors.text_tertiary)),
+            )
             .on_click(cx.listener(move |this, _, _window, cx| {
                 this.copy_turn_response(turn_index, cx);
             }));
