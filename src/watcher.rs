@@ -990,10 +990,10 @@ impl ScriptWatcher {
 
                     // Check if any extensions directories we're tracking have been created
                     for extensions_path in &all_extensions_paths {
-                        if !watching_extensions.contains(extensions_path) && extensions_path.exists()
+                        if !watching_extensions.contains(extensions_path)
+                            && extensions_path.exists()
                         {
-                            if let Err(e) =
-                                watcher.watch(extensions_path, RecursiveMode::Recursive)
+                            if let Err(e) = watcher.watch(extensions_path, RecursiveMode::Recursive)
                             {
                                 warn!(
                                     error = %e,
@@ -1058,8 +1058,8 @@ impl ScriptWatcher {
                                     }
 
                                     if extensions_dir.exists() {
-                                        if let Err(e) = watcher
-                                            .watch(&extensions_dir, RecursiveMode::Recursive)
+                                        if let Err(e) =
+                                            watcher.watch(&extensions_dir, RecursiveMode::Recursive)
                                         {
                                             warn!(
                                                 error = %e,
