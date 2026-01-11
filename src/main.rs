@@ -1967,6 +1967,11 @@ fn main() {
     app.run(move |cx: &mut App| {
         logging::log("APP", "GPUI Application starting");
 
+        // Warm up the secrets cache in background thread
+        // This pre-decrypts secrets.age so AI chat opens instantly instead of
+        // waiting ~7s for sequential keyring lookups
+        secrets::warmup_cache();
+
         // Configure as accessory app FIRST, before any windows are created
         // This is equivalent to LSUIElement=true in Info.plist:
         // - No Dock icon
