@@ -10,8 +10,8 @@
 //! Design: Matches ArgPrompt-no-choices (single input line, minimal height)
 
 use gpui::{
-    div, prelude::*, px, rgb, rgba, svg, Context, Div, FocusHandle, Focusable, Render, SharedString,
-    Window,
+    div, prelude::*, px, rgb, rgba, svg, Context, Div, FocusHandle, Focusable, Render,
+    SharedString, Window,
 };
 use std::sync::Arc;
 
