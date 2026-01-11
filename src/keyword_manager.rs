@@ -310,7 +310,7 @@ impl KeywordManager {
 
                     // Handle match if found
                     if let Some(result) = match_result {
-                        tracing::debug!(
+                        tracing::info!(
                             category = "KEYWORD",
                             trigger = %result.trigger,
                             chars_to_delete = result.chars_to_delete,
