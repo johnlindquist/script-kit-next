@@ -603,9 +603,6 @@ impl ScriptListApp {
                             builtins::BuiltInFeature::SystemAction(_) => {
                                 "System Action".to_string()
                             }
-                            builtins::BuiltInFeature::WindowAction(_) => {
-                                "Window Action".to_string()
-                            }
                             builtins::BuiltInFeature::NotesCommand(_) => {
                                 "Notes Command".to_string()
                             }
