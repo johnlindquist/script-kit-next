@@ -2,6 +2,7 @@
 //!
 //! A simple confirmation dialog with a message and two buttons (Cancel/Confirm).
 //! Supports keyboard shortcuts: Enter = confirm, Escape = cancel.
+//! Tab/Arrow keys navigate between buttons with visual focus indication.
 
 use crate::logging;
 use crate::theme;
@@ -25,6 +26,9 @@ pub type ConfirmCallback = Arc<dyn Fn(bool) + Send + Sync>;
 fn hex_with_alpha(hex: u32, alpha: u8) -> u32 {
     (hex << 8) | (alpha as u32)
 }
+
+/// Focus ring border width for focused buttons
+const FOCUS_BORDER_WIDTH: f32 = 2.0;
 
 /// ConfirmDialog - Simple confirmation modal with message and two buttons
 pub struct ConfirmDialog {
@@ -139,15 +143,23 @@ impl Render for ConfirmDialog {
         let primary_text = rgb(colors.text.primary);
         let secondary_text = rgb(colors.text.secondary);
 
-        // Button colors
-        let border_color = rgba(hex_with_alpha(colors.ui.border, 0x80));
-        let button_bg = rgba(hex_with_alpha(colors.background.search_box, 0x60));
-        let button_hover = rgba(hex_with_alpha(colors.accent.selected_subtle, 0x40));
-        let confirm_bg = rgb(colors.accent.selected);
-        let confirm_hover = rgba(hex_with_alpha(colors.accent.selected, 0xCC));
+        // Button colors - both buttons now use consistent semi-transparent styling
+        let border_color = rgba(hex_with_alpha(colors.ui.border, 0x60));
+        let button_bg = rgba(hex_with_alpha(colors.background.search_box, 0x40));
 
-        // Focus ring color
-        let focus_ring = rgba(hex_with_alpha(colors.accent.selected, 0x60));
+        // Confirm button uses accent color with reduced opacity for vibrancy consistency
+        // 0x60 = 37.5% opacity - visible but not harsh like solid yellow
+        let confirm_bg = rgba(hex_with_alpha(colors.accent.selected, 0x50));
+        let confirm_hover = rgba(hex_with_alpha(colors.accent.selected, 0x70));
+        let cancel_hover = rgba(hex_with_alpha(colors.accent.selected_subtle, 0x30));
+
+        // Focus colors - visible ring around focused button
+        // Higher alpha (0xA0 = 62.5%) for clear focus indication
+        let focus_ring_color = rgba(hex_with_alpha(colors.accent.selected, 0xA0));
+        let unfocused_border = rgba(hex_with_alpha(colors.ui.border, 0x40));
+
+        // Focus background tint - subtle background change when button is focused
+        let focus_tint = rgba(hex_with_alpha(colors.accent.selected_subtle, 0x20));
 
         let message_str: SharedString = self.message.clone().into();
         let cancel_str: SharedString = self.cancel_text.clone().into();
@@ -156,7 +168,8 @@ impl Render for ConfirmDialog {
         let is_cancel_focused = self.focused_button == 0;
         let is_confirm_focused = self.focused_button == 1;
 
-        // Cancel button
+        // Cancel button - secondary action with subtle styling
+        // When focused: accent border ring + slight background tint
         let cancel_button = div()
             .id("cancel-button")
             .flex_1()
@@ -167,15 +180,20 @@ impl Render for ConfirmDialog {
             .items_center()
             .justify_center()
             .rounded(px(BUTTON_RADIUS))
-            .bg(button_bg)
-            .border_1()
-            .border_color(if is_cancel_focused {
-                focus_ring
+            .bg(if is_cancel_focused {
+                // Add subtle tint when focused
+                focus_tint
             } else {
-                border_color
+                button_bg
             })
-            .when(is_cancel_focused, |d| d.border_2())
-            .hover(|s| s.bg(button_hover))
+            .border_color(if is_cancel_focused {
+                focus_ring_color
+            } else {
+                unfocused_border
+            })
+            .when(is_cancel_focused, |d| d.border(px(FOCUS_BORDER_WIDTH)))
+            .when(!is_cancel_focused, |d| d.border_1())
+            .hover(|s| s.bg(cancel_hover))
             .cursor_pointer()
             .text_color(secondary_text)
             .text_sm()
@@ -185,7 +203,9 @@ impl Render for ConfirmDialog {
                 window.remove_window();
             }));
 
-        // Confirm button (primary action)
+        // Confirm button - primary action with accent color at reduced opacity
+        // Matches vibrancy theme while still standing out as the primary action
+        // When focused: brighter accent border ring
         let confirm_button = div()
             .id("confirm-button")
             .flex_1()
@@ -196,17 +216,24 @@ impl Render for ConfirmDialog {
             .items_center()
             .justify_center()
             .rounded(px(BUTTON_RADIUS))
-            .bg(confirm_bg)
-            .border_1()
-            .border_color(if is_confirm_focused {
-                focus_ring
+            .bg(if is_confirm_focused {
+                // Slightly brighter when focused
+                rgba(hex_with_alpha(colors.accent.selected, 0x60))
             } else {
-                rgba(0x00000000)
+                confirm_bg
             })
-            .when(is_confirm_focused, |d| d.border_2())
+            .border_color(if is_confirm_focused {
+                focus_ring_color
+            } else {
+                // Subtle accent border even when unfocused to indicate primary action
+                rgba(hex_with_alpha(colors.accent.selected, 0x40))
+            })
+            .when(is_confirm_focused, |d| d.border(px(FOCUS_BORDER_WIDTH)))
+            .when(!is_confirm_focused, |d| d.border_1())
             .hover(|s| s.bg(confirm_hover))
             .cursor_pointer()
-            .text_color(rgb(0xFFFFFF)) // White text on accent background
+            // Use primary text color for better readability on semi-transparent bg
+            .text_color(primary_text)
             .text_sm()
             .font_weight(gpui::FontWeight::MEDIUM)
             .child(confirm_str)
