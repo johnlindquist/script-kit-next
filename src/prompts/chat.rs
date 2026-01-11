@@ -9,11 +9,13 @@
 
 use gpui::{
     div, prelude::*, px, rgb, rgba, Context, FocusHandle, Focusable, Hsla, KeyDownEvent, Render,
-    ScrollHandle, Window,
+    ScrollHandle, Timer, Window,
 };
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-use crate::ai::{self, Chat, ChatSource, Message, MessageRole};
+use crate::ai::providers::{ProviderMessage, ProviderRegistry};
+use crate::ai::{self, Chat, ChatSource, Message, MessageRole, ModelInfo};
 use crate::components::TextInputState;
 use crate::logging;
 use crate::prompts::markdown::render_markdown;
@@ -195,6 +197,12 @@ pub struct ChatPrompt {
     actions_menu_selected: usize,
     // Database persistence
     save_history: bool,
+    // Built-in AI provider support (for inline chat without SDK)
+    provider_registry: Option<ProviderRegistry>,
+    available_models: Vec<ModelInfo>,
+    selected_model: Option<ModelInfo>,
+    builtin_streaming_content: String,
+    builtin_is_streaming: bool,
 }
 
 impl ChatPrompt {
@@ -238,6 +246,12 @@ impl ChatPrompt {
             actions_menu_open: false,
             actions_menu_selected: 0,
             save_history: true, // Default to saving
+            // Built-in AI fields (disabled by default)
+            provider_registry: None,
+            available_models: Vec::new(),
+            selected_model: None,
+            builtin_streaming_content: String::new(),
+            builtin_is_streaming: false,
         }
     }
 
@@ -298,6 +312,50 @@ impl ChatPrompt {
     pub fn with_save_history(mut self, save: bool) -> Self {
         self.save_history = save;
         self
+    }
+
+    /// Enable built-in AI mode with the given provider registry.
+    /// When enabled, the ChatPrompt will handle AI calls directly instead of using the SDK callback.
+    /// If prefer_vercel is true and Vercel is available, it will be used as the default provider.
+    pub fn with_builtin_ai(mut self, registry: ProviderRegistry, prefer_vercel: bool) -> Self {
+        let available_models = registry.get_all_models();
+
+        // Select default model: prefer Vercel models if available and preferred, otherwise first available
+        let selected_model = if prefer_vercel {
+            available_models
+                .iter()
+                .find(|m| m.provider.to_lowercase() == "vercel")
+                .or_else(|| available_models.first())
+                .cloned()
+        } else {
+            available_models.first().cloned()
+        };
+
+        // Update display models list from provider registry
+        self.models = available_models
+            .iter()
+            .map(|m| ChatModel::new(m.id.clone(), m.display_name.clone(), m.provider.clone()))
+            .collect();
+        self.model = selected_model.as_ref().map(|m| m.display_name.clone());
+
+        logging::log(
+            "CHAT",
+            &format!(
+                "ChatPrompt with built-in AI: {} models, selected={:?}",
+                available_models.len(),
+                selected_model.as_ref().map(|m| &m.display_name)
+            ),
+        );
+
+        self.provider_registry = Some(registry);
+        self.available_models = available_models;
+        self.selected_model = selected_model;
+        self
+    }
+
+    /// Check if built-in AI mode is enabled
+    pub fn has_builtin_ai(&self) -> bool {
+        self.provider_registry.is_some()
     }
 
     pub fn add_message(&mut self, message: ChatPromptMessage, cx: &mut Context<Self>) {
@@ -405,14 +463,216 @@ impl ChatPrompt {
         cx.notify();
     }
 
-    fn handle_submit(&mut self, _cx: &mut Context<Self>) {
+    fn handle_submit(&mut self, cx: &mut Context<Self>) {
         let text = self.input.text().to_string();
         if text.trim().is_empty() {
             return;
         }
         logging::log("CHAT", &format!("User submitted: {}", text));
         self.input.clear();
-        (self.on_submit)(self.id.clone(), text);
+
+        // If built-in AI mode is enabled, handle the AI call directly
+        if self.has_builtin_ai() {
+            self.handle_builtin_ai_submit(text, cx);
+        } else {
+            // Use SDK callback for script-driven chat
+            (self.on_submit)(self.id.clone(), text);
+        }
+    }
+
+    /// Handle submission in built-in AI mode - calls AI provider directly
+    fn handle_builtin_ai_submit(&mut self, text: String, cx: &mut Context<Self>) {
+        // Don't allow new messages while streaming
+        if self.builtin_is_streaming {
+            return;
+        }
+
+        // Add user message to UI (ChatPromptMessage::user auto-generates UUID)
+        let user_message = ChatPromptMessage::user(text.clone());
+        self.messages.push(user_message);
+        self.scroll_handle.scroll_to_bottom();
+        cx.notify();
+
+        // Get the selected model and provider
+        let (model_id, provider) = match &self.selected_model {
+            Some(m) => (m.id.clone(), m.provider.clone()),
+            None => {
+                logging::log("CHAT", "No model selected for built-in AI");
+                let error_msg = ChatPromptMessage::assistant("No AI model configured. Please set up an API key.");
+                self.messages.push(error_msg);
+                cx.notify();
+                return;
+            }
+        };
+
+        let registry = match &self.provider_registry {
+            Some(r) => r.clone(),
+            None => return,
+        };
+
+        let ai_provider = match registry.find_provider_for_model(&model_id) {
+            Some(p) => p.clone(),
+            None => {
+                logging::log("CHAT", &format!("No provider found for model: {}", model_id));
+                let error_msg = ChatPromptMessage::assistant(format!("Provider not found for model: {}", model_id));
+                self.messages.push(error_msg);
+                cx.notify();
+                return;
+            }
+        };
+
+        // Build messages for the API call (convert our messages to provider format)
+        let api_messages: Vec<ProviderMessage> = self
+            .messages
+            .iter()
+            .map(|m| {
+                if m.is_user() {
+                    ProviderMessage::user(m.get_content())
+                } else {
+                    ProviderMessage::assistant(m.get_content())
+                }
+            })
+            .collect();
+
+        // Set streaming state
+        self.builtin_is_streaming = true;
+        self.builtin_streaming_content.clear();
+
+        // Add placeholder for assistant response (assistant() auto-generates UUID)
+        let assistant_message = ChatPromptMessage::assistant("").with_streaming(true);
+        let assistant_msg_id = assistant_message.id.clone().unwrap_or_default();
+        self.messages.push(assistant_message);
+        self.streaming_message_id = Some(assistant_msg_id.clone());
+        cx.notify();
+
+        logging::log(
+            "CHAT",
+            &format!(
+                "Starting built-in AI call: model={}, provider={}, messages={}",
+                model_id, provider, api_messages.len()
+            ),
+        );
+
+        // Use shared buffer for streaming content
+        let shared_content = Arc::new(std::sync::Mutex::new(String::new()));
+        let shared_done = Arc::new(AtomicBool::new(false));
+        let shared_error = Arc::new(std::sync::Mutex::new(None::<String>));
+
+        let content_clone = shared_content.clone();
+        let done_clone = shared_done.clone();
+        let error_clone = shared_error.clone();
+        let model_id_clone = model_id.clone();
+
+        // Spawn background thread for streaming
+        std::thread::spawn(move || {
+            let result = ai_provider.stream_message(
+                &api_messages,
+                &model_id_clone,
+                Box::new(move |chunk| {
+                    if let Ok(mut content) = content_clone.lock() {
+                        content.push_str(&chunk);
+                    }
+                }),
+            );
+
+            match result {
+                Ok(()) => {
+                    done_clone.store(true, Ordering::SeqCst);
+                }
+                Err(e) => {
+                    if let Ok(mut err) = error_clone.lock() {
+                        *err = Some(e.to_string());
+                    }
+                    done_clone.store(true, Ordering::SeqCst);
+                }
+            }
+        });
+
+        // Poll for streaming updates
+        let content_for_poll = shared_content.clone();
+        let done_for_poll = shared_done.clone();
+        let error_for_poll = shared_error.clone();
+        let msg_id = assistant_msg_id.clone();
+
+        cx.spawn(async move |this, cx| {
+            let mut last_content_len = 0;
+
+            loop {
+                Timer::after(std::time::Duration::from_millis(50)).await;
+
+                // Check for new content
+                if let Ok(content) = content_for_poll.lock() {
+                    if content.len() > last_content_len {
+                        let new_content = content.clone();
+                        last_content_len = content.len();
+
+                        let msg_id_clone = msg_id.clone();
+                        let _ = cx.update(|cx| {
+                            this.update(cx, |chat, cx| {
+                                // Update the streaming message content
+                                if let Some(msg) = chat
+                                    .messages
+                                    .iter_mut()
+                                    .find(|m| m.id.as_deref() == Some(&msg_id_clone))
+                                {
+                                    msg.set_content(&new_content);
+                                }
+                                chat.builtin_streaming_content = new_content;
+                                chat.scroll_handle.scroll_to_bottom();
+                                cx.notify();
+                            })
+                            .ok();
+                        });
+                    }
+                }
+
+                // Check if done
+                if done_for_poll.load(Ordering::SeqCst) {
+                    let final_content = content_for_poll.lock().ok().map(|c| c.clone());
+                    let error = error_for_poll.lock().ok().and_then(|e| e.clone());
+
+                    let msg_id_clone = msg_id.clone();
+                    let _ = cx.update(|cx| {
+                        this.update(cx, |chat, cx| {
+                            // Complete streaming
+                            chat.builtin_is_streaming = false;
+                            chat.streaming_message_id = None;
+
+                            if let Some(err) = error {
+                                logging::log("CHAT", &format!("Built-in AI error: {}", err));
+                                // Set error on the message
+                                if let Some(msg) = chat
+                                    .messages
+                                    .iter_mut()
+                                    .find(|m| m.id.as_deref() == Some(&msg_id_clone))
+                                {
+                                    msg.error = Some(err);
+                                    msg.streaming = false;
+                                }
+                            } else if let Some(content) = final_content {
+                                logging::log(
+                                    "CHAT",
+                                    &format!("Built-in AI complete: {} chars", content.len()),
+                                );
+                                // Set final content
+                                if let Some(msg) = chat
+                                    .messages
+                                    .iter_mut()
+                                    .find(|m| m.id.as_deref() == Some(&msg_id_clone))
+                                {
+                                    msg.set_content(&content);
+                                    msg.streaming = false;
+                                }
+                            }
+                            cx.notify();
+                        })
+                        .ok();
+                    });
+                    break;
+                }
+            }
+        })
+        .detach();
     }
 
     fn handle_escape(&mut self, _cx: &mut Context<Self>) {
