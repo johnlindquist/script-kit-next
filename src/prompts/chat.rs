@@ -1519,7 +1519,10 @@ impl Render for ChatPrompt {
         // Process pending_submit on first render (used when Tab opens chat with query)
         if self.pending_submit && !self.input.is_empty() {
             self.pending_submit = false;
-            logging::log("CHAT", "Processing pending_submit - auto-submitting query from Tab");
+            logging::log(
+                "CHAT",
+                "Processing pending_submit - auto-submitting query from Tab",
+            );
             self.handle_submit(cx);
         }
 
