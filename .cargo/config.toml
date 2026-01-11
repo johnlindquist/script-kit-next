@@ -5,3 +5,18 @@
 
 [env]
 RUST_TEST_THREADS = "1"
+# Enable incremental compilation
+CARGO_INCREMENTAL = "1"
+
+[build]
+# Use all available CPU cores for rustc
+jobs = 8
+
+# Target-specific optimizations for Apple Silicon
+[target.aarch64-apple-darwin]
+rustflags = [
+    # Enable frame pointers for better profiling, minimal perf impact
+    "-C", "force-frame-pointers=yes",
+    # Parallel code generation
+    "-C", "codegen-units=16",
+]

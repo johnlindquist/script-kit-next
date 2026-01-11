@@ -173,3 +173,31 @@ osx_url_schemes = ["scriptkit"]
 resources = ["assets/*"]
 # LSUIElement makes app an "agent app" - no menu bar, no Dock icon (like Raycast)
 osx_info_plist_exts = ["assets/Info.plist.ext"]
+
+# ============================================================================
+# PROFILE OPTIMIZATIONS FOR FASTER CI
+# ============================================================================
+
+# Dev profile: optimize for compile speed, not runtime
+[profile.dev]
+opt-level = 0
+debug = "line-tables-only"  # Minimal debug info, faster compile
+split-debuginfo = "unpacked"  # Faster linking on macOS
+incremental = true
+
+# Faster dependency compilation in dev
+[profile.dev.package."*"]
+opt-level = 1  # Slight optimization for deps, still fast
+
+# Test profile inherits from dev but ensure fast compile
+[profile.test]
+opt-level = 0
+debug = "line-tables-only"
+incremental = true
+
+# CI profile: balance between compile speed and reasonable runtime
+[profile.ci]
+inherits = "dev"
+opt-level = 1
+lto = false
+codegen-units = 16  # More parallel compilation
