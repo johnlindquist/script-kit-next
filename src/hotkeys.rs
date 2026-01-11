@@ -26,6 +26,8 @@ pub enum HotkeyAction {
     Notes,
     /// AI window hotkey
     Ai,
+    /// Toggle log capture hotkey
+    ToggleLogs,
     /// Script shortcut - run the script at this path
     Script(String),
 }
@@ -54,6 +56,8 @@ struct HotkeyRoutes {
     notes_id: Option<u32>,
     /// Current AI hotkey ID (for quick lookup)
     ai_id: Option<u32>,
+    /// Current logs hotkey ID (for quick lookup)
+    logs_id: Option<u32>,
 }
 
 impl HotkeyRoutes {
@@ -64,6 +68,7 @@ impl HotkeyRoutes {
             main_id: None,
             notes_id: None,
             ai_id: None,
+            logs_id: None,
         }
     }
 
@@ -78,6 +83,7 @@ impl HotkeyRoutes {
             HotkeyAction::Main => self.main_id = Some(id),
             HotkeyAction::Notes => self.notes_id = Some(id),
             HotkeyAction::Ai => self.ai_id = Some(id),
+            HotkeyAction::ToggleLogs => self.logs_id = Some(id),
             HotkeyAction::Script(path) => {
                 self.script_paths.insert(path.clone(), id);
             }
@@ -104,6 +110,11 @@ impl HotkeyRoutes {
                         self.ai_id = None;
                     }
                 }
+                HotkeyAction::ToggleLogs => {
+                    if self.logs_id == Some(id) {
+                        self.logs_id = None;
+                    }
+                }
                 HotkeyAction::Script(path) => {
                     self.script_paths.remove(path);
                 }
@@ -126,6 +137,7 @@ impl HotkeyRoutes {
             HotkeyAction::Main => self.main_id?,
             HotkeyAction::Notes => self.notes_id?,
             HotkeyAction::Ai => self.ai_id?,
+            HotkeyAction::ToggleLogs => self.logs_id?,
             HotkeyAction::Script(path) => *self.script_paths.get(path)?,
         };
         self.routes.get(&id)
@@ -242,6 +254,7 @@ fn rebind_hotkey_transactional(
             HotkeyAction::Main => routes_guard.main_id,
             HotkeyAction::Notes => routes_guard.notes_id,
             HotkeyAction::Ai => routes_guard.ai_id,
+            HotkeyAction::ToggleLogs => routes_guard.logs_id,
             HotkeyAction::Script(path) => routes_guard.get_script_id(path),
         }
     };
@@ -269,6 +282,7 @@ fn rebind_hotkey_transactional(
             HotkeyAction::Main => routes_guard.main_id,
             HotkeyAction::Notes => routes_guard.notes_id,
             HotkeyAction::Ai => routes_guard.ai_id,
+            HotkeyAction::ToggleLogs => routes_guard.logs_id,
             HotkeyAction::Script(path) => routes_guard.get_script_id(path),
         };
         let old_entry = old_id.and_then(|id| routes_guard.remove_route(id));
@@ -348,6 +362,19 @@ pub fn update_hotkeys(cfg: &config::Config) {
     if let Some((mods, code)) = parse_hotkey_config(&ai_config) {
         let display = hotkey_config_to_display(&ai_config);
         rebind_hotkey_transactional(&manager_guard, HotkeyAction::Ai, mods, code, &display);
+    }
+
+    // Update logs hotkey
+    let logs_config = cfg.get_logs_hotkey();
+    if let Some((mods, code)) = parse_hotkey_config(&logs_config) {
+        let display = hotkey_config_to_display(&logs_config);
+        rebind_hotkey_transactional(
+            &manager_guard,
+            HotkeyAction::ToggleLogs,
+            mods,
+            code,
+            &display,
+        );
     }
 }
 
@@ -925,6 +952,18 @@ pub(crate) fn ai_hotkey_channel(
     AI_HOTKEY_CHANNEL.get_or_init(|| async_channel::bounded(10))
 }
 
+// LOGS_HOTKEY_CHANNEL: Channel for log capture toggle events
+#[allow(dead_code)]
+static LOGS_HOTKEY_CHANNEL: OnceLock<(async_channel::Sender<()>, async_channel::Receiver<()>)> =
+    OnceLock::new();
+
+/// Get the logs hotkey channel, initializing it on first access.
+#[allow(dead_code)]
+pub(crate) fn logs_hotkey_channel(
+) -> &'static (async_channel::Sender<()>, async_channel::Receiver<()>) {
+    LOGS_HOTKEY_CHANNEL.get_or_init(|| async_channel::bounded(10))
+}
+
 /// Tracks whether the main hotkey was successfully registered
 /// Used by main.rs to detect if the app has an alternate entry point
 static MAIN_HOTKEY_REGISTERED: AtomicBool = AtomicBool::new(false);
@@ -1072,13 +1111,18 @@ pub(crate) fn start_hotkey_listener(config: config::Config) {
             MAIN_HOTKEY_REGISTERED.store(true, Ordering::Relaxed);
         }
 
-        // Register notes and AI hotkeys
+        // Register notes, AI, and logs hotkeys
         register_builtin_hotkey(
             &manager_guard,
             HotkeyAction::Notes,
             &config.get_notes_hotkey(),
         );
         register_builtin_hotkey(&manager_guard, HotkeyAction::Ai, &config.get_ai_hotkey());
+        register_builtin_hotkey(
+            &manager_guard,
+            HotkeyAction::ToggleLogs,
+            &config.get_logs_hotkey(),
+        );
 
         // Register script shortcuts
         let mut script_count = 0;
@@ -1200,10 +1244,11 @@ pub(crate) fn start_hotkey_listener(config: config::Config) {
             logging::log(
                 "HOTKEY",
                 &format!(
-                    "Routing table: main={:?}, notes={:?}, ai={:?}, scripts={}",
+                    "Routing table: main={:?}, notes={:?}, ai={:?}, logs={:?}, scripts={}",
                     routes_guard.main_id,
                     routes_guard.notes_id,
                     routes_guard.ai_id,
+                    routes_guard.logs_id,
                     routes_guard.script_paths.len()
                 ),
             );
@@ -1246,6 +1291,28 @@ pub(crate) fn start_hotkey_listener(config: config::Config) {
                     Some(HotkeyAction::Ai) => {
                         logging::log("HOTKEY", "AI hotkey pressed - dispatching to main thread");
                         dispatch_ai_hotkey();
+                    }
+                    Some(HotkeyAction::ToggleLogs) => {
+                        logging::log("HOTKEY", "Logs hotkey pressed - toggling log capture");
+                        // Toggle capture immediately (no need for main thread dispatch)
+                        let (is_capturing, path) = logging::toggle_capture();
+                        if is_capturing {
+                            if let Some(p) = path {
+                                logging::log(
+                                    "HOTKEY",
+                                    &format!("Log capture STARTED: {}", p.display()),
+                                );
+                            }
+                        } else if let Some(p) = path {
+                            logging::log(
+                                "HOTKEY",
+                                &format!("Log capture STOPPED: {}", p.display()),
+                            );
+                        }
+                        // Send to channel for UI notification (HUD)
+                        if logs_hotkey_channel().0.try_send(()).is_err() {
+                            logging::log("HOTKEY", "Logs hotkey channel full/closed");
+                        }
                     }
                     Some(HotkeyAction::Script(path)) => {
                         logging::log("HOTKEY", &format!("Script shortcut triggered: {}", path));
@@ -1364,11 +1431,13 @@ mod tests {
             assert_eq!(HotkeyAction::Main, HotkeyAction::Main);
             assert_eq!(HotkeyAction::Notes, HotkeyAction::Notes);
             assert_eq!(HotkeyAction::Ai, HotkeyAction::Ai);
+            assert_eq!(HotkeyAction::ToggleLogs, HotkeyAction::ToggleLogs);
             assert_eq!(
                 HotkeyAction::Script("/a.ts".to_string()),
                 HotkeyAction::Script("/a.ts".to_string())
             );
             assert_ne!(HotkeyAction::Main, HotkeyAction::Notes);
+            assert_ne!(HotkeyAction::Main, HotkeyAction::ToggleLogs);
             assert_ne!(
                 HotkeyAction::Script("/a.ts".to_string()),
                 HotkeyAction::Script("/b.ts".to_string())

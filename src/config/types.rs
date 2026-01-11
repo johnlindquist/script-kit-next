@@ -255,6 +255,14 @@ impl HotkeyConfig {
         }
     }
 
+    /// Create a default logs capture hotkey (Cmd+Shift+L)
+    pub fn default_logs_hotkey() -> Self {
+        HotkeyConfig {
+            modifiers: vec!["meta".to_string(), "shift".to_string()],
+            key: "KeyL".to_string(),
+        }
+    }
+
     /// Convert to a human-readable display string using macOS symbols (e.g., "⌘⇧K").
     ///
     /// Uses standard macOS modifier symbols in order: ⌃ (Control), ⌥ (Option), ⇧ (Shift), ⌘ (Command)
@@ -412,6 +420,13 @@ pub struct Config {
     /// Hotkey for opening AI Chat window (default: Cmd+Shift+Space)
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "aiHotkey")]
     pub ai_hotkey: Option<HotkeyConfig>,
+    /// Hotkey for toggling log capture (default: Cmd+Shift+L)
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "logsHotkey"
+    )]
+    pub logs_hotkey: Option<HotkeyConfig>,
     /// Per-command configuration overrides (shortcuts, visibility)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub commands: Option<HashMap<String, CommandConfig>>,
@@ -436,6 +451,7 @@ impl Default for Config {
             suggested: None,          // Will use SuggestedConfig::default() via getter
             notes_hotkey: None,       // Will use HotkeyConfig::default_notes_hotkey() via getter
             ai_hotkey: None,          // Will use HotkeyConfig::default_ai_hotkey() via getter
+            logs_hotkey: None,        // Will use HotkeyConfig::default_logs_hotkey() via getter
             commands: None,           // No per-command overrides by default
         }
     }
@@ -515,6 +531,14 @@ impl Config {
         self.ai_hotkey
             .clone()
             .unwrap_or_else(HotkeyConfig::default_ai_hotkey)
+    }
+
+    /// Returns the logs hotkey configuration, or default (Cmd+Shift+L) if not configured
+    #[allow(dead_code)]
+    pub fn get_logs_hotkey(&self) -> HotkeyConfig {
+        self.logs_hotkey
+            .clone()
+            .unwrap_or_else(HotkeyConfig::default_logs_hotkey)
     }
 
     /// Returns command configuration for a specific command ID, or None if not configured.

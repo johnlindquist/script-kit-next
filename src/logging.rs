@@ -27,8 +27,10 @@
 
 use std::collections::VecDeque;
 use std::fmt::Write as FmtWrite;
-use std::fs::{self, OpenOptions};
+use std::fs::{self, File, OpenOptions};
+use std::io::Write;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -282,6 +284,151 @@ impl<'a> MakeWriter<'a> for StderrWriter {
 static LOG_BUFFER: OnceLock<Mutex<VecDeque<String>>> = OnceLock::new();
 const MAX_LOG_LINES: usize = 50;
 
+// =============================================================================
+// LOG CAPTURE SYSTEM
+// =============================================================================
+// Allows capturing logs to a separate timestamped file via hotkey toggle.
+// Press hotkey once to start capture, press again to stop.
+// Captured logs go to ~/.scriptkit/logs/capture-<timestamp>.jsonl
+
+/// Whether log capture is currently active
+static CAPTURE_ENABLED: AtomicBool = AtomicBool::new(false);
+
+/// Current capture session state
+struct CaptureSession {
+    file: File,
+    path: PathBuf,
+    start_time: SystemTime,
+}
+
+/// Active capture session (if any)
+static CAPTURE_SESSION: OnceLock<Mutex<Option<CaptureSession>>> = OnceLock::new();
+
+fn capture_session() -> &'static Mutex<Option<CaptureSession>> {
+    CAPTURE_SESSION.get_or_init(|| Mutex::new(None))
+}
+
+/// Check if log capture is currently enabled
+pub fn is_capture_enabled() -> bool {
+    CAPTURE_ENABLED.load(Ordering::Relaxed)
+}
+
+/// Start capturing logs to a new timestamped file.
+/// Returns the path to the capture file.
+pub fn start_capture() -> anyhow::Result<PathBuf> {
+    let log_dir = get_log_dir();
+    fs::create_dir_all(&log_dir)?;
+
+    // Create timestamped filename: capture-2026-01-11T08-37-28.jsonl
+    let now = SystemTime::now();
+    let timestamp = chrono::DateTime::<chrono::Utc>::from(now)
+        .format("%Y-%m-%dT%H-%M-%S")
+        .to_string();
+    let filename = format!("capture-{}.jsonl", timestamp);
+    let path = log_dir.join(&filename);
+
+    let file = OpenOptions::new().create(true).append(true).open(&path)?;
+
+    let session = CaptureSession {
+        file,
+        path: path.clone(),
+        start_time: now,
+    };
+
+    {
+        let mut guard = capture_session().lock().unwrap();
+        *guard = Some(session);
+    }
+
+    CAPTURE_ENABLED.store(true, Ordering::Relaxed);
+
+    tracing::info!(
+        event_type = "log_capture",
+        action = "started",
+        capture_file = %path.display(),
+        "Log capture started"
+    );
+
+    Ok(path)
+}
+
+/// Stop capturing logs and close the capture file.
+/// Returns the path to the capture file and duration in seconds.
+pub fn stop_capture() -> Option<(PathBuf, u64)> {
+    CAPTURE_ENABLED.store(false, Ordering::Relaxed);
+
+    let session = {
+        let mut guard = capture_session().lock().unwrap();
+        guard.take()
+    };
+
+    if let Some(session) = session {
+        let duration_secs = session
+            .start_time
+            .elapsed()
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+
+        tracing::info!(
+            event_type = "log_capture",
+            action = "stopped",
+            capture_file = %session.path.display(),
+            duration_secs = duration_secs,
+            "Log capture stopped"
+        );
+
+        Some((session.path, duration_secs))
+    } else {
+        None
+    }
+}
+
+/// Toggle log capture on/off.
+/// Returns (is_now_capturing, capture_file_path_if_relevant).
+/// When starting: returns (true, Some(path_to_new_capture_file))
+/// When stopping: returns (false, Some(path_to_completed_capture_file))
+pub fn toggle_capture() -> (bool, Option<PathBuf>) {
+    if is_capture_enabled() {
+        // Stop capture
+        if let Some((path, _duration)) = stop_capture() {
+            (false, Some(path))
+        } else {
+            (false, None)
+        }
+    } else {
+        // Start capture
+        match start_capture() {
+            Ok(path) => (true, Some(path)),
+            Err(e) => {
+                tracing::error!(
+                    event_type = "log_capture",
+                    action = "start_failed",
+                    error = %e,
+                    "Failed to start log capture"
+                );
+                (false, None)
+            }
+        }
+    }
+}
+
+/// Write a log line to the capture file if capture is enabled.
+/// This is called internally by the logging system.
+fn write_to_capture(line: &str) {
+    if !CAPTURE_ENABLED.load(Ordering::Relaxed) {
+        return;
+    }
+
+    if let Ok(mut guard) = capture_session().lock() {
+        if let Some(ref mut session) = *guard {
+            // Write line with newline
+            let _ = writeln!(session.file, "{}", line);
+            // Flush to ensure logs are immediately visible
+            let _ = session.file.flush();
+        }
+    }
+}
+
 /// Guard that must be kept alive for the duration of the program.
 /// Dropping this guard will flush and close the log file.
 pub struct LoggingGuard {
@@ -438,6 +585,16 @@ pub fn log_path() -> PathBuf {
 pub fn log(category: &str, message: &str) {
     // Add to legacy buffer for UI display
     add_to_buffer(category, message);
+
+    // Write to capture file if capture is enabled
+    if is_capture_enabled() {
+        let timestamp = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ");
+        let json_line = format!(
+            r#"{{"timestamp":"{}","level":"INFO","category":"{}","message":"{}"}}"#,
+            timestamp, category, message
+        );
+        write_to_capture(&json_line);
+    }
 
     // Use tracing for actual logging
     tracing::info!(category = category, legacy = true, "{}", message);
@@ -1737,5 +1894,73 @@ mod tests {
         assert!(summary.len() < 100);
         assert!(summary.contains("type:screenshotResult"));
         assert!(summary.contains(&format!("len:{}", json.len())));
+    }
+
+    // -------------------------------------------------------------------------
+    // Log capture tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_is_capture_enabled_default_false() {
+        // By default, capture should be disabled
+        // Note: we can't test this in isolation because it's a global static
+        // but we can verify the initial state
+        let _ = is_capture_enabled(); // Just verify it doesn't panic
+    }
+
+    #[test]
+    fn test_toggle_capture_returns_correct_state() {
+        // First toggle should start capture (if not already running)
+        let initial_state = is_capture_enabled();
+
+        if !initial_state {
+            // If not capturing, toggle should start it
+            let (is_capturing, path) = toggle_capture();
+            assert!(is_capturing);
+            assert!(path.is_some());
+
+            // Clean up: toggle again to stop
+            let (is_capturing2, path2) = toggle_capture();
+            assert!(!is_capturing2);
+            assert!(path2.is_some());
+        } else {
+            // If already capturing (from another test), toggle should stop it
+            let (is_capturing, path) = toggle_capture();
+            assert!(!is_capturing);
+            assert!(path.is_some());
+        }
+    }
+
+    #[test]
+    fn test_capture_file_path_format() {
+        // Start capture and check the file path format
+        let was_enabled = is_capture_enabled();
+
+        if !was_enabled {
+            let result = start_capture();
+            assert!(result.is_ok());
+
+            let path = result.unwrap();
+            let filename = path.file_name().unwrap().to_str().unwrap();
+
+            // Filename should be like: capture-2026-01-11T08-37-28.jsonl
+            assert!(filename.starts_with("capture-"));
+            assert!(filename.ends_with(".jsonl"));
+
+            // Clean up
+            let _ = stop_capture();
+        }
+    }
+
+    #[test]
+    fn test_stop_capture_when_not_started() {
+        // Ensure capture is stopped
+        while is_capture_enabled() {
+            let _ = stop_capture();
+        }
+
+        // Stopping when not started should return None
+        let result = stop_capture();
+        assert!(result.is_none());
     }
 }

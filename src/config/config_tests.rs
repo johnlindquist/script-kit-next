@@ -38,6 +38,7 @@ fn test_config_serialization() {
         suggested: None,
         notes_hotkey: None,
         ai_hotkey: None,
+        logs_hotkey: None,
         commands: None,
     };
 
@@ -80,6 +81,7 @@ fn test_config_with_bun_path() {
         suggested: None,
         notes_hotkey: None,
         ai_hotkey: None,
+        logs_hotkey: None,
         commands: None,
     };
     assert_eq!(config.bun_path, Some("/custom/path/bun".to_string()));
@@ -104,6 +106,7 @@ fn test_config_without_bun_path() {
         suggested: None,
         notes_hotkey: None,
         ai_hotkey: None,
+        logs_hotkey: None,
         commands: None,
     };
     assert_eq!(config.bun_path, None);
@@ -128,6 +131,7 @@ fn test_config_serialization_skip_none_bun_path() {
         suggested: None,
         notes_hotkey: None,
         ai_hotkey: None,
+        logs_hotkey: None,
         commands: None,
     };
 
@@ -157,6 +161,7 @@ fn test_config_serialization_preserves_multiple_modifiers() {
         suggested: None,
         notes_hotkey: None,
         ai_hotkey: None,
+        logs_hotkey: None,
         commands: None,
     };
 
@@ -253,6 +258,7 @@ fn test_config_with_empty_modifiers_list() {
         suggested: None,
         notes_hotkey: None,
         ai_hotkey: None,
+        logs_hotkey: None,
         commands: None,
     };
 
@@ -283,6 +289,7 @@ fn test_config_key_preservation() {
             suggested: None,
             notes_hotkey: None,
             ai_hotkey: None,
+            logs_hotkey: None,
             commands: None,
         };
 
@@ -312,6 +319,7 @@ fn test_config_with_editor() {
         suggested: None,
         notes_hotkey: None,
         ai_hotkey: None,
+        logs_hotkey: None,
         commands: None,
     };
 
@@ -341,6 +349,7 @@ fn test_config_without_editor() {
         suggested: None,
         notes_hotkey: None,
         ai_hotkey: None,
+        logs_hotkey: None,
         commands: None,
     };
 
@@ -371,6 +380,7 @@ fn test_get_editor_from_config() {
         suggested: None,
         notes_hotkey: None,
         ai_hotkey: None,
+        logs_hotkey: None,
         commands: None,
     };
 
@@ -403,6 +413,7 @@ fn test_get_editor_from_env() {
         suggested: None,
         notes_hotkey: None,
         ai_hotkey: None,
+        logs_hotkey: None,
         commands: None,
     };
 
@@ -441,6 +452,7 @@ fn test_get_editor_default() {
         suggested: None,
         notes_hotkey: None,
         ai_hotkey: None,
+        logs_hotkey: None,
         commands: None,
     };
 
@@ -479,6 +491,7 @@ fn test_config_editor_priority() {
         suggested: None,
         notes_hotkey: None,
         ai_hotkey: None,
+        logs_hotkey: None,
         commands: None,
     };
 
@@ -586,6 +599,7 @@ fn test_config_get_padding_custom() {
         suggested: None,
         notes_hotkey: None,
         ai_hotkey: None,
+        logs_hotkey: None,
         commands: None,
     };
 
@@ -620,6 +634,7 @@ fn test_config_get_editor_font_size_custom() {
         suggested: None,
         notes_hotkey: None,
         ai_hotkey: None,
+        logs_hotkey: None,
         commands: None,
     };
 
@@ -651,6 +666,7 @@ fn test_config_get_terminal_font_size_custom() {
         suggested: None,
         notes_hotkey: None,
         ai_hotkey: None,
+        logs_hotkey: None,
         commands: None,
     };
 
@@ -682,6 +698,7 @@ fn test_config_get_ui_scale_custom() {
         suggested: None,
         notes_hotkey: None,
         ai_hotkey: None,
+        logs_hotkey: None,
         commands: None,
     };
 
@@ -774,6 +791,7 @@ fn test_config_serialization_includes_set_ui_settings() {
         suggested: None,
         notes_hotkey: None,
         ai_hotkey: None,
+        logs_hotkey: None,
         commands: None,
     };
 
@@ -874,6 +892,7 @@ fn test_config_with_builtins() {
         suggested: None,
         notes_hotkey: None,
         ai_hotkey: None,
+        logs_hotkey: None,
         commands: None,
     };
 
@@ -966,6 +985,7 @@ fn test_config_serialization_includes_set_builtins() {
         suggested: None,
         notes_hotkey: None,
         ai_hotkey: None,
+        logs_hotkey: None,
         commands: None,
     };
 
@@ -1109,6 +1129,7 @@ fn test_config_with_process_limits() {
         suggested: None,
         notes_hotkey: None,
         ai_hotkey: None,
+        logs_hotkey: None,
         commands: None,
     };
 
@@ -1207,6 +1228,7 @@ fn test_config_serialization_includes_set_process_limits() {
         suggested: None,
         notes_hotkey: None,
         ai_hotkey: None,
+        logs_hotkey: None,
         commands: None,
     };
 
@@ -1319,6 +1341,7 @@ fn test_requires_confirmation_user_override_disable() {
         suggested: None,
         notes_hotkey: None,
         ai_hotkey: None,
+        logs_hotkey: None,
         commands: Some(commands),
     };
 
@@ -1358,6 +1381,7 @@ fn test_requires_confirmation_user_override_enable() {
         suggested: None,
         notes_hotkey: None,
         ai_hotkey: None,
+        logs_hotkey: None,
         commands: Some(commands),
     };
 
@@ -1510,6 +1534,7 @@ fn test_requires_confirmation_with_partial_command_config() {
         suggested: None,
         notes_hotkey: None,
         ai_hotkey: None,
+        logs_hotkey: None,
         commands: Some(commands),
     };
 
