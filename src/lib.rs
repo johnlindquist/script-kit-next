@@ -285,3 +285,30 @@ pub fn request_show_main_window() {
     let (tx, _) = show_window_channel();
     let _ = tx.try_send(());
 }
+
+/// Timestamp of when the window was last shown (for focus loss grace period)
+/// This prevents focus racing from immediately closing the window after it opens
+static WINDOW_SHOWN_AT: std::sync::Mutex<Option<std::time::Instant>> =
+    std::sync::Mutex::new(None);
+
+/// Grace period in milliseconds after showing window during which focus loss is ignored
+const FOCUS_LOSS_GRACE_PERIOD_MS: u64 = 200;
+
+/// Mark the window as just shown (call from show_main_window_helper)
+pub fn mark_window_shown() {
+    if let Ok(mut guard) = WINDOW_SHOWN_AT.lock() {
+        *guard = Some(std::time::Instant::now());
+    }
+}
+
+/// Check if we're within the grace period after showing the window
+/// Returns true if focus loss should be ignored (within grace period)
+pub fn is_within_focus_grace_period() -> bool {
+    if let Ok(guard) = WINDOW_SHOWN_AT.lock() {
+        if let Some(shown_at) = *guard {
+            let elapsed = shown_at.elapsed().as_millis() as u64;
+            return elapsed < FOCUS_LOSS_GRACE_PERIOD_MS;
+        }
+    }
+    false
+}

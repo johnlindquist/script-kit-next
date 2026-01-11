@@ -1679,6 +1679,131 @@ impl ScriptListApp {
 
                 cx.notify();
             }
+            PromptMessage::AiStartChat {
+                request_id,
+                message,
+                system_prompt,
+                image,
+                model_id,
+                no_response,
+            } => {
+                logging::log(
+                    "AI",
+                    &format!(
+                        "AiStartChat request: {} (message: {} chars, system_prompt: {}, image: {}, model: {:?}, no_response: {})",
+                        request_id,
+                        message.len(),
+                        system_prompt.is_some(),
+                        image.is_some(),
+                        model_id,
+                        no_response
+                    ),
+                );
+
+                // Open the AI window (creates new if not open, brings to front if open)
+                if let Err(e) = crate::ai::open_ai_window(cx) {
+                    tracing::error!(error = %e, "Failed to open AI window for AiStartChat");
+                    logging::log("ERROR", &format!("Failed to open AI window: {}", e));
+                    // Still send response so SDK doesn't hang
+                    if let Some(ref sender) = self.response_sender {
+                        let _ = sender.try_send(Message::AiChatCreated {
+                            request_id,
+                            chat_id: String::new(),
+                            title: String::new(),
+                            model_id: model_id.unwrap_or_default(),
+                            provider: String::new(),
+                            streaming_started: false,
+                        });
+                    }
+                    return;
+                }
+
+                // Set the input and optionally submit
+                // If no_response is false (default), we submit to trigger AI response
+                let should_submit = !no_response;
+
+                // Set input with image if provided, otherwise just set text
+                if let Some(ref img_base64) = image {
+                    crate::ai::set_ai_input_with_image(cx, &message, img_base64, should_submit);
+                } else {
+                    crate::ai::set_ai_input(cx, &message, should_submit);
+                }
+
+                // Generate a chat ID (the AI window will create the actual chat)
+                // For now, use a placeholder - the real chat ID is managed by AiApp
+                let generated_chat_id = format!("chat-{}", uuid::Uuid::new_v4());
+                let title = if message.len() > 30 {
+                    format!("{}...", &message[..30])
+                } else {
+                    message.clone()
+                };
+
+                // Send AiChatCreated response back to SDK
+                if let Some(ref sender) = self.response_sender {
+                    let response = Message::AiChatCreated {
+                        request_id: request_id.clone(),
+                        chat_id: generated_chat_id,
+                        title,
+                        model_id: model_id.unwrap_or_else(|| "claude-3-5-sonnet-20241022".to_string()),
+                        provider: "anthropic".to_string(),
+                        streaming_started: should_submit,
+                    };
+                    match sender.try_send(response) {
+                        Ok(()) => {
+                            logging::log("AI", &format!("AiChatCreated response sent for {}", request_id));
+                        }
+                        Err(std::sync::mpsc::TrySendError::Full(_)) => {
+                            logging::log("WARN", "Response channel full - AiChatCreated dropped");
+                        }
+                        Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
+                            logging::log("UI", "Response channel disconnected - script exited");
+                        }
+                    }
+                }
+
+                cx.notify();
+            }
+            PromptMessage::AiFocus { request_id } => {
+                logging::log("AI", &format!("AiFocus request: {}", request_id));
+
+                // Check if window was already open before we open/focus it
+                let was_open = crate::ai::is_ai_window_open();
+
+                // Open the AI window (creates new if not open, brings to front if open)
+                let success = match crate::ai::open_ai_window(cx) {
+                    Ok(()) => {
+                        logging::log("AI", "AI window focused successfully");
+                        true
+                    }
+                    Err(e) => {
+                        tracing::error!(error = %e, "Failed to focus AI window");
+                        logging::log("ERROR", &format!("Failed to focus AI window: {}", e));
+                        false
+                    }
+                };
+
+                // Send AiFocusResult response back to SDK
+                if let Some(ref sender) = self.response_sender {
+                    let response = Message::AiFocusResult {
+                        request_id: request_id.clone(),
+                        success,
+                        was_open,
+                    };
+                    match sender.try_send(response) {
+                        Ok(()) => {
+                            logging::log("AI", &format!("AiFocusResult sent for {}", request_id));
+                        }
+                        Err(std::sync::mpsc::TrySendError::Full(_)) => {
+                            logging::log("WARN", "Response channel full - AiFocusResult dropped");
+                        }
+                        Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
+                            logging::log("UI", "Response channel disconnected - script exited");
+                        }
+                    }
+                }
+
+                cx.notify();
+            }
             PromptMessage::ShowGrid { options } => {
                 logging::log(
                     "DEBUG_GRID",

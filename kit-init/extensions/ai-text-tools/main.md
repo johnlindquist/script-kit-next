@@ -24,8 +24,12 @@ shortcut: ctrl shift i
 let text: string | undefined;
 try {
   text = await getSelectedText();
-} catch {
-  // Fall through - text will be undefined (e.g., accessibility permission denied)
+} catch (e: any) {
+  if (e.message?.includes('Accessibility')) {
+    await hud('Enable Accessibility in System Preferences');
+    exit();
+  }
+  // Other errors - fall through
 }
 if (!text?.trim()) {
   await hud('No text selected');
@@ -51,8 +55,11 @@ shortcut: ctrl shift e
 let text: string | undefined;
 try {
   text = await getSelectedText();
-} catch {
-  // Fall through - text will be undefined (e.g., accessibility permission denied)
+} catch (e: any) {
+  if (e.message?.includes('Accessibility')) {
+    await hud('Enable Accessibility in System Preferences');
+    exit();
+  }
 }
 if (!text?.trim()) {
   await hud('No text selected');
@@ -78,8 +85,11 @@ shortcut: ctrl shift g
 let text: string | undefined;
 try {
   text = await getSelectedText();
-} catch {
-  // Fall through - text will be undefined (e.g., accessibility permission denied)
+} catch (e: any) {
+  if (e.message?.includes('Accessibility')) {
+    await hud('Enable Accessibility in System Preferences');
+    exit();
+  }
 }
 if (!text?.trim()) {
   await hud('No text selected');
@@ -105,8 +115,11 @@ shortcut: ctrl shift s
 let text: string | undefined;
 try {
   text = await getSelectedText();
-} catch {
-  // Fall through - text will be undefined (e.g., accessibility permission denied)
+} catch (e: any) {
+  if (e.message?.includes('Accessibility')) {
+    await hud('Enable Accessibility in System Preferences');
+    exit();
+  }
 }
 if (!text?.trim()) {
   await hud('No text selected');
@@ -132,8 +145,11 @@ shortcut: ctrl shift c
 let text: string | undefined;
 try {
   text = await getSelectedText();
-} catch {
-  // Fall through - text will be undefined (e.g., accessibility permission denied)
+} catch (e: any) {
+  if (e.message?.includes('Accessibility')) {
+    await hud('Enable Accessibility in System Preferences');
+    exit();
+  }
 }
 if (!text?.trim()) {
   await hud('No text selected');
@@ -159,8 +175,11 @@ shortcut: ctrl shift t
 let text: string | undefined;
 try {
   text = await getSelectedText();
-} catch {
-  // Fall through - text will be undefined (e.g., accessibility permission denied)
+} catch (e: any) {
+  if (e.message?.includes('Accessibility')) {
+    await hud('Enable Accessibility in System Preferences');
+    exit();
+  }
 }
 if (!text?.trim()) {
   await hud('No text selected');
@@ -186,8 +205,11 @@ shortcut: ctrl shift p
 let text: string | undefined;
 try {
   text = await getSelectedText();
-} catch {
-  // Fall through - text will be undefined (e.g., accessibility permission denied)
+} catch (e: any) {
+  if (e.message?.includes('Accessibility')) {
+    await hud('Enable Accessibility in System Preferences');
+    exit();
+  }
 }
 if (!text?.trim()) {
   await hud('No text selected');

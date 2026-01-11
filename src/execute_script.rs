@@ -1390,6 +1390,26 @@ impl ScriptListApp {
                                     }
                                     // ChatSubmit goes from App → SDK, not SDK → App
                                     Message::ChatSubmit { .. } => None,
+                                    // AI window start chat
+                                    Message::AiStartChat {
+                                        request_id,
+                                        message,
+                                        system_prompt,
+                                        image,
+                                        model_id,
+                                        no_response,
+                                    } => Some(PromptMessage::AiStartChat {
+                                        request_id,
+                                        message,
+                                        system_prompt,
+                                        image,
+                                        model_id,
+                                        no_response,
+                                    }),
+                                    // AI window focus
+                                    Message::AiFocus { request_id } => {
+                                        Some(PromptMessage::AiFocus { request_id })
+                                    }
                                     other => {
                                         // Get the message type name for user feedback
                                         let msg_type = format!("{:?}", other);

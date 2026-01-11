@@ -343,10 +343,14 @@ fn show_main_window_helper(
     // 1. Set visibility state
     set_main_window_visible(true);
 
-    // 2. Move to active space (macOS)
+    // 2. Mark window shown timestamp for focus grace period
+    // This prevents the window from being closed by focus loss immediately after opening
+    script_kit_gpui::mark_window_shown();
+
+    // 3. Move to active space (macOS)
     platform::ensure_move_to_active_space();
 
-    // 3. Position window - try per-display saved position first, then fall back to eye-line
+    // 4. Position window - try per-display saved position first, then fall back to eye-line
     let window_size = gpui::size(px(750.), initial_window_height());
     let displays = platform::get_macos_displays();
     let bounds = if let Some((mouse_x, mouse_y)) = platform::get_global_mouse_position() {
@@ -390,7 +394,7 @@ fn show_main_window_helper(
     };
     platform::move_first_window_to_bounds(&bounds);
 
-    // 4. Configure as floating panel (first time only)
+    // 5. Configure as floating panel (first time only)
     if !PANEL_CONFIGURED.load(Ordering::SeqCst) {
         platform::configure_as_floating_panel();
         // HACK: Swizzle GPUI's BlurredView to preserve native CAChameleonLayer tint
@@ -403,13 +407,13 @@ fn show_main_window_helper(
         PANEL_CONFIGURED.store(true, Ordering::SeqCst);
     }
 
-    // 5. Activate window
+    // 6. Activate window
     cx.activate(true);
     let _ = window.update(cx, |_root, win, _cx| {
         win.activate_window();
     });
 
-    // 6. Focus input, reset resize debounce, and handle NEEDS_RESET
+    // 7. Focus input, reset resize debounce, and handle NEEDS_RESET
     app_entity.update(cx, |view, ctx| {
         let focus_handle = view.focus_handle(ctx);
         let _ = window.update(ctx, |_root, win, _cx| {
@@ -1081,6 +1085,19 @@ enum PromptMessage {
         id: String,
         message_id: String,
     },
+    /// Open AI window and start a new chat with a message
+    AiStartChat {
+        request_id: String,
+        message: String,
+        system_prompt: Option<String>,
+        image: Option<String>,
+        model_id: Option<String>,
+        no_response: bool,
+    },
+    /// Focus the AI window (opens if not already open)
+    AiFocus {
+        request_id: String,
+    },
     HideWindow,
     OpenBrowser {
         url: String,
@@ -1414,15 +1431,22 @@ impl Render for ScriptListApp {
         if self.was_window_focused && !is_window_focused {
             // Window just lost focus (user clicked another window)
             // Only auto-dismiss if we're in a dismissable view AND window is visible AND not pinned
+            // AND we're past the focus grace period (prevents race condition on window open)
             if self.is_dismissable_view()
                 && script_kit_gpui::is_main_window_visible()
                 && !self.is_pinned
+                && !script_kit_gpui::is_within_focus_grace_period()
             {
                 logging::log(
                     "FOCUS",
                     "Main window lost focus while in dismissable view - closing",
                 );
                 self.close_and_reset_window(cx);
+            } else if script_kit_gpui::is_within_focus_grace_period() {
+                logging::log(
+                    "FOCUS",
+                    "Main window lost focus but within grace period - ignoring",
+                );
             } else if self.is_pinned {
                 logging::log(
                     "FOCUS",
@@ -2657,6 +2681,7 @@ fn main() {
                                 // The core logic matches show_main_window_helper().
 
                                 script_kit_gpui::set_main_window_visible(true);
+                                script_kit_gpui::mark_window_shown(); // Focus grace period
                                 platform::ensure_move_to_active_space();
 
                                 // Use Window::defer via window_ops to coalesce and defer window move.
@@ -2690,6 +2715,7 @@ fn main() {
                                 // The core logic matches show_main_window_helper().
 
                                 script_kit_gpui::set_main_window_visible(true);
+                                script_kit_gpui::mark_window_shown(); // Focus grace period
                                 platform::ensure_move_to_active_space();
 
                                 // Position window - try per-display saved position first, then fall back to eye-line
