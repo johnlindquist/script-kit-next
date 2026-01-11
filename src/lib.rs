@@ -288,8 +288,7 @@ pub fn request_show_main_window() {
 
 /// Timestamp of when the window was last shown (for focus loss grace period)
 /// This prevents focus racing from immediately closing the window after it opens
-static WINDOW_SHOWN_AT: std::sync::Mutex<Option<std::time::Instant>> =
-    std::sync::Mutex::new(None);
+static WINDOW_SHOWN_AT: std::sync::Mutex<Option<std::time::Instant>> = std::sync::Mutex::new(None);
 
 /// Grace period in milliseconds after showing window during which focus loss is ignored
 const FOCUS_LOSS_GRACE_PERIOD_MS: u64 = 200;

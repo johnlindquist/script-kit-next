@@ -48,8 +48,7 @@ const EMBEDDED_WINDOW_MANAGEMENT_EXTENSION: &str =
     include_str!("../kit-init/extensions/window-management/main.md");
 
 /// Embedded Conductor extension (built-in extension that ships with the app)
-const EMBEDDED_CONDUCTOR_EXTENSION: &str =
-    include_str!("../kit-init/extensions/conductor/main.md");
+const EMBEDDED_CONDUCTOR_EXTENSION: &str = include_str!("../kit-init/extensions/conductor/main.md");
 
 /// Embedded AI Text Tools extension (built-in extension that ships with the app)
 const EMBEDDED_AI_TEXT_TOOLS_EXTENSION: &str =
@@ -1033,10 +1032,7 @@ pub fn ensure_kit_setup() -> SetupResult {
         // Built-in Conductor extension kit
         kit_dir.join("kit").join("conductor").join("extensions"),
         // Built-in AI Text Tools extension kit
-        kit_dir
-            .join("kit")
-            .join("ai-text-tools")
-            .join("extensions"),
+        kit_dir.join("kit").join("ai-text-tools").join("extensions"),
         kit_dir.join("sdk"),
         kit_dir.join("db"),
         kit_dir.join("logs"),

@@ -30,7 +30,11 @@ pub struct ChatModel {
 }
 
 impl ChatModel {
-    pub fn new(id: impl Into<String>, name: impl Into<String>, provider: impl Into<String>) -> Self {
+    pub fn new(
+        id: impl Into<String>,
+        name: impl Into<String>,
+        provider: impl Into<String>,
+    ) -> Self {
         Self {
             id: id.into(),
             name: name.into(),
@@ -116,9 +120,15 @@ pub enum ChatErrorType {
 impl ChatErrorType {
     pub fn from_error_string(s: &str) -> Self {
         let s_lower = s.to_lowercase();
-        if s_lower.contains("api key") || s_lower.contains("unauthorized") || s_lower.contains("401") {
+        if s_lower.contains("api key")
+            || s_lower.contains("unauthorized")
+            || s_lower.contains("401")
+        {
             ChatErrorType::NoApiKey
-        } else if s_lower.contains("network") || s_lower.contains("connection") || s_lower.contains("timeout") {
+        } else if s_lower.contains("network")
+            || s_lower.contains("connection")
+            || s_lower.contains("timeout")
+        {
             ChatErrorType::NetworkError
         } else if s_lower.contains("interrupt") || s_lower.contains("abort") {
             ChatErrorType::StreamInterrupted
@@ -126,7 +136,10 @@ impl ChatErrorType {
             ChatErrorType::RateLimited
         } else if s_lower.contains("model") || s_lower.contains("invalid") {
             ChatErrorType::InvalidModel
-        } else if s_lower.contains("token") || s_lower.contains("too long") || s_lower.contains("length") {
+        } else if s_lower.contains("token")
+            || s_lower.contains("too long")
+            || s_lower.contains("length")
+        {
             ChatErrorType::TokenLimit
         } else {
             ChatErrorType::Unknown
@@ -288,13 +301,21 @@ impl ChatPrompt {
     }
 
     pub fn add_message(&mut self, message: ChatPromptMessage, cx: &mut Context<Self>) {
-        logging::log("CHAT", &format!("Adding message: {:?}", message.get_position()));
+        logging::log(
+            "CHAT",
+            &format!("Adding message: {:?}", message.get_position()),
+        );
         self.messages.push(message);
         self.scroll_handle.scroll_to_bottom();
         cx.notify();
     }
 
-    pub fn start_streaming(&mut self, message_id: String, position: ChatMessagePosition, cx: &mut Context<Self>) {
+    pub fn start_streaming(
+        &mut self,
+        message_id: String,
+        position: ChatMessagePosition,
+        cx: &mut Context<Self>,
+    ) {
         let role = match position {
             ChatMessagePosition::Right => Some(ChatMessageRole::User),
             ChatMessagePosition::Left => Some(ChatMessageRole::Assistant),
@@ -320,7 +341,12 @@ impl ChatPrompt {
 
     pub fn append_chunk(&mut self, message_id: &str, chunk: &str, cx: &mut Context<Self>) {
         if self.streaming_message_id.as_deref() == Some(message_id) {
-            if let Some(msg) = self.messages.iter_mut().rev().find(|m| m.id.as_deref() == Some(message_id)) {
+            if let Some(msg) = self
+                .messages
+                .iter_mut()
+                .rev()
+                .find(|m| m.id.as_deref() == Some(message_id))
+            {
                 msg.append_content(chunk);
                 self.scroll_handle.scroll_to_bottom();
                 cx.notify();
@@ -329,7 +355,12 @@ impl ChatPrompt {
     }
 
     pub fn complete_streaming(&mut self, message_id: &str, cx: &mut Context<Self>) {
-        if let Some(msg) = self.messages.iter_mut().rev().find(|m| m.id.as_deref() == Some(message_id)) {
+        if let Some(msg) = self
+            .messages
+            .iter_mut()
+            .rev()
+            .find(|m| m.id.as_deref() == Some(message_id))
+        {
             msg.streaming = false;
         }
         if self.streaming_message_id.as_deref() == Some(message_id) {
@@ -346,7 +377,12 @@ impl ChatPrompt {
 
     /// Set an error on a message (typically on streaming failure)
     pub fn set_message_error(&mut self, message_id: &str, error: String, cx: &mut Context<Self>) {
-        if let Some(msg) = self.messages.iter_mut().rev().find(|m| m.id.as_deref() == Some(message_id)) {
+        if let Some(msg) = self
+            .messages
+            .iter_mut()
+            .rev()
+            .find(|m| m.id.as_deref() == Some(message_id))
+        {
             msg.error = Some(error);
             msg.streaming = false; // Stop streaming indicator
         }
@@ -358,7 +394,12 @@ impl ChatPrompt {
 
     /// Clear error from a message (before retry)
     pub fn clear_message_error(&mut self, message_id: &str, cx: &mut Context<Self>) {
-        if let Some(msg) = self.messages.iter_mut().rev().find(|m| m.id.as_deref() == Some(message_id)) {
+        if let Some(msg) = self
+            .messages
+            .iter_mut()
+            .rev()
+            .find(|m| m.id.as_deref() == Some(message_id))
+        {
             msg.error = None;
         }
         cx.notify();
@@ -402,21 +443,24 @@ impl ChatPrompt {
         }
 
         // Generate title from first user message
-        let title = self.messages.iter()
+        let title = self
+            .messages
+            .iter()
             .find(|m| m.is_user())
             .map(|m| Chat::generate_title_from_content(m.get_content()))
             .unwrap_or_else(|| "Chat Prompt Conversation".to_string());
 
         // Determine the model and provider
         let model_id = self.model.clone().unwrap_or_else(|| "unknown".to_string());
-        let provider = self.models.iter()
+        let provider = self
+            .models
+            .iter()
             .find(|m| m.name == model_id || m.id == model_id)
             .map(|m| m.provider.clone())
             .unwrap_or_else(|| "unknown".to_string());
 
         // Create the chat record with ChatPrompt source
-        let chat = Chat::new(&model_id, &provider)
-            .with_source(ChatSource::ChatPrompt);
+        let chat = Chat::new(&model_id, &provider).with_source(ChatSource::ChatPrompt);
         let mut chat = chat;
         chat.set_title(&title);
 
@@ -440,7 +484,14 @@ impl ChatPrompt {
             }
         }
 
-        logging::log("CHAT", &format!("Saved conversation with {} messages (id: {})", self.messages.len(), chat.id));
+        logging::log(
+            "CHAT",
+            &format!(
+                "Saved conversation with {} messages (id: {})",
+                self.messages.len(),
+                chat.id
+            ),
+        );
     }
 
     fn handle_continue_in_chat(&mut self, _cx: &mut Context<Self>) {
@@ -473,7 +524,17 @@ impl ChatPrompt {
     fn toggle_actions_menu(&mut self, cx: &mut Context<Self>) {
         self.actions_menu_open = !self.actions_menu_open;
         self.actions_menu_selected = 0;
-        logging::log("CHAT", &format!("Actions menu: {}", if self.actions_menu_open { "opened" } else { "closed" }));
+        logging::log(
+            "CHAT",
+            &format!(
+                "Actions menu: {}",
+                if self.actions_menu_open {
+                    "opened"
+                } else {
+                    "closed"
+                }
+            ),
+        );
         cx.notify();
     }
 
@@ -639,11 +700,7 @@ impl ChatPrompt {
             let is_selected = i == self.actions_menu_selected;
             let is_current = model.name == current_model;
 
-            let row_bg = if is_selected {
-                Some(selected_bg)
-            } else {
-                None
-            };
+            let row_bg = if is_selected { Some(selected_bg) } else { None };
 
             let model_name = model.name.clone();
             let index = i;
@@ -712,12 +769,7 @@ impl ChatPrompt {
         }
 
         // Separator
-        menu = menu.child(
-            div()
-                .w_full()
-                .h(px(1.0))
-                .bg(border_color),
-        );
+        menu = menu.child(div().w_full().h(px(1.0)).bg(border_color));
 
         // Actions section
         let actions = self.get_actions();
@@ -730,11 +782,7 @@ impl ChatPrompt {
             let menu_index = model_count + i;
             let is_selected = menu_index == self.actions_menu_selected;
 
-            let row_bg = if is_selected {
-                Some(selected_bg)
-            } else {
-                None
-            };
+            let row_bg = if is_selected { Some(selected_bg) } else { None };
 
             let action_id = action.id.clone();
             let action_label = action.label.clone();
@@ -831,7 +879,12 @@ impl ChatPrompt {
     }
 
     /// Render a conversation turn (user prompt + AI response bundled)
-    fn render_turn(&self, turn: &ConversationTurn, turn_index: usize, cx: &Context<Self>) -> impl IntoElement {
+    fn render_turn(
+        &self,
+        turn: &ConversationTurn,
+        turn_index: usize,
+        cx: &Context<Self>,
+    ) -> impl IntoElement {
         let colors = &self.prompt_colors;
 
         let container_bg = rgba((colors.code_bg << 8) | 0x60);
@@ -859,17 +912,12 @@ impl ChatPrompt {
             let error_message = error_type.display_message();
             let can_retry = error_type.can_retry() && has_retry_callback;
 
-            let mut error_row = div()
-                .flex()
-                .flex_row()
-                .items_center()
-                .gap(px(8.0))
-                .child(
-                    div()
-                        .text_sm()
-                        .text_color(rgb(0xEF4444)) // Red
-                        .child(error_message.to_string()),
-                );
+            let mut error_row = div().flex().flex_row().items_center().gap(px(8.0)).child(
+                div()
+                    .text_sm()
+                    .text_color(rgb(0xEF4444)) // Red
+                    .child(error_message.to_string()),
+            );
 
             // Add retry button if applicable
             if can_retry {
@@ -902,9 +950,7 @@ impl ChatPrompt {
             // Use markdown rendering for assistant responses
             if turn.streaming && response.is_empty() {
                 // Empty streaming state
-                content = content.child(
-                    div().text_xs().opacity(0.6).child("Thinking..."),
-                );
+                content = content.child(div().text_xs().opacity(0.6).child("Thinking..."));
             } else if turn.streaming {
                 // Streaming with content - render markdown + cursor
                 content = content.child(
@@ -955,7 +1001,10 @@ impl ChatPrompt {
 
     /// Handle retry for a failed message
     fn handle_retry(&self, message_id: String) {
-        logging::log("CHAT", &format!("Retry requested for message: {}", message_id));
+        logging::log(
+            "CHAT",
+            &format!("Retry requested for message: {}", message_id),
+        );
         if let Some(ref callback) = self.on_retry {
             callback(self.id.clone(), message_id);
         }
@@ -967,12 +1016,26 @@ impl ChatPrompt {
         if let Some(turn) = turns.get(turn_index) {
             if let Some(ref response) = turn.assistant_response {
                 let content = response.clone();
-                logging::log("CHAT", &format!("Copied turn {} response: {} chars", turn_index, content.len()));
+                logging::log(
+                    "CHAT",
+                    &format!(
+                        "Copied turn {} response: {} chars",
+                        turn_index,
+                        content.len()
+                    ),
+                );
                 cx.write_to_clipboard(gpui::ClipboardItem::new_string(content));
             } else if !turn.user_prompt.is_empty() {
                 // If no assistant response, copy the user prompt
                 let content = turn.user_prompt.clone();
-                logging::log("CHAT", &format!("Copied turn {} user prompt: {} chars", turn_index, content.len()));
+                logging::log(
+                    "CHAT",
+                    &format!(
+                        "Copied turn {} user prompt: {} chars",
+                        turn_index,
+                        content.len()
+                    ),
+                );
                 cx.write_to_clipboard(gpui::ClipboardItem::new_string(content));
             }
         }
@@ -990,33 +1053,35 @@ impl ChatPrompt {
         // Text before cursor
         if cursor_pos > 0 {
             let before: String = chars[..cursor_pos].iter().collect();
-            input_content = input_content.child(
-                div().text_color(rgb(colors.text_primary)).child(before),
-            );
+            input_content =
+                input_content.child(div().text_color(rgb(colors.text_primary)).child(before));
         }
 
         // Cursor
-        input_content = input_content.child(
-            div().w(px(2.0)).h(px(16.0)).bg(rgb(colors.accent_color)),
-        );
+        input_content =
+            input_content.child(div().w(px(2.0)).h(px(16.0)).bg(rgb(colors.accent_color)));
 
         // Text after cursor
         if cursor_pos < chars.len() {
             let after: String = chars[cursor_pos..].iter().collect();
-            input_content = input_content.child(
-                div().text_color(rgb(colors.text_primary)).child(after),
-            );
+            input_content =
+                input_content.child(div().text_color(rgb(colors.text_primary)).child(after));
         }
 
         // Placeholder if empty
         if text.is_empty() {
-            let placeholder = self.placeholder.clone().unwrap_or_else(|| "Ask follow-up...".into());
+            let placeholder = self
+                .placeholder
+                .clone()
+                .unwrap_or_else(|| "Ask follow-up...".into());
             input_content = div()
                 .flex()
                 .flex_row()
                 .items_center()
                 .child(
-                    div().text_color(rgb(colors.text_tertiary)).child(placeholder),
+                    div()
+                        .text_color(rgb(colors.text_tertiary))
+                        .child(placeholder),
                 )
                 .child(div().w(px(2.0)).h(px(16.0)).bg(rgb(colors.accent_color)));
         }

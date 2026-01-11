@@ -51,8 +51,7 @@ pub fn render_markdown(text: &str, colors: &PromptColors) -> impl IntoElement {
                     .text_color(rgb(colors.text_primary))
                     .child(heading.to_string()),
             );
-        }
-        else if let Some(heading) = line.strip_prefix("## ") {
+        } else if let Some(heading) = line.strip_prefix("## ") {
             container = container.child(
                 div()
                     .text_base()
@@ -60,8 +59,7 @@ pub fn render_markdown(text: &str, colors: &PromptColors) -> impl IntoElement {
                     .text_color(rgb(colors.text_primary))
                     .child(heading.to_string()),
             );
-        }
-        else if let Some(heading) = line.strip_prefix("# ") {
+        } else if let Some(heading) = line.strip_prefix("# ") {
             container = container.child(
                 div()
                     .text_lg()
@@ -83,13 +81,20 @@ pub fn render_markdown(text: &str, colors: &PromptColors) -> impl IntoElement {
         }
         // Numbered list (1. item)
         else if let Some(rest) = parse_numbered(line) {
-            let num = line.chars().take_while(|c| c.is_ascii_digit()).collect::<String>();
+            let num = line
+                .chars()
+                .take_while(|c| c.is_ascii_digit())
+                .collect::<String>();
             container = container.child(
                 div()
                     .flex()
                     .flex_row()
                     .gap(px(6.0))
-                    .child(div().text_color(rgb(colors.text_tertiary)).child(format!("{}.", num)))
+                    .child(
+                        div()
+                            .text_color(rgb(colors.text_tertiary))
+                            .child(format!("{}.", num)),
+                    )
                     .child(render_inline(rest, colors)),
             );
         }
@@ -163,7 +168,9 @@ fn render_inline(text: &str, colors: &PromptColors) -> impl IntoElement {
                 row = flush_text(row, &mut current, colors);
                 chars.next();
                 let bold = collect_until(&mut chars, |c, next| c == '*' && next == Some(&'*'));
-                if chars.peek() == Some(&'*') { chars.next(); }
+                if chars.peek() == Some(&'*') {
+                    chars.next();
+                }
                 row = row.child(
                     div()
                         .font_weight(gpui::FontWeight::BOLD)
