@@ -1684,6 +1684,12 @@ impl ChatPromptMessage {
         }
     }
 
+    /// Set content (replaces existing content)
+    pub fn set_content(&mut self, new_content: &str) {
+        self.text = new_content.to_string();
+        self.content = Some(new_content.to_string());
+    }
+
     /// Convert to AI SDK CoreMessage format
     pub fn to_core_message(&self) -> serde_json::Value {
         serde_json::json!({
