@@ -26,7 +26,7 @@ env:
 
 jobs:
   # ═══════════════════════════════════════════════════════════════════
-  # FAST CI (default for PRs) - Target: <3 minutes
+  # FAST CI (default for PRs) - Target: <1 minute with warm sccache
   # Just verify code compiles and is formatted
   # ═══════════════════════════════════════════════════════════════════
 
