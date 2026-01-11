@@ -368,14 +368,18 @@ impl ScriptListApp {
             PromptMessage::ScriptExit => {
                 logging::log("VISIBILITY", "=== ScriptExit message received ===");
                 let was_visible = script_kit_gpui::is_main_window_visible();
+                let script_hid_window = script_kit_gpui::script_requested_hide();
                 logging::log(
                     "VISIBILITY",
-                    &format!("WINDOW_VISIBLE was: {}", was_visible),
+                    &format!(
+                        "WINDOW_VISIBLE was: {}, SCRIPT_REQUESTED_HIDE was: {}",
+                        was_visible, script_hid_window
+                    ),
                 );
 
-                // CRITICAL: Update visibility state so hotkey toggle works correctly
-                script_kit_gpui::set_main_window_visible(false);
-                logging::log("VISIBILITY", "WINDOW_VISIBLE set to: false");
+                // Reset the script-requested-hide flag
+                script_kit_gpui::set_script_requested_hide(false);
+                logging::log("VISIBILITY", "SCRIPT_REQUESTED_HIDE reset to: false");
 
                 // Set flag so next hotkey show will reset to script list
                 NEEDS_RESET.store(true, Ordering::SeqCst);
@@ -384,12 +388,23 @@ impl ScriptListApp {
                 self.reset_to_script_list(cx);
                 logging::log("VISIBILITY", "reset_to_script_list() called");
 
-                // Hide window when script completes - scripts only stay active while code is running
-                cx.hide();
-                logging::log(
-                    "VISIBILITY",
-                    "cx.hide() called - window hidden on script completion",
-                );
+                // If the script had hidden the window (e.g., for getSelectedText),
+                // request showing the main window so the menu comes back
+                if script_hid_window {
+                    logging::log(
+                        "VISIBILITY",
+                        "Script had hidden window - requesting show main window",
+                    );
+                    script_kit_gpui::request_show_main_window();
+                } else {
+                    // Script didn't hide window, so it was user-initiated hide or already visible
+                    // Just update visibility state - don't force show
+                    script_kit_gpui::set_main_window_visible(false);
+                    logging::log(
+                        "VISIBILITY",
+                        "Script didn't hide window - keeping current visibility state",
+                    );
+                }
             }
             PromptMessage::HideWindow => {
                 logging::log("VISIBILITY", "=== HideWindow message received ===");
@@ -402,6 +417,10 @@ impl ScriptListApp {
                 // CRITICAL: Update visibility state so hotkey toggle works correctly
                 script_kit_gpui::set_main_window_visible(false);
                 logging::log("VISIBILITY", "WINDOW_VISIBLE set to: false");
+
+                // Mark that script requested hide - so ScriptExit knows to show window again
+                script_kit_gpui::set_script_requested_hide(true);
+                logging::log("VISIBILITY", "SCRIPT_REQUESTED_HIDE set to: true");
 
                 // Set flag so next hotkey show will reset to script list
                 NEEDS_RESET.store(true, Ordering::SeqCst);
@@ -751,6 +770,16 @@ impl ScriptListApp {
                     ),
                     AppView::TemplatePrompt { id, .. } => (
                         "template".to_string(),
+                        Some(id.clone()),
+                        None,
+                        String::new(),
+                        0,
+                        0,
+                        -1,
+                        None,
+                    ),
+                    AppView::ChatPrompt { id, .. } => (
+                        "chat".to_string(),
                         Some(id.clone()),
                         None,
                         String::new(),
@@ -1469,6 +1498,146 @@ impl ScriptListApp {
 
                 cx.notify();
             }
+            PromptMessage::ShowChat {
+                id,
+                placeholder,
+                messages,
+                hint,
+                footer,
+                actions,
+                model,
+                models,
+                save_history,
+            } => {
+                tracing::info!(id, ?placeholder, message_count = messages.len(), ?model, model_count = models.len(), save_history, "ShowChat received");
+                logging::log(
+                    "UI",
+                    &format!("ShowChat prompt received: {} ({} messages, {} models, save={})", id, messages.len(), models.len(), save_history),
+                );
+
+                // Store SDK actions for the actions panel (Cmd+K)
+                self.sdk_actions = actions;
+
+                // Create submit callback for chat prompt
+                let response_sender = self.response_sender.clone();
+                let chat_submit_callback: prompts::ChatSubmitCallback =
+                    std::sync::Arc::new(move |id, text| {
+                        if let Some(ref sender) = response_sender {
+                            // Send ChatSubmit message back to SDK
+                            let response = Message::ChatSubmit { id, text };
+                            match sender.try_send(response) {
+                                Ok(()) => {}
+                                Err(std::sync::mpsc::TrySendError::Full(_)) => {
+                                    logging::log("WARN", "Response channel full - chat response dropped");
+                                }
+                                Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
+                                    logging::log("UI", "Response channel disconnected - script exited");
+                                }
+                            }
+                        }
+                    });
+
+                // Create ChatPrompt entity with configured models
+                let focus_handle = self.focus_handle.clone();
+                let mut chat_prompt = prompts::ChatPrompt::new(
+                    id.clone(),
+                    placeholder,
+                    messages,
+                    hint,
+                    footer,
+                    focus_handle,
+                    chat_submit_callback,
+                    std::sync::Arc::clone(&self.theme),
+                );
+
+                // Apply model configuration from SDK
+                if !models.is_empty() {
+                    chat_prompt = chat_prompt.with_model_names(models);
+                }
+                if let Some(default_model) = model {
+                    chat_prompt = chat_prompt.with_default_model(default_model);
+                }
+
+                // Configure history saving
+                chat_prompt = chat_prompt.with_save_history(save_history);
+
+                let entity = cx.new(|_| chat_prompt);
+                self.current_view = AppView::ChatPrompt { id, entity };
+                self.focused_input = FocusedInput::None;
+                self.pending_focus = Some(FocusTarget::ChatPrompt);
+
+                resize_to_view_sync(ViewType::DivPrompt, 0);
+                cx.notify();
+            }
+            PromptMessage::ChatAddMessage { id, message } => {
+                logging::log("CHAT", &format!("ChatAddMessage for {}", id));
+                if let AppView::ChatPrompt { id: view_id, entity } = &self.current_view {
+                    if view_id == &id {
+                        entity.update(cx, |chat, cx| {
+                            chat.add_message(message, cx);
+                        });
+                    }
+                }
+            }
+            PromptMessage::ChatStreamStart { id, message_id, position } => {
+                logging::log("CHAT", &format!("ChatStreamStart for {} msg={}", id, message_id));
+                if let AppView::ChatPrompt { id: view_id, entity } = &self.current_view {
+                    if view_id == &id {
+                        entity.update(cx, |chat, cx| {
+                            chat.start_streaming(message_id, position, cx);
+                        });
+                    }
+                }
+            }
+            PromptMessage::ChatStreamChunk { id, message_id, chunk } => {
+                if let AppView::ChatPrompt { id: view_id, entity } = &self.current_view {
+                    if view_id == &id {
+                        entity.update(cx, |chat, cx| {
+                            chat.append_chunk(&message_id, &chunk, cx);
+                        });
+                    }
+                }
+            }
+            PromptMessage::ChatStreamComplete { id, message_id } => {
+                logging::log("CHAT", &format!("ChatStreamComplete for {} msg={}", id, message_id));
+                if let AppView::ChatPrompt { id: view_id, entity } = &self.current_view {
+                    if view_id == &id {
+                        entity.update(cx, |chat, cx| {
+                            chat.complete_streaming(&message_id, cx);
+                        });
+                    }
+                }
+            }
+            PromptMessage::ChatClear { id } => {
+                logging::log("CHAT", &format!("ChatClear for {}", id));
+                if let AppView::ChatPrompt { id: view_id, entity } = &self.current_view {
+                    if view_id == &id {
+                        entity.update(cx, |chat, cx| {
+                            chat.clear_messages(cx);
+                        });
+                    }
+                }
+            }
+            PromptMessage::ChatSetError { id, message_id, error } => {
+                logging::log("CHAT", &format!("ChatSetError for {} msg={}: {}", id, message_id, error));
+                if let AppView::ChatPrompt { id: view_id, entity } = &self.current_view {
+                    if view_id == &id {
+                        entity.update(cx, |chat, cx| {
+                            chat.set_message_error(&message_id, error.clone(), cx);
+                        });
+                    }
+                }
+            }
+            PromptMessage::ChatClearError { id, message_id } => {
+                logging::log("CHAT", &format!("ChatClearError for {} msg={}", id, message_id));
+                if let AppView::ChatPrompt { id: view_id, entity } = &self.current_view {
+                    if view_id == &id {
+                        entity.update(cx, |chat, cx| {
+                            chat.clear_message_error(&message_id, cx);
+                        });
+                    }
+                }
+            }
             PromptMessage::ShowHud { text, duration_ms } => {
                 self.show_hud(text, duration_ms, cx);
             }
@@ -1506,6 +1675,131 @@ impl ScriptListApp {
                     dialog.update(cx, |d, _cx| {
                         d.set_sdk_actions(actions);
                     });
+                }
+
+                cx.notify();
+            }
+            PromptMessage::AiStartChat {
+                request_id,
+                message,
+                system_prompt,
+                image,
+                model_id,
+                no_response,
+            } => {
+                logging::log(
+                    "AI",
+                    &format!(
+                        "AiStartChat request: {} (message: {} chars, system_prompt: {}, image: {}, model: {:?}, no_response: {})",
+                        request_id,
+                        message.len(),
+                        system_prompt.is_some(),
+                        image.is_some(),
+                        model_id,
+                        no_response
+                    ),
+                );
+
+                // Open the AI window (creates new if not open, brings to front if open)
+                if let Err(e) = crate::ai::open_ai_window(cx) {
+                    tracing::error!(error = %e, "Failed to open AI window for AiStartChat");
+                    logging::log("ERROR", &format!("Failed to open AI window: {}", e));
+                    // Still send response so SDK doesn't hang
+                    if let Some(ref sender) = self.response_sender {
+                        let _ = sender.try_send(Message::AiChatCreated {
+                            request_id,
+                            chat_id: String::new(),
+                            title: String::new(),
+                            model_id: model_id.unwrap_or_default(),
+                            provider: String::new(),
+                            streaming_started: false,
+                        });
+                    }
+                    return;
+                }
+
+                // Set the input and optionally submit
+                // If no_response is false (default), we submit to trigger AI response
+                let should_submit = !no_response;
+
+                // Set input with image if provided, otherwise just set text
+                if let Some(ref img_base64) = image {
+                    crate::ai::set_ai_input_with_image(cx, &message, img_base64, should_submit);
+                } else {
+                    crate::ai::set_ai_input(cx, &message, should_submit);
+                }
+
+                // Generate a chat ID (the AI window will create the actual chat)
+                // For now, use a placeholder - the real chat ID is managed by AiApp
+                let generated_chat_id = format!("chat-{}", uuid::Uuid::new_v4());
+                let title = if message.len() > 30 {
+                    format!("{}...", &message[..30])
+                } else {
+                    message.clone()
+                };
+
+                // Send AiChatCreated response back to SDK
+                if let Some(ref sender) = self.response_sender {
+                    let response = Message::AiChatCreated {
+                        request_id: request_id.clone(),
+                        chat_id: generated_chat_id,
+                        title,
+                        model_id: model_id.unwrap_or_else(|| "claude-3-5-sonnet-20241022".to_string()),
+                        provider: "anthropic".to_string(),
+                        streaming_started: should_submit,
+                    };
+                    match sender.try_send(response) {
+                        Ok(()) => {
+                            logging::log("AI", &format!("AiChatCreated response sent for {}", request_id));
+                        }
+                        Err(std::sync::mpsc::TrySendError::Full(_)) => {
+                            logging::log("WARN", "Response channel full - AiChatCreated dropped");
+                        }
+                        Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
+                            logging::log("UI", "Response channel disconnected - script exited");
+                        }
+                    }
+                }
+
+                cx.notify();
+            }
+            PromptMessage::AiFocus { request_id } => {
+                logging::log("AI", &format!("AiFocus request: {}", request_id));
+
+                // Check if window was already open before we open/focus it
+                let was_open = crate::ai::is_ai_window_open();
+
+                // Open the AI window (creates new if not open, brings to front if open)
+                let success = match crate::ai::open_ai_window(cx) {
+                    Ok(()) => {
+                        logging::log("AI", "AI window focused successfully");
+                        true
+                    }
+                    Err(e) => {
+                        tracing::error!(error = %e, "Failed to focus AI window");
+                        logging::log("ERROR", &format!("Failed to focus AI window: {}", e));
+                        false
+                    }
+                };
+
+                // Send AiFocusResult response back to SDK
+                if let Some(ref sender) = self.response_sender {
+                    let response = Message::AiFocusResult {
+                        request_id: request_id.clone(),
+                        success,
+                        was_open,
+                    };
+                    match sender.try_send(response) {
+                        Ok(()) => {
+                            logging::log("AI", &format!("AiFocusResult sent for {}", request_id));
+                        }
+                        Err(std::sync::mpsc::TrySendError::Full(_)) => {
+                            logging::log("WARN", "Response channel full - AiFocusResult dropped");
+                        }
+                        Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
+                            logging::log("UI", "Response channel disconnected - script exited");
+                        }
+                    }
                 }
 
                 cx.notify();

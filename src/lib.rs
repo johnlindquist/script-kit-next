@@ -243,6 +243,11 @@ use std::sync::atomic::{AtomicBool, Ordering};
 /// - Used by Notes/AI to prevent main window from appearing when they close
 pub static MAIN_WINDOW_VISIBLE: AtomicBool = AtomicBool::new(false);
 
+/// Tracks whether a script requested hiding the window (via Hide message)
+/// When ScriptExit is received, if this is true, we show the window again
+/// This ensures main menu comes back after scripts that temporarily hide (e.g., getSelectedText)
+pub static SCRIPT_REQUESTED_HIDE: AtomicBool = AtomicBool::new(false);
+
 /// Check if the main window is currently visible
 pub fn is_main_window_visible() -> bool {
     MAIN_WINDOW_VISIBLE.load(Ordering::SeqCst)
@@ -251,4 +256,58 @@ pub fn is_main_window_visible() -> bool {
 /// Set the main window visibility state
 pub fn set_main_window_visible(visible: bool) {
     MAIN_WINDOW_VISIBLE.store(visible, Ordering::SeqCst);
+}
+
+/// Check if a script requested hiding the window
+pub fn script_requested_hide() -> bool {
+    SCRIPT_REQUESTED_HIDE.load(Ordering::SeqCst)
+}
+
+/// Set the script-requested-hide flag
+pub fn set_script_requested_hide(value: bool) {
+    SCRIPT_REQUESTED_HIDE.store(value, Ordering::SeqCst);
+}
+
+/// Channel for requesting the main window to be shown
+/// Used by prompt_handler to signal that the window should come back after script exit
+static SHOW_WINDOW_CHANNEL: std::sync::OnceLock<(
+    async_channel::Sender<()>,
+    async_channel::Receiver<()>,
+)> = std::sync::OnceLock::new();
+
+/// Get the show window channel (sender, receiver)
+pub fn show_window_channel() -> &'static (async_channel::Sender<()>, async_channel::Receiver<()>) {
+    SHOW_WINDOW_CHANNEL.get_or_init(|| async_channel::bounded(10))
+}
+
+/// Request showing the main window (called from prompt_handler on ScriptExit)
+pub fn request_show_main_window() {
+    let (tx, _) = show_window_channel();
+    let _ = tx.try_send(());
+}
+
+/// Timestamp of when the window was last shown (for focus loss grace period)
+/// This prevents focus racing from immediately closing the window after it opens
+static WINDOW_SHOWN_AT: std::sync::Mutex<Option<std::time::Instant>> = std::sync::Mutex::new(None);
+
+/// Grace period in milliseconds after showing window during which focus loss is ignored
+const FOCUS_LOSS_GRACE_PERIOD_MS: u64 = 200;
+
+/// Mark the window as just shown (call from show_main_window_helper)
+pub fn mark_window_shown() {
+    if let Ok(mut guard) = WINDOW_SHOWN_AT.lock() {
+        *guard = Some(std::time::Instant::now());
+    }
+}
+
+/// Check if we're within the grace period after showing the window
+/// Returns true if focus loss should be ignored (within grace period)
+pub fn is_within_focus_grace_period() -> bool {
+    if let Ok(guard) = WINDOW_SHOWN_AT.lock() {
+        if let Some(shown_at) = *guard {
+            let elapsed = shown_at.elapsed().as_millis() as u64;
+            return elapsed < FOCUS_LOSS_GRACE_PERIOD_MS;
+        }
+    }
+    false
 }

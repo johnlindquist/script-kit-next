@@ -1333,6 +1333,83 @@ impl ScriptListApp {
                                         Some(PromptMessage::ShowGrid { options })
                                     }
                                     Message::HideGrid => Some(PromptMessage::HideGrid),
+                                    // Chat prompt messages
+                                    Message::Chat {
+                                        id,
+                                        placeholder,
+                                        messages,
+                                        hint,
+                                        footer,
+                                        actions,
+                                        model,
+                                        models,
+                                        save_history,
+                                    } => Some(PromptMessage::ShowChat {
+                                        id,
+                                        placeholder,
+                                        messages,
+                                        hint,
+                                        footer,
+                                        actions,
+                                        model,
+                                        models,
+                                        save_history,
+                                    }),
+                                    Message::ChatMessage { id, message } => {
+                                        Some(PromptMessage::ChatAddMessage { id, message })
+                                    }
+                                    Message::ChatStreamStart {
+                                        id,
+                                        message_id,
+                                        position,
+                                    } => Some(PromptMessage::ChatStreamStart {
+                                        id,
+                                        message_id,
+                                        position,
+                                    }),
+                                    Message::ChatStreamChunk {
+                                        id,
+                                        message_id,
+                                        chunk,
+                                    } => Some(PromptMessage::ChatStreamChunk {
+                                        id,
+                                        message_id,
+                                        chunk,
+                                    }),
+                                    Message::ChatStreamComplete { id, message_id } => {
+                                        Some(PromptMessage::ChatStreamComplete { id, message_id })
+                                    }
+                                    Message::ChatClear { id } => {
+                                        Some(PromptMessage::ChatClear { id })
+                                    }
+                                    Message::ChatSetError { id, message_id, error } => {
+                                        Some(PromptMessage::ChatSetError { id, message_id, error })
+                                    }
+                                    Message::ChatClearError { id, message_id } => {
+                                        Some(PromptMessage::ChatClearError { id, message_id })
+                                    }
+                                    // ChatSubmit goes from App → SDK, not SDK → App
+                                    Message::ChatSubmit { .. } => None,
+                                    // AI window start chat
+                                    Message::AiStartChat {
+                                        request_id,
+                                        message,
+                                        system_prompt,
+                                        image,
+                                        model_id,
+                                        no_response,
+                                    } => Some(PromptMessage::AiStartChat {
+                                        request_id,
+                                        message,
+                                        system_prompt,
+                                        image,
+                                        model_id,
+                                        no_response,
+                                    }),
+                                    // AI window focus
+                                    Message::AiFocus { request_id } => {
+                                        Some(PromptMessage::AiFocus { request_id })
+                                    }
                                     other => {
                                         // Get the message type name for user feedback
                                         let msg_type = format!("{:?}", other);

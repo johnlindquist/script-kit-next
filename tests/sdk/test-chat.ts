@@ -7,14 +7,14 @@
  * Tests the conversational chat UI where messages can be added programmatically.
  *
  * Test cases:
- * 1. chat-basic: Basic chat with messages
- * 2. chat-setinput: Chat with pre-filled input
- * 3. chat-simple: Simple chat without options
+ * 1. chat-basic: Basic chat with messages - returns ChatResult object
+ * 2. chat-addmessage: Chat with addMessage controller method
+ * 3. chat-simple: Simple chat without options - returns ChatResult object
  *
  * Requires GPUI support for:
  * - 'chat' message type to open chat UI
- * - 'chatAction' message type for addMessage, setInput, submit actions
- * - Submit response with user's final input
+ * - 'chatAction' message type for addMessage actions
+ * - Submit response returns ChatResult with messages array
  */
 
 import "../../scripts/kit-sdk";
@@ -50,9 +50,6 @@ function debug(msg: string) {
 	console.error(`[TEST] ${msg}`);
 }
 
-// Helper to pause for async visualization
-const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
 // =============================================================================
 // Tests
 // =============================================================================
@@ -61,43 +58,43 @@ debug("test-chat.ts starting...");
 debug(`SDK globals: chat=${typeof chat}`);
 
 // -----------------------------------------------------------------------------
-// Test 1: Basic chat with messages
+// Test 1: Basic chat with messages - returns ChatResult object
 // -----------------------------------------------------------------------------
 const test1 = "chat-basic";
 logTest(test1, "running");
 const start1 = Date.now();
 
 try {
-	debug("Test 1: chat() with messages");
+	debug("Test 1: chat() with initial messages");
 
 	const result = await chat({
-		onInit: async () => {
-			// Add initial messages
-			chat.addMessage({
-				text: "Welcome! I'm your assistant.",
-				position: "left",
-			});
-			await wait(500);
-			chat.addMessage({ text: "How can I help you today?", position: "left" });
-		},
-		onSubmit: async (input) => {
-			debug(`User submitted: ${input}`);
-			// Could add response message here
-			chat.addMessage({ text: `You said: ${input}`, position: "left" });
-		},
+		messages: [
+			{ role: "assistant", content: "Welcome! I'm your assistant." },
+			{ role: "assistant", content: "How can I help you today?" },
+		],
 	});
 
-	debug(`Test 1 result: "${result}"`);
+	debug(`Test 1 result type: ${typeof result}`);
+	debug(`Test 1 result keys: ${Object.keys(result || {}).join(", ")}`);
 
-	// Assertion: result should be a string (user's input)
-	if (typeof result !== "string") {
+	// Assertion: result should be a ChatResult object with expected properties
+	if (typeof result !== "object" || result === null) {
 		logTest(test1, "fail", {
-			error: `Expected string response, got ${typeof result}`,
+			error: `Expected ChatResult object, got ${typeof result}`,
 			result,
 			duration_ms: Date.now() - start1,
 		});
+	} else if (!("messages" in result) || !("action" in result)) {
+		logTest(test1, "fail", {
+			error: `ChatResult missing required fields (messages, action)`,
+			result: Object.keys(result),
+			duration_ms: Date.now() - start1,
+		});
 	} else {
-		logTest(test1, "pass", { result, duration_ms: Date.now() - start1 });
+		logTest(test1, "pass", {
+			result: { action: result.action, messageCount: result.messages?.length },
+			duration_ms: Date.now() - start1,
+		});
 	}
 } catch (err) {
 	logTest(test1, "fail", {
@@ -107,33 +104,36 @@ try {
 }
 
 // -----------------------------------------------------------------------------
-// Test 2: Chat with pre-filled input
+// Test 2: Chat with addMessage controller method
 // -----------------------------------------------------------------------------
-const test2 = "chat-setinput";
+const test2 = "chat-addmessage";
 logTest(test2, "running");
 const start2 = Date.now();
 
 try {
-	debug("Test 2: chat() with setInput");
+	debug("Test 2: chat.addMessage() controller method exists");
 
-	const result = await chat({
-		onInit: async () => {
-			chat.addMessage({ text: "Type your name:", position: "left" });
-			chat.setInput("John Doe"); // Pre-fill the input
-		},
-	});
-
-	debug(`Test 2 result: "${result}"`);
-
-	// Assertion: result should be a string
-	if (typeof result !== "string") {
+	// Test that addMessage is a function on the chat object
+	if (typeof chat.addMessage !== "function") {
 		logTest(test2, "fail", {
-			error: `Expected string response, got ${typeof result}`,
-			result,
+			error: `Expected chat.addMessage to be a function, got ${typeof chat.addMessage}`,
+			duration_ms: Date.now() - start2,
+		});
+	} else if (typeof chat.getMessages !== "function") {
+		logTest(test2, "fail", {
+			error: `Expected chat.getMessages to be a function, got ${typeof chat.getMessages}`,
+			duration_ms: Date.now() - start2,
+		});
+	} else if (typeof chat.clear !== "function") {
+		logTest(test2, "fail", {
+			error: `Expected chat.clear to be a function, got ${typeof chat.clear}`,
 			duration_ms: Date.now() - start2,
 		});
 	} else {
-		logTest(test2, "pass", { result, duration_ms: Date.now() - start2 });
+		logTest(test2, "pass", {
+			result: "chat controller methods exist (addMessage, getMessages, clear)",
+			duration_ms: Date.now() - start2,
+		});
 	}
 } catch (err) {
 	logTest(test2, "fail", {
@@ -143,7 +143,7 @@ try {
 }
 
 // -----------------------------------------------------------------------------
-// Test 3: Simple chat without options
+// Test 3: Simple chat without options - returns ChatResult object
 // -----------------------------------------------------------------------------
 const test3 = "chat-simple";
 logTest(test3, "running");
@@ -155,17 +155,26 @@ try {
 	// Can also call without options
 	const result = await chat();
 
-	debug(`Test 3 result: "${result}"`);
+	debug(`Test 3 result type: ${typeof result}`);
 
-	// Assertion: result should be a string (even empty is valid)
-	if (typeof result !== "string") {
+	// Assertion: result should be a ChatResult object
+	if (typeof result !== "object" || result === null) {
 		logTest(test3, "fail", {
-			error: `Expected string response, got ${typeof result}`,
+			error: `Expected ChatResult object, got ${typeof result}`,
 			result,
 			duration_ms: Date.now() - start3,
 		});
+	} else if (!("messages" in result) || !("action" in result)) {
+		logTest(test3, "fail", {
+			error: `ChatResult missing required fields (messages, action)`,
+			result: Object.keys(result),
+			duration_ms: Date.now() - start3,
+		});
 	} else {
-		logTest(test3, "pass", { result, duration_ms: Date.now() - start3 });
+		logTest(test3, "pass", {
+			result: { action: result.action, messageCount: result.messages?.length },
+			duration_ms: Date.now() - start3,
+		});
 	}
 } catch (err) {
 	logTest(test3, "fail", {
@@ -185,9 +194,9 @@ await div(
 All chat prompt tests have been executed.
 
 ## Test Cases Run
-1. **chat-basic**: Basic chat with messages (expects string)
-2. **chat-setinput**: Chat with pre-filled input (expects string)
-3. **chat-simple**: Simple chat without options (expects string)
+1. **chat-basic**: Basic chat with messages (expects ChatResult object)
+2. **chat-addmessage**: Chat controller methods exist (addMessage, getMessages, clear)
+3. **chat-simple**: Simple chat without options (expects ChatResult object)
 
 ---
 

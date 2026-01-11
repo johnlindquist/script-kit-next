@@ -87,6 +87,39 @@ impl std::fmt::Display for MessageRole {
     }
 }
 
+/// Source of a chat (where it originated from)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ChatSource {
+    /// Chat from the AI window
+    #[default]
+    AiWindow,
+    /// Chat from the chat() SDK prompt
+    ChatPrompt,
+    /// Chat from a script (programmatic)
+    Script,
+}
+
+impl ChatSource {
+    /// Convert to string for storage
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ChatSource::AiWindow => "ai_window",
+            ChatSource::ChatPrompt => "chat_prompt",
+            ChatSource::Script => "script",
+        }
+    }
+
+    /// Parse from string
+    pub fn parse(s: &str) -> Self {
+        match s {
+            "chat_prompt" => ChatSource::ChatPrompt,
+            "script" => ChatSource::Script,
+            _ => ChatSource::AiWindow,
+        }
+    }
+}
+
 /// A chat conversation
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Chat {
@@ -110,6 +143,10 @@ pub struct Chat {
 
     /// Provider identifier (e.g., "anthropic", "openai")
     pub provider: String,
+
+    /// Source of the chat (ai_window, chat_prompt, script)
+    #[serde(default)]
+    pub source: ChatSource,
 }
 
 impl Chat {
@@ -124,7 +161,14 @@ impl Chat {
             deleted_at: None,
             model_id: model_id.into(),
             provider: provider.into(),
+            source: ChatSource::default(),
         }
+    }
+
+    /// Create a new chat with a specific source
+    pub fn with_source(mut self, source: ChatSource) -> Self {
+        self.source = source;
+        self
     }
 
     /// Update the title

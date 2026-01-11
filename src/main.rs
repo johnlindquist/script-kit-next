@@ -343,10 +343,14 @@ fn show_main_window_helper(
     // 1. Set visibility state
     set_main_window_visible(true);
 
-    // 2. Move to active space (macOS)
+    // 2. Mark window shown timestamp for focus grace period
+    // This prevents the window from being closed by focus loss immediately after opening
+    script_kit_gpui::mark_window_shown();
+
+    // 3. Move to active space (macOS)
     platform::ensure_move_to_active_space();
 
-    // 3. Position window - try per-display saved position first, then fall back to eye-line
+    // 4. Position window - try per-display saved position first, then fall back to eye-line
     let window_size = gpui::size(px(750.), initial_window_height());
     let displays = platform::get_macos_displays();
     let bounds = if let Some((mouse_x, mouse_y)) = platform::get_global_mouse_position() {
@@ -390,7 +394,7 @@ fn show_main_window_helper(
     };
     platform::move_first_window_to_bounds(&bounds);
 
-    // 4. Configure as floating panel (first time only)
+    // 5. Configure as floating panel (first time only)
     if !PANEL_CONFIGURED.load(Ordering::SeqCst) {
         platform::configure_as_floating_panel();
         // HACK: Swizzle GPUI's BlurredView to preserve native CAChameleonLayer tint
@@ -403,13 +407,13 @@ fn show_main_window_helper(
         PANEL_CONFIGURED.store(true, Ordering::SeqCst);
     }
 
-    // 5. Activate window
+    // 6. Activate window
     cx.activate(true);
     let _ = window.update(cx, |_root, win, _cx| {
         win.activate_window();
     });
 
-    // 6. Focus input, reset resize debounce, and handle NEEDS_RESET
+    // 7. Focus input, reset resize debounce, and handle NEEDS_RESET
     app_entity.update(cx, |view, ctx| {
         let focus_handle = view.focus_handle(ctx);
         let _ = window.update(ctx, |_root, win, _cx| {
@@ -788,6 +792,12 @@ enum AppView {
         id: String,
         entity: Entity<TemplatePrompt>,
     },
+    /// Showing chat prompt for conversational interfaces
+    ChatPrompt {
+        #[allow(dead_code)]
+        id: String,
+        entity: Entity<prompts::ChatPrompt>,
+    },
     /// Showing clipboard history
     /// P0 FIX: View state only - data comes from clipboard_history module cache
     ClipboardHistoryView {
@@ -876,6 +886,8 @@ enum FocusTarget {
     TemplatePrompt,
     /// Focus the term prompt
     TermPrompt,
+    /// Focus the chat prompt
+    ChatPrompt,
 }
 
 /// Identifies which prompt type is hosting the actions dialog.
@@ -1023,6 +1035,68 @@ enum PromptMessage {
         message: String,
         confirm_text: Option<String>,
         cancel_text: Option<String>,
+    },
+    /// Chat prompt for conversational interfaces (Raycast-style)
+    ShowChat {
+        id: String,
+        placeholder: Option<String>,
+        messages: Vec<protocol::ChatPromptMessage>,
+        hint: Option<String>,
+        footer: Option<String>,
+        actions: Option<Vec<ProtocolAction>>,
+        model: Option<String>,
+        models: Vec<String>,
+        save_history: bool,
+    },
+    /// Add a message to an active chat prompt
+    ChatAddMessage {
+        id: String,
+        message: protocol::ChatPromptMessage,
+    },
+    /// Start streaming a message in chat
+    ChatStreamStart {
+        id: String,
+        message_id: String,
+        position: protocol::ChatMessagePosition,
+    },
+    /// Append chunk to streaming message
+    ChatStreamChunk {
+        id: String,
+        message_id: String,
+        chunk: String,
+    },
+    /// Complete streaming for a message
+    ChatStreamComplete {
+        id: String,
+        message_id: String,
+    },
+    /// Clear all messages in chat
+    ChatClear {
+        id: String,
+    },
+    /// Set error on a message
+    ChatSetError {
+        id: String,
+        message_id: String,
+        error: String,
+    },
+    /// Clear error from a message
+    ChatClearError {
+        id: String,
+        message_id: String,
+    },
+    /// Open AI window and start a new chat with a message
+    AiStartChat {
+        request_id: String,
+        message: String,
+        system_prompt: Option<String>,
+        image: Option<String>,
+        model_id: Option<String>,
+        no_response: bool,
+    },
+    /// Focus the AI window (opens if not already open)
+    AiFocus {
+        request_id: String,
     },
     HideWindow,
     OpenBrowser {
@@ -1357,15 +1431,22 @@ impl Render for ScriptListApp {
         if self.was_window_focused && !is_window_focused {
             // Window just lost focus (user clicked another window)
             // Only auto-dismiss if we're in a dismissable view AND window is visible AND not pinned
+            // AND we're past the focus grace period (prevents race condition on window open)
             if self.is_dismissable_view()
                 && script_kit_gpui::is_main_window_visible()
                 && !self.is_pinned
+                && !script_kit_gpui::is_within_focus_grace_period()
             {
                 logging::log(
                     "FOCUS",
                     "Main window lost focus while in dismissable view - closing",
                 );
                 self.close_and_reset_window(cx);
+            } else if script_kit_gpui::is_within_focus_grace_period() {
+                logging::log(
+                    "FOCUS",
+                    "Main window lost focus but within grace period - ignoring",
+                );
             } else if self.is_pinned {
                 logging::log(
                     "FOCUS",
@@ -1440,6 +1521,9 @@ impl Render for ScriptListApp {
             }
             AppView::TemplatePrompt { entity, .. } => {
                 self.render_template_prompt(entity, cx).into_any_element()
+            }
+            AppView::ChatPrompt { entity, .. } => {
+                self.render_chat_prompt(entity, cx).into_any_element()
             }
             // P0 FIX: View state only - data comes from self.cached_clipboard_entries
             AppView::ClipboardHistoryView {
@@ -2199,6 +2283,27 @@ fn main() {
             logging::log("DEEPLINK", "Deeplink listener exiting (channel closed)");
         }).detach();
 
+        // Show window listener - handles requests to show main window after script exit
+        // This is needed because prompt_handler doesn't have access to show_main_window_helper
+        let app_entity_for_show = app_entity.clone();
+        let window_for_show = window;
+        cx.spawn(async move |cx: &mut gpui::AsyncApp| {
+            logging::log("VISIBILITY", "Show window listener started (event-driven)");
+            let (_, rx) = script_kit_gpui::show_window_channel();
+            while let Ok(()) = rx.recv().await {
+                logging::log(
+                    "VISIBILITY",
+                    "Show window request received - bringing main menu back",
+                );
+                let app_entity_inner = app_entity_for_show.clone();
+                let window_inner = window_for_show;
+                let _ = cx.update(move |cx: &mut gpui::App| {
+                    show_main_window_helper(window_inner, app_entity_inner, cx);
+                });
+            }
+            logging::log("VISIBILITY", "Show window listener exiting (channel closed)");
+        }).detach();
+
         // Appearance change watcher - event-driven with async_channel
         // Only spawn if watcher started successfully
         if appearance_watcher_ok {
@@ -2576,6 +2681,7 @@ fn main() {
                                 // The core logic matches show_main_window_helper().
 
                                 script_kit_gpui::set_main_window_visible(true);
+                                script_kit_gpui::mark_window_shown(); // Focus grace period
                                 platform::ensure_move_to_active_space();
 
                                 // Use Window::defer via window_ops to coalesce and defer window move.
@@ -2609,6 +2715,7 @@ fn main() {
                                 // The core logic matches show_main_window_helper().
 
                                 script_kit_gpui::set_main_window_visible(true);
+                                script_kit_gpui::mark_window_shown(); // Focus grace period
                                 platform::ensure_move_to_active_space();
 
                                 // Position window - try per-display saved position first, then fall back to eye-line

@@ -5,6 +5,7 @@
 //!
 //! # Module Structure
 //! - `base`: PromptBase - Shared base infrastructure (fields, DesignContext, macros)
+//! - `chat`: ChatPrompt - Raycast-style chat interface with streaming support
 //! - `div`: DivPrompt - HTML content display
 //! - `path`: PathPrompt - File/folder picker (skeleton)
 //! - `env`: EnvPrompt - Environment variable/secrets (skeleton)
@@ -15,9 +16,11 @@
 #![allow(dead_code)]
 
 pub mod base;
+pub mod chat;
 pub mod div;
 mod drop;
 pub mod env;
+pub mod markdown;
 mod path;
 mod select;
 mod template;
@@ -31,6 +34,7 @@ mod template;
 // Base infrastructure for prompts - will be used as prompts adopt PromptBase
 #[allow(unused_imports)]
 pub use base::{DesignContext, PromptBase, ResolvedColors};
+pub use chat::{ChatPrompt, ChatSubmitCallback};
 pub use div::{ContainerOptions, ContainerPadding, DivPrompt};
 
 // These exports are ready for use in main.rs when AppView variants are added

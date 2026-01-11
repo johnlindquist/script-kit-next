@@ -40,7 +40,7 @@ pub mod storage;
 pub mod window;
 
 // Re-export commonly used types
-pub use model::{Chat, ChatId, Message, MessageRole};
+pub use model::{Chat, ChatId, ChatSource, Message, MessageRole};
 pub use storage::{
     clear_all_chats, create_chat, delete_chat, get_all_chats, get_chat, get_chat_messages,
     get_deleted_chats, init_ai_db, insert_mock_data, restore_chat, save_message, search_chats,
