@@ -5257,6 +5257,14 @@ export default {
 
         if !registry.has_any_provider() {
             crate::logging::log("CHAT", "No AI providers configured - showing setup message");
+
+            // Show HUD notification to make the error visible
+            self.show_hud(
+                "No AI API key configured. Set SCRIPT_KIT_VERCEL_API_KEY or run 'Configure AI' from menu.".to_string(),
+                Some(5000), // 5 seconds - longer for important config message
+                cx,
+            );
+
             // Show a message prompting user to configure API keys
             let placeholder = Some("Type your question...".to_string());
             let hint = Some("No API keys configured. Run 'Configure Vercel AI Gateway' from the menu.".to_string());
