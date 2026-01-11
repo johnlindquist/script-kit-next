@@ -18,16 +18,11 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  # Disable incremental - better for CI caching with sccache
-  CARGO_INCREMENTAL: 0
-  # sccache configuration
-  SCCACHE_GHA_ENABLED: "true"
-  RUSTC_WRAPPER: "sccache"
 
 jobs:
   # ═══════════════════════════════════════════════════════════════════
-  # FAST CI (default for PRs) - Target: <1 minute with warm sccache
-  # Just verify code compiles and is formatted
+  # FAST CI (default for PRs) - Target: <1 minute
+  # Uses rust-cache only (faster for simple cargo check)
   # ═══════════════════════════════════════════════════════════════════
 
   # Fast format check (parallel with compile)
@@ -43,6 +38,7 @@ jobs:
       - run: cargo fmt --check
 
   # Fast compile check (parallel with format)
+  # Uses rust-cache only - faster than sccache for simple cargo check
   fast-compile:
     name: Compile
     runs-on: macos-14
@@ -52,14 +48,10 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
-      # sccache - compiler-level caching (fetches artifacts on-demand)
-      - uses: mozilla-actions/sccache-action@v0.0.9
-
-      # Cargo registry cache (complements sccache)
+      # Full target directory cache - fastest for cargo check
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: "macos-debug"
-          cache-targets: false  # sccache handles compilation artifacts
           save-if: false
 
       # Check lib + binary only (not tests) - faster for PR feedback
@@ -68,7 +60,7 @@ jobs:
 
   # ═══════════════════════════════════════════════════════════════════
   # FULL CI (main branch or 'full-ci' label)
-  # Complete validation: format, clippy, tests, SDK tests
+  # Uses sccache for incremental compilation benefits
   # ═══════════════════════════════════════════════════════════════════
 
   fmt:
@@ -86,6 +78,9 @@ jobs:
     name: Clippy
     runs-on: macos-14
     if: ${{ contains(github.event.pull_request.labels.*.name, 'full-ci') || github.ref == 'refs/heads/main' }}
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: "sccache"
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -103,6 +98,9 @@ jobs:
     name: Test
     runs-on: macos-14
     if: ${{ contains(github.event.pull_request.labels.*.name, 'full-ci') || github.ref == 'refs/heads/main' }}
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: "sccache"
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -120,6 +118,9 @@ jobs:
     name: TypeScript SDK Tests
     runs-on: macos-14
     if: ${{ contains(github.event.pull_request.labels.*.name, 'full-ci') || github.ref == 'refs/heads/main' }}
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: "sccache"
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -149,6 +150,9 @@ jobs:
     runs-on: macos-14
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: [fmt, clippy, test]
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: "sccache"
     steps:
       - uses: actions/checkout@v4
 
@@ -159,7 +163,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: "macos-release"
-          cache-targets: false  # sccache handles compilation artifacts
+          cache-targets: false
           cache-all-crates: true
 
       - name: Cache cargo-bundle
