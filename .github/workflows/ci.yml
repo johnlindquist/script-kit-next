@@ -24,9 +24,6 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: 1
-  # sccache config
-  SCCACHE_GHA_ENABLED: true
-  RUSTC_WRAPPER: sccache
 
 jobs:
   # Fast format check (no compilation needed) - runs in ~10s
@@ -54,9 +51,6 @@ jobs:
         with:
           components: clippy
 
-      # sccache - shared compilation cache
-      - uses: mozilla-actions/sccache-action@v0.0.7
-
       # Rust dependency cache (faster than rebuilding)
       - uses: Swatinem/rust-cache@v2
         with:
@@ -78,8 +72,6 @@ jobs:
         with:
           fetch-depth: 1
       - uses: dtolnay/rust-toolchain@stable
-
-      - uses: mozilla-actions/sccache-action@v0.0.7
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -120,8 +112,6 @@ jobs:
           fetch-depth: 1
 
       - uses: dtolnay/rust-toolchain@stable
-
-      - uses: mozilla-actions/sccache-action@v0.0.7
 
       - uses: Swatinem/rust-cache@v2
         with:
