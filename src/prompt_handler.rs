@@ -522,7 +522,17 @@ impl ScriptListApp {
                     ),
                 );
 
-                // Create error toast with expandable details
+                // CRITICAL: Show error via HUD (highly visible floating window)
+                // This ensures the user sees the error even if the main window is hidden/dismissed
+                // HUD appears at bottom-center of screen for 5 seconds
+                let hud_message = if error_message.len() > 60 {
+                    format!("Script Error: {}...", &error_message[..57])
+                } else {
+                    format!("Script Error: {}", error_message)
+                };
+                self.show_hud(hud_message, Some(5000), cx);
+
+                // Also create in-app toast with expandable details (for when window is visible)
                 // Use stderr_output if available, otherwise use stack_trace
                 let details_text = stderr_output.clone().or_else(|| stack_trace.clone());
                 let toast = Toast::error(error_message.clone(), &self.theme)
