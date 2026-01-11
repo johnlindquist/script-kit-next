@@ -1460,12 +1460,18 @@ impl Render for ScriptListApp {
                 && script_kit_gpui::is_main_window_visible()
                 && !self.is_pinned
                 && !script_kit_gpui::is_within_focus_grace_period()
+                && !confirm::is_confirm_window_open()
             {
                 logging::log(
                     "FOCUS",
                     "Main window lost focus while in dismissable view - closing",
                 );
                 self.close_and_reset_window(cx);
+            } else if confirm::is_confirm_window_open() {
+                logging::log(
+                    "FOCUS",
+                    "Main window lost focus but confirm dialog is open - staying open",
+                );
             } else if script_kit_gpui::is_within_focus_grace_period() {
                 logging::log(
                     "FOCUS",
