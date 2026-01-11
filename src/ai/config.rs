@@ -166,10 +166,7 @@ fn read_key_env_or_keyring(name: &str) -> Option<String> {
     // Fall back to keyring
     let keyring_result = get_secret(name);
     if keyring_result.is_some() {
-        crate::logging::log(
-            "CONFIG",
-            &format!("Found API key in keyring for: {}", name),
-        );
+        crate::logging::log("CONFIG", &format!("Found API key in keyring for: {}", name));
     }
     keyring_result
 }
