@@ -1206,10 +1206,10 @@ impl ScriptListApp {
                         }
                     });
 
-                // Check if key already exists in keyring (for UX messaging)
+                // Check if key already exists in secrets (for UX messaging)
                 // Empty values don't count as "existing" - must have actual content
-                let exists_in_keyring = prompts::env::get_secret(&key)
-                    .map(|v| !v.is_empty())
+                let exists_in_keyring = secrets::get_secret(&key)
+                    .map(|v: String| !v.is_empty())
                     .unwrap_or(false);
 
                 // Create EnvPrompt entity
@@ -1434,10 +1434,7 @@ impl ScriptListApp {
             } => {
                 logging::log(
                     "CONFIRM",
-                    &format!(
-                        "ShowConfirm prompt: id={}, message={:?}",
-                        id, message
-                    ),
+                    &format!("ShowConfirm prompt: id={}, message={:?}", id, message),
                 );
 
                 // Create callback to send response and close the confirm window
@@ -1446,17 +1443,31 @@ impl ScriptListApp {
                 let on_choice: ConfirmCallback = std::sync::Arc::new(move |confirmed: bool| {
                     logging::log(
                         "CONFIRM",
-                        &format!("User choice: {} (id={})", if confirmed { "confirmed" } else { "cancelled" }, prompt_id),
+                        &format!(
+                            "User choice: {} (id={})",
+                            if confirmed { "confirmed" } else { "cancelled" },
+                            prompt_id
+                        ),
                     );
                     if let Some(ref sender) = response_sender {
-                        let value = if confirmed { Some("true".to_string()) } else { Some("false".to_string()) };
-                        let response = Message::Submit { id: prompt_id.clone(), value };
+                        let value = if confirmed {
+                            Some("true".to_string())
+                        } else {
+                            Some("false".to_string())
+                        };
+                        let response = Message::Submit {
+                            id: prompt_id.clone(),
+                            value,
+                        };
                         match sender.try_send(response) {
                             Ok(()) => {
                                 logging::log("CONFIRM", "Submit message sent");
                             }
                             Err(std::sync::mpsc::TrySendError::Full(_)) => {
-                                logging::log("WARN", "Response channel full - confirm response dropped");
+                                logging::log(
+                                    "WARN",
+                                    "Response channel full - confirm response dropped",
+                                );
                             }
                             Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
                                 logging::log("UI", "Response channel disconnected - script exited");
@@ -1468,14 +1479,26 @@ impl ScriptListApp {
                 // Get main window bounds from native API for positioning
                 let main_bounds = if let Some((x, y, w, h)) = platform::get_main_window_bounds() {
                     gpui::Bounds {
-                        origin: gpui::Point { x: gpui::px(x as f32), y: gpui::px(y as f32) },
-                        size: gpui::Size { width: gpui::px(w as f32), height: gpui::px(h as f32) },
+                        origin: gpui::Point {
+                            x: gpui::px(x as f32),
+                            y: gpui::px(y as f32),
+                        },
+                        size: gpui::Size {
+                            width: gpui::px(w as f32),
+                            height: gpui::px(h as f32),
+                        },
                     }
                 } else {
                     // Fallback to centered on primary display
                     gpui::Bounds {
-                        origin: gpui::Point { x: gpui::px(200.0), y: gpui::px(200.0) },
-                        size: gpui::Size { width: gpui::px(750.0), height: gpui::px(500.0) },
+                        origin: gpui::Point {
+                            x: gpui::px(200.0),
+                            y: gpui::px(200.0),
+                        },
+                        size: gpui::Size {
+                            width: gpui::px(750.0),
+                            height: gpui::px(500.0),
+                        },
                     }
                 };
                 let display_id: Option<gpui::DisplayId> = None; // Use primary display
@@ -1505,8 +1528,10 @@ impl ScriptListApp {
                                 );
                             }
                         }
-                    }).ok();
-                }).detach();
+                    })
+                    .ok();
+                })
+                .detach();
 
                 cx.notify();
             }
@@ -1521,10 +1546,24 @@ impl ScriptListApp {
                 models,
                 save_history,
             } => {
-                tracing::info!(id, ?placeholder, message_count = messages.len(), ?model, model_count = models.len(), save_history, "ShowChat received");
+                tracing::info!(
+                    id,
+                    ?placeholder,
+                    message_count = messages.len(),
+                    ?model,
+                    model_count = models.len(),
+                    save_history,
+                    "ShowChat received"
+                );
                 logging::log(
                     "UI",
-                    &format!("ShowChat prompt received: {} ({} messages, {} models, save={})", id, messages.len(), models.len(), save_history),
+                    &format!(
+                        "ShowChat prompt received: {} ({} messages, {} models, save={})",
+                        id,
+                        messages.len(),
+                        models.len(),
+                        save_history
+                    ),
                 );
 
                 // Store SDK actions for the actions panel (Cmd+K)
@@ -1540,10 +1579,16 @@ impl ScriptListApp {
                             match sender.try_send(response) {
                                 Ok(()) => {}
                                 Err(std::sync::mpsc::TrySendError::Full(_)) => {
-                                    logging::log("WARN", "Response channel full - chat response dropped");
+                                    logging::log(
+                                        "WARN",
+                                        "Response channel full - chat response dropped",
+                                    );
                                 }
                                 Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
-                                    logging::log("UI", "Response channel disconnected - script exited");
+                                    logging::log(
+                                        "UI",
+                                        "Response channel disconnected - script exited",
+                                    );
                                 }
                             }
                         }
@@ -1583,7 +1628,11 @@ impl ScriptListApp {
             }
             PromptMessage::ChatAddMessage { id, message } => {
                 logging::log("CHAT", &format!("ChatAddMessage for {}", id));
-                if let AppView::ChatPrompt { id: view_id, entity } = &self.current_view {
+                if let AppView::ChatPrompt {
+                    id: view_id,
+                    entity,
+                } = &self.current_view
+                {
                     if view_id == &id {
                         entity.update(cx, |chat, cx| {
                             chat.add_message(message, cx);
@@ -1591,9 +1640,20 @@ impl ScriptListApp {
                     }
                 }
             }
-            PromptMessage::ChatStreamStart { id, message_id, position } => {
-                logging::log("CHAT", &format!("ChatStreamStart for {} msg={}", id, message_id));
-                if let AppView::ChatPrompt { id: view_id, entity } = &self.current_view {
+            PromptMessage::ChatStreamStart {
+                id,
+                message_id,
+                position,
+            } => {
+                logging::log(
+                    "CHAT",
+                    &format!("ChatStreamStart for {} msg={}", id, message_id),
+                );
+                if let AppView::ChatPrompt {
+                    id: view_id,
+                    entity,
+                } = &self.current_view
+                {
                     if view_id == &id {
                         entity.update(cx, |chat, cx| {
                             chat.start_streaming(message_id, position, cx);
@@ -1601,8 +1661,16 @@ impl ScriptListApp {
                     }
                 }
             }
-            PromptMessage::ChatStreamChunk { id, message_id, chunk } => {
-                if let AppView::ChatPrompt { id: view_id, entity } = &self.current_view {
+            PromptMessage::ChatStreamChunk {
+                id,
+                message_id,
+                chunk,
+            } => {
+                if let AppView::ChatPrompt {
+                    id: view_id,
+                    entity,
+                } = &self.current_view
+                {
                     if view_id == &id {
                         entity.update(cx, |chat, cx| {
                             chat.append_chunk(&message_id, &chunk, cx);
@@ -1611,8 +1679,15 @@ impl ScriptListApp {
                 }
             }
             PromptMessage::ChatStreamComplete { id, message_id } => {
-                logging::log("CHAT", &format!("ChatStreamComplete for {} msg={}", id, message_id));
-                if let AppView::ChatPrompt { id: view_id, entity } = &self.current_view {
+                logging::log(
+                    "CHAT",
+                    &format!("ChatStreamComplete for {} msg={}", id, message_id),
+                );
+                if let AppView::ChatPrompt {
+                    id: view_id,
+                    entity,
+                } = &self.current_view
+                {
                     if view_id == &id {
                         entity.update(cx, |chat, cx| {
                             chat.complete_streaming(&message_id, cx);
@@ -1622,7 +1697,11 @@ impl ScriptListApp {
             }
             PromptMessage::ChatClear { id } => {
                 logging::log("CHAT", &format!("ChatClear for {}", id));
-                if let AppView::ChatPrompt { id: view_id, entity } = &self.current_view {
+                if let AppView::ChatPrompt {
+                    id: view_id,
+                    entity,
+                } = &self.current_view
+                {
                     if view_id == &id {
                         entity.update(cx, |chat, cx| {
                             chat.clear_messages(cx);
@@ -1630,9 +1709,20 @@ impl ScriptListApp {
                     }
                 }
             }
-            PromptMessage::ChatSetError { id, message_id, error } => {
-                logging::log("CHAT", &format!("ChatSetError for {} msg={}: {}", id, message_id, error));
-                if let AppView::ChatPrompt { id: view_id, entity } = &self.current_view {
+            PromptMessage::ChatSetError {
+                id,
+                message_id,
+                error,
+            } => {
+                logging::log(
+                    "CHAT",
+                    &format!("ChatSetError for {} msg={}: {}", id, message_id, error),
+                );
+                if let AppView::ChatPrompt {
+                    id: view_id,
+                    entity,
+                } = &self.current_view
+                {
                     if view_id == &id {
                         entity.update(cx, |chat, cx| {
                             chat.set_message_error(&message_id, error.clone(), cx);
@@ -1641,8 +1731,15 @@ impl ScriptListApp {
                 }
             }
             PromptMessage::ChatClearError { id, message_id } => {
-                logging::log("CHAT", &format!("ChatClearError for {} msg={}", id, message_id));
-                if let AppView::ChatPrompt { id: view_id, entity } = &self.current_view {
+                logging::log(
+                    "CHAT",
+                    &format!("ChatClearError for {} msg={}", id, message_id),
+                );
+                if let AppView::ChatPrompt {
+                    id: view_id,
+                    entity,
+                } = &self.current_view
+                {
                     if view_id == &id {
                         entity.update(cx, |chat, cx| {
                             chat.clear_message_error(&message_id, cx);
@@ -1756,13 +1853,17 @@ impl ScriptListApp {
                         request_id: request_id.clone(),
                         chat_id: generated_chat_id,
                         title,
-                        model_id: model_id.unwrap_or_else(|| "claude-3-5-sonnet-20241022".to_string()),
+                        model_id: model_id
+                            .unwrap_or_else(|| "claude-3-5-sonnet-20241022".to_string()),
                         provider: "anthropic".to_string(),
                         streaming_started: should_submit,
                     };
                     match sender.try_send(response) {
                         Ok(()) => {
-                            logging::log("AI", &format!("AiChatCreated response sent for {}", request_id));
+                            logging::log(
+                                "AI",
+                                &format!("AiChatCreated response sent for {}", request_id),
+                            );
                         }
                         Err(std::sync::mpsc::TrySendError::Full(_)) => {
                             logging::log("WARN", "Response channel full - AiChatCreated dropped");

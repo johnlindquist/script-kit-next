@@ -26,16 +26,29 @@ impl ScriptListApp {
             cx.spawn(async move |this, cx| {
                 cx.update(|cx| {
                     // Get main window bounds from native API for positioning
-                    let main_bounds = if let Some((x, y, w, h)) = platform::get_main_window_bounds() {
+                    let main_bounds = if let Some((x, y, w, h)) = platform::get_main_window_bounds()
+                    {
                         gpui::Bounds {
-                            origin: gpui::Point { x: gpui::px(x as f32), y: gpui::px(y as f32) },
-                            size: gpui::Size { width: gpui::px(w as f32), height: gpui::px(h as f32) },
+                            origin: gpui::Point {
+                                x: gpui::px(x as f32),
+                                y: gpui::px(y as f32),
+                            },
+                            size: gpui::Size {
+                                width: gpui::px(w as f32),
+                                height: gpui::px(h as f32),
+                            },
                         }
                     } else {
                         // Fallback: use sensible defaults
                         gpui::Bounds {
-                            origin: gpui::Point { x: gpui::px(100.0), y: gpui::px(100.0) },
-                            size: gpui::Size { width: gpui::px(600.0), height: gpui::px(400.0) },
+                            origin: gpui::Point {
+                                x: gpui::px(100.0),
+                                y: gpui::px(100.0),
+                            },
+                            size: gpui::Size {
+                                width: gpui::px(600.0),
+                                height: gpui::px(400.0),
+                            },
                         }
                     };
 
@@ -468,10 +481,9 @@ impl ScriptListApp {
                             ),
 
                             // Quadrant positions
-                            WindowActionType::TileTopLeft => window_control::tile_window(
-                                target_window.id,
-                                TilePosition::TopLeft,
-                            ),
+                            WindowActionType::TileTopLeft => {
+                                window_control::tile_window(target_window.id, TilePosition::TopLeft)
+                            }
                             WindowActionType::TileTopRight => window_control::tile_window(
                                 target_window.id,
                                 TilePosition::TopRight,
@@ -534,10 +546,9 @@ impl ScriptListApp {
                             ),
 
                             // Centered positions
-                            WindowActionType::TileCenter => window_control::tile_window(
-                                target_window.id,
-                                TilePosition::Center,
-                            ),
+                            WindowActionType::TileCenter => {
+                                window_control::tile_window(target_window.id, TilePosition::Center)
+                            }
                             WindowActionType::TileAlmostMaximize => window_control::tile_window(
                                 target_window.id,
                                 TilePosition::AlmostMaximize,
@@ -677,8 +688,10 @@ impl ScriptListApp {
                         // Capture entire screen and send to AI
                         match platform::capture_screen_screenshot() {
                             Ok((png_data, width, height)) => {
-                                let base64_data =
-                                    base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &png_data);
+                                let base64_data = base64::Engine::encode(
+                                    &base64::engine::general_purpose::STANDARD,
+                                    &png_data,
+                                );
                                 let message = format!(
                                     "[Screenshot captured: {}x{} pixels]\n\nPlease analyze this screenshot.",
                                     width, height
@@ -717,8 +730,10 @@ impl ScriptListApp {
                         // Capture the focused window (not our window) and send to AI
                         match platform::capture_focused_window_screenshot() {
                             Ok((png_data, width, height, window_title)) => {
-                                let base64_data =
-                                    base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &png_data);
+                                let base64_data = base64::Engine::encode(
+                                    &base64::engine::general_purpose::STANDARD,
+                                    &png_data,
+                                );
                                 let message = format!(
                                     "[Window: {} - {}x{} pixels]\n\nPlease analyze this window screenshot.",
                                     window_title, width, height
@@ -783,7 +798,10 @@ impl ScriptListApp {
                                 cx.notify();
                             }
                             Err(e) => {
-                                logging::log("ERROR", &format!("Failed to get selected text: {}", e));
+                                logging::log(
+                                    "ERROR",
+                                    &format!("Failed to get selected text: {}", e),
+                                );
                                 self.toast_manager.push(
                                     components::toast::Toast::error(
                                         format!("Failed to get selected text: {}", e),
@@ -1225,15 +1243,18 @@ impl ScriptListApp {
                 let _ = completion_sender.try_send((provider_for_callback.clone(), success));
             });
 
-        // Check if key already exists in keyring (for UX messaging)
-        let exists_in_keyring = prompts::env::get_secret(&key)
-            .map(|v| !v.is_empty())
+        // Check if key already exists in secrets (for UX messaging)
+        let exists_in_keyring = secrets::get_secret(&key)
+            .map(|v: String| !v.is_empty())
             .unwrap_or(false);
 
         if exists_in_keyring {
             logging::log(
                 "EXEC",
-                &format!("{} API key already configured - showing update prompt", provider_name),
+                &format!(
+                    "{} API key already configured - showing update prompt",
+                    provider_name
+                ),
             );
         }
 
@@ -1262,7 +1283,12 @@ impl ScriptListApp {
 
     /// Handle API key configuration completion.
     /// Called when the EnvPrompt callback signals completion.
-    fn handle_api_key_completion(&mut self, provider: String, success: bool, cx: &mut Context<Self>) {
+    fn handle_api_key_completion(
+        &mut self,
+        provider: String,
+        success: bool,
+        cx: &mut Context<Self>,
+    ) {
         self.pending_api_key_config = None;
 
         if success {
@@ -1702,7 +1728,10 @@ impl ScriptListApp {
     ) {
         logging::log(
             "EXEC",
-            &format!("Executing confirmed built-in: {} (id: {})", entry.name, entry.id),
+            &format!(
+                "Executing confirmed built-in: {} (id: {})",
+                entry.name, entry.id
+            ),
         );
 
         // Direct execution - same logic as execute_builtin but without confirmation check
@@ -1754,32 +1783,61 @@ impl ScriptListApp {
                             // These shouldn't typically be confirmed, but handle gracefully
                             logging::log(
                                 "EXEC",
-                                &format!("Executing non-dangerous system action: {:?}", action_type),
+                                &format!(
+                                    "Executing non-dangerous system action: {:?}",
+                                    action_type
+                                ),
                             );
                             // Call the original execute_builtin for these
                             // Note: This creates a temp config with no confirmation to avoid loop
                             match action_type {
-                                SystemActionType::ToggleDarkMode => system_actions::toggle_dark_mode(),
+                                SystemActionType::ToggleDarkMode => {
+                                    system_actions::toggle_dark_mode()
+                                }
                                 SystemActionType::ShowDesktop => system_actions::show_desktop(),
-                                SystemActionType::MissionControl => system_actions::mission_control(),
+                                SystemActionType::MissionControl => {
+                                    system_actions::mission_control()
+                                }
                                 SystemActionType::Launchpad => system_actions::launchpad(),
-                                SystemActionType::ForceQuitApps => system_actions::force_quit_apps(),
+                                SystemActionType::ForceQuitApps => {
+                                    system_actions::force_quit_apps()
+                                }
                                 SystemActionType::Volume0 => system_actions::set_volume(0),
                                 SystemActionType::Volume25 => system_actions::set_volume(25),
                                 SystemActionType::Volume50 => system_actions::set_volume(50),
                                 SystemActionType::Volume75 => system_actions::set_volume(75),
                                 SystemActionType::Volume100 => system_actions::set_volume(100),
                                 SystemActionType::VolumeMute => system_actions::volume_mute(),
-                                SystemActionType::ToggleDoNotDisturb => system_actions::toggle_do_not_disturb(),
-                                SystemActionType::StartScreenSaver => system_actions::start_screen_saver(),
-                                SystemActionType::OpenSystemPreferences => system_actions::open_system_preferences_main(),
-                                SystemActionType::OpenPrivacySettings => system_actions::open_privacy_settings(),
-                                SystemActionType::OpenDisplaySettings => system_actions::open_display_settings(),
-                                SystemActionType::OpenSoundSettings => system_actions::open_sound_settings(),
-                                SystemActionType::OpenNetworkSettings => system_actions::open_network_settings(),
-                                SystemActionType::OpenKeyboardSettings => system_actions::open_keyboard_settings(),
-                                SystemActionType::OpenBluetoothSettings => system_actions::open_bluetooth_settings(),
-                                SystemActionType::OpenNotificationsSettings => system_actions::open_notifications_settings(),
+                                SystemActionType::ToggleDoNotDisturb => {
+                                    system_actions::toggle_do_not_disturb()
+                                }
+                                SystemActionType::StartScreenSaver => {
+                                    system_actions::start_screen_saver()
+                                }
+                                SystemActionType::OpenSystemPreferences => {
+                                    system_actions::open_system_preferences_main()
+                                }
+                                SystemActionType::OpenPrivacySettings => {
+                                    system_actions::open_privacy_settings()
+                                }
+                                SystemActionType::OpenDisplaySettings => {
+                                    system_actions::open_display_settings()
+                                }
+                                SystemActionType::OpenSoundSettings => {
+                                    system_actions::open_sound_settings()
+                                }
+                                SystemActionType::OpenNetworkSettings => {
+                                    system_actions::open_network_settings()
+                                }
+                                SystemActionType::OpenKeyboardSettings => {
+                                    system_actions::open_keyboard_settings()
+                                }
+                                SystemActionType::OpenBluetoothSettings => {
+                                    system_actions::open_bluetooth_settings()
+                                }
+                                SystemActionType::OpenNotificationsSettings => {
+                                    system_actions::open_notifications_settings()
+                                }
                                 _ => Ok(()),
                             }
                         }
@@ -1791,7 +1849,10 @@ impl ScriptListApp {
                             self.close_and_reset_window(cx);
                         }
                         Err(e) => {
-                            logging::log("ERROR", &format!("Confirmed system action failed: {}", e));
+                            logging::log(
+                                "ERROR",
+                                &format!("Confirmed system action failed: {}", e),
+                            );
                             self.toast_manager.push(
                                 components::toast::Toast::error(
                                     format!("System action failed: {}", e),
@@ -1823,10 +1884,7 @@ impl ScriptListApp {
             _ => {
                 logging::log(
                     "WARN",
-                    &format!(
-                        "Unexpected confirmed builtin type: {:?}",
-                        entry.feature
-                    ),
+                    &format!("Unexpected confirmed builtin type: {:?}", entry.feature),
                 );
             }
         }

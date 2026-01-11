@@ -86,6 +86,9 @@ mod file_search;
 mod toast_manager;
 mod window_control;
 
+// Secrets - age-encrypted secrets storage (replacement for keyring)
+mod secrets;
+
 // System actions - macOS AppleScript-based system commands
 #[cfg(target_os = "macos")]
 mod system_actions;
