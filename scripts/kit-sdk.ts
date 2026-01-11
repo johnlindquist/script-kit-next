@@ -2830,11 +2830,22 @@ declare global {
   const mouse: MouseAPI;
   
   // =============================================================================
-  // TIER 4A: Chat Prompt
+  // TIER 4A: Chat Prompt (Inline UI in Main Window)
   // =============================================================================
-  
+  //
+  // IMPORTANT: chat() is a UI-ONLY prompt in the main Script Kit window.
+  // It does NOT do AI generation - your script handles that.
+  // Use chat() when you want to:
+  // - Build a custom chat interface with your own AI provider
+  // - Stream responses from any API (Anthropic, OpenAI, local models, etc.)
+  // - Control the conversation flow programmatically
+  //
+  // For the separate floating AI window with built-in BYOK AI providers,
+  // see the ai* functions below (aiStartChat, aiFocus, etc.)
+  // =============================================================================
+
   /**
-   * Chat function interface with attached controller methods
+   * Chat function interface with attached controller methods for streaming
    */
   interface ChatFunction {
     (options?: ChatOptions): Promise<ChatResult>;
@@ -2848,11 +2859,43 @@ declare global {
     getMessages(): CoreMessage[];
     getResult(): ChatResult;
   }
-  
+
   /**
-   * Conversational chat UI where messages can be added programmatically
-   * @param options - Optional chat options with onInit and onSubmit callbacks
-   * @returns The final user input when submitted
+   * Inline chat UI prompt in the main Script Kit window.
+   *
+   * **IMPORTANT**: This is UI-only - it does NOT call AI APIs.
+   * Your script is responsible for:
+   * - Calling AI APIs (Anthropic, OpenAI, etc.) directly or via npm packages
+   * - Streaming responses using chat.startStream(), chat.appendChunk(), chat.completeStream()
+   *
+   * This design lets you use ANY AI provider, including local models, custom APIs,
+   * or the Vercel AI SDK. The SDK only provides the chat UI; generation is up to you.
+   *
+   * For the separate floating AI window with built-in AI providers (BYOK),
+   * see aiStartChat(), aiFocus(), and other ai* functions.
+   *
+   * @param options - Chat configuration with optional callbacks
+   * @param options.messages - Initial messages to display (AI SDK compatible)
+   * @param options.system - System prompt shorthand
+   * @param options.onInit - Called when chat opens (use to stream initial response)
+   * @param options.onMessage - Called when user submits a message
+   * @returns ChatResult with messages in AI SDK format
+   *
+   * @example Basic chat with streaming
+   * ```typescript
+   * await chat({
+   *   messages: [{ role: 'user', content: userPrompt }],
+   *   system: 'You are a helpful assistant',
+   *   async onInit() {
+   *     const msgId = chat.startStream('left');
+   *     // Stream from your AI provider
+   *     for await (const chunk of myAiStream()) {
+   *       chat.appendChunk(msgId, chunk);
+   *     }
+   *     chat.completeStream(msgId);
+   *   }
+   * });
+   * ```
    */
   const chat: ChatFunction;
   
@@ -2961,13 +3004,23 @@ declare global {
   function getLayoutInfo(): Promise<LayoutInfo>;
 
   // =============================================================================
-  // AI Chat SDK API
+  // AI Chat Window SDK API (Separate Floating Window)
+  // =============================================================================
+  //
+  // These functions control the **separate floating AI chat window** which:
+  // - Opens as its own window (not in the main Script Kit window)
+  // - Has built-in BYOK (Bring Your Own Key) AI providers (Anthropic, OpenAI)
+  // - Manages its own chat history in SQLite
+  // - Provides streaming responses automatically
+  //
+  // For an **inline chat UI** in the main window where YOU control AI generation,
+  // use the chat() function instead. See TIER 4A above.
   // =============================================================================
 
   /** Check if the AI chat window is currently open */
   function aiIsOpen(): Promise<{ isOpen: boolean; activeChatId?: string }>;
 
-  /** Get information about the currently active chat */
+  /** Get information about the currently active chat in the AI window */
   function aiGetActiveChat(): Promise<AiChatInfo | null>;
 
   /** List all chats from AI chat storage */
