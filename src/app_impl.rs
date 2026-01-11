@@ -226,6 +226,8 @@ impl ScriptListApp {
         // the modal callback sends (entry_id, confirmed) through this channel
         let (builtin_confirm_tx, builtin_confirm_rx) = async_channel::bounded(4);
 
+        // Create channel for inline chat escape signals
+        let (inline_chat_escape_tx, inline_chat_escape_rx) = mpsc::sync_channel(4);
         let mut app = ScriptListApp {
             scripts,
             scriptlets,
@@ -380,6 +382,9 @@ impl ScriptListApp {
             api_key_completion_receiver: api_key_rx,
             // Navigation tracking: starts false, set to true when opening built-in views from main menu
             opened_from_main_menu: false,
+            // Inline chat escape channel - for ChatPrompt escape callback to signal return to main menu
+            inline_chat_escape_sender: inline_chat_escape_tx,
+            inline_chat_escape_receiver: inline_chat_escape_rx,
         };
 
         // Build initial alias/shortcut registries (conflicts logged, not shown via HUD on startup)
@@ -545,6 +550,7 @@ impl ScriptListApp {
                             }
 
                             // Handle Tab in ScriptList view for Ask AI feature
+                            // Shows inline ChatPrompt with built-in AI (prefers Vercel AI Gateway)
                             if matches!(this.current_view, AppView::ScriptList)
                                 && !this.filter_text.is_empty()
                                 && !this.show_actions_popup
@@ -552,19 +558,11 @@ impl ScriptListApp {
                             {
                                 let query = this.filter_text.clone();
 
-                                // Open AI window and submit query
-                                if let Err(e) = crate::ai::open_ai_window(cx) {
-                                    crate::logging::log(
-                                        "ERROR",
-                                        &format!("Failed to open AI window: {}", e),
-                                    );
-                                } else {
-                                    crate::ai::set_ai_input(cx, &query, true);
-                                }
-
-                                // Clear filter text directly (close_and_reset_window will reset the input)
+                                // Clear filter text before switching view
                                 this.filter_text.clear();
-                                this.close_and_reset_window(cx);
+
+                                // Show inline AI chat with the query as initial input
+                                this.show_inline_ai_chat(Some(query), cx);
 
                                 // Stop propagation so Input doesn't handle it
                                 cx.stop_propagation();
@@ -5225,6 +5223,113 @@ export default {
             blur_radius: px(shadow_config.blur_radius),
             spread_radius: px(shadow_config.spread_radius),
         }]
+    }
+
+    /// Show inline AI chat prompt with built-in AI provider support.
+    /// This switches to the ChatPrompt view with direct AI integration (no SDK needed).
+    /// Prefers Vercel AI Gateway if configured, otherwise uses the first available provider.
+    pub fn show_inline_ai_chat(&mut self, initial_query: Option<String>, cx: &mut Context<Self>) {
+        use crate::ai::ProviderRegistry;
+        use crate::prompts::{ChatEscapeCallback, ChatPrompt, ChatSubmitCallback};
+
+        // Mark as opened from main menu so ESC returns to main menu
+        self.opened_from_main_menu = true;
+
+        // Create escape callback that signals via channel
+        let escape_sender = self.inline_chat_escape_sender.clone();
+        let escape_callback: ChatEscapeCallback = std::sync::Arc::new(move |_id| {
+            let _ = escape_sender.try_send(());
+        });
+
+        // Initialize provider registry from environment
+        let registry = ProviderRegistry::from_environment();
+
+        if !registry.has_any_provider() {
+            crate::logging::log("CHAT", "No AI providers configured - showing setup message");
+            // Show a message prompting user to configure API keys
+            let placeholder = Some("Type your question...".to_string());
+            let hint = Some("No API keys configured. Run 'Configure Vercel AI Gateway' from the menu.".to_string());
+
+            // Create a no-op callback since there are no providers
+            let noop_callback: ChatSubmitCallback = std::sync::Arc::new(|_id, _text| {
+                crate::logging::log("CHAT", "No providers - submission ignored");
+            });
+
+            let mut chat_prompt = ChatPrompt::new(
+                "inline-ai".to_string(),
+                placeholder,
+                vec![],
+                hint,
+                None,
+                self.focus_handle.clone(),
+                noop_callback,
+                std::sync::Arc::clone(&self.theme),
+            )
+            .with_title("Ask AI")
+            .with_save_history(true)
+            .with_escape_callback(escape_callback.clone());
+
+            // If there's an initial query, set it in the input
+            if let Some(query) = initial_query {
+                chat_prompt.input.set_text(&query);
+            }
+
+            let entity = cx.new(|_| chat_prompt);
+            self.current_view = AppView::ChatPrompt {
+                id: "inline-ai".to_string(),
+                entity,
+            };
+            self.focused_input = FocusedInput::None;
+            self.pending_focus = Some(FocusTarget::ChatPrompt);
+            resize_to_view_sync(ViewType::DivPrompt, 0);
+            cx.notify();
+            return;
+        }
+
+        crate::logging::log(
+            "CHAT",
+            &format!(
+                "Showing inline AI chat with {} providers",
+                registry.provider_ids().len()
+            ),
+        );
+
+        // Create a no-op callback since built-in AI handles submissions internally
+        let noop_callback: ChatSubmitCallback = std::sync::Arc::new(|_id, _text| {
+            // Built-in AI mode handles this internally
+        });
+
+        let placeholder = Some("Ask anything...".to_string());
+
+        let mut chat_prompt = ChatPrompt::new(
+            "inline-ai".to_string(),
+            placeholder,
+            vec![],
+            None,
+            None,
+            self.focus_handle.clone(),
+            noop_callback,
+            std::sync::Arc::clone(&self.theme),
+        )
+        .with_title("Ask AI")
+        .with_save_history(true)
+        .with_escape_callback(escape_callback)
+        .with_builtin_ai(registry, true); // true = prefer Vercel AI Gateway
+
+        // If there's an initial query, set it in the input
+        if let Some(query) = initial_query {
+            chat_prompt.input.set_text(&query);
+        }
+
+        let entity = cx.new(|_| chat_prompt);
+        self.current_view = AppView::ChatPrompt {
+            id: "inline-ai".to_string(),
+            entity,
+        };
+        self.focused_input = FocusedInput::None;
+        self.pending_focus = Some(FocusTarget::ChatPrompt);
+        resize_to_view_sync(ViewType::DivPrompt, 0);
+        cx.notify();
     }
 }
 

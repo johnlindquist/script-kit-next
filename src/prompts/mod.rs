@@ -34,7 +34,7 @@ mod template;
 // Base infrastructure for prompts - will be used as prompts adopt PromptBase
 #[allow(unused_imports)]
 pub use base::{DesignContext, PromptBase, ResolvedColors};
-pub use chat::{ChatPrompt, ChatSubmitCallback};
+pub use chat::{ChatEscapeCallback, ChatPrompt, ChatSubmitCallback};
 pub use div::{ContainerOptions, ContainerPadding, DivPrompt};
 
 // These exports are ready for use in main.rs when AppView variants are added

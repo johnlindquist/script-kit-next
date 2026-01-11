@@ -943,6 +943,7 @@ impl AiProvider for VercelGatewayProvider {
 ///
 /// The registry automatically discovers available providers based on
 /// environment variables and provides a unified interface to access them.
+#[derive(Clone)]
 pub struct ProviderRegistry {
     providers: HashMap<String, Arc<dyn AiProvider>>,
 }
