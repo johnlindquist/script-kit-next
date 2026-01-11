@@ -1410,7 +1410,11 @@ impl AiApp {
     /// Render the input field with proper cursor positioning
     /// When empty: cursor on left, placeholder on right (like main menu)
     /// When has text: standard Input behavior
-    fn render_input_with_cursor(&self, border_color: gpui::Hsla, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_input_with_cursor(
+        &self,
+        border_color: gpui::Hsla,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
         let input_text = self.input_state.read(cx).value().to_string();
         let is_empty = input_text.is_empty();
 
