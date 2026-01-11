@@ -203,6 +203,8 @@ pub struct ChatPrompt {
     selected_model: Option<ModelInfo>,
     builtin_streaming_content: String,
     builtin_is_streaming: bool,
+    // Auto-submit flag: when true, submit the input on first render (for Tab from main menu)
+    pending_submit: bool,
 }
 
 impl ChatPrompt {
@@ -252,6 +254,7 @@ impl ChatPrompt {
             selected_model: None,
             builtin_streaming_content: String::new(),
             builtin_is_streaming: false,
+            pending_submit: false,
         }
     }
 
@@ -350,6 +353,13 @@ impl ChatPrompt {
         self.provider_registry = Some(registry);
         self.available_models = available_models;
         self.selected_model = selected_model;
+        self
+    }
+
+    /// Set pending_submit flag - when true, auto-submit input on first render
+    /// Used for Tab from main menu to immediately send the query to AI
+    pub fn with_pending_submit(mut self, submit: bool) -> Self {
+        self.pending_submit = submit;
         self
     }
 
@@ -1461,6 +1471,13 @@ impl Focusable for ChatPrompt {
 
 impl Render for ChatPrompt {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        // Process pending_submit on first render (used when Tab opens chat with query)
+        if self.pending_submit && !self.input.is_empty() {
+            self.pending_submit = false;
+            logging::log("CHAT", "Processing pending_submit - auto-submitting query from Tab");
+            self.handle_submit(cx);
+        }
+
         let colors = &self.prompt_colors;
 
         let actions_menu_open = self.actions_menu_open;

@@ -5335,9 +5335,10 @@ export default {
         .with_escape_callback(escape_callback)
         .with_builtin_ai(registry, true); // true = prefer Vercel AI Gateway
 
-        // If there's an initial query, set it in the input
+        // If there's an initial query, set it in the input and auto-submit
         if let Some(query) = initial_query {
             chat_prompt.input.set_text(&query);
+            chat_prompt = chat_prompt.with_pending_submit(true);
         }
 
         let entity = cx.new(|_| chat_prompt);
