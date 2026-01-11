@@ -1164,6 +1164,18 @@ impl ScriptListApp {
                 let _ = completion_sender.try_send((provider_for_callback.clone(), success));
             });
 
+        // Check if key already exists in keyring (for UX messaging)
+        let exists_in_keyring = prompts::env::get_secret(&key)
+            .map(|v| !v.is_empty())
+            .unwrap_or(false);
+
+        if exists_in_keyring {
+            logging::log(
+                "EXEC",
+                &format!("{} API key already configured - showing update prompt", provider_name),
+            );
+        }
+
         // Create EnvPrompt entity
         let focus_handle = self.focus_handle.clone();
         let env_prompt = prompts::EnvPrompt::new(
@@ -1174,25 +1186,15 @@ impl ScriptListApp {
             focus_handle,
             submit_callback,
             std::sync::Arc::clone(&self.theme),
+            exists_in_keyring,
         );
-
-        // Check if key already exists in keyring
-        if let Some(existing) = prompts::env::get_secret(&key) {
-            if !existing.is_empty() {
-                // Key already configured - show info toast and offer to reconfigure
-                logging::log(
-                    "EXEC",
-                    &format!("{} API key already configured", provider_name),
-                );
-                // Still show the prompt so user can update if they want
-            }
-        }
 
         let entity = cx.new(|_| env_prompt);
         self.current_view = AppView::EnvPrompt { id, entity };
         self.focused_input = FocusedInput::None; // EnvPrompt has its own focus handling
         self.pending_focus = Some(FocusTarget::EnvPrompt);
 
+        // Resize to compact height: header + footer only
         resize_to_view_sync(ViewType::ArgPromptNoChoices, 0);
         cx.notify();
     }
