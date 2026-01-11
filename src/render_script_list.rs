@@ -687,8 +687,8 @@ impl ScriptListApp {
                             if let Err(e) = ai::open_ai_window(cx) {
                                 logging::log("ERROR", &format!("Failed to open AI window: {}", e));
                             } else {
-                                // Set input and submit to AI
-                                ai::set_ai_input(cx, &query, true);
+                                    // Set input in AI chat (don't auto-submit - let user review first)
+                                ai::set_ai_input(cx, &query, false);
                             }
 
                             // Clear filter and close main window
