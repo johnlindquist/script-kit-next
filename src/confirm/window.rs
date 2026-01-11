@@ -265,7 +265,10 @@ pub fn dispatch_confirm_key(key: &str, cx: &mut App) -> bool {
         return false;
     };
 
-    crate::logging::log("CONFIRM", &format!("Dispatching key to confirm dialog: {}", key));
+    crate::logging::log(
+        "CONFIRM",
+        &format!("Dispatching key to confirm dialog: {}", key),
+    );
 
     match key {
         // Enter = submit current selection and close
