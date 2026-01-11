@@ -4,11 +4,6 @@
 
 impl ScriptListApp {
     fn move_selection_up(&mut self, cx: &mut Context<Self>) {
-        // Clear pending confirmation when changing selection
-        if self.pending_confirmation.is_some() {
-            self.pending_confirmation = None;
-        }
-
         // Get grouped results to check for section headers (cached)
         let (grouped_items, _) = self.get_grouped_results_cached();
         // Clone to avoid borrow issues with self mutation below
@@ -53,11 +48,6 @@ impl ScriptListApp {
     }
 
     fn move_selection_down(&mut self, cx: &mut Context<Self>) {
-        // Clear pending confirmation when changing selection
-        if self.pending_confirmation.is_some() {
-            self.pending_confirmation = None;
-        }
-
         // Get grouped results to check for section headers (cached)
         let (grouped_items, _) = self.get_grouped_results_cached();
         // Clone to avoid borrow issues with self mutation below
@@ -172,11 +162,6 @@ impl ScriptListApp {
     /// just like move_selection_up/down. Otherwise, holding arrow keys
     /// can land on headers causing navigation to feel "stuck".
     fn move_selection_by(&mut self, delta: i32, cx: &mut Context<Self>) {
-        // Clear pending confirmation when changing selection
-        if self.pending_confirmation.is_some() {
-            self.pending_confirmation = None;
-        }
-
         // Get grouped results to check for section headers (cached)
         let (grouped_items, _) = self.get_grouped_results_cached();
         // Clone to avoid borrow issues with self mutation below

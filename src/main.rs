@@ -1337,9 +1337,11 @@ struct ScriptListApp {
     pending_focus: Option<FocusTarget>,
     // Show warning banner when bun is not available
     show_bun_warning: bool,
-    // Pending confirmation: when set, the entry with this ID is awaiting confirmation
-    // Used for dangerous actions like Shut Down, Restart, Log Out, Empty Trash
-    pending_confirmation: Option<String>,
+    // Builtin confirmation channel - for modal callback to signal completion
+    // When a dangerous builtin requires confirmation, we open a modal and the callback
+    // sends (entry_id, confirmed) through this channel
+    builtin_confirm_sender: async_channel::Sender<(String, bool)>,
+    builtin_confirm_receiver: async_channel::Receiver<(String, bool)>,
     // Scroll stabilization: track last scrolled-to index for each scroll handle
     #[allow(dead_code)]
     last_scrolled_main: Option<usize>,
@@ -1422,6 +1424,13 @@ impl Render for ScriptListApp {
         // The EnvPrompt callback signals completion via channel
         if let Ok((provider, success)) = self.api_key_completion_receiver.try_recv() {
             self.handle_api_key_completion(provider, success, cx);
+        }
+
+        // Check for builtin confirmation modal completion
+        // When user confirms/cancels a dangerous action (Quit, Shut Down, etc.),
+        // the modal callback sends the result through this channel
+        if let Ok((entry_id, confirmed)) = self.builtin_confirm_receiver.try_recv() {
+            self.handle_builtin_confirmation(entry_id, confirmed, cx);
         }
 
         // Focus-lost auto-dismiss: Close dismissable prompts when the main window loses focus
