@@ -6,8 +6,16 @@ fs.mkdirSync(dir, { recursive: true });
 
 console.error('[AUDIT] Testing ARG prompt with grid overlay');
 
-// Show arg prompt with choices
-const result = await arg({
+// Set up screenshot capture BEFORE await arg - fires while prompt is displayed
+setTimeout(async () => {
+  const ss = await captureScreenshot();
+  fs.writeFileSync(`${dir}/01-arg-choices.png`, Buffer.from(ss.data, 'base64'));
+  console.error(`[AUDIT] Screenshot saved: ${dir}/01-arg-choices.png`);
+  process.exit(0);
+}, 1000);
+
+// Show arg prompt with choices (blocks, but setTimeout fires while waiting)
+await arg({
   placeholder: 'Select a fruit',
   choices: [
     { name: 'Apple', description: 'A red fruit', value: 'apple' },
@@ -17,12 +25,3 @@ const result = await arg({
     { name: 'Elderberry', description: 'A purple berry', value: 'elderberry' },
   ]
 });
-
-// Wait for render then capture
-await new Promise(r => setTimeout(r, 500));
-const ss = await captureScreenshot();
-fs.writeFileSync(`${dir}/01-arg-choices.png`, Buffer.from(ss.data, 'base64'));
-console.error(`[AUDIT] Screenshot saved: ${dir}/01-arg-choices.png`);
-console.error(`[AUDIT] Selected: ${result}`);
-
-process.exit(0);

@@ -45,3 +45,5 @@ const result = await arg({
 
 console.error(`[TEST] Result: ${result}`);
 console.error('[TEST] Test completed');
+
+process.exit(0);

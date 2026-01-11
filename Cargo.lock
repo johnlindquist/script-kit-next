@@ -6866,6 +6866,7 @@ dependencies = [
  "parking_lot",
  "portable-pty",
  "pulldown-cmark",
+ "rayon",
  "regex",
  "resvg",
  "ropey 1.6.1",
