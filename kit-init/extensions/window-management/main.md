@@ -9,9 +9,9 @@ icon: layout-grid
 
 Organize and position windows with keyboard shortcuts. All commands operate on the frontmost window of the app you were using before Script Kit appeared.
 
-## Half Tiling
+---
 
-### Tile Left Half
+## Tile Left Half
 
 <!--
 description: Tile window to left half of screen
@@ -24,7 +24,9 @@ if (win) {
 }
 ```
 
-### Tile Right Half
+---
+
+## Tile Right Half
 
 <!--
 description: Tile window to right half of screen
@@ -37,7 +39,9 @@ if (win) {
 }
 ```
 
-### Tile Top Half
+---
+
+## Tile Top Half
 
 <!--
 description: Tile window to top half of screen
@@ -50,7 +54,9 @@ if (win) {
 }
 ```
 
-### Tile Bottom Half
+---
+
+## Tile Bottom Half
 
 <!--
 description: Tile window to bottom half of screen
@@ -63,9 +69,9 @@ if (win) {
 }
 ```
 
-## Quadrant Tiling
+---
 
-### Tile Top Left
+## Tile Top Left
 
 <!--
 description: Tile window to top-left quadrant
@@ -78,7 +84,9 @@ if (win) {
 }
 ```
 
-### Tile Top Right
+---
+
+## Tile Top Right
 
 <!--
 description: Tile window to top-right quadrant
@@ -91,7 +99,9 @@ if (win) {
 }
 ```
 
-### Tile Bottom Left
+---
+
+## Tile Bottom Left
 
 <!--
 description: Tile window to bottom-left quadrant
@@ -104,7 +114,9 @@ if (win) {
 }
 ```
 
-### Tile Bottom Right
+---
+
+## Tile Bottom Right
 
 <!--
 description: Tile window to bottom-right quadrant
@@ -117,9 +129,9 @@ if (win) {
 }
 ```
 
-## Third Tiling (Horizontal)
+---
 
-### Tile Left Third
+## Tile Left Third
 
 <!--
 description: Tile window to left third of screen
@@ -132,7 +144,9 @@ if (win) {
 }
 ```
 
-### Tile Center Third
+---
+
+## Tile Center Third
 
 <!--
 description: Tile window to center third of screen
@@ -145,7 +159,9 @@ if (win) {
 }
 ```
 
-### Tile Right Third
+---
+
+## Tile Right Third
 
 <!--
 description: Tile window to right third of screen
@@ -158,9 +174,9 @@ if (win) {
 }
 ```
 
-## Third Tiling (Vertical)
+---
 
-### Tile Top Third
+## Tile Top Third
 
 <!--
 description: Tile window to top third of screen
@@ -173,7 +189,9 @@ if (win) {
 }
 ```
 
-### Tile Middle Third
+---
+
+## Tile Middle Third
 
 <!--
 description: Tile window to middle third of screen
@@ -186,7 +204,9 @@ if (win) {
 }
 ```
 
-### Tile Bottom Third
+---
+
+## Tile Bottom Third
 
 <!--
 description: Tile window to bottom third of screen
@@ -199,9 +219,9 @@ if (win) {
 }
 ```
 
-## Two-Thirds Tiling
+---
 
-### Tile First Two Thirds
+## Tile First Two Thirds
 
 <!--
 description: Tile window to first two-thirds of screen (left)
@@ -214,7 +234,9 @@ if (win) {
 }
 ```
 
-### Tile Last Two Thirds
+---
+
+## Tile Last Two Thirds
 
 <!--
 description: Tile window to last two-thirds of screen (right)
@@ -227,7 +249,9 @@ if (win) {
 }
 ```
 
-### Tile Top Two Thirds
+---
+
+## Tile Top Two Thirds
 
 <!--
 description: Tile window to top two-thirds of screen
@@ -240,7 +264,9 @@ if (win) {
 }
 ```
 
-### Tile Bottom Two Thirds
+---
+
+## Tile Bottom Two Thirds
 
 <!--
 description: Tile window to bottom two-thirds of screen
@@ -253,9 +279,9 @@ if (win) {
 }
 ```
 
-## Centered Positions
+---
 
-### Center Window
+## Center Window
 
 <!--
 description: Center window on screen (60% size)
@@ -268,7 +294,9 @@ if (win) {
 }
 ```
 
-### Almost Maximize
+---
+
+## Almost Maximize
 
 <!--
 description: Maximize window with small margin
@@ -281,7 +309,9 @@ if (win) {
 }
 ```
 
-### Maximize
+---
+
+## Maximize
 
 <!--
 description: Maximize window to fill screen
@@ -294,9 +324,9 @@ if (win) {
 }
 ```
 
-## Display Management
+---
 
-### Move to Next Display
+## Move to Next Display
 
 <!--
 description: Move window to next display/monitor
@@ -309,7 +339,9 @@ if (win) {
 }
 ```
 
-### Move to Previous Display
+---
+
+## Move to Previous Display
 
 <!--
 description: Move window to previous display/monitor
@@ -322,9 +354,9 @@ if (win) {
 }
 ```
 
-## Window Actions
+---
 
-### Minimize Window
+## Minimize Window
 
 <!--
 description: Minimize the frontmost window
@@ -337,7 +369,9 @@ if (win) {
 }
 ```
 
-### Close Window
+---
+
+## Close Window
 
 <!--
 description: Close the frontmost window
@@ -350,9 +384,9 @@ if (win) {
 }
 ```
 
-## Information
+---
 
-### Show Display Info
+## Show Display Info
 
 <!--
 description: Show information about connected displays
@@ -372,7 +406,9 @@ await div(`
 `);
 ```
 
-### Show Window Info
+---
+
+## Show Window Info
 
 <!--
 description: Show information about the frontmost window
