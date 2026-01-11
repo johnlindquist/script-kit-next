@@ -22,13 +22,42 @@ env:
 
 jobs:
   # ═══════════════════════════════════════════════════════════════════
-  # PARALLEL VALIDATION JOBS (~60s total with warm cache)
-  # All run simultaneously on separate runners for maximum speed
+  # FAST CI (default for PRs) - Target: <3 minutes
+  # Just verify code compiles and is formatted
+  # ═══════════════════════════════════════════════════════════════════
+
+  fast-check:
+    name: Fast Check
+    runs-on: macos-14
+    # Skip if full-ci is requested (label or main branch)
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'full-ci') && github.ref != 'refs/heads/main' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "macos-check"
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Format check
+        run: cargo fmt --check
+
+      - name: Compile check
+        run: cargo check --all-targets
+
+  # ═══════════════════════════════════════════════════════════════════
+  # FULL CI (main branch or 'full-ci' label)
+  # Complete validation: format, clippy, tests, SDK tests
   # ═══════════════════════════════════════════════════════════════════
 
   fmt:
     name: Format
     runs-on: macos-14
+    if: ${{ contains(github.event.pull_request.labels.*.name, 'full-ci') || github.ref == 'refs/heads/main' }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -39,6 +68,7 @@ jobs:
   clippy:
     name: Clippy
     runs-on: macos-14
+    if: ${{ contains(github.event.pull_request.labels.*.name, 'full-ci') || github.ref == 'refs/heads/main' }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -47,13 +77,13 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: "macos-debug"
-          # Only one job saves cache to avoid race conditions
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo clippy --all-targets -- -D warnings
 
   test:
     name: Test
     runs-on: macos-14
+    if: ${{ contains(github.event.pull_request.labels.*.name, 'full-ci') || github.ref == 'refs/heads/main' }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -65,13 +95,10 @@ jobs:
       - name: Run tests with nextest (parallel)
         run: cargo nextest run --no-fail-fast
 
-  # ═══════════════════════════════════════════════════════════════════
-  # TYPESCRIPT SDK TESTS (runs in parallel with validation)
-  # ═══════════════════════════════════════════════════════════════════
-
   typescript-tests:
     name: TypeScript SDK Tests
     runs-on: macos-14
+    if: ${{ contains(github.event.pull_request.labels.*.name, 'full-ci') || github.ref == 'refs/heads/main' }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -91,8 +118,7 @@ jobs:
         timeout-minutes: 5
 
   # ═══════════════════════════════════════════════════════════════════
-  # BUILD ARTIFACT (main branch only, after validation passes)
-  # Uses separate release cache + cached cargo-bundle for speed
+  # BUILD ARTIFACT (main branch only, after full validation passes)
   # ═══════════════════════════════════════════════════════════════════
 
   build-artifact:
