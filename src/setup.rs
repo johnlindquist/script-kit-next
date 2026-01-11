@@ -54,6 +54,16 @@ const EMBEDDED_CONDUCTOR_EXTENSION: &str = include_str!("../kit-init/extensions/
 const EMBEDDED_AI_TEXT_TOOLS_EXTENSION: &str =
     include_str!("../kit-init/extensions/ai-text-tools/main.md");
 
+/// Embedded Examples extension - main scriptlet examples (built-in extension that ships with the app)
+const EMBEDDED_EXAMPLES_MAIN: &str = include_str!("../kit-init/extensions/examples/main.md");
+
+/// Embedded Examples extension - advanced scriptlet examples (built-in extension that ships with the app)
+const EMBEDDED_EXAMPLES_ADVANCED: &str =
+    include_str!("../kit-init/extensions/examples/advanced.md");
+
+/// Embedded Examples extension - howto guide (built-in extension that ships with the app)
+const EMBEDDED_EXAMPLES_HOWTO: &str = include_str!("../kit-init/extensions/examples/howto.md");
+
 /// Embedded Conductor SDK module - provides TypeScript APIs for Conductor integration
 /// Used by conductor extension scriptlets via `import from '../../conductor'`
 const EMBEDDED_CONDUCTOR_SDK_INDEX: &str = include_str!("../kit-init/conductor/index.ts");
@@ -1033,6 +1043,8 @@ pub fn ensure_kit_setup() -> SetupResult {
         kit_dir.join("kit").join("conductor").join("extensions"),
         // Built-in AI Text Tools extension kit
         kit_dir.join("kit").join("ai-text-tools").join("extensions"),
+        // Built-in Examples extension kit (scriptlet pattern reference)
+        kit_dir.join("kit").join("examples").join("extensions"),
         kit_dir.join("sdk"),
         kit_dir.join("db"),
         kit_dir.join("logs"),
@@ -1129,6 +1141,28 @@ pub fn ensure_kit_setup() -> SetupResult {
         EMBEDDED_AI_TEXT_TOOLS_EXTENSION,
         &mut warnings,
         "kit/ai-text-tools/extensions/main.md",
+    );
+
+    // App-managed: Built-in Examples extension (refresh if changed)
+    // This extension ships with the app and provides complete scriptlet pattern reference
+    let examples_dir = kit_dir.join("kit").join("examples").join("extensions");
+    write_string_if_changed(
+        &examples_dir.join("main.md"),
+        EMBEDDED_EXAMPLES_MAIN,
+        &mut warnings,
+        "kit/examples/extensions/main.md",
+    );
+    write_string_if_changed(
+        &examples_dir.join("advanced.md"),
+        EMBEDDED_EXAMPLES_ADVANCED,
+        &mut warnings,
+        "kit/examples/extensions/advanced.md",
+    );
+    write_string_if_changed(
+        &examples_dir.join("howto.md"),
+        EMBEDDED_EXAMPLES_HOWTO,
+        &mut warnings,
+        "kit/examples/extensions/howto.md",
     );
 
     // App-managed: Conductor SDK module (refresh if changed)
