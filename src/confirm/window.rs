@@ -21,6 +21,9 @@ use super::dialog::{ConfirmCallback, ConfirmDialog};
 /// Global singleton for the confirm window handle
 static CONFIRM_WINDOW: OnceLock<Mutex<Option<WindowHandle<Root>>>> = OnceLock::new();
 
+/// Global singleton for the confirm dialog entity (for keyboard event dispatch)
+static CONFIRM_DIALOG: OnceLock<Mutex<Option<Entity<ConfirmDialog>>>> = OnceLock::new();
+
 /// ConfirmWindow wrapper that renders the ConfirmDialog entity
 pub struct ConfirmWindow {
     /// The dialog entity
@@ -118,7 +121,7 @@ pub fn open_confirm_window(
         window_bounds: Some(WindowBounds::Windowed(bounds)),
         titlebar: None,
         window_background,
-        focus: true, // Take focus for keyboard events
+        focus: false, // CRITICAL: Don't take focus - main window keeps it and routes keys
         show: true,
         kind: WindowKind::PopUp,
         display_id,
@@ -177,14 +180,29 @@ pub fn open_confirm_window(
         *guard = Some(handle);
     }
 
+    let dialog_entity = dialog_entity_holder.expect("Dialog entity should have been created");
+
+    // Store the dialog entity globally for keyboard event dispatch
+    let dialog_storage = CONFIRM_DIALOG.get_or_init(|| Mutex::new(None));
+    if let Ok(mut guard) = dialog_storage.lock() {
+        *guard = Some(dialog_entity.clone());
+    }
+
     crate::logging::log("CONFIRM", "Confirm popup window opened with vibrancy");
 
-    let dialog_entity = dialog_entity_holder.expect("Dialog entity should have been created");
     Ok((handle, dialog_entity))
 }
 
 /// Close the confirm window if it's open
 pub fn close_confirm_window(cx: &mut App) {
+    // Clear the dialog entity first
+    if let Some(dialog_storage) = CONFIRM_DIALOG.get() {
+        if let Ok(mut guard) = dialog_storage.lock() {
+            *guard = None;
+        }
+    }
+
+    // Then close the window
     if let Some(window_storage) = CONFIRM_WINDOW.get() {
         if let Ok(mut guard) = window_storage.lock() {
             if let Some(handle) = guard.take() {
@@ -226,5 +244,60 @@ pub fn notify_confirm_window(cx: &mut App) {
         let _ = handle.update(cx, |_root, _window, cx| {
             cx.notify();
         });
+    }
+}
+
+/// Dispatch a keyboard event to the confirm dialog
+/// Returns true if the event was handled, false otherwise
+pub fn dispatch_confirm_key(key: &str, cx: &mut App) -> bool {
+    // Get the dialog entity from global storage
+    let dialog_opt = if let Some(storage) = CONFIRM_DIALOG.get() {
+        if let Ok(guard) = storage.lock() {
+            guard.clone()
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    let Some(dialog) = dialog_opt else {
+        return false;
+    };
+
+    crate::logging::log("CONFIRM", &format!("Dispatching key to confirm dialog: {}", key));
+
+    match key {
+        // Enter = submit current selection and close
+        "enter" | "Enter" => {
+            dialog.update(cx, |d, _cx| d.submit());
+            close_confirm_window(cx);
+            true
+        }
+        // Escape = cancel and close
+        "escape" | "Escape" => {
+            dialog.update(cx, |d, _cx| d.cancel());
+            close_confirm_window(cx);
+            true
+        }
+        // Tab = toggle focus between buttons
+        "tab" | "Tab" => {
+            dialog.update(cx, |d, cx| d.toggle_focus(cx));
+            notify_confirm_window(cx);
+            true
+        }
+        // Left arrow = focus cancel button
+        "left" | "arrowleft" | "Left" | "ArrowLeft" => {
+            dialog.update(cx, |d, cx| d.focus_cancel(cx));
+            notify_confirm_window(cx);
+            true
+        }
+        // Right arrow = focus confirm button
+        "right" | "arrowright" | "Right" | "ArrowRight" => {
+            dialog.update(cx, |d, cx| d.focus_confirm(cx));
+            notify_confirm_window(cx);
+            true
+        }
+        _ => false,
     }
 }
