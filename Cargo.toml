@@ -89,7 +89,9 @@ glob = "0.3.3"
 libc = "0.2.178"
 
 # Keyring integration for secure secret storage (env prompt)
-keyring = "3"
+# IMPORTANT: Must enable apple-native feature for macOS Keychain access
+# Without this, keyring uses a mock backend that doesn't persist secrets
+keyring = { version = "3", features = ["apple-native"] }
 
 # Process monitoring for orphan detection and cleanup
 sysinfo = "0.33"
