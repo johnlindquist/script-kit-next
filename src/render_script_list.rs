@@ -247,16 +247,9 @@ impl ScriptListApp {
                                             },
                                         );
 
-                                        // Check if this item requires confirmation and is pending
-                                        let pending_id = this.pending_confirmation.clone();
-                                        let is_pending_confirmation = match result {
-                                            scripts::SearchResult::BuiltIn(bm) => {
-                                                pending_id.as_ref() == Some(&bm.entry.id)
-                                            }
-                                            _ => false,
-                                        };
-
                                         // Dispatch to design-specific item renderer
+                                        // Note: Confirmation for dangerous builtins is now handled
+                                        // via modal dialog, not inline overlay
                                         let item_element = render_design_item(
                                             current_design,
                                             result,
@@ -266,36 +259,6 @@ impl ScriptListApp {
                                             theme_colors,
                                         );
 
-                                        // Wrap with confirmation overlay if pending
-                                        let final_element = if is_pending_confirmation && is_selected {
-                                            // Create confirmation overlay using theme warning color
-                                            let confirm_name = match result {
-                                                scripts::SearchResult::BuiltIn(bm) => {
-                                                    format!("⚠️ Confirm {}? (Enter)", bm.entry.name)
-                                                }
-                                                _ => "⚠️ Confirm? (Enter)".to_string(),
-                                            };
-
-                                            div()
-                                                .w_full()
-                                                .h(px(LIST_ITEM_HEIGHT))
-                                                .flex()
-                                                .items_center()
-                                                .px(px(16.))
-                                                .bg(rgb(theme_colors.warning_bg))
-                                                .rounded_md()
-                                                .child(
-                                                    div()
-                                                        .text_color(rgb(theme_colors.text_on_accent))
-                                                        .font_weight(gpui::FontWeight::SEMIBOLD)
-                                                        .text_size(px(14.))
-                                                        .child(confirm_name)
-                                                )
-                                                .into_any_element()
-                                        } else {
-                                            item_element
-                                        };
-
                                         div()
                                             .id(ElementId::NamedInteger(
                                                 "script-item".into(),
@@ -304,7 +267,7 @@ impl ScriptListApp {
                                             .h(px(LIST_ITEM_HEIGHT)) // Explicit 48px height
                                             .on_hover(hover_handler)
                                             .on_click(click_handler)
-                                            .child(final_element)
+                                            .child(item_element)
                                             .into_any_element()
                                     } else {
                                         // Fallback for missing result
@@ -706,13 +669,8 @@ impl ScriptListApp {
                         }
                     }
                     "escape" => {
-                        // First check if we have a pending confirmation to clear
-                        if this.pending_confirmation.is_some() {
-                            logging::log("KEY", "ESC - clearing pending confirmation");
-                            this.pending_confirmation = None;
-                            cx.notify();
-                        } else if !this.filter_text.is_empty() {
-                            // Clear filter first if there's text
+                        // Clear filter first if there's text, otherwise close window
+                        if !this.filter_text.is_empty() {
                             this.clear_filter(window, cx);
                         } else {
                             // Filter is empty - close window

@@ -221,6 +221,11 @@ impl ScriptListApp {
         // Small buffer (4) prevents blocking, more than enough for normal use
         let (api_key_tx, api_key_rx) = mpsc::sync_channel(4);
 
+        // Create channel for builtin confirmation modal signals
+        // When a dangerous action (Quit, Shut Down, etc.) requires confirmation,
+        // the modal callback sends (entry_id, confirmed) through this channel
+        let (builtin_confirm_tx, builtin_confirm_rx) = async_channel::bounded(4);
+
         let mut app = ScriptListApp {
             scripts,
             scriptlets,
@@ -348,8 +353,9 @@ impl ScriptListApp {
             last_scrolled_design_gallery: None,
             // Show warning banner when bun is not available
             show_bun_warning: !bun_available,
-            // Pending confirmation for dangerous actions
-            pending_confirmation: None,
+            // Builtin confirmation channel
+            builtin_confirm_sender: builtin_confirm_tx,
+            builtin_confirm_receiver: builtin_confirm_rx,
             // Menu bar integration: Now handled by frontmost_app_tracker module
             // which pre-fetches menu items in background when apps activate
             // Shortcut recorder state - starts as None (no recorder showing)
@@ -2308,11 +2314,6 @@ impl ScriptListApp {
         }
         if new_text == self.filter_text {
             return;
-        }
-
-        // Clear pending confirmation when typing (user is changing context)
-        if self.pending_confirmation.is_some() {
-            self.pending_confirmation = None;
         }
 
         let previous_text = std::mem::replace(&mut self.filter_text, new_text.clone());
