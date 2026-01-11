@@ -41,11 +41,10 @@ jobs:
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
-      - uses: taiki-e/install-action@nextest
       - name: Clippy
         run: cargo clippy --all-targets -- -D warnings
       - name: Tests
-        run: cargo nextest run
+        run: cargo test
 
   # Runs in parallel with lint-and-test (no needs: dependency)
   # Only needs the binary built, doesn't depend on Rust tests passing
