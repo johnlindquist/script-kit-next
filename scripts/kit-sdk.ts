@@ -49,23 +49,119 @@ export interface FileInfo {
 }
 
 // =============================================================================
-// Chat Types (TIER 4A)
+// Chat Types (TIER 4A) - AI SDK Compatible
 // =============================================================================
 
+/** AI SDK compatible message role */
+export type ChatMessageRole = 'system' | 'user' | 'assistant' | 'tool';
+
+/** AI SDK CoreMessage - pass directly to generateText({ messages }) */
+export interface CoreMessage {
+  role: ChatMessageRole;
+  content: string;
+}
+
+/** Message displayed in the chat UI - AI SDK compatible with Script Kit extensions */
 export interface ChatMessage {
-  text: string;
-  position: 'left' | 'right';
+  /** Unique message identifier (auto-generated if not provided) */
+  id?: string;
+
+  // === AI SDK Compatible Fields ===
+  /** Message role (AI SDK format) - takes precedence over position if set */
+  role?: ChatMessageRole;
+  /** Message content (AI SDK format) - alias for text */
+  content?: string;
+
+  // === Script Kit Fields (backwards compatible) ===
+  /** Message text content (supports markdown) - use content for AI SDK compat */
+  text?: string;
+  /** Position: 'left' (assistant/other) or 'right' (user) - derived from role if not set */
+  position?: 'left' | 'right';
+
+  // === Metadata ===
+  /** Optional sender name */
+  name?: string;
+  /** Model that generated this message (assistant only) */
+  model?: string;
+  /** Whether this message is currently streaming */
+  streaming?: boolean;
+  /** Error message if generation failed */
+  error?: string;
+  /** Creation timestamp (ISO 8601) */
+  createdAt?: string;
 }
 
+/** Result returned from chat() */
+export interface ChatResult {
+  /** AI SDK compatible messages - pass directly to generateText({ messages }) */
+  messages: CoreMessage[];
+  /** UI messages with metadata */
+  uiMessages: ChatMessage[];
+  /** Convenience: last user message */
+  lastUserMessage: string;
+  /** Convenience: last assistant message */
+  lastAssistantMessage: string;
+  /** Model used (if any) */
+  model?: string;
+  /** How the chat ended: 'escape' or 'continue' */
+  action: 'escape' | 'continue';
+  /** Conversation ID for database persistence */
+  conversationId?: string;
+}
+
+/** Configuration options for the chat() prompt */
 export interface ChatOptions {
+  // === Messages (AI SDK compatible) ===
+  /** Initial messages to display (supports both ChatMessage and CoreMessage formats) */
+  messages?: (ChatMessage | CoreMessage)[];
+  /** System prompt shorthand - convenience for adding a system message */
+  system?: string;
+
+  // === Model Configuration ===
+  /** Default model to use */
+  model?: string;
+  /** Available models in actions menu */
+  models?: string[];
+
+  // === UI Configuration ===
+  /** Placeholder text for the input field */
+  placeholder?: string;
+  /** Hint text (shown in header) */
+  hint?: string;
+  /** Footer text */
+  footer?: string;
+  /** Actions for the actions panel (Cmd+K) */
+  actions?: Action[];
+
+  // === Behavior ===
+  /** Save conversation to database (default: true) */
+  saveHistory?: boolean;
+
+  // === Callbacks ===
+  /** Called when chat opens (before user interaction) */
   onInit?: () => Promise<void>;
-  onSubmit?: (input: string) => Promise<void>;
+  /** Called when user submits a message */
+  onMessage?: (text: string) => Promise<void>;
+  /** Called when a chunk is received during streaming */
+  onChunk?: (chunk: string) => void;
+  /** Called when a message is finished */
+  onFinish?: (message: ChatMessage) => void;
+  /** Called when an error occurs */
+  onError?: (error: Error) => void;
 }
 
+/** Controller for interacting with an active chat session */
 export interface ChatController {
-  addMessage(msg: ChatMessage): void;
-  setInput(text: string): void;
-  submit(): void;
+  /** Add a message to the chat */
+  addMessage(msg: ChatMessage | CoreMessage): void;
+  /** Start streaming a message (returns message ID for subsequent chunks) */
+  startStream(position?: 'left' | 'right'): string;
+  /** Append text to a streaming message */
+  appendChunk(messageId: string, chunk: string): void;
+  /** Complete a streaming message */
+  completeStream(messageId: string): void;
+  /** Clear all messages */
+  clear(): void;
 }
 
 // =============================================================================
@@ -1963,16 +2059,69 @@ type ResponseMessage =
   | ScreenshotResultMessage
   | ActionTriggeredMessage;
 
+/** Initial chat message to show the prompt */
 interface ChatMessageType {
   type: 'chat';
   id: string;
+  placeholder?: string;
+  messages?: ChatMessage[];
+  hint?: string;
+  footer?: string;
+  actions?: Action[];
+  model?: string;
+  models?: string[];
+  saveHistory?: boolean;
 }
 
-interface ChatActionMessage {
-  type: 'chatAction';
+/** Add a message to an active chat */
+interface ChatAddMessageType {
+  type: 'chatMessage';
   id: string;
-  action: 'addMessage' | 'setInput' | 'submit';
-  data?: ChatMessage | string;
+  message: ChatMessage;
+}
+
+/** Start streaming a message */
+interface ChatStreamStartType {
+  type: 'chatStreamStart';
+  id: string;
+  messageId: string;
+  position: 'left' | 'right';
+}
+
+/** Append chunk to streaming message */
+interface ChatStreamChunkType {
+  type: 'chatStreamChunk';
+  id: string;
+  messageId: string;
+  chunk: string;
+}
+
+/** Complete streaming for a message */
+interface ChatStreamCompleteType {
+  type: 'chatStreamComplete';
+  id: string;
+  messageId: string;
+}
+
+/** Set error on a message */
+interface ChatSetErrorType {
+  type: 'chatSetError';
+  id: string;
+  messageId: string;
+  error: string;
+}
+
+/** Clear error from a message */
+interface ChatClearErrorType {
+  type: 'chatClearError';
+  id: string;
+  messageId: string;
+}
+
+/** Clear all messages */
+interface ChatClearType {
+  type: 'chatClear';
+  id: string;
 }
 
 // =============================================================================
@@ -2325,12 +2474,8 @@ process.stdin.on('data', (chunk: string) => {
         if (id && pending.has(id)) {
           const resolver = removePending(id);
           if (resolver) {
-            // For submit messages, pass the value directly
-            if (msg.type === 'submit') {
-              resolver((msg as SubmitMessage).value ?? undefined);
-            } else {
-              resolver(msg);
-            }
+            // Pass the full message object so resolvers can check msg.value, msg.type, etc.
+            resolver(msg);
           }
         }
         
@@ -2692,10 +2837,16 @@ declare global {
    * Chat function interface with attached controller methods
    */
   interface ChatFunction {
-    (options?: ChatOptions): Promise<string>;
+    (options?: ChatOptions): Promise<ChatResult>;
     addMessage(msg: ChatMessage): void;
-    setInput(text: string): void;
-    submit(): void;
+    startStream(position?: 'left' | 'right'): string;
+    appendChunk(messageId: string, chunk: string): void;
+    completeStream(messageId: string): void;
+    clear(): void;
+    setError(messageId: string, error: string): void;
+    clearError(messageId: string): void;
+    getMessages(): CoreMessage[];
+    getResult(): ChatResult;
   }
   
   /**
@@ -3400,8 +3551,8 @@ globalThis.div = async function div(
   }
   
   return new Promise((resolve) => {
-    addPending(id, (value?: any) => {
-      resolve(value);
+    addPending(id, (msg: SubmitMessage) => {
+      resolve(msg?.value);
     }, undefined); // Auto-submit: div just dismisses, no value needed
 
     const message: DivMessage = {
@@ -4513,16 +4664,117 @@ globalThis.mouse = {
 
 // Current active chat session ID (for controller methods)
 let currentChatId: string | null = null;
+// Message ID counter for streaming
+let chatMessageIdCounter = 0;
+
+// Type for chat function with controller methods
+interface ChatFunction {
+  (options?: ChatOptions): Promise<ChatResult>;
+  addMessage(msg: ChatMessage | CoreMessage): void;
+  startStream(position?: 'left' | 'right'): string;
+  appendChunk(messageId: string, chunk: string): void;
+  completeStream(messageId: string): void;
+  clear(): void;
+  /** Set an error on a message (typically during streaming failure) */
+  setError(messageId: string, error: string): void;
+  /** Clear error from a message (before retry) */
+  clearError(messageId: string): void;
+  /** Get messages in AI SDK CoreMessage format */
+  getMessages(): CoreMessage[];
+  /** Get full chat result including metadata */
+  getResult(): ChatResult;
+}
+
+/** Convert CoreMessage or ChatMessage to normalized ChatMessage */
+function normalizeMessage(msg: ChatMessage | CoreMessage, index: number): ChatMessage {
+  // If it's a CoreMessage (has role and content but no text or position)
+  if ('role' in msg && 'content' in msg && !('text' in msg)) {
+    const coreMsg = msg as CoreMessage;
+    return {
+      id: `msg-${index}`,
+      role: coreMsg.role,
+      content: coreMsg.content,
+      text: coreMsg.content,
+      position: coreMsg.role === 'user' ? 'right' : 'left',
+      createdAt: new Date().toISOString(),
+    };
+  }
+  // It's already a ChatMessage
+  const chatMsg = msg as ChatMessage;
+  return {
+    ...chatMsg,
+    id: chatMsg.id || `msg-${index}`,
+    // Ensure text and content are in sync
+    text: chatMsg.text || chatMsg.content || '',
+    content: chatMsg.content || chatMsg.text || '',
+    // Derive position from role if not set
+    position: chatMsg.position || (chatMsg.role === 'user' ? 'right' : 'left'),
+  };
+}
+
+/** Convert ChatMessage to CoreMessage for AI SDK compat */
+function toCoreMessage(msg: ChatMessage): CoreMessage {
+  const role = msg.role || (msg.position === 'right' ? 'user' : 'assistant');
+  return {
+    role,
+    content: msg.content || msg.text || '',
+  };
+}
+
+// Track messages in the current chat session
+let chatMessages: ChatMessage[] = [];
+
+// Store conversation ID and model for result
+let currentConversationId: string | undefined;
+let currentModel: string | undefined;
+
+// Helper to build ChatResult
+function buildChatResult(action: 'escape' | 'continue'): ChatResult {
+  const userMsgs = chatMessages.filter((m) => m.role === 'user' || m.position === 'right');
+  const assistantMsgs = chatMessages.filter((m) => m.role === 'assistant' || (m.position === 'left' && m.role !== 'system'));
+
+  return {
+    messages: chatMessages.map(toCoreMessage),
+    uiMessages: chatMessages,
+    lastUserMessage: userMsgs[userMsgs.length - 1]?.content || userMsgs[userMsgs.length - 1]?.text || '',
+    lastAssistantMessage: assistantMsgs[assistantMsgs.length - 1]?.content || assistantMsgs[assistantMsgs.length - 1]?.text || '',
+    model: currentModel,
+    action,
+    conversationId: currentConversationId,
+  };
+}
 
 // The chat function with attached controller methods
-const chatFn = async function chat(options?: ChatOptions): Promise<string> {
+const chatFn: ChatFunction = async function chat(options?: ChatOptions): Promise<ChatResult> {
   const id = nextId();
   currentChatId = id;
+  currentConversationId = `conv-${id}`;
+  currentModel = options?.model;
+  chatMessages = [];
+
+  // Build initial messages with IDs and normalize format
+  const inputMessages = options?.messages || [];
+
+  // If system prompt shorthand is provided, prepend it
+  if (options?.system) {
+    inputMessages.unshift({ role: 'system' as const, content: options.system });
+  }
+
+  const initialMessages = inputMessages.map((msg, i) => normalizeMessage(msg, i));
+  chatMessages = [...initialMessages];
 
   // Send the initial chat message to open the UI
   const message: ChatMessageType = {
     type: 'chat',
     id,
+    placeholder: options?.placeholder,
+    messages: initialMessages,
+    hint: options?.hint,
+    footer: options?.footer,
+    actions: options?.actions,
+    model: options?.model,
+    models: options?.models,
+    saveHistory: options?.saveHistory ?? true,
   };
   send(message);
 
@@ -4531,76 +4783,233 @@ const chatFn = async function chat(options?: ChatOptions): Promise<string> {
     await options.onInit();
   }
 
-  // Auto-submit value: empty string (user would type something)
-  const autoSubmitValue = { value: '' };
+  // If onMessage is provided, set up a loop to handle user messages
+  if (options?.onMessage) {
+    return new Promise((resolve) => {
+      const handleMessage = async (msg: { type: string; id: string; text: string }) => {
+        if (msg.type === 'chatSubmit' && msg.id === id) {
+          // If user pressed Escape (text is empty or undefined), return with escape action
+          if (!msg.text) {
+            currentChatId = null;
+            resolve(buildChatResult('escape'));
+            return;
+          }
 
-  // Wait for user submission
+          // Track the user message
+          const userMsg: ChatMessage = {
+            id: `user-${chatMessageIdCounter++}`,
+            role: 'user',
+            content: msg.text,
+            text: msg.text,
+            position: 'right',
+            createdAt: new Date().toISOString(),
+          };
+          chatMessages.push(userMsg);
+
+          // Call onMessage callback
+          await options.onMessage!(msg.text);
+
+          // Continue listening for more messages
+        }
+      };
+
+      // Add handler for chatSubmit messages
+      addPending(id, (msg: SubmitMessage) => {
+        currentChatId = null;
+        if (msg.value === null) {
+          resolve(buildChatResult('escape'));
+        } else {
+          resolve(buildChatResult('continue'));
+        }
+      }, { value: '' });
+
+      process.on('chatSubmit' as any, handleMessage);
+    });
+  }
+
+  // Simple mode: wait for single submission
   return new Promise((resolve) => {
     addPending(id, (msg: SubmitMessage) => {
-      // If user pressed Escape (value is null), exit the script
-      if (msg.value === null) {
-        process.exit(0);
-      }
-      const value = msg.value ?? '';
-
-      // Call onSubmit if provided
-      if (options?.onSubmit) {
-        options.onSubmit(value).then(() => {
-          resolve(value);
-        });
-      } else {
-        resolve(value);
-      }
-
       currentChatId = null;
-    }, autoSubmitValue);
+      if (msg.value === null) {
+        resolve(buildChatResult('escape'));
+      } else {
+        resolve(buildChatResult('continue'));
+      }
+    }, { value: '' });
   });
 };
 
-// Attach controller methods to the chat function
-chatFn.addMessage = function addMessage(msg: ChatMessage): void {
+// Controller method: Add a message to the chat
+chatFn.addMessage = function addMessage(msg: ChatMessage | CoreMessage): void {
   if (currentChatId === null) {
     throw new Error('chat.addMessage() called outside of a chat session');
   }
-  
-  const message: ChatActionMessage = {
-    type: 'chatAction',
+
+  // Normalize the message
+  const normalized = normalizeMessage(msg, chatMessageIdCounter++);
+  chatMessages.push(normalized);
+
+  const message: ChatAddMessageType = {
+    type: 'chatMessage',
     id: currentChatId,
-    action: 'addMessage',
-    data: msg,
+    message: normalized,
   };
   send(message);
 };
 
-chatFn.setInput = function setInput(text: string): void {
+// Controller method: Start streaming a message
+chatFn.startStream = function startStream(position: 'left' | 'right' = 'left'): string {
   if (currentChatId === null) {
-    throw new Error('chat.setInput() called outside of a chat session');
+    throw new Error('chat.startStream() called outside of a chat session');
   }
-  
-  const message: ChatActionMessage = {
-    type: 'chatAction',
+
+  const messageId = `stream-${chatMessageIdCounter++}`;
+
+  // Track the streaming message
+  const streamMsg: ChatMessage = {
+    id: messageId,
+    role: position === 'right' ? 'user' : 'assistant',
+    content: '',
+    text: '',
+    position,
+    streaming: true,
+    createdAt: new Date().toISOString(),
+  };
+  chatMessages.push(streamMsg);
+
+  const message: ChatStreamStartType = {
+    type: 'chatStreamStart',
     id: currentChatId,
-    action: 'setInput',
-    data: text,
+    messageId,
+    position,
+  };
+  send(message);
+  return messageId;
+};
+
+// Controller method: Append chunk to streaming message
+chatFn.appendChunk = function appendChunk(messageId: string, chunk: string): void {
+  if (currentChatId === null) {
+    throw new Error('chat.appendChunk() called outside of a chat session');
+  }
+
+  // Update the tracked message
+  const msg = chatMessages.find((m) => m.id === messageId);
+  if (msg) {
+    msg.content = (msg.content || '') + chunk;
+    msg.text = (msg.text || '') + chunk;
+  }
+
+  const message: ChatStreamChunkType = {
+    type: 'chatStreamChunk',
+    id: currentChatId,
+    messageId,
+    chunk,
   };
   send(message);
 };
 
-chatFn.submit = function submit(): void {
+// Controller method: Complete streaming for a message
+chatFn.completeStream = function completeStream(messageId: string): void {
   if (currentChatId === null) {
-    throw new Error('chat.submit() called outside of a chat session');
+    throw new Error('chat.completeStream() called outside of a chat session');
   }
-  
-  const message: ChatActionMessage = {
-    type: 'chatAction',
+
+  // Update the tracked message
+  const msg = chatMessages.find((m) => m.id === messageId);
+  if (msg) {
+    msg.streaming = false;
+  }
+
+  const message: ChatStreamCompleteType = {
+    type: 'chatStreamComplete',
     id: currentChatId,
-    action: 'submit',
+    messageId,
   };
   send(message);
+};
+
+// Controller method: Clear all messages
+chatFn.clear = function clear(): void {
+  if (currentChatId === null) {
+    throw new Error('chat.clear() called outside of a chat session');
+  }
+
+  // Clear tracked messages
+  chatMessages = [];
+
+  const message: ChatClearType = {
+    type: 'chatClear',
+    id: currentChatId,
+  };
+  send(message);
+};
+
+// Controller method: Set error on a message (typically during streaming failure)
+chatFn.setError = function setError(messageId: string, error: string): void {
+  if (currentChatId === null) {
+    throw new Error('chat.setError() called outside of a chat session');
+  }
+
+  // Update the tracked message
+  const msg = chatMessages.find((m) => m.id === messageId);
+  if (msg) {
+    msg.error = error;
+    msg.streaming = false;
+  }
+
+  const message: ChatSetErrorType = {
+    type: 'chatSetError',
+    id: currentChatId,
+    messageId,
+    error,
+  };
+  send(message);
+};
+
+// Controller method: Clear error from a message (before retry)
+chatFn.clearError = function clearError(messageId: string): void {
+  if (currentChatId === null) {
+    throw new Error('chat.clearError() called outside of a chat session');
+  }
+
+  // Update the tracked message
+  const msg = chatMessages.find((m) => m.id === messageId);
+  if (msg) {
+    msg.error = undefined;
+  }
+
+  const message: ChatClearErrorType = {
+    type: 'chatClearError',
+    id: currentChatId,
+    messageId,
+  };
+  send(message);
+};
+
+// Helper: Get messages as AI SDK CoreMessages
+chatFn.getMessages = function getMessages(): CoreMessage[] {
+  return chatMessages.map(toCoreMessage);
+};
+
+// Helper: Get full chat result
+chatFn.getResult = function getResult(): ChatResult {
+  const userMsgs = chatMessages.filter((m) => m.role === 'user' || m.position === 'right');
+  const assistantMsgs = chatMessages.filter((m) => m.role === 'assistant' || (m.position === 'left' && m.role !== 'system'));
+
+  return {
+    messages: chatMessages.map(toCoreMessage),
+    uiMessages: chatMessages,
+    lastUserMessage: userMsgs[userMsgs.length - 1]?.content || userMsgs[userMsgs.length - 1]?.text || '',
+    lastAssistantMessage: assistantMsgs[assistantMsgs.length - 1]?.content || assistantMsgs[assistantMsgs.length - 1]?.text || '',
+    model: assistantMsgs[assistantMsgs.length - 1]?.model,
+    action: 'escape',
+  };
 };
 
 // Expose as global
-(globalThis as unknown as { chat: typeof chatFn }).chat = chatFn;
+(globalThis as unknown as { chat: ChatFunction }).chat = chatFn;
 
 // =============================================================================
 // TIER 4B: Widget/Term/Media Prompts
@@ -6896,7 +7305,7 @@ declare global {
   function env(name: string, defaultValue?: string): Promise<string>;
 
   // Chat (TIER 4A)
-  function chat(options?: ChatOptions): Promise<string>;
+  function chat(options?: ChatOptions): Promise<ChatResult>;
 
   // Widget/Term/Media (TIER 4B)
   function widget(html: string, options?: WidgetOptions): Promise<WidgetController>;

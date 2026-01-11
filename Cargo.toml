@@ -127,6 +127,9 @@ english-to-cron = "0.1"        # Convert natural language schedules to cron
 # HTTP client for AI provider API calls
 ureq = { version = "3", features = ["json"] }
 
+# Markdown parsing for chat prompt
+pulldown-cmark = "0.10"
+
 # macOS launch-at-login via SMAppService
 smappservice-rs = "0.1"
 which = "8.0.0"

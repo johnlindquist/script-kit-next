@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex, OnceLock};
 use tracing::{debug, info};
 
-use super::model::{Chat, ChatId, Message, MessageRole};
+use super::model::{Chat, ChatId, ChatSource, Message, MessageRole};
 
 /// Global database connection for AI chats
 static AI_DB: OnceLock<Arc<Mutex<Connection>>> = OnceLock::new();
@@ -76,12 +76,14 @@ pub fn init_ai_db() -> Result<()> {
             updated_at TEXT NOT NULL,
             deleted_at TEXT,
             model_id TEXT NOT NULL,
-            provider TEXT NOT NULL
+            provider TEXT NOT NULL,
+            source TEXT NOT NULL DEFAULT 'ai_window'
         );
 
         CREATE INDEX IF NOT EXISTS idx_chats_updated_at ON chats(updated_at DESC);
         CREATE INDEX IF NOT EXISTS idx_chats_deleted_at ON chats(deleted_at);
         CREATE INDEX IF NOT EXISTS idx_chats_provider ON chats(provider);
+        -- Note: idx_chats_source is created in the migration below to handle existing DBs
 
         -- Messages table
         CREATE TABLE IF NOT EXISTS messages (
@@ -163,6 +165,32 @@ pub fn init_ai_db() -> Result<()> {
     )
     .context("Failed to create AI tables")?;
 
+    // Migration: Add source column if it doesn't exist (for existing databases)
+    // SQLite's ADD COLUMN is simple and doesn't require complex migrations
+    let has_source: bool = conn
+        .query_row(
+            "SELECT COUNT(*) > 0 FROM pragma_table_info('chats') WHERE name = 'source'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(false);
+
+    if !has_source {
+        conn.execute(
+            "ALTER TABLE chats ADD COLUMN source TEXT NOT NULL DEFAULT 'ai_window'",
+            [],
+        )
+        .context("Failed to add source column to chats table")?;
+        info!("Migrated AI database: added source column to chats table");
+    }
+
+    // Always ensure the source index exists (handles both new and migrated DBs)
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_chats_source ON chats(source)",
+        [],
+    )
+    .context("Failed to create source index")?;
+
     info!(db_path = %db_path.display(), "AI chats database initialized");
 
     // Try to set the global connection. If another thread beat us to it
@@ -195,8 +223,8 @@ pub fn create_chat(chat: &Chat) -> Result<()> {
 
     conn.execute(
         r#"
-        INSERT INTO chats (id, title, created_at, updated_at, deleted_at, model_id, provider)
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+        INSERT INTO chats (id, title, created_at, updated_at, deleted_at, model_id, provider, source)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
         "#,
         params![
             chat.id.as_str(),
@@ -206,6 +234,7 @@ pub fn create_chat(chat: &Chat) -> Result<()> {
             chat.deleted_at.map(|dt| dt.to_rfc3339()),
             chat.model_id,
             chat.provider,
+            chat.source.as_str(),
         ],
     )
     .context("Failed to create chat")?;
@@ -223,8 +252,8 @@ pub fn update_chat(chat: &Chat) -> Result<()> {
 
     conn.execute(
         r#"
-        UPDATE chats 
-        SET title = ?2, updated_at = ?3, deleted_at = ?4, model_id = ?5, provider = ?6
+        UPDATE chats
+        SET title = ?2, updated_at = ?3, deleted_at = ?4, model_id = ?5, provider = ?6, source = ?7
         WHERE id = ?1
         "#,
         params![
@@ -234,6 +263,7 @@ pub fn update_chat(chat: &Chat) -> Result<()> {
             chat.deleted_at.map(|dt| dt.to_rfc3339()),
             chat.model_id,
             chat.provider,
+            chat.source.as_str(),
         ],
     )
     .context("Failed to update chat")?;
@@ -271,7 +301,7 @@ pub fn get_chat(id: &ChatId) -> Result<Option<Chat>> {
     let mut stmt = conn
         .prepare(
             r#"
-            SELECT id, title, created_at, updated_at, deleted_at, model_id, provider
+            SELECT id, title, created_at, updated_at, deleted_at, model_id, provider, source
             FROM chats
             WHERE id = ?1
             "#,
@@ -296,7 +326,7 @@ pub fn get_all_chats() -> Result<Vec<Chat>> {
     let mut stmt = conn
         .prepare(
             r#"
-            SELECT id, title, created_at, updated_at, deleted_at, model_id, provider
+            SELECT id, title, created_at, updated_at, deleted_at, model_id, provider, source
             FROM chats
             WHERE deleted_at IS NULL
             ORDER BY updated_at DESC
@@ -324,7 +354,7 @@ pub fn get_deleted_chats() -> Result<Vec<Chat>> {
     let mut stmt = conn
         .prepare(
             r#"
-            SELECT id, title, created_at, updated_at, deleted_at, model_id, provider
+            SELECT id, title, created_at, updated_at, deleted_at, model_id, provider, source
             FROM chats
             WHERE deleted_at IS NOT NULL
             ORDER BY deleted_at DESC
@@ -434,7 +464,7 @@ pub fn search_chats(query: &str) -> Result<Vec<Chat>> {
         let mut stmt = conn.prepare(
             r#"
             SELECT DISTINCT c.id, c.title, c.created_at, c.updated_at,
-                   c.deleted_at, c.model_id, c.provider
+                   c.deleted_at, c.model_id, c.provider, c.source
             FROM chats c
             LEFT JOIN chats_fts fts ON c.rowid = fts.rowid
             LEFT JOIN messages m ON c.id = m.chat_id
@@ -466,7 +496,7 @@ pub fn search_chats(query: &str) -> Result<Vec<Chat>> {
                 .prepare(
                     r#"
                     SELECT DISTINCT c.id, c.title, c.created_at, c.updated_at,
-                           c.deleted_at, c.model_id, c.provider
+                           c.deleted_at, c.model_id, c.provider, c.source
                     FROM chats c
                     LEFT JOIN messages m ON c.id = m.chat_id
                     WHERE c.deleted_at IS NULL
@@ -712,6 +742,7 @@ fn row_to_chat(row: &rusqlite::Row) -> rusqlite::Result<Chat> {
     let deleted_at_str: Option<String> = row.get(4)?;
     let model_id: String = row.get(5)?;
     let provider: String = row.get(6)?;
+    let source_str: String = row.get(7)?;
 
     let id = ChatId::parse(&id_str).unwrap_or_default();
 
@@ -729,6 +760,8 @@ fn row_to_chat(row: &rusqlite::Row) -> rusqlite::Result<Chat> {
             .ok()
     });
 
+    let source = ChatSource::parse(&source_str);
+
     Ok(Chat {
         id,
         title,
@@ -737,6 +770,7 @@ fn row_to_chat(row: &rusqlite::Row) -> rusqlite::Result<Chat> {
         deleted_at,
         model_id,
         provider,
+        source,
     })
 }
 
@@ -803,6 +837,7 @@ pub fn insert_mock_data() -> Result<()> {
         deleted_at: None,
         model_id: "claude-3-5-sonnet-20241022".to_string(),
         provider: "anthropic".to_string(),
+        source: ChatSource::default(),
     })?;
     total_chats += 1;
 
@@ -839,6 +874,7 @@ pub fn insert_mock_data() -> Result<()> {
         deleted_at: None,
         model_id: "gpt-4o".to_string(),
         provider: "openai".to_string(),
+        source: ChatSource::default(),
     })?;
     total_chats += 1;
 
@@ -870,6 +906,7 @@ pub fn insert_mock_data() -> Result<()> {
         deleted_at: None,
         model_id: "claude-3-5-sonnet-20241022".to_string(),
         provider: "anthropic".to_string(),
+        source: ChatSource::default(),
     })?;
     total_chats += 1;
 
@@ -901,6 +938,7 @@ pub fn insert_mock_data() -> Result<()> {
         deleted_at: None,
         model_id: "gpt-4o".to_string(),
         provider: "openai".to_string(),
+        source: ChatSource::default(),
     })?;
     total_chats += 1;
 
@@ -932,6 +970,7 @@ pub fn insert_mock_data() -> Result<()> {
         deleted_at: None,
         model_id: "claude-3-5-sonnet-20241022".to_string(),
         provider: "anthropic".to_string(),
+        source: ChatSource::default(),
     })?;
     total_chats += 1;
 
@@ -968,6 +1007,7 @@ pub fn insert_mock_data() -> Result<()> {
         deleted_at: None,
         model_id: "gpt-4o".to_string(),
         provider: "openai".to_string(),
+        source: ChatSource::default(),
     })?;
     total_chats += 1;
 
@@ -1002,6 +1042,7 @@ pub fn insert_mock_data() -> Result<()> {
         deleted_at: None,
         model_id: "claude-3-5-sonnet-20241022".to_string(),
         provider: "anthropic".to_string(),
+        source: ChatSource::default(),
     })?;
     total_chats += 1;
 
@@ -1033,6 +1074,7 @@ pub fn insert_mock_data() -> Result<()> {
         deleted_at: None,
         model_id: "gpt-4o".to_string(),
         provider: "openai".to_string(),
+        source: ChatSource::default(),
     })?;
     total_chats += 1;
 
@@ -1064,6 +1106,7 @@ pub fn insert_mock_data() -> Result<()> {
         deleted_at: None,
         model_id: "claude-3-5-sonnet-20241022".to_string(),
         provider: "anthropic".to_string(),
+        source: ChatSource::default(),
     })?;
     total_chats += 1;
 
@@ -1100,6 +1143,7 @@ pub fn insert_mock_data() -> Result<()> {
         deleted_at: None,
         model_id: "claude-3-5-sonnet-20241022".to_string(),
         provider: "anthropic".to_string(),
+        source: ChatSource::default(),
     })?;
     total_chats += 1;
 
@@ -1139,6 +1183,7 @@ pub fn insert_mock_data() -> Result<()> {
         deleted_at: None,
         model_id: "gpt-4o".to_string(),
         provider: "openai".to_string(),
+        source: ChatSource::default(),
     })?;
     total_chats += 1;
 
@@ -1184,6 +1229,7 @@ pub fn insert_mock_data() -> Result<()> {
             }
             .to_string(),
             provider: if i % 2 == 0 { "anthropic" } else { "openai" }.to_string(),
+            source: ChatSource::default(),
         })?;
         total_chats += 1;
 
@@ -1235,6 +1281,7 @@ pub fn insert_mock_data() -> Result<()> {
             deleted_at: None,
             model_id: "claude-3-5-sonnet-20241022".to_string(),
             provider: "anthropic".to_string(),
+            source: ChatSource::default(),
         })?;
         total_chats += 1;
 

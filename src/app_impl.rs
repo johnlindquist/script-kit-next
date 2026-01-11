@@ -1161,6 +1161,13 @@ impl ScriptListApp {
                     self.focused_input = FocusedInput::None;
                 }
             }
+            FocusTarget::ChatPrompt => {
+                if let AppView::ChatPrompt { entity, .. } = &self.current_view {
+                    let fh = entity.read(cx).focus_handle(cx);
+                    window.focus(&fh, cx);
+                    self.focused_input = FocusedInput::None;
+                }
+            }
             FocusTarget::AppRoot => {
                 window.focus(&self.focus_handle, cx);
                 // Don't reset focused_input here - the caller already set it appropriately.
@@ -2508,6 +2515,7 @@ impl ScriptListApp {
             AppView::EnvPrompt { .. } => Some((ViewType::ArgPromptNoChoices, 0)), // Compact: header + footer only
             AppView::DropPrompt { .. } => Some((ViewType::DivPrompt, 0)), // Drop prompt uses div size for drop zone
             AppView::TemplatePrompt { .. } => Some((ViewType::DivPrompt, 0)), // Template prompt uses div size
+            AppView::ChatPrompt { .. } => Some((ViewType::DivPrompt, 0)), // Chat prompt uses div size
             AppView::TermPrompt { .. } => Some((ViewType::TermPrompt, 0)),
             AppView::ActionsDialog => {
                 // Actions dialog is an overlay, don't resize
@@ -4959,6 +4967,7 @@ export default {
             AppView::EnvPrompt { .. } => "EnvPrompt",
             AppView::DropPrompt { .. } => "DropPrompt",
             AppView::TemplatePrompt { .. } => "TemplatePrompt",
+            AppView::ChatPrompt { .. } => "ChatPrompt",
             AppView::ClipboardHistoryView { .. } => "ClipboardHistoryView",
             AppView::AppLauncherView { .. } => "AppLauncherView",
             AppView::WindowSwitcherView { .. } => "WindowSwitcherView",

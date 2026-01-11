@@ -18,8 +18,6 @@ description: Tile window to left half of screen
 -->
 
 ```ts
-import '../../scripts/kit-sdk';
-
 const win = await getFrontmostWindow();
 if (win) {
   await tileWindow(win.windowId, 'left');
@@ -33,8 +31,6 @@ description: Tile window to right half of screen
 -->
 
 ```ts
-import '../../scripts/kit-sdk';
-
 const win = await getFrontmostWindow();
 if (win) {
   await tileWindow(win.windowId, 'right');
@@ -48,8 +44,6 @@ description: Tile window to top half of screen
 -->
 
 ```ts
-import '../../scripts/kit-sdk';
-
 const win = await getFrontmostWindow();
 if (win) {
   await tileWindow(win.windowId, 'top');
@@ -63,8 +57,6 @@ description: Tile window to bottom half of screen
 -->
 
 ```ts
-import '../../scripts/kit-sdk';
-
 const win = await getFrontmostWindow();
 if (win) {
   await tileWindow(win.windowId, 'bottom');
@@ -80,8 +72,6 @@ description: Tile window to top-left quadrant
 -->
 
 ```ts
-import '../../scripts/kit-sdk';
-
 const win = await getFrontmostWindow();
 if (win) {
   await tileWindow(win.windowId, 'top-left');
@@ -95,8 +85,6 @@ description: Tile window to top-right quadrant
 -->
 
 ```ts
-import '../../scripts/kit-sdk';
-
 const win = await getFrontmostWindow();
 if (win) {
   await tileWindow(win.windowId, 'top-right');
@@ -110,8 +98,6 @@ description: Tile window to bottom-left quadrant
 -->
 
 ```ts
-import '../../scripts/kit-sdk';
-
 const win = await getFrontmostWindow();
 if (win) {
   await tileWindow(win.windowId, 'bottom-left');
@@ -125,8 +111,6 @@ description: Tile window to bottom-right quadrant
 -->
 
 ```ts
-import '../../scripts/kit-sdk';
-
 const win = await getFrontmostWindow();
 if (win) {
   await tileWindow(win.windowId, 'bottom-right');
@@ -142,8 +126,6 @@ description: Tile window to left third of screen
 -->
 
 ```ts
-import '../../scripts/kit-sdk';
-
 const win = await getFrontmostWindow();
 if (win) {
   await tileWindow(win.windowId, 'left-third');
@@ -157,8 +139,6 @@ description: Tile window to center third of screen
 -->
 
 ```ts
-import '../../scripts/kit-sdk';
-
 const win = await getFrontmostWindow();
 if (win) {
   await tileWindow(win.windowId, 'center-third');
@@ -172,8 +152,6 @@ description: Tile window to right third of screen
 -->
 
 ```ts
-import '../../scripts/kit-sdk';
-
 const win = await getFrontmostWindow();
 if (win) {
   await tileWindow(win.windowId, 'right-third');
@@ -189,8 +167,6 @@ description: Tile window to top third of screen
 -->
 
 ```ts
-import '../../scripts/kit-sdk';
-
 const win = await getFrontmostWindow();
 if (win) {
   await tileWindow(win.windowId, 'top-third');
@@ -204,8 +180,6 @@ description: Tile window to middle third of screen
 -->
 
 ```ts
-import '../../scripts/kit-sdk';
-
 const win = await getFrontmostWindow();
 if (win) {
   await tileWindow(win.windowId, 'middle-third');
@@ -219,8 +193,6 @@ description: Tile window to bottom third of screen
 -->
 
 ```ts
-import '../../scripts/kit-sdk';
-
 const win = await getFrontmostWindow();
 if (win) {
   await tileWindow(win.windowId, 'bottom-third');
@@ -236,8 +208,6 @@ description: Tile window to first two-thirds of screen (left)
 -->
 
 ```ts
-import '../../scripts/kit-sdk';
-
 const win = await getFrontmostWindow();
 if (win) {
   await tileWindow(win.windowId, 'first-two-thirds');
@@ -251,8 +221,6 @@ description: Tile window to last two-thirds of screen (right)
 -->
 
 ```ts
-import '../../scripts/kit-sdk';
-
 const win = await getFrontmostWindow();
 if (win) {
   await tileWindow(win.windowId, 'last-two-thirds');
@@ -266,8 +234,6 @@ description: Tile window to top two-thirds of screen
 -->
 
 ```ts
-import '../../scripts/kit-sdk';
-
 const win = await getFrontmostWindow();
 if (win) {
   await tileWindow(win.windowId, 'top-two-thirds');
@@ -281,8 +247,6 @@ description: Tile window to bottom two-thirds of screen
 -->
 
 ```ts
-import '../../scripts/kit-sdk';
-
 const win = await getFrontmostWindow();
 if (win) {
   await tileWindow(win.windowId, 'bottom-two-thirds');
@@ -298,8 +262,6 @@ description: Center window on screen (60% size)
 -->
 
 ```ts
-import '../../scripts/kit-sdk';
-
 const win = await getFrontmostWindow();
 if (win) {
   await tileWindow(win.windowId, 'center');
@@ -313,8 +275,6 @@ description: Maximize window with small margin
 -->
 
 ```ts
-import '../../scripts/kit-sdk';
-
 const win = await getFrontmostWindow();
 if (win) {
   await tileWindow(win.windowId, 'almost-maximize');
@@ -328,8 +288,6 @@ description: Maximize window to fill screen
 -->
 
 ```ts
-import '../../scripts/kit-sdk';
-
 const win = await getFrontmostWindow();
 if (win) {
   await tileWindow(win.windowId, 'maximize');
@@ -345,8 +303,6 @@ description: Move window to next display/monitor
 -->
 
 ```ts
-import '../../scripts/kit-sdk';
-
 const win = await getFrontmostWindow();
 if (win) {
   await moveToNextDisplay(win.windowId);
@@ -360,8 +316,6 @@ description: Move window to previous display/monitor
 -->
 
 ```ts
-import '../../scripts/kit-sdk';
-
 const win = await getFrontmostWindow();
 if (win) {
   await moveToPreviousDisplay(win.windowId);
@@ -377,8 +331,6 @@ description: Minimize the frontmost window
 -->
 
 ```ts
-import '../../scripts/kit-sdk';
-
 const win = await getFrontmostWindow();
 if (win) {
   await minimizeWindow(win.windowId);
@@ -392,8 +344,6 @@ description: Close the frontmost window
 -->
 
 ```ts
-import '../../scripts/kit-sdk';
-
 const win = await getFrontmostWindow();
 if (win) {
   await closeWindow(win.windowId);
@@ -409,8 +359,6 @@ description: Show information about connected displays
 -->
 
 ```ts
-import '../../scripts/kit-sdk';
-
 const displays = await getDisplays();
 const displayInfo = displays.map((d, i) =>
   `Display ${i + 1}${d.isPrimary ? ' (Primary)' : ''}: ${d.bounds.width}x${d.bounds.height} at (${d.bounds.x}, ${d.bounds.y})`
@@ -431,8 +379,6 @@ description: Show information about the frontmost window
 -->
 
 ```ts
-import '../../scripts/kit-sdk';
-
 const win = await getFrontmostWindow();
 if (win) {
   const info = `
