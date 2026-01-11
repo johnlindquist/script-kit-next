@@ -4542,7 +4542,18 @@ export default {
         use gpui_component::WindowExt;
 
         let pending = self.toast_manager.drain_pending();
+        let count = pending.len();
+        if count > 0 {
+            logging::log(
+                "UI",
+                &format!("Flushing {} pending toast(s) to NotificationList", count),
+            );
+        }
         for toast in pending {
+            logging::log(
+                "UI",
+                &format!("Pushing notification: {}", toast.message),
+            );
             let notification = pending_toast_to_notification(&toast);
             window.push_notification(notification, cx);
         }
