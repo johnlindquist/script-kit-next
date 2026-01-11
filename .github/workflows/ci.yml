@@ -18,17 +18,55 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  CARGO_INCREMENTAL: 1
 
 jobs:
   # ═══════════════════════════════════════════════════════════════════
-  # PARALLEL VALIDATION JOBS (~60s total with warm cache)
-  # All run simultaneously on separate runners for maximum speed
+  # FAST CI (default for PRs) - Target: <1 minute
+  # Uses rust-cache only (faster for simple cargo check)
+  # ═══════════════════════════════════════════════════════════════════
+
+  # Fast format check (parallel with compile)
+  fast-fmt:
+    name: Format
+    runs-on: macos-14
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'full-ci') && github.ref != 'refs/heads/main' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --check
+
+  # Fast compile check (parallel with format)
+  # Uses rust-cache only - faster than sccache for simple cargo check
+  fast-compile:
+    name: Compile
+    runs-on: macos-14
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'full-ci') && github.ref != 'refs/heads/main' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      # Full target directory cache - fastest for cargo check
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "macos-debug"
+          save-if: false
+
+      # Check lib + binary only (not tests) - faster for PR feedback
+      - name: Compile check
+        run: cargo check
+
+  # ═══════════════════════════════════════════════════════════════════
+  # FULL CI (main branch or 'full-ci' label)
+  # Uses sccache for incremental compilation benefits
   # ═══════════════════════════════════════════════════════════════════
 
   fmt:
     name: Format
     runs-on: macos-14
+    if: ${{ contains(github.event.pull_request.labels.*.name, 'full-ci') || github.ref == 'refs/heads/main' }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -39,45 +77,58 @@ jobs:
   clippy:
     name: Clippy
     runs-on: macos-14
+    if: ${{ contains(github.event.pull_request.labels.*.name, 'full-ci') || github.ref == 'refs/heads/main' }}
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: "sccache"
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
+      - uses: mozilla-actions/sccache-action@v0.0.9
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: "macos-debug"
-          # Only one job saves cache to avoid race conditions
+          cache-targets: false
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo clippy --all-targets -- -D warnings
 
   test:
     name: Test
     runs-on: macos-14
+    if: ${{ contains(github.event.pull_request.labels.*.name, 'full-ci') || github.ref == 'refs/heads/main' }}
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: "sccache"
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - uses: mozilla-actions/sccache-action@v0.0.9
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: "macos-debug"
+          cache-targets: false
           save-if: false
       - uses: taiki-e/install-action@nextest
       - name: Run tests with nextest (parallel)
         run: cargo nextest run --no-fail-fast
 
-  # ═══════════════════════════════════════════════════════════════════
-  # TYPESCRIPT SDK TESTS (runs in parallel with validation)
-  # ═══════════════════════════════════════════════════════════════════
-
   typescript-tests:
     name: TypeScript SDK Tests
     runs-on: macos-14
+    if: ${{ contains(github.event.pull_request.labels.*.name, 'full-ci') || github.ref == 'refs/heads/main' }}
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: "sccache"
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - uses: mozilla-actions/sccache-action@v0.0.9
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: "macos-debug"
+          cache-targets: false
           save-if: false
       - uses: oven-sh/setup-bun@v1
         with:
@@ -91,8 +142,7 @@ jobs:
         timeout-minutes: 5
 
   # ═══════════════════════════════════════════════════════════════════
-  # BUILD ARTIFACT (main branch only, after validation passes)
-  # Uses separate release cache + cached cargo-bundle for speed
+  # BUILD ARTIFACT (main branch only, after full validation passes)
   # ═══════════════════════════════════════════════════════════════════
 
   build-artifact:
@@ -100,15 +150,20 @@ jobs:
     runs-on: macos-14
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: [fmt, clippy, test]
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: "sccache"
     steps:
       - uses: actions/checkout@v4
 
       - uses: dtolnay/rust-toolchain@stable
 
+      - uses: mozilla-actions/sccache-action@v0.0.9
+
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: "macos-release"
-          cache-targets: true
+          cache-targets: false
           cache-all-crates: true
 
       - name: Cache cargo-bundle
