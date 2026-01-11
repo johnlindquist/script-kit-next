@@ -416,6 +416,14 @@ impl ScriptListApp {
                 {
                     if let Some(app) = app_entity.upgrade() {
                         app.update(cx, |this, cx| {
+                            // FIRST: If confirm dialog is open, route Tab to it for button switching
+                            if crate::confirm::is_confirm_window_open()
+                                && crate::confirm::dispatch_confirm_key(&key, cx)
+                            {
+                                cx.stop_propagation();
+                                return;
+                            }
+
                             // Handle Tab/Shift+Tab in FileSearchView for directory/file navigation
                             // CRITICAL: ALWAYS consume Tab/Shift+Tab to prevent focus traversal
                             if let AppView::FileSearchView {
