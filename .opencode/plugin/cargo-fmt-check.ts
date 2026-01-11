@@ -157,7 +157,7 @@ interface ToolInput {
   result?: Record<string, unknown>
 }
 
-export const CargoFmtCheck: Plugin = async (client) => {
+export const CargoFmtCheck: Plugin = async ({ client }) => {
   // Periodically clean up stale file tracking
   setInterval(cleanupStaleTracking, ACTIVE_WORK_WINDOW_MS)
 

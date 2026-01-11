@@ -114,7 +114,7 @@ interface ToolInput {
   result?: Record<string, unknown>
 }
 
-export const VisualTestingReminder: Plugin = async (client) => {
+export const VisualTestingReminder: Plugin = async ({ client }) => {
   return {
     event: async ({ event }) => {
       const eventWithSession = event as { session_id?: string; sessionID?: string }

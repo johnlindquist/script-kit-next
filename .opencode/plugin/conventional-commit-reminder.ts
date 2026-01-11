@@ -105,7 +105,7 @@ interface ToolInput {
 // Plugin Export
 // =============================================================================
 
-export const ConventionalCommitReminder: Plugin = async (client) => {
+export const ConventionalCommitReminder: Plugin = async ({ client }) => {
   return {
     // Track session events
     event: async ({ event }) => {
