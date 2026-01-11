@@ -469,7 +469,10 @@ impl AiApp {
     /// Called when the window is opened to allow immediate typing
     pub fn focus_input(&self, window: &mut Window, cx: &mut Context<Self>) {
         self.input_state.update(cx, |state, cx| {
-            state.focus(window, cx);
+            // Focus and ensure cursor is at the end of any existing text
+            // For empty input, this puts cursor at position 0 with proper blinking
+            let text_len = state.text().len();
+            state.set_selection(text_len, text_len, window, cx);
         });
         info!("AI input focused for immediate typing");
     }
@@ -777,8 +780,10 @@ impl AiApp {
         self.touch_and_reorder_chat(chat_id);
 
         // Clear the input and any pending image
+        // Explicitly reset cursor to position 0 to fix cursor placement with placeholder
         self.input_state.update(cx, |state, cx| {
             state.set_value("", window, cx);
+            state.set_selection(0, 0, window, cx);
         });
         self.pending_image = None;
 
@@ -1929,6 +1934,9 @@ impl Render for AiApp {
                 AiCommand::SetInput { text, submit } => {
                     self.input_state.update(cx, |state, cx| {
                         state.set_value(text.clone(), window, cx);
+                        // Ensure cursor is at end of text with proper focus for editing
+                        let text_len = state.text().len();
+                        state.set_selection(text_len, text_len, window, cx);
                     });
                     crate::logging::log("AI", &format!("Input set to: {}", text));
                     if submit {
@@ -1943,6 +1951,9 @@ impl Render for AiApp {
                 } => {
                     self.input_state.update(cx, |state, cx| {
                         state.set_value(text.clone(), window, cx);
+                        // Ensure cursor is at end of text with proper focus for editing
+                        let text_len = state.text().len();
+                        state.set_selection(text_len, text_len, window, cx);
                     });
                     // Store the pending image to be included with the next message
                     self.pending_image = Some(image_base64.clone());
