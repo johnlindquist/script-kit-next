@@ -525,8 +525,10 @@ impl ScriptListApp {
                 // CRITICAL: Show error via HUD (highly visible floating window)
                 // This ensures the user sees the error even if the main window is hidden/dismissed
                 // HUD appears at bottom-center of screen for 5 seconds
-                let hud_message = if error_message.len() > 60 {
-                    format!("Script Error: {}...", &error_message[..57])
+                let hud_message = if error_message.chars().count() > 60 {
+                    // Use chars().take() to safely handle multi-byte UTF-8 characters
+                    let truncated: String = error_message.chars().take(57).collect();
+                    format!("Script Error: {}...", truncated)
                 } else {
                     format!("Script Error: {}", error_message)
                 };
