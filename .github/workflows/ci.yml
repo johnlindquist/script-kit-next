@@ -18,7 +18,11 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  CARGO_INCREMENTAL: 1
+  # Disable incremental - better for CI caching with sccache
+  CARGO_INCREMENTAL: 0
+  # sccache configuration
+  SCCACHE_GHA_ENABLED: "true"
+  RUSTC_WRAPPER: "sccache"
 
 jobs:
   # ═══════════════════════════════════════════════════════════════════
@@ -48,10 +52,14 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
-      # Share cache with full CI for faster warm starts
+      # sccache - compiler-level caching (fetches artifacts on-demand)
+      - uses: mozilla-actions/sccache-action@v0.0.9
+
+      # Cargo registry cache (complements sccache)
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: "macos-debug"
+          cache-targets: false  # sccache handles compilation artifacts
           save-if: false
 
       # Check lib + binary only (not tests) - faster for PR feedback
@@ -83,9 +91,11 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
+      - uses: mozilla-actions/sccache-action@v0.0.9
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: "macos-debug"
+          cache-targets: false
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo clippy --all-targets -- -D warnings
 
@@ -96,9 +106,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - uses: mozilla-actions/sccache-action@v0.0.9
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: "macos-debug"
+          cache-targets: false
           save-if: false
       - uses: taiki-e/install-action@nextest
       - name: Run tests with nextest (parallel)
@@ -111,9 +123,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - uses: mozilla-actions/sccache-action@v0.0.9
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: "macos-debug"
+          cache-targets: false
           save-if: false
       - uses: oven-sh/setup-bun@v1
         with:
@@ -140,10 +154,12 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
+      - uses: mozilla-actions/sccache-action@v0.0.9
+
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: "macos-release"
-          cache-targets: true
+          cache-targets: false  # sccache handles compilation artifacts
           cache-all-crates: true
 
       - name: Cache cargo-bundle
