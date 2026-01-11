@@ -2505,7 +2505,7 @@ impl ScriptListApp {
             AppView::EditorPrompt { .. } => Some((ViewType::EditorPrompt, 0)),
             AppView::SelectPrompt { .. } => Some((ViewType::ArgPromptWithChoices, 0)),
             AppView::PathPrompt { .. } => Some((ViewType::DivPrompt, 0)),
-            AppView::EnvPrompt { .. } => Some((ViewType::ArgPromptNoChoices, 0)), // Env prompt is a simple input
+            AppView::EnvPrompt { .. } => Some((ViewType::ArgPromptNoChoices, 0)), // Compact: header + footer only
             AppView::DropPrompt { .. } => Some((ViewType::DivPrompt, 0)), // Drop prompt uses div size for drop zone
             AppView::TemplatePrompt { .. } => Some((ViewType::DivPrompt, 0)), // Template prompt uses div size
             AppView::TermPrompt { .. } => Some((ViewType::TermPrompt, 0)),
@@ -4724,12 +4724,13 @@ export default {
     /// Check if the current view is a dismissable prompt
     ///
     /// Dismissable prompts are those that feel "closeable" with escape:
-    /// - ArgPrompt, DivPrompt, FormPrompt, SelectPrompt, PathPrompt, EnvPrompt, DropPrompt, TemplatePrompt
+    /// - ArgPrompt, DivPrompt, FormPrompt, SelectPrompt, PathPrompt, DropPrompt, TemplatePrompt
     /// - Built-in views (ClipboardHistory, AppLauncher, WindowSwitcher, DesignGallery)
     /// - ScriptList
     ///
     /// Non-dismissable prompts:
     /// - TermPrompt, EditorPrompt (these require explicit Cmd+W to close)
+    /// - EnvPrompt (stays open on blur so user can copy API keys from other windows)
     #[allow(dead_code)]
     fn is_dismissable_view(&self) -> bool {
         !matches!(
@@ -4738,6 +4739,7 @@ export default {
                 | AppView::EditorPrompt { .. }
                 | AppView::ScratchPadView { .. }
                 | AppView::QuickTerminalView { .. }
+                | AppView::EnvPrompt { .. }
         )
     }
 

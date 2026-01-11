@@ -15,12 +15,13 @@ use gpui::{
 };
 use std::sync::Arc;
 
+use crate::components::prompt_footer::{PromptFooter, PromptFooterColors, PromptFooterConfig};
 use crate::components::TextInputState;
+use crate::designs::icon_variations::IconName;
 use crate::designs::{get_tokens, DesignVariant};
 use crate::logging;
 use crate::panel::{
-    CURSOR_GAP_X, CURSOR_HEIGHT_LG, CURSOR_MARGIN_Y, CURSOR_WIDTH, HEADER_GAP, HEADER_PADDING_X,
-    HEADER_PADDING_Y,
+    CURSOR_HEIGHT_LG, CURSOR_MARGIN_Y, CURSOR_WIDTH, HEADER_GAP, HEADER_PADDING_X, HEADER_PADDING_Y,
 };
 use crate::theme;
 
@@ -112,9 +113,12 @@ pub struct EnvPrompt {
     pub design_variant: DesignVariant,
     /// Whether we checked the keyring already
     checked_keyring: bool,
+    /// Whether a value already exists in keyring (for UX messaging)
+    pub exists_in_keyring: bool,
 }
 
 impl EnvPrompt {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         id: String,
         key: String,
@@ -123,10 +127,14 @@ impl EnvPrompt {
         focus_handle: FocusHandle,
         on_submit: SubmitCallback,
         theme: Arc<theme::Theme>,
+        exists_in_keyring: bool,
     ) -> Self {
         logging::log(
             "PROMPTS",
-            &format!("EnvPrompt::new for key: {} (secret: {})", key, secret),
+            &format!(
+                "EnvPrompt::new for key: {} (secret: {}, exists: {})",
+                key, secret, exists_in_keyring
+            ),
         );
 
         EnvPrompt {
@@ -140,6 +148,7 @@ impl EnvPrompt {
             theme,
             design_variant: DesignVariant::Default,
             checked_keyring: false,
+            exists_in_keyring,
         }
     }
 
@@ -312,23 +321,15 @@ impl Render for EnvPrompt {
         // Use design tokens for consistent styling (matches ArgPrompt)
         let text_primary = design_colors.text_primary;
         let text_muted = design_colors.text_muted;
-        let text_dimmed = design_colors.text_dimmed;
         let accent_color = design_colors.accent;
 
-        // Build placeholder text: "Enter {KEY}" or custom prompt, with lock icon for secrets
+        // Build placeholder text: "Update {KEY}" when exists, "Enter {KEY}" for new, or custom prompt
         let placeholder: SharedString = self
             .prompt
             .clone()
-            .map(|p| {
-                if self.secret {
-                    format!("🔒 {}", p)
-                } else {
-                    p
-                }
-            })
             .unwrap_or_else(|| {
-                if self.secret {
-                    format!("🔒 Enter {}", self.key)
+                if self.exists_in_keyring {
+                    format!("Update {}", self.key)
                 } else {
                     format!("Enter {}", self.key)
                 }
@@ -338,7 +339,7 @@ impl Render for EnvPrompt {
         let input_is_empty = self.input.is_empty();
 
         // Main container - matches ArgPrompt-no-choices layout exactly
-        // Single row with: input area + Submit button + logo
+        // Header has only the input area; Submit button is in the footer
         div()
             .id(gpui::ElementId::Name("window:env".into()))
             .flex()
@@ -360,14 +361,26 @@ impl Render for EnvPrompt {
                     .flex_row()
                     .items_center()
                     .gap(px(HEADER_GAP))
-                    // Input area with cursor and selection
-                    .child(
+                    // EyeOff icon for secrets (hidden/masked input)
+                    .when(self.secret, |d: Div| {
+                        d.child(
+                            svg()
+                                .external_path(IconName::EyeOff.external_path())
+                                .size(px(18.))
+                                .text_color(rgb(text_muted))
+                                .flex_shrink_0(),
+                        )
+                    })
+                    // Input area with cursor and selection (matches ArgPrompt - no buttons/logo in header)
+                    .child({
+                        let input_height = CURSOR_HEIGHT_LG + (CURSOR_MARGIN_Y * 2.0);
                         div()
                             .flex_1()
                             .flex()
                             .flex_row()
                             .items_center()
-                            .text_lg()
+                            .h(px(input_height)) // Fixed height for consistent vertical centering
+                            .text_xl() // Match ArgPrompt text size
                             .text_color(if input_is_empty {
                                 rgb(text_muted)
                             } else {
@@ -377,57 +390,54 @@ impl Render for EnvPrompt {
                             .when(input_is_empty, |d: Div| {
                                 d.child(
                                     div()
-                                        .w(px(CURSOR_WIDTH))
-                                        .h(px(CURSOR_HEIGHT_LG))
-                                        .my(px(CURSOR_MARGIN_Y))
-                                        .mr(px(CURSOR_GAP_X))
-                                        .bg(rgb(text_primary)),
+                                        .flex()
+                                        .flex_row()
+                                        .items_center()
+                                        .child(
+                                            div()
+                                                .w(px(CURSOR_WIDTH))
+                                                .h(px(CURSOR_HEIGHT_LG))
+                                                .bg(rgb(text_primary)),
+                                        )
+                                        .child(
+                                            div()
+                                                .ml(px(-(CURSOR_WIDTH))) // Overlay cursor
+                                                .text_color(rgb(text_muted))
+                                                .child(placeholder.clone()),
+                                        ),
                                 )
-                                .child(div().child(placeholder.clone()))
                             })
                             // When has text: show text with cursor/selection
                             .when(!input_is_empty, |d: Div| {
                                 d.child(self.render_input_text(text_primary, accent_color))
-                            }),
-                    )
-                    // Submit button area (matches ArgPrompt style)
-                    .child(
-                        div()
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .child(
-                                div()
-                                    .text_color(rgb(accent_color))
-                                    .text_sm()
-                                    .child("Submit"),
-                            )
-                            .child(
-                                div()
-                                    .ml(px(4.))
-                                    .px(px(4.))
-                                    .py(px(2.))
-                                    .rounded(px(4.))
-                                    .bg(rgba((text_dimmed << 8) | 0x30))
-                                    .text_color(rgb(text_muted))
-                                    .text_xs()
-                                    .child("↵"),
-                            )
-                            .child(
-                                div()
-                                    .mx(px(4.))
-                                    .text_color(rgba((text_dimmed << 8) | 0x60))
-                                    .text_sm()
-                                    .child("|"),
-                            ),
-                    )
-                    // Script Kit logo
-                    .child(
-                        svg()
-                            .path(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/logo.svg"))
-                            .size(px(16.))
-                            .text_color(rgb(accent_color)),
-                    ),
+                            })
+                    }),
             )
+            // Footer with submit action (directly after header, no spacer)
+            // Use "Update" when value already exists, "Set" when new
+            .child({
+                let footer_colors = PromptFooterColors::from_theme(&self.theme);
+                let primary_label = if self.exists_in_keyring {
+                    "Update"
+                } else {
+                    "Set"
+                };
+                let footer_config = PromptFooterConfig::new()
+                    .primary_label(primary_label)
+                    .primary_shortcut("↵")
+                    .show_secondary(false); // No secondary action for env prompt
+
+                // Add click handler for Submit button
+                let handle = cx.entity().downgrade();
+                PromptFooter::new(footer_config, footer_colors).on_primary_click(Box::new(
+                    move |_, _window, cx| {
+                        if let Some(entity) = handle.upgrade() {
+                            entity.update(cx, |this, _cx| {
+                                this.submit();
+                            });
+                        }
+                    },
+                ))
+            })
     }
 }

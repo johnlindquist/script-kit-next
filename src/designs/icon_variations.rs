@@ -84,6 +84,7 @@ pub enum IconName {
     StarFilled,
     BoltFilled,
     BoltOutlined,
+    EyeOff,
 
     // Arrows
     ArrowRight,
@@ -126,6 +127,7 @@ impl IconName {
             Self::StarFilled,
             Self::BoltFilled,
             Self::BoltOutlined,
+            Self::EyeOff,
             // Arrows
             Self::ArrowRight,
             Self::ArrowDown,
@@ -166,6 +168,7 @@ impl IconName {
             Self::StarFilled => "Star Filled",
             Self::BoltFilled => "Bolt Filled",
             Self::BoltOutlined => "Bolt Outlined",
+            Self::EyeOff => "Eye Off",
             Self::ArrowRight => "Arrow Right",
             Self::ArrowDown => "Arrow Down",
             Self::ArrowUp => "Arrow Up",
@@ -197,6 +200,7 @@ impl IconName {
             Self::StarFilled => "Favorite (filled)",
             Self::BoltFilled => "Quick action (filled)",
             Self::BoltOutlined => "Quick action (outline)",
+            Self::EyeOff => "Hidden/secret content",
             Self::ArrowRight => "Navigate forward",
             Self::ArrowDown => "Navigate down/expand",
             Self::ArrowUp => "Navigate up/collapse",
@@ -229,6 +233,7 @@ impl IconName {
             Self::StarFilled => "star_filled",
             Self::BoltFilled => "bolt_filled",
             Self::BoltOutlined => "bolt_outlined",
+            Self::EyeOff => "eye_off",
             Self::ArrowRight => "arrow_right",
             Self::ArrowDown => "arrow_down",
             Self::ArrowUp => "arrow_up",
@@ -274,6 +279,7 @@ impl IconName {
                 env!("CARGO_MANIFEST_DIR"),
                 "/assets/icons/bolt_outlined.svg"
             ),
+            Self::EyeOff => concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/eye_off.svg"),
             Self::ArrowRight => {
                 concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/arrow_right.svg")
             }
@@ -309,9 +315,12 @@ impl IconName {
             | Self::MagnifyingGlass
             | Self::Terminal
             | Self::Code => IconCategory::Actions,
-            Self::Check | Self::Star | Self::StarFilled | Self::BoltFilled | Self::BoltOutlined => {
-                IconCategory::Status
-            }
+            Self::Check
+            | Self::Star
+            | Self::StarFilled
+            | Self::BoltFilled
+            | Self::BoltOutlined
+            | Self::EyeOff => IconCategory::Status,
             Self::ArrowRight
             | Self::ArrowDown
             | Self::ArrowUp
@@ -556,7 +565,7 @@ mod tests {
 
     #[test]
     fn test_icon_count() {
-        assert_eq!(IconName::count(), 25); // 22 + Sidebar + ArrowUp + Close
+        assert_eq!(IconName::count(), 26); // 22 + Sidebar + ArrowUp + Close + EyeOff
     }
 
     #[test]
