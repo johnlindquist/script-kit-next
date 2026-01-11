@@ -156,11 +156,19 @@ fn read_env_nonempty(name: &str) -> Option<String> {
 fn read_key_env_or_keyring(name: &str) -> Option<String> {
     // First check environment variable
     if let Some(value) = read_env_nonempty(name) {
+        crate::logging::log(
+            "CONFIG",
+            &format!("Found API key in environment variable: {}", name),
+        );
         return Some(value);
     }
 
     // Fall back to keyring
-    get_secret(name)
+    let keyring_result = get_secret(name);
+    if keyring_result.is_some() {
+        crate::logging::log("CONFIG", &format!("Found API key in keyring for: {}", name));
+    }
+    keyring_result
 }
 
 /// Detected API keys from environment.
