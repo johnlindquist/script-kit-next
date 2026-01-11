@@ -80,6 +80,9 @@ sha2 = "0.10"  # SHA-256 for content hash dedup
 # Image decoding for app icons
 image = { version = "0.25", default-features = false, features = ["png"] }
 
+# Parallel iteration for app scanning
+rayon = "1.10"
+
 # Cross-platform window screenshot capture
 xcap = "0.8"
 

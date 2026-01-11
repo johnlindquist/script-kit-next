@@ -17,15 +17,22 @@
 //!
 
 use anyhow::{Context, Result};
+use rayon::prelude::*;
 use rusqlite::{params, Connection};
 use std::collections::hash_map::DefaultHasher;
 use std::fs;
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Instant;
-use tracing::{debug, error, info, info_span, warn};
+use tracing::{debug, error, info, info_span, trace, warn};
+
+/// Stats for icon extraction during a scan (thread-safe)
+static ICONS_EXTRACTED: AtomicUsize = AtomicUsize::new(0);
+static ICONS_FROM_CACHE: AtomicUsize = AtomicUsize::new(0);
+static EXTRACT_TIME_MS: AtomicUsize = AtomicUsize::new(0);
 
 #[cfg(target_os = "macos")]
 use cocoa::base::{id, nil};
@@ -535,7 +542,8 @@ fn get_or_extract_icon(app_path: &Path) -> Option<Vec<u8>> {
                 if cache_mtime >= app_mtime {
                     // Load from cache
                     if let Ok(png_bytes) = std::fs::read(&cache_file) {
-                        debug!(
+                        ICONS_FROM_CACHE.fetch_add(1, Ordering::Relaxed);
+                        trace!(
                             app = %app_path.display(),
                             duration_ms = start.elapsed().as_millis(),
                             source = "disk_cache",
@@ -578,7 +586,10 @@ fn get_or_extract_icon(app_path: &Path) -> Option<Vec<u8>> {
                 "Failed to set cache file mtime"
             );
         } else {
-            debug!(
+            // Update stats for summary log (instead of per-app logging)
+            ICONS_EXTRACTED.fetch_add(1, Ordering::Relaxed);
+            EXTRACT_TIME_MS.fetch_add(extract_ms as usize, Ordering::Relaxed);
+            trace!(
                 app = %app_path.display(),
                 extract_ms,
                 total_ms = start.elapsed().as_millis(),
@@ -739,10 +750,41 @@ pub fn scan_applications_fresh() -> Vec<AppInfo> {
     apps
 }
 
+/// Reset icon extraction stats before a new scan
+fn reset_icon_stats() {
+    ICONS_EXTRACTED.store(0, Ordering::Relaxed);
+    ICONS_FROM_CACHE.store(0, Ordering::Relaxed);
+    EXTRACT_TIME_MS.store(0, Ordering::Relaxed);
+}
+
+/// Log a summary of icon extraction stats
+fn log_icon_stats_summary() {
+    let extracted = ICONS_EXTRACTED.load(Ordering::Relaxed);
+    let from_cache = ICONS_FROM_CACHE.load(Ordering::Relaxed);
+    let total_ms = EXTRACT_TIME_MS.load(Ordering::Relaxed);
+
+    if extracted > 0 || from_cache > 0 {
+        info!(
+            icons_extracted = extracted,
+            icons_from_cache = from_cache,
+            total_extract_ms = total_ms,
+            avg_extract_ms = if extracted > 0 {
+                total_ms / extracted
+            } else {
+                0
+            },
+            "Icon extraction summary"
+        );
+    }
+}
+
 /// Scan all configured directories for applications and update SQLite
 fn scan_all_directories_with_db_update() -> Vec<AppInfo> {
     let _span = info_span!("scan_all_directories_with_db_update").entered();
     let start = Instant::now();
+
+    // Reset stats for this scan
+    reset_icon_stats();
 
     let mut apps = Vec::new();
     let mut dirs_scanned = 0;
@@ -756,7 +798,7 @@ fn scan_all_directories_with_db_update() -> Vec<AppInfo> {
             match scan_directory_with_db_update(path) {
                 Ok(found) => {
                     let count = found.len();
-                    debug!(
+                    trace!(
                         directory = %path.display(),
                         count,
                         duration_ms = dir_start.elapsed().as_millis(),
@@ -774,7 +816,7 @@ fn scan_all_directories_with_db_update() -> Vec<AppInfo> {
                 }
             }
         } else {
-            debug!(directory = %path.display(), "Directory does not exist, skipping");
+            trace!(directory = %path.display(), "Directory does not exist, skipping");
         }
     }
 
@@ -783,6 +825,9 @@ fn scan_all_directories_with_db_update() -> Vec<AppInfo> {
 
     // Remove duplicates (same name from different directories - prefer first)
     apps.dedup_by(|a, b| a.name.to_lowercase() == b.name.to_lowercase());
+
+    // Log icon extraction summary (batched instead of per-app)
+    log_icon_stats_summary();
 
     debug!(
         total_apps = apps.len(),
@@ -795,28 +840,39 @@ fn scan_all_directories_with_db_update() -> Vec<AppInfo> {
 }
 
 /// Scan a single directory for .app bundles and update SQLite
+///
+/// Uses parallel iteration (rayon) for icon extraction which is the bottleneck.
 fn scan_directory_with_db_update(dir: &Path) -> Result<Vec<AppInfo>> {
-    let mut apps = Vec::new();
-
     let entries = fs::read_dir(dir)
         .with_context(|| format!("Failed to read directory: {}", dir.display()))?;
 
-    for entry in entries.flatten() {
-        let path = entry.path();
-
-        // Check if it's a .app bundle
-        if let Some(extension) = path.extension() {
-            if extension == "app" {
-                if let Some((app_info, icon_bytes)) = parse_app_bundle_with_icon(&path) {
-                    // Save to SQLite
-                    let mtime = get_mtime(&path).unwrap_or(0);
-                    save_app_to_db(&app_info, icon_bytes.as_deref(), mtime);
-
-                    apps.push(app_info);
-                }
+    // Collect app paths first (fast, just directory listing)
+    let app_paths: Vec<PathBuf> = entries
+        .flatten()
+        .filter_map(|entry| {
+            let path = entry.path();
+            if path.extension().map(|e| e == "app").unwrap_or(false) {
+                Some(path)
+            } else {
+                None
             }
-        }
-    }
+        })
+        .collect();
+
+    // Process apps in parallel using rayon (icon extraction is the bottleneck)
+    let apps: Vec<AppInfo> = app_paths
+        .par_iter()
+        .filter_map(|path| {
+            if let Some((app_info, icon_bytes)) = parse_app_bundle_with_icon(path) {
+                // Save to SQLite (thread-safe via mutex in get_apps_db)
+                let mtime = get_mtime(path).unwrap_or(0);
+                save_app_to_db(&app_info, icon_bytes.as_deref(), mtime);
+                Some(app_info)
+            } else {
+                None
+            }
+        })
+        .collect();
 
     Ok(apps)
 }

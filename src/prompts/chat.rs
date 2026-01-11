@@ -7,6 +7,7 @@
 //! - Footer with model selector and "Continue in Chat"
 //! - Actions menu (⌘+K) with model picker
 
+use crate::components::TextInputState;
 use crate::designs::icon_variations::IconName;
 use gpui::{
     div, prelude::*, px, rgb, rgba, svg, Context, FocusHandle, Focusable, Hsla, KeyDownEvent,
@@ -18,7 +19,6 @@ use std::time::Duration;
 
 use crate::ai::providers::{ProviderMessage, ProviderRegistry};
 use crate::ai::{self, Chat, ChatSource, Message, MessageRole, ModelInfo};
-use crate::components::TextInputState;
 use crate::logging;
 use crate::prompts::markdown::render_markdown;
 use crate::protocol::{ChatMessagePosition, ChatMessageRole, ChatPromptMessage};
@@ -48,12 +48,18 @@ impl ChatModel {
 }
 
 /// Default models available in the chat
+/// NOTE: First model in list is the default
 pub fn default_models() -> Vec<ChatModel> {
     vec![
+        // Default: Claude 3.5 Haiku (fast, good quality)
+        ChatModel::new("claude-3-5-haiku-20241022", "Claude 3.5 Haiku", "Anthropic"),
+        ChatModel::new(
+            "claude-3-5-sonnet-20241022",
+            "Claude 3.5 Sonnet",
+            "Anthropic",
+        ),
         ChatModel::new("gpt-4o-mini", "GPT-4o mini", "OpenAI"),
         ChatModel::new("gpt-4o", "GPT-4o", "OpenAI"),
-        ChatModel::new("claude-3-haiku", "Claude 3 Haiku", "Anthropic"),
-        ChatModel::new("claude-3-sonnet", "Claude 3 Sonnet", "Anthropic"),
     ]
 }
 
@@ -1314,13 +1320,13 @@ impl ChatPrompt {
             .h(px(24.0))
             .rounded(px(4.0))
             .cursor_pointer()
-            .opacity(0.5)
+            .opacity(0.7)
             .hover(|s| s.opacity(1.0).bg(copy_hover_bg))
             .child(
                 svg()
                     .external_path(IconName::Copy.external_path())
-                    .size(px(14.))
-                    .text_color(rgb(colors.text_tertiary)),
+                    .size(px(16.))
+                    .text_color(rgb(colors.text_secondary)),
             )
             .on_click(cx.listener(move |this, _, _window, cx| {
                 this.copy_turn_response(turn_index, cx);
