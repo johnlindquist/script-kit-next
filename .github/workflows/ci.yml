@@ -16,68 +16,107 @@ on:
       - 'LICENSE'
       - '.gitignore'
 
+# Cancel superseded runs for same PR/branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 env:
   CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 1
 
 jobs:
-  # Fast format check (no compilation needed)
+  # Fast format check (no compilation needed) - runs in ~10s
   fmt:
     name: Format
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1  # Shallow clone
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
       - run: cargo fmt --check
 
-  # Combined lint + test job (clippy is superset of check, no need for separate check job)
+  # Combined lint + test job with sccache
   lint-and-test:
     name: Lint & Test
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
+
+      # Rust dependency cache (faster than rebuilding)
       - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "rust-ci"
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
       - name: Clippy
         run: cargo clippy --all-targets -- -D warnings
+
       - name: Tests
         run: cargo test
 
-  # Runs in parallel with lint-and-test (no needs: dependency)
-  # Only needs the binary built, doesn't depend on Rust tests passing
+  # TS tests run in parallel - completely independent
   typescript-tests:
     name: TypeScript SDK Tests
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
       - uses: dtolnay/rust-toolchain@stable
+
       - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "rust-ci"
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      # Bun with caching
       - uses: oven-sh/setup-bun@v1
         with:
           bun-version: latest
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lockb', 'package.json') }}
+          restore-keys: |
+            bun-${{ runner.os }}-
+
       - name: Install dependencies
-        run: bun install
+        run: bun install --frozen-lockfile || bun install
+
       - name: Build binary
         run: cargo build
+
       - name: Run TypeScript SDK tests
         run: bun run scripts/test-runner.ts --parallel
         timeout-minutes: 5
 
+  # Only on main push, after checks pass
   build-artifact:
     name: Build macOS Artifact
     runs-on: macos-14
-    # Only run on push to main, not on PRs
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: [fmt, lint-and-test]
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
 
       - uses: dtolnay/rust-toolchain@stable
 
       - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "rust-release"
+          save-if: true
 
       - name: Build release
         run: cargo build --release
