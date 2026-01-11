@@ -1165,6 +1165,12 @@ impl ScriptListApp {
                         }
                     });
 
+                // Check if key already exists in keyring (for UX messaging)
+                // Empty values don't count as "existing" - must have actual content
+                let exists_in_keyring = prompts::env::get_secret(&key)
+                    .map(|v| !v.is_empty())
+                    .unwrap_or(false);
+
                 // Create EnvPrompt entity
                 let focus_handle = self.focus_handle.clone();
                 let mut env_prompt = prompts::EnvPrompt::new(
@@ -1175,6 +1181,7 @@ impl ScriptListApp {
                     focus_handle,
                     submit_callback,
                     std::sync::Arc::clone(&self.theme),
+                    exists_in_keyring,
                 );
 
                 // Check keyring first - if value exists, auto-submit without showing UI

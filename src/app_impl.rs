@@ -4724,12 +4724,13 @@ export default {
     /// Check if the current view is a dismissable prompt
     ///
     /// Dismissable prompts are those that feel "closeable" with escape:
-    /// - ArgPrompt, DivPrompt, FormPrompt, SelectPrompt, PathPrompt, EnvPrompt, DropPrompt, TemplatePrompt
+    /// - ArgPrompt, DivPrompt, FormPrompt, SelectPrompt, PathPrompt, DropPrompt, TemplatePrompt
     /// - Built-in views (ClipboardHistory, AppLauncher, WindowSwitcher, DesignGallery)
     /// - ScriptList
     ///
     /// Non-dismissable prompts:
     /// - TermPrompt, EditorPrompt (these require explicit Cmd+W to close)
+    /// - EnvPrompt (stays open on blur so user can copy API keys from other windows)
     #[allow(dead_code)]
     fn is_dismissable_view(&self) -> bool {
         !matches!(
@@ -4738,6 +4739,7 @@ export default {
                 | AppView::EditorPrompt { .. }
                 | AppView::ScratchPadView { .. }
                 | AppView::QuickTerminalView { .. }
+                | AppView::EnvPrompt { .. }
         )
     }
 

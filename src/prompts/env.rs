@@ -10,13 +10,14 @@
 //! Design: Matches ArgPrompt-no-choices (single input line, minimal height)
 
 use gpui::{
-    div, prelude::*, px, rgb, rgba, Context, Div, FocusHandle, Focusable, Render, SharedString,
+    div, prelude::*, px, rgb, rgba, svg, Context, Div, FocusHandle, Focusable, Render, SharedString,
     Window,
 };
 use std::sync::Arc;
 
 use crate::components::prompt_footer::{PromptFooter, PromptFooterColors, PromptFooterConfig};
 use crate::components::TextInputState;
+use crate::designs::icon_variations::IconName;
 use crate::designs::{get_tokens, DesignVariant};
 use crate::logging;
 use crate::panel::{
@@ -112,9 +113,12 @@ pub struct EnvPrompt {
     pub design_variant: DesignVariant,
     /// Whether we checked the keyring already
     checked_keyring: bool,
+    /// Whether a value already exists in keyring (for UX messaging)
+    pub exists_in_keyring: bool,
 }
 
 impl EnvPrompt {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         id: String,
         key: String,
@@ -123,10 +127,14 @@ impl EnvPrompt {
         focus_handle: FocusHandle,
         on_submit: SubmitCallback,
         theme: Arc<theme::Theme>,
+        exists_in_keyring: bool,
     ) -> Self {
         logging::log(
             "PROMPTS",
-            &format!("EnvPrompt::new for key: {} (secret: {})", key, secret),
+            &format!(
+                "EnvPrompt::new for key: {} (secret: {}, exists: {})",
+                key, secret, exists_in_keyring
+            ),
         );
 
         EnvPrompt {
@@ -140,6 +148,7 @@ impl EnvPrompt {
             theme,
             design_variant: DesignVariant::Default,
             checked_keyring: false,
+            exists_in_keyring,
         }
     }
 
@@ -314,20 +323,13 @@ impl Render for EnvPrompt {
         let text_muted = design_colors.text_muted;
         let accent_color = design_colors.accent;
 
-        // Build placeholder text: "Enter {KEY}" or custom prompt, with lock icon for secrets
+        // Build placeholder text: "Update {KEY}" when exists, "Enter {KEY}" for new, or custom prompt
         let placeholder: SharedString = self
             .prompt
             .clone()
-            .map(|p| {
-                if self.secret {
-                    format!("🔒 {}", p)
-                } else {
-                    p
-                }
-            })
             .unwrap_or_else(|| {
-                if self.secret {
-                    format!("🔒 Enter {}", self.key)
+                if self.exists_in_keyring {
+                    format!("Update {}", self.key)
                 } else {
                     format!("Enter {}", self.key)
                 }
@@ -337,7 +339,7 @@ impl Render for EnvPrompt {
         let input_is_empty = self.input.is_empty();
 
         // Main container - matches ArgPrompt-no-choices layout exactly
-        // Single row with: input area + Submit button + logo
+        // Header has only the input area; Submit button is in the footer
         div()
             .id(gpui::ElementId::Name("window:env".into()))
             .flex()
@@ -359,6 +361,16 @@ impl Render for EnvPrompt {
                     .flex_row()
                     .items_center()
                     .gap(px(HEADER_GAP))
+                    // EyeOff icon for secrets (hidden/masked input)
+                    .when(self.secret, |d: Div| {
+                        d.child(
+                            svg()
+                                .external_path(IconName::EyeOff.external_path())
+                                .size(px(18.))
+                                .text_color(rgb(text_muted))
+                                .flex_shrink_0(),
+                        )
+                    })
                     // Input area with cursor and selection (matches ArgPrompt - no buttons/logo in header)
                     .child({
                         let input_height = CURSOR_HEIGHT_LG + (CURSOR_MARGIN_Y * 2.0);
@@ -402,10 +414,16 @@ impl Render for EnvPrompt {
                     }),
             )
             // Footer with submit action (directly after header, no spacer)
+            // Use "Update" when value already exists, "Set" when new
             .child({
                 let footer_colors = PromptFooterColors::from_theme(&self.theme);
+                let primary_label = if self.exists_in_keyring {
+                    "Update"
+                } else {
+                    "Set"
+                };
                 let footer_config = PromptFooterConfig::new()
-                    .primary_label("Submit")
+                    .primary_label(primary_label)
                     .primary_shortcut("↵")
                     .show_secondary(false); // No secondary action for env prompt
 
