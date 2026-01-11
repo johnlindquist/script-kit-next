@@ -475,6 +475,19 @@ impl ScriptListApp {
                     }
                 }
 
+                // FIRST: If confirm dialog is open, route keyboard events to it
+                if crate::confirm::is_confirm_window_open() {
+                    // Dispatch to confirm dialog
+                    cx.spawn(async move |_this, cx| {
+                        cx.update(|cx| {
+                            crate::confirm::dispatch_confirm_key(key_str.as_str(), cx);
+                        })
+                        .ok();
+                    })
+                    .detach();
+                    return;
+                }
+
                 // If actions popup is open, route keyboard events to it
                 if this.show_actions_popup {
                     if let Some(ref dialog) = this.actions_dialog {

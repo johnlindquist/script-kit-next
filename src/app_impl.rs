@@ -416,6 +416,14 @@ impl ScriptListApp {
                 {
                     if let Some(app) = app_entity.upgrade() {
                         app.update(cx, |this, cx| {
+                            // FIRST: If confirm dialog is open, route Tab to it for button switching
+                            if crate::confirm::is_confirm_window_open()
+                                && crate::confirm::dispatch_confirm_key(&key, cx)
+                            {
+                                cx.stop_propagation();
+                                return;
+                            }
+
                             // Handle Tab/Shift+Tab in FileSearchView for directory/file navigation
                             // CRITICAL: ALWAYS consume Tab/Shift+Tab to prevent focus traversal
                             if let AppView::FileSearchView {
@@ -589,6 +597,14 @@ impl ScriptListApp {
                 {
                     if let Some(app) = app_entity.upgrade() {
                         app.update(cx, |this, cx| {
+                            // FIRST: If confirm dialog is open, route all arrow keys to it
+                            if crate::confirm::is_confirm_window_open()
+                                && crate::confirm::dispatch_confirm_key(&key, cx)
+                            {
+                                cx.stop_propagation();
+                                return;
+                            }
+
                             // Only intercept in views that use Input + list navigation
                             match &mut this.current_view {
                                 AppView::FileSearchView {
@@ -842,6 +858,14 @@ impl ScriptListApp {
 
                 if let Some(app) = app_entity.upgrade() {
                     app.update(cx, |this, cx| {
+                        // FIRST: If confirm dialog is open, route Enter/Escape/Tab to it
+                        if crate::confirm::is_confirm_window_open()
+                            && crate::confirm::dispatch_confirm_key(&key, cx)
+                        {
+                            cx.stop_propagation();
+                            return;
+                        }
+
                         // Only handle when in FileSearchView with actions popup open
                         if !matches!(this.current_view, AppView::FileSearchView { .. }) {
                             return;
