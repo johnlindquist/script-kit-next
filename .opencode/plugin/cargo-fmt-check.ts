@@ -1,5 +1,8 @@
 import type { Plugin } from "@opencode-ai/plugin"
 import { spawn } from "child_process"
+import { logTriggered, logSkipped } from "../lib/logger"
+
+const PLUGIN_NAME = "cargo-fmt-check"
 
 /**
  * Cargo Format Check Plugin
@@ -172,7 +175,11 @@ const CargoFmtCheck: Plugin = async ({ client }) => {
         for (const sessions of fileModifiedBy.values()) {
           sessions.delete(sessionId)
         }
+        logTriggered(sessionId, PLUGIN_NAME, "event", "Session deleted - cleaned up file tracking")
+        return
       }
+      
+      logSkipped(sessionId, PLUGIN_NAME, "event", `Unhandled event type: ${event.type}`)
     },
 
     "tool.execute.after": async (input: ToolInput) => {
@@ -181,15 +188,26 @@ const CargoFmtCheck: Plugin = async ({ client }) => {
       const sessionId = input.sessionID
 
       // Only check after edit/write operations
-      if (tool !== "edit" && tool !== "write") return
+      if (tool !== "edit" && tool !== "write") {
+        logSkipped(sessionId, PLUGIN_NAME, "tool.execute.after", `Skipped non-edit tool: ${tool}`)
+        return
+      }
 
       // Need session ID to send feedback
-      if (!sessionId) return
+      if (!sessionId) {
+        logSkipped(null, PLUGIN_NAME, "tool.execute.after", "No session ID available")
+        return
+      }
 
       const filePath = (args.filePath as string) || ""
 
       // Only check Rust files
-      if (!RUST_FILE_PATTERN.test(filePath)) return
+      if (!RUST_FILE_PATTERN.test(filePath)) {
+        logSkipped(sessionId, PLUGIN_NAME, "tool.execute.after", `Skipped non-Rust file: ${filePath}`)
+        return
+      }
+
+      logTriggered(sessionId, PLUGIN_NAME, "tool.execute.after", `Rust file edited, scheduling format check: ${filePath}`)
 
       // Track that this session modified this file
       trackModifiedFile(sessionId, filePath)
@@ -215,19 +233,21 @@ const CargoFmtCheck: Plugin = async ({ client }) => {
           if (hasParallelWork) {
             // Parallel work detected - wait and retry
             const sessions = fileModifiedBy.get(filePath)
-            console.log(`[CargoFmtCheck] Format error on ${filePath} - ${sessions?.size || 0} sessions working on this file, waiting ${PARALLEL_WORK_WAIT_MS / 1000}s...`)
+            logTriggered(targetSessionId, PLUGIN_NAME, "format-check", `Parallel work detected on ${filePath}, waiting ${PARALLEL_WORK_WAIT_MS / 1000}s`, {
+              sessionCount: sessions?.size || 0
+            })
             await sleep(PARALLEL_WORK_WAIT_MS)
             
             // Retry after waiting
             result = await runCargoFmtCheck(filePath)
             
             if (result.success) {
-              console.log(`[CargoFmtCheck] ✓ ${filePath} now passes (parallel work completed)`)
+              logTriggered(targetSessionId, PLUGIN_NAME, "format-check", `Format now passes after wait: ${filePath}`)
               return
             }
             
             // Still failing after wait
-            console.log(`[CargoFmtCheck] ${filePath} still has format issues after wait`)
+            logTriggered(targetSessionId, PLUGIN_NAME, "format-check", `Format still failing after wait, notifying with soft message: ${filePath}`)
             
             // Notify but with softer messaging about parallel work
             const fileName = filePath.split("/").pop() || filePath
@@ -256,6 +276,8 @@ ${result.output.slice(0, 1000)}${result.output.length > 1000 ? "\n... (truncated
           }
 
           // Single session working on this file - prompt immediately
+          logTriggered(targetSessionId, PLUGIN_NAME, "format-check", `Format check FAILED, prompting agent: ${filePath}`)
+          
           const fileName = filePath.split("/").pop() || filePath
           const message = `## Formatting Issue Detected
 
@@ -280,6 +302,8 @@ Or manually apply the diff shown above.`
               parts: [{ type: "text", text: message }],
             },
           })
+        } else if (result.success) {
+          logSkipped(targetSessionId, PLUGIN_NAME, "format-check", `Format check passed: ${filePath}`)
         }
       }, DEBOUNCE_MS)
 

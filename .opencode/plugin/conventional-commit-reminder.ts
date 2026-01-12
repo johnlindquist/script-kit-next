@@ -1,4 +1,7 @@
 import type { Plugin } from "@opencode-ai/plugin"
+import { logTriggered, logSkipped } from "../lib/logger"
+
+const PLUGIN_NAME = "conventional-commit-reminder"
 
 /**
  * Conventional Commit Reminder Plugin
@@ -114,11 +117,17 @@ const ConventionalCommitReminder: Plugin = async ({ client }) => {
 
       if (event.type === "session.created" && sessionId) {
         sessions.set(sessionId, createSessionState())
+        logTriggered(sessionId, PLUGIN_NAME, "event", "Session created - initialized commit tracking state")
+        return
       }
       
       if (event.type === "session.deleted" && sessionId) {
         clearState(sessionId)
+        logTriggered(sessionId, PLUGIN_NAME, "event", "Session deleted - cleared commit tracking state")
+        return
       }
+      
+      logSkipped(sessionId, PLUGIN_NAME, "event", `Unhandled event type: ${event.type}`)
     },
     
     // Track tool executions
@@ -127,9 +136,13 @@ const ConventionalCommitReminder: Plugin = async ({ client }) => {
       const args = input.args || {}
       const sessionId = input.sessionID
       
-      if (!sessionId) return
+      if (!sessionId) {
+        logSkipped(null, PLUGIN_NAME, "tool.execute.after", "No session ID available")
+        return
+      }
       
       const state = getState(sessionId)
+      const trackedActions: string[] = []
       
       // Track file modifications
       if (tool === "edit" || tool === "write") {
@@ -139,6 +152,7 @@ const ConventionalCommitReminder: Plugin = async ({ client }) => {
           if (!state.modifiedFiles.includes(filePath)) {
             state.modifiedFiles.push(filePath)
           }
+          trackedActions.push(`code file modified: ${filePath}`)
         }
       }
       
@@ -149,19 +163,38 @@ const ConventionalCommitReminder: Plugin = async ({ client }) => {
         // Track git commits
         if (COMMIT_PATTERNS.some(pattern => pattern.test(command))) {
           state.commitMade = true
+          trackedActions.push("git commit detected")
         }
+      }
+      
+      if (trackedActions.length > 0) {
+        logTriggered(sessionId, PLUGIN_NAME, "tool.execute.after", `Tracked: ${trackedActions.join(", ")}`, {
+          tool,
+          totalModifiedFiles: state.modifiedFiles.length,
+          commitMade: state.commitMade
+        })
+      } else {
+        logSkipped(sessionId, PLUGIN_NAME, "tool.execute.after", `No commit-related actions in ${tool} call`)
       }
     },
     
     // Hook into session stop - prompt for conventional commit if needed
     stop: async (input) => {
       const sessionId = extractSessionId(input)
-      if (!sessionId) return
+      if (!sessionId) {
+        logSkipped(null, PLUGIN_NAME, "stop", "No session ID available")
+        return
+      }
       
       const state = getState(sessionId)
       
       // Only prompt if files were modified but no commit was made
       if (state.codeFilesModified && !state.commitMade && state.modifiedFiles.length > 0) {
+        logTriggered(sessionId, PLUGIN_NAME, "stop", "BLOCKING STOP: Uncommitted changes detected", {
+          modifiedFiles: state.modifiedFiles.length,
+          files: state.modifiedFiles.slice(0, 5)
+        })
+        
         const fileList = state.modifiedFiles
           .slice(0, 10) // Limit to first 10 files
           .map(f => `  - ${f}`)
@@ -205,13 +238,22 @@ Please commit now with an appropriate conventional commit message.`
             parts: [{ type: "text", text: message }],
           },
         })
+      } else if (state.commitMade) {
+        logSkipped(sessionId, PLUGIN_NAME, "stop", "Stop allowed - commit already made")
+      } else if (!state.codeFilesModified) {
+        logSkipped(sessionId, PLUGIN_NAME, "stop", "Stop allowed - no code files modified")
+      } else {
+        logSkipped(sessionId, PLUGIN_NAME, "stop", "Stop allowed - no modified files tracked")
       }
     },
     
     // Add reminder to system prompt about conventional commits
     "experimental.chat.system.transform": async (input, output) => {
       const sessionId = extractSessionId(input)
-      if (!sessionId) return
+      if (!sessionId) {
+        logSkipped(null, PLUGIN_NAME, "system.transform", "No session ID available")
+        return
+      }
       
       const state = getState(sessionId)
       const hasUncommittedChanges = state.codeFilesModified && !state.commitMade
@@ -225,13 +267,21 @@ You have uncommitted changes. When you're done with your task, commit using conv
 Types: feat, fix, docs, style, refactor, perf, test, chore, build, ci
 </conventional-commit-reminder>
 `.trim())
+        logTriggered(sessionId, PLUGIN_NAME, "system.transform", "Injected commit reminder (uncommitted changes)", {
+          modifiedFiles: state.modifiedFiles.length
+        })
+      } else {
+        logSkipped(sessionId, PLUGIN_NAME, "system.transform", "No uncommitted changes - no reminder needed")
       }
     },
     
     // Preserve state through compaction
     "experimental.session.compacting": async (input, output) => {
       const sessionId = extractSessionId(input)
-      if (!sessionId) return
+      if (!sessionId) {
+        logSkipped(null, PLUGIN_NAME, "session.compacting", "No session ID available")
+        return
+      }
       
       const state = getState(sessionId)
       
@@ -240,6 +290,11 @@ Types: feat, fix, docs, style, refactor, perf, test, chore, build, ci
 Uncommitted changes detected. Modified ${state.modifiedFiles.length} file(s).
 Remember to commit with conventional commit format before ending session.
 </commit-state>`)
+        logTriggered(sessionId, PLUGIN_NAME, "session.compacting", "Preserved uncommitted changes state", {
+          modifiedFiles: state.modifiedFiles.length
+        })
+      } else {
+        logSkipped(sessionId, PLUGIN_NAME, "session.compacting", "No uncommitted changes to preserve")
       }
     }
   }

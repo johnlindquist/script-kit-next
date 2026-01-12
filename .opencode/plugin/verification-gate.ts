@@ -1,4 +1,7 @@
 import type { Plugin } from "@opencode-ai/plugin"
+import { logTriggered, logSkipped, extractSessionId } from "../lib/logger"
+
+const PLUGIN_NAME = "verification-gate"
 
 /**
  * Verification Gate Plugin
@@ -59,7 +62,12 @@ const VerificationGate: Plugin = async () => {
   return {
     // Track when verification commands are run (after execution)
     "tool.execute.after": async (input: ToolInput) => {
-      if (input.tool !== "bash") return
+      const sessionId = input.sessionID
+      
+      if (input.tool !== "bash") {
+        logSkipped(sessionId, PLUGIN_NAME, "tool.execute.after", `Skipped non-bash tool: ${input.tool}`)
+        return
+      }
       
       const args = input.args || {}
       const result = input.result || {}
@@ -75,13 +83,23 @@ const VerificationGate: Plugin = async () => {
         if (!hasError) {
           verificationRanInSession = true
           lastVerificationTime = Date.now()
+          logTriggered(sessionId, PLUGIN_NAME, "tool.execute.after", "Verification passed - cargo check/clippy/test succeeded", { command: command.slice(0, 100) })
+        } else {
+          logTriggered(sessionId, PLUGIN_NAME, "tool.execute.after", "Verification failed - errors detected in output", { command: command.slice(0, 100) })
         }
+      } else {
+        logSkipped(sessionId, PLUGIN_NAME, "tool.execute.after", "Not a verification command", { command: command.slice(0, 100) })
       }
     },
 
     // Intercept commit attempts and warn if verification not done (before execution)
     "tool.execute.before": async (input: ToolInput) => {
-      if (input.tool !== "bash") return
+      const sessionId = input.sessionID
+      
+      if (input.tool !== "bash") {
+        logSkipped(sessionId, PLUGIN_NAME, "tool.execute.before", `Skipped non-bash tool: ${input.tool}`)
+        return
+      }
       
       const args = input.args || {}
       const command = (args.command as string) || ""
@@ -89,14 +107,22 @@ const VerificationGate: Plugin = async () => {
       if (containsCommitAttempt(command)) {
         // Check if verification was run recently
         if (!verificationRanInSession || isVerificationStale()) {
-          // Log warning - system prompt injection is the reliable approach for enforcement
-          console.log("[VerificationGate] Commit attempted without recent verification")
+          logTriggered(sessionId, PLUGIN_NAME, "tool.execute.before", "WARN: Commit attempted without recent verification", { 
+            command: command.slice(0, 100),
+            verificationRan: verificationRanInSession,
+            isStale: isVerificationStale()
+          })
+        } else {
+          logTriggered(sessionId, PLUGIN_NAME, "tool.execute.before", "Commit attempted with valid verification", { command: command.slice(0, 100) })
         }
+      } else {
+        logSkipped(sessionId, PLUGIN_NAME, "tool.execute.before", "Not a commit command", { command: command.slice(0, 100) })
       }
     },
 
     // Add verification reminder to system prompt
-    "experimental.chat.system.transform": async (_input, output) => {
+    "experimental.chat.system.transform": async (input, output) => {
+      const sessionId = extractSessionId(input)
       const verificationStatus = verificationRanInSession && !isVerificationStale()
         ? "✅ Verification recently passed"
         : "⏳ Verification pending"
@@ -112,22 +138,31 @@ Current status: ${verificationStatus}
 `.trim()
       
       output.system.push(reminder)
+      logTriggered(sessionId, PLUGIN_NAME, "system.transform", `Injected verification gate policy (status: ${verificationStatus})`)
     },
 
     // Preserve verification state through compaction
-    "experimental.session.compacting": async (_input, output) => {
+    "experimental.session.compacting": async (input, output) => {
+      const sessionId = extractSessionId(input)
       const state = verificationRanInSession && !isVerificationStale()
         ? "Verification gate: PASSED (recent)"
         : "Verification gate: PENDING - run cargo check && cargo clippy && cargo test before commit"
       
       output.context.push(`<verification-state>${state}</verification-state>`)
+      logTriggered(sessionId, PLUGIN_NAME, "session.compacting", `Preserved verification state: ${state}`)
     },
     
     // Reset state on new session
     event: async ({ event }) => {
+      const eventWithSession = event as { session_id?: string; sessionID?: string }
+      const sessionId = eventWithSession.session_id || eventWithSession.sessionID
+      
       if (event.type === "session.created") {
         verificationRanInSession = false
         lastVerificationTime = 0
+        logTriggered(sessionId, PLUGIN_NAME, "event", "Session created - reset verification state")
+      } else {
+        logSkipped(sessionId, PLUGIN_NAME, "event", `Unhandled event type: ${event.type}`)
       }
     }
   }

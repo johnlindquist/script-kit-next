@@ -1,4 +1,7 @@
 import type { Plugin } from "@opencode-ai/plugin"
+import { logTriggered, logSkipped } from "../lib/logger"
+
+const PLUGIN_NAME = "thoroughness-enforcer"
 
 /**
  * Thoroughness Enforcer Plugin (OpenCode port)
@@ -283,11 +286,13 @@ const ThoroughnessEnforcer: Plugin = async ({ client }) => {
 
       if (event.type === "session.created" && sessionId) {
         sessions.set(sessionId, createSessionState())
+        logTriggered(sessionId, PLUGIN_NAME, "event", "Session created - initialized thoroughness tracking")
         return
       }
       
       if (event.type === "session.deleted" && sessionId) {
         clearState(sessionId)
+        logTriggered(sessionId, PLUGIN_NAME, "event", "Session deleted - cleared thoroughness tracking")
         return
       }
 
@@ -334,28 +339,43 @@ const ThoroughnessEnforcer: Plugin = async ({ client }) => {
                   indicators: analysis.matchedIndicators,
                 })
                 
-                console.log(`[ThoroughnessEnforcer] [${msgSessionId.slice(0, 8)}] Detected thoroughness (${analysis.confidence}): ${analysis.matchedIndicators.slice(0, 3).join(", ")}`)
+                logTriggered(msgSessionId, PLUGIN_NAME, "event", `Detected thoroughness (${analysis.confidence})`, {
+                  indicators: analysis.matchedIndicators.slice(0, 5),
+                  promptNumber: state.promptCount
+                })
               }
+            } else {
+              logSkipped(msgSessionId, PLUGIN_NAME, "event", "User message analyzed - no thoroughness indicators")
             }
+          } else {
+            logSkipped(msgSessionId, PLUGIN_NAME, "event", `Prompt too long to analyze (${extraction.reason})`)
           }
         }
+        return
       }
+      
+      logSkipped(sessionId, PLUGIN_NAME, "event", `Unhandled event type: ${event.type}`)
     },
 
     // Block stop if thoroughness requirements not met
     stop: async (input) => {
       const sessionId = extractSessionId(input)
-      if (!sessionId) return
+      if (!sessionId) {
+        logSkipped(null, PLUGIN_NAME, "stop", "No session ID available")
+        return
+      }
       
       const state = getState(sessionId)
       
       // No thoroughness detected - allow stop
       if (!state.analysis.isThorough) {
+        logSkipped(sessionId, PLUGIN_NAME, "stop", "Stop allowed - no thoroughness requirements active")
         return
       }
 
       // Safety valve: After MAX_STOP_DENIALS, allow stop
       if (state.stopDenialCount >= MAX_STOP_DENIALS) {
+        logTriggered(sessionId, PLUGIN_NAME, "stop", `Stop allowed - max denials reached (${MAX_STOP_DENIALS})`)
         clearState(sessionId)
         return
       }
@@ -363,6 +383,11 @@ const ThoroughnessEnforcer: Plugin = async ({ client }) => {
       // Increment denial count
       state.stopDenialCount++
       const denialCount = state.stopDenialCount
+
+      logTriggered(sessionId, PLUGIN_NAME, "stop", `BLOCKING STOP: Thoroughness check ${denialCount}/${MAX_STOP_DENIALS}`, {
+        confidence: state.analysis.confidence,
+        indicators: state.analysis.matchedIndicators.slice(0, 3)
+      })
 
       // Generate review prompt
       const reviewPrompt = generateReviewPrompt(state.analysis)
@@ -418,7 +443,10 @@ Make this final pass count. Verify or explain what you may have missed.`
     // Add thoroughness context to system prompt when active
     "experimental.chat.system.transform": async (input, output) => {
       const sessionId = extractSessionId(input)
-      if (!sessionId) return
+      if (!sessionId) {
+        logSkipped(null, PLUGIN_NAME, "system.transform", "No session ID available")
+        return
+      }
       
       const state = getState(sessionId)
       
@@ -438,13 +466,21 @@ Key expectations:
 
 Stop denial count: ${state.stopDenialCount}/${MAX_STOP_DENIALS}
 </thoroughness-enforcer>`)
+        logTriggered(sessionId, PLUGIN_NAME, "system.transform", `Injected thoroughness context (${state.analysis.confidence})`, {
+          stopDenials: state.stopDenialCount
+        })
+      } else {
+        logSkipped(sessionId, PLUGIN_NAME, "system.transform", "No active thoroughness requirements")
       }
     },
 
     // Preserve state through compaction
     "experimental.session.compacting": async (input, output) => {
       const sessionId = extractSessionId(input)
-      if (!sessionId) return
+      if (!sessionId) {
+        logSkipped(null, PLUGIN_NAME, "session.compacting", "No session ID available")
+        return
+      }
       
       const state = getState(sessionId)
       
@@ -456,6 +492,12 @@ Indicators: "${indicators}"
 Stop denials: ${state.stopDenialCount}/${MAX_STOP_DENIALS}
 Original request (truncated): "${state.activePrompt.slice(0, 200)}..."
 </thoroughness-state>`)
+        logTriggered(sessionId, PLUGIN_NAME, "session.compacting", "Preserved thoroughness state", {
+          confidence: state.analysis.confidence,
+          stopDenials: state.stopDenialCount
+        })
+      } else {
+        logSkipped(sessionId, PLUGIN_NAME, "session.compacting", "No thoroughness state to preserve")
       }
     },
   }

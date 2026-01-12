@@ -1,4 +1,7 @@
 import type { Plugin, Hooks } from "@opencode-ai/plugin"
+import { logTriggered, logSkipped, extractSessionId } from "../lib/logger"
+
+const PLUGIN_NAME = "screenshot-enforcer"
 
 /**
  * Screenshot Enforcer Plugin
@@ -87,7 +90,12 @@ const ScreenshotEnforcer: Plugin = async () => {
   const hooks: Hooks = {
     // Intercept bash commands before execution
     "tool.execute.before": async (input: ToolInput) => {
-      if (input.tool !== "bash") return
+      const sessionId = input.sessionID
+      
+      if (input.tool !== "bash") {
+        logSkipped(sessionId, PLUGIN_NAME, "tool.execute.before", `Skipped non-bash tool: ${input.tool}`)
+        return
+      }
       
       const args = input.args || {}
       const command = (args.command as string) || ""
@@ -95,23 +103,30 @@ const ScreenshotEnforcer: Plugin = async () => {
       const { blocked, toolName } = detectBlockedScreenshotTool(command)
       
       if (blocked) {
+        logTriggered(sessionId, PLUGIN_NAME, "tool.execute.before", `BLOCKED screenshot tool: ${toolName}`, { command: command.slice(0, 100) })
         throw new Error(
           `BLOCKED: System screenshot tool "${toolName}" is not allowed.\n\n` +
           HELPFUL_ERROR
         )
       }
+      
+      logSkipped(sessionId, PLUGIN_NAME, "tool.execute.before", "Bash command allowed (no blocked screenshot tools)", { command: command.slice(0, 100) })
     },
 
     // Add screenshot policy to system prompt
-    "experimental.chat.system.transform": async (_input, output) => {
+    "experimental.chat.system.transform": async (input, output) => {
+      const sessionId = extractSessionId(input)
       output.system.push(SYSTEM_PROMPT_REMINDER)
+      logTriggered(sessionId, PLUGIN_NAME, "system.transform", "Injected screenshot policy into system prompt")
     },
 
     // Preserve policy during session compaction
-    "experimental.session.compacting": async (_input, output) => {
+    "experimental.session.compacting": async (input, output) => {
+      const sessionId = extractSessionId(input)
       output.context.push(
         "<screenshot-policy>Use captureScreenshot() SDK, not system tools (screencapture, scrot, etc.)</screenshot-policy>"
       )
+      logTriggered(sessionId, PLUGIN_NAME, "session.compacting", "Preserved screenshot policy in compaction context")
     }
   }
   

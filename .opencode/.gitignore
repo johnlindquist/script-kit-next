@@ -10,3 +10,6 @@ swarm.db
 # Package files (regenerated)
 package.json
 bun.lock
+
+# Plugin logs (session-specific)
+logs/
