@@ -105,6 +105,9 @@ pub type ChatContinueCallback = Arc<dyn Fn(String) + Send + Sync>;
 /// Callback type for retry: (prompt_id, message_id)
 pub type ChatRetryCallback = Arc<dyn Fn(String, String) + Send + Sync>;
 
+/// Callback type for "Configure API" action: () -> triggers API key setup
+pub type ChatConfigureCallback = Arc<dyn Fn() + Send + Sync>;
+
 /// A conversation turn: user prompt + optional AI response
 #[derive(Clone, Debug)]
 pub struct ConversationTurn {
@@ -217,6 +220,9 @@ pub struct ChatPrompt {
     // Cursor blink state for input field
     cursor_visible: bool,
     cursor_blink_started: bool,
+    // Setup mode: when true, shows API key configuration card instead of chat
+    needs_setup: bool,
+    on_configure: Option<ChatConfigureCallback>,
 }
 
 impl ChatPrompt {
@@ -269,6 +275,8 @@ impl ChatPrompt {
             pending_submit: false,
             cursor_visible: true,
             cursor_blink_started: false,
+            needs_setup: false,
+            on_configure: None,
         }
     }
 
@@ -399,6 +407,19 @@ impl ChatPrompt {
     /// Used for Tab from main menu to immediately send the query to AI
     pub fn with_pending_submit(mut self, submit: bool) -> Self {
         self.pending_submit = submit;
+        self
+    }
+
+    /// Set needs_setup flag - when true, shows API configuration card instead of chat
+    /// Used when no AI providers are configured
+    pub fn with_needs_setup(mut self, needs_setup: bool) -> Self {
+        self.needs_setup = needs_setup;
+        self
+    }
+
+    /// Set the configure callback - called when user clicks "Configure API Key"
+    pub fn with_configure_callback(mut self, callback: ChatConfigureCallback) -> Self {
+        self.on_configure = Some(callback);
         self
     }
 
@@ -1397,6 +1418,159 @@ impl ChatPrompt {
         }
     }
 
+    /// Render the setup card when no API keys are configured
+    fn render_setup_card(&self, cx: &Context<Self>) -> impl IntoElement {
+        let colors = &self.prompt_colors;
+
+        // Card styling values
+        let _card_border = (colors.quote_border << 8) | 0x60; // 40% opacity (unused but kept for future)
+        let card_bg = (colors.code_bg << 8) | 0x30; // ~20% opacity
+        let accent_bg = (colors.accent_color << 8) | 0x26; // 15% opacity
+        let accent_border = (colors.accent_color << 8) | 0x40; // 25% opacity
+
+        // Get the configure callback for the button click
+        let on_configure = self.on_configure.clone();
+
+        div()
+            .flex()
+            .flex_col()
+            .items_center()
+            .justify_center()
+            .flex_1()
+            .gap(px(20.))
+            .px(px(24.))
+            // Icon - settings/key icon
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .size(px(56.))
+                    .rounded(px(14.))
+                    .bg(rgba(card_bg))
+                    .child(
+                        svg()
+                            .path(IconName::Settings.external_path())
+                            .size(px(28.))
+                            .text_color(rgb(colors.text_secondary)),
+                    ),
+            )
+            // Title
+            .child(
+                div()
+                    .text_lg()
+                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                    .text_color(rgb(colors.text_primary))
+                    .child("API Key Required"),
+            )
+            // Description
+            .child(
+                div()
+                    .text_sm()
+                    .text_color(rgb(colors.text_secondary))
+                    .text_center()
+                    .max_w(px(320.))
+                    .child("Set up an API key to use the Ask AI feature. The easiest option is Vercel AI Gateway."),
+            )
+            // Configure button
+            .child(
+                div()
+                    .id("configure-button")
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .gap(px(8.))
+                    .px(px(16.))
+                    .py(px(10.))
+                    .rounded(px(8.))
+                    .bg(rgba(accent_bg))
+                    .border_1()
+                    .border_color(rgba(accent_border))
+                    .cursor_pointer()
+                    .hover(|s| s.bg(rgba((colors.accent_color << 8) | 0x40)))
+                    .when_some(on_configure.clone(), |d, callback| {
+                        d.on_click(cx.listener(move |_this, _event, _window, _cx| {
+                            logging::log("CHAT", "Configure button clicked - triggering API key setup");
+                            callback();
+                        }))
+                    })
+                    .child(
+                        svg()
+                            .path(IconName::Settings.external_path())
+                            .size(px(16.))
+                            .text_color(rgb(colors.accent_color)),
+                    )
+                    .child(
+                        div()
+                            .text_sm()
+                            .font_weight(gpui::FontWeight::MEDIUM)
+                            .text_color(rgb(colors.accent_color))
+                            .child("Configure Vercel AI Gateway"),
+                    ),
+            )
+            // Hint about no restart needed
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .items_center()
+                    .gap(px(4.))
+                    .mt(px(8.))
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(colors.text_tertiary))
+                            .child("No restart required"),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(colors.text_tertiary))
+                            .child("After configuring, press Tab again to try"),
+                    ),
+            )
+            // Keyboard hint
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(6.))
+                    .mt(px(12.))
+                    .child(
+                        div()
+                            .px(px(6.))
+                            .py(px(2.))
+                            .rounded(px(4.))
+                            .bg(rgba(card_bg))
+                            .text_xs()
+                            .text_color(rgb(colors.text_tertiary))
+                            .child("Enter"),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(colors.text_tertiary))
+                            .child("to configure"),
+                    )
+                    .child(
+                        div()
+                            .px(px(6.))
+                            .py(px(2.))
+                            .rounded(px(4.))
+                            .bg(rgba(card_bg))
+                            .text_xs()
+                            .text_color(rgb(colors.text_tertiary))
+                            .child("Esc"),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(colors.text_tertiary))
+                            .child("to go back"),
+                    ),
+            )
+    }
+
     /// Render the input field at the top
     fn render_input(&self, _cx: &Context<Self>) -> impl IntoElement {
         let colors = &self.prompt_colors;
@@ -1550,14 +1724,15 @@ impl Focusable for ChatPrompt {
 
 impl Render for ChatPrompt {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        // Start cursor blink timer on first render
-        if !self.cursor_blink_started {
+        // Start cursor blink timer on first render (only needed when not in setup mode)
+        if !self.needs_setup && !self.cursor_blink_started {
             self.cursor_blink_started = true;
             self.start_cursor_blink(cx);
         }
 
         // Process pending_submit on first render (used when Tab opens chat with query)
-        if self.pending_submit && !self.input.is_empty() {
+        // Skip if in setup mode
+        if !self.needs_setup && self.pending_submit && !self.input.is_empty() {
             self.pending_submit = false;
             logging::log(
                 "CHAT",
@@ -1569,11 +1744,32 @@ impl Render for ChatPrompt {
         let colors = &self.prompt_colors;
 
         let actions_menu_open = self.actions_menu_open;
+        let needs_setup = self.needs_setup;
+        let on_configure = self.on_configure.clone();
 
         let handle_key = cx.listener(move |this, event: &KeyDownEvent, _window, cx| {
             let key = event.keystroke.key.to_lowercase();
             let key_char = event.keystroke.key_char.as_deref();
             let has_cmd = event.keystroke.modifiers.platform; // ⌘ on macOS
+
+            // In setup mode, only handle Escape and Enter
+            if needs_setup {
+                match key.as_str() {
+                    "escape" => this.handle_escape(cx),
+                    "enter" => {
+                        // Trigger configure callback on Enter
+                        if let Some(ref callback) = on_configure {
+                            logging::log(
+                                "CHAT",
+                                "Enter pressed in setup mode - triggering configure",
+                            );
+                            callback();
+                        }
+                    }
+                    _ => {}
+                }
+                return;
+            }
 
             // Handle actions menu keys when open
             if actions_menu_open {
@@ -1626,6 +1822,25 @@ impl Render for ChatPrompt {
         });
 
         let container_bg: Option<Hsla> = get_vibrancy_background(&self.theme).map(Hsla::from);
+
+        // If needs_setup, render setup card instead of normal chat
+        if self.needs_setup {
+            return div()
+                .id("chat-prompt-setup")
+                .flex()
+                .flex_col()
+                .w_full()
+                .h_full()
+                .when_some(container_bg, |d, bg| d.bg(bg))
+                .key_context("chat_prompt_setup")
+                .track_focus(&self.focus_handle)
+                .on_key_down(handle_key)
+                // Header with back button and title
+                .child(self.render_header())
+                // Setup card content
+                .child(self.render_setup_card(cx))
+                .into_any_element();
+        }
 
         // Input area at TOP
         let input_area = div()
@@ -1695,5 +1910,6 @@ impl Render for ChatPrompt {
             .child(self.render_footer())
             // Actions menu overlay (when open)
             .when(show_actions_menu, |d| d.child(self.render_actions_menu(cx)))
+            .into_any_element()
     }
 }
