@@ -162,7 +162,6 @@ Current status: ${verificationStatus}
         lastVerificationTime = 0
         logTriggered(sessionId, PLUGIN_NAME, "event", "Session created - reset verification state")
       } else {
-        logSkipped(sessionId, PLUGIN_NAME, "event", `Unhandled event type: ${event.type}`)
       }
     }
   }

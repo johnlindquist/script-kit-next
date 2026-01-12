@@ -127,7 +127,6 @@ const ConventionalCommitReminder: Plugin = async ({ client }) => {
         return
       }
       
-      logSkipped(sessionId, PLUGIN_NAME, "event", `Unhandled event type: ${event.type}`)
     },
     
     // Track tool executions

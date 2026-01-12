@@ -217,7 +217,6 @@ const GuidelineEnforcer: Plugin = async () => {
         return
       }
       
-      logSkipped(sessionId, PLUGIN_NAME, "event", `Unhandled event type: ${event.type}`)
     },
     
     // Track tool executions using the documented hook
