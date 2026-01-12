@@ -51,6 +51,174 @@ enum StreamingEvent {
     Error(String),
 }
 
+/// A preset configuration for starting new chats
+#[derive(Clone)]
+struct AiPreset {
+    /// Unique identifier
+    id: &'static str,
+    /// Display name
+    name: &'static str,
+    /// Description shown in dropdown
+    description: &'static str,
+    /// System prompt to use
+    system_prompt: &'static str,
+    /// Icon name
+    icon: LocalIconName,
+    /// Preferred model ID (if any)
+    preferred_model: Option<&'static str>,
+}
+
+impl AiPreset {
+    /// Get default presets
+    fn default_presets() -> Vec<AiPreset> {
+        vec![
+            AiPreset {
+                id: "general",
+                name: "General Assistant",
+                description: "Helpful AI assistant for any task",
+                system_prompt: "You are a helpful AI assistant.",
+                icon: LocalIconName::Star,
+                preferred_model: None,
+            },
+            AiPreset {
+                id: "coder",
+                name: "Code Assistant",
+                description: "Expert programmer and debugger",
+                system_prompt: "You are an expert programmer. Write clean, efficient, well-documented code. Explain your reasoning.",
+                icon: LocalIconName::Code,
+                preferred_model: None,
+            },
+            AiPreset {
+                id: "writer",
+                name: "Writing Assistant",
+                description: "Help with writing and editing",
+                system_prompt: "You are a skilled writer and editor. Help improve writing clarity, grammar, and style.",
+                icon: LocalIconName::FileCode,
+                preferred_model: None,
+            },
+            AiPreset {
+                id: "researcher",
+                name: "Research Assistant",
+                description: "Deep analysis and research",
+                system_prompt: "You are a thorough researcher. Analyze topics deeply, cite sources when possible, and provide comprehensive answers.",
+                icon: LocalIconName::MagnifyingGlass,
+                preferred_model: None,
+            },
+            AiPreset {
+                id: "creative",
+                name: "Creative Partner",
+                description: "Brainstorming and creative ideas",
+                system_prompt: "You are a creative partner. Help brainstorm ideas, think outside the box, and explore possibilities.",
+                icon: LocalIconName::BoltFilled,
+                preferred_model: None,
+            },
+        ]
+    }
+}
+
+/// Action available in the command bar (Cmd+K menu)
+#[derive(Clone)]
+struct AiAction {
+    /// Unique identifier for the action
+    id: &'static str,
+    /// Display name
+    name: &'static str,
+    /// Icon name (uses local SVG icons from LocalIconName)
+    icon: LocalIconName,
+    /// Keyboard shortcut display (e.g., "⌘C")
+    shortcut: Option<&'static str>,
+    /// Section group (for visual grouping)
+    section: &'static str,
+}
+
+impl AiAction {
+    /// Create all available AI actions
+    fn all_actions() -> Vec<AiAction> {
+        vec![
+            // Response actions
+            AiAction {
+                id: "copy_response",
+                name: "Copy Response",
+                icon: LocalIconName::Copy,
+                shortcut: Some("⇧⌘C"),
+                section: "Response",
+            },
+            AiAction {
+                id: "copy_chat",
+                name: "Copy Chat",
+                icon: LocalIconName::Copy,
+                shortcut: Some("⌥⇧⌘C"),
+                section: "Response",
+            },
+            AiAction {
+                id: "copy_last_code",
+                name: "Copy Last Code Block",
+                icon: LocalIconName::Code,
+                shortcut: Some("⌥⌘C"),
+                section: "Response",
+            },
+            // Submit actions
+            AiAction {
+                id: "submit",
+                name: "Submit",
+                icon: LocalIconName::ArrowUp,
+                shortcut: Some("↵"),
+                section: "Actions",
+            },
+            AiAction {
+                id: "new_chat",
+                name: "New Chat",
+                icon: LocalIconName::Plus,
+                shortcut: Some("⌘N"),
+                section: "Actions",
+            },
+            AiAction {
+                id: "delete_chat",
+                name: "Delete Chat",
+                icon: LocalIconName::Trash,
+                shortcut: Some("⌘⌫"),
+                section: "Actions",
+            },
+            // Attachments
+            AiAction {
+                id: "add_attachment",
+                name: "Add Attachments...",
+                icon: LocalIconName::Plus,
+                shortcut: Some("⇧⌘A"),
+                section: "Attachments",
+            },
+            AiAction {
+                id: "paste_image",
+                name: "Paste Image from Clipboard",
+                icon: LocalIconName::File,
+                shortcut: Some("⌘V"),
+                section: "Attachments",
+            },
+            // Settings
+            AiAction {
+                id: "change_model",
+                name: "Change Model",
+                icon: LocalIconName::Settings,
+                shortcut: None,
+                section: "Settings",
+            },
+        ]
+    }
+
+    /// Filter actions by search query
+    fn filter_actions(query: &str, actions: &[AiAction]) -> Vec<AiAction> {
+        if query.is_empty() {
+            return actions.to_vec();
+        }
+        let query_lower = query.to_lowercase();
+        actions
+            .iter()
+            .filter(|a| a.name.to_lowercase().contains(&query_lower))
+            .cloned()
+            .collect()
+    }
+}
+
 /// Date group categories for sidebar organization
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum DateGroup {
@@ -314,6 +482,43 @@ pub struct AiApp {
 
     /// API key input state (for configure flow)
     api_key_input_state: Entity<InputState>,
+
+    // === Command Bar State ===
+    /// Whether the command bar is visible (Cmd+K)
+    showing_command_bar: bool,
+
+    /// Command bar search input state
+    command_bar_search_state: Entity<InputState>,
+
+    /// Selected action index in command bar
+    command_bar_selected_index: usize,
+
+    /// Filtered actions based on search query
+    command_bar_filtered_actions: Vec<AiAction>,
+
+    // === Model Picker State ===
+    /// Whether the model picker dropdown is visible
+    showing_model_picker: bool,
+
+    /// Selected index in model picker
+    model_picker_selected_index: usize,
+
+    // === Presets State ===
+    /// Whether the new chat dropdown (presets) is visible
+    showing_presets_dropdown: bool,
+
+    /// Available presets
+    presets: Vec<AiPreset>,
+
+    /// Selected preset index
+    presets_selected_index: usize,
+
+    // === Attachments State ===
+    /// Whether the attachments picker is visible
+    showing_attachments_picker: bool,
+
+    /// List of pending attachments (file paths)
+    pending_attachments: Vec<String>,
 }
 
 impl AiApp {
@@ -414,6 +619,19 @@ impl AiApp {
             }
         });
 
+        // Create command bar search input
+        let command_bar_search_state =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Search for actions..."));
+
+        // Subscribe to command bar search changes
+        let command_bar_sub = cx.subscribe_in(&command_bar_search_state, window, {
+            move |this, _, ev: &InputEvent, window, cx| match ev {
+                InputEvent::Change => this.filter_command_bar_actions(cx),
+                InputEvent::PressEnter { .. } => this.execute_command_bar_action(window, cx),
+                _ => {}
+            }
+        });
+
         // Load messages for the selected chat
         let current_messages = selected_chat_id
             .and_then(|id| storage::get_chat_messages(&id).ok())
@@ -436,7 +654,7 @@ impl AiApp {
             available_models,
             selected_model,
             focus_handle,
-            _subscriptions: vec![input_sub, search_sub, api_key_sub],
+            _subscriptions: vec![input_sub, search_sub, api_key_sub, command_bar_sub],
             // Streaming state
             is_streaming: false,
             streaming_content: String::new(),
@@ -453,6 +671,21 @@ impl AiApp {
             setup_copied_at: None,
             showing_api_key_input: false,
             api_key_input_state,
+            // Command bar state
+            showing_command_bar: false,
+            command_bar_search_state,
+            command_bar_selected_index: 0,
+            command_bar_filtered_actions: AiAction::all_actions(),
+            // Model picker state
+            showing_model_picker: false,
+            model_picker_selected_index: 0,
+            // Presets state
+            showing_presets_dropdown: false,
+            presets: AiPreset::default_presets(),
+            presets_selected_index: 0,
+            // Attachments state
+            showing_attachments_picker: false,
+            pending_attachments: Vec::new(),
         }
     }
 
@@ -773,6 +1006,332 @@ impl AiApp {
             }
         }
 
+        cx.notify();
+    }
+
+    // === Command Bar Methods ===
+
+    /// Show the command bar overlay (Cmd+K)
+    fn show_command_bar(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.showing_command_bar = true;
+        self.command_bar_selected_index = 0;
+        self.command_bar_filtered_actions = AiAction::all_actions();
+        // Clear search and focus it
+        self.command_bar_search_state.update(cx, |state, cx| {
+            state.set_value("", window, cx);
+        });
+        self.command_bar_search_state
+            .focus_handle(cx)
+            .focus(window, cx);
+        cx.notify();
+    }
+
+    /// Hide the command bar overlay
+    fn hide_command_bar(&mut self, cx: &mut Context<Self>) {
+        self.showing_command_bar = false;
+        cx.notify();
+    }
+
+    /// Filter command bar actions based on search query
+    fn filter_command_bar_actions(&mut self, cx: &mut Context<Self>) {
+        let query = self.command_bar_search_state.read(cx).value().to_string();
+        let all_actions = AiAction::all_actions();
+        self.command_bar_filtered_actions = AiAction::filter_actions(&query, &all_actions);
+        self.command_bar_selected_index = 0;
+        cx.notify();
+    }
+
+    /// Move selection up in command bar
+    fn command_bar_select_prev(&mut self, cx: &mut Context<Self>) {
+        if !self.command_bar_filtered_actions.is_empty() {
+            if self.command_bar_selected_index > 0 {
+                self.command_bar_selected_index -= 1;
+            } else {
+                self.command_bar_selected_index = self.command_bar_filtered_actions.len() - 1;
+            }
+            cx.notify();
+        }
+    }
+
+    /// Move selection down in command bar
+    fn command_bar_select_next(&mut self, cx: &mut Context<Self>) {
+        if !self.command_bar_filtered_actions.is_empty() {
+            self.command_bar_selected_index =
+                (self.command_bar_selected_index + 1) % self.command_bar_filtered_actions.len();
+            cx.notify();
+        }
+    }
+
+    /// Execute the selected command bar action
+    fn execute_command_bar_action(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(action) = self
+            .command_bar_filtered_actions
+            .get(self.command_bar_selected_index)
+            .cloned()
+        {
+            self.hide_command_bar(cx);
+            self.execute_action(action.id, window, cx);
+        }
+    }
+
+    /// Execute an action by ID
+    fn execute_action(&mut self, action_id: &str, window: &mut Window, cx: &mut Context<Self>) {
+        match action_id {
+            "copy_response" => self.copy_last_response(cx),
+            "copy_chat" => self.copy_entire_chat(cx),
+            "copy_last_code" => self.copy_last_code_block(cx),
+            "submit" => self.submit_message(window, cx),
+            "new_chat" => {
+                self.create_chat(window, cx);
+            }
+            "delete_chat" => {
+                self.delete_selected_chat(cx);
+            }
+            "add_attachment" => {
+                self.show_attachments_picker(window, cx);
+            }
+            "paste_image" => self.paste_image_from_clipboard(cx),
+            "change_model" => {
+                self.show_model_picker(window, cx);
+            }
+            _ => {
+                tracing::warn!(action = action_id, "Unknown action");
+            }
+        }
+    }
+
+    /// Copy the last AI response to clipboard
+    fn copy_last_response(&self, cx: &mut Context<Self>) {
+        // Find the last assistant message
+        if let Some(last_response) = self
+            .current_messages
+            .iter()
+            .rev()
+            .find(|m| m.role == MessageRole::Assistant)
+        {
+            cx.write_to_clipboard(gpui::ClipboardItem::new_string(
+                last_response.content.clone(),
+            ));
+            info!("Copied last response to clipboard");
+        }
+    }
+
+    /// Copy the entire chat to clipboard
+    fn copy_entire_chat(&self, cx: &mut Context<Self>) {
+        let chat_text: String = self
+            .current_messages
+            .iter()
+            .map(|m| {
+                let role = if m.role == MessageRole::User {
+                    "You"
+                } else {
+                    "AI"
+                };
+                format!("**{}**: {}\n\n", role, m.content)
+            })
+            .collect();
+        cx.write_to_clipboard(gpui::ClipboardItem::new_string(chat_text));
+        info!("Copied entire chat to clipboard");
+    }
+
+    /// Copy the last code block from AI response
+    fn copy_last_code_block(&self, cx: &mut Context<Self>) {
+        // Find the last assistant message with a code block
+        for msg in self.current_messages.iter().rev() {
+            if msg.role == MessageRole::Assistant {
+                // Simple regex-like search for code blocks
+                if let Some(start) = msg.content.find("```") {
+                    let after_start = &msg.content[start + 3..];
+                    // Find the end of the language identifier (newline)
+                    if let Some(lang_end) = after_start.find('\n') {
+                        let code_start = &after_start[lang_end + 1..];
+                        if let Some(end) = code_start.find("```") {
+                            let code = &code_start[..end];
+                            cx.write_to_clipboard(gpui::ClipboardItem::new_string(
+                                code.to_string(),
+                            ));
+                            info!("Copied last code block to clipboard");
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+        info!("No code block found to copy");
+    }
+
+    /// Paste image from clipboard as attachment
+    fn paste_image_from_clipboard(&mut self, cx: &mut Context<Self>) {
+        // Get the current clipboard text or image
+        // Note: GPUI's clipboard API may not support raw image data directly
+        // For now, we'll use a placeholder that can be enhanced later
+        info!("Paste image from clipboard - checking for image data");
+        // TODO: Implement proper image clipboard support when GPUI supports it
+        cx.notify();
+    }
+
+    // === Model Picker Methods ===
+
+    /// Show the model picker dropdown
+    fn show_model_picker(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        // Find current model index
+        self.model_picker_selected_index = self
+            .selected_model
+            .as_ref()
+            .and_then(|sm| self.available_models.iter().position(|m| m.id == sm.id))
+            .unwrap_or(0);
+        self.showing_model_picker = true;
+        cx.notify();
+    }
+
+    /// Hide the model picker dropdown
+    fn hide_model_picker(&mut self, cx: &mut Context<Self>) {
+        self.showing_model_picker = false;
+        cx.notify();
+    }
+
+    /// Move selection up in model picker
+    fn model_picker_select_prev(&mut self, cx: &mut Context<Self>) {
+        if !self.available_models.is_empty() {
+            if self.model_picker_selected_index > 0 {
+                self.model_picker_selected_index -= 1;
+            } else {
+                self.model_picker_selected_index = self.available_models.len() - 1;
+            }
+            cx.notify();
+        }
+    }
+
+    /// Move selection down in model picker
+    fn model_picker_select_next(&mut self, cx: &mut Context<Self>) {
+        if !self.available_models.is_empty() {
+            self.model_picker_selected_index =
+                (self.model_picker_selected_index + 1) % self.available_models.len();
+            cx.notify();
+        }
+    }
+
+    /// Select the current model in the picker
+    fn select_model_from_picker(&mut self, cx: &mut Context<Self>) {
+        if let Some(model) = self.available_models.get(self.model_picker_selected_index) {
+            self.selected_model = Some(model.clone());
+            self.on_model_change(self.model_picker_selected_index, cx);
+        }
+        self.hide_model_picker(cx);
+    }
+
+    // === Presets Dropdown Methods ===
+
+    /// Show the presets dropdown
+    fn show_presets_dropdown(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        self.presets_selected_index = 0;
+        self.showing_presets_dropdown = true;
+        cx.notify();
+    }
+
+    /// Hide the presets dropdown
+    fn hide_presets_dropdown(&mut self, cx: &mut Context<Self>) {
+        self.showing_presets_dropdown = false;
+        cx.notify();
+    }
+
+    /// Move selection up in presets dropdown
+    fn presets_select_prev(&mut self, cx: &mut Context<Self>) {
+        if !self.presets.is_empty() {
+            if self.presets_selected_index > 0 {
+                self.presets_selected_index -= 1;
+            } else {
+                self.presets_selected_index = self.presets.len() - 1;
+            }
+            cx.notify();
+        }
+    }
+
+    /// Move selection down in presets dropdown
+    fn presets_select_next(&mut self, cx: &mut Context<Self>) {
+        if !self.presets.is_empty() {
+            self.presets_selected_index = (self.presets_selected_index + 1) % self.presets.len();
+            cx.notify();
+        }
+    }
+
+    /// Create a new chat with the selected preset
+    fn create_chat_with_preset(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(preset) = self.presets.get(self.presets_selected_index).cloned() {
+            self.hide_presets_dropdown(cx);
+
+            // Create new chat with system prompt
+            let chat_id = self.create_chat(window, cx);
+            if let Some(chat_id) = chat_id {
+                // Add system message from preset
+                if !preset.system_prompt.is_empty() {
+                    let system_msg = Message::new(
+                        chat_id,
+                        crate::ai::model::MessageRole::System,
+                        preset.system_prompt,
+                    );
+                    if let Err(e) = storage::save_message(&system_msg) {
+                        tracing::error!(error = %e, "Failed to save system message");
+                    }
+                    // Reload messages to include system prompt
+                    self.current_messages =
+                        storage::get_chat_messages(&chat_id).unwrap_or_default();
+                }
+
+                // Set preferred model if specified
+                if let Some(model_id) = preset.preferred_model {
+                    if let Some(model) = self.available_models.iter().find(|m| m.id == model_id) {
+                        self.selected_model = Some(model.clone());
+                    }
+                }
+
+                cx.notify();
+            }
+        }
+    }
+
+    // === Attachments Picker Methods ===
+
+    /// Show the attachments picker
+    fn show_attachments_picker(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        self.showing_attachments_picker = true;
+        cx.notify();
+    }
+
+    /// Hide the attachments picker
+    fn hide_attachments_picker(&mut self, cx: &mut Context<Self>) {
+        self.showing_attachments_picker = false;
+        cx.notify();
+    }
+
+    /// Add a file attachment
+    fn add_attachment(&mut self, path: String, cx: &mut Context<Self>) {
+        if !self.pending_attachments.contains(&path) {
+            self.pending_attachments.push(path);
+            cx.notify();
+        }
+    }
+
+    /// Remove a file attachment
+    fn remove_attachment(&mut self, index: usize, cx: &mut Context<Self>) {
+        if index < self.pending_attachments.len() {
+            self.pending_attachments.remove(index);
+            cx.notify();
+        }
+    }
+
+    /// Clear all attachments
+    fn clear_attachments(&mut self, cx: &mut Context<Self>) {
+        self.pending_attachments.clear();
+        cx.notify();
+    }
+
+    /// Hide all dropdowns
+    fn hide_all_dropdowns(&mut self, cx: &mut Context<Self>) {
+        self.showing_command_bar = false;
+        self.showing_model_picker = false;
+        self.showing_presets_dropdown = false;
+        self.showing_attachments_picker = false;
         cx.notify();
     }
 
@@ -1658,17 +2217,46 @@ impl AiApp {
                     .px_2()
                     .pb_2()
                     .gap_2()
-                    // New chat button row
+                    // New chat button row with preset dropdown option
                     .child(
-                        div().flex().items_center().justify_end().w_full().child(
-                            Button::new("new-chat")
-                                .ghost()
-                                .xsmall()
-                                .icon(IconName::Plus)
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    this.create_chat(window, cx);
-                                })),
-                        ),
+                        div()
+                            .flex()
+                            .items_center()
+                            .justify_end()
+                            .w_full()
+                            .gap_1()
+                            // New chat button
+                            .child(
+                                Button::new("new-chat")
+                                    .ghost()
+                                    .xsmall()
+                                    .icon(IconName::Plus)
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.create_chat(window, cx);
+                                    })),
+                            )
+                            // Presets dropdown trigger
+                            .child(
+                                div()
+                                    .id("presets-trigger")
+                                    .px_1()
+                                    .rounded(px(4.))
+                                    .cursor_pointer()
+                                    .hover(|el| el.bg(cx.theme().sidebar_accent.opacity(0.5)))
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        if this.showing_presets_dropdown {
+                                            this.hide_presets_dropdown(cx);
+                                        } else {
+                                            this.hide_all_dropdowns(cx);
+                                            this.show_presets_dropdown(window, cx);
+                                        }
+                                    }))
+                                    .child(
+                                        Icon::new(IconName::ChevronDown)
+                                            .size(px(12.))
+                                            .text_color(cx.theme().sidebar_foreground.opacity(0.7)),
+                                    ),
+                            ),
                     )
                     .child(self.render_search(cx)),
             )
@@ -1921,14 +2509,18 @@ impl AiApp {
             .unwrap_or_else(|| "Select Model".to_string())
             .into();
 
-        // Model picker button - clicking cycles through models
+        // Model picker button - clicking opens dropdown
         Button::new("model-picker")
             .ghost()
             .xsmall()
             .icon(IconName::ChevronDown)
             .child(model_label)
-            .on_click(cx.listener(|this, _, _window, cx| {
-                this.cycle_model(cx);
+            .on_click(cx.listener(|this, _, window, cx| {
+                if this.showing_model_picker {
+                    this.hide_model_picker(cx);
+                } else {
+                    this.show_model_picker(window, cx);
+                }
             }))
             .into_any_element()
     }
@@ -2466,9 +3058,10 @@ impl AiApp {
                     .items_center()
                     .gap_2()
                     .w_full()
-                    // Plus button on the left using SVG icon (properly centered)
+                    // Plus button on the left - opens attachments picker
                     .child(
                         div()
+                            .id("attachments-btn")
                             .flex()
                             .items_center()
                             .justify_center()
@@ -2478,6 +3071,14 @@ impl AiApp {
                             .border_color(cx.theme().muted_foreground.opacity(0.4))
                             .cursor_pointer()
                             .hover(|s| s.bg(cx.theme().muted.opacity(0.3)))
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                if this.showing_attachments_picker {
+                                    this.hide_attachments_picker(cx);
+                                } else {
+                                    this.hide_all_dropdowns(cx);
+                                    this.show_attachments_picker(window, cx);
+                                }
+                            }))
                             .child(
                                 svg()
                                     .external_path(LocalIconName::Plus.external_path())
@@ -2804,11 +3405,103 @@ impl Render for AiApp {
                     return;
                 }
 
+                // Handle command bar navigation when it's open
+                if this.showing_command_bar {
+                    match key {
+                        "up" | "arrowup" => {
+                            this.command_bar_select_prev(cx);
+                            return;
+                        }
+                        "down" | "arrowdown" => {
+                            this.command_bar_select_next(cx);
+                            return;
+                        }
+                        "escape" => {
+                            this.hide_command_bar(cx);
+                            return;
+                        }
+                        _ => {}
+                    }
+                }
+
+                // Handle model picker navigation
+                if this.showing_model_picker {
+                    match key {
+                        "up" | "arrowup" => {
+                            this.model_picker_select_prev(cx);
+                            return;
+                        }
+                        "down" | "arrowdown" => {
+                            this.model_picker_select_next(cx);
+                            return;
+                        }
+                        "enter" | "return" => {
+                            this.select_model_from_picker(cx);
+                            return;
+                        }
+                        "escape" => {
+                            this.hide_model_picker(cx);
+                            return;
+                        }
+                        _ => {}
+                    }
+                }
+
+                // Handle presets dropdown navigation
+                if this.showing_presets_dropdown {
+                    match key {
+                        "up" | "arrowup" => {
+                            this.presets_select_prev(cx);
+                            return;
+                        }
+                        "down" | "arrowdown" => {
+                            this.presets_select_next(cx);
+                            return;
+                        }
+                        "enter" | "return" => {
+                            this.create_chat_with_preset(window, cx);
+                            return;
+                        }
+                        "escape" => {
+                            this.hide_presets_dropdown(cx);
+                            return;
+                        }
+                        _ => {}
+                    }
+                }
+
+                // Handle attachments picker
+                if this.showing_attachments_picker && key == "escape" {
+                    this.hide_attachments_picker(cx);
+                    return;
+                }
+
                 // platform modifier = Cmd on macOS, Ctrl on Windows/Linux
                 if modifiers.platform {
                     match key {
+                        // Cmd+K to toggle command bar (like Raycast)
+                        "k" => {
+                            this.hide_all_dropdowns(cx);
+                            this.show_command_bar(window, cx);
+                        }
+                        // Cmd+N for new chat (with Shift for presets)
                         "n" => {
-                            this.create_chat(window, cx);
+                            if modifiers.shift {
+                                // Cmd+Shift+N opens presets dropdown
+                                this.hide_all_dropdowns(cx);
+                                this.show_presets_dropdown(window, cx);
+                            } else {
+                                this.create_chat(window, cx);
+                            }
+                        }
+                        // Cmd+M to toggle model picker
+                        "m" => {
+                            if this.showing_model_picker {
+                                this.hide_model_picker(cx);
+                            } else {
+                                this.hide_all_dropdowns(cx);
+                                this.show_model_picker(window, cx);
+                            }
                         }
                         "enter" | "return" => this.submit_message(window, cx),
                         // Cmd+\ to toggle sidebar (like Raycast)
@@ -2834,9 +3527,666 @@ impl Render for AiApp {
                         _ => {}
                     }
                 }
+
+                // Escape closes any open dropdown
+                if key == "escape"
+                    && (this.showing_command_bar
+                        || this.showing_model_picker
+                        || this.showing_presets_dropdown
+                        || this.showing_attachments_picker)
+                {
+                    this.hide_all_dropdowns(cx);
+                }
             }))
             .child(self.render_sidebar(cx))
             .child(self.render_main_panel(cx))
+            // Overlay dropdowns (only one at a time)
+            .when(self.showing_command_bar, |el| {
+                el.child(self.render_command_bar_overlay(cx))
+            })
+            .when(self.showing_model_picker, |el| {
+                el.child(self.render_model_picker_dropdown(cx))
+            })
+            .when(self.showing_presets_dropdown, |el| {
+                el.child(self.render_presets_dropdown(cx))
+            })
+            .when(self.showing_attachments_picker, |el| {
+                el.child(self.render_attachments_picker(cx))
+            })
+    }
+}
+
+impl AiApp {
+    /// Render the command bar overlay (Raycast-style Cmd+K menu)
+    fn render_command_bar_overlay(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        // Extract theme colors upfront to avoid borrow conflicts
+        let theme = cx.theme();
+        let bg_color = theme.background;
+        let border_color = theme.border;
+        let muted_fg = theme.muted_foreground;
+        let accent = theme.accent;
+        let accent_fg = theme.accent_foreground;
+        let fg = theme.foreground;
+
+        // Group actions by section
+        let section_order = ["Response", "Actions", "Attachments", "Settings"];
+        let mut sections: std::collections::HashMap<&str, Vec<(usize, &AiAction)>> =
+            std::collections::HashMap::new();
+        for (i, action) in self.command_bar_filtered_actions.iter().enumerate() {
+            sections
+                .entry(action.section)
+                .or_default()
+                .push((i, action));
+        }
+
+        // Build section elements (including items) inline
+        let section_elements: Vec<_> = section_order
+            .iter()
+            .filter_map(|&section_name| {
+                let items = sections.get(section_name)?;
+                if items.is_empty() {
+                    return None;
+                }
+
+                // Build item elements for this section
+                let item_elements: Vec<_> = items
+                    .iter()
+                    .map(|(idx, action)| {
+                        let is_selected = *idx == self.command_bar_selected_index;
+                        let action_id = action.id;
+                        let icon = action.icon;
+                        let name = action.name.to_string();
+                        let shortcut_text = action.shortcut.map(|s| s.to_string());
+
+                        let mut item = div()
+                            .id(SharedString::from(format!("cmd-action-{}", action_id)))
+                            .px_3()
+                            .py_2()
+                            .mx_1()
+                            .rounded_md()
+                            .flex()
+                            .items_center()
+                            .gap_3()
+                            .cursor_pointer()
+                            .when(is_selected, |el| el.bg(accent))
+                            .when(!is_selected, |el| el.hover(|el| el.bg(accent.opacity(0.5))))
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                this.hide_command_bar(cx);
+                                this.execute_action(action_id, window, cx);
+                            }))
+                            // Icon
+                            .child(
+                                svg()
+                                    .external_path(icon.external_path())
+                                    .size(px(16.))
+                                    .text_color(if is_selected { accent_fg } else { muted_fg }),
+                            )
+                            // Action name
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .text_sm()
+                                    .text_color(if is_selected { accent_fg } else { fg })
+                                    .child(name),
+                            );
+
+                        // Add shortcut if present
+                        if let Some(shortcut) = shortcut_text {
+                            item = item.child(
+                                div()
+                                    .text_xs()
+                                    .text_color(if is_selected { accent_fg } else { muted_fg })
+                                    .child(shortcut),
+                            );
+                        }
+                        item
+                    })
+                    .collect();
+
+                Some(
+                    div()
+                        .flex()
+                        .flex_col()
+                        // Section header
+                        .child(
+                            div()
+                                .px_3()
+                                .py_1()
+                                .text_xs()
+                                .text_color(muted_fg)
+                                .child(section_name.to_string()),
+                        )
+                        // Section items
+                        .children(item_elements),
+                )
+            })
+            .collect();
+
+        // Semi-transparent overlay background
+        div()
+            .id("command-bar-overlay")
+            .absolute()
+            .inset_0()
+            .flex()
+            .items_center()
+            .justify_center()
+            .bg(gpui::rgba(0x00000080)) // Semi-transparent black overlay
+            .on_click(cx.listener(|this, _, _, cx| {
+                // Close when clicking outside the command bar
+                this.hide_command_bar(cx);
+            }))
+            .child(
+                // Command bar container - stop propagation by having its own click handler
+                div()
+                    .id("command-bar-container")
+                    .w(px(500.0))
+                    .max_h(px(400.0))
+                    .bg(bg_color)
+                    .border_1()
+                    .border_color(border_color)
+                    .rounded_xl()
+                    .shadow_lg()
+                    .overflow_hidden()
+                    .flex()
+                    .flex_col()
+                    .on_click(cx.listener(|_, _, _, _| {
+                        // Stop propagation - don't close when clicking inside
+                    }))
+                    // Search input at top
+                    .child(
+                        div()
+                            .p_3()
+                            .border_b_1()
+                            .border_color(border_color)
+                            .child(Input::new(&self.command_bar_search_state).w_full()),
+                    )
+                    // Action list
+                    .child(
+                        div()
+                            .id("cmd-bar-actions")
+                            .flex_1()
+                            .overflow_y_scroll()
+                            .p_1()
+                            .children(section_elements),
+                    )
+                    // Footer with keyboard hints
+                    .child(
+                        div()
+                            .px_3()
+                            .py_2()
+                            .border_t_1()
+                            .border_color(border_color)
+                            .flex()
+                            .items_center()
+                            .gap_4()
+                            .text_xs()
+                            .text_color(muted_fg)
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap_1()
+                                    .child("↑↓")
+                                    .child("Navigate"),
+                            )
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap_1()
+                                    .child("↵")
+                                    .child("Select"),
+                            )
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap_1()
+                                    .child("esc")
+                                    .child("Close"),
+                            ),
+                    ),
+            )
+    }
+
+    /// Render the model picker dropdown overlay
+    fn render_model_picker_dropdown(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = cx.theme();
+        let bg_color = theme.background;
+        let border_color = theme.border;
+        let muted_fg = theme.muted_foreground;
+        let accent = theme.accent;
+        let accent_fg = theme.accent_foreground;
+        let fg = theme.foreground;
+
+        // Build model items
+        let model_items: Vec<_> = self
+            .available_models
+            .iter()
+            .enumerate()
+            .map(|(idx, model)| {
+                let is_selected = idx == self.model_picker_selected_index;
+                let model_id = model.id.clone();
+                let display_name = model.display_name.clone();
+                let provider = model.provider.clone();
+
+                div()
+                    .id(SharedString::from(format!("model-{}", idx)))
+                    .px_3()
+                    .py_2()
+                    .mx_1()
+                    .rounded_md()
+                    .flex()
+                    .items_center()
+                    .gap_3()
+                    .cursor_pointer()
+                    .when(is_selected, |el| el.bg(accent))
+                    .when(!is_selected, |el| el.hover(|el| el.bg(accent.opacity(0.5))))
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.model_picker_selected_index = idx;
+                        this.select_model_from_picker(cx);
+                    }))
+                    // Model name
+                    .child(
+                        div()
+                            .flex_1()
+                            .flex()
+                            .flex_col()
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .text_color(if is_selected { accent_fg } else { fg })
+                                    .child(display_name),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(if is_selected {
+                                        accent_fg.opacity(0.7)
+                                    } else {
+                                        muted_fg
+                                    })
+                                    .child(format!("{} • {}", provider, model_id)),
+                            ),
+                    )
+                    // Check mark if currently selected model
+                    .when(
+                        self.selected_model.as_ref().map(|m| &m.id) == Some(&model_id),
+                        |el| {
+                            el.child(
+                                svg()
+                                    .external_path(LocalIconName::Check.external_path())
+                                    .size(px(14.))
+                                    .text_color(if is_selected { accent_fg } else { accent }),
+                            )
+                        },
+                    )
+            })
+            .collect();
+
+        // Overlay
+        div()
+            .id("model-picker-overlay")
+            .absolute()
+            .inset_0()
+            .flex()
+            .items_end()
+            .justify_center()
+            .pb_20() // Position above the input area
+            .on_click(cx.listener(|this, _, _, cx| {
+                this.hide_model_picker(cx);
+            }))
+            .child(
+                div()
+                    .id("model-picker-container")
+                    .w(px(350.0))
+                    .max_h(px(300.0))
+                    .bg(bg_color)
+                    .border_1()
+                    .border_color(border_color)
+                    .rounded_lg()
+                    .shadow_lg()
+                    .overflow_hidden()
+                    .flex()
+                    .flex_col()
+                    .on_click(cx.listener(|_, _, _, _| {}))
+                    // Header
+                    .child(
+                        div()
+                            .px_3()
+                            .py_2()
+                            .border_b_1()
+                            .border_color(border_color)
+                            .text_sm()
+                            .font_weight(gpui::FontWeight::MEDIUM)
+                            .text_color(fg)
+                            .child("Select Model"),
+                    )
+                    // Model list
+                    .child(
+                        div()
+                            .id("model-list")
+                            .flex_1()
+                            .overflow_y_scroll()
+                            .p_1()
+                            .children(model_items),
+                    ),
+            )
+    }
+
+    /// Render the presets dropdown overlay
+    fn render_presets_dropdown(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = cx.theme();
+        let bg_color = theme.background;
+        let border_color = theme.border;
+        let muted_fg = theme.muted_foreground;
+        let accent = theme.accent;
+        let accent_fg = theme.accent_foreground;
+        let fg = theme.foreground;
+
+        // Build preset items
+        let preset_items: Vec<_> = self
+            .presets
+            .iter()
+            .enumerate()
+            .map(|(idx, preset)| {
+                let is_selected = idx == self.presets_selected_index;
+                let icon = preset.icon;
+                let name = preset.name.to_string();
+                let description = preset.description.to_string();
+
+                div()
+                    .id(SharedString::from(format!("preset-{}", idx)))
+                    .px_3()
+                    .py_2()
+                    .mx_1()
+                    .rounded_md()
+                    .flex()
+                    .items_center()
+                    .gap_3()
+                    .cursor_pointer()
+                    .when(is_selected, |el| el.bg(accent))
+                    .when(!is_selected, |el| el.hover(|el| el.bg(accent.opacity(0.5))))
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.presets_selected_index = idx;
+                        this.create_chat_with_preset(window, cx);
+                    }))
+                    // Icon
+                    .child(
+                        svg()
+                            .external_path(icon.external_path())
+                            .size(px(18.))
+                            .text_color(if is_selected { accent_fg } else { muted_fg }),
+                    )
+                    // Name and description
+                    .child(
+                        div()
+                            .flex_1()
+                            .flex()
+                            .flex_col()
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .text_color(if is_selected { accent_fg } else { fg })
+                                    .child(name),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(if is_selected {
+                                        accent_fg.opacity(0.7)
+                                    } else {
+                                        muted_fg
+                                    })
+                                    .child(description),
+                            ),
+                    )
+            })
+            .collect();
+
+        // Overlay positioned near the new chat button
+        div()
+            .id("presets-dropdown-overlay")
+            .absolute()
+            .inset_0()
+            .flex()
+            .items_start()
+            .justify_start()
+            .pt_12()
+            .pl_4()
+            .on_click(cx.listener(|this, _, _, cx| {
+                this.hide_presets_dropdown(cx);
+            }))
+            .child(
+                div()
+                    .id("presets-dropdown-container")
+                    .w(px(300.0))
+                    .max_h(px(350.0))
+                    .bg(bg_color)
+                    .border_1()
+                    .border_color(border_color)
+                    .rounded_lg()
+                    .shadow_lg()
+                    .overflow_hidden()
+                    .flex()
+                    .flex_col()
+                    .on_click(cx.listener(|_, _, _, _| {}))
+                    // Header
+                    .child(
+                        div()
+                            .px_3()
+                            .py_2()
+                            .border_b_1()
+                            .border_color(border_color)
+                            .text_sm()
+                            .font_weight(gpui::FontWeight::MEDIUM)
+                            .text_color(fg)
+                            .child("New Chat with Preset"),
+                    )
+                    // Preset list
+                    .child(
+                        div()
+                            .id("preset-list")
+                            .flex_1()
+                            .overflow_y_scroll()
+                            .p_1()
+                            .children(preset_items),
+                    )
+                    // Footer hint
+                    .child(
+                        div()
+                            .px_3()
+                            .py_2()
+                            .border_t_1()
+                            .border_color(border_color)
+                            .text_xs()
+                            .text_color(muted_fg)
+                            .child("Select a preset to start a new chat"),
+                    ),
+            )
+    }
+
+    /// Render the attachments picker overlay
+    fn render_attachments_picker(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = cx.theme();
+        let bg_color = theme.background;
+        let border_color = theme.border;
+        let muted_fg = theme.muted_foreground;
+        let accent = theme.accent;
+        let fg = theme.foreground;
+
+        // Attachment options
+        let options = [
+            ("file", "Add File", LocalIconName::File, "Browse for a file"),
+            ("image", "Add Image", LocalIconName::File, "Add an image"),
+            (
+                "clipboard",
+                "Paste from Clipboard",
+                LocalIconName::Copy,
+                "⌘V",
+            ),
+        ];
+
+        let option_items: Vec<_> = options
+            .iter()
+            .map(|(id, name, icon, hint)| {
+                let id_str = *id;
+                let name_str = name.to_string();
+                let icon_name = *icon;
+                let hint_str = hint.to_string();
+
+                div()
+                    .id(SharedString::from(format!("attach-{}", id_str)))
+                    .px_3()
+                    .py_2()
+                    .mx_1()
+                    .rounded_md()
+                    .flex()
+                    .items_center()
+                    .gap_3()
+                    .cursor_pointer()
+                    .hover(|el| el.bg(accent.opacity(0.5)))
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.hide_attachments_picker(cx);
+                        match id_str {
+                            "file" => {
+                                info!("File picker not implemented yet");
+                            }
+                            "image" => {
+                                info!("Image picker not implemented yet");
+                            }
+                            "clipboard" => {
+                                this.paste_image_from_clipboard(cx);
+                            }
+                            _ => {}
+                        }
+                    }))
+                    // Icon
+                    .child(
+                        svg()
+                            .external_path(icon_name.external_path())
+                            .size(px(16.))
+                            .text_color(muted_fg),
+                    )
+                    // Name
+                    .child(div().flex_1().text_sm().text_color(fg).child(name_str))
+                    // Hint
+                    .child(div().text_xs().text_color(muted_fg).child(hint_str))
+            })
+            .collect();
+
+        // Show pending attachments if any
+        let pending_items: Vec<_> = self
+            .pending_attachments
+            .iter()
+            .enumerate()
+            .map(|(idx, path)| {
+                let filename = std::path::Path::new(path)
+                    .file_name()
+                    .map(|s| s.to_string_lossy().to_string())
+                    .unwrap_or_else(|| path.clone());
+
+                div()
+                    .id(SharedString::from(format!("pending-{}", idx)))
+                    .px_3()
+                    .py_1()
+                    .mx_1()
+                    .rounded_md()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .bg(accent.opacity(0.2))
+                    // File icon
+                    .child(
+                        svg()
+                            .external_path(LocalIconName::File.external_path())
+                            .size(px(14.))
+                            .text_color(accent),
+                    )
+                    // Filename
+                    .child(
+                        div()
+                            .flex_1()
+                            .text_xs()
+                            .text_color(fg)
+                            .overflow_hidden()
+                            .text_ellipsis()
+                            .child(filename),
+                    )
+                    // Remove button
+                    .child(
+                        div()
+                            .id(SharedString::from(format!("remove-{}", idx)))
+                            .cursor_pointer()
+                            .hover(|el| el.text_color(gpui::red()))
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.remove_attachment(idx, cx);
+                            }))
+                            .child(
+                                svg()
+                                    .external_path(LocalIconName::Close.external_path())
+                                    .size(px(12.))
+                                    .text_color(muted_fg),
+                            ),
+                    )
+            })
+            .collect();
+
+        // Overlay
+        div()
+            .id("attachments-picker-overlay")
+            .absolute()
+            .inset_0()
+            .flex()
+            .items_end()
+            .justify_start()
+            .pb_20()
+            .pl_4()
+            .on_click(cx.listener(|this, _, _, cx| {
+                this.hide_attachments_picker(cx);
+            }))
+            .child(
+                div()
+                    .id("attachments-picker-container")
+                    .w(px(280.0))
+                    .bg(bg_color)
+                    .border_1()
+                    .border_color(border_color)
+                    .rounded_lg()
+                    .shadow_lg()
+                    .overflow_hidden()
+                    .flex()
+                    .flex_col()
+                    .on_click(cx.listener(|_, _, _, _| {}))
+                    // Header
+                    .child(
+                        div()
+                            .px_3()
+                            .py_2()
+                            .border_b_1()
+                            .border_color(border_color)
+                            .text_sm()
+                            .font_weight(gpui::FontWeight::MEDIUM)
+                            .text_color(fg)
+                            .child("Add Attachment"),
+                    )
+                    // Pending attachments (if any)
+                    .when(!self.pending_attachments.is_empty(), |el| {
+                        el.child(
+                            div()
+                                .px_2()
+                                .py_1()
+                                .border_b_1()
+                                .border_color(border_color)
+                                .flex()
+                                .flex_col()
+                                .gap_1()
+                                .children(pending_items),
+                        )
+                    })
+                    // Options
+                    .child(div().p_1().children(option_items)),
+            )
     }
 }
 
