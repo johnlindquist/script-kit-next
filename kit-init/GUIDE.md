@@ -460,79 +460,315 @@ Best regards,
 
 ---
 
-## Extensions
+## Extensions (Scriptlets)
 
-Extensions are markdown-based mini-scripts that execute shell commands. They're perfect for quick automations that don't need a full TypeScript file.
+Extensions (also called "scriptlets") are markdown files containing one or more mini-scripts. They're perfect for quick automations that don't need a full TypeScript file, and support multiple command types including bash, TypeScript, AppleScript, and more.
 
-### Creating an Extension
+### Creating an Extension File
 
 Create a `.md` file in `~/.scriptkit/kit/main/extensions/`:
 
 ```markdown
-<!-- 
-name: Open Project
-description: Open a project in VS Code
+---
+name: My Tools
+description: A collection of useful tools
 author: Your Name
--->
+icon: wrench
+---
 
-# Open Project
+# My Tools
 
-Opens the selected project in VS Code.
+A collection of quick automation tools.
 
-```bash
-code ~/Projects/{{project}}
+## Say Hello
+<!-- description: Greet the user -->
+<!-- shortcut: cmd+shift+h -->
+
+\`\`\`bash
+echo "Hello, World!"
+\`\`\`
+
+## Open VS Code
+<!-- description: Launch VS Code in current directory -->
+
+\`\`\`bash
+code .
+\`\`\`
 ```
+
+### File Structure
+
+An extension file has three main parts:
+
+1. **Frontmatter** (optional) - YAML metadata between `---` markers at the top
+2. **H1 Header** - The bundle title (displayed as a category)
+3. **H2 Headers** - Individual scriptlets (each becomes a separate command)
+
+### Frontmatter Metadata
+
+The optional YAML frontmatter at the top of the file:
+
+```markdown
+---
+name: Quick Links          # Display name for the bundle
+description: Common URLs   # Description of the bundle
+author: Your Name          # Author name
+icon: link                 # Icon name (lucide icon)
+---
+```
+
+### Scriptlet Metadata
+
+Each H2 scriptlet can have its own metadata in HTML comments:
+
+```markdown
+## Open Dashboard
+<!-- description: Open the admin dashboard -->
+<!-- shortcut: cmd+shift+d -->
+
+\`\`\`open
+https://admin.example.com/dashboard
+\`\`\`
+```
+
+Available scriptlet metadata:
+- `description` - Shown below the scriptlet name
+- `shortcut` - Global keyboard shortcut (e.g., `cmd+shift+k`)
+
+### Code Block Types
+
+Script Kit supports several code block types:
+
+#### `bash` - Shell Commands
+```markdown
+\`\`\`bash
+echo "Hello from bash"
+ls -la ~/Projects
+\`\`\`
+```
+
+#### `open` - Open URLs/Files/Apps
+```markdown
+\`\`\`open
+https://github.com
+\`\`\`
+
+\`\`\`open
+file:///Applications/Safari.app
+\`\`\`
+```
+
+#### `ts` or `typescript` - TypeScript Code
+```markdown
+\`\`\`ts
+const name = await arg("What's your name?");
+await div(\`<h1>Hello, \${name}!</h1>\`);
+\`\`\`
+```
+
+#### `applescript` - AppleScript Commands
+```markdown
+\`\`\`applescript
+tell application "Finder"
+    activate
+end tell
+\`\`\`
+```
+
+#### `template` - Text Templates
+```markdown
+\`\`\`template
+Hello {{name}},
+
+Thank you for your inquiry about {{topic}}.
+
+Best regards,
+{{sender}}
+\`\`\`
 ```
 
 ### Variable Substitution
 
-Use `{{variableName}}` syntax for user input:
+Use `{{variableName}}` syntax for user input. Script Kit will prompt for each variable before execution:
 
 ```markdown
-<!-- name: Git Clone -->
+## Git Clone
+<!-- description: Clone a repository -->
 
-# Clone Repository
-
-```bash
+\`\`\`bash
 cd ~/Projects
 git clone {{url}}
 cd $(basename {{url}} .git)
 code .
-```
+\`\`\`
 ```
 
-When this extension runs, Script Kit will prompt for `url` before executing.
+When this scriptlet runs, you'll be prompted for `url` before the commands execute.
 
-### Multiple Variables
+### Multiple Scriptlets Per File
+
+A single markdown file can contain many scriptlets, organized under one bundle:
 
 ```markdown
-<!-- name: Create Note -->
+---
+name: Quick Links
+description: Common websites and tools
+---
 
-# Create Note
+# Quick Links
 
-```bash
-echo "# {{title}}" > ~/Notes/{{filename}}.md
-echo "" >> ~/Notes/{{filename}}.md
-echo "Created: $(date)" >> ~/Notes/{{filename}}.md
-echo "" >> ~/Notes/{{filename}}.md
-echo "{{content}}" >> ~/Notes/{{filename}}.md
-code ~/Notes/{{filename}}.md
+## GitHub
+<!-- description: Open GitHub -->
+\`\`\`open
+https://github.com
+\`\`\`
+
+## Gmail
+<!-- description: Open Gmail -->
+\`\`\`open
+https://mail.google.com
+\`\`\`
+
+## Calendar
+<!-- description: Open Google Calendar -->
+\`\`\`open
+https://calendar.google.com
+\`\`\`
 ```
+
+All three scriptlets appear in Script Kit as separate commands, grouped under "Quick Links".
+
+---
+
+## Shared Actions
+
+Shared actions let you define reusable actions that automatically apply to ALL scriptlets in an extension file. This is perfect for common operations like "Copy URL", "Open in Browser", etc.
+
+### Creating Shared Actions
+
+Create a companion `.actions.md` file with the same base name as your extension:
+
+```
+~/.scriptkit/kit/main/extensions/
+├── quicklinks.md           # Main extension file
+└── quicklinks.actions.md   # Shared actions for all quicklinks
 ```
 
-### Extension Metadata
+### Shared Actions File Format
 
-Use HTML comments for metadata:
+Shared actions use H3 headers (###) instead of H2:
 
 ```markdown
-<!--
-name: My Extension
-description: What it does
-author: Your Name
-shortcut: cmd+shift+s
-icon: Terminal
-tags: utility, shell
--->
+# URL Actions
+
+### Copy URL
+<!-- shortcut: cmd+c -->
+<!-- description: Copy the URL to clipboard -->
+\`\`\`bash
+echo -n "{{content}}" | pbcopy
+\`\`\`
+
+### Open in Safari
+<!-- shortcut: cmd+shift+s -->
+<!-- description: Open URL in Safari -->
+\`\`\`bash
+open -a Safari "{{content}}"
+\`\`\`
+
+### Open in Chrome
+<!-- description: Open URL in Google Chrome -->
+\`\`\`bash
+open -a "Google Chrome" "{{content}}"
+\`\`\`
+```
+
+### The `{{content}}` Variable
+
+In shared actions, `{{content}}` is automatically replaced with the parent scriptlet's code content. For example, if your scriptlet is:
+
+```markdown
+## GitHub
+\`\`\`open
+https://github.com
+\`\`\`
+```
+
+And your shared action is:
+```markdown
+### Copy URL
+\`\`\`bash
+echo -n "{{content}}" | pbcopy
+\`\`\`
+```
+
+Then `{{content}}` becomes `https://github.com` when the action runs.
+
+### How Shared Actions Work
+
+1. When you open the Actions menu (Tab key) on a scriptlet
+2. Script Kit loads both the scriptlet's inline actions (H3 headers within the scriptlet) AND the shared actions from the companion `.actions.md` file
+3. Inline actions take precedence over shared actions with the same name
+4. All actions appear together in the Actions menu
+
+### Action Precedence
+
+If a scriptlet has an inline action with the same command name as a shared action, the inline action wins:
+
+```markdown
+## Special Link
+<!-- This inline action overrides the shared "Copy URL" action -->
+
+\`\`\`open
+https://example.com/special
+\`\`\`
+
+### Copy URL
+<!-- This takes precedence over shared Copy URL -->
+\`\`\`bash
+echo "Custom copy for this link: {{content}}" | pbcopy
+\`\`\`
+```
+
+### Built-in Shared Actions
+
+Script Kit ships with shared actions for several built-in extensions:
+
+| Extension | Shared Actions |
+|-----------|---------------|
+| Quick Links | Copy URL, Open in Safari/Chrome/Firefox |
+| CleanShot | Copy URL scheme, Open Settings |
+| Conductor | Copy URL, Open in Browser |
+
+### Creating Your Own Shared Actions
+
+1. Create your extension file: `my-tools.md`
+2. Create the companion: `my-tools.actions.md`
+3. Add H3 actions with optional shortcuts and descriptions
+4. Use `{{content}}` to access the parent scriptlet's code
+
+Example for a code snippets extension:
+
+```markdown
+# Snippet Actions
+
+### Copy to Clipboard
+<!-- shortcut: cmd+c -->
+\`\`\`bash
+echo -n "{{content}}" | pbcopy
+\`\`\`
+
+### Insert at Cursor
+<!-- shortcut: cmd+shift+v -->
+\`\`\`ts
+await setSelectedText("{{content}}");
+\`\`\`
+
+### Open in Editor
+\`\`\`ts
+const tmp = \`/tmp/snippet-\${Date.now()}.txt\`;
+await Bun.write(tmp, "{{content}}");
+await \$\`code \${tmp}\`;
+\`\`\`
 ```
 
 ---
