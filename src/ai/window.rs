@@ -3114,7 +3114,7 @@ impl AiApp {
                             )
                             // Divider
                             .child(div().w(px(1.)).h(px(16.)).bg(cx.theme().border))
-                            // Actions ⌘K - placeholder for future actions menu
+                            // Actions ⌘K - opens command bar with AI-specific actions
                             .child(
                                 div()
                                     .flex()
@@ -3126,6 +3126,12 @@ impl AiApp {
                                     .hover(|s| s.bg(cx.theme().muted.opacity(0.3)))
                                     .text_sm()
                                     .text_color(cx.theme().muted_foreground)
+                                    .on_mouse_down(
+                                        gpui::MouseButton::Left,
+                                        cx.listener(|this, _, window, cx| {
+                                            this.show_command_bar(window, cx);
+                                        }),
+                                    )
                                     .child("Actions ⌘K"),
                             ),
                     ),
