@@ -1,4 +1,7 @@
 import type { Plugin } from "@opencode-ai/plugin"
+import { logTriggered, logSkipped } from "../lib/logger"
+
+const PLUGIN_NAME = "visual-testing-reminder"
 
 /**
  * Visual Testing Reminder Plugin
@@ -122,11 +125,17 @@ const VisualTestingReminder: Plugin = async ({ client }) => {
 
       if (event.type === "session.created" && sessionId) {
         sessions.set(sessionId, createSessionState())
+        logTriggered(sessionId, PLUGIN_NAME, "event", "Session created - initialized visual testing tracking")
+        return
       }
 
       if (event.type === "session.deleted" && sessionId) {
         clearState(sessionId)
+        logTriggered(sessionId, PLUGIN_NAME, "event", "Session deleted - cleared visual testing tracking")
+        return
       }
+      
+      logSkipped(sessionId, PLUGIN_NAME, "event", `Unhandled event type: ${event.type}`)
     },
 
     "tool.execute.after": async (input: ToolInput) => {
@@ -135,9 +144,13 @@ const VisualTestingReminder: Plugin = async ({ client }) => {
       const result = input.result || {}
       const sessionId = input.sessionID
 
-      if (!sessionId) return
+      if (!sessionId) {
+        logSkipped(null, PLUGIN_NAME, "tool.execute.after", "No session ID available")
+        return
+      }
 
       const state = getState(sessionId)
+      const trackedActions: string[] = []
 
       // Track UI file modifications
       if (tool === "edit" || tool === "write") {
@@ -147,6 +160,7 @@ const VisualTestingReminder: Plugin = async ({ client }) => {
           if (!state.modifiedUiFiles.includes(filePath)) {
             state.modifiedUiFiles.push(filePath)
           }
+          trackedActions.push(`UI file modified: ${filePath}`)
         }
       }
 
@@ -162,6 +176,7 @@ const VisualTestingReminder: Plugin = async ({ client }) => {
           /screenshot.*\.png/i.test(output)
         ) {
           state.screenshotCaptured = true
+          trackedActions.push("Screenshot captured")
         }
       }
 
@@ -170,18 +185,37 @@ const VisualTestingReminder: Plugin = async ({ client }) => {
         const filePath = (args.filePath as string) || ""
         if (/test-screenshots\/.*\.png$/i.test(filePath) || /screenshot.*\.png$/i.test(filePath)) {
           state.screenshotCaptured = true
+          trackedActions.push(`Screenshot file read: ${filePath}`)
         }
+      }
+      
+      if (trackedActions.length > 0) {
+        logTriggered(sessionId, PLUGIN_NAME, "tool.execute.after", `Tracked: ${trackedActions.join(", ")}`, {
+          tool,
+          uiFilesModified: state.uiFilesModified,
+          screenshotCaptured: state.screenshotCaptured,
+          modifiedUiFilesCount: state.modifiedUiFiles.length
+        })
+      } else {
+        logSkipped(sessionId, PLUGIN_NAME, "tool.execute.after", `No visual-testing-related actions in ${tool} call`)
       }
     },
 
     stop: async (input) => {
       const sessionId = extractSessionId(input)
-      if (!sessionId) return
+      if (!sessionId) {
+        logSkipped(null, PLUGIN_NAME, "stop", "No session ID available")
+        return
+      }
 
       const state = getState(sessionId)
 
       // Only remind if UI files were modified but no screenshot was taken
       if (state.uiFilesModified && !state.screenshotCaptured) {
+        logTriggered(sessionId, PLUGIN_NAME, "stop", "PROMPTING: UI files modified but no screenshot taken", {
+          modifiedUiFiles: state.modifiedUiFiles.slice(0, 5)
+        })
+        
         const fileList = state.modifiedUiFiles
           .slice(0, 5)
           .map(f => `  - ${f.split("/").pop()}`)
@@ -218,6 +252,10 @@ If no visual changes were made, or you've already verified, you can proceed.`
             parts: [{ type: "text", text: message }],
           },
         })
+      } else if (state.screenshotCaptured) {
+        logSkipped(sessionId, PLUGIN_NAME, "stop", "Stop allowed - screenshot was captured")
+      } else if (!state.uiFilesModified) {
+        logSkipped(sessionId, PLUGIN_NAME, "stop", "Stop allowed - no UI files modified")
       }
     },
   }

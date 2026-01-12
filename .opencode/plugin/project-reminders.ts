@@ -1,4 +1,7 @@
 import type { Plugin } from "@opencode-ai/plugin"
+import { logTriggered, extractSessionId } from "../lib/logger"
+
+const PLUGIN_NAME = "project-reminders"
 
 /**
  * Project Reminders Plugin
@@ -108,13 +111,17 @@ Visual verification is NOT complete until you READ the screenshot file and analy
 const ProjectReminders: Plugin = async () => {
   return {
     // Inject into system prompt - runs on every conversation
-    "experimental.chat.system.transform": async (_input, output) => {
+    "experimental.chat.system.transform": async (input, output) => {
+      const sessionId = extractSessionId(input)
       output.system.push(COMBINED_REMINDER)
+      logTriggered(sessionId, PLUGIN_NAME, "system.transform", "Injected project reminders into system prompt")
     },
 
     // Preserve in compaction context - uses shorter version to save tokens
-    "experimental.session.compacting": async (_input, output) => {
+    "experimental.session.compacting": async (input, output) => {
+      const sessionId = extractSessionId(input)
       output.context.push(COMPACTION_CONTEXT)
+      logTriggered(sessionId, PLUGIN_NAME, "session.compacting", "Preserved project reminders in compaction context")
     }
   }
 }

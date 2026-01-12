@@ -1,4 +1,7 @@
 import type { Plugin } from "@opencode-ai/plugin"
+import { logTriggered, logSkipped, extractSessionId } from "../lib/logger"
+
+const PLUGIN_NAME = "guideline-enforcer"
 
 /**
  * Guideline Enforcer Plugin
@@ -176,9 +179,14 @@ const GuidelineEnforcer: Plugin = async () => {
     // NOTE: We do NOT call client.session.prompt() on session.idle 
     // because that interferes with Task tool subagent responses
     event: async ({ event }) => {
+      const eventWithSession = event as { session_id?: string; sessionID?: string }
+      const sessionId = eventWithSession.session_id || eventWithSession.sessionID
+      
       // Reset state on new session
       if (event.type === "session.created") {
         state = createSessionState()
+        logTriggered(sessionId, PLUGIN_NAME, "event", "Session created - reset guideline state")
+        return
       }
       
       // Detect images in user messages
@@ -190,30 +198,43 @@ const GuidelineEnforcer: Plugin = async () => {
           if (content.includes("image/") || content.includes("data:image") || 
               /\.(png|jpg|jpeg|gif|webp)/i.test(content)) {
             state.userProvidedImage = true
+            logTriggered(sessionId, PLUGIN_NAME, "event", "Image detected in user message - visual testing required")
+          } else {
+            logSkipped(sessionId, PLUGIN_NAME, "event", "User message without image")
           }
         }
+        return
       }
       
       // Just log compliance status on session.idle - do NOT inject prompts
       if (event.type === "session.idle") {
         const result = checkCompliance()
         if (!result.compliant) {
-          console.log("[GuidelineEnforcer] Session idle with violations:", result.violations)
+          logTriggered(sessionId, PLUGIN_NAME, "event", "Session idle with violations", { violations: result.violations })
+        } else {
+          logSkipped(sessionId, PLUGIN_NAME, "event", "Session idle - all guidelines followed")
         }
+        return
       }
+      
+      logSkipped(sessionId, PLUGIN_NAME, "event", `Unhandled event type: ${event.type}`)
     },
     
     // Track tool executions using the documented hook
     "tool.execute.after": async (input: ToolInput) => {
+      const sessionId = input.sessionID
       const tool = input.tool
       const args = input.args || {}
       const result = input.result || {}
+      
+      const trackedActions: string[] = []
       
       // Track file modifications
       if (tool === "edit" || tool === "write") {
         const filePath = (args.filePath as string) || ""
         if (CODE_FILE_PATTERNS.some(pattern => pattern.test(filePath))) {
           state.codeFilesModified = true
+          trackedActions.push(`code file modified: ${filePath}`)
         }
       }
       
@@ -225,33 +246,40 @@ const GuidelineEnforcer: Plugin = async () => {
         // Track verification commands
         if (/cargo\s+check/.test(command)) {
           state.cargoCheckRan = true
+          trackedActions.push("cargo check ran")
         }
         if (/cargo\s+clippy/.test(command)) {
           state.cargoClippyRan = true
+          trackedActions.push("cargo clippy ran")
         }
         if (/cargo\s+test/.test(command)) {
           state.cargoTestRan = true
+          trackedActions.push("cargo test ran")
         }
         
         // Track git commits
         if (/git\s+commit/.test(command)) {
           state.commitAttempted = true
+          trackedActions.push("git commit attempted")
         }
         
         // Track stdin protocol usage
         if (STDIN_PROTOCOL_PATTERN.test(command)) {
           state.stdinProtocolUsed = true
           state.appTestAttempted = true
+          trackedActions.push("stdin protocol used for app test")
         }
         
         // Track app launch attempts (without stdin = wrong)
         if (/\.\/target\/.*script-kit-gpui/.test(command) && !STDIN_PROTOCOL_PATTERN.test(command)) {
           state.appTestAttempted = true
+          trackedActions.push("app launched without stdin protocol (violation)")
         }
         
         // Track screenshot capture in test output
         if (output.includes("captureScreenshot") || output.includes("[SCREENSHOT]")) {
           state.screenshotCaptured = true
+          trackedActions.push("screenshot captured")
         }
       }
       
@@ -260,12 +288,20 @@ const GuidelineEnforcer: Plugin = async () => {
         const filePath = (args.filePath as string) || ""
         if (SCREENSHOT_DIR_PATTERN.test(filePath) && /\.png$/i.test(filePath)) {
           state.screenshotFileRead = true
+          trackedActions.push(`screenshot file read: ${filePath}`)
         }
+      }
+      
+      if (trackedActions.length > 0) {
+        logTriggered(sessionId, PLUGIN_NAME, "tool.execute.after", `Tracked: ${trackedActions.join(", ")}`, { tool })
+      } else {
+        logSkipped(sessionId, PLUGIN_NAME, "tool.execute.after", `No guideline-related actions in ${tool} call`)
       }
     },
     
     // Add enforcement status to system prompt
-    "experimental.chat.system.transform": async (_input, output) => {
+    "experimental.chat.system.transform": async (input, output) => {
+      const sessionId = extractSessionId(input)
       output.system.push(`
 <guideline-enforcer>
 This session is monitored for guideline compliance:
@@ -277,10 +313,12 @@ This session is monitored for guideline compliance:
 Complete all required actions before finishing your task.
 </guideline-enforcer>
 `.trim())
+      logTriggered(sessionId, PLUGIN_NAME, "system.transform", "Injected guideline enforcement policy")
     },
     
     // Preserve state through compaction
-    "experimental.session.compacting": async (_input, output) => {
+    "experimental.session.compacting": async (input, output) => {
+      const sessionId = extractSessionId(input)
       const complianceStatus = generateComplianceStatus()
       output.context.push(`<guideline-state>
 ${complianceStatus}
@@ -293,6 +331,9 @@ State: ${JSON.stringify({
         verificationComplete: state.cargoCheckRan && state.cargoClippyRan && state.cargoTestRan,
       })}
 </guideline-state>`)
+      logTriggered(sessionId, PLUGIN_NAME, "session.compacting", "Preserved guideline state in compaction context", {
+        compliant: checkCompliance().compliant
+      })
     }
   }
 }
