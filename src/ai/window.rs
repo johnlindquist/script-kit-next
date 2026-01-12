@@ -305,6 +305,9 @@ pub struct AiApp {
 
     /// Pending image attachment (base64 encoded PNG) to include with next message
     pending_image: Option<String>,
+
+    /// Timestamp when setup command was last copied (for showing "Copied!" feedback)
+    setup_copied_at: Option<std::time::Instant>,
 }
 
 impl AiApp {
@@ -340,10 +343,20 @@ impl AiApp {
         let provider_registry = ProviderRegistry::from_environment();
         let available_models = provider_registry.get_all_models();
 
-        // Select default model (prefer Claude, then GPT-4o)
+        // Select default model (prefer Claude Haiku 4.5, then 3.5 Haiku, then Sonnet, then GPT-4o)
         let selected_model = available_models
             .iter()
-            .find(|m| m.id.contains("claude-3-5-sonnet"))
+            .find(|m| m.id.contains("haiku-4-5"))
+            .or_else(|| {
+                available_models
+                    .iter()
+                    .find(|m| m.id.contains("claude-3-5-haiku"))
+            })
+            .or_else(|| {
+                available_models
+                    .iter()
+                    .find(|m| m.id.contains("claude-3-5-sonnet"))
+            })
             .or_else(|| available_models.iter().find(|m| m.id == "gpt-4o"))
             .or_else(|| available_models.first())
             .cloned();
@@ -419,6 +432,7 @@ impl AiApp {
             last_bounds_save: std::time::Instant::now(),
             theme_rev_seen: crate::theme::service::theme_revision(),
             pending_image: None,
+            setup_copied_at: None,
         }
     }
 
@@ -1255,6 +1269,35 @@ impl AiApp {
         cx.notify();
     }
 
+    /// Copy the setup command to clipboard and show feedback
+    fn copy_setup_command(&mut self, cx: &mut Context<Self>) {
+        let setup_command = "export SCRIPT_KIT_ANTHROPIC_API_KEY=\"your-key-here\"";
+        let item = gpui::ClipboardItem::new_string(setup_command.to_string());
+        cx.write_to_clipboard(item);
+        self.setup_copied_at = Some(std::time::Instant::now());
+        info!("Setup command copied to clipboard");
+        cx.notify();
+
+        // Reset feedback after 2 seconds
+        cx.spawn(async move |this, cx| {
+            gpui::Timer::after(std::time::Duration::from_millis(2000)).await;
+            let _ = cx.update(|cx| {
+                this.update(cx, |this, cx| {
+                    this.setup_copied_at = None;
+                    cx.notify();
+                })
+            });
+        })
+        .detach();
+    }
+
+    /// Check if we're showing "Copied!" feedback
+    fn is_showing_copied_feedback(&self) -> bool {
+        self.setup_copied_at
+            .map(|t| t.elapsed() < std::time::Duration::from_millis(2000))
+            .unwrap_or(false)
+    }
+
     /// Render the sidebar toggle button using the Sidebar icon from our icon library
     fn render_sidebar_toggle(&self, cx: &mut Context<Self>) -> impl IntoElement {
         // Use opacity to indicate state - dimmed when collapsed
@@ -1549,14 +1592,60 @@ impl AiApp {
     /// Clicking cycles to the next model; shows current model name
     fn render_model_picker(&self, cx: &mut Context<Self>) -> impl IntoElement {
         if self.available_models.is_empty() {
-            // No models available - show message
+            let show_copied = self.is_showing_copied_feedback();
+
+            // No models available - show actionable setup hint
             return div()
+                .id("setup-hint")
                 .flex()
                 .items_center()
+                .gap_2()
                 .px_2()
-                .text_xs()
-                .text_color(cx.theme().muted_foreground)
-                .child("No AI providers configured")
+                .py(px(2.))
+                .rounded_md()
+                .cursor_pointer()
+                .hover(|s| s.bg(cx.theme().muted.opacity(0.3)))
+                .on_click(cx.listener(|this, _, window, cx| {
+                    this.copy_setup_command(cx);
+                    window.activate_window();
+                }))
+                .child(if show_copied {
+                    Icon::new(IconName::Check)
+                        .size(px(12.))
+                        .text_color(cx.theme().success)
+                        .into_any_element()
+                } else {
+                    Icon::new(IconName::TriangleAlert)
+                        .size(px(12.))
+                        .text_color(cx.theme().warning)
+                        .into_any_element()
+                })
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(if show_copied {
+                            cx.theme().success
+                        } else {
+                            cx.theme().muted_foreground
+                        })
+                        .child(if show_copied {
+                            "Copied!"
+                        } else {
+                            "Setup Required"
+                        }),
+                )
+                .when(!show_copied, |d| {
+                    d.child(
+                        div()
+                            .px(px(4.))
+                            .py(px(1.))
+                            .rounded(px(3.))
+                            .bg(cx.theme().muted)
+                            .text_xs()
+                            .text_color(cx.theme().muted_foreground)
+                            .child("↵"),
+                    )
+                })
                 .into_any_element();
         }
 
@@ -1600,6 +1689,11 @@ impl AiApp {
 
     /// Render the welcome state (no chat selected or empty chat)
     fn render_welcome(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        // Show setup card if no providers are configured
+        if self.available_models.is_empty() {
+            return self.render_setup_card(cx).into_any_element();
+        }
+
         div()
             .flex()
             .flex_col()
@@ -1618,6 +1712,226 @@ impl AiApp {
                     .text_sm()
                     .text_color(cx.theme().muted_foreground)
                     .child("Start a conversation with AI"),
+            )
+            .into_any_element()
+    }
+
+    /// Render the setup card when no API keys are configured
+    /// Shows a friendly prompt with clear instructions and keyboard shortcuts
+    fn render_setup_card(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let setup_command = "export SCRIPT_KIT_ANTHROPIC_API_KEY=\"your-key-here\"";
+
+        div()
+            .flex()
+            .flex_col()
+            .items_center()
+            .justify_center()
+            .flex_1()
+            .gap_6()
+            .px_8()
+            // Icon
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .size(px(64.))
+                    .rounded(px(16.))
+                    .bg(cx.theme().muted.opacity(0.3))
+                    .child(
+                        Icon::new(IconName::Settings)
+                            .size(px(32.))
+                            .text_color(cx.theme().muted_foreground),
+                    ),
+            )
+            // Title
+            .child(
+                div()
+                    .text_xl()
+                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                    .text_color(cx.theme().foreground)
+                    .child("API Key Required"),
+            )
+            // Description
+            .child(
+                div()
+                    .text_sm()
+                    .text_color(cx.theme().muted_foreground)
+                    .text_center()
+                    .max_w(px(400.))
+                    .child("Add an API key to enable AI chat. Supports Anthropic, OpenAI, Google, Groq, and OpenRouter."),
+            )
+            // Setup instructions card
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_3()
+                    .p_4()
+                    .rounded_lg()
+                    .bg(cx.theme().secondary)
+                    .border_1()
+                    .border_color(cx.theme().border)
+                    .max_w(px(480.))
+                    .w_full()
+                    // Step 1
+                    .child(
+                        div()
+                            .flex()
+                            .items_start()
+                            .gap_3()
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .size(px(20.))
+                                    .rounded_full()
+                                    .bg(cx.theme().accent)
+                                    .text_xs()
+                                    .font_weight(gpui::FontWeight::BOLD)
+                                    .text_color(cx.theme().accent_foreground)
+                                    .child("1"),
+                            )
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_col()
+                                    .gap_1()
+                                    .child(
+                                        div()
+                                            .text_sm()
+                                            .font_weight(gpui::FontWeight::MEDIUM)
+                                            .text_color(cx.theme().foreground)
+                                            .child("Add to your shell profile"),
+                                    )
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .text_color(cx.theme().muted_foreground)
+                                            .child("~/.zshrc or ~/.bashrc"),
+                                    ),
+                            ),
+                    )
+                    // Code block
+                    .child({
+                        let show_copied = self.is_showing_copied_feedback();
+                        div()
+                            .id("setup-command")
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .px_3()
+                            .py_2()
+                            .rounded_md()
+                            .bg(if show_copied {
+                                cx.theme().success.opacity(0.1)
+                            } else {
+                                cx.theme().background
+                            })
+                            .border_1()
+                            .border_color(if show_copied {
+                                cx.theme().success.opacity(0.3)
+                            } else {
+                                cx.theme().border
+                            })
+                            .cursor_pointer()
+                            .hover(|s| s.bg(cx.theme().muted.opacity(0.5)))
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                this.copy_setup_command(cx);
+                                window.activate_window();
+                            }))
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .font_family("monospace")
+                                    .text_color(if show_copied {
+                                        cx.theme().success
+                                    } else {
+                                        cx.theme().foreground
+                                    })
+                                    .overflow_hidden()
+                                    .text_ellipsis()
+                                    .child(if show_copied {
+                                        "Copied to clipboard!"
+                                    } else {
+                                        setup_command
+                                    }),
+                            )
+                            .child(if show_copied {
+                                Icon::new(IconName::Check)
+                                    .size(px(14.))
+                                    .text_color(cx.theme().success)
+                                    .into_any_element()
+                            } else {
+                                Icon::new(IconName::Copy)
+                                    .size(px(14.))
+                                    .text_color(cx.theme().muted_foreground)
+                                    .into_any_element()
+                            })
+                    })
+                    // Step 2
+                    .child(
+                        div()
+                            .flex()
+                            .items_start()
+                            .gap_3()
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .size(px(20.))
+                                    .rounded_full()
+                                    .bg(cx.theme().accent)
+                                    .text_xs()
+                                    .font_weight(gpui::FontWeight::BOLD)
+                                    .text_color(cx.theme().accent_foreground)
+                                    .child("2"),
+                            )
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .text_color(cx.theme().foreground)
+                                    .child("Restart Script Kit"),
+                            ),
+                    ),
+            )
+            // Keyboard hint (hide when showing copied feedback)
+            .when(!self.is_showing_copied_feedback(), |d| {
+                d.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .mt_2()
+                        .child(
+                            div()
+                                .px_2()
+                                .py(px(2.))
+                                .rounded(px(4.))
+                                .bg(cx.theme().muted)
+                                .text_xs()
+                                .font_weight(gpui::FontWeight::MEDIUM)
+                                .text_color(cx.theme().muted_foreground)
+                                .child("Enter"),
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(cx.theme().muted_foreground)
+                                .child("Copy setup command"),
+                        ),
+                )
+            })
+            // Alternative providers hint
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(cx.theme().muted_foreground.opacity(0.7))
+                    .text_center()
+                    .mt_2()
+                    .child("Or use: SCRIPT_KIT_OPENAI_API_KEY, SCRIPT_KIT_GOOGLE_API_KEY, etc."),
             )
     }
 
@@ -2120,6 +2434,19 @@ impl Render for AiApp {
                 // Handle keyboard shortcuts
                 let key = event.keystroke.key.as_str();
                 let modifiers = &event.keystroke.modifiers;
+
+                // Handle Enter key for setup mode (no modifiers needed)
+                if !modifiers.platform
+                    && !modifiers.alt
+                    && !modifiers.control
+                    && matches!(key, "enter" | "return")
+                    && this.available_models.is_empty()
+                {
+                    // In setup mode - Enter copies the setup command
+                    this.copy_setup_command(cx);
+                    window.activate_window();
+                    return;
+                }
 
                 // platform modifier = Cmd on macOS, Ctrl on Windows/Linux
                 if modifiers.platform {

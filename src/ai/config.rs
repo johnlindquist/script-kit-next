@@ -271,7 +271,14 @@ pub mod default_models {
     /// NOTE: The FIRST model in this list is the default model for new chats
     pub fn anthropic() -> Vec<ModelInfo> {
         vec![
-            // Default: Claude 3.5 Haiku (fast, cheap, good quality)
+            // Default: Claude Haiku 4.5 (fast, cheap, good quality)
+            ModelInfo::new(
+                "claude-haiku-4-5-20250514",
+                "Claude Haiku 4.5",
+                "anthropic",
+                true,
+                200_000,
+            ),
             ModelInfo::new(
                 "claude-3-5-haiku-20241022",
                 "Claude 3.5 Haiku",

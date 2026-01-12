@@ -114,7 +114,7 @@ interface ToolInput {
   result?: Record<string, unknown>
 }
 
-export const VisualTestingReminder: Plugin = async ({ client }) => {
+const VisualTestingReminder: Plugin = async ({ client }) => {
   return {
     event: async ({ event }) => {
       const eventWithSession = event as { session_id?: string; sessionID?: string }
@@ -222,3 +222,5 @@ If no visual changes were made, or you've already verified, you can proceed.`
     },
   }
 }
+
+export default VisualTestingReminder

@@ -167,7 +167,7 @@ interface ToolInput {
 // Plugin Export
 // =============================================================================
 
-export const GuidelineEnforcer: Plugin = async () => {
+const GuidelineEnforcer: Plugin = async () => {
   // Reset state on plugin load
   state = createSessionState()
   
@@ -296,3 +296,5 @@ State: ${JSON.stringify({
     }
   }
 }
+
+export default GuidelineEnforcer

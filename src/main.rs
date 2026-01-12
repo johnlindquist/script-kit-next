@@ -3,8 +3,8 @@
 use gpui::{
     div, hsla, list, point, prelude::*, px, rgb, rgba, size, svg, uniform_list, AnyElement, App,
     Application, BoxShadow, Context, ElementId, Entity, FocusHandle, Focusable, ListAlignment,
-    ListSizingBehavior, ListState, Render, ScrollStrategy, SharedString, Subscription, Timer,
-    UniformListScrollHandle, Window, WindowBackgroundAppearance, WindowBounds, WindowHandle,
+    ListOffset, ListSizingBehavior, ListState, Render, ScrollStrategy, SharedString, Subscription,
+    Timer, UniformListScrollHandle, Window, WindowBackgroundAppearance, WindowBounds, WindowHandle,
     WindowOptions,
 };
 
@@ -139,6 +139,7 @@ mod template_variables;
 // Text expansion system components (macOS only)
 #[cfg(target_os = "macos")]
 mod keyboard_monitor;
+mod keystroke_logger;
 mod keyword_matcher;
 mod text_injector;
 
@@ -1432,7 +1433,7 @@ impl Render for ScriptListApp {
         // Check for API key configuration completion (from built-in commands)
         // The EnvPrompt callback signals completion via channel
         if let Ok((provider, success)) = self.api_key_completion_receiver.try_recv() {
-            self.handle_api_key_completion(provider, success, cx);
+            self.handle_api_key_completion(provider, success, window, cx);
         }
 
         // Check for builtin confirmation modal completion

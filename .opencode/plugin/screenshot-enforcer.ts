@@ -83,7 +83,7 @@ function detectBlockedScreenshotTool(command: string): { blocked: boolean; toolN
   return { blocked: false }
 }
 
-export const ScreenshotEnforcer: Plugin = async () => {
+const ScreenshotEnforcer: Plugin = async () => {
   const hooks: Hooks = {
     // Intercept bash commands before execution
     "tool.execute.before": async (input: ToolInput) => {
@@ -117,3 +117,5 @@ export const ScreenshotEnforcer: Plugin = async () => {
   
   return hooks
 }
+
+export default ScreenshotEnforcer

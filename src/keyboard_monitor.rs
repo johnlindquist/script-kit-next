@@ -21,7 +21,7 @@
 //! monitor.stop();
 //! ```
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
@@ -36,6 +36,83 @@ use core_graphics::event::{
 use macos_accessibility_client::accessibility;
 use thiserror::Error;
 use tracing::{debug, error, info, warn};
+
+// =============================================================================
+// DEBOUNCED LOGGING
+// =============================================================================
+// To avoid log spam, we accumulate keystroke counts and only log a summary
+// after 3 seconds of inactivity.
+
+/// How long to wait after the last keystroke before logging a summary
+const LOG_DEBOUNCE_SECS: u64 = 3;
+
+/// State for debounced keystroke logging
+struct DebouncedLogState {
+    /// Number of keystrokes since last log
+    count: AtomicU64,
+    /// Timestamp of first keystroke in current batch (millis since UNIX epoch)
+    batch_start_ms: AtomicU64,
+    /// Timestamp of last keystroke (millis since UNIX epoch)
+    last_keystroke_ms: AtomicU64,
+}
+
+impl DebouncedLogState {
+    fn new() -> Self {
+        Self {
+            count: AtomicU64::new(0),
+            batch_start_ms: AtomicU64::new(0),
+            last_keystroke_ms: AtomicU64::new(0),
+        }
+    }
+
+    /// Record a keystroke. Returns (should_log_summary, count, duration_ms) if we should
+    /// log a summary of the previous batch before starting a new one.
+    fn record(&self) -> Option<(u64, u64)> {
+        let now_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0);
+
+        let last = self.last_keystroke_ms.load(Ordering::Relaxed);
+        let debounce_ms = LOG_DEBOUNCE_SECS * 1000;
+
+        // Check if we should flush the previous batch
+        let result = if last > 0 && now_ms.saturating_sub(last) > debounce_ms {
+            // Time gap exceeded - log previous batch and reset
+            let count = self.count.swap(0, Ordering::Relaxed);
+            let batch_start = self.batch_start_ms.load(Ordering::Relaxed);
+            let duration_ms = last.saturating_sub(batch_start);
+
+            // Start new batch
+            self.batch_start_ms.store(now_ms, Ordering::Relaxed);
+
+            if count > 0 {
+                Some((count, duration_ms))
+            } else {
+                None
+            }
+        } else if self.count.load(Ordering::Relaxed) == 0 {
+            // First keystroke of a new batch
+            self.batch_start_ms.store(now_ms, Ordering::Relaxed);
+            None
+        } else {
+            None
+        };
+
+        // Record this keystroke
+        self.count.fetch_add(1, Ordering::Relaxed);
+        self.last_keystroke_ms.store(now_ms, Ordering::Relaxed);
+
+        result
+    }
+}
+
+/// Global debounced log state
+static DEBOUNCED_LOG: std::sync::OnceLock<DebouncedLogState> = std::sync::OnceLock::new();
+
+fn debounced_log_state() -> &'static DebouncedLogState {
+    DEBOUNCED_LOG.get_or_init(DebouncedLogState::new)
+}
 
 /// Errors that can occur when using the keyboard monitor
 #[derive(Error, Debug)]
@@ -286,19 +363,21 @@ impl KeyboardMonitor {
                     return None;
                 }
 
-                debug!("CGEventTap callback invoked - key event received");
-
                 // Extract key event information
                 let key_event = Self::extract_key_event(event);
 
-                // NOTE: We intentionally do NOT log key_event.character for privacy
-                // This is a global keystroke monitor - logging typed characters
-                // would capture passwords, private messages, etc.
-                debug!(
-                    key_code = key_event.key_code,
-                    is_repeat = key_event.is_repeat,
-                    "Key event captured"
-                );
+                // Debounced logging: accumulate keystrokes and log summary after 3s of inactivity
+                // NOTE: We intentionally do NOT log individual characters for privacy
+                let log_state = debounced_log_state();
+                if let Some((count, duration_ms)) = log_state.record() {
+                    debug!(
+                        keystroke_count = count,
+                        duration_ms = duration_ms,
+                        "Keyboard monitor: {} keystrokes captured over {}ms",
+                        count,
+                        duration_ms
+                    );
+                }
 
                 // Invoke callback
                 callback(key_event);
