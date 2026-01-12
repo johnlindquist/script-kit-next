@@ -1220,6 +1220,7 @@ impl ScriptListApp {
                     id.clone(),
                     key,
                     prompt,
+                    None, // title - SDK scripts don't provide one yet
                     secret,
                     focus_handle,
                     submit_callback,
@@ -1240,8 +1241,8 @@ impl ScriptListApp {
                 self.focused_input = FocusedInput::None; // EnvPrompt has its own focus handling
                 self.pending_focus = Some(FocusTarget::EnvPrompt);
 
-                // Resize to compact height: header + footer only
-                resize_to_view_sync(ViewType::ArgPromptNoChoices, 0);
+                // Resize to standard height for full-window centered layout
+                resize_to_view_sync(ViewType::DivPrompt, 0);
                 cx.notify();
             }
             PromptMessage::ShowDrop {

@@ -11,13 +11,120 @@
 //! - Individual provider implementations (OpenAI, Anthropic, etc.) implement the trait
 //!
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader};
 use std::sync::Arc;
 use std::time::Duration;
 
 use super::config::{default_models, DetectedKeys, ModelInfo, ProviderConfig};
+
+/// Extract a user-friendly error message from an API error response body.
+///
+/// Tries to parse JSON error responses from various AI providers and extract
+/// the most useful error message for display to users.
+fn extract_api_error_message(body: &str) -> Option<String> {
+    let parsed: serde_json::Value = serde_json::from_str(body).ok()?;
+
+    // OpenAI/Vercel format: {"error": {"message": "...", "type": "..."}}
+    if let Some(error) = parsed.get("error") {
+        let message = error.get("message").and_then(|m| m.as_str());
+        let error_type = error.get("type").and_then(|t| t.as_str());
+
+        return match (message, error_type) {
+            (Some(msg), Some(typ)) => Some(format!("{}: {}", typ, msg)),
+            (Some(msg), None) => Some(msg.to_string()),
+            _ => None,
+        };
+    }
+
+    // Anthropic format: {"type": "error", "error": {"type": "...", "message": "..."}}
+    if parsed.get("type").and_then(|t| t.as_str()) == Some("error") {
+        if let Some(error) = parsed.get("error") {
+            let message = error.get("message").and_then(|m| m.as_str());
+            let error_type = error.get("type").and_then(|t| t.as_str());
+
+            return match (message, error_type) {
+                (Some(msg), Some(typ)) => Some(format!("{}: {}", typ, msg)),
+                (Some(msg), None) => Some(msg.to_string()),
+                _ => None,
+            };
+        }
+    }
+
+    None
+}
+
+/// Handle HTTP response and return an error if status is not 2xx.
+///
+/// Reads the error body and extracts a user-friendly message.
+fn handle_http_response(
+    response: ureq::http::Response<ureq::Body>,
+    provider_name: &str,
+) -> Result<ureq::http::Response<ureq::Body>> {
+    let status = response.status().as_u16();
+
+    if (200..300).contains(&status) {
+        return Ok(response);
+    }
+
+    // Read the error body
+    let mut body = response.into_body();
+    let body_str = body.read_to_string().unwrap_or_default();
+
+    // Try to extract a meaningful error message
+    let error_detail = extract_api_error_message(&body_str);
+
+    // Build user-friendly error message based on status code
+    let user_message = match status {
+        401 => {
+            let detail = error_detail.unwrap_or_else(|| "Invalid or missing API key".to_string());
+            format!(
+                "{} authentication failed: {}",
+                provider_name,
+                simplify_auth_error(&detail)
+            )
+        }
+        403 => {
+            let detail = error_detail.unwrap_or_else(|| "Access denied".to_string());
+            format!("{} access denied: {}", provider_name, detail)
+        }
+        404 => {
+            let detail = error_detail.unwrap_or_else(|| "Model or endpoint not found".to_string());
+            format!("{}: {}", provider_name, detail)
+        }
+        429 => {
+            let detail = error_detail.unwrap_or_else(|| "Too many requests".to_string());
+            format!("{} rate limited: {}", provider_name, detail)
+        }
+        500..=599 => {
+            let detail = error_detail.unwrap_or_else(|| "Server error".to_string());
+            format!("{} server error ({}): {}", provider_name, status, detail)
+        }
+        _ => {
+            let detail = error_detail.unwrap_or_else(|| body_str.clone());
+            format!("{} error (HTTP {}): {}", provider_name, status, detail)
+        }
+    };
+
+    tracing::warn!(
+        status = status,
+        provider = provider_name,
+        raw_error = %body_str,
+        "API request failed"
+    );
+
+    Err(anyhow!(user_message))
+}
+
+/// Simplify verbose authentication error messages for display.
+fn simplify_auth_error(detail: &str) -> String {
+    // Vercel OIDC errors are very verbose - simplify them
+    if detail.contains("OIDC") || detail.contains("VERCEL_OIDC_TOKEN") {
+        return "Vercel AI Gateway requires OIDC authentication. This is only available when running on Vercel. For local development, use direct API keys (SCRIPT_KIT_ANTHROPIC_API_KEY, SCRIPT_KIT_OPENAI_API_KEY).".to_string();
+    }
+    detail.to_string()
+}
 
 /// Default timeouts for API requests
 const CONNECT_TIMEOUT_SECS: u64 = 10;
@@ -288,7 +395,10 @@ impl AiProvider for OpenAiProvider {
                 &format!("Bearer {}", self.config.api_key()),
             )
             .send_json(&body)
-            .context("Failed to send request to OpenAI API")?;
+            .context("Network error connecting to OpenAI")?;
+
+        // Check HTTP status and extract meaningful error if not 2xx
+        let response = handle_http_response(response, "OpenAI")?;
 
         let response_json: serde_json::Value = response
             .into_body()
@@ -339,7 +449,10 @@ impl AiProvider for OpenAiProvider {
             )
             .header("Accept", "text/event-stream")
             .send_json(&body)
-            .context("Failed to send streaming request to OpenAI API")?;
+            .context("Network error connecting to OpenAI")?;
+
+        // Check HTTP status and extract meaningful error if not 2xx
+        let response = handle_http_response(response, "OpenAI")?;
 
         // Read the SSE stream using the helper
         let reader = BufReader::new(response.into_body().into_reader());
@@ -500,7 +613,10 @@ impl AiProvider for AnthropicProvider {
             .header("x-api-key", self.config.api_key())
             .header("anthropic-version", ANTHROPIC_VERSION)
             .send_json(&body)
-            .context("Failed to send request to Anthropic API")?;
+            .context("Network error connecting to Anthropic")?;
+
+        // Check HTTP status and extract meaningful error if not 2xx
+        let response = handle_http_response(response, "Anthropic")?;
 
         let response_json: serde_json::Value = response
             .into_body()
@@ -550,7 +666,10 @@ impl AiProvider for AnthropicProvider {
             .header("anthropic-version", ANTHROPIC_VERSION)
             .header("Accept", "text/event-stream")
             .send_json(&body)
-            .context("Failed to send streaming request to Anthropic API")?;
+            .context("Network error connecting to Anthropic")?;
+
+        // Check HTTP status and extract meaningful error if not 2xx
+        let response = handle_http_response(response, "Anthropic")?;
 
         // Read the SSE stream using the helper
         let reader = BufReader::new(response.into_body().into_reader());
@@ -772,19 +891,20 @@ impl AiProvider for VercelGatewayProvider {
     fn available_models(&self) -> Vec<ModelInfo> {
         // Vercel Gateway supports various models from different providers.
         // These are curated defaults; the full list is available via GET https://ai-gateway.vercel.sh/v1/models
-        // Model IDs are namespaced: provider/model (e.g., "openai/gpt-5", "anthropic/claude-sonnet-4.5")
+        // Model IDs are namespaced: provider/model (e.g., "openai/gpt-4o", "anthropic/claude-haiku-4.5")
+        // These MUST match the exact IDs from https://ai-gateway.vercel.sh/v1/models
         // NOTE: The FIRST model in this list is the default model for new chats
         vec![
             // Default model: Claude Haiku 4.5 (fast, cheap, good quality)
             ModelInfo::new(
-                "anthropic/claude-haiku-4-5-20250514",
+                "anthropic/claude-haiku-4.5",
                 "Claude Haiku 4.5 (via Vercel)",
                 "vercel",
                 true,
                 200000,
             ),
             ModelInfo::new(
-                "anthropic/claude-3-5-haiku-20241022",
+                "anthropic/claude-3.5-haiku",
                 "Claude 3.5 Haiku (via Vercel)",
                 "vercel",
                 true,
@@ -813,14 +933,6 @@ impl AiProvider for VercelGatewayProvider {
                 200000,
             ),
             // OpenAI models
-            ModelInfo::new("openai/gpt-5", "GPT-5 (via Vercel)", "vercel", true, 400000),
-            ModelInfo::new(
-                "openai/gpt-5-mini",
-                "GPT-5 mini (via Vercel)",
-                "vercel",
-                true,
-                400000,
-            ),
             ModelInfo::new(
                 "openai/gpt-4o",
                 "GPT-4o (via Vercel)",
@@ -828,15 +940,22 @@ impl AiProvider for VercelGatewayProvider {
                 true,
                 128000,
             ),
-            ModelInfo::new("openai/o3", "o3 (via Vercel)", "vercel", true, 200000),
-            // Google models
             ModelInfo::new(
-                "google/gemini-3-flash",
-                "Gemini 3 Flash (via Vercel)",
+                "openai/gpt-4o-mini",
+                "GPT-4o mini (via Vercel)",
                 "vercel",
                 true,
-                1000000,
+                128000,
             ),
+            ModelInfo::new("openai/o3", "o3 (via Vercel)", "vercel", true, 200000),
+            ModelInfo::new(
+                "openai/o3-mini",
+                "o3 mini (via Vercel)",
+                "vercel",
+                true,
+                200000,
+            ),
+            // Google models
             ModelInfo::new(
                 "google/gemini-2.5-pro",
                 "Gemini 2.5 Pro (via Vercel)",
@@ -844,8 +963,15 @@ impl AiProvider for VercelGatewayProvider {
                 true,
                 1048576,
             ),
+            ModelInfo::new(
+                "google/gemini-2.5-flash",
+                "Gemini 2.5 Flash (via Vercel)",
+                "vercel",
+                true,
+                1048576,
+            ),
             // xAI models
-            ModelInfo::new("xai/grok-4", "Grok 4 (via Vercel)", "vercel", true, 256000),
+            ModelInfo::new("xai/grok-3", "Grok 3 (via Vercel)", "vercel", true, 131072),
             // DeepSeek models
             ModelInfo::new(
                 "deepseek/deepseek-r1",
@@ -876,7 +1002,10 @@ impl AiProvider for VercelGatewayProvider {
                 &format!("Bearer {}", self.config.api_key()),
             )
             .send_json(&body)
-            .context("Failed to send request to Vercel Gateway")?;
+            .context("Network error connecting to Vercel AI Gateway")?;
+
+        // Check HTTP status and extract meaningful error if not 2xx
+        let response = handle_http_response(response, "Vercel AI Gateway")?;
 
         let response_json: serde_json::Value = response
             .into_body()
@@ -927,7 +1056,10 @@ impl AiProvider for VercelGatewayProvider {
             )
             .header("Accept", "text/event-stream")
             .send_json(&body)
-            .context("Failed to send streaming request to Vercel Gateway")?;
+            .context("Network error connecting to Vercel AI Gateway")?;
+
+        // Check HTTP status and extract meaningful error if not 2xx
+        let response = handle_http_response(response, "Vercel AI Gateway")?;
 
         // Read the SSE stream using the helper (OpenAI-compatible format)
         let reader = BufReader::new(response.into_body().into_reader());
@@ -1362,8 +1494,8 @@ mod tests {
             "openai/gpt-4o"
         );
         assert_eq!(
-            VercelGatewayProvider::normalize_model_id("anthropic/claude-sonnet-4-20250514"),
-            "anthropic/claude-sonnet-4-20250514"
+            VercelGatewayProvider::normalize_model_id("anthropic/claude-haiku-4.5"),
+            "anthropic/claude-haiku-4.5"
         );
 
         // Not prefixed - should add openai/
@@ -1387,9 +1519,8 @@ mod tests {
         assert_eq!(body["model"], "openai/gpt-4o");
 
         // Test with prefixed model
-        let body =
-            provider.build_request_body(&messages, "anthropic/claude-sonnet-4-20250514", true);
-        assert_eq!(body["model"], "anthropic/claude-sonnet-4-20250514");
+        let body = provider.build_request_body(&messages, "anthropic/claude-haiku-4.5", true);
+        assert_eq!(body["model"], "anthropic/claude-haiku-4.5");
     }
 
     #[test]
@@ -1413,5 +1544,56 @@ mod tests {
 
         let models = registry.get_all_models();
         assert!(models.iter().any(|m| m.provider == "vercel"));
+    }
+
+    #[test]
+    fn test_extract_api_error_message_openai_format() {
+        // OpenAI/Vercel format
+        let body = r#"{"error": {"message": "Invalid API key", "type": "authentication_error"}}"#;
+        let result = extract_api_error_message(body);
+        assert_eq!(
+            result,
+            Some("authentication_error: Invalid API key".to_string())
+        );
+
+        // Missing type
+        let body = r#"{"error": {"message": "Something went wrong"}}"#;
+        let result = extract_api_error_message(body);
+        assert_eq!(result, Some("Something went wrong".to_string()));
+    }
+
+    #[test]
+    fn test_extract_api_error_message_anthropic_format() {
+        // Anthropic format
+        let body = r#"{"type": "error", "error": {"type": "invalid_request_error", "message": "Invalid model"}}"#;
+        let result = extract_api_error_message(body);
+        assert_eq!(
+            result,
+            Some("invalid_request_error: Invalid model".to_string())
+        );
+    }
+
+    #[test]
+    fn test_extract_api_error_message_invalid_json() {
+        let result = extract_api_error_message("not json");
+        assert_eq!(result, None);
+
+        let result = extract_api_error_message(r#"{"foo": "bar"}"#);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_simplify_auth_error_vercel_oidc() {
+        let detail = "Error verifying OIDC token\nThe AI Gateway OIDC authentication token...";
+        let result = simplify_auth_error(detail);
+        assert!(result.contains("Vercel AI Gateway requires OIDC authentication"));
+        assert!(result.contains("local development"));
+    }
+
+    #[test]
+    fn test_simplify_auth_error_passthrough() {
+        let detail = "Invalid API key provided";
+        let result = simplify_auth_error(detail);
+        assert_eq!(result, detail);
     }
 }
