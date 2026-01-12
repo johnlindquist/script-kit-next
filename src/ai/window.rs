@@ -1261,9 +1261,14 @@ impl AiApp {
         cx.notify();
     }
 
-    /// Hide all dropdowns
+    /// Hide all dropdowns (including closing the command bar vibrancy window)
     fn hide_all_dropdowns(&mut self, cx: &mut Context<Self>) {
+        // Close command bar vibrancy window if open
+        if self.showing_command_bar {
+            close_actions_window(cx);
+        }
         self.showing_command_bar = false;
+        self.command_bar_dialog = None;
         self.showing_model_picker = false;
         self.showing_presets_dropdown = false;
         self.showing_attachments_picker = false;
@@ -3363,6 +3368,7 @@ impl Render for AiApp {
                 }
 
                 // Handle command bar navigation when it's open
+                // This routes all relevant keys to the ActionsDialog
                 if this.showing_command_bar {
                     match key {
                         "up" | "arrowup" => {
@@ -3373,11 +3379,34 @@ impl Render for AiApp {
                             this.command_bar_select_next(cx);
                             return;
                         }
+                        "enter" | "return" => {
+                            this.execute_command_bar_action(window, cx);
+                            return;
+                        }
                         "escape" => {
                             this.hide_command_bar(cx);
                             return;
                         }
-                        _ => {}
+                        "backspace" | "delete" => {
+                            this.command_bar_handle_backspace(cx);
+                            return;
+                        }
+                        _ => {
+                            // Handle printable characters for search (when no modifiers)
+                            if !modifiers.platform && !modifiers.control && !modifiers.alt {
+                                // Get the character from the keystroke
+                                if let Some(ch) = key.chars().next() {
+                                    if ch.is_alphanumeric()
+                                        || ch.is_whitespace()
+                                        || ch == '-'
+                                        || ch == '_'
+                                    {
+                                        this.command_bar_handle_char(ch, cx);
+                                        return;
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -3438,8 +3467,12 @@ impl Render for AiApp {
                     match key {
                         // Cmd+K to toggle command bar (like Raycast)
                         "k" => {
-                            this.hide_all_dropdowns(cx);
-                            this.show_command_bar(window, cx);
+                            if this.showing_command_bar {
+                                this.hide_command_bar(cx);
+                            } else {
+                                this.hide_all_dropdowns(cx);
+                                this.show_command_bar(window, cx);
+                            }
                         }
                         // Cmd+N for new chat (with Shift for presets)
                         "n" => {
