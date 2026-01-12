@@ -231,6 +231,8 @@ impl ScriptListApp {
 
         // Create channel for inline chat escape signals
         let (inline_chat_escape_tx, inline_chat_escape_rx) = mpsc::sync_channel(4);
+        // Create channel for inline chat configure signals (when user wants to set up API key)
+        let (inline_chat_configure_tx, inline_chat_configure_rx) = mpsc::sync_channel(4);
         let mut app = ScriptListApp {
             scripts,
             scriptlets,
@@ -388,6 +390,9 @@ impl ScriptListApp {
             // Inline chat escape channel - for ChatPrompt escape callback to signal return to main menu
             inline_chat_escape_sender: inline_chat_escape_tx,
             inline_chat_escape_receiver: inline_chat_escape_rx,
+            // Inline chat configure channel - for ChatPrompt configure callback to trigger API key setup
+            inline_chat_configure_sender: inline_chat_configure_tx,
+            inline_chat_configure_receiver: inline_chat_configure_rx,
         };
 
         // Build initial alias/shortcut registries (conflicts logged, not shown via HUD on startup)
@@ -5293,49 +5298,40 @@ export default {
         let registry = ProviderRegistry::from_environment();
 
         if !registry.has_any_provider() {
-            crate::logging::log("CHAT", "No AI providers configured - showing setup message");
+            crate::logging::log("CHAT", "No AI providers configured - showing setup card");
 
-            // Show HUD notification to make the error visible
-            self.show_hud(
-                "No AI API key configured. Set SCRIPT_KIT_VERCEL_API_KEY or run 'Configure AI' from menu.".to_string(),
-                Some(5000), // 5 seconds - longer for important config message
-                cx,
-            );
+            // Create configure callback that signals via channel
+            let configure_sender = self.inline_chat_configure_sender.clone();
+            let configure_callback: crate::prompts::ChatConfigureCallback =
+                std::sync::Arc::new(move || {
+                    crate::logging::log("CHAT", "Configure callback triggered - sending signal");
+                    let _ = configure_sender.try_send(());
+                });
 
-            // Show a message prompting user to configure API keys
-            let placeholder = Some("Type your question...".to_string());
-            let hint = Some(
-                "No API keys configured. Run 'Configure Vercel AI Gateway' from the menu."
-                    .to_string(),
-            );
-
-            // Create a no-op callback since there are no providers
+            // Create a no-op submit callback since we're in setup mode
             let noop_callback: ChatSubmitCallback = std::sync::Arc::new(|_id, _text| {
-                crate::logging::log("CHAT", "No providers - submission ignored");
+                crate::logging::log("CHAT", "No providers - submission ignored (setup mode)");
             });
 
-            let mut chat_prompt = ChatPrompt::new(
-                "inline-ai".to_string(),
-                placeholder,
+            let chat_prompt = ChatPrompt::new(
+                "inline-ai-setup".to_string(),
+                Some("Configure API key to continue...".to_string()),
                 vec![],
-                hint,
+                None, // No hint needed - setup card is the UI
                 None,
                 self.focus_handle.clone(),
                 noop_callback,
                 std::sync::Arc::clone(&self.theme),
             )
             .with_title("Ask AI")
-            .with_save_history(true)
-            .with_escape_callback(escape_callback.clone());
-
-            // If there's an initial query, set it in the input
-            if let Some(query) = initial_query {
-                chat_prompt.input.set_text(&query);
-            }
+            .with_save_history(false) // Don't save setup state to history
+            .with_escape_callback(escape_callback.clone())
+            .with_needs_setup(true)
+            .with_configure_callback(configure_callback);
 
             let entity = cx.new(|_| chat_prompt);
             self.current_view = AppView::ChatPrompt {
-                id: "inline-ai".to_string(),
+                id: "inline-ai-setup".to_string(),
                 entity,
             };
             self.focused_input = FocusedInput::None;

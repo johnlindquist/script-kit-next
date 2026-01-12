@@ -32,6 +32,7 @@ mod form_fields_tests;
 pub mod prompt_container;
 pub mod prompt_footer;
 pub mod prompt_header;
+pub mod prompt_input;
 pub mod scrollbar;
 pub mod shortcut_recorder;
 pub mod text_input;
@@ -55,6 +56,8 @@ pub use prompt_container::{PromptContainer, PromptContainerColors, PromptContain
 pub use prompt_footer::{PromptFooter, PromptFooterColors, PromptFooterConfig};
 #[allow(unused_imports)]
 pub use prompt_header::{PromptHeader, PromptHeaderColors, PromptHeaderConfig};
+#[allow(unused_imports)]
+pub use prompt_input::{InputPadding, PromptInput, PromptInputColors, PromptInputConfig};
 #[allow(unused_imports)]
 pub use shortcut_recorder::{
     RecordedShortcut, ShortcutConflict, ShortcutRecorder, ShortcutRecorderColors,

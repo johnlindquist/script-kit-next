@@ -1386,6 +1386,12 @@ struct ScriptListApp {
     /// Receiver for inline chat escape signals
     /// Checked by timer to trigger view reset
     inline_chat_escape_receiver: mpsc::Receiver<()>,
+    /// Sender for inline chat configure signals
+    /// The ChatPrompt configure callback uses this to signal when user wants to configure API key
+    inline_chat_configure_sender: mpsc::SyncSender<()>,
+    /// Receiver for inline chat configure signals
+    /// Checked by timer to trigger API key configuration prompt
+    inline_chat_configure_receiver: mpsc::Receiver<()>,
 }
 
 /// Result of alias matching - either a Script or Scriptlet
@@ -1451,6 +1457,24 @@ impl Render for ScriptListApp {
                 "Inline chat escape received - returning to main menu",
             );
             self.go_back_or_close(window, cx);
+        }
+
+        // Check for inline chat configure (user wants to set up API key)
+        // The ChatPrompt configure callback signals via channel
+        if self.inline_chat_configure_receiver.try_recv().is_ok() {
+            crate::logging::log(
+                "CHAT",
+                "Inline chat configure received - showing API key setup",
+            );
+            // First close the chat prompt
+            self.go_back_or_close(window, cx);
+            // Then show the Vercel API key configuration prompt
+            self.show_api_key_prompt(
+                "SCRIPT_KIT_VERCEL_API_KEY",
+                "Enter your Vercel AI Gateway API key",
+                "Vercel AI Gateway",
+                cx,
+            );
         }
         // Focus-lost auto-dismiss: Close dismissable prompts when the main window loses focus
         // This includes focus loss to other app windows like Notes/AI.
