@@ -135,15 +135,23 @@ pub struct WindowStateFile {
     pub version: u32,
     /// Legacy main window position (for backwards compatibility)
     pub main: Option<PersistedWindowBounds>,
-    /// Main window positions stored per display (keyed by display dimensions, e.g., "2560x1440")
+    /// Main window positions stored per display (keyed by display dimensions + origin)
     #[serde(default)]
     pub main_per_display: HashMap<String, PersistedWindowBounds>,
+    /// Legacy notes window position (for backwards compatibility)
     pub notes: Option<PersistedWindowBounds>,
+    /// Notes window positions stored per display
+    #[serde(default)]
+    pub notes_per_display: HashMap<String, PersistedWindowBounds>,
+    /// Legacy AI window position (for backwards compatibility)
     pub ai: Option<PersistedWindowBounds>,
+    /// AI window positions stored per display
+    #[serde(default)]
+    pub ai_per_display: HashMap<String, PersistedWindowBounds>,
 }
 
 fn default_version() -> u32 {
-    2 // Version 2 adds per-display support
+    3 // Version 3 adds per-display support for AI and Notes windows
 }
 
 // ============================================================================
@@ -206,7 +214,6 @@ pub fn save_state_file(state: &WindowStateFile) -> bool {
             return false;
         }
     };
-    // Atomic write: temp file then rename
     let tmp_path = path.with_extension("json.tmp");
     if let Err(e) = fs::write(&tmp_path, &json) {
         logging::log("WINDOW_STATE", &format!("Failed to write temp file: {}", e));
@@ -237,7 +244,7 @@ pub fn load_window_bounds(role: WindowRole) -> Option<PersistedWindowBounds> {
 /// Save bounds for a specific window role
 pub fn save_window_bounds(role: WindowRole, bounds: PersistedWindowBounds) {
     let mut state = load_state_file().unwrap_or_default();
-    state.version = 1;
+    state.version = 3;
     match role {
         WindowRole::Main => state.main = Some(bounds),
         WindowRole::Notes => state.notes = Some(bounds),
@@ -277,22 +284,10 @@ pub fn has_custom_positions() -> bool {
 }
 
 // ============================================================================
-// Per-Display Position Storage (Main Window Only)
+// Per-Display Position Storage (Main Window)
 // ============================================================================
 
 /// Generate a stable key for a display based on its dimensions AND origin.
-/// Format: "WIDTHxHEIGHT@X,Y" (e.g., "2560x1440@0,0")
-///
-/// Including origin ensures each physical monitor position gets its own saved position,
-/// even when multiple monitors have the same resolution. For example, with three
-/// 2560x1440 monitors arranged horizontally:
-/// - Left:   "2560x1440@0,0"
-/// - Center: "2560x1440@2560,0"
-/// - Right:  "2560x1440@5120,0"
-///
-/// Trade-off: If display arrangements change (e.g., swapping monitor positions),
-/// the saved positions won't match and will fall back to defaults. This is acceptable
-/// since the physical layout changed.
 pub fn display_key(display: &DisplayBounds) -> String {
     format!(
         "{}x{}@{},{}",
@@ -304,7 +299,6 @@ pub fn display_key(display: &DisplayBounds) -> String {
 }
 
 /// Find which display contains the given point (typically mouse cursor).
-/// Returns None if point is not on any display.
 pub fn find_display_containing_point(
     x: f64,
     y: f64,
@@ -321,7 +315,6 @@ pub fn find_display_containing_point(
 }
 
 /// Find which display contains the center of the given bounds.
-/// Falls back to display with most overlap, then first display.
 pub fn find_display_for_bounds<'a>(
     bounds: &PersistedWindowBounds,
     displays: &'a [DisplayBounds],
@@ -330,13 +323,11 @@ pub fn find_display_for_bounds<'a>(
 }
 
 /// Save main window position for a specific display.
-/// This is the primary API for per-display persistence.
 pub fn save_main_position_for_display(display: &DisplayBounds, bounds: PersistedWindowBounds) {
     let key = display_key(display);
     let mut state = load_state_file().unwrap_or_default();
-    state.version = 2;
+    state.version = 3;
     state.main_per_display.insert(key.clone(), bounds);
-    // Also update legacy main for backwards compatibility
     state.main = Some(bounds);
     save_state_file(&state);
     logging::log(
@@ -348,25 +339,14 @@ pub fn save_main_position_for_display(display: &DisplayBounds, bounds: Persisted
     );
 }
 
-/// Get main window position for a specific display.
-/// Returns None if no position was saved for this display.
 #[allow(dead_code)]
 pub fn get_main_position_for_display(display: &DisplayBounds) -> Option<PersistedWindowBounds> {
     let state = load_state_file()?;
     let key = display_key(display);
-    let saved = state.main_per_display.get(&key).copied();
-    if saved.is_some() {
-        logging::log(
-            "WINDOW_STATE",
-            &format!("Found saved position for display {}", key),
-        );
-    }
-    saved
+    state.main_per_display.get(&key).copied()
 }
 
 /// Get the best main window position for the mouse display.
-/// Tries per-display position first, then falls back to legacy position.
-/// Returns None if no saved position exists for this display.
 pub fn get_main_position_for_mouse_display(
     mouse_x: f64,
     mouse_y: f64,
@@ -374,33 +354,19 @@ pub fn get_main_position_for_mouse_display(
 ) -> Option<(PersistedWindowBounds, DisplayBounds)> {
     let display = find_display_containing_point(mouse_x, mouse_y, displays)?;
     let key = display_key(display);
-
     let state = load_state_file()?;
 
-    // Try per-display position first
     if let Some(saved) = state.main_per_display.get(&key) {
         logging::log(
             "WINDOW_STATE",
-            &format!(
-                "Restoring per-display position for {}: ({:.0}, {:.0})",
-                key, saved.x, saved.y
-            ),
+            &format!("Restoring per-display position for {}", key),
         );
         return Some((*saved, display.clone()));
     }
 
-    // Fall back to legacy position if it's on this display
     if let Some(legacy) = state.main {
-        let legacy_bounds_temp = legacy;
-        if let Some(legacy_display) = find_best_display_for_bounds(&legacy_bounds_temp, displays) {
+        if let Some(legacy_display) = find_best_display_for_bounds(&legacy, displays) {
             if display_key(legacy_display) == key {
-                logging::log(
-                    "WINDOW_STATE",
-                    &format!(
-                        "Using legacy position for display {}: ({:.0}, {:.0})",
-                        key, legacy.x, legacy.y
-                    ),
-                );
                 return Some((legacy, display.clone()));
             }
         }
@@ -409,6 +375,108 @@ pub fn get_main_position_for_mouse_display(
     logging::log(
         "WINDOW_STATE",
         &format!("No saved position for display {}", key),
+    );
+    None
+}
+
+// ============================================================================
+// Per-Display Position Storage (AI Window)
+// ============================================================================
+
+/// Save AI window position for a specific display.
+pub fn save_ai_position_for_display(display: &DisplayBounds, bounds: PersistedWindowBounds) {
+    let key = display_key(display);
+    let mut state = load_state_file().unwrap_or_default();
+    state.version = 3;
+    state.ai_per_display.insert(key.clone(), bounds);
+    state.ai = Some(bounds);
+    save_state_file(&state);
+    logging::log(
+        "WINDOW_STATE",
+        &format!("Saved AI position for display {}", key),
+    );
+}
+
+/// Get the best AI window position for the mouse display.
+pub fn get_ai_position_for_mouse_display(
+    mouse_x: f64,
+    mouse_y: f64,
+    displays: &[DisplayBounds],
+) -> Option<(PersistedWindowBounds, DisplayBounds)> {
+    let display = find_display_containing_point(mouse_x, mouse_y, displays)?;
+    let key = display_key(display);
+    let state = load_state_file()?;
+
+    if let Some(saved) = state.ai_per_display.get(&key) {
+        logging::log(
+            "WINDOW_STATE",
+            &format!("Restoring AI per-display position for {}", key),
+        );
+        return Some((*saved, display.clone()));
+    }
+
+    if let Some(legacy) = state.ai {
+        if let Some(legacy_display) = find_best_display_for_bounds(&legacy, displays) {
+            if display_key(legacy_display) == key {
+                return Some((legacy, display.clone()));
+            }
+        }
+    }
+
+    logging::log(
+        "WINDOW_STATE",
+        &format!("No saved AI position for display {}", key),
+    );
+    None
+}
+
+// ============================================================================
+// Per-Display Position Storage (Notes Window)
+// ============================================================================
+
+#[allow(dead_code)]
+pub fn save_notes_position_for_display(display: &DisplayBounds, bounds: PersistedWindowBounds) {
+    let key = display_key(display);
+    let mut state = load_state_file().unwrap_or_default();
+    state.version = 3;
+    state.notes_per_display.insert(key.clone(), bounds);
+    state.notes = Some(bounds);
+    save_state_file(&state);
+    logging::log(
+        "WINDOW_STATE",
+        &format!("Saved Notes position for display {}", key),
+    );
+}
+
+#[allow(dead_code)]
+pub fn get_notes_position_for_mouse_display(
+    mouse_x: f64,
+    mouse_y: f64,
+    displays: &[DisplayBounds],
+) -> Option<(PersistedWindowBounds, DisplayBounds)> {
+    let display = find_display_containing_point(mouse_x, mouse_y, displays)?;
+    let key = display_key(display);
+    let state = load_state_file()?;
+
+    if let Some(saved) = state.notes_per_display.get(&key) {
+        logging::log(
+            "WINDOW_STATE",
+            &format!("Restoring Notes per-display position for {}", key),
+        );
+        return Some((*saved, display.clone()));
+    }
+
+    if let Some(legacy) = state.notes {
+        if let Some(legacy_display) = find_best_display_for_bounds(&legacy, displays) {
+            if display_key(legacy_display) == key {
+                return Some((legacy, display.clone()));
+            }
+        }
+    }
+
+    logging::log(
+        "WINDOW_STATE",
+        &format!("No saved Notes position for display {}", key),
     );
     None
 }
@@ -466,7 +534,6 @@ fn rect_intersection(
     }
 }
 
-/// Clamp bounds to ensure window is visible and grabbable on given displays.
 pub fn clamp_bounds_to_displays(
     bounds: &PersistedWindowBounds,
     displays: &[DisplayBounds],
@@ -528,7 +595,6 @@ fn find_best_display_for_bounds<'a>(
 // High-Level API
 // ============================================================================
 
-/// Get initial bounds for a window, trying saved position first, then fallback.
 pub fn get_initial_bounds(
     role: WindowRole,
     default_bounds: Bounds<Pixels>,
@@ -567,7 +633,6 @@ pub fn get_initial_bounds(
     default_bounds
 }
 
-/// Save window bounds from current GPUI window state.
 pub fn save_window_from_gpui(role: WindowRole, window_bounds: WindowBounds) {
     save_window_bounds(role, PersistedWindowBounds::from_gpui(window_bounds));
 }

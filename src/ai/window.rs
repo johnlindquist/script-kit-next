@@ -4115,16 +4115,23 @@ pub fn open_ai_window(cx: &mut App) -> Result<()> {
         gpui::WindowBackgroundAppearance::Opaque
     };
 
-    // Calculate position: try saved position first, then centered on mouse display
-    // Use mouse display positioning so AI window appears on the same screen as the main window
-    let default_bounds =
-        crate::platform::calculate_centered_bounds_on_mouse_display(size(px(900.), px(700.)));
+    // Calculate position: try per-display saved position first, then centered on mouse display
+    // Use mouse display positioning so AI window appears on the same screen as the cursor
     let displays = crate::platform::get_macos_displays();
-    let bounds = crate::window_state::get_initial_bounds(
-        crate::window_state::WindowRole::Ai,
-        default_bounds,
-        &displays,
-    );
+    let bounds = if let Some((mouse_x, mouse_y)) = crate::platform::get_global_mouse_position() {
+        if let Some((saved, _display)) =
+            crate::window_state::get_ai_position_for_mouse_display(mouse_x, mouse_y, &displays)
+        {
+            // Use saved per-display position
+            saved.to_gpui().get_bounds()
+        } else {
+            // Fall back to centered on mouse display
+            crate::platform::calculate_centered_bounds_on_mouse_display(size(px(900.), px(700.)))
+        }
+    } else {
+        // Mouse position unavailable, fall back to centered
+        crate::platform::calculate_centered_bounds_on_mouse_display(size(px(900.), px(700.)))
+    };
 
     let window_options = WindowOptions {
         window_bounds: Some(WindowBounds::Windowed(bounds)),
@@ -4257,9 +4264,19 @@ pub fn close_ai_window(cx: &mut App) {
 
     if let Some(handle) = handle {
         let _ = handle.update(cx, |_, window, _| {
-            // Save window bounds before closing
+            // Save window bounds per-display before closing
             let wb = window.window_bounds();
-            crate::window_state::save_window_from_gpui(crate::window_state::WindowRole::Ai, wb);
+            let persisted = crate::window_state::PersistedWindowBounds::from_gpui(wb);
+            let displays = crate::platform::get_macos_displays();
+            // Find which display the window center is on
+            if let Some(display) =
+                crate::window_state::find_display_for_bounds(&persisted, &displays)
+            {
+                crate::window_state::save_ai_position_for_display(display, persisted);
+            } else {
+                // Fallback to legacy save if display not found
+                crate::window_state::save_window_from_gpui(crate::window_state::WindowRole::Ai, wb);
+            }
             window.remove_window();
         });
     }
