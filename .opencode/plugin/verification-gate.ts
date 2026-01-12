@@ -45,13 +45,27 @@ function containsVerificationCommand(text: string): boolean {
   return VERIFICATION_PATTERNS.every(pattern => pattern.test(text))
 }
 
-// Type for tool execution input
-interface ToolInput {
+// Type definitions for hook inputs/outputs matching @opencode-ai/plugin types
+interface ToolExecuteBeforeInput {
   tool: string
   sessionID: string
   callID: string
-  args?: Record<string, unknown>
-  result?: Record<string, unknown>
+}
+
+interface ToolExecuteBeforeOutput {
+  args: Record<string, unknown>
+}
+
+interface ToolExecuteAfterInput {
+  tool: string
+  sessionID: string
+  callID: string
+}
+
+interface ToolExecuteAfterOutput {
+  title: string
+  output: string
+  metadata: Record<string, unknown>
 }
 
 const VerificationGate: Plugin = async () => {
@@ -61,7 +75,7 @@ const VerificationGate: Plugin = async () => {
   
   return {
     // Track when verification commands are run (after execution)
-    "tool.execute.after": async (input: ToolInput) => {
+    "tool.execute.after": async (input: ToolExecuteAfterInput, output: ToolExecuteAfterOutput) => {
       const sessionId = input.sessionID
       
       if (input.tool !== "bash") {
@@ -69,16 +83,16 @@ const VerificationGate: Plugin = async () => {
         return
       }
       
-      const args = input.args || {}
-      const result = input.result || {}
-      const command = (args.command as string) || ""
-      const output = (result.output as string) || ""
+      // For tool.execute.after, command may be in metadata or we extract from title/description
+      const metadata = output.metadata || {}
+      const command = (metadata.command as string) || (metadata.description as string) || output.title || ""
+      const cmdOutput = output.output || ""
       
       // Check if this was a verification command
       if (containsVerificationCommand(command)) {
         // Only mark as verified if command succeeded (no error in result)
-        const hasError = /error\[E\d+\]|^error:/im.test(output) ||
-                        /warning:.*\n.*= help:/m.test(output) && /--\s*-D\s*warnings/.test(command)
+        const hasError = /error\[E\d+\]|^error:/im.test(cmdOutput) ||
+                        /warning:.*\n.*= help:/m.test(cmdOutput) && /--\s*-D\s*warnings/.test(command)
         
         if (!hasError) {
           verificationRanInSession = true
@@ -93,7 +107,7 @@ const VerificationGate: Plugin = async () => {
     },
 
     // Intercept commit attempts and warn if verification not done (before execution)
-    "tool.execute.before": async (input: ToolInput) => {
+    "tool.execute.before": async (input: ToolExecuteBeforeInput, output: ToolExecuteBeforeOutput) => {
       const sessionId = input.sessionID
       
       if (input.tool !== "bash") {
@@ -101,7 +115,8 @@ const VerificationGate: Plugin = async () => {
         return
       }
       
-      const args = input.args || {}
+      // For tool.execute.before, args are in the output object
+      const args = output.args || {}
       const command = (args.command as string) || ""
       
       if (containsCommitAttempt(command)) {

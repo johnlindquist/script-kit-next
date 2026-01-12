@@ -152,12 +152,17 @@ async function runCargoFmtCheck(filePath: string): Promise<FmtResult> {
 // Plugin Export
 // =============================================================================
 
-interface ToolInput {
+// Type definitions for hook inputs/outputs matching @opencode-ai/plugin types
+interface ToolExecuteAfterInput {
   tool: string
   sessionID: string
   callID: string
-  args?: Record<string, unknown>
-  result?: Record<string, unknown>
+}
+
+interface ToolExecuteAfterOutput {
+  title: string
+  output: string
+  metadata: Record<string, unknown>
 }
 
 const CargoFmtCheck: Plugin = async ({ client }) => {
@@ -181,10 +186,13 @@ const CargoFmtCheck: Plugin = async ({ client }) => {
       
     },
 
-    "tool.execute.after": async (input: ToolInput) => {
+    "tool.execute.after": async (input: ToolExecuteAfterInput, output: ToolExecuteAfterOutput) => {
       const tool = input.tool
-      const args = input.args || {}
       const sessionId = input.sessionID
+      
+      // For tool.execute.after, extract args from metadata
+      const metadata = output.metadata || {}
+      const filePath = (metadata.filePath as string) || ""
 
       // Only check after edit/write operations
       if (tool !== "edit" && tool !== "write") {
@@ -197,8 +205,6 @@ const CargoFmtCheck: Plugin = async ({ client }) => {
         logSkipped(null, PLUGIN_NAME, "tool.execute.after", "No session ID available")
         return
       }
-
-      const filePath = (args.filePath as string) || ""
 
       // Only check Rust files
       if (!RUST_FILE_PATTERN.test(filePath)) {
