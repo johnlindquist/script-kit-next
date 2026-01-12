@@ -280,15 +280,27 @@ pub fn has_custom_positions() -> bool {
 // Per-Display Position Storage (Main Window Only)
 // ============================================================================
 
-/// Generate a stable key for a display based on its dimensions.
-/// Format: "WIDTHxHEIGHT" (e.g., "2560x1440")
+/// Generate a stable key for a display based on its dimensions AND origin.
+/// Format: "WIDTHxHEIGHT@X,Y" (e.g., "2560x1440@0,0")
 ///
-/// Using dimensions only (not origin) because:
-/// - Origins change when display arrangements change
-/// - Dimensions are stable across reboots
-/// - If two displays have the same resolution, they share position (acceptable trade-off)
+/// Including origin ensures each physical monitor position gets its own saved position,
+/// even when multiple monitors have the same resolution. For example, with three
+/// 2560x1440 monitors arranged horizontally:
+/// - Left:   "2560x1440@0,0"
+/// - Center: "2560x1440@2560,0"
+/// - Right:  "2560x1440@5120,0"
+///
+/// Trade-off: If display arrangements change (e.g., swapping monitor positions),
+/// the saved positions won't match and will fall back to defaults. This is acceptable
+/// since the physical layout changed.
 pub fn display_key(display: &DisplayBounds) -> String {
-    format!("{}x{}", display.width as u32, display.height as u32)
+    format!(
+        "{}x{}@{},{}",
+        display.width as u32,
+        display.height as u32,
+        display.origin_x as i32,
+        display.origin_y as i32
+    )
 }
 
 /// Find which display contains the given point (typically mouse cursor).

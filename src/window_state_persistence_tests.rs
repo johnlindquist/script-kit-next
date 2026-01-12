@@ -157,21 +157,36 @@ mod tests {
 
     #[test]
     fn test_display_key_generation() {
+        // First display at origin (0,0)
         let display = DisplayBounds {
             origin_x: 0.0,
             origin_y: 0.0,
             width: 2560.0,
             height: 1440.0,
         };
-        assert_eq!(display_key(&display), "2560x1440");
+        assert_eq!(display_key(&display), "2560x1440@0,0");
 
+        // Second display to the right of the first
         let display2 = DisplayBounds {
             origin_x: 2560.0,
             origin_y: 0.0,
             width: 1920.0,
             height: 1080.0,
         };
-        assert_eq!(display_key(&display2), "1920x1080");
+        assert_eq!(display_key(&display2), "1920x1080@2560,0");
+
+        // Third display with same resolution as first but different position
+        // This should generate a DIFFERENT key (the main fix!)
+        let display3 = DisplayBounds {
+            origin_x: 5120.0, // Further to the right
+            origin_y: 0.0,
+            width: 2560.0, // Same resolution as display1
+            height: 1440.0,
+        };
+        assert_eq!(display_key(&display3), "2560x1440@5120,0");
+
+        // Verify same-resolution displays at different positions have unique keys
+        assert_ne!(display_key(&display), display_key(&display3));
     }
 
     #[test]
