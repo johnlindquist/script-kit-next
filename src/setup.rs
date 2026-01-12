@@ -36,6 +36,10 @@ const EMBEDDED_GUIDE_MD: &str = include_str!("../kit-init/GUIDE.md");
 /// Embedded CleanShot X extension (built-in extension that ships with the app)
 const EMBEDDED_CLEANSHOT_EXTENSION: &str = include_str!("../kit-init/extensions/cleanshot/main.md");
 
+/// Embedded CleanShot X shared actions (built-in actions for all cleanshot scriptlets)
+const EMBEDDED_CLEANSHOT_ACTIONS: &str =
+    include_str!("../kit-init/extensions/cleanshot/main.actions.md");
+
 /// Embedded 1Password extension (built-in extension that ships with the app)
 const EMBEDDED_1PASSWORD_EXTENSION: &str = include_str!("../kit-init/extensions/1password/main.md");
 
@@ -43,12 +47,20 @@ const EMBEDDED_1PASSWORD_EXTENSION: &str = include_str!("../kit-init/extensions/
 const EMBEDDED_QUICKLINKS_EXTENSION: &str =
     include_str!("../kit-init/extensions/quicklinks/main.md");
 
+/// Embedded Quick Links shared actions (built-in actions for all quicklinks scriptlets)
+const EMBEDDED_QUICKLINKS_ACTIONS: &str =
+    include_str!("../kit-init/extensions/quicklinks/main.actions.md");
+
 /// Embedded Window Management extension (built-in extension that ships with the app)
 const EMBEDDED_WINDOW_MANAGEMENT_EXTENSION: &str =
     include_str!("../kit-init/extensions/window-management/main.md");
 
 /// Embedded Conductor extension (built-in extension that ships with the app)
 const EMBEDDED_CONDUCTOR_EXTENSION: &str = include_str!("../kit-init/extensions/conductor/main.md");
+
+/// Embedded Conductor shared actions (built-in actions for all conductor scriptlets)
+const EMBEDDED_CONDUCTOR_ACTIONS: &str =
+    include_str!("../kit-init/extensions/conductor/main.actions.md");
 
 /// Embedded AI Text Tools extension (built-in extension that ships with the app)
 const EMBEDDED_AI_TEXT_TOOLS_EXTENSION: &str =
@@ -1073,6 +1085,20 @@ pub fn ensure_kit_setup() -> SetupResult {
         "kit/cleanshot/extensions/main.md",
     );
 
+    // App-managed: Built-in CleanShot X shared actions (refresh if changed)
+    // These actions are automatically available for all CleanShot scriptlets
+    let cleanshot_actions_path = kit_dir
+        .join("kit")
+        .join("cleanshot")
+        .join("extensions")
+        .join("main.actions.md");
+    write_string_if_changed(
+        &cleanshot_actions_path,
+        EMBEDDED_CLEANSHOT_ACTIONS,
+        &mut warnings,
+        "kit/cleanshot/extensions/main.actions.md",
+    );
+
     // App-managed: Built-in 1Password extension (refresh if changed)
     // This extension ships with the app and provides password manager CLI commands
     let onepassword_path = kit_dir
@@ -1101,6 +1127,20 @@ pub fn ensure_kit_setup() -> SetupResult {
         "kit/quicklinks/extensions/main.md",
     );
 
+    // App-managed: Built-in Quick Links shared actions (refresh if changed)
+    // These actions are automatically available for all Quick Links scriptlets
+    let quicklinks_actions_path = kit_dir
+        .join("kit")
+        .join("quicklinks")
+        .join("extensions")
+        .join("main.actions.md");
+    write_string_if_changed(
+        &quicklinks_actions_path,
+        EMBEDDED_QUICKLINKS_ACTIONS,
+        &mut warnings,
+        "kit/quicklinks/extensions/main.actions.md",
+    );
+
     // App-managed: Built-in Window Management extension (refresh if changed)
     // This extension ships with the app and provides window tiling and positioning
     let window_management_path = kit_dir
@@ -1127,6 +1167,20 @@ pub fn ensure_kit_setup() -> SetupResult {
         EMBEDDED_CONDUCTOR_EXTENSION,
         &mut warnings,
         "kit/conductor/extensions/main.md",
+    );
+
+    // App-managed: Built-in Conductor shared actions (refresh if changed)
+    // These actions are automatically available for all Conductor scriptlets
+    let conductor_actions_path = kit_dir
+        .join("kit")
+        .join("conductor")
+        .join("extensions")
+        .join("main.actions.md");
+    write_string_if_changed(
+        &conductor_actions_path,
+        EMBEDDED_CONDUCTOR_ACTIONS,
+        &mut warnings,
+        "kit/conductor/extensions/main.actions.md",
     );
 
     // App-managed: Built-in AI Text Tools extension (refresh if changed)

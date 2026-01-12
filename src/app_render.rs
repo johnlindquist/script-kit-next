@@ -1116,9 +1116,7 @@ impl ScriptListApp {
                             Some(format!("builtin:{}", m.entry.name))
                         }
                     }
-                    scripts::SearchResult::App(m) => {
-                        Some(m.app.path.to_string_lossy().to_string())
-                    }
+                    scripts::SearchResult::App(m) => Some(m.app.path.to_string_lossy().to_string()),
                     scripts::SearchResult::Window(m) => {
                         Some(format!("window:{}:{}", m.window.app, m.window.title))
                     }
@@ -1254,6 +1252,46 @@ impl ScriptListApp {
         } else {
             None
         }
+    }
+
+    /// Get the full scriptlet with actions for the currently focused item
+    ///
+    /// This re-parses the markdown file to get the scriptlet's H3 actions
+    /// and shared actions from the companion .actions.md file.
+    /// Returns None if the focused item is not a scriptlet.
+    pub fn get_focused_scriptlet_with_actions(&mut self) -> Option<crate::scriptlets::Scriptlet> {
+        let (grouped_items, flat_results) = self.get_grouped_results_cached();
+        let grouped_items = grouped_items.clone();
+        let flat_results = flat_results.clone();
+
+        let result_idx = match grouped_items.get(self.selected_index) {
+            Some(GroupedListItem::Item(idx)) => Some(*idx),
+            _ => None,
+        };
+
+        if let Some(idx) = result_idx {
+            if let Some(scripts::SearchResult::Scriptlet(m)) = flat_results.get(idx) {
+                // Get the file path from the UI scriptlet type
+                let file_path = m.scriptlet.file_path.clone()?;
+                let scriptlet_command = m.scriptlet.command.clone()?;
+
+                // Extract just the file path (before #anchor)
+                let file_only = file_path.split('#').next().unwrap_or(&file_path);
+
+                // Read and parse the markdown file to get full scriptlet with actions
+                if let Ok(content) = std::fs::read_to_string(file_only) {
+                    let parsed_scriptlets =
+                        crate::scriptlets::parse_markdown_as_scriptlets(&content, Some(file_only));
+
+                    // Find the matching scriptlet by command
+                    return parsed_scriptlets
+                        .into_iter()
+                        .find(|s| s.command == scriptlet_command);
+                }
+            }
+        }
+
+        None
     }
 
     fn render_actions_dialog(&mut self, cx: &mut Context<Self>) -> AnyElement {
