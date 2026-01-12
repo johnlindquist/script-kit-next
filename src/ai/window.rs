@@ -1248,18 +1248,25 @@ impl AiApp {
     }
 
     /// Render the search input
-    fn render_search(&self, _cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_search(&self, cx: &mut Context<Self>) -> impl IntoElement {
         // Fixed height container to prevent layout shift when typing
+        // Style the container and use appearance(false) on Input to remove its default white background
         div()
             .w_full()
             .h(px(36.)) // Fixed height to prevent layout shift
             .flex()
             .items_center()
+            .px_2()
+            .rounded_md()
+            .border_1()
+            .border_color(cx.theme().border.opacity(0.5))
+            .bg(cx.theme().input) // Use theme's input background
             .child(
                 Input::new(&self.search_state)
                     .w_full()
                     .small()
-                    .focus_bordered(false), // Disable default focus border (too bright)
+                    .appearance(false) // Remove default background/border (we provide our own)
+                    .focus_bordered(false), // Disable default focus border
             )
     }
 
@@ -1418,19 +1425,27 @@ impl AiApp {
             )
             // Scrollable chat list with date groups
             // Note: overflow_y_scrollbar() wraps the element in a Scrollable container
-            // that uses size_full(), so flex_1() goes on the wrapper, not the inner content
+            // min_h_0() is critical for flex containers - without it, the element won't shrink
+            // below its content size and scrolling won't work properly
             .child(
                 div()
                     .flex()
                     .flex_col()
-                    .px_2()
-                    .pb_2()
-                    .gap_3()
-                    .children(date_groups.into_iter().map(|(group, chats)| {
-                        self.render_date_group(group, chats, selected_id, cx)
-                    }))
-                    .overflow_y_scrollbar()
-                    .flex_1(),
+                    .flex_1()
+                    .min_h_0() // Critical: allows flex child to shrink and enable scrolling
+                    .overflow_hidden()
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .px_2()
+                            .pb_2()
+                            .gap_3()
+                            .children(date_groups.into_iter().map(|(group, chats)| {
+                                self.render_date_group(group, chats, selected_id, cx)
+                            }))
+                            .overflow_y_scrollbar(),
+                    ),
             )
             .into_any_element()
     }
@@ -1729,7 +1744,7 @@ impl AiApp {
             .flex_1()
             .gap_6()
             .px_8()
-            // Icon
+            // Icon - use LocalIconName which has reliable SVG paths
             .child(
                 div()
                     .flex()
@@ -1739,7 +1754,8 @@ impl AiApp {
                     .rounded(px(16.))
                     .bg(cx.theme().muted.opacity(0.3))
                     .child(
-                        Icon::new(IconName::Settings)
+                        svg()
+                            .external_path(LocalIconName::Settings.external_path())
                             .size(px(32.))
                             .text_color(cx.theme().muted_foreground),
                     ),
