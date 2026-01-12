@@ -55,7 +55,7 @@ pub fn get_all_displays() -> Result<Vec<DisplayInfo>> {
 
     let display_ids = CGDisplay::active_displays()
         .map_err(|e| anyhow::anyhow!("Failed to get active displays: error code {}", e))?;
-    let main_screen_height = get_main_screen_height()?;
+    let primary_screen_height = get_primary_screen_height()?;
 
     let mut displays = Vec::with_capacity(display_ids.len());
 
@@ -65,7 +65,7 @@ pub fn get_all_displays() -> Result<Vec<DisplayInfo>> {
         let is_main = display_id == CGDisplay::main().id;
 
         // Get visible frame from NSScreen
-        let visible_bounds = get_nsscreen_visible_frame(display_id, main_screen_height)
+        let visible_bounds = get_nsscreen_visible_frame(display_id, primary_screen_height)
             .unwrap_or_else(|| {
                 // Fallback: estimate visible area
                 let menu_bar = if is_main { 25.0 } else { 0.0 };
@@ -125,18 +125,34 @@ pub fn get_display_for_window<'a>(
         .filter(|d| window_bounds.intersection_area(&d.visible_bounds) > 0.0)
 }
 
-/// Get the main screen height for coordinate conversion
+/// Get the PRIMARY screen height for coordinate conversion.
+/// IMPORTANT: We use screens[0] (the primary screen with the menu bar),
+/// NOT mainScreen (which is the screen with the key window).
+/// Cocoa coordinates have their origin at bottom-left of the PRIMARY screen,
+/// and CoreGraphics coordinates have origin at top-left of PRIMARY screen.
+/// Using mainScreen causes incorrect coordinate conversion on multi-monitor setups.
 #[cfg(target_os = "macos")]
-fn get_main_screen_height() -> Result<f64> {
+fn get_primary_screen_height() -> Result<f64> {
     unsafe {
         use objc::runtime::{Class, Object};
         use objc::{msg_send, sel, sel_impl};
 
         let nsscreen = Class::get("NSScreen").context("Failed to get NSScreen class")?;
-        let main_screen: *mut Object = msg_send![nsscreen, mainScreen];
+        let screens: *mut Object = msg_send![nsscreen, screens];
 
-        if main_screen.is_null() {
-            bail!("No main screen found");
+        if screens.is_null() {
+            bail!("No screens found");
+        }
+
+        let count: usize = msg_send![screens, count];
+        if count == 0 {
+            bail!("No screens available");
+        }
+
+        // Use screens[0] which is always the primary screen (with menu bar)
+        let primary_screen: *mut Object = msg_send![screens, objectAtIndex: 0usize];
+        if primary_screen.is_null() {
+            bail!("Primary screen is null");
         }
 
         #[repr(C)]
@@ -155,19 +171,19 @@ fn get_main_screen_height() -> Result<f64> {
             height: f64,
         }
 
-        let frame: NSRect = msg_send![main_screen, frame];
+        let frame: NSRect = msg_send![primary_screen, frame];
         Ok(frame.size.height)
     }
 }
 
 #[cfg(not(target_os = "macos"))]
-fn get_main_screen_height() -> Result<f64> {
+fn get_primary_screen_height() -> Result<f64> {
     Ok(1080.0)
 }
 
 /// Get NSScreen.visibleFrame for a display, converted to AX coordinates
 #[cfg(target_os = "macos")]
-fn get_nsscreen_visible_frame(display_id: u32, main_screen_height: f64) -> Option<WindowBounds> {
+fn get_nsscreen_visible_frame(display_id: u32, primary_screen_height: f64) -> Option<WindowBounds> {
     unsafe {
         use objc::runtime::{Class, Object};
         use objc::{msg_send, sel, sel_impl};
@@ -221,7 +237,7 @@ fn get_nsscreen_visible_frame(display_id: u32, main_screen_height: f64) -> Optio
                     visible.origin.y,
                     visible.size.width,
                     visible.size.height,
-                    main_screen_height,
+                    primary_screen_height,
                 ));
             }
         }
@@ -231,7 +247,10 @@ fn get_nsscreen_visible_frame(display_id: u32, main_screen_height: f64) -> Optio
 }
 
 #[cfg(not(target_os = "macos"))]
-fn get_nsscreen_visible_frame(_display_id: u32, _main_screen_height: f64) -> Option<WindowBounds> {
+fn get_nsscreen_visible_frame(
+    _display_id: u32,
+    _primary_screen_height: f64,
+) -> Option<WindowBounds> {
     None
 }
 
