@@ -308,6 +308,12 @@ pub struct AiApp {
 
     /// Timestamp when setup command was last copied (for showing "Copied!" feedback)
     setup_copied_at: Option<std::time::Instant>,
+
+    /// Whether we're showing the API key input field (configure mode)
+    showing_api_key_input: bool,
+
+    /// API key input state (for configure flow)
+    api_key_input_state: Entity<InputState>,
 }
 
 impl AiApp {
@@ -376,6 +382,9 @@ impl AiApp {
 
         let search_state = cx.new(|cx| InputState::new(window, cx).placeholder("Search chats..."));
 
+        let api_key_input_state =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Enter your Vercel API key..."));
+
         let focus_handle = cx.focus_handle();
 
         // Subscribe to input changes and Enter key
@@ -392,6 +401,15 @@ impl AiApp {
             move |this, _, ev: &InputEvent, _window, cx| {
                 if matches!(ev, InputEvent::Change) {
                     this.on_search_change(cx);
+                }
+            }
+        });
+
+        // Subscribe to API key input changes (Enter submits the key)
+        let api_key_sub = cx.subscribe_in(&api_key_input_state, window, {
+            move |this, _, ev: &InputEvent, window, cx| {
+                if matches!(ev, InputEvent::PressEnter { .. }) {
+                    this.submit_api_key(window, cx);
                 }
             }
         });
@@ -418,7 +436,7 @@ impl AiApp {
             available_models,
             selected_model,
             focus_handle,
-            _subscriptions: vec![input_sub, search_sub],
+            _subscriptions: vec![input_sub, search_sub, api_key_sub],
             // Streaming state
             is_streaming: false,
             streaming_content: String::new(),
@@ -433,6 +451,8 @@ impl AiApp {
             theme_rev_seen: crate::theme::service::theme_revision(),
             pending_image: None,
             setup_copied_at: None,
+            showing_api_key_input: false,
+            api_key_input_state,
         }
     }
 
@@ -1465,6 +1485,75 @@ impl AiApp {
             .unwrap_or(false)
     }
 
+    /// Show the API key configuration input
+    fn show_api_key_input(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.showing_api_key_input = true;
+        // Focus the API key input
+        self.api_key_input_state.update(cx, |state, cx| {
+            state.set_value("", window, cx);
+            state.set_selection(0, 0, window, cx);
+        });
+        cx.notify();
+    }
+
+    /// Hide the API key configuration input
+    fn hide_api_key_input(&mut self, cx: &mut Context<Self>) {
+        self.showing_api_key_input = false;
+        cx.notify();
+    }
+
+    /// Submit the API key from the configuration input
+    fn submit_api_key(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let api_key = self.api_key_input_state.read(cx).value().to_string();
+        let api_key = api_key.trim();
+
+        if api_key.is_empty() {
+            info!("API key input is empty, ignoring submission");
+            return;
+        }
+
+        // Save the API key to secrets storage
+        if let Err(e) =
+            crate::secrets::set_secret(crate::ai::config::env_vars::VERCEL_API_KEY, api_key)
+        {
+            tracing::error!(error = %e, "Failed to save Vercel API key");
+            return;
+        }
+
+        info!("Vercel API key saved successfully");
+
+        // Reinitialize the provider registry to pick up the new key
+        self.provider_registry = ProviderRegistry::from_environment();
+        self.available_models = self.provider_registry.get_all_models();
+
+        // Select default model if available
+        self.selected_model = self
+            .available_models
+            .iter()
+            .find(|m| m.id.contains("haiku"))
+            .or_else(|| self.available_models.first())
+            .cloned();
+
+        info!(
+            providers = self.provider_registry.provider_ids().len(),
+            models = self.available_models.len(),
+            "Providers reinitialized after API key setup"
+        );
+
+        // Hide the input and show the welcome state
+        self.showing_api_key_input = false;
+
+        // Clear the input
+        self.api_key_input_state.update(cx, |state, cx| {
+            state.set_value("", window, cx);
+        });
+
+        // Focus the main input
+        self.focus_input(window, cx);
+
+        cx.notify();
+    }
+
     /// Render the sidebar toggle button using the Sidebar icon from our icon library
     fn render_sidebar_toggle(&self, cx: &mut Context<Self>) -> impl IntoElement {
         // Use opacity to indicate state - dimmed when collapsed
@@ -1892,9 +1981,16 @@ impl AiApp {
     }
 
     /// Render the setup card when no API keys are configured
-    /// Shows a friendly prompt with clear instructions and keyboard shortcuts
+    /// Shows a Raycast-style prompt with a Configure Vercel AI Gateway button
     fn render_setup_card(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let setup_command = "export SCRIPT_KIT_ANTHROPIC_API_KEY=\"your-key-here\"";
+        // If showing API key input mode, render that instead
+        if self.showing_api_key_input {
+            return self.render_api_key_input(cx).into_any_element();
+        }
+
+        // Yellow/gold accent color for the button (Raycast style)
+        let button_bg = hsla(45.0 / 360.0, 0.9, 0.55, 1.0); // Gold/yellow
+        let button_text = hsla(0.0, 0.0, 0.1, 1.0); // Dark text
 
         div()
             .flex()
@@ -1902,22 +1998,22 @@ impl AiApp {
             .items_center()
             .justify_center()
             .flex_1()
-            .gap_6()
+            .gap_5()
             .px_8()
-            // Icon - use LocalIconName which has reliable SVG paths
+            // Icon - muted settings icon at top
             .child(
                 div()
                     .flex()
                     .items_center()
                     .justify_center()
-                    .size(px(64.))
-                    .rounded(px(16.))
-                    .bg(cx.theme().muted.opacity(0.3))
+                    .size(px(80.))
+                    .rounded(px(20.))
+                    .bg(cx.theme().muted.opacity(0.2))
                     .child(
                         svg()
                             .external_path(LocalIconName::Settings.external_path())
-                            .size(px(32.))
-                            .text_color(cx.theme().muted_foreground),
+                            .size(px(40.))
+                            .text_color(cx.theme().muted_foreground.opacity(0.5)),
                     ),
             )
             // Title
@@ -1934,180 +2030,247 @@ impl AiApp {
                     .text_sm()
                     .text_color(cx.theme().muted_foreground)
                     .text_center()
-                    .max_w(px(400.))
-                    .child("Add an API key to enable AI chat. Supports Anthropic, OpenAI, Google, Groq, and OpenRouter."),
+                    .max_w(px(380.))
+                    .child("Set up an API key to use the Ask AI feature. The easiest option is Vercel AI Gateway."),
             )
-            // Setup instructions card
+            // Configure Vercel AI Gateway button
+            .child(
+                div()
+                    .id("configure-vercel-btn")
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .gap_2()
+                    .px_5()
+                    .py_2()
+                    .rounded_lg()
+                    .bg(button_bg)
+                    .cursor_pointer()
+                    .border_1()
+                    .border_color(button_bg.opacity(0.8))
+                    .hover(|s| s.bg(button_bg.opacity(0.9)))
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.show_api_key_input(window, cx);
+                    }))
+                    .child(
+                        svg()
+                            .external_path(LocalIconName::Settings.external_path())
+                            .size(px(18.))
+                            .text_color(button_text),
+                    )
+                    .child(
+                        div()
+                            .text_sm()
+                            .font_weight(gpui::FontWeight::MEDIUM)
+                            .text_color(button_text)
+                            .child("Configure Vercel AI Gateway"),
+                    ),
+            )
+            // Info text
             .child(
                 div()
                     .flex()
                     .flex_col()
-                    .gap_3()
-                    .p_4()
-                    .rounded_lg()
-                    .bg(cx.theme().secondary)
-                    .border_1()
-                    .border_color(cx.theme().border)
-                    .max_w(px(480.))
-                    .w_full()
-                    // Step 1
+                    .items_center()
+                    .gap_1()
+                    .mt_2()
                     .child(
                         div()
-                            .flex()
-                            .items_start()
-                            .gap_3()
-                            .child(
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .size(px(20.))
-                                    .rounded_full()
-                                    .bg(cx.theme().accent)
-                                    .text_xs()
-                                    .font_weight(gpui::FontWeight::BOLD)
-                                    .text_color(cx.theme().accent_foreground)
-                                    .child("1"),
-                            )
-                            .child(
-                                div()
-                                    .flex()
-                                    .flex_col()
-                                    .gap_1()
-                                    .child(
-                                        div()
-                                            .text_sm()
-                                            .font_weight(gpui::FontWeight::MEDIUM)
-                                            .text_color(cx.theme().foreground)
-                                            .child("Add to your shell profile"),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_xs()
-                                            .text_color(cx.theme().muted_foreground)
-                                            .child("~/.zshrc or ~/.bashrc"),
-                                    ),
-                            ),
+                            .text_sm()
+                            .text_color(cx.theme().muted_foreground)
+                            .child("No restart required"),
                     )
-                    // Code block
-                    .child({
-                        let show_copied = self.is_showing_copied_feedback();
+                    .child(
                         div()
-                            .id("setup-command")
+                            .text_sm()
+                            .text_color(cx.theme().muted_foreground)
+                            .child("After configuring, press Tab again to try"),
+                    ),
+            )
+            // Keyboard hints
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_4()
+                    .mt_4()
+                    // Enter to configure
+                    .child(
+                        div()
                             .flex()
                             .items_center()
-                            .justify_between()
-                            .px_3()
-                            .py_2()
-                            .rounded_md()
-                            .bg(if show_copied {
-                                cx.theme().success.opacity(0.1)
-                            } else {
-                                cx.theme().background
-                            })
-                            .border_1()
-                            .border_color(if show_copied {
-                                cx.theme().success.opacity(0.3)
-                            } else {
-                                cx.theme().border
-                            })
-                            .cursor_pointer()
-                            .hover(|s| s.bg(cx.theme().muted.opacity(0.5)))
-                            .on_click(cx.listener(move |this, _, window, cx| {
-                                this.copy_setup_command(cx);
-                                window.activate_window();
-                            }))
+                            .gap_2()
+                            .child(
+                                div()
+                                    .px_2()
+                                    .py(px(2.))
+                                    .rounded(px(4.))
+                                    .bg(cx.theme().muted)
+                                    .text_xs()
+                                    .font_weight(gpui::FontWeight::MEDIUM)
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child("Enter"),
+                            )
                             .child(
                                 div()
                                     .text_xs()
-                                    .font_family("monospace")
-                                    .text_color(if show_copied {
-                                        cx.theme().success
-                                    } else {
-                                        cx.theme().foreground
-                                    })
-                                    .overflow_hidden()
-                                    .text_ellipsis()
-                                    .child(if show_copied {
-                                        "Copied to clipboard!"
-                                    } else {
-                                        setup_command
-                                    }),
-                            )
-                            .child(if show_copied {
-                                Icon::new(IconName::Check)
-                                    .size(px(14.))
-                                    .text_color(cx.theme().success)
-                                    .into_any_element()
-                            } else {
-                                Icon::new(IconName::Copy)
-                                    .size(px(14.))
                                     .text_color(cx.theme().muted_foreground)
-                                    .into_any_element()
-                            })
-                    })
-                    // Step 2
+                                    .child("to configure"),
+                            ),
+                    )
+                    // Esc to go back
                     .child(
                         div()
                             .flex()
-                            .items_start()
-                            .gap_3()
+                            .items_center()
+                            .gap_2()
                             .child(
                                 div()
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .size(px(20.))
-                                    .rounded_full()
-                                    .bg(cx.theme().accent)
+                                    .px_2()
+                                    .py(px(2.))
+                                    .rounded(px(4.))
+                                    .bg(cx.theme().muted)
                                     .text_xs()
-                                    .font_weight(gpui::FontWeight::BOLD)
-                                    .text_color(cx.theme().accent_foreground)
-                                    .child("2"),
+                                    .font_weight(gpui::FontWeight::MEDIUM)
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child("Esc"),
                             )
                             .child(
                                 div()
-                                    .text_sm()
-                                    .text_color(cx.theme().foreground)
-                                    .child("Restart Script Kit"),
+                                    .text_xs()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child("to go back"),
                             ),
                     ),
             )
-            // Keyboard hint (hide when showing copied feedback)
-            .when(!self.is_showing_copied_feedback(), |d| {
-                d.child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap_2()
-                        .mt_2()
-                        .child(
-                            div()
-                                .px_2()
-                                .py(px(2.))
-                                .rounded(px(4.))
-                                .bg(cx.theme().muted)
-                                .text_xs()
-                                .font_weight(gpui::FontWeight::MEDIUM)
-                                .text_color(cx.theme().muted_foreground)
-                                .child("Enter"),
-                        )
-                        .child(
-                            div()
-                                .text_xs()
-                                .text_color(cx.theme().muted_foreground)
-                                .child("Copy setup command"),
-                        ),
-                )
-            })
-            // Alternative providers hint
+            .into_any_element()
+    }
+
+    /// Render the API key input view (shown when user clicks Configure)
+    fn render_api_key_input(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let input_border_color = cx.theme().accent;
+
+        div()
+            .flex()
+            .flex_col()
+            .items_center()
+            .justify_center()
+            .flex_1()
+            .gap_5()
+            .px_8()
+            // Back arrow + title
             .child(
                 div()
-                    .text_xs()
-                    .text_color(cx.theme().muted_foreground.opacity(0.7))
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .child(
+                        div()
+                            .id("back-btn")
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .size(px(28.))
+                            .rounded_md()
+                            .cursor_pointer()
+                            .hover(|s| s.bg(cx.theme().muted.opacity(0.3)))
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.hide_api_key_input(cx);
+                            }))
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child("←"),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .text_lg()
+                            .font_weight(gpui::FontWeight::MEDIUM)
+                            .text_color(cx.theme().foreground)
+                            .child("Enter Vercel API Key"),
+                    ),
+            )
+            // Description
+            .child(
+                div()
+                    .text_sm()
+                    .text_color(cx.theme().muted_foreground)
                     .text_center()
+                    .max_w(px(400.))
+                    .child("Get your API key from Vercel AI Gateway and paste it below."),
+            )
+            // Input field
+            .child(
+                div()
+                    .w(px(400.))
+                    .rounded_lg()
+                    .border_1()
+                    .border_color(input_border_color.opacity(0.6))
+                    .overflow_hidden()
+                    .child(
+                        Input::new(&self.api_key_input_state)
+                            .w_full()
+                            .appearance(false)
+                            .focus_bordered(false),
+                    ),
+            )
+            // Keyboard hints
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_4()
                     .mt_2()
-                    .child("Or use: SCRIPT_KIT_OPENAI_API_KEY, SCRIPT_KIT_GOOGLE_API_KEY, etc."),
+                    // Enter to save
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_2()
+                            .child(
+                                div()
+                                    .px_2()
+                                    .py(px(2.))
+                                    .rounded(px(4.))
+                                    .bg(cx.theme().muted)
+                                    .text_xs()
+                                    .font_weight(gpui::FontWeight::MEDIUM)
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child("Enter"),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child("to save"),
+                            ),
+                    )
+                    // Esc to go back
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_2()
+                            .child(
+                                div()
+                                    .px_2()
+                                    .py(px(2.))
+                                    .rounded(px(4.))
+                                    .bg(cx.theme().muted)
+                                    .text_xs()
+                                    .font_weight(gpui::FontWeight::MEDIUM)
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child("Esc"),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child("to go back"),
+                            ),
+                    ),
             )
     }
 
