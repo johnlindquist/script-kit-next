@@ -135,7 +135,6 @@ const VisualTestingReminder: Plugin = async ({ client }) => {
         return
       }
       
-      logSkipped(sessionId, PLUGIN_NAME, "event", `Unhandled event type: ${event.type}`)
     },
 
     "tool.execute.after": async (input: ToolInput) => {

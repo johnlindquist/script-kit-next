@@ -354,7 +354,6 @@ const ThoroughnessEnforcer: Plugin = async ({ client }) => {
         return
       }
       
-      logSkipped(sessionId, PLUGIN_NAME, "event", `Unhandled event type: ${event.type}`)
     },
 
     // Block stop if thoroughness requirements not met
