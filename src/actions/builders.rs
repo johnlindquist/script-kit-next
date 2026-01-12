@@ -2,10 +2,29 @@
 //!
 //! Factory functions for creating context-specific action lists.
 
+use crate::designs::icon_variations::IconName;
+
 use super::types::{Action, ActionCategory, ScriptInfo};
+use crate::clipboard_history::ContentType;
 use crate::file_search::FileInfo;
 use crate::prompts::PathInfo;
 use crate::scriptlets::Scriptlet;
+
+/// Information about a clipboard history entry for action building
+#[derive(Debug, Clone)]
+pub struct ClipboardEntryInfo {
+    /// Entry ID in the database
+    pub id: String,
+    /// Content type (text or image)
+    pub content_type: ContentType,
+    /// Whether the entry is pinned
+    pub pinned: bool,
+    /// Preview text (for text entries)
+    pub preview: String,
+    /// Image dimensions (for image entries)
+    #[allow(dead_code)] // Used for context in action dialog, may be used by future actions
+    pub image_dimensions: Option<(u32, u32)>,
+}
 
 /// Get actions specific to a file search result
 /// Actions: Open (default), Show in Finder, Quick Look, Open With..., Show Info
@@ -611,6 +630,407 @@ pub fn get_global_actions() -> Vec<Action> {
     vec![]
 }
 
+/// Get actions specific to a clipboard history entry
+/// Actions vary based on content type (text vs image) and pin status
+#[allow(clippy::vec_init_then_push)] // Actions are conditionally added based on entry type
+pub fn get_clipboard_history_context_actions(entry: &ClipboardEntryInfo) -> Vec<Action> {
+    let mut actions = Vec::new();
+
+    // Primary action - Paste to focused app (simulates Cmd+V after copying)
+    actions.push(
+        Action::new(
+            "clipboard_paste",
+            "Paste to WezTerm",
+            Some("Copy to clipboard and paste to focused app".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("↵"),
+    );
+
+    // Copy to Clipboard (without pasting)
+    actions.push(
+        Action::new(
+            "clipboard_copy",
+            "Copy to Clipboard",
+            Some("Copy entry to clipboard without pasting".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("⌘↵"),
+    );
+
+    // Paste and Keep Window Open
+    actions.push(
+        Action::new(
+            "clipboard_paste_keep_open",
+            "Paste and Keep Window Open",
+            Some("Paste entry but keep the clipboard history open".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("⌥↵"),
+    );
+
+    // Share...
+    actions.push(
+        Action::new(
+            "clipboard_share",
+            "Share...",
+            Some("Share this entry via system share sheet".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("⇧⌘E"),
+    );
+
+    // Attach to AI Chat
+    actions.push(
+        Action::new(
+            "clipboard_attach_to_ai",
+            "Attach to AI Chat",
+            Some("Send this entry to the AI chat window".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("⌃⌘A"),
+    );
+
+    // Image-specific actions
+    if entry.content_type == ContentType::Image {
+        // Open With...
+        #[cfg(target_os = "macos")]
+        actions.push(
+            Action::new(
+                "clipboard_open_with",
+                "Open With...",
+                Some("Open image with a specific application".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌘O"),
+        );
+
+        // Quick Look
+        #[cfg(target_os = "macos")]
+        actions.push(
+            Action::new(
+                "clipboard_quick_look",
+                "Quick Look",
+                Some("Preview image with Quick Look".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌘Y"),
+        );
+
+        // Annotate in CleanShot X (external app integration)
+        #[cfg(target_os = "macos")]
+        actions.push(
+            Action::new(
+                "clipboard_annotate_cleanshot",
+                "Annotate in CleanShot X",
+                Some("Open image in CleanShot X for annotation".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⇧⌘A"),
+        );
+
+        // Upload to CleanShot X
+        #[cfg(target_os = "macos")]
+        actions.push(
+            Action::new(
+                "clipboard_upload_cleanshot",
+                "Upload to CleanShot X",
+                Some("Upload image to CleanShot Cloud".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⇧⌘U"),
+        );
+    }
+
+    // Pin/Unpin Entry
+    if entry.pinned {
+        actions.push(
+            Action::new(
+                "clipboard_unpin",
+                "Unpin Entry",
+                Some("Remove pin from this entry".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⇧⌘P"),
+        );
+    } else {
+        actions.push(
+            Action::new(
+                "clipboard_pin",
+                "Pin Entry",
+                Some("Pin this entry to prevent auto-removal".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⇧⌘P"),
+        );
+    }
+
+    // Copy Text from Image (OCR) - image only
+    if entry.content_type == ContentType::Image {
+        actions.push(
+            Action::new(
+                "clipboard_ocr",
+                "Copy Text from Image",
+                Some("Extract text from image using OCR".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⇧⌘C"),
+        );
+    }
+
+    // Save Text as Snippet
+    actions.push(
+        Action::new(
+            "clipboard_save_snippet",
+            "Save Text as Snippet",
+            Some("Create a scriptlet from this text".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("⇧⌘S"),
+    );
+
+    // Save as File...
+    actions.push(
+        Action::new(
+            "clipboard_save_file",
+            "Save as File...",
+            Some("Save this entry to a file".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("⌥⇧⌘S"),
+    );
+
+    // --- Destructive actions (shown with red/destructive styling) ---
+
+    // Delete Entry
+    actions.push(
+        Action::new(
+            "clipboard_delete",
+            "Delete Entry",
+            Some("Remove this entry from clipboard history".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("⌃X"),
+    );
+
+    // Delete Entries... (select multiple)
+    actions.push(
+        Action::new(
+            "clipboard_delete_multiple",
+            "Delete Entries...",
+            Some("Select and delete multiple entries".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("⇧⌘X"),
+    );
+
+    // Delete All Entries
+    actions.push(
+        Action::new(
+            "clipboard_delete_all",
+            "Delete All Entries",
+            Some("Clear all clipboard history (except pinned)".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("⌃⇧X"),
+    );
+
+    actions
+}
+
+/// Information about a chat prompt for action building
+#[derive(Debug, Clone)]
+pub struct ChatPromptInfo {
+    /// Current model name (display name)
+    pub current_model: Option<String>,
+    /// Available models
+    pub available_models: Vec<ChatModelInfo>,
+    /// Whether there are messages to copy
+    pub has_messages: bool,
+    /// Whether there's an assistant response to copy
+    pub has_response: bool,
+}
+
+/// Information about an available chat model
+#[derive(Debug, Clone)]
+pub struct ChatModelInfo {
+    /// Model ID (for API calls)
+    pub id: String,
+    /// Display name shown in UI
+    pub display_name: String,
+    /// Provider name (Anthropic, OpenAI, etc.)
+    pub provider: String,
+}
+
+/// Get actions specific to a chat prompt
+/// Actions: Model selection, Continue in Chat, Copy Response, Clear Conversation
+pub fn get_chat_context_actions(info: &ChatPromptInfo) -> Vec<Action> {
+    let mut actions = Vec::new();
+
+    // Model selection actions - each model as a selectable action
+    for model in &info.available_models {
+        let is_current = info
+            .current_model
+            .as_ref()
+            .map(|m| m == &model.display_name)
+            .unwrap_or(false);
+
+        let action = Action::new(
+            format!("select_model_{}", model.id),
+            if is_current {
+                format!("{} ✓", model.display_name)
+            } else {
+                model.display_name.clone()
+            },
+            Some(format!("via {}", model.provider)),
+            ActionCategory::ScriptContext,
+        );
+        actions.push(action);
+    }
+
+    // Separator (conceptual - ActionDialog handles visual separation)
+    // Continue in Chat action
+    actions.push(
+        Action::new(
+            "continue_in_chat",
+            "Continue in Chat",
+            Some("Open in AI Chat window".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("⌘↵"),
+    );
+
+    // Copy Last Response (only if there's a response)
+    if info.has_response {
+        actions.push(
+            Action::new(
+                "copy_response",
+                "Copy Last Response",
+                Some("Copy the last assistant response".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌘C"),
+        );
+    }
+
+    // Clear Conversation (only if there are messages)
+    if info.has_messages {
+        actions.push(
+            Action::new(
+                "clear_conversation",
+                "Clear Conversation",
+                Some("Clear all messages".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌘⌫"),
+        );
+    }
+
+    actions
+}
+
+/// Get actions for the AI chat command bar (Cmd+K menu)
+///
+/// Returns actions with icons and sections for:
+/// - Response: Copy Response, Copy Chat, Copy Last Code Block
+/// - Actions: Submit, New Chat, Delete Chat
+/// - Attachments: Add Attachments, Paste Image
+/// - Settings: Change Model
+#[allow(dead_code)] // Public API - will be used by AI window integration
+pub fn get_ai_command_bar_actions() -> Vec<Action> {
+    vec![
+        // Response section
+        Action::new(
+            "copy_response",
+            "Copy Response",
+            Some("Copy the last AI response".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("⇧⌘C")
+        .with_icon(IconName::Copy)
+        .with_section("Response"),
+        //
+        Action::new(
+            "copy_chat",
+            "Copy Chat",
+            Some("Copy the entire conversation".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("⌥⇧⌘C")
+        .with_icon(IconName::Copy)
+        .with_section("Response"),
+        //
+        Action::new(
+            "copy_last_code",
+            "Copy Last Code Block",
+            Some("Copy the most recent code block".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("⌥⌘C")
+        .with_icon(IconName::Code)
+        .with_section("Response"),
+        // Actions section
+        Action::new(
+            "submit",
+            "Submit",
+            Some("Send your message".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("↵")
+        .with_icon(IconName::ArrowUp)
+        .with_section("Actions"),
+        //
+        Action::new(
+            "new_chat",
+            "New Chat",
+            Some("Start a new conversation".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("⌘N")
+        .with_icon(IconName::Plus)
+        .with_section("Actions"),
+        //
+        Action::new(
+            "delete_chat",
+            "Delete Chat",
+            Some("Delete current conversation".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("⌘⌫")
+        .with_icon(IconName::Trash)
+        .with_section("Actions"),
+        // Attachments section
+        Action::new(
+            "add_attachment",
+            "Add Attachments...",
+            Some("Attach files to your message".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("⇧⌘A")
+        .with_icon(IconName::Plus)
+        .with_section("Attachments"),
+        //
+        Action::new(
+            "paste_image",
+            "Paste Image from Clipboard",
+            Some("Paste an image from your clipboard".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("⌘V")
+        .with_icon(IconName::File)
+        .with_section("Attachments"),
+        // Settings section
+        Action::new(
+            "change_model",
+            "Change Model",
+            Some("Select a different AI model".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_icon(IconName::Settings)
+        .with_section("Settings"),
+    ]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1188,5 +1608,128 @@ mod tests {
 
         // Should have reset_ranking since it's suggested
         assert!(actions.iter().any(|a| a.id == "reset_ranking"));
+    }
+
+    // ========================================
+    // Clipboard History Action Tests
+    // ========================================
+
+    #[test]
+    fn test_get_clipboard_history_text_actions() {
+        let entry = ClipboardEntryInfo {
+            id: "test-id".to_string(),
+            content_type: ContentType::Text,
+            pinned: false,
+            preview: "Hello world".to_string(),
+            image_dimensions: None,
+        };
+
+        let actions = get_clipboard_history_context_actions(&entry);
+
+        // Should have primary actions
+        assert!(actions.iter().any(|a| a.id == "clipboard_paste"));
+        assert!(actions.iter().any(|a| a.id == "clipboard_copy"));
+        assert!(actions.iter().any(|a| a.id == "clipboard_paste_keep_open"));
+        assert!(actions.iter().any(|a| a.id == "clipboard_share"));
+        assert!(actions.iter().any(|a| a.id == "clipboard_attach_to_ai"));
+
+        // Should have pin action (not unpin since not pinned)
+        assert!(actions.iter().any(|a| a.id == "clipboard_pin"));
+        assert!(!actions.iter().any(|a| a.id == "clipboard_unpin"));
+
+        // Should have save actions
+        assert!(actions.iter().any(|a| a.id == "clipboard_save_snippet"));
+        assert!(actions.iter().any(|a| a.id == "clipboard_save_file"));
+
+        // Should have delete actions
+        assert!(actions.iter().any(|a| a.id == "clipboard_delete"));
+        assert!(actions.iter().any(|a| a.id == "clipboard_delete_multiple"));
+        assert!(actions.iter().any(|a| a.id == "clipboard_delete_all"));
+
+        // Should NOT have image-only actions for text entry
+        assert!(!actions.iter().any(|a| a.id == "clipboard_ocr"));
+    }
+
+    #[test]
+    fn test_get_clipboard_history_image_actions() {
+        let entry = ClipboardEntryInfo {
+            id: "img-id".to_string(),
+            content_type: ContentType::Image,
+            pinned: false,
+            preview: "Image (800x600)".to_string(),
+            image_dimensions: Some((800, 600)),
+        };
+
+        let actions = get_clipboard_history_context_actions(&entry);
+
+        // Should have primary actions
+        assert!(actions.iter().any(|a| a.id == "clipboard_paste"));
+        assert!(actions.iter().any(|a| a.id == "clipboard_copy"));
+
+        // Should have image-specific actions
+        assert!(actions.iter().any(|a| a.id == "clipboard_ocr"));
+
+        // macOS-specific image actions
+        #[cfg(target_os = "macos")]
+        {
+            assert!(actions.iter().any(|a| a.id == "clipboard_open_with"));
+            assert!(actions.iter().any(|a| a.id == "clipboard_quick_look"));
+            assert!(actions
+                .iter()
+                .any(|a| a.id == "clipboard_annotate_cleanshot"));
+            assert!(actions.iter().any(|a| a.id == "clipboard_upload_cleanshot"));
+        }
+    }
+
+    #[test]
+    fn test_get_clipboard_history_pinned_entry() {
+        let entry = ClipboardEntryInfo {
+            id: "pinned-id".to_string(),
+            content_type: ContentType::Text,
+            pinned: true,
+            preview: "Pinned text".to_string(),
+            image_dimensions: None,
+        };
+
+        let actions = get_clipboard_history_context_actions(&entry);
+
+        // Should have unpin action (not pin since already pinned)
+        assert!(actions.iter().any(|a| a.id == "clipboard_unpin"));
+        assert!(!actions.iter().any(|a| a.id == "clipboard_pin"));
+    }
+
+    #[test]
+    fn test_clipboard_history_action_shortcuts() {
+        let entry = ClipboardEntryInfo {
+            id: "test-id".to_string(),
+            content_type: ContentType::Text,
+            pinned: false,
+            preview: "Test".to_string(),
+            image_dimensions: None,
+        };
+
+        let actions = get_clipboard_history_context_actions(&entry);
+
+        // Verify specific shortcuts
+        let paste_action = actions.iter().find(|a| a.id == "clipboard_paste").unwrap();
+        assert_eq!(paste_action.shortcut.as_ref().unwrap(), "↵");
+
+        let copy_action = actions.iter().find(|a| a.id == "clipboard_copy").unwrap();
+        assert_eq!(copy_action.shortcut.as_ref().unwrap(), "⌘↵");
+
+        let paste_keep_open = actions
+            .iter()
+            .find(|a| a.id == "clipboard_paste_keep_open")
+            .unwrap();
+        assert_eq!(paste_keep_open.shortcut.as_ref().unwrap(), "⌥↵");
+
+        let delete_action = actions.iter().find(|a| a.id == "clipboard_delete").unwrap();
+        assert_eq!(delete_action.shortcut.as_ref().unwrap(), "⌃X");
+
+        let delete_all = actions
+            .iter()
+            .find(|a| a.id == "clipboard_delete_all")
+            .unwrap();
+        assert_eq!(delete_all.shortcut.as_ref().unwrap(), "⌃⇧X");
     }
 }
