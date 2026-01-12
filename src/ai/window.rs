@@ -14,8 +14,8 @@ use anyhow::Result;
 use chrono::{Datelike, NaiveDate, Utc};
 use gpui::{
     div, hsla, point, prelude::*, px, rgba, size, svg, App, BoxShadow, Context, Entity,
-    FocusHandle, Focusable, IntoElement, KeyDownEvent, ParentElement, Render, ScrollHandle,
-    SharedString, Styled, Subscription, Window, WindowBounds, WindowOptions,
+    ExternalPaths, FocusHandle, Focusable, IntoElement, KeyDownEvent, ParentElement, Render,
+    ScrollHandle, SharedString, Styled, Subscription, Window, WindowBounds, WindowOptions,
 };
 
 // Import local IconName for SVG icons (has external_path() method)
@@ -481,6 +481,154 @@ impl AiApp {
         // TODO: Handle input changes (e.g., streaming, auto-complete)
     }
 
+    /// Handle paste event - check for clipboard images
+    ///
+    /// If clipboard contains an image, encode it as base64 and store as pending_image.
+    /// If clipboard contains text, let the normal input handling process it.
+    ///
+    /// Returns true if an image was pasted (caller should not process text).
+    fn handle_paste_for_image(&mut self, cx: &mut Context<Self>) -> bool {
+        // Use arboard to read clipboard since it handles images
+        match arboard::Clipboard::new() {
+            Ok(mut clipboard) => {
+                // Check for image first
+                if let Ok(image_data) = clipboard.get_image() {
+                    // Convert image to base64 PNG
+                    match crate::clipboard_history::encode_image_as_png(&image_data) {
+                        Ok(encoded) => {
+                            // Strip the "png:" prefix since we store raw base64
+                            let base64_data =
+                                encoded.strip_prefix("png:").unwrap_or(&encoded).to_string();
+
+                            let size_kb = base64_data.len() / 1024;
+                            info!(
+                                width = image_data.width,
+                                height = image_data.height,
+                                size_kb = size_kb,
+                                "Image pasted from clipboard"
+                            );
+
+                            self.pending_image = Some(base64_data);
+                            cx.notify();
+                            return true;
+                        }
+                        Err(e) => {
+                            tracing::warn!(error = %e, "Failed to encode pasted image");
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "Failed to access clipboard");
+            }
+        }
+        false
+    }
+
+    /// Remove the pending image attachment
+    fn remove_pending_image(&mut self, cx: &mut Context<Self>) {
+        if self.pending_image.is_some() {
+            self.pending_image = None;
+            info!("Pending image removed");
+            cx.notify();
+        }
+    }
+
+    /// Handle file drop - if it's an image, set it as pending image
+    fn handle_file_drop(&mut self, paths: &ExternalPaths, cx: &mut Context<Self>) {
+        let paths = paths.paths();
+        if paths.is_empty() {
+            return;
+        }
+
+        // Only handle the first file for now
+        let path = &paths[0];
+        let extension = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|s| s.to_lowercase())
+            .unwrap_or_default();
+
+        // Check if it's an image file
+        let is_image = matches!(
+            extension.as_str(),
+            "png" | "jpg" | "jpeg" | "gif" | "webp" | "bmp"
+        );
+
+        if !is_image {
+            info!("Dropped file is not an image: {:?}", path);
+            return;
+        }
+
+        // Read and encode the file as base64
+        match std::fs::read(path) {
+            Ok(data) => {
+                use base64::Engine;
+                let base64_data = base64::engine::general_purpose::STANDARD.encode(&data);
+                self.pending_image = Some(base64_data);
+                info!("Image file dropped and attached: {:?}", path);
+                cx.notify();
+            }
+            Err(e) => {
+                info!("Failed to read dropped image file: {:?} - {}", path, e);
+            }
+        }
+    }
+
+    /// Render the pending image preview badge
+    fn render_pending_image_preview(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        div().flex().items_center().gap_2().px_3().py_1().child(
+            div()
+                .id("pending-image-preview")
+                .flex()
+                .items_center()
+                .gap_2()
+                .px_2()
+                .py_1()
+                .rounded_md()
+                .bg(cx.theme().muted.opacity(0.3))
+                .border_1()
+                .border_color(cx.theme().accent.opacity(0.5))
+                // Icon + label
+                .child(
+                    svg()
+                        .external_path(LocalIconName::File.external_path())
+                        .size(px(14.))
+                        .text_color(cx.theme().accent),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(cx.theme().foreground)
+                        .child("PNG"),
+                )
+                // Remove button
+                .child(
+                    div()
+                        .id("remove-image-btn")
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .size(px(16.))
+                        .rounded_full()
+                        .cursor_pointer()
+                        .hover(|s| s.bg(hsla(0.0, 0.7, 0.5, 0.2))) // Red hover
+                        .on_mouse_down(
+                            gpui::MouseButton::Left,
+                            cx.listener(|this, _, _, cx| {
+                                this.remove_pending_image(cx);
+                            }),
+                        )
+                        .child(
+                            svg()
+                                .external_path(LocalIconName::Close.external_path())
+                                .size(px(10.))
+                                .text_color(cx.theme().muted_foreground),
+                        ),
+                ),
+        )
+    }
+
     /// Focus the main chat input
     /// Called when the window is opened to allow immediate typing
     pub fn focus_input(&self, window: &mut Window, cx: &mut Context<Self>) {
@@ -808,18 +956,15 @@ impl AiApp {
 
     /// Submit the current input as a message
     fn submit_message(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let mut content = self.input_state.read(cx).value().to_string();
+        let content = self.input_state.read(cx).value().to_string();
 
-        // If there's a pending image, note it in the message content
-        // Full multimodal API support would require provider changes
-        let has_image = self.pending_image.is_some();
-        if let Some(ref image_base64) = self.pending_image {
-            // Calculate approximate image size for display
+        // Capture pending image before clearing
+        let pending_image = self.pending_image.take();
+        let has_image = pending_image.is_some();
+
+        if let Some(ref image_base64) = pending_image {
+            // Calculate approximate image size for logging
             let image_size_kb = image_base64.len() / 1024;
-            content = format!(
-                "{}\n\n📷 [Image attached: ~{}KB base64 data]",
-                content, image_size_kb
-            );
             crate::logging::log(
                 "AI",
                 &format!("Message includes attached image (~{}KB)", image_size_kb),
@@ -862,8 +1007,16 @@ impl AiApp {
             }
         }
 
-        // Create and save user message
-        let user_message = Message::user(chat_id, &content);
+        // Create and save user message with optional image
+        let mut user_message = Message::user(chat_id, &content);
+
+        // Attach image if present
+        if let Some(image_base64) = pending_image {
+            user_message
+                .images
+                .push(super::model::ImageAttachment::png(image_base64));
+        }
+
         if let Err(e) = storage::save_message(&user_message) {
             tracing::error!(error = %e, "Failed to save user message");
             return;
@@ -887,13 +1040,12 @@ impl AiApp {
         // Update chat timestamp and move to top of list
         self.touch_and_reorder_chat(chat_id);
 
-        // Clear the input and any pending image
+        // Clear the input (pending image was already taken above)
         // Explicitly reset cursor to position 0 to fix cursor placement with placeholder
         self.input_state.update(cx, |state, cx| {
             state.set_value("", window, cx);
             state.set_selection(0, 0, window, cx);
         });
-        self.pending_image = None;
 
         info!(
             chat_id = %chat_id,
@@ -944,6 +1096,14 @@ impl AiApp {
             .map(|m| super::providers::ProviderMessage {
                 role: m.role.to_string(),
                 content: m.content.clone(),
+                images: m
+                    .images
+                    .iter()
+                    .map(|img| super::providers::ProviderImage {
+                        data: img.data.clone(),
+                        media_type: img.media_type.clone(),
+                    })
+                    .collect(),
             })
             .collect();
 
@@ -2115,7 +2275,11 @@ impl AiApp {
         // Use theme accent color for input border (follows theme)
         let input_border_color = cx.theme().accent;
 
+        // Check if we have a pending image to show
+        let has_pending_image = self.pending_image.is_some();
+
         let input_area = div()
+            .id("ai-input-area")
             .flex()
             .flex_col()
             .w_full()
@@ -2124,6 +2288,14 @@ impl AiApp {
             .pt_3()
             .pb_2() // Reduced bottom padding
             .gap_2()
+            // Handle image file drops
+            .on_drop(cx.listener(|this, paths: &ExternalPaths, _window, cx| {
+                this.handle_file_drop(paths, cx);
+            }))
+            // Pending image preview (shown above input when image is attached)
+            .when(has_pending_image, |d| {
+                d.child(self.render_pending_image_preview(cx))
+            })
             // Input row with + icon and accent border
             .child(
                 div()
@@ -2215,11 +2387,16 @@ impl AiApp {
         // Build main layout
         // Structure: titlebar (fixed) -> content area (flex_1, scrollable) -> input area (fixed)
         div()
+            .id("ai-main-panel")
             .flex_1()
             .flex()
             .flex_col()
             .h_full()
             .overflow_hidden()
+            // Handle image file drops anywhere on the main panel
+            .on_drop(cx.listener(|this, paths: &ExternalPaths, _window, cx| {
+                this.handle_file_drop(paths, cx);
+            }))
             // Titlebar (fixed height)
             .child(titlebar)
             // Content area - this wrapper gets flex_1 to fill remaining space
@@ -2475,6 +2652,12 @@ impl Render for AiApp {
                         "\\" | "backslash" => this.toggle_sidebar(cx),
                         // Cmd+B also toggles sidebar (common convention)
                         "b" => this.toggle_sidebar(cx),
+                        // Cmd+V for paste - check for images first
+                        "v" => {
+                            // Try to paste an image; if not found, let normal text paste happen
+                            // We don't need to prevent the event since the Input handles text paste
+                            this.handle_paste_for_image(cx);
+                        }
                         // Cmd+W closes the AI window (standard macOS pattern)
                         "w" => {
                             // Save bounds before closing

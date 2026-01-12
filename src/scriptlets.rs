@@ -20,7 +20,7 @@ use crate::scriptlet_metadata::parse_codefence_metadata;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use tracing::debug;
+use tracing::{debug, warn};
 
 /// Valid tool types that can be used in code fences
 pub const VALID_TOOLS: &[&str] = &[
@@ -252,6 +252,48 @@ pub struct ScriptletMetadata {
     pub extra: HashMap<String, String>,
 }
 
+/// An action defined within a scriptlet via H3 header + codefence
+///
+/// These actions appear in the Actions Menu when the scriptlet is focused.
+/// Example markdown:
+/// ```markdown
+/// ## My Scriptlet
+/// ```bash
+/// main code
+/// ```
+///
+/// ### Copy to Clipboard
+/// <!-- shortcut: cmd+c -->
+/// ```bash
+/// echo "{{selection}}" | pbcopy
+/// ```
+/// ```
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct ScriptletAction {
+    /// Name from H3 header (e.g., "Copy to Clipboard")
+    pub name: String,
+    /// Slugified command identifier
+    pub command: String,
+    /// Tool type from codefence (e.g., "bash", "open", "transform")
+    pub tool: String,
+    /// Code content from codefence
+    pub code: String,
+    /// Named input placeholders (e.g., ["selection", "clipboard"])
+    pub inputs: Vec<String>,
+    /// Optional keyboard shortcut hint (e.g., "cmd+c")
+    pub shortcut: Option<String>,
+    /// Optional description
+    pub description: Option<String>,
+}
+
+impl ScriptletAction {
+    /// Create action ID for the Actions Menu (prefixed to avoid collisions)
+    #[allow(dead_code)] // Will be used when integrating with ActionsDialog
+    pub fn action_id(&self) -> String {
+        format!("scriptlet_action:{}", self.command)
+    }
+}
+
 /// A scriptlet parsed from a markdown file
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Scriptlet {
@@ -279,6 +321,8 @@ pub struct Scriptlet {
     pub kit: Option<String>,
     /// Source file path
     pub source_path: Option<String>,
+    /// Actions defined via H3 headers within this scriptlet
+    pub actions: Vec<ScriptletAction>,
 }
 
 #[allow(dead_code)]
@@ -301,6 +345,7 @@ impl Scriptlet {
             schema: None,
             kit: None,
             source_path: None,
+            actions: Vec::new(),
         }
     }
 
@@ -519,12 +564,269 @@ fn is_matching_fence_end(line: &str, fence_type: FenceType, min_count: usize) ->
     rest.chars().all(|c| c.is_whitespace())
 }
 
+/// Extract H3 actions from a scriptlet section
+///
+/// H3 headers within an H2 section define actions that appear in the Actions Menu.
+/// Each H3 must have a valid tool codefence to become an action.
+///
+/// # Example
+/// ```markdown
+/// ## My Scriptlet
+/// ```bash
+/// main code
+/// ```
+///
+/// ### Copy to Clipboard
+/// <!-- shortcut: cmd+c -->
+/// ```bash
+/// echo "{{selection}}" | pbcopy
+/// ```
+///
+/// ### Open in Browser
+/// ```open
+/// https://example.com
+/// ```
+/// ```
+fn extract_h3_actions(section_text: &str) -> Vec<ScriptletAction> {
+    let mut actions = Vec::new();
+    let lines: Vec<&str> = section_text.lines().collect();
+
+    let mut i = 0;
+    let mut found_main_code = false;
+
+    // First, skip past the main H2 content until we find the main code block
+    // The main code block is the first valid tool codefence after the H2 header
+    while i < lines.len() {
+        let trimmed = lines[i].trim_start();
+
+        // Skip the H2 header itself
+        if trimmed.starts_with("## ") {
+            i += 1;
+            continue;
+        }
+
+        // Check for code fence start
+        if let Some(fence_info) = detect_fence_start(trimmed) {
+            // Check if this is a valid tool or metadata/schema block
+            let lang = &fence_info.2;
+            if VALID_TOOLS.contains(&lang.as_str()) || lang.is_empty() {
+                // This is the main scriptlet code, skip it
+                found_main_code = true;
+                // Skip to end of this fence
+                let fence_type = fence_info.0;
+                let fence_count = fence_info.1;
+                i += 1;
+                while i < lines.len() {
+                    if is_matching_fence_end(lines[i].trim_start(), fence_type, fence_count) {
+                        break;
+                    }
+                    i += 1;
+                }
+            }
+        }
+
+        // Once we've found and passed the main code, look for H3s
+        if found_main_code && trimmed.starts_with("### ") {
+            // Found an H3 - extract its content until the next H3 or end of section
+            let h3_name = trimmed.strip_prefix("### ").unwrap().trim().to_string();
+            if h3_name.is_empty() {
+                i += 1;
+                continue;
+            }
+
+            // Collect content until next H3 or end
+            let mut h3_content = String::new();
+            i += 1;
+            while i < lines.len() {
+                let line_trimmed = lines[i].trim_start();
+                if line_trimmed.starts_with("### ") {
+                    break;
+                }
+                h3_content.push_str(lines[i]);
+                h3_content.push('\n');
+                i += 1;
+            }
+
+            // Try to parse this H3 as an action
+            if let Some(action) = parse_h3_action(&h3_name, &h3_content) {
+                actions.push(action);
+            }
+
+            continue; // Don't increment i again
+        }
+
+        i += 1;
+    }
+
+    actions
+}
+
+/// Parse a single H3 section into a ScriptletAction
+fn parse_h3_action(name: &str, content: &str) -> Option<ScriptletAction> {
+    // Extract metadata from HTML comments
+    let metadata = parse_html_comment_metadata(content);
+
+    // Extract code block
+    let (tool_str, code) = extract_code_block_nested(content)?;
+
+    // Default to bash if no tool specified
+    let tool = if tool_str.is_empty() {
+        "bash".to_string()
+    } else {
+        tool_str
+    };
+
+    // Only create action if tool is valid
+    if !VALID_TOOLS.contains(&tool.as_str()) {
+        debug!(tool = %tool, action = %name, "Unknown tool type in scriptlet action, skipping");
+        return None;
+    }
+
+    let inputs = extract_named_inputs(&code);
+    let command = slugify(name);
+
+    Some(ScriptletAction {
+        name: name.to_string(),
+        command,
+        tool,
+        code,
+        inputs,
+        shortcut: metadata.shortcut,
+        description: metadata.description,
+    })
+}
+
+/// Parse a `.actions.md` file into shared actions
+///
+/// # Format
+/// - H1 headers (`# Group Name`) define groups (for organization only)
+/// - H3 headers (`### Action Name`) define individual actions
+/// - H2 headers are ignored (they're for regular scriptlets)
+/// - HTML comments contain metadata (shortcut, description)
+/// - Code fences contain the action code
+///
+/// All H3 actions are returned flat (group names are not used at runtime).
+#[allow(dead_code)]
+pub fn parse_actions_file(content: &str) -> Vec<ScriptletAction> {
+    let mut actions = Vec::new();
+    let lines: Vec<&str> = content.lines().collect();
+
+    let mut i = 0;
+
+    while i < lines.len() {
+        let trimmed = lines[i].trim_start();
+
+        // Look for H3 headers - these are actions
+        if trimmed.starts_with("### ") {
+            let h3_name = trimmed.strip_prefix("### ").unwrap().trim().to_string();
+            if h3_name.is_empty() {
+                i += 1;
+                continue;
+            }
+
+            // Collect content until next H1, H2, H3, or end
+            let mut h3_content = String::new();
+            i += 1;
+            while i < lines.len() {
+                let line_trimmed = lines[i].trim_start();
+                if line_trimmed.starts_with("# ")
+                    || line_trimmed.starts_with("## ")
+                    || line_trimmed.starts_with("### ")
+                {
+                    break;
+                }
+                h3_content.push_str(lines[i]);
+                h3_content.push('\n');
+                i += 1;
+            }
+
+            // Try to parse this H3 as an action
+            if let Some(action) = parse_h3_action(&h3_name, &h3_content) {
+                actions.push(action);
+            }
+
+            continue; // Don't increment i again
+        }
+
+        i += 1;
+    }
+
+    actions
+}
+
+/// Get the path to the companion actions file for a given markdown file
+///
+/// For `foo.md`, returns `foo.actions.md`
+/// For `foo.bar.md`, returns `foo.bar.actions.md`
+#[allow(dead_code)]
+pub fn get_actions_file_path(md_path: &std::path::Path) -> std::path::PathBuf {
+    let stem = md_path.file_stem().unwrap_or_default().to_string_lossy();
+    let parent = md_path.parent().unwrap_or(std::path::Path::new(""));
+    parent.join(format!("{}.actions.md", stem))
+}
+
+/// Load shared actions from a companion `.actions.md` file if it exists
+///
+/// For a scriptlet file at `/path/to/foo.md`, this checks for
+/// `/path/to/foo.actions.md` and parses any actions defined there.
+#[allow(dead_code)]
+pub fn load_shared_actions(md_path: &std::path::Path) -> Vec<ScriptletAction> {
+    let actions_path = get_actions_file_path(md_path);
+
+    if actions_path.exists() {
+        match std::fs::read_to_string(&actions_path) {
+            Ok(content) => {
+                let actions = parse_actions_file(&content);
+                if !actions.is_empty() {
+                    debug!(
+                        path = %actions_path.display(),
+                        count = actions.len(),
+                        "Loaded shared actions from companion file"
+                    );
+                }
+                actions
+            }
+            Err(e) => {
+                warn!(
+                    path = %actions_path.display(),
+                    error = %e,
+                    "Failed to read actions file"
+                );
+                Vec::new()
+            }
+        }
+    } else {
+        Vec::new()
+    }
+}
+
+/// Merge shared actions into a scriptlet
+///
+/// Shared actions are added to the scriptlet's actions list.
+/// If an action with the same command already exists (inline action),
+/// the inline action takes precedence and the shared one is skipped.
+#[allow(dead_code)]
+pub fn merge_shared_actions(scriptlet: &mut Scriptlet, shared_actions: &[ScriptletAction]) {
+    for shared_action in shared_actions {
+        // Check if an inline action with the same command already exists
+        let exists = scriptlet
+            .actions
+            .iter()
+            .any(|a| a.command == shared_action.command);
+
+        if !exists {
+            scriptlet.actions.push(shared_action.clone());
+        }
+    }
+}
+
 /// Parse a markdown file into scriptlets
 ///
 /// # Format
 /// - H1 headers (`# Group Name`) define groups
 /// - H1 can have a code fence that prepends to all scriptlets in that group
 /// - H2 headers (`## Scriptlet Name`) define individual scriptlets
+/// - H3 headers (`### Action Name`) define actions for the parent scriptlet
 /// - HTML comments contain metadata
 /// - Code fences contain the scriptlet code
 pub fn parse_markdown_as_scriptlets(content: &str, source_path: Option<&str>) -> Vec<Scriptlet> {
@@ -587,6 +889,9 @@ pub fn parse_markdown_as_scriptlets(content: &str, source_path: Option<&str>) ->
                 let inputs = extract_named_inputs(&code);
                 let command = slugify(&name);
 
+                // Extract H3 actions from this section
+                let actions = extract_h3_actions(section_text);
+
                 scriptlets.push(Scriptlet {
                     name,
                     command,
@@ -600,6 +905,7 @@ pub fn parse_markdown_as_scriptlets(content: &str, source_path: Option<&str>) ->
                     schema,
                     kit: None,
                     source_path: source_path.map(|s| s.to_string()),
+                    actions,
                 });
             }
         } else if first_line.starts_with("# ") {
@@ -616,6 +922,20 @@ pub fn parse_markdown_as_scriptlets(content: &str, source_path: Option<&str>) ->
                 global_prepend = code;
             } else {
                 global_prepend.clear();
+            }
+        }
+    }
+
+    // Load and merge shared actions from companion .actions.md file
+    if let Some(path_str) = source_path {
+        let path = std::path::Path::new(path_str);
+        // Only load shared actions for .md files (not .actions.md files themselves)
+        if !path_str.ends_with(".actions.md") {
+            let shared_actions = load_shared_actions(path);
+            if !shared_actions.is_empty() {
+                for scriptlet in &mut scriptlets {
+                    merge_shared_actions(scriptlet, &shared_actions);
+                }
             }
         }
     }
@@ -836,6 +1156,9 @@ fn parse_single_scriptlet(
     let inputs = extract_named_inputs(&code);
     let command = slugify(name);
 
+    // Extract H3 actions from this section
+    let actions = extract_h3_actions(section_text);
+
     Ok(Scriptlet {
         name: name.to_string(),
         command,
@@ -849,6 +1172,7 @@ fn parse_single_scriptlet(
         schema,
         kit: None,
         source_path: source_path.map(|s| s.to_string()),
+        actions,
     })
 }
 

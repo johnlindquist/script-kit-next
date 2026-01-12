@@ -191,13 +191,41 @@ fn stream_sse_lines<R: BufRead>(
     Ok(())
 }
 
+/// Image data for multimodal API calls
+#[derive(Debug, Clone)]
+pub struct ProviderImage {
+    /// Base64 encoded image data
+    pub data: String,
+    /// MIME type of the image (e.g., "image/png", "image/jpeg")
+    pub media_type: String,
+}
+
+impl ProviderImage {
+    /// Create a new image from base64 data
+    pub fn new(data: String, media_type: String) -> Self {
+        Self { data, media_type }
+    }
+
+    /// Create a PNG image
+    pub fn png(data: String) -> Self {
+        Self::new(data, "image/png".to_string())
+    }
+
+    /// Create a JPEG image
+    pub fn jpeg(data: String) -> Self {
+        Self::new(data, "image/jpeg".to_string())
+    }
+}
+
 /// Message for AI provider API calls.
 #[derive(Debug, Clone)]
 pub struct ProviderMessage {
     /// Role of the message sender: "user", "assistant", or "system"
     pub role: String,
-    /// Content of the message
+    /// Text content of the message
     pub content: String,
+    /// Image attachments for multimodal messages
+    pub images: Vec<ProviderImage>,
 }
 
 impl ProviderMessage {
@@ -206,6 +234,16 @@ impl ProviderMessage {
         Self {
             role: "user".to_string(),
             content: content.into(),
+            images: Vec::new(),
+        }
+    }
+
+    /// Create a new user message with images.
+    pub fn user_with_images(content: impl Into<String>, images: Vec<ProviderImage>) -> Self {
+        Self {
+            role: "user".to_string(),
+            content: content.into(),
+            images,
         }
     }
 
@@ -214,6 +252,7 @@ impl ProviderMessage {
         Self {
             role: "assistant".to_string(),
             content: content.into(),
+            images: Vec::new(),
         }
     }
 
@@ -222,7 +261,13 @@ impl ProviderMessage {
         Self {
             role: "system".to_string(),
             content: content.into(),
+            images: Vec::new(),
         }
+    }
+
+    /// Check if this message has images attached
+    pub fn has_images(&self) -> bool {
+        !self.images.is_empty()
     }
 }
 
@@ -311,6 +356,17 @@ impl OpenAiProvider {
     }
 
     /// Build the request body for OpenAI API
+    ///
+    /// Supports multimodal messages with images using OpenAI's content array format:
+    /// ```json
+    /// {
+    ///   "role": "user",
+    ///   "content": [
+    ///     {"type": "image_url", "image_url": {"url": "data:image/png;base64,..."}},
+    ///     {"type": "text", "text": "What's in this image?"}
+    ///   ]
+    /// }
+    /// ```
     fn build_request_body(
         &self,
         messages: &[ProviderMessage],
@@ -320,10 +376,40 @@ impl OpenAiProvider {
         let api_messages: Vec<serde_json::Value> = messages
             .iter()
             .map(|m| {
-                serde_json::json!({
-                    "role": m.role,
-                    "content": m.content
-                })
+                // If message has images, use content array format
+                if m.has_images() {
+                    let mut content_blocks: Vec<serde_json::Value> = Vec::new();
+
+                    // Add images (OpenAI uses data URL format)
+                    for img in &m.images {
+                        let data_url = format!("data:{};base64,{}", img.media_type, img.data);
+                        content_blocks.push(serde_json::json!({
+                            "type": "image_url",
+                            "image_url": {
+                                "url": data_url
+                            }
+                        }));
+                    }
+
+                    // Add text content if not empty
+                    if !m.content.is_empty() {
+                        content_blocks.push(serde_json::json!({
+                            "type": "text",
+                            "text": m.content
+                        }));
+                    }
+
+                    serde_json::json!({
+                        "role": m.role,
+                        "content": content_blocks
+                    })
+                } else {
+                    // Text-only message (simpler format)
+                    serde_json::json!({
+                        "role": m.role,
+                        "content": m.content
+                    })
+                }
             })
             .collect();
 
@@ -514,6 +600,17 @@ impl AnthropicProvider {
     }
 
     /// Build the request body for Anthropic API
+    ///
+    /// Supports multimodal messages with images using Anthropic's content array format:
+    /// ```json
+    /// {
+    ///   "role": "user",
+    ///   "content": [
+    ///     {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": "..."}},
+    ///     {"type": "text", "text": "What's in this image?"}
+    ///   ]
+    /// }
+    /// ```
     fn build_request_body(
         &self,
         messages: &[ProviderMessage],
@@ -526,15 +623,46 @@ impl AnthropicProvider {
             .find(|m| m.role == "system")
             .map(|m| m.content.clone());
 
-        // Filter out system messages for the messages array
+        // Filter out system messages and build multimodal content for the messages array
         let api_messages: Vec<serde_json::Value> = messages
             .iter()
             .filter(|m| m.role != "system")
             .map(|m| {
-                serde_json::json!({
-                    "role": m.role,
-                    "content": m.content
-                })
+                // If message has images, use content array format
+                if m.has_images() {
+                    let mut content_blocks: Vec<serde_json::Value> = Vec::new();
+
+                    // Add images first (Anthropic recommends images before text)
+                    for img in &m.images {
+                        content_blocks.push(serde_json::json!({
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": img.media_type,
+                                "data": img.data
+                            }
+                        }));
+                    }
+
+                    // Add text content if not empty
+                    if !m.content.is_empty() {
+                        content_blocks.push(serde_json::json!({
+                            "type": "text",
+                            "text": m.content
+                        }));
+                    }
+
+                    serde_json::json!({
+                        "role": m.role,
+                        "content": content_blocks
+                    })
+                } else {
+                    // Text-only message (simpler format)
+                    serde_json::json!({
+                        "role": m.role,
+                        "content": m.content
+                    })
+                }
             })
             .collect();
 
@@ -855,6 +983,17 @@ impl VercelGatewayProvider {
     }
 
     /// Build the request body for Vercel Gateway (OpenAI-compatible format)
+    ///
+    /// Supports multimodal messages with images using OpenAI's content array format:
+    /// ```json
+    /// {
+    ///   "role": "user",
+    ///   "content": [
+    ///     {"type": "image_url", "image_url": {"url": "data:image/png;base64,..."}},
+    ///     {"type": "text", "text": "What's in this image?"}
+    ///   ]
+    /// }
+    /// ```
     fn build_request_body(
         &self,
         messages: &[ProviderMessage],
@@ -864,10 +1003,40 @@ impl VercelGatewayProvider {
         let api_messages: Vec<serde_json::Value> = messages
             .iter()
             .map(|m| {
-                serde_json::json!({
-                    "role": m.role,
-                    "content": m.content
-                })
+                // If message has images, use content array format
+                if m.has_images() {
+                    let mut content_blocks: Vec<serde_json::Value> = Vec::new();
+
+                    // Add images (OpenAI-compatible data URL format)
+                    for img in &m.images {
+                        let data_url = format!("data:{};base64,{}", img.media_type, img.data);
+                        content_blocks.push(serde_json::json!({
+                            "type": "image_url",
+                            "image_url": {
+                                "url": data_url
+                            }
+                        }));
+                    }
+
+                    // Add text content if not empty
+                    if !m.content.is_empty() {
+                        content_blocks.push(serde_json::json!({
+                            "type": "text",
+                            "text": m.content
+                        }));
+                    }
+
+                    serde_json::json!({
+                        "role": m.role,
+                        "content": content_blocks
+                    })
+                } else {
+                    // Text-only message (simpler format)
+                    serde_json::json!({
+                        "role": m.role,
+                        "content": m.content
+                    })
+                }
             })
             .collect();
 

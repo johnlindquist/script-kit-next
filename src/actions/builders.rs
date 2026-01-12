@@ -5,6 +5,7 @@
 use super::types::{Action, ActionCategory, ScriptInfo};
 use crate::file_search::FileInfo;
 use crate::prompts::PathInfo;
+use crate::scriptlets::Scriptlet;
 
 /// Get actions specific to a file search result
 /// Actions: Open (default), Show in Finder, Quick Look, Open With..., Show Info
@@ -200,6 +201,215 @@ pub fn to_deeplink_name(name: &str) -> String {
         .filter(|s| !s.is_empty())
         .collect::<Vec<_>>()
         .join("-")
+}
+
+/// Format a shortcut string for display in the UI
+/// Converts "cmd+shift+c" to "⌘⇧C"
+fn format_shortcut_hint(shortcut: &str) -> String {
+    shortcut
+        .replace("cmd", "⌘")
+        .replace("ctrl", "⌃")
+        .replace("alt", "⌥")
+        .replace("shift", "⇧")
+        .replace("+", "")
+        .to_uppercase()
+}
+
+/// Convert scriptlet-defined actions (from H3 headers) to Action structs for the UI
+///
+/// These actions appear in the Actions Menu when a scriptlet is focused.
+/// Each H3 header with a valid tool codefence in the scriptlet markdown
+/// becomes an action that can execute that code.
+///
+/// # Example
+/// ```markdown
+/// ## My Scriptlet
+/// ```bash
+/// main code
+/// ```
+///
+/// ### Copy to Clipboard
+/// <!-- shortcut: cmd+c -->
+/// ```bash
+/// echo "{{text}}" | pbcopy
+/// ```
+/// ```
+pub fn get_scriptlet_defined_actions(scriptlet: &Scriptlet) -> Vec<Action> {
+    scriptlet
+        .actions
+        .iter()
+        .map(|sa| {
+            let mut action = Action::new(
+                sa.action_id(),
+                &sa.name,
+                sa.description.clone(),
+                ActionCategory::ScriptContext,
+            );
+
+            if let Some(ref shortcut) = sa.shortcut {
+                action = action.with_shortcut(format_shortcut_hint(shortcut));
+            }
+
+            // Mark as scriptlet action for routing
+            // has_action=true means this needs special handling (execute the action code)
+            action.has_action = true;
+            action.value = Some(sa.command.clone());
+
+            action
+        })
+        .collect()
+}
+
+/// Get actions for a scriptlet, including both custom (H3-defined) and built-in actions
+///
+/// This merges:
+/// 1. Primary action (Run)
+/// 2. Custom actions defined via H3 headers in the scriptlet markdown
+/// 3. Built-in scriptlet actions (Edit, Reveal, Copy Path)
+/// 4. Universal actions (Shortcut, Alias, Deeplink)
+pub fn get_scriptlet_context_actions_with_custom(
+    script: &ScriptInfo,
+    scriptlet: Option<&Scriptlet>,
+) -> Vec<Action> {
+    let mut actions = Vec::new();
+
+    // 1. Primary action - Run the scriptlet
+    actions.push(
+        Action::new(
+            "run_script",
+            format!("{} \"{}\"", script.action_verb, script.name),
+            Some(format!("{} this item", script.action_verb)),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("↵"),
+    );
+
+    // 2. Custom actions from H3 headers
+    if let Some(scriptlet) = scriptlet {
+        actions.extend(get_scriptlet_defined_actions(scriptlet));
+    }
+
+    // 3. Dynamic shortcut actions
+    if script.shortcut.is_some() {
+        actions.push(
+            Action::new(
+                "update_shortcut",
+                "Update Keyboard Shortcut",
+                Some("Change the keyboard shortcut".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌘⇧K"),
+        );
+        actions.push(
+            Action::new(
+                "remove_shortcut",
+                "Remove Keyboard Shortcut",
+                Some("Remove the current keyboard shortcut".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌘⌥K"),
+        );
+    } else {
+        actions.push(
+            Action::new(
+                "add_shortcut",
+                "Add Keyboard Shortcut",
+                Some("Set a keyboard shortcut".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌘⇧K"),
+        );
+    }
+
+    // 4. Dynamic alias actions
+    if script.alias.is_some() {
+        actions.push(
+            Action::new(
+                "update_alias",
+                "Update Alias",
+                Some("Change the alias trigger".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌘⇧A"),
+        );
+        actions.push(
+            Action::new(
+                "remove_alias",
+                "Remove Alias",
+                Some("Remove the current alias".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌘⌥A"),
+        );
+    } else {
+        actions.push(
+            Action::new(
+                "add_alias",
+                "Add Alias",
+                Some("Set an alias trigger (type alias + space to run)".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌘⇧A"),
+        );
+    }
+
+    // 5. Scriptlet-specific built-in actions
+    actions.push(
+        Action::new(
+            "edit_scriptlet",
+            "Edit Scriptlet",
+            Some("Open the markdown file in $EDITOR".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("⌘E"),
+    );
+
+    actions.push(
+        Action::new(
+            "reveal_scriptlet_in_finder",
+            "Reveal in Finder",
+            Some("Show scriptlet bundle in Finder".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("⌘⇧F"),
+    );
+
+    actions.push(
+        Action::new(
+            "copy_scriptlet_path",
+            "Copy Path",
+            Some("Copy scriptlet bundle path to clipboard".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("⌘⇧C"),
+    );
+
+    // 6. Copy deeplink
+    let deeplink_name = to_deeplink_name(&script.name);
+    actions.push(
+        Action::new(
+            "copy_deeplink",
+            "Copy Deeplink",
+            Some(format!(
+                "Copy scriptkit://run/{} URL to clipboard",
+                deeplink_name
+            )),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("⌘⇧D"),
+    );
+
+    // 7. Reset Ranking (if suggested)
+    if script.is_suggested {
+        actions.push(Action::new(
+            "reset_ranking",
+            "Reset Ranking",
+            Some("Remove this item from Suggested section".to_string()),
+            ActionCategory::ScriptContext,
+        ));
+    }
+
+    actions
 }
 
 /// Get actions specific to the focused script
@@ -806,5 +1016,177 @@ mod tests {
         // Frecency path should be exactly what we set
         assert_eq!(script.frecency_path, Some("/path/to/test.ts".to_string()));
         assert!(script.is_suggested);
+    }
+
+    // ========================================
+    // Scriptlet-Defined Action Tests (H3)
+    // ========================================
+
+    #[test]
+    fn test_format_shortcut_hint_basic() {
+        assert_eq!(format_shortcut_hint("cmd+c"), "⌘C");
+        assert_eq!(format_shortcut_hint("cmd+shift+c"), "⌘⇧C");
+        assert_eq!(format_shortcut_hint("ctrl+alt+delete"), "⌃⌥DELETE");
+    }
+
+    #[test]
+    fn test_get_scriptlet_defined_actions_empty() {
+        use crate::scriptlets::Scriptlet;
+
+        let scriptlet = Scriptlet::new(
+            "Test".to_string(),
+            "bash".to_string(),
+            "echo test".to_string(),
+        );
+
+        let actions = get_scriptlet_defined_actions(&scriptlet);
+        assert!(actions.is_empty());
+    }
+
+    #[test]
+    fn test_get_scriptlet_defined_actions_basic() {
+        use crate::scriptlets::{Scriptlet, ScriptletAction};
+
+        let mut scriptlet = Scriptlet::new(
+            "Test".to_string(),
+            "bash".to_string(),
+            "echo main".to_string(),
+        );
+
+        scriptlet.actions = vec![
+            ScriptletAction {
+                name: "Copy to Clipboard".to_string(),
+                command: "copy-to-clipboard".to_string(),
+                tool: "bash".to_string(),
+                code: "echo | pbcopy".to_string(),
+                inputs: vec![],
+                shortcut: Some("cmd+c".to_string()),
+                description: Some("Copy to clipboard".to_string()),
+            },
+            ScriptletAction {
+                name: "Open Browser".to_string(),
+                command: "open-browser".to_string(),
+                tool: "open".to_string(),
+                code: "https://example.com".to_string(),
+                inputs: vec![],
+                shortcut: None,
+                description: None,
+            },
+        ];
+
+        let actions = get_scriptlet_defined_actions(&scriptlet);
+        assert_eq!(actions.len(), 2);
+
+        // First action
+        assert_eq!(actions[0].id, "scriptlet_action:copy-to-clipboard");
+        assert_eq!(actions[0].title, "Copy to Clipboard");
+        assert_eq!(actions[0].shortcut, Some("⌘C".to_string()));
+        assert_eq!(
+            actions[0].description,
+            Some("Copy to clipboard".to_string())
+        );
+        assert!(actions[0].has_action);
+        assert_eq!(actions[0].value, Some("copy-to-clipboard".to_string()));
+
+        // Second action
+        assert_eq!(actions[1].id, "scriptlet_action:open-browser");
+        assert_eq!(actions[1].title, "Open Browser");
+        assert!(actions[1].shortcut.is_none());
+        assert!(actions[1].has_action);
+    }
+
+    #[test]
+    fn test_get_scriptlet_context_actions_with_custom_empty() {
+        let script = ScriptInfo::scriptlet("Test Scriptlet", "/path/to/test.md", None, None);
+
+        // No scriptlet data passed
+        let actions = get_scriptlet_context_actions_with_custom(&script, None);
+
+        // Should have basic actions but no custom ones
+        assert!(actions.iter().any(|a| a.id == "run_script"));
+        assert!(actions.iter().any(|a| a.id == "edit_scriptlet"));
+        assert!(actions.iter().any(|a| a.id == "copy_deeplink"));
+
+        // No scriptlet_action: prefixed actions
+        assert!(!actions
+            .iter()
+            .any(|a| a.id.starts_with("scriptlet_action:")));
+    }
+
+    #[test]
+    fn test_get_scriptlet_context_actions_with_custom_actions() {
+        use crate::scriptlets::{Scriptlet, ScriptletAction};
+
+        let script = ScriptInfo::scriptlet("Test Scriptlet", "/path/to/test.md", None, None);
+
+        let mut scriptlet = Scriptlet::new(
+            "Test Scriptlet".to_string(),
+            "bash".to_string(),
+            "echo main".to_string(),
+        );
+
+        scriptlet.actions = vec![ScriptletAction {
+            name: "Custom Action".to_string(),
+            command: "custom-action".to_string(),
+            tool: "bash".to_string(),
+            code: "echo custom".to_string(),
+            inputs: vec![],
+            shortcut: Some("cmd+1".to_string()),
+            description: Some("A custom action".to_string()),
+        }];
+
+        let actions = get_scriptlet_context_actions_with_custom(&script, Some(&scriptlet));
+
+        // Should have the custom action
+        assert!(actions
+            .iter()
+            .any(|a| a.id == "scriptlet_action:custom-action"));
+
+        // Custom actions should appear after run but before built-in actions
+        let run_idx = actions.iter().position(|a| a.id == "run_script").unwrap();
+        let custom_idx = actions
+            .iter()
+            .position(|a| a.id == "scriptlet_action:custom-action")
+            .unwrap();
+        let edit_idx = actions
+            .iter()
+            .position(|a| a.id == "edit_scriptlet")
+            .unwrap();
+
+        assert!(run_idx < custom_idx);
+        assert!(custom_idx < edit_idx);
+    }
+
+    #[test]
+    fn test_get_scriptlet_context_actions_with_custom_preserves_shortcut_alias() {
+        let script = ScriptInfo::scriptlet(
+            "Test",
+            "/path/to/test.md",
+            Some("cmd+t".to_string()),
+            Some("ts".to_string()),
+        );
+
+        let actions = get_scriptlet_context_actions_with_custom(&script, None);
+
+        // Should have update/remove for both since they exist
+        assert!(actions.iter().any(|a| a.id == "update_shortcut"));
+        assert!(actions.iter().any(|a| a.id == "remove_shortcut"));
+        assert!(actions.iter().any(|a| a.id == "update_alias"));
+        assert!(actions.iter().any(|a| a.id == "remove_alias"));
+
+        // Should NOT have add versions
+        assert!(!actions.iter().any(|a| a.id == "add_shortcut"));
+        assert!(!actions.iter().any(|a| a.id == "add_alias"));
+    }
+
+    #[test]
+    fn test_get_scriptlet_context_actions_with_frecency() {
+        let script = ScriptInfo::scriptlet("Test", "/path/to/test.md", None, None)
+            .with_frecency(true, Some("scriptlet:Test".to_string()));
+
+        let actions = get_scriptlet_context_actions_with_custom(&script, None);
+
+        // Should have reset_ranking since it's suggested
+        assert!(actions.iter().any(|a| a.id == "reset_ranking"));
     }
 }
