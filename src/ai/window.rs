@@ -36,11 +36,16 @@ use gpui_component::{
 use objc::{msg_send, sel, sel_impl};
 use tracing::{debug, info};
 
-use super::command_bar::{CommandBarColors, CommandBarDialog};
+// Using the unified ActionsDialog component for AI command bar (Cmd+K)
+// Opens in a separate vibrancy window for proper macOS blur effect
 use super::config::ModelInfo;
 use super::model::{Chat, ChatId, ChatSource, Message, MessageRole};
 use super::providers::ProviderRegistry;
 use super::storage;
+use crate::actions::{
+    close_actions_window, get_ai_command_bar_actions, open_actions_window, ActionsDialog,
+    ActionsDialogConfig, AnchorPosition, SearchPosition, SectionStyle,
+};
 
 /// Events from the streaming thread
 enum StreamingEvent {
@@ -387,8 +392,8 @@ pub struct AiApp {
     /// Whether the command bar is visible (Cmd+K)
     showing_command_bar: bool,
 
-    /// The command bar dialog entity (uses the reusable CommandBarDialog component)
-    command_bar_dialog: Option<Entity<CommandBarDialog>>,
+    /// The command bar dialog entity (uses the unified ActionsDialog component)
+    command_bar_dialog: Option<Entity<ActionsDialog>>,
 
     // === Model Picker State ===
     /// Whether the model picker dropdown is visible
@@ -552,7 +557,7 @@ impl AiApp {
             setup_copied_at: None,
             showing_api_key_input: false,
             api_key_input_state,
-            // Command bar state (uses the reusable CommandBarDialog component)
+            // Command bar state (uses the unified ActionsDialog component)
             showing_command_bar: false,
             command_bar_dialog: None,
             // Model picker state
@@ -890,41 +895,77 @@ impl AiApp {
 
     // === Command Bar Methods ===
 
-    /// Show the command bar overlay (Cmd+K)
-    /// Creates a new CommandBarDialog entity and displays it.
+    /// Show the command bar as a separate vibrancy window (Cmd+K)
+    /// Creates a new ActionsDialog entity and opens it in a floating window with macOS blur.
     fn show_command_bar(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        // Create the dialog with a callback that handles action selection
+        // Load theme
+        let theme = std::sync::Arc::new(crate::theme::load_theme());
+
+        // Get AI-specific actions from the unified actions module
+        let actions = get_ai_command_bar_actions();
+
+        // Configure for AI-style command bar:
+        // - Search at top (like Raycast Cmd+K)
+        // - Section headers (not separators)
+        // - Icons shown
+        // - Footer with keyboard hints
+        let config = ActionsDialogConfig {
+            search_position: SearchPosition::Top,
+            section_style: SectionStyle::Headers,
+            anchor: AnchorPosition::Top,
+            show_icons: true,
+            show_footer: true,
+        };
+
+        // Create the dialog with a callback for action selection
+        // The callback is unused here because we handle actions via get_selected_action_id()
+        let on_select: std::sync::Arc<dyn Fn(String) + Send + Sync> =
+            std::sync::Arc::new(|_action_id: String| {
+                // Action handling is done via execute_command_bar_action()
+            });
+
+        // Create the ActionsDialog with config
         let dialog = cx.new(|cx| {
-            CommandBarDialog::new(cx, |_action_id| {
-                // Action handling is done via submit_selected() -> on_select callback
-                // We handle it in the keyboard event handler instead
-            })
+            ActionsDialog::with_config(cx.focus_handle(), on_select, actions, theme, config)
         });
 
-        // Set colors from theme
-        let theme = crate::theme::load_theme();
-        let colors = CommandBarColors {
-            background: theme.colors.background.main,
-            border: theme.colors.ui.border,
-            text_primary: 0xffffff,
-            text_secondary: 0xcccccc,
-            text_dimmed: theme.colors.text.muted,
-            accent: theme.colors.accent.selected,
-        };
-        dialog.update(cx, |d, cx| d.set_colors(colors, cx));
+        // Get window bounds and display for positioning the vibrancy window
+        let ai_window_bounds = window.bounds();
+        let display_id = window.display(cx).map(|d| d.id());
 
-        // Focus the dialog
-        dialog.focus_handle(cx).focus(window, cx);
-
-        self.command_bar_dialog = Some(dialog);
+        // Store dialog for keyboard routing
+        self.command_bar_dialog = Some(dialog.clone());
         self.showing_command_bar = true;
+
+        // Open the command bar in a separate vibrancy window
+        // The window will be positioned relative to the AI window
+        cx.spawn(async move |_this, cx| {
+            cx.update(
+                |cx| match open_actions_window(cx, ai_window_bounds, display_id, dialog) {
+                    Ok(_handle) => {
+                        crate::logging::log("AI", "Command bar vibrancy window opened");
+                    }
+                    Err(e) => {
+                        crate::logging::log(
+                            "AI",
+                            &format!("Failed to open command bar window: {}", e),
+                        );
+                    }
+                },
+            )
+            .ok();
+        })
+        .detach();
+
         cx.notify();
     }
 
-    /// Hide the command bar overlay
+    /// Hide the command bar (closes the vibrancy window)
     fn hide_command_bar(&mut self, cx: &mut Context<Self>) {
         self.showing_command_bar = false;
         self.command_bar_dialog = None;
+        // Close the separate vibrancy window
+        close_actions_window(cx);
         cx.notify();
     }
 
@@ -3457,9 +3498,7 @@ impl Render for AiApp {
             .child(self.render_sidebar(cx))
             .child(self.render_main_panel(cx))
             // Overlay dropdowns (only one at a time)
-            .when(self.showing_command_bar, |el| {
-                el.child(self.render_command_bar_overlay(cx))
-            })
+            // NOTE: Command bar now renders in a separate vibrancy window (not inline)
             .when(self.showing_model_picker, |el| {
                 el.child(self.render_model_picker_dropdown(cx))
             })
@@ -3474,7 +3513,8 @@ impl Render for AiApp {
 
 impl AiApp {
     /// Render the command bar overlay (Raycast-style Cmd+K menu)
-    /// Uses the reusable CommandBarDialog component for consistent styling.
+    /// NOTE: This is kept for reference but no longer used - command bar now uses separate vibrancy window
+    #[allow(dead_code)]
     fn render_command_bar_overlay(&self, cx: &mut Context<Self>) -> impl IntoElement {
         // Semi-transparent overlay background
         div()

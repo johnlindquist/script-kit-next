@@ -5,6 +5,10 @@
 //! This library provides the core functionality for executing scripts
 //! with bidirectional JSONL communication.
 
+// Actions - Reusable action dialog component
+// Provides ActionsDialog with configurable layout for script actions, AI command bar, etc.
+pub mod actions;
+
 // App Shell - Unified frame and chrome for all prompts
 // Provides ShellSpec, HeaderSpec, FooterSpec, ChromeSpec for consistent prompt layout
 pub mod app_shell;
