@@ -1259,18 +1259,15 @@ impl ChatPrompt {
         let retry_hover_bg = rgba((colors.accent_color << 8) | 0x40);
         let has_retry_callback = self.on_retry.is_some();
 
-        let mut content = div()
-            .flex()
-            .flex_col()
-            .gap(px(4.0))
-            .w_full()
-            .min_w_0()
-            .overflow_hidden();
+        let mut content = div().flex().flex_col().gap(px(4.0)).w_full().min_w_0();
+        // Note: removed overflow_hidden() to allow text to wrap naturally
 
         // User prompt (small, bold) - only if not empty
         if !turn.user_prompt.is_empty() {
             content = content.child(
                 div()
+                    .w_full()
+                    .min_w_0()
                     .text_sm()
                     .font_weight(gpui::FontWeight::SEMIBOLD)
                     .text_color(rgb(colors.text_secondary))
@@ -1331,12 +1328,19 @@ impl ChatPrompt {
                         .flex_col()
                         .w_full()
                         .min_w_0()
+                        .overflow_x_hidden() // Only clip horizontal overflow for long unbreakable content
                         .child(render_markdown(response, colors))
                         .child(div().text_color(rgb(colors.accent_color)).child("▌")),
                 );
             } else {
-                // Complete response - full markdown rendering
-                content = content.child(render_markdown(response, colors));
+                // Complete response - full markdown rendering (with container for proper wrapping)
+                content = content.child(
+                    div()
+                        .w_full()
+                        .min_w_0()
+                        .overflow_x_hidden()
+                        .child(render_markdown(response, colors)),
+                );
             }
         }
 

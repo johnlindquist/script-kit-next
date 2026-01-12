@@ -2773,17 +2773,27 @@ impl ScriptListApp {
 
             let script_info = self.get_focused_script_info();
 
+            // Get the full scriptlet with actions if focused item is a scriptlet
+            let focused_scriptlet = self.get_focused_scriptlet_with_actions();
+
             // Create the dialog entity HERE in main app (for keyboard routing)
             let theme_arc = std::sync::Arc::clone(&self.theme);
             // Create the dialog entity (search input shown at bottom, Raycast-style)
             let dialog = cx.new(|cx| {
                 let focus_handle = cx.focus_handle();
-                ActionsDialog::with_script(
+                let mut dialog = ActionsDialog::with_script(
                     focus_handle,
                     std::sync::Arc::new(|_action_id| {}), // Callback handled via main app
                     script_info.clone(),
                     theme_arc,
-                )
+                );
+
+                // If we have a scriptlet with actions, pass it to the dialog
+                if let Some(ref scriptlet) = focused_scriptlet {
+                    dialog.set_focused_scriptlet(script_info.clone(), Some(scriptlet.clone()));
+                }
+
+                dialog
             });
 
             // Store the dialog entity for keyboard routing

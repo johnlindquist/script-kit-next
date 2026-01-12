@@ -157,6 +157,20 @@ fn render_code_block(code: &str, lang: &str, colors: &PromptColors) -> impl Into
 
 /// Render inline text with bold, italic, code, and links
 fn render_inline(text: &str, colors: &PromptColors) -> impl IntoElement {
+    // For simple text without inline formatting, render as a simple text element
+    // The parent container constrains width, allowing natural text wrapping
+    if !text.contains('*') && !text.contains('_') && !text.contains('`') && !text.contains('[') {
+        return div()
+            .w_full()
+            .min_w_0()
+            .overflow_hidden()
+            .text_sm()
+            .text_color(rgb(colors.text_primary))
+            .child(text.to_string())
+            .into_any_element();
+    }
+
+    // For text with inline formatting, use flex_wrap for word-level wrapping
     let mut row = div()
         .flex()
         .flex_row()
@@ -233,7 +247,7 @@ fn render_inline(text: &str, colors: &PromptColors) -> impl IntoElement {
         }
     }
 
-    flush_text(row, &mut current, colors)
+    flush_text(row, &mut current, colors).into_any_element()
 }
 
 fn flush_text(row: gpui::Div, current: &mut String, colors: &PromptColors) -> gpui::Div {

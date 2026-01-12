@@ -2750,3 +2750,153 @@ fn test_merge_shared_actions_mixed() {
     assert_eq!(scriptlet.actions[1].command, "open");
     assert_eq!(scriptlet.actions[2].command, "delete");
 }
+
+// ========================================
+// Integration Tests (filesystem-based)
+// ========================================
+
+#[test]
+fn test_shared_actions_loaded_from_companion_file() {
+    use std::fs;
+    use tempfile::TempDir;
+
+    // Create temp directory
+    let temp_dir = TempDir::new().unwrap();
+    let temp_path = temp_dir.path();
+
+    // Create main.md with a scriptlet
+    let main_md_path = temp_path.join("main.md");
+    let main_md_content = r#"## Open Google
+
+```open
+https://www.google.com
+```
+"#;
+    fs::write(&main_md_path, main_md_content).unwrap();
+
+    // Create main.actions.md with shared actions
+    let actions_md_path = temp_path.join("main.actions.md");
+    let actions_md_content = r#"### Copy URL
+<!-- shortcut: cmd+c -->
+```bash
+echo "{{content}}" | pbcopy
+```
+
+### Open in Safari
+```bash
+open -a Safari "{{content}}"
+```
+"#;
+    fs::write(&actions_md_path, actions_md_content).unwrap();
+
+    // Parse the main.md file
+    let content = fs::read_to_string(&main_md_path).unwrap();
+    let scriptlets = parse_markdown_as_scriptlets(&content, Some(main_md_path.to_str().unwrap()));
+
+    // Should have 1 scriptlet
+    assert_eq!(scriptlets.len(), 1);
+
+    // The scriptlet should have the shared actions merged
+    let scriptlet = &scriptlets[0];
+    assert_eq!(scriptlet.name, "Open Google");
+    assert_eq!(scriptlet.actions.len(), 2);
+
+    // Check the actions are correct
+    assert_eq!(scriptlet.actions[0].name, "Copy URL");
+    assert_eq!(scriptlet.actions[0].shortcut, Some("cmd+c".to_string()));
+    assert!(scriptlet.actions[0].code.contains("pbcopy"));
+
+    assert_eq!(scriptlet.actions[1].name, "Open in Safari");
+    assert!(scriptlet.actions[1].code.contains("Safari"));
+}
+
+#[test]
+fn test_shared_actions_not_loaded_for_actions_file() {
+    use std::fs;
+    use tempfile::TempDir;
+
+    // Create temp directory
+    let temp_dir = TempDir::new().unwrap();
+    let temp_path = temp_dir.path();
+
+    // Create main.actions.md (the actions file itself)
+    let actions_md_path = temp_path.join("main.actions.md");
+    let actions_md_content = r#"### Copy URL
+```bash
+echo "test" | pbcopy
+```
+"#;
+    fs::write(&actions_md_path, actions_md_content).unwrap();
+
+    // Parsing the .actions.md file should NOT try to load main.actions.actions.md
+    // (it would be a recursive loop)
+    let content = fs::read_to_string(&actions_md_path).unwrap();
+    let scriptlets =
+        parse_markdown_as_scriptlets(&content, Some(actions_md_path.to_str().unwrap()));
+
+    // Should have 0 scriptlets (actions files only have H3, not H2)
+    assert_eq!(scriptlets.len(), 0);
+}
+
+#[test]
+fn test_inline_actions_take_precedence_over_shared() {
+    use std::fs;
+    use tempfile::TempDir;
+
+    // Create temp directory
+    let temp_dir = TempDir::new().unwrap();
+    let temp_path = temp_dir.path();
+
+    // Create main.md with a scriptlet that has an inline action
+    let main_md_path = temp_path.join("main.md");
+    let main_md_content = r#"## My Scriptlet
+
+```bash
+echo "hello"
+```
+
+### Copy
+<!-- shortcut: cmd+shift+c -->
+```bash
+inline copy code
+```
+"#;
+    fs::write(&main_md_path, main_md_content).unwrap();
+
+    // Create main.actions.md with a shared action of the same name
+    let actions_md_path = temp_path.join("main.actions.md");
+    let actions_md_content = r#"### Copy
+<!-- shortcut: cmd+c -->
+```bash
+shared copy code
+```
+
+### Delete
+```bash
+rm something
+```
+"#;
+    fs::write(&actions_md_path, actions_md_content).unwrap();
+
+    // Parse the main.md file
+    let content = fs::read_to_string(&main_md_path).unwrap();
+    let scriptlets = parse_markdown_as_scriptlets(&content, Some(main_md_path.to_str().unwrap()));
+
+    assert_eq!(scriptlets.len(), 1);
+    let scriptlet = &scriptlets[0];
+
+    // Should have 2 actions: inline Copy + shared Delete
+    // The shared Copy should be skipped because inline takes precedence
+    assert_eq!(scriptlet.actions.len(), 2);
+
+    // First action is inline Copy
+    assert_eq!(scriptlet.actions[0].name, "Copy");
+    assert_eq!(scriptlet.actions[0].code, "inline copy code");
+    assert_eq!(
+        scriptlet.actions[0].shortcut,
+        Some("cmd+shift+c".to_string())
+    ); // inline shortcut
+
+    // Second action is shared Delete
+    assert_eq!(scriptlet.actions[1].name, "Delete");
+}
