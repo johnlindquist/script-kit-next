@@ -446,6 +446,7 @@ impl Render for EnvPrompt {
                             .child({
                                 div()
                                     .flex_1()
+                                    .overflow_hidden()
                                     .text_lg()
                                     .text_color(if input_is_empty {
                                         rgb(text_muted)
