@@ -7,7 +7,7 @@
 //! - Remember values for future sessions
 //! - Full text selection and clipboard support (cmd+c/v/x, shift+arrows)
 //!
-//! Design: Matches ArgPrompt-no-choices (single input line, minimal height)
+//! Design: Full-window centered input with clear visual hierarchy
 
 use gpui::{
     div, prelude::*, px, rgb, rgba, svg, Context, Div, FocusHandle, Focusable, Render,
@@ -20,9 +20,7 @@ use crate::components::TextInputState;
 use crate::designs::icon_variations::IconName;
 use crate::designs::{get_tokens, DesignVariant};
 use crate::logging;
-use crate::panel::{
-    CURSOR_HEIGHT_LG, CURSOR_MARGIN_Y, CURSOR_WIDTH, HEADER_GAP, HEADER_PADDING_X, HEADER_PADDING_Y,
-};
+use crate::panel::{CURSOR_HEIGHT_LG, CURSOR_WIDTH};
 use crate::secrets;
 use crate::theme;
 
@@ -39,6 +37,8 @@ pub struct EnvPrompt {
     pub key: String,
     /// Custom prompt text (defaults to "Enter value for {key}")
     pub prompt: Option<String>,
+    /// Optional title (e.g., provider name like "Vercel AI Gateway")
+    pub title: Option<String>,
     /// Whether to mask input (for secrets)
     pub secret: bool,
     /// Text input state with selection and clipboard support
@@ -63,6 +63,7 @@ impl EnvPrompt {
         id: String,
         key: String,
         prompt: Option<String>,
+        title: Option<String>,
         secret: bool,
         focus_handle: FocusHandle,
         on_submit: SubmitCallback,
@@ -72,8 +73,8 @@ impl EnvPrompt {
         logging::log(
             "PROMPTS",
             &format!(
-                "EnvPrompt::new for key: {} (secret: {}, exists: {})",
-                key, secret, exists_in_keyring
+                "EnvPrompt::new for key: {} (secret: {}, exists: {}, title: {:?})",
+                key, secret, exists_in_keyring, title
             ),
         );
 
@@ -81,6 +82,7 @@ impl EnvPrompt {
             id,
             key,
             prompt,
+            title,
             secret,
             input: TextInputState::new(),
             focus_handle,
@@ -258,28 +260,35 @@ impl Render for EnvPrompt {
             },
         );
 
-        // Use design tokens for consistent styling (matches ArgPrompt)
+        // Use design tokens for consistent styling
         let text_primary = design_colors.text_primary;
         let text_muted = design_colors.text_muted;
         let accent_color = design_colors.accent;
+        let bg_surface = design_colors.background_secondary;
 
-        // Build placeholder text: "Update {KEY}" when exists, "Enter {KEY}" for new, or custom prompt
-        let placeholder: SharedString = self
+        // Build placeholder text for input
+        let input_placeholder: SharedString = if self.exists_in_keyring {
+            "Enter new value to update".into()
+        } else {
+            "Paste or type your API key".into()
+        };
+
+        // Build description text
+        let description: SharedString = self
             .prompt
             .clone()
             .unwrap_or_else(|| {
                 if self.exists_in_keyring {
-                    format!("Update {}", self.key)
+                    format!("Update the value for {}", self.key)
                 } else {
-                    format!("Enter {}", self.key)
+                    format!("Enter the value for {}", self.key)
                 }
             })
             .into();
 
         let input_is_empty = self.input.is_empty();
 
-        // Main container - matches ArgPrompt-no-choices layout exactly
-        // Header has only the input area; Submit button is in the footer
+        // Full-window centered layout for API key input
         div()
             .id(gpui::ElementId::Name("window:env".into()))
             .flex()
@@ -291,93 +300,201 @@ impl Render for EnvPrompt {
             .key_context("env_prompt")
             .track_focus(&self.focus_handle)
             .on_key_down(handle_key)
-            // Single header row - uses shared header constants for visual consistency with main menu
+            // Main content area - centered vertically
             .child(
                 div()
-                    .w_full()
-                    .px(px(HEADER_PADDING_X))
-                    .py(px(HEADER_PADDING_Y))
+                    .flex_1()
                     .flex()
-                    .flex_row()
+                    .flex_col()
                     .items_center()
-                    .gap(px(HEADER_GAP))
-                    // EyeOff icon for secrets (hidden/masked input)
-                    .when(self.secret, |d: Div| {
-                        d.child(
-                            svg()
-                                .external_path(IconName::EyeOff.external_path())
-                                .size(px(18.))
-                                .text_color(rgb(text_muted))
-                                .flex_shrink_0(),
-                        )
-                    })
-                    // Input area with cursor and selection (matches ArgPrompt - no buttons/logo in header)
-                    .child({
-                        let input_height = CURSOR_HEIGHT_LG + (CURSOR_MARGIN_Y * 2.0);
+                    .justify_center()
+                    .px(px(32.))
+                    .gap(px(24.))
+                    // Large key icon at top
+                    .child(
                         div()
-                            .flex_1()
+                            .size(px(64.))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .rounded(px(16.))
+                            .bg(rgba(accent_color << 8 | 0x20)) // Accent with low alpha
+                            .child(
+                                svg()
+                                    .external_path(if self.secret {
+                                        IconName::EyeOff.external_path()
+                                    } else {
+                                        IconName::Settings.external_path()
+                                    })
+                                    .size(px(32.))
+                                    .text_color(rgb(accent_color)),
+                            ),
+                    )
+                    // Title - provider name or key name
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .items_center()
+                            .gap(px(8.))
+                            .child(
+                                div()
+                                    .text_2xl()
+                                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                                    .text_color(rgb(text_primary))
+                                    .child(self.title.clone().unwrap_or_else(|| self.key.clone())),
+                            )
+                            // Description
+                            .child(
+                                div()
+                                    .text_base()
+                                    .text_color(rgb(text_muted))
+                                    .text_center()
+                                    .child(description),
+                            ),
+                    )
+                    // Input field with rounded border
+                    .child(
+                        div()
+                            .w_full()
+                            .max_w(px(400.))
+                            .px(px(16.))
+                            .py(px(14.))
+                            .rounded(px(12.))
+                            .bg(rgb(bg_surface))
+                            .border_1()
+                            .border_color(rgba(text_muted << 8 | 0x40))
                             .flex()
                             .flex_row()
                             .items_center()
-                            .h(px(input_height)) // Fixed height for consistent vertical centering
-                            .text_xl() // Match ArgPrompt text size
-                            .text_color(if input_is_empty {
-                                rgb(text_muted)
-                            } else {
-                                rgb(text_primary)
-                            })
-                            // When empty: show cursor + placeholder
-                            .when(input_is_empty, |d: Div| {
-                                d.child(
-                                    div()
-                                        .flex()
-                                        .flex_row()
-                                        .items_center()
-                                        .child(
+                            .gap(px(12.))
+                            // Lock icon inside input
+                            .child(
+                                svg()
+                                    .external_path(if self.secret {
+                                        IconName::EyeOff.external_path()
+                                    } else {
+                                        IconName::Settings.external_path()
+                                    })
+                                    .size(px(18.))
+                                    .text_color(rgb(text_muted))
+                                    .flex_shrink_0(),
+                            )
+                            // Input text area
+                            .child({
+                                div()
+                                    .flex_1()
+                                    .text_lg()
+                                    .text_color(if input_is_empty {
+                                        rgb(text_muted)
+                                    } else {
+                                        rgb(text_primary)
+                                    })
+                                    // When empty: show cursor + placeholder
+                                    .when(input_is_empty, |d: Div| {
+                                        d.child(
                                             div()
-                                                .w(px(CURSOR_WIDTH))
-                                                .h(px(CURSOR_HEIGHT_LG))
-                                                .bg(rgb(text_primary)),
+                                                .flex()
+                                                .flex_row()
+                                                .items_center()
+                                                .child(
+                                                    div()
+                                                        .w(px(CURSOR_WIDTH))
+                                                        .h(px(CURSOR_HEIGHT_LG))
+                                                        .bg(rgb(accent_color)),
+                                                )
+                                                .child(
+                                                    div()
+                                                        .ml(px(4.))
+                                                        .text_color(rgb(text_muted))
+                                                        .child(input_placeholder.clone()),
+                                                ),
                                         )
-                                        .child(
-                                            div()
-                                                .ml(px(-(CURSOR_WIDTH))) // Overlay cursor
-                                                .text_color(rgb(text_muted))
-                                                .child(placeholder.clone()),
-                                        ),
+                                    })
+                                    // When has text: show masked dots or text with cursor
+                                    .when(!input_is_empty, |d: Div| {
+                                        if self.secret {
+                                            // Show dots for secret input
+                                            let dot_count = self.input.text().len();
+                                            let dots = "•".repeat(dot_count);
+                                            d.child(
+                                                div()
+                                                    .flex()
+                                                    .flex_row()
+                                                    .items_center()
+                                                    .child(dots)
+                                                    .child(
+                                                        div()
+                                                            .w(px(CURSOR_WIDTH))
+                                                            .h(px(CURSOR_HEIGHT_LG))
+                                                            .bg(rgb(accent_color))
+                                                            .ml(px(1.)),
+                                                    ),
+                                            )
+                                        } else {
+                                            d.child(
+                                                self.render_input_text(text_primary, accent_color),
+                                            )
+                                        }
+                                    })
+                            }),
+                    )
+                    // Status hint
+                    .when(self.exists_in_keyring, |d: Div| {
+                        d.child(
+                            div()
+                                .flex()
+                                .flex_row()
+                                .items_center()
+                                .gap(px(6.))
+                                .child(
+                                    svg()
+                                        .external_path(IconName::Check.external_path())
+                                        .size(px(14.))
+                                        .text_color(rgb(0x22C55E)), // Green
                                 )
-                            })
-                            // When has text: show text with cursor/selection
-                            .when(!input_is_empty, |d: Div| {
-                                d.child(self.render_input_text(text_primary, accent_color))
-                            })
+                                .child(
+                                    div()
+                                        .text_sm()
+                                        .text_color(rgb(text_muted))
+                                        .child("A value is already configured"),
+                                ),
+                        )
                     }),
             )
-            // Footer with submit action (directly after header, no spacer)
-            // Use "Update" when value already exists, "Set" when new
+            // Footer with submit action
             .child({
                 let footer_colors = PromptFooterColors::from_theme(&self.theme);
                 let primary_label = if self.exists_in_keyring {
                     "Update"
                 } else {
-                    "Set"
+                    "Save"
                 };
                 let footer_config = PromptFooterConfig::new()
                     .primary_label(primary_label)
                     .primary_shortcut("↵")
-                    .show_secondary(false); // No secondary action for env prompt
+                    .show_secondary(true)
+                    .secondary_label("Cancel")
+                    .secondary_shortcut("esc");
 
-                // Add click handler for Submit button
+                // Add click handlers
                 let handle = cx.entity().downgrade();
-                PromptFooter::new(footer_config, footer_colors).on_primary_click(Box::new(
-                    move |_, _window, cx| {
+                let handle_cancel = cx.entity().downgrade();
+                PromptFooter::new(footer_config, footer_colors)
+                    .on_primary_click(Box::new(move |_, _window, cx| {
                         if let Some(entity) = handle.upgrade() {
                             entity.update(cx, |this, _cx| {
                                 this.submit();
                             });
                         }
-                    },
-                ))
+                    }))
+                    .on_secondary_click(Box::new(move |_, _window, cx| {
+                        if let Some(entity) = handle_cancel.upgrade() {
+                            entity.update(cx, |this, _cx| {
+                                this.submit_cancel();
+                            });
+                        }
+                    }))
             })
     }
 }
