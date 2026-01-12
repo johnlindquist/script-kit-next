@@ -43,8 +43,8 @@ use super::model::{Chat, ChatId, ChatSource, Message, MessageRole};
 use super::providers::ProviderRegistry;
 use super::storage;
 use crate::actions::{
-    close_actions_window, get_ai_command_bar_actions, open_actions_window, ActionsDialog,
-    ActionsDialogConfig, AnchorPosition, SearchPosition, SectionStyle,
+    close_actions_window, get_ai_command_bar_actions, notify_actions_window, open_actions_window,
+    ActionsDialog, ActionsDialogConfig, AnchorPosition, SearchPosition, SectionStyle,
 };
 
 /// Events from the streaming thread
@@ -937,6 +937,10 @@ impl AiApp {
         self.command_bar_dialog = Some(dialog.clone());
         self.showing_command_bar = true;
 
+        // CRITICAL: Focus main focus_handle so keyboard events route to us, not the vibrancy window
+        // This is the same pattern used by the main app when opening its actions popup
+        self.focus_handle.focus(window, cx);
+
         // Open the command bar in a separate vibrancy window
         // The window will be positioned relative to the AI window
         cx.spawn(async move |_this, cx| {
@@ -973,6 +977,8 @@ impl AiApp {
     fn command_bar_handle_char(&mut self, ch: char, cx: &mut Context<Self>) {
         if let Some(dialog) = &self.command_bar_dialog {
             dialog.update(cx, |d, cx| d.handle_char(ch, cx));
+            // Notify the vibrancy window to re-render with updated state
+            notify_actions_window(cx);
         }
     }
 
@@ -980,6 +986,8 @@ impl AiApp {
     fn command_bar_handle_backspace(&mut self, cx: &mut Context<Self>) {
         if let Some(dialog) = &self.command_bar_dialog {
             dialog.update(cx, |d, cx| d.handle_backspace(cx));
+            // Notify the vibrancy window to re-render with updated state
+            notify_actions_window(cx);
         }
     }
 
@@ -987,6 +995,8 @@ impl AiApp {
     fn command_bar_select_prev(&mut self, cx: &mut Context<Self>) {
         if let Some(dialog) = &self.command_bar_dialog {
             dialog.update(cx, |d, cx| d.move_up(cx));
+            // Notify the vibrancy window to re-render with updated state
+            notify_actions_window(cx);
         }
     }
 
@@ -994,6 +1004,8 @@ impl AiApp {
     fn command_bar_select_next(&mut self, cx: &mut Context<Self>) {
         if let Some(dialog) = &self.command_bar_dialog {
             dialog.update(cx, |d, cx| d.move_down(cx));
+            // Notify the vibrancy window to re-render with updated state
+            notify_actions_window(cx);
         }
     }
 
