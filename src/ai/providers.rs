@@ -1102,6 +1102,14 @@ impl AiProvider for VercelGatewayProvider {
                 200000,
             ),
             // OpenAI models
+            ModelInfo::new("openai/gpt-5", "GPT-5 (via Vercel)", "vercel", true, 400000),
+            ModelInfo::new(
+                "openai/gpt-5-mini",
+                "GPT-5 mini (via Vercel)",
+                "vercel",
+                true,
+                400000,
+            ),
             ModelInfo::new(
                 "openai/gpt-4o",
                 "GPT-4o (via Vercel)",
@@ -1109,6 +1117,7 @@ impl AiProvider for VercelGatewayProvider {
                 true,
                 128000,
             ),
+            ModelInfo::new("openai/o3", "o3 (via Vercel)", "vercel", true, 200000),
             ModelInfo::new(
                 "openai/gpt-4o-mini",
                 "GPT-4o mini (via Vercel)",

@@ -280,8 +280,8 @@ pub mod default_models {
                 200_000,
             ),
             ModelInfo::new(
-                "claude-3-5-haiku-20241022",
-                "Claude 3.5 Haiku",
+                "claude-3-5-sonnet-20241022",
+                "Claude 3.5 Sonnet",
                 "anthropic",
                 true,
                 200_000,

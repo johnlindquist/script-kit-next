@@ -91,7 +91,7 @@ filetime = "0.2"
 glob = "0.3.3"
 libc = "0.2.178"
 
-# Age encryption for secrets storage
+# Age encryption for secrets storage (alternative to keyring)
 # Uses scrypt passphrase-based encryption for portable secrets at ~/.scriptkit/secrets.age
 age = "0.11"
 hostname = "0.4"  # Get machine hostname for passphrase derivation
