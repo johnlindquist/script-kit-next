@@ -55,11 +55,64 @@ impl Focusable for ActionsWindow {
 }
 
 impl Render for ActionsWindow {
-    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        // Render the shared dialog entity - it handles its own sizing
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        // Key handler for the actions window
+        // Since this is a separate window, it needs its own key handling
+        // (the parent window can't route events to us)
+        let handle_key = cx.listener(move |this, event: &gpui::KeyDownEvent, window, cx| {
+            let key = event.keystroke.key.as_str();
+            let modifiers = &event.keystroke.modifiers;
+
+            match key {
+                "up" | "arrowup" => {
+                    this.dialog.update(cx, |d, cx| d.move_up(cx));
+                    cx.notify();
+                }
+                "down" | "arrowdown" => {
+                    this.dialog.update(cx, |d, cx| d.move_down(cx));
+                    cx.notify();
+                }
+                "enter" | "return" => {
+                    // Get selected action and execute via callback
+                    let action_id = this.dialog.read(cx).get_selected_action_id();
+                    if let Some(action_id) = action_id {
+                        // Execute the action's callback
+                        let callback = this.dialog.read(cx).on_select.clone();
+                        callback(action_id.clone());
+                        // Close the window
+                        window.remove_window();
+                    }
+                }
+                "escape" => {
+                    // Close the window
+                    window.remove_window();
+                }
+                "backspace" | "delete" => {
+                    this.dialog.update(cx, |d, cx| d.handle_backspace(cx));
+                    cx.notify();
+                }
+                _ => {
+                    // Handle printable characters for search (when no modifiers)
+                    if !modifiers.platform && !modifiers.control && !modifiers.alt {
+                        if let Some(ch) = key.chars().next() {
+                            if ch.is_alphanumeric() || ch.is_whitespace() || ch == '-' || ch == '_'
+                            {
+                                this.dialog.update(cx, |d, cx| d.handle_char(ch, cx));
+                                cx.notify();
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        // Render the shared dialog entity with key handling
         // Don't use size_full() - the dialog calculates its own dynamic height
         // This prevents unused window space from showing as a dark area
-        div().child(self.dialog.clone())
+        div()
+            .track_focus(&self.focus_handle)
+            .on_key_down(handle_key)
+            .child(self.dialog.clone())
     }
 }
 
@@ -156,7 +209,7 @@ pub fn open_actions_window(
         window_bounds: Some(WindowBounds::Windowed(bounds)),
         titlebar: None, // No titlebar = no drag affordance
         window_background,
-        focus: false, // CRITICAL: Don't take focus - main window keeps it
+        focus: true, // Take focus so we receive keyboard events for navigation
         show: true,
         kind: WindowKind::PopUp, // Floating popup window
         display_id,              // CRITICAL: Position on same display as main window
@@ -165,7 +218,12 @@ pub fn open_actions_window(
 
     // Create the window with the shared dialog entity
     let handle = cx.open_window(window_options, |window, cx| {
-        let actions_window = cx.new(|cx| ActionsWindow::new(dialog_entity, cx));
+        let actions_window = cx.new(|cx| {
+            let aw = ActionsWindow::new(dialog_entity, cx);
+            // Focus the actions window so it receives keyboard events
+            aw.focus_handle.focus(window, cx);
+            aw
+        });
         // Wrap in Root for gpui-component theming and vibrancy
         cx.new(|cx| Root::new(actions_window, window, cx))
     })?;
