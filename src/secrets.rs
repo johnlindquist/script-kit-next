@@ -22,8 +22,11 @@
 //! - `get_secret(key: &str) -> Option<String>`
 //! - `set_secret(key: &str, value: &str) -> Result<(), String>`
 //! - `delete_secret(key: &str) -> Result<(), String>`
+//! - `get_secret_info(key: &str) -> Option<SecretInfo>` - includes metadata
 
 use age::secrecy::SecretString;
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::io::{Read, Write};
@@ -33,17 +36,44 @@ use std::sync::{Mutex, OnceLock};
 
 use crate::logging;
 
-/// In-memory cache of decrypted secrets.
+/// A secret entry with value and metadata
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SecretEntry {
+    /// The secret value
+    pub value: String,
+    /// When the secret was last modified (ISO 8601)
+    pub modified_at: DateTime<Utc>,
+}
+
+/// Information about a stored secret (returned to callers)
+#[derive(Debug, Clone)]
+pub struct SecretInfo {
+    /// The secret value
+    pub value: String,
+    /// When the secret was last modified
+    pub modified_at: DateTime<Utc>,
+}
+
+impl From<SecretEntry> for SecretInfo {
+    fn from(entry: SecretEntry) -> Self {
+        SecretInfo {
+            value: entry.value,
+            modified_at: entry.modified_at,
+        }
+    }
+}
+
+/// In-memory cache of decrypted secrets with metadata.
 /// Avoids repeated scrypt decryption which takes ~1.3s per call.
-static SECRETS_CACHE: OnceLock<Mutex<Option<HashMap<String, String>>>> = OnceLock::new();
+static SECRETS_CACHE: OnceLock<Mutex<Option<HashMap<String, SecretEntry>>>> = OnceLock::new();
 
 /// Get the secrets cache mutex, initializing it if needed.
-fn secrets_cache() -> &'static Mutex<Option<HashMap<String, String>>> {
+fn secrets_cache() -> &'static Mutex<Option<HashMap<String, SecretEntry>>> {
     SECRETS_CACHE.get_or_init(|| Mutex::new(None))
 }
 
 /// Get cached secrets, loading from disk if not yet cached.
-fn get_cached_secrets() -> HashMap<String, String> {
+fn get_cached_secrets() -> HashMap<String, SecretEntry> {
     let mut guard = secrets_cache().lock().expect("Secrets cache lock poisoned");
     if let Some(ref secrets) = *guard {
         return secrets.clone();
@@ -56,7 +86,7 @@ fn get_cached_secrets() -> HashMap<String, String> {
 }
 
 /// Update the cache after a write operation.
-fn update_cache(secrets: HashMap<String, String>) {
+fn update_cache(secrets: HashMap<String, SecretEntry>) {
     let mut guard = secrets_cache().lock().expect("Secrets cache lock poisoned");
     *guard = Some(secrets);
 }
@@ -103,7 +133,10 @@ fn derive_passphrase() -> SecretString {
 
 /// Load and decrypt the secrets store from disk.
 /// This is slow (~1.3s) due to scrypt. Use get_cached_secrets() instead.
-fn load_secrets_from_disk() -> HashMap<String, String> {
+///
+/// Handles migration from old format (HashMap<String, String>) to new format
+/// (HashMap<String, SecretEntry>) automatically.
+fn load_secrets_from_disk() -> HashMap<String, SecretEntry> {
     let path = secrets_path();
 
     if !path.exists() {
@@ -153,17 +186,43 @@ fn load_secrets_from_disk() -> HashMap<String, String> {
         return HashMap::new();
     }
 
-    match serde_json::from_slice(&decrypted) {
-        Ok(secrets) => secrets,
-        Err(e) => {
-            logging::log("SECRETS", &format!("Failed to parse secrets JSON: {}", e));
-            HashMap::new()
-        }
+    // Try to parse as new format first
+    if let Ok(secrets) = serde_json::from_slice::<HashMap<String, SecretEntry>>(&decrypted) {
+        logging::log("SECRETS", "Loaded secrets in new format with metadata");
+        return secrets;
     }
+
+    // Fall back to old format and migrate
+    if let Ok(old_secrets) = serde_json::from_slice::<HashMap<String, String>>(&decrypted) {
+        logging::log(
+            "SECRETS",
+            &format!(
+                "Migrating {} secrets from old format to new format with timestamps",
+                old_secrets.len()
+            ),
+        );
+        let now = Utc::now();
+        let migrated: HashMap<String, SecretEntry> = old_secrets
+            .into_iter()
+            .map(|(key, value)| {
+                (
+                    key,
+                    SecretEntry {
+                        value,
+                        modified_at: now,
+                    },
+                )
+            })
+            .collect();
+        return migrated;
+    }
+
+    logging::log("SECRETS", "Failed to parse secrets JSON in any format");
+    HashMap::new()
 }
 
 /// Encrypt and save the secrets store
-fn save_secrets(secrets: &HashMap<String, String>) -> Result<(), String> {
+fn save_secrets(secrets: &HashMap<String, SecretEntry>) -> Result<(), String> {
     let path = secrets_path();
 
     // Ensure parent directory exists
@@ -202,9 +261,10 @@ fn save_secrets(secrets: &HashMap<String, String>) -> Result<(), String> {
     Ok(())
 }
 
-/// Get a secret from the encrypted store
+/// Get a secret value from the encrypted store
 ///
 /// Returns `Some(value)` if the secret exists, `None` otherwise.
+/// For metadata (modification time), use `get_secret_info()` instead.
 ///
 /// # Example
 /// ```ignore
@@ -214,7 +274,7 @@ fn save_secrets(secrets: &HashMap<String, String>) -> Result<(), String> {
 /// ```
 pub fn get_secret(key: &str) -> Option<String> {
     let secrets = get_cached_secrets();
-    let result = secrets.get(key).cloned();
+    let result = secrets.get(key).map(|entry| entry.value.clone());
 
     if result.is_some() {
         logging::log("SECRETS", &format!("Retrieved secret for key: {}", key));
@@ -225,9 +285,40 @@ pub fn get_secret(key: &str) -> Option<String> {
     result
 }
 
+/// Get a secret with its metadata from the encrypted store
+///
+/// Returns `Some(SecretInfo)` if the secret exists, including the value
+/// and when it was last modified. Returns `None` if not found.
+///
+/// # Example
+/// ```ignore
+/// if let Some(info) = get_secret_info("OPENAI_API_KEY") {
+///     println!("Key set on: {}", info.modified_at);
+///     // Use info.value
+/// }
+/// ```
+pub fn get_secret_info(key: &str) -> Option<SecretInfo> {
+    let secrets = get_cached_secrets();
+    let result = secrets
+        .get(key)
+        .map(|entry| SecretInfo::from(entry.clone()));
+
+    if result.is_some() {
+        logging::log(
+            "SECRETS",
+            &format!("Retrieved secret info for key: {}", key),
+        );
+    } else {
+        logging::log("SECRETS", &format!("No secret found for key: {}", key));
+    }
+
+    result
+}
+
 /// Set a secret in the encrypted store
 ///
 /// Creates or updates the secret with the given key.
+/// Updates the modification timestamp to now.
 ///
 /// # Example
 /// ```ignore
@@ -235,7 +326,13 @@ pub fn get_secret(key: &str) -> Option<String> {
 /// ```
 pub fn set_secret(key: &str, value: &str) -> Result<(), String> {
     let mut secrets = get_cached_secrets();
-    secrets.insert(key.to_string(), value.to_string());
+    secrets.insert(
+        key.to_string(),
+        SecretEntry {
+            value: value.to_string(),
+            modified_at: Utc::now(),
+        },
+    );
     save_secrets(&secrets)?;
 
     // Update the in-memory cache
@@ -253,7 +350,6 @@ pub fn set_secret(key: &str, value: &str) -> Result<(), String> {
 /// ```ignore
 /// delete_secret("OPENAI_API_KEY")?;
 /// ```
-#[allow(dead_code)]
 pub fn delete_secret(key: &str) -> Result<(), String> {
     let mut secrets = get_cached_secrets();
 
