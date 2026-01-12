@@ -368,6 +368,8 @@ enum AiCommand {
     },
     /// Initialize the chat with pending messages from open_ai_window_with_chat
     InitializeWithPendingChat,
+    /// Show the command bar overlay (Cmd+K menu)
+    ShowCommandBar,
 }
 
 fn get_pending_commands() -> &'static std::sync::Mutex<Vec<AiCommand>> {
@@ -2336,6 +2338,26 @@ impl AiApp {
 
         let preview = self.message_previews.get(&chat_id).cloned();
 
+        // Vibrancy-compatible selection/hover colors (white with alpha)
+        // Same pattern as main menu list items - 0x54 = 33%, 0x26 = 15%
+        // Formula: (hex_color << 8) | alpha
+        let selected_bg = rgba((0xFFFFFF << 8) | 0x54);
+        let hover_bg = rgba((0xFFFFFF << 8) | 0x26);
+
+        // Text colors change based on selection state (matching main menu behavior)
+        // Selected: bright white for high contrast against dark-tinted selection
+        // Not selected: standard sidebar/muted colors
+        let title_color = if is_selected {
+            cx.theme().foreground // Bright white when selected
+        } else {
+            cx.theme().sidebar_foreground // Normal sidebar color when not
+        };
+        let description_color = if is_selected {
+            cx.theme().sidebar_foreground // Lighter when selected (still readable)
+        } else {
+            cx.theme().muted_foreground // Muted when not selected
+        };
+
         // Create a custom chat item with title and preview
         div()
             .id(SharedString::from(format!("chat-{}", chat_id)))
@@ -2346,19 +2368,17 @@ impl AiApp {
             .py_1()
             .rounded_md()
             .cursor_pointer()
-            .when(is_selected, |d| d.bg(cx.theme().sidebar_accent))
-            .when(!is_selected, |d| {
-                d.hover(|d| d.bg(cx.theme().sidebar_accent.opacity(0.5)))
-            })
+            .when(is_selected, |d| d.bg(selected_bg))
+            .when(!is_selected, |d| d.hover(|d| d.bg(hover_bg)))
             .on_click(cx.listener(move |this, _, window, cx| {
                 this.select_chat(chat_id, window, cx);
             }))
             .child(
-                // Title
+                // Title - bright when selected, normal when not
                 div()
                     .text_sm()
                     .font_weight(gpui::FontWeight::MEDIUM)
-                    .text_color(cx.theme().sidebar_foreground)
+                    .text_color(title_color)
                     .overflow_hidden()
                     .text_ellipsis()
                     .child(title),
@@ -2384,10 +2404,10 @@ impl AiApp {
                     .collect();
 
                 d.child(
-                    // Preview (muted, smaller text, single line only)
+                    // Preview - lighter when selected, muted when not
                     div()
                         .text_xs()
-                        .text_color(cx.theme().muted_foreground)
+                        .text_color(description_color)
                         .overflow_hidden()
                         .whitespace_nowrap()
                         .text_ellipsis()
@@ -3373,6 +3393,10 @@ impl Render for AiApp {
                 }
                 AiCommand::InitializeWithPendingChat => {
                     self.initialize_with_pending_chat(window, cx);
+                }
+                AiCommand::ShowCommandBar => {
+                    self.show_command_bar(window, cx);
+                    crate::logging::log("AI", "Command bar shown via stdin command");
                 }
             }
         }
@@ -4505,6 +4529,41 @@ pub fn set_ai_input_with_image(cx: &mut App, text: &str, image_base64: &str, sub
         });
     } else {
         logging::log("AI", "Cannot set input with image - AI window not open");
+    }
+}
+
+/// Show the AI command bar (Cmd+K menu) in the AI window.
+///
+/// This is triggered by the stdin command `{"type":"showAiCommandBar"}`.
+/// Opens the AI window if not already open, then shows the command bar overlay.
+pub fn show_ai_command_bar(cx: &mut App) {
+    use crate::logging;
+
+    // First ensure the AI window is open
+    if !is_ai_window_open() {
+        if let Err(e) = open_ai_window(cx) {
+            logging::log("AI", &format!("Failed to open AI window: {}", e));
+            return;
+        }
+    }
+
+    // Queue the command and notify the window to process it in render()
+    // This avoids the need for direct entity access which caused memory leaks.
+    push_ai_command(AiCommand::ShowCommandBar);
+
+    // Notify the window to process the command
+    let handle = {
+        let slot = AI_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
+        slot.lock().ok().and_then(|g| *g)
+    };
+
+    if let Some(handle) = handle {
+        let _ = handle.update(cx, |_root, _window, cx| {
+            cx.notify();
+        });
+        logging::log("AI", "Showing AI command bar");
+    } else {
+        logging::log("AI", "Cannot show command bar - AI window handle not found");
     }
 }
 
