@@ -3209,6 +3209,10 @@ fn main() {
                                     logging::log("STDIN", &format!("Failed to open AI window: {}", e));
                                 }
                             }
+                            ExternalCommand::ShowAiCommandBar => {
+                                logging::log("STDIN", "Showing AI command bar via stdin command");
+                                ai::show_ai_command_bar(ctx);
+                            }
                             ExternalCommand::CaptureWindow { title, path } => {
                                 logging::log("STDIN", &format!("Capturing window with title '{}' to '{}'", title, path));
                                 match capture_window_by_title(&title, false) {

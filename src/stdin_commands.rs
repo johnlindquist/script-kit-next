@@ -89,6 +89,8 @@ pub enum ExternalCommand {
     /// Open the AI Chat window with mock data (for visual testing)
     /// This inserts sample conversations to test the UI layout
     OpenAiWithMockData,
+    /// Show the AI command bar (Cmd+K menu) for testing the refactored ActionsDialog
+    ShowAiCommandBar,
     /// Capture a screenshot of a window by title pattern and save to file (for testing)
     /// title: Title pattern to match (e.g., "Script Kit AI" for the AI window)
     /// path: File path to save the PNG screenshot
