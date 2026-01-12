@@ -9,6 +9,7 @@
 //!
 //! Design: Full-window centered input with clear visual hierarchy
 
+use chrono::{DateTime, Utc};
 use gpui::{
     div, prelude::*, px, rgb, rgba, svg, Context, Div, FocusHandle, Focusable, Render,
     SharedString, Window,
@@ -25,6 +26,47 @@ use crate::secrets;
 use crate::theme;
 
 use super::SubmitCallback;
+
+/// Format a DateTime as relative time (e.g., "2 hours ago", "3 days ago")
+fn format_relative_time(dt: DateTime<Utc>) -> String {
+    let now = Utc::now();
+    let diff = now.signed_duration_since(dt);
+
+    let seconds = diff.num_seconds();
+    if seconds < 0 {
+        return "just now".to_string();
+    }
+    let seconds = seconds as u64;
+
+    const MINUTE: u64 = 60;
+    const HOUR: u64 = MINUTE * 60;
+    const DAY: u64 = HOUR * 24;
+    const WEEK: u64 = DAY * 7;
+    const MONTH: u64 = DAY * 30;
+    const YEAR: u64 = DAY * 365;
+
+    if seconds < MINUTE {
+        "just now".to_string()
+    } else if seconds < HOUR {
+        let mins = seconds / MINUTE;
+        format!("{} min{} ago", mins, if mins == 1 { "" } else { "s" })
+    } else if seconds < DAY {
+        let hours = seconds / HOUR;
+        format!("{} hour{} ago", hours, if hours == 1 { "" } else { "s" })
+    } else if seconds < WEEK {
+        let days = seconds / DAY;
+        format!("{} day{} ago", days, if days == 1 { "" } else { "s" })
+    } else if seconds < MONTH {
+        let weeks = seconds / WEEK;
+        format!("{} week{} ago", weeks, if weeks == 1 { "" } else { "s" })
+    } else if seconds < YEAR {
+        let months = seconds / MONTH;
+        format!("{} month{} ago", months, if months == 1 { "" } else { "s" })
+    } else {
+        let years = seconds / YEAR;
+        format!("{} year{} ago", years, if years == 1 { "" } else { "s" })
+    }
+}
 
 /// EnvPrompt - Environment variable prompt with secure storage
 ///
@@ -55,6 +97,8 @@ pub struct EnvPrompt {
     checked_keyring: bool,
     /// Whether a value already exists in keyring (for UX messaging)
     pub exists_in_keyring: bool,
+    /// When the secret was last modified (if exists)
+    pub modified_at: Option<DateTime<Utc>>,
 }
 
 impl EnvPrompt {
@@ -69,12 +113,13 @@ impl EnvPrompt {
         on_submit: SubmitCallback,
         theme: Arc<theme::Theme>,
         exists_in_keyring: bool,
+        modified_at: Option<DateTime<Utc>>,
     ) -> Self {
         logging::log(
             "PROMPTS",
             &format!(
-                "EnvPrompt::new for key: {} (secret: {}, exists: {}, title: {:?})",
-                key, secret, exists_in_keyring, title
+                "EnvPrompt::new for key: {} (secret: {}, exists: {}, title: {:?}, modified: {:?})",
+                key, secret, exists_in_keyring, title, modified_at
             ),
         );
 
@@ -91,6 +136,7 @@ impl EnvPrompt {
             design_variant: DesignVariant::Default,
             checked_keyring: false,
             exists_in_keyring,
+            modified_at,
         }
     }
 
@@ -140,6 +186,22 @@ impl EnvPrompt {
 
     /// Cancel - submit None
     fn submit_cancel(&mut self) {
+        (self.on_submit)(self.id.clone(), None);
+    }
+
+    /// Delete the secret and close the prompt
+    fn submit_delete(&mut self) {
+        logging::log(
+            "PROMPTS",
+            &format!("EnvPrompt: deleting secret for key: {}", self.key),
+        );
+
+        // Delete from keyring
+        if let Err(e) = secrets::delete_secret(&self.key) {
+            logging::log("ERROR", &format!("Failed to delete secret: {}", e));
+        }
+
+        // Call callback with None (same as cancel, but secret is now deleted)
         (self.on_submit)(self.id.clone(), None);
     }
 
@@ -439,25 +501,62 @@ impl Render for EnvPrompt {
                                     })
                             }),
                     )
-                    // Status hint
+                    // Status hint - show when key exists with modification date and delete option
                     .when(self.exists_in_keyring, |d: Div| {
+                        let modified_text = self
+                            .modified_at
+                            .map(format_relative_time)
+                            .unwrap_or_else(|| "previously".to_string());
+
+                        // Create delete click handler
+                        let handle_delete = cx.entity().downgrade();
+
                         d.child(
                             div()
                                 .flex()
-                                .flex_row()
+                                .flex_col()
                                 .items_center()
-                                .gap(px(6.))
-                                .child(
-                                    svg()
-                                        .external_path(IconName::Check.external_path())
-                                        .size(px(14.))
-                                        .text_color(rgb(0x22C55E)), // Green
-                                )
+                                .gap(px(8.))
+                                // Status line with checkmark and modification time
                                 .child(
                                     div()
-                                        .text_sm()
-                                        .text_color(rgb(text_muted))
-                                        .child("A value is already configured"),
+                                        .flex()
+                                        .flex_row()
+                                        .items_center()
+                                        .gap(px(6.))
+                                        .child(
+                                            svg()
+                                                .external_path(IconName::Check.external_path())
+                                                .size(px(14.))
+                                                .text_color(rgb(0x22C55E)), // Green
+                                        )
+                                        .child(
+                                            div()
+                                                .text_sm()
+                                                .text_color(rgb(text_muted))
+                                                .child(format!("Configured {}", modified_text)),
+                                        )
+                                        // Separator dot
+                                        .child(
+                                            div().text_sm().text_color(rgb(text_muted)).child("·"),
+                                        )
+                                        // Delete link
+                                        .child(
+                                            div()
+                                                .id("delete-secret")
+                                                .text_sm()
+                                                .text_color(rgb(0xEF4444)) // Red
+                                                .cursor_pointer()
+                                                .hover(|s| s.opacity(0.8))
+                                                .on_click(move |_event, _window, cx| {
+                                                    if let Some(entity) = handle_delete.upgrade() {
+                                                        entity.update(cx, |this, _cx| {
+                                                            this.submit_delete();
+                                                        });
+                                                    }
+                                                })
+                                                .child("Delete"),
+                                        ),
                                 ),
                         )
                     }),

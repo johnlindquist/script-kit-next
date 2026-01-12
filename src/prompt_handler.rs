@@ -1210,9 +1210,13 @@ impl ScriptListApp {
 
                 // Check if key already exists in secrets (for UX messaging)
                 // Empty values don't count as "existing" - must have actual content
-                let exists_in_keyring = secrets::get_secret(&key)
-                    .map(|v: String| !v.is_empty())
+                // Use get_secret_info to get both existence and modification timestamp
+                let secret_info = secrets::get_secret_info(&key);
+                let exists_in_keyring = secret_info
+                    .as_ref()
+                    .map(|info| !info.value.is_empty())
                     .unwrap_or(false);
+                let modified_at = secret_info.map(|info| info.modified_at);
 
                 // Create EnvPrompt entity
                 let focus_handle = self.focus_handle.clone();
@@ -1226,6 +1230,7 @@ impl ScriptListApp {
                     submit_callback,
                     std::sync::Arc::clone(&self.theme),
                     exists_in_keyring,
+                    modified_at,
                 );
 
                 // Check keyring first - if value exists, auto-submit without showing UI
