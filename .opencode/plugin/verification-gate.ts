@@ -51,7 +51,7 @@ interface ToolInput {
   result?: Record<string, unknown>
 }
 
-export const VerificationGate: Plugin = async () => {
+const VerificationGate: Plugin = async () => {
   // Reset state on plugin load
   verificationRanInSession = false
   lastVerificationTime = 0
@@ -132,3 +132,5 @@ Current status: ${verificationStatus}
     }
   }
 }
+
+export default VerificationGate

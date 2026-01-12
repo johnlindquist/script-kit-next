@@ -105,7 +105,7 @@ interface ToolInput {
 // Plugin Export
 // =============================================================================
 
-export const ConventionalCommitReminder: Plugin = async ({ client }) => {
+const ConventionalCommitReminder: Plugin = async ({ client }) => {
   return {
     // Track session events
     event: async ({ event }) => {
@@ -244,3 +244,5 @@ Remember to commit with conventional commit format before ending session.
     }
   }
 }
+
+export default ConventionalCommitReminder

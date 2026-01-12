@@ -9,7 +9,7 @@ use crate::theme::PromptColors;
 
 /// Render markdown text to GPUI elements
 pub fn render_markdown(text: &str, colors: &PromptColors) -> impl IntoElement {
-    let mut container = div().flex().flex_col().gap(px(6.0));
+    let mut container = div().flex().flex_col().gap(px(6.0)).w_full().min_w_0();
     let lines: Vec<&str> = text.lines().collect();
     let mut i = 0;
 
@@ -157,7 +157,13 @@ fn render_code_block(code: &str, lang: &str, colors: &PromptColors) -> impl Into
 
 /// Render inline text with bold, italic, code, and links
 fn render_inline(text: &str, colors: &PromptColors) -> impl IntoElement {
-    let mut row = div().flex().flex_row().flex_wrap().text_sm();
+    let mut row = div()
+        .flex()
+        .flex_row()
+        .flex_wrap()
+        .w_full()
+        .min_w_0()
+        .text_sm();
     let mut chars = text.chars().peekable();
     let mut current = String::new();
 

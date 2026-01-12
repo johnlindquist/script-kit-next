@@ -142,6 +142,10 @@ pub mod text_injector;
 // Keyword trigger matching for text expansion
 pub mod keyword_matcher;
 
+// Debounced keystroke logging for text expansion system
+// Consolidates per-keystroke logs into periodic summaries
+pub mod keystroke_logger;
+
 // Global keyboard monitoring for system-wide keystroke capture
 // Required for text expansion triggers typed in any application
 #[cfg(target_os = "macos")]

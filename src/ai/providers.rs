@@ -775,7 +775,14 @@ impl AiProvider for VercelGatewayProvider {
         // Model IDs are namespaced: provider/model (e.g., "openai/gpt-5", "anthropic/claude-sonnet-4.5")
         // NOTE: The FIRST model in this list is the default model for new chats
         vec![
-            // Default model: Claude 3.5 Haiku (fast, cheap, good quality)
+            // Default model: Claude Haiku 4.5 (fast, cheap, good quality)
+            ModelInfo::new(
+                "anthropic/claude-haiku-4-5-20250514",
+                "Claude Haiku 4.5 (via Vercel)",
+                "vercel",
+                true,
+                200000,
+            ),
             ModelInfo::new(
                 "anthropic/claude-3-5-haiku-20241022",
                 "Claude 3.5 Haiku (via Vercel)",

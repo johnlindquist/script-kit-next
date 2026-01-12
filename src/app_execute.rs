@@ -1285,10 +1285,14 @@ impl ScriptListApp {
 
     /// Handle API key configuration completion.
     /// Called when the EnvPrompt callback signals completion.
+    ///
+    /// NOTE: This is called from render(), so we must use deferred resize via Window::defer
+    /// to avoid layout issues where the macOS window resizes but GPUI's layout doesn't update.
     fn handle_api_key_completion(
         &mut self,
         provider: String,
         success: bool,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         self.pending_api_key_config = None;
@@ -1304,9 +1308,18 @@ impl ScriptListApp {
             );
         }
 
-        // Return to main menu and restore window height
+        // Return to main menu
         self.reset_to_script_list(cx);
-        resize_to_view_sync(ViewType::ScriptList, 0);
+
+        // CRITICAL: Use deferred resize because this is called from render().
+        // Synchronous resize (resize_to_view_sync) would resize the macOS window
+        // but GPUI's layout system wouldn't update until the next frame,
+        // causing the content to render at the wrong size (empty list bug).
+        let target_height = window_resize::height_for_view(ViewType::ScriptList, 0);
+        window.defer(cx, move |_window, _cx| {
+            window_resize::resize_first_window_to_height(target_height);
+        });
+
         cx.notify();
     }
 

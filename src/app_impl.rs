@@ -42,7 +42,10 @@ impl ScriptListApp {
         ));
         logging::log(
             "APP",
-            &format!("Loaded {} scripts from ~/.scriptkit/kit/*/scripts", scripts.len()),
+            &format!(
+                "Loaded {} scripts from ~/.scriptkit/kit/*/scripts",
+                scripts.len()
+            ),
         );
         logging::log(
             "APP",
@@ -1784,9 +1787,11 @@ impl ScriptListApp {
 
             // Check for app/{bundle_id} command IDs
             if let Some(bundle_id) = command_id.strip_prefix("app/") {
-                if let Some(app) = self.apps.iter().find(|a| {
-                    a.bundle_id.as_deref() == Some(bundle_id)
-                }) {
+                if let Some(app) = self
+                    .apps
+                    .iter()
+                    .find(|a| a.bundle_id.as_deref() == Some(bundle_id))
+                {
                     logging::log(
                         "ALIAS",
                         &format!("Found app match: '{}' -> '{}'", alias, app.name),
@@ -2167,15 +2172,14 @@ impl ScriptListApp {
             } => {
                 if *query != new_text {
                     // Get old filter BEFORE updating query (for frozen filter during transitions)
-                    let old_filter = if let Some(old_parsed) =
-                        crate::file_search::parse_directory_path(query)
-                    {
-                        old_parsed.filter
-                    } else if !query.is_empty() {
-                        Some(query.clone())
-                    } else {
-                        None
-                    };
+                    let old_filter =
+                        if let Some(old_parsed) = crate::file_search::parse_directory_path(query) {
+                            old_parsed.filter
+                        } else if !query.is_empty() {
+                            Some(query.clone())
+                        } else {
+                            None
+                        };
 
                     // Update query immediately for responsive UI
                     *query = new_text.clone();
@@ -3769,7 +3773,9 @@ export default {
                                 .text_sm()
                                 .text_color(gpui::rgb(colors.text_muted))
                                 .font_family(typography.font_family)
-                                .child("Type the alias + space in the main menu to run this command"),
+                                .child(
+                                    "Type the alias + space in the main menu to run this command",
+                                ),
                         )
                         // Input field (simplified - just show the current value)
                         .child(
@@ -4574,10 +4580,7 @@ export default {
             );
         }
         for toast in pending {
-            logging::log(
-                "UI",
-                &format!("Pushing notification: {}", toast.message),
-            );
+            logging::log("UI", &format!("Pushing notification: {}", toast.message));
             let notification = pending_toast_to_notification(&toast);
             window.push_notification(notification, cx);
         }
@@ -4670,7 +4673,10 @@ export default {
     /// This provides consistent UX: pressing ESC always "goes back" one step.
     fn go_back_or_close(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.opened_from_main_menu {
-            logging::log("KEY", "ESC - returning to main menu (opened from main menu)");
+            logging::log(
+                "KEY",
+                "ESC - returning to main menu (opened from main menu)",
+            );
             // Return to main menu
             self.current_view = AppView::ScriptList;
             self.filter_text.clear();
@@ -4688,7 +4694,10 @@ export default {
             self.focused_input = FocusedInput::MainFilter;
             cx.notify();
         } else {
-            logging::log("KEY", "ESC - closing window (opened directly via hotkey/protocol)");
+            logging::log(
+                "KEY",
+                "ESC - closing window (opened directly via hotkey/protocol)",
+            );
             self.close_and_reset_window(cx);
         }
     }
@@ -5070,8 +5079,12 @@ export default {
         self.sync_list_state();
         self.selected_index = 0;
         self.validate_selection_bounds(cx);
-        self.main_list_state
-            .scroll_to_reveal_item(self.selected_index);
+        // Scroll to the very top of the list (not just reveal the item)
+        // This ensures the first item is at the top, not just visible somewhere in the viewport
+        self.main_list_state.scroll_to(ListOffset {
+            item_ix: 0,
+            offset_in_item: px(0.),
+        });
         self.last_scrolled_index = Some(self.selected_index);
 
         // NOTE: Window resize is NOT done here to avoid RefCell borrow conflicts.
@@ -5291,7 +5304,10 @@ export default {
 
             // Show a message prompting user to configure API keys
             let placeholder = Some("Type your question...".to_string());
-            let hint = Some("No API keys configured. Run 'Configure Vercel AI Gateway' from the menu.".to_string());
+            let hint = Some(
+                "No API keys configured. Run 'Configure Vercel AI Gateway' from the menu."
+                    .to_string(),
+            );
 
             // Create a no-op callback since there are no providers
             let noop_callback: ChatSubmitCallback = std::sync::Arc::new(|_id, _text| {

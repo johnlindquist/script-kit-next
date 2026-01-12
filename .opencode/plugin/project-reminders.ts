@@ -105,7 +105,7 @@ Visual verification is NOT complete until you READ the screenshot file and analy
 </project-reminder>
 `.trim()
 
-export const ProjectReminders: Plugin = async () => {
+const ProjectReminders: Plugin = async () => {
   return {
     // Inject into system prompt - runs on every conversation
     "experimental.chat.system.transform": async (_input, output) => {
@@ -118,3 +118,5 @@ export const ProjectReminders: Plugin = async () => {
     }
   }
 }
+
+export default ProjectReminders

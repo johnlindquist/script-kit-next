@@ -51,7 +51,8 @@ impl ChatModel {
 /// NOTE: First model in list is the default
 pub fn default_models() -> Vec<ChatModel> {
     vec![
-        // Default: Claude 3.5 Haiku (fast, good quality)
+        // Default: Claude Haiku 4.5 (fast, good quality)
+        ChatModel::new("claude-haiku-4-5-20250514", "Claude Haiku 4.5", "Anthropic"),
         ChatModel::new("claude-3-5-haiku-20241022", "Claude 3.5 Haiku", "Anthropic"),
         ChatModel::new(
             "claude-3-5-sonnet-20241022",
@@ -1237,7 +1238,13 @@ impl ChatPrompt {
         let retry_hover_bg = rgba((colors.accent_color << 8) | 0x40);
         let has_retry_callback = self.on_retry.is_some();
 
-        let mut content = div().flex().flex_col().gap(px(4.0));
+        let mut content = div()
+            .flex()
+            .flex_col()
+            .gap(px(4.0))
+            .w_full()
+            .min_w_0()
+            .overflow_hidden();
 
         // User prompt (small, bold) - only if not empty
         if !turn.user_prompt.is_empty() {
@@ -1301,6 +1308,8 @@ impl ChatPrompt {
                     div()
                         .flex()
                         .flex_col()
+                        .w_full()
+                        .min_w_0()
                         .child(render_markdown(response, colors))
                         .child(div().text_color(rgb(colors.accent_color)).child("▌")),
                 );
@@ -1342,7 +1351,7 @@ impl ChatPrompt {
             .flex()
             .flex_row()
             .gap(px(8.0))
-            .child(content.flex_1())
+            .child(content.flex_1().min_w_0())
             .child(copy_button)
     }
 
