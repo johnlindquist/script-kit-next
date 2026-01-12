@@ -11,14 +11,15 @@ use crate::logging;
 use crate::protocol::ProtocolAction;
 use crate::theme;
 use gpui::{
-    div, prelude::*, px, rgb, rgba, uniform_list, App, BoxShadow, Context, FocusHandle, Focusable,
-    Render, ScrollStrategy, SharedString, UniformListScrollHandle, Window,
+    div, prelude::*, px, rgb, rgba, svg, uniform_list, App, BoxShadow, Context, FocusHandle,
+    Focusable, Render, ScrollStrategy, SharedString, UniformListScrollHandle, Window,
 };
 use std::sync::Arc;
 
 use super::builders::{
-    get_file_context_actions, get_global_actions, get_path_context_actions,
-    get_script_context_actions, get_scriptlet_context_actions_with_custom,
+    get_chat_context_actions, get_clipboard_history_context_actions, get_file_context_actions,
+    get_global_actions, get_path_context_actions, get_script_context_actions,
+    get_scriptlet_context_actions_with_custom, ChatPromptInfo, ClipboardEntryInfo,
 };
 use super::constants::{
     ACTION_ITEM_HEIGHT, ACTION_ROW_INSET, HEADER_HEIGHT, KEYCAP_HEIGHT, KEYCAP_MIN_WIDTH,
@@ -30,7 +31,11 @@ use crate::scriptlets::Scriptlet;
 // Keep ACCENT_BAR_WIDTH for backwards compatibility during transition
 #[allow(unused_imports)]
 use super::constants::ACCENT_BAR_WIDTH;
-use super::types::{Action, ActionCallback, ActionCategory, ScriptInfo};
+#[allow(unused_imports)] // AnchorPosition reserved for future use
+use super::types::{
+    Action, ActionCallback, ActionCategory, ActionsDialogConfig, AnchorPosition, ScriptInfo,
+    SearchPosition, SectionStyle,
+};
 use crate::prompts::PathInfo;
 
 /// Helper function to combine a hex color with an alpha value
@@ -42,6 +47,14 @@ fn hex_with_alpha(hex: u32, alpha: u8) -> u32 {
 
 /// ActionsDialog - Compact overlay popup for quick actions
 /// Implements Raycast-style design with individual keycap shortcuts
+///
+/// # Configuration
+/// Use `ActionsDialogConfig` to customize appearance:
+/// - `search_position`: Top (AI chat style) or Bottom (main menu style)
+/// - `section_style`: Headers (text labels) or Separators (subtle lines)
+/// - `anchor`: Top (list grows down) or Bottom (list grows up)
+/// - `show_icons`: Display icons next to actions
+/// - `show_footer`: Show keyboard hint footer
 pub struct ActionsDialog {
     pub actions: Vec<Action>,
     pub filtered_actions: Vec<usize>, // Indices into actions
@@ -67,6 +80,8 @@ pub struct ActionsDialog {
     pub sdk_actions: Option<Vec<ProtocolAction>>,
     /// Context title shown in the header (e.g., "Activity Monitor", script name)
     pub context_title: Option<String>,
+    /// Configuration for appearance and behavior
+    pub config: ActionsDialogConfig,
 }
 
 impl ActionsDialog {
@@ -138,6 +153,7 @@ impl ActionsDialog {
             hide_search: false,
             sdk_actions: None,
             context_title: Some(path_info.path.clone()),
+            config: ActionsDialogConfig::default(),
         }
     }
 
@@ -178,6 +194,100 @@ impl ActionsDialog {
             hide_search: false,
             sdk_actions: None,
             context_title: Some(file_info.name.clone()),
+            config: ActionsDialogConfig::default(),
+        }
+    }
+
+    /// Create ActionsDialog for a clipboard history entry with clipboard-specific actions
+    /// Actions: Paste, Copy, Paste and Keep Open, Share, Attach to AI, Pin/Unpin, Delete, etc.
+    pub fn with_clipboard_entry(
+        focus_handle: FocusHandle,
+        on_select: ActionCallback,
+        entry_info: &ClipboardEntryInfo,
+        theme: Arc<theme::Theme>,
+    ) -> Self {
+        let actions = get_clipboard_history_context_actions(entry_info);
+        let filtered_actions: Vec<usize> = (0..actions.len()).collect();
+
+        let context_title = if entry_info.preview.len() > 30 {
+            format!("{}...", &entry_info.preview[..27])
+        } else {
+            entry_info.preview.clone()
+        };
+
+        logging::log(
+            "ACTIONS",
+            &format!(
+                "ActionsDialog created for clipboard entry: {} (type={:?}, pinned={}) with {} actions",
+                entry_info.id,
+                entry_info.content_type,
+                entry_info.pinned,
+                actions.len()
+            ),
+        );
+
+        ActionsDialog {
+            actions,
+            filtered_actions,
+            selected_index: 0,
+            search_text: String::new(),
+            focus_handle,
+            on_select,
+            focused_script: None,
+            focused_scriptlet: None,
+            scroll_handle: UniformListScrollHandle::new(),
+            theme,
+            design_variant: DesignVariant::Default,
+            cursor_visible: true,
+            hide_search: false,
+            sdk_actions: None,
+            context_title: Some(context_title),
+            config: ActionsDialogConfig::default(),
+        }
+    }
+
+    /// Create ActionsDialog for a chat prompt with chat-specific actions
+    /// Actions: Model selection, Continue in Chat, Copy Response, Clear Conversation
+    pub fn with_chat(
+        focus_handle: FocusHandle,
+        on_select: ActionCallback,
+        chat_info: &ChatPromptInfo,
+        theme: Arc<theme::Theme>,
+    ) -> Self {
+        let actions = get_chat_context_actions(chat_info);
+        let filtered_actions: Vec<usize> = (0..actions.len()).collect();
+
+        let context_title = chat_info
+            .current_model
+            .clone()
+            .unwrap_or_else(|| "Chat".to_string());
+
+        logging::log(
+            "ACTIONS",
+            &format!(
+                "ActionsDialog created for chat prompt: model={:?} with {} actions",
+                chat_info.current_model,
+                actions.len()
+            ),
+        );
+
+        ActionsDialog {
+            actions,
+            filtered_actions,
+            selected_index: 0,
+            search_text: String::new(),
+            focus_handle,
+            on_select,
+            focused_script: None,
+            focused_scriptlet: None,
+            scroll_handle: UniformListScrollHandle::new(),
+            theme,
+            design_variant: DesignVariant::Default,
+            cursor_visible: true,
+            hide_search: false,
+            sdk_actions: None,
+            context_title: Some(context_title),
+            config: ActionsDialogConfig::default(),
         }
     }
 
@@ -229,6 +339,7 @@ impl ActionsDialog {
             hide_search: false,
             sdk_actions: None,
             context_title,
+            config: ActionsDialogConfig::default(),
         }
     }
 
@@ -245,6 +356,57 @@ impl ActionsDialog {
     /// Set the context title shown in the header
     pub fn set_context_title(&mut self, title: Option<String>) {
         self.context_title = title;
+    }
+
+    /// Set the configuration for appearance and behavior
+    pub fn set_config(&mut self, config: ActionsDialogConfig) {
+        self.config = config;
+        // Update hide_search based on config for backwards compatibility
+        self.hide_search = matches!(self.config.search_position, SearchPosition::Hidden);
+    }
+
+    /// Create ActionsDialog with custom configuration and actions
+    ///
+    /// Use this for contexts like AI chat that need different appearance:
+    /// - Search at top instead of bottom
+    /// - Section headers instead of separators
+    /// - Icons next to actions
+    pub fn with_config(
+        focus_handle: FocusHandle,
+        on_select: ActionCallback,
+        actions: Vec<Action>,
+        theme: Arc<theme::Theme>,
+        config: ActionsDialogConfig,
+    ) -> Self {
+        let filtered_actions: Vec<usize> = (0..actions.len()).collect();
+
+        logging::log(
+            "ACTIONS",
+            &format!(
+                "ActionsDialog created with config: {} actions, search={:?}",
+                actions.len(),
+                config.search_position
+            ),
+        );
+
+        ActionsDialog {
+            actions,
+            filtered_actions,
+            selected_index: 0,
+            search_text: String::new(),
+            focus_handle,
+            on_select,
+            focused_script: None,
+            focused_scriptlet: None,
+            scroll_handle: UniformListScrollHandle::new(),
+            theme,
+            design_variant: DesignVariant::Default,
+            cursor_visible: true,
+            hide_search: matches!(config.search_position, SearchPosition::Hidden),
+            sdk_actions: None,
+            context_title: None,
+            config,
+        }
     }
 
     /// Parse a shortcut string into individual keycap characters
@@ -292,6 +454,8 @@ impl ActionsDialog {
                 shortcut: pa.shortcut.as_ref().map(|s| Self::format_shortcut_hint(s)),
                 has_action: pa.has_action,
                 value: pa.value.clone(),
+                icon: None,    // SDK actions don't currently have icons
+                section: None, // SDK actions don't currently have sections
             })
             .collect();
 
@@ -884,7 +1048,7 @@ impl Render for ActionsDialog {
                                 .when(self.cursor_visible, |d| d.bg(accent_color)),
                         )
                     })
-                    .child(search_display)
+                    .child(search_display.clone())
                     // When has text, cursor is at the end after the text
                     .when(!self.search_text.is_empty(), |d| {
                         d.child(
@@ -1001,15 +1165,19 @@ impl Render for ActionsDialog {
                             rgba(hex_with_alpha(item_colors.border_subtle, 0x40))
                         };
 
+                        // Get section style from config
+                        let section_style = this.config.section_style;
+
                         for idx in visible_range {
                             if let Some(&action_idx) = this.filtered_actions.get(idx) {
                                 if let Some(action) = this.actions.get(action_idx) {
                                     let action: &Action = action; // Explicit type annotation
                                     let is_selected = idx == selected_index;
 
-                                    // Check if this is the first item of a new category
-                                    // (for adding a subtle separator line)
-                                    let is_category_start = if idx > 0 {
+                                    // Determine if this is the start of a new section/category
+                                    // For SectionStyle::Headers, use action.section
+                                    // For SectionStyle::Separators, use action.category
+                                    let (is_section_start, section_label) = if idx > 0 {
                                         if let Some(&prev_action_idx) =
                                             this.filtered_actions.get(idx - 1)
                                         {
@@ -1017,15 +1185,33 @@ impl Render for ActionsDialog {
                                                 this.actions.get(prev_action_idx)
                                             {
                                                 let prev_action: &Action = prev_action;
-                                                prev_action.category != action.category
+                                                match section_style {
+                                                    SectionStyle::Headers => {
+                                                        // Compare section strings
+                                                        let different =
+                                                            prev_action.section != action.section;
+                                                        (different, action.section.clone())
+                                                    }
+                                                    SectionStyle::Separators
+                                                    | SectionStyle::None => {
+                                                        // Compare categories
+                                                        let different =
+                                                            prev_action.category != action.category;
+                                                        (different, None)
+                                                    }
+                                                }
                                             } else {
-                                                false
+                                                (false, None)
                                             }
                                         } else {
-                                            false
+                                            (false, None)
                                         }
                                     } else {
-                                        false
+                                        // First item - show section header if using Headers style
+                                        match section_style {
+                                            SectionStyle::Headers => (true, action.section.clone()),
+                                            _ => (false, None),
+                                        }
                                     };
 
                                     // Match main list styling: bright text when selected, secondary when not
@@ -1072,10 +1258,47 @@ impl Render for ActionsDialog {
                                         .flex_col()
                                         .justify_center();
 
-                                    // Add top border for category separator (non-first items only)
-                                    if is_category_start {
-                                        action_item =
-                                            action_item.border_t_1().border_color(separator_color);
+                                    // Add section indicator based on section_style config
+                                    match section_style {
+                                        SectionStyle::Separators => {
+                                            // Add top border for category separator (non-first items only)
+                                            if is_section_start && idx > 0 {
+                                                action_item = action_item
+                                                    .border_t_1()
+                                                    .border_color(separator_color);
+                                            }
+                                        }
+                                        SectionStyle::Headers => {
+                                            // Add section header text above the item
+                                            if is_section_start {
+                                                if let Some(ref label) = section_label {
+                                                    action_item = action_item
+                                                        .when(idx > 0, |d| {
+                                                            d.border_t_1()
+                                                                .border_color(separator_color)
+                                                        })
+                                                        .child(
+                                                            div()
+                                                                .px(px(16.0))
+                                                                .pt(px(if idx > 0 {
+                                                                    8.0
+                                                                } else {
+                                                                    4.0
+                                                                }))
+                                                                .pb(px(2.0))
+                                                                .text_xs()
+                                                                .font_weight(
+                                                                    gpui::FontWeight::SEMIBOLD,
+                                                                )
+                                                                .text_color(dimmed_text)
+                                                                .child(label.clone()),
+                                                        );
+                                                }
+                                            }
+                                        }
+                                        SectionStyle::None => {
+                                            // No section indicators
+                                        }
                                     }
 
                                     // Inner row fills available height (minus 4px for py(2) top+bottom)
@@ -1095,25 +1318,50 @@ impl Render for ActionsDialog {
                                         .hover(|s| s.bg(hover_bg))
                                         .cursor_pointer();
 
-                                    // Content row: label + shortcuts
+                                    // Get icon if config enables icons
+                                    let show_icons = this.config.show_icons;
+                                    let action_icon = action.icon;
+
+                                    // Content row: optional icon + label + shortcuts
+                                    let mut left_side =
+                                        div().flex().flex_row().items_center().gap(px(12.0));
+
+                                    // Add icon if enabled and present
+                                    if show_icons {
+                                        if let Some(icon) = action_icon {
+                                            left_side = left_side.child(
+                                                svg()
+                                                    .external_path(icon.external_path())
+                                                    .size(px(16.0))
+                                                    .text_color(if is_selected {
+                                                        primary_text
+                                                    } else {
+                                                        dimmed_text
+                                                    }),
+                                            );
+                                        }
+                                    }
+
+                                    // Add title
+                                    left_side = left_side.child(
+                                        div()
+                                            .text_color(title_color)
+                                            .text_sm()
+                                            .font_weight(if is_selected {
+                                                gpui::FontWeight::MEDIUM
+                                            } else {
+                                                gpui::FontWeight::NORMAL
+                                            })
+                                            .child(title_str),
+                                    );
+
                                     let content = div()
                                         .flex_1()
                                         .flex()
                                         .flex_row()
                                         .items_center()
                                         .justify_between()
-                                        .child(
-                                            // Left side: title only (no icons)
-                                            div()
-                                                .text_color(title_color)
-                                                .text_sm()
-                                                .font_weight(if is_selected {
-                                                    gpui::FontWeight::MEDIUM
-                                                } else {
-                                                    gpui::FontWeight::NORMAL
-                                                })
-                                                .child(title_str),
-                                        );
+                                        .child(left_side);
 
                                     // Right side: keyboard shortcuts as individual keycaps (Raycast-style)
                                     let content = if let Some(shortcut) = shortcut_opt {
@@ -1251,11 +1499,176 @@ impl Render for ActionsDialog {
         // Only apply a background when vibrancy is disabled for a solid fallback.
         let use_vibrancy = self.theme.is_vibrancy_enabled();
 
+        // Build footer with keyboard hints (if enabled)
+        let footer_height = if self.config.show_footer { 32.0 } else { 0.0 };
+        let footer_container = if self.config.show_footer {
+            let footer_text = if self.design_variant == DesignVariant::Default {
+                rgb(self.theme.colors.text.dimmed)
+            } else {
+                rgb(colors.text_dimmed)
+            };
+            let footer_border = if self.design_variant == DesignVariant::Default {
+                rgba(hex_with_alpha(self.theme.colors.ui.border, 0x40))
+            } else {
+                rgba(hex_with_alpha(colors.border, 0x40))
+            };
+
+            Some(
+                div()
+                    .w_full()
+                    .h(px(32.0))
+                    .px(px(16.0))
+                    .border_t_1()
+                    .border_color(footer_border)
+                    .flex()
+                    .items_center()
+                    .gap(px(16.0))
+                    .text_xs()
+                    .text_color(footer_text)
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(4.0))
+                            .child("↑↓")
+                            .child("Navigate"),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(4.0))
+                            .child("↵")
+                            .child("Select"),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(4.0))
+                            .child("esc")
+                            .child("Close"),
+                    ),
+            )
+        } else {
+            None
+        };
+
+        // Recalculate total height including footer
+        let total_height = total_height + footer_height;
+
+        // Get search position from config
+        let search_at_top = matches!(self.config.search_position, SearchPosition::Top);
+        let show_search =
+            !matches!(self.config.search_position, SearchPosition::Hidden) && !self.hide_search;
+
+        // Modify input_container for top position (border at bottom instead of top)
+        let input_container_top = if search_at_top && show_search {
+            Some(
+                div()
+                    .w(px(POPUP_WIDTH))
+                    .min_w(px(POPUP_WIDTH))
+                    .max_w(px(POPUP_WIDTH))
+                    .h(px(SEARCH_INPUT_HEIGHT))
+                    .min_h(px(SEARCH_INPUT_HEIGHT))
+                    .max_h(px(SEARCH_INPUT_HEIGHT))
+                    .overflow_hidden()
+                    .px(px(spacing.item_padding_x))
+                    .py(px(spacing.item_padding_y + 2.0))
+                    .bg(search_box_bg)
+                    .border_b_1() // Border at bottom for top-positioned search
+                    .border_color(border_color)
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .gap(px(spacing.gap_md))
+                    .child(
+                        div()
+                            .w(px(24.0))
+                            .min_w(px(24.0))
+                            .text_color(dimmed_text)
+                            .text_xs()
+                            .child("⌘K"),
+                    )
+                    .child(
+                        div()
+                            .flex_shrink_0()
+                            .w(px(240.0))
+                            .min_w(px(240.0))
+                            .max_w(px(240.0))
+                            .h(px(28.0))
+                            .min_h(px(28.0))
+                            .max_h(px(28.0))
+                            .overflow_hidden()
+                            .px(px(spacing.padding_sm))
+                            .py(px(spacing.padding_xs))
+                            .bg(if self.design_variant == DesignVariant::Default {
+                                rgba(hex_with_alpha(
+                                    self.theme.colors.background.main,
+                                    if self.search_text.is_empty() {
+                                        0x20
+                                    } else {
+                                        0x40
+                                    },
+                                ))
+                            } else {
+                                rgba(hex_with_alpha(
+                                    colors.background,
+                                    if self.search_text.is_empty() {
+                                        0x20
+                                    } else {
+                                        0x40
+                                    },
+                                ))
+                            })
+                            .rounded(px(visual.radius_sm))
+                            .border_1()
+                            .border_color(if !self.search_text.is_empty() {
+                                focus_border_color
+                            } else {
+                                border_color
+                            })
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .text_sm()
+                            .text_color(if self.search_text.is_empty() {
+                                dimmed_text
+                            } else {
+                                primary_text
+                            })
+                            .when(self.search_text.is_empty(), |d| {
+                                d.child(
+                                    div()
+                                        .w(px(2.))
+                                        .h(px(16.))
+                                        .mr(px(2.))
+                                        .rounded(px(1.))
+                                        .when(self.cursor_visible, |d| d.bg(accent_color)),
+                                )
+                            })
+                            .child(search_display.clone())
+                            .when(!self.search_text.is_empty(), |d| {
+                                d.child(
+                                    div()
+                                        .w(px(2.))
+                                        .h(px(16.))
+                                        .ml(px(2.))
+                                        .rounded(px(1.))
+                                        .when(self.cursor_visible, |d| d.bg(accent_color)),
+                                )
+                            }),
+                    ),
+            )
+        } else {
+            None
+        };
+
         div()
             .flex()
             .flex_col()
             .w(px(POPUP_WIDTH))
-            .h(px(total_height)) // Use calculated height instead of max_h
+            .h(px(total_height)) // Use calculated height including footer
             .when(!use_vibrancy, |d| d.bg(main_bg)) // Only apply bg when vibrancy disabled
             .rounded(px(visual.radius_lg))
             .shadow(Self::create_popup_shadow())
@@ -1266,9 +1679,15 @@ impl Render for ActionsDialog {
             .key_context("actions_dialog")
             .track_focus(&self.focus_handle)
             // NOTE: No on_key_down here - parent handles all keyboard input
+            // Search input at top (if config.search_position == Top)
+            .when_some(input_container_top, |d, input| d.child(input))
             // Header row (if context_title is set)
             .when_some(header_container, |d, header| d.child(header))
+            // Actions list
             .child(actions_container)
-            .when(!self.hide_search, |d| d.child(input_container))
+            // Search input at bottom (if config.search_position == Bottom)
+            .when(show_search && !search_at_top, |d| d.child(input_container))
+            // Footer with keyboard hints (if config.show_footer)
+            .when_some(footer_container, |d, footer| d.child(footer))
     }
 }

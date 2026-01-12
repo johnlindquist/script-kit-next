@@ -25,9 +25,17 @@ mod window;
 // - ActionsDialog: the main dialog component
 // - Window functions for separate vibrancy window
 
-pub use builders::to_deeplink_name;
+pub use builders::{to_deeplink_name, ClipboardEntryInfo};
 pub use dialog::ActionsDialog;
 pub use types::ScriptInfo;
+
+// Public API for AI window integration (re-exported but may appear unused until integration)
+#[allow(unused_imports)]
+pub use builders::get_ai_command_bar_actions;
+#[allow(unused_imports)]
+pub use types::{
+    Action, ActionCategory, ActionsDialogConfig, AnchorPosition, SearchPosition, SectionStyle,
+};
 
 // Window functions for separate vibrancy window
 pub use window::{

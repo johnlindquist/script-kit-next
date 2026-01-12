@@ -2,6 +2,7 @@
 //!
 //! Core types for the actions system including Action, ActionCategory, and ScriptInfo.
 
+use crate::designs::icon_variations::IconName;
 use std::sync::Arc;
 
 /// Callback for action selection
@@ -250,6 +251,63 @@ pub struct Action {
     /// Optional value to submit when action is triggered
     #[allow(dead_code)]
     pub value: Option<String>,
+    /// Optional icon to display next to the action
+    pub icon: Option<IconName>,
+    /// Section/group name for display (used with SectionStyle::Headers)
+    pub section: Option<String>,
+}
+
+/// Configuration for how the search input is positioned
+#[allow(dead_code)] // Public API - will be used by AI window integration
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SearchPosition {
+    /// Search input at top (AI chat style - list grows downward)
+    Top,
+    /// Search input at bottom (main menu style - list grows upward)
+    #[default]
+    Bottom,
+    /// No search input (external search handling)
+    Hidden,
+}
+
+/// Configuration for how sections/categories are displayed
+#[allow(dead_code)] // Public API - will be used by AI window integration
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SectionStyle {
+    /// Show text headers for sections (AI chat style)
+    Headers,
+    /// Show subtle separators between categories (main menu style)
+    #[default]
+    Separators,
+    /// No section indicators
+    None,
+}
+
+/// Configuration for dialog anchor position during resize
+#[allow(dead_code)] // Public API - will be used by AI window integration
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum AnchorPosition {
+    /// Dialog grows/shrinks from top (content pinned to top)
+    Top,
+    /// Dialog grows/shrinks from bottom (content pinned to bottom)
+    #[default]
+    Bottom,
+}
+
+/// Complete configuration for ActionsDialog appearance and behavior
+#[allow(dead_code)] // Public API - will be used by AI window integration
+#[derive(Debug, Clone, Default)]
+pub struct ActionsDialogConfig {
+    /// Position of search input
+    pub search_position: SearchPosition,
+    /// How to display section/category divisions
+    pub section_style: SectionStyle,
+    /// Which edge the dialog anchors to during resize
+    pub anchor: AnchorPosition,
+    /// Whether to show icons for actions (if available)
+    pub show_icons: bool,
+    /// Whether to show the footer with keyboard hints
+    pub show_footer: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -276,11 +334,25 @@ impl Action {
             shortcut: None,
             has_action: false,
             value: None,
+            icon: None,
+            section: None,
         }
     }
 
     pub fn with_shortcut(mut self, shortcut: impl Into<String>) -> Self {
         self.shortcut = Some(shortcut.into());
+        self
+    }
+
+    #[allow(dead_code)] // Public API - used by get_ai_command_bar_actions
+    pub fn with_icon(mut self, icon: IconName) -> Self {
+        self.icon = Some(icon);
+        self
+    }
+
+    #[allow(dead_code)] // Public API - used by get_ai_command_bar_actions
+    pub fn with_section(mut self, section: impl Into<String>) -> Self {
+        self.section = Some(section.into());
         self
     }
 }
