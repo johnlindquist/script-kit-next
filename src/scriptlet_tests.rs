@@ -2081,3 +2081,672 @@ fn test_resolve_scriptlet_icon_tool_fallback() {
     let icon = resolve_scriptlet_icon(&metadata, None, "python");
     assert_eq!(icon, "snake");
 }
+
+// ========================================
+// H3 Scriptlet Action Tests
+// ========================================
+
+#[test]
+fn test_scriptlet_action_struct() {
+    let action = ScriptletAction {
+        name: "Copy to Clipboard".to_string(),
+        command: "copy-to-clipboard".to_string(),
+        tool: "bash".to_string(),
+        code: "echo '{{text}}' | pbcopy".to_string(),
+        inputs: vec!["text".to_string()],
+        shortcut: Some("cmd+c".to_string()),
+        description: Some("Copy text to clipboard".to_string()),
+    };
+
+    assert_eq!(action.name, "Copy to Clipboard");
+    assert_eq!(action.action_id(), "scriptlet_action:copy-to-clipboard");
+}
+
+#[test]
+fn test_parse_h3_action_basic() {
+    let content = r#"
+```bash
+echo "action code"
+```
+"#;
+
+    let action = parse_h3_action("My Action", content);
+    assert!(action.is_some());
+
+    let action = action.unwrap();
+    assert_eq!(action.name, "My Action");
+    assert_eq!(action.command, "my-action");
+    assert_eq!(action.tool, "bash");
+    assert_eq!(action.code, "echo \"action code\"");
+}
+
+#[test]
+fn test_parse_h3_action_with_metadata() {
+    let content = r#"
+<!-- shortcut: cmd+c -->
+<!-- description: Copies to clipboard -->
+
+```bash
+echo "copy"
+```
+"#;
+
+    let action = parse_h3_action("Copy Action", content);
+    assert!(action.is_some());
+
+    let action = action.unwrap();
+    assert_eq!(action.shortcut, Some("cmd+c".to_string()));
+    assert_eq!(action.description, Some("Copies to clipboard".to_string()));
+}
+
+#[test]
+fn test_parse_h3_action_extracts_inputs() {
+    let content = r#"
+```bash
+echo "Hello {{name}}, your age is {{age}}"
+```
+"#;
+
+    let action = parse_h3_action("Greeting", content);
+    assert!(action.is_some());
+
+    let action = action.unwrap();
+    assert!(action.inputs.contains(&"name".to_string()));
+    assert!(action.inputs.contains(&"age".to_string()));
+}
+
+#[test]
+fn test_parse_h3_action_no_code_block() {
+    let content = "Just text, no code fence.";
+    let action = parse_h3_action("Bad Action", content);
+    assert!(action.is_none());
+}
+
+#[test]
+fn test_parse_h3_action_open_tool() {
+    let content = r#"
+```open
+https://github.com/{{repo}}
+```
+"#;
+
+    let action = parse_h3_action("Open GitHub", content);
+    assert!(action.is_some());
+
+    let action = action.unwrap();
+    assert_eq!(action.tool, "open");
+    assert!(action.code.contains("https://github.com"));
+}
+
+#[test]
+fn test_parse_h3_action_invalid_tool() {
+    let content = r#"
+```invalidtool
+some code
+```
+"#;
+
+    // Invalid tool should return None
+    let action = parse_h3_action("Bad Tool Action", content);
+    assert!(action.is_none());
+}
+
+#[test]
+fn test_extract_h3_actions_basic() {
+    let section = r#"## My Scriptlet
+
+```bash
+echo "main code"
+```
+
+### Copy to Clipboard
+
+```bash
+echo "copy"
+```
+
+### Open Browser
+
+```open
+https://example.com
+```
+"#;
+
+    let actions = extract_h3_actions(section);
+    assert_eq!(actions.len(), 2);
+
+    assert_eq!(actions[0].name, "Copy to Clipboard");
+    assert_eq!(actions[0].tool, "bash");
+
+    assert_eq!(actions[1].name, "Open Browser");
+    assert_eq!(actions[1].tool, "open");
+}
+
+#[test]
+fn test_extract_h3_actions_with_metadata() {
+    let section = r#"## Scriptlet
+
+```bash
+main code
+```
+
+### Action One
+<!-- shortcut: cmd+1 -->
+```bash
+action one code
+```
+
+### Action Two
+<!-- shortcut: cmd+2 -->
+<!-- description: Second action -->
+```bash
+action two code
+```
+"#;
+
+    let actions = extract_h3_actions(section);
+    assert_eq!(actions.len(), 2);
+
+    assert_eq!(actions[0].shortcut, Some("cmd+1".to_string()));
+    assert_eq!(actions[1].shortcut, Some("cmd+2".to_string()));
+    assert_eq!(actions[1].description, Some("Second action".to_string()));
+}
+
+#[test]
+fn test_extract_h3_actions_none_before_main_code() {
+    // H3s before the main code block should not be captured
+    let section = r#"## Scriptlet
+
+### This Should Be Ignored
+```bash
+ignored
+```
+
+```bash
+main code - this is the FIRST valid tool codefence
+```
+
+### This Should Be Captured
+```bash
+captured
+```
+"#;
+
+    let actions = extract_h3_actions(section);
+    // Only the H3 AFTER the main code should be captured
+    assert_eq!(actions.len(), 1);
+    assert_eq!(actions[0].name, "This Should Be Captured");
+}
+
+#[test]
+fn test_extract_h3_actions_empty_section() {
+    let section = r#"## Scriptlet
+
+```bash
+main code
+```
+"#;
+
+    let actions = extract_h3_actions(section);
+    assert!(actions.is_empty());
+}
+
+#[test]
+fn test_extract_h3_actions_h3_without_code() {
+    let section = r#"## Scriptlet
+
+```bash
+main
+```
+
+### Bad H3 Without Code
+
+Just text, no code fence.
+
+### Good H3
+
+```bash
+good code
+```
+"#;
+
+    let actions = extract_h3_actions(section);
+    // Only the good H3 should be captured
+    assert_eq!(actions.len(), 1);
+    assert_eq!(actions[0].name, "Good H3");
+}
+
+#[test]
+fn test_parse_markdown_includes_h3_actions() {
+    let markdown = r#"## GitHub Tools
+
+<!-- shortcut: cmd+g -->
+
+```open
+https://github.com/{{repo}}
+```
+
+### Copy SSH URL
+<!-- shortcut: cmd+shift+c -->
+```bash
+echo "git@github.com:{{repo}}.git" | pbcopy
+```
+
+### View README
+```open
+https://github.com/{{repo}}/blob/main/README.md
+```
+"#;
+
+    let scriptlets = parse_markdown_as_scriptlets(markdown, None);
+    assert_eq!(scriptlets.len(), 1);
+
+    let scriptlet = &scriptlets[0];
+    assert_eq!(scriptlet.name, "GitHub Tools");
+    assert_eq!(scriptlet.actions.len(), 2);
+
+    // First action
+    assert_eq!(scriptlet.actions[0].name, "Copy SSH URL");
+    assert_eq!(scriptlet.actions[0].tool, "bash");
+    assert_eq!(
+        scriptlet.actions[0].shortcut,
+        Some("cmd+shift+c".to_string())
+    );
+
+    // Second action
+    assert_eq!(scriptlet.actions[1].name, "View README");
+    assert_eq!(scriptlet.actions[1].tool, "open");
+    assert!(scriptlet.actions[1].shortcut.is_none());
+}
+
+#[test]
+fn test_parse_markdown_multiple_scriptlets_with_actions() {
+    let markdown = r#"# Tools
+
+## URL Opener
+
+```open
+https://{{url}}
+```
+
+### Open in Safari
+```bash
+open -a Safari "https://{{url}}"
+```
+
+## File Manager
+
+```bash
+ls -la {{path}}
+```
+
+### Open in Finder
+```bash
+open {{path}}
+```
+
+### Copy Path
+```bash
+echo "{{path}}" | pbcopy
+```
+"#;
+
+    let scriptlets = parse_markdown_as_scriptlets(markdown, None);
+    assert_eq!(scriptlets.len(), 2);
+
+    // First scriptlet
+    assert_eq!(scriptlets[0].name, "URL Opener");
+    assert_eq!(scriptlets[0].actions.len(), 1);
+    assert_eq!(scriptlets[0].actions[0].name, "Open in Safari");
+
+    // Second scriptlet
+    assert_eq!(scriptlets[1].name, "File Manager");
+    assert_eq!(scriptlets[1].actions.len(), 2);
+    assert_eq!(scriptlets[1].actions[0].name, "Open in Finder");
+    assert_eq!(scriptlets[1].actions[1].name, "Copy Path");
+}
+
+#[test]
+fn test_scriptlet_action_serialization() {
+    let action = ScriptletAction {
+        name: "Test Action".to_string(),
+        command: "test-action".to_string(),
+        tool: "bash".to_string(),
+        code: "echo test".to_string(),
+        inputs: vec!["var".to_string()],
+        shortcut: Some("cmd+t".to_string()),
+        description: Some("A test action".to_string()),
+    };
+
+    let json = serde_json::to_string(&action).unwrap();
+    let deserialized: ScriptletAction = serde_json::from_str(&json).unwrap();
+
+    assert_eq!(action.name, deserialized.name);
+    assert_eq!(action.tool, deserialized.tool);
+    assert_eq!(action.shortcut, deserialized.shortcut);
+}
+
+#[test]
+fn test_scriptlet_with_actions_serialization() {
+    let markdown = r#"## Test Scriptlet
+
+```bash
+echo main
+```
+
+### Action One
+```bash
+echo one
+```
+"#;
+
+    let scriptlets = parse_markdown_as_scriptlets(markdown, None);
+    let scriptlet = &scriptlets[0];
+
+    let json = serde_json::to_string(scriptlet).unwrap();
+    let deserialized: Scriptlet = serde_json::from_str(&json).unwrap();
+
+    assert_eq!(deserialized.actions.len(), 1);
+    assert_eq!(deserialized.actions[0].name, "Action One");
+}
+
+#[test]
+fn test_validation_parser_includes_actions() {
+    let markdown = r#"## Test
+
+```bash
+main
+```
+
+### Sub Action
+```bash
+sub
+```
+"#;
+
+    let result = parse_scriptlets_with_validation(markdown, None);
+    assert_eq!(result.scriptlets.len(), 1);
+    assert_eq!(result.scriptlets[0].actions.len(), 1);
+}
+
+#[test]
+fn test_scriptlet_new_has_empty_actions() {
+    let scriptlet = Scriptlet::new("Test".to_string(), "bash".to_string(), "echo".to_string());
+
+    assert!(scriptlet.actions.is_empty());
+}
+
+// ========================================
+// Shared Actions (.actions.md) Tests
+// ========================================
+
+#[test]
+fn test_parse_actions_file_basic() {
+    let content = r#"# URL Actions
+
+### Copy URL
+```bash
+echo "{{url}}" | pbcopy
+```
+"#;
+
+    let actions = parse_actions_file(content);
+    assert_eq!(actions.len(), 1);
+    assert_eq!(actions[0].name, "Copy URL");
+    assert_eq!(actions[0].command, "copy-url");
+    assert_eq!(actions[0].tool, "bash");
+    assert!(actions[0].code.contains("pbcopy"));
+}
+
+#[test]
+fn test_parse_actions_file_multiple_actions() {
+    let content = r#"# URL Actions
+
+### Copy URL
+```bash
+echo "{{url}}" | pbcopy
+```
+
+### Open URL
+```open
+{{url}}
+```
+
+# Text Actions
+
+### Make Uppercase
+```bash
+echo "{{text}}" | tr '[:lower:]' '[:upper:]'
+```
+"#;
+
+    let actions = parse_actions_file(content);
+    assert_eq!(actions.len(), 3);
+    assert_eq!(actions[0].name, "Copy URL");
+    assert_eq!(actions[1].name, "Open URL");
+    assert_eq!(actions[2].name, "Make Uppercase");
+}
+
+#[test]
+fn test_parse_actions_file_with_metadata() {
+    let content = r#"### Copy URL
+<!-- shortcut: cmd+c -->
+<!-- description: Copy the URL to clipboard -->
+```bash
+echo "{{url}}" | pbcopy
+```
+"#;
+
+    let actions = parse_actions_file(content);
+    assert_eq!(actions.len(), 1);
+    assert_eq!(actions[0].shortcut, Some("cmd+c".to_string()));
+    assert_eq!(
+        actions[0].description,
+        Some("Copy the URL to clipboard".to_string())
+    );
+}
+
+#[test]
+fn test_parse_actions_file_ignores_h2() {
+    let content = r#"## This is an H2 (should be ignored)
+```bash
+echo "ignored"
+```
+
+### This is an H3 (should be parsed)
+```bash
+echo "action"
+```
+"#;
+
+    let actions = parse_actions_file(content);
+    assert_eq!(actions.len(), 1);
+    assert_eq!(actions[0].name, "This is an H3 (should be parsed)");
+}
+
+#[test]
+fn test_parse_actions_file_extracts_inputs() {
+    let content = r#"### Send Email
+```bash
+echo "To: {{email}}, Subject: {{subject}}"
+```
+"#;
+
+    let actions = parse_actions_file(content);
+    assert_eq!(actions.len(), 1);
+    assert_eq!(actions[0].inputs.len(), 2);
+    assert!(actions[0].inputs.contains(&"email".to_string()));
+    assert!(actions[0].inputs.contains(&"subject".to_string()));
+}
+
+#[test]
+fn test_parse_actions_file_empty() {
+    let content = "# Just a header with no actions\n\nSome text here.";
+    let actions = parse_actions_file(content);
+    assert!(actions.is_empty());
+}
+
+#[test]
+fn test_parse_actions_file_skips_invalid_tool() {
+    let content = r#"### Invalid Tool Action
+```invalidtool
+some code
+```
+"#;
+
+    let actions = parse_actions_file(content);
+    assert!(actions.is_empty());
+}
+
+#[test]
+fn test_get_actions_file_path() {
+    use std::path::Path;
+
+    let md_path = Path::new("/path/to/main.md");
+    let actions_path = get_actions_file_path(md_path);
+    assert_eq!(actions_path.to_string_lossy(), "/path/to/main.actions.md");
+
+    let md_path2 = Path::new("/extensions/foo.bar.md");
+    let actions_path2 = get_actions_file_path(md_path2);
+    assert_eq!(
+        actions_path2.to_string_lossy(),
+        "/extensions/foo.bar.actions.md"
+    );
+}
+
+#[test]
+fn test_merge_shared_actions_basic() {
+    let mut scriptlet = Scriptlet::new(
+        "Test".to_string(),
+        "bash".to_string(),
+        "echo test".to_string(),
+    );
+
+    let shared_actions = vec![
+        ScriptletAction {
+            name: "Copy".to_string(),
+            command: "copy".to_string(),
+            tool: "bash".to_string(),
+            code: "pbcopy".to_string(),
+            inputs: vec![],
+            shortcut: None,
+            description: None,
+        },
+        ScriptletAction {
+            name: "Open".to_string(),
+            command: "open".to_string(),
+            tool: "open".to_string(),
+            code: "{{url}}".to_string(),
+            inputs: vec!["url".to_string()],
+            shortcut: None,
+            description: None,
+        },
+    ];
+
+    merge_shared_actions(&mut scriptlet, &shared_actions);
+    assert_eq!(scriptlet.actions.len(), 2);
+}
+
+#[test]
+fn test_merge_shared_actions_inline_takes_precedence() {
+    let mut scriptlet = Scriptlet::new(
+        "Test".to_string(),
+        "bash".to_string(),
+        "echo test".to_string(),
+    );
+
+    // Add an inline action
+    scriptlet.actions.push(ScriptletAction {
+        name: "Copy".to_string(),
+        command: "copy".to_string(),
+        tool: "bash".to_string(),
+        code: "inline copy code".to_string(),
+        inputs: vec![],
+        shortcut: Some("cmd+c".to_string()),
+        description: None,
+    });
+
+    // Shared action with same command
+    let shared_actions = vec![ScriptletAction {
+        name: "Copy".to_string(),
+        command: "copy".to_string(),
+        tool: "bash".to_string(),
+        code: "shared copy code".to_string(),
+        inputs: vec![],
+        shortcut: None,
+        description: Some("Shared description".to_string()),
+    }];
+
+    merge_shared_actions(&mut scriptlet, &shared_actions);
+
+    // Should still have only 1 action (inline takes precedence)
+    assert_eq!(scriptlet.actions.len(), 1);
+    // The code should be from the inline action
+    assert_eq!(scriptlet.actions[0].code, "inline copy code");
+    // Shortcut should be from inline action
+    assert_eq!(scriptlet.actions[0].shortcut, Some("cmd+c".to_string()));
+}
+
+#[test]
+fn test_merge_shared_actions_mixed() {
+    let mut scriptlet = Scriptlet::new(
+        "Test".to_string(),
+        "bash".to_string(),
+        "echo test".to_string(),
+    );
+
+    // Add an inline action
+    scriptlet.actions.push(ScriptletAction {
+        name: "Copy".to_string(),
+        command: "copy".to_string(),
+        tool: "bash".to_string(),
+        code: "inline".to_string(),
+        inputs: vec![],
+        shortcut: None,
+        description: None,
+    });
+
+    // Shared actions: one conflicts, two are new
+    let shared_actions = vec![
+        ScriptletAction {
+            name: "Copy".to_string(), // conflicts
+            command: "copy".to_string(),
+            tool: "bash".to_string(),
+            code: "shared".to_string(),
+            inputs: vec![],
+            shortcut: None,
+            description: None,
+        },
+        ScriptletAction {
+            name: "Open".to_string(), // new
+            command: "open".to_string(),
+            tool: "open".to_string(),
+            code: "open".to_string(),
+            inputs: vec![],
+            shortcut: None,
+            description: None,
+        },
+        ScriptletAction {
+            name: "Delete".to_string(), // new
+            command: "delete".to_string(),
+            tool: "bash".to_string(),
+            code: "rm".to_string(),
+            inputs: vec![],
+            shortcut: None,
+            description: None,
+        },
+    ];
+
+    merge_shared_actions(&mut scriptlet, &shared_actions);
+
+    // Should have 3 actions: 1 inline + 2 new from shared
+    assert_eq!(scriptlet.actions.len(), 3);
+
+    // First is inline copy (unchanged)
+    assert_eq!(scriptlet.actions[0].command, "copy");
+    assert_eq!(scriptlet.actions[0].code, "inline");
+
+    // Then the two new shared actions
+    assert_eq!(scriptlet.actions[1].command, "open");
+    assert_eq!(scriptlet.actions[2].command, "delete");
+}

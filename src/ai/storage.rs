@@ -798,6 +798,7 @@ fn row_to_message(row: &rusqlite::Row) -> rusqlite::Result<Message> {
         content,
         created_at,
         tokens_used,
+        images: Vec::new(),
     })
 }
 
@@ -860,6 +861,7 @@ pub fn insert_mock_data() -> Result<()> {
             content: content.to_string(),
             created_at: now - Duration::minutes(120 - i as i64 * 10),
             tokens_used: Some(content.len() as u32 / 4),
+            images: Vec::new(),
         })?;
         total_messages += 1;
     }
@@ -885,6 +887,7 @@ pub fn insert_mock_data() -> Result<()> {
         content: "What's the difference between git rebase and merge?".to_string(),
         created_at: now - Duration::minutes(35),
         tokens_used: Some(12),
+        images: Vec::new(),
     })?;
     save_message_without_update(&Message {
         id: uuid::Uuid::new_v4().to_string(),
@@ -893,6 +896,7 @@ pub fn insert_mock_data() -> Result<()> {
         content: "## Git Merge vs Rebase\n\n**Merge** creates a new commit that combines two branches:\n```\n  A---B---C feature\n /         \\\nD---E---F---G main (merge commit)\n```\n\n**Rebase** replays your commits on top of another branch:\n```\n          A'--B'--C' feature\n         /\nD---E---F main\n```\n\n### When to use each:\n- **Merge**: Preserves history, good for shared branches\n- **Rebase**: Cleaner history, good for local/feature branches".to_string(),
         created_at: now - Duration::minutes(34),
         tokens_used: Some(85),
+            images: Vec::new(),
     })?;
     total_messages += 2;
 
@@ -917,6 +921,7 @@ pub fn insert_mock_data() -> Result<()> {
         content: "Explain TypeScript generics with examples".to_string(),
         created_at: now - Duration::hours(3),
         tokens_used: Some(8),
+        images: Vec::new(),
     })?;
     save_message_without_update(&Message {
         id: uuid::Uuid::new_v4().to_string(),
@@ -925,6 +930,7 @@ pub fn insert_mock_data() -> Result<()> {
         content: "## TypeScript Generics\n\nGenerics allow you to write reusable, type-safe code.\n\n```typescript\nfunction identity<T>(arg: T): T {\n    return arg;\n}\n\nconst num = identity<number>(42);\nconst str = identity<string>(\"hello\");\n```\n\n### Generic Interfaces\n\n```typescript\ninterface Container<T> {\n    value: T;\n    getValue(): T;\n}\n```\n\n### Generic Constraints\n\n```typescript\ninterface Lengthwise {\n    length: number;\n}\n\nfunction logLength<T extends Lengthwise>(arg: T): void {\n    console.log(arg.length);\n}\n```".to_string(),
         created_at: now - Duration::hours(3) + Duration::minutes(1),
         tokens_used: Some(95),
+            images: Vec::new(),
     })?;
     total_messages += 2;
 
@@ -949,6 +955,7 @@ pub fn insert_mock_data() -> Result<()> {
         content: "How do I set up Docker Compose for a Node.js app with PostgreSQL?".to_string(),
         created_at: now - Duration::hours(4),
         tokens_used: Some(15),
+        images: Vec::new(),
     })?;
     save_message_without_update(&Message {
         id: uuid::Uuid::new_v4().to_string(),
@@ -957,6 +964,7 @@ pub fn insert_mock_data() -> Result<()> {
         content: "Here's a complete Docker Compose setup:\n\n```yaml\nversion: '3.8'\n\nservices:\n  app:\n    build: .\n    ports:\n      - \"3000:3000\"\n    environment:\n      - DATABASE_URL=postgresql://user:pass@db:5432/mydb\n    depends_on:\n      - db\n\n  db:\n    image: postgres:15\n    environment:\n      - POSTGRES_USER=user\n      - POSTGRES_PASSWORD=pass\n      - POSTGRES_DB=mydb\n    volumes:\n      - postgres_data:/var/lib/postgresql/data\n\nvolumes:\n  postgres_data:\n```\n\nAnd your Dockerfile:\n\n```dockerfile\nFROM node:20-alpine\nWORKDIR /app\nCOPY package*.json ./\nRUN npm install\nCOPY . .\nEXPOSE 3000\nCMD [\"npm\", \"start\"]\n```".to_string(),
         created_at: now - Duration::hours(4) + Duration::minutes(1),
         tokens_used: Some(120),
+            images: Vec::new(),
     })?;
     total_messages += 2;
 
@@ -981,6 +989,7 @@ pub fn insert_mock_data() -> Result<()> {
         content: "When do I need cleanup in useEffect?".to_string(),
         created_at: now - Duration::hours(5),
         tokens_used: Some(10),
+        images: Vec::new(),
     })?;
     save_message_without_update(&Message {
         id: uuid::Uuid::new_v4().to_string(),
@@ -989,6 +998,7 @@ pub fn insert_mock_data() -> Result<()> {
         content: "## useEffect Cleanup\n\nYou need cleanup when your effect:\n\n1. **Subscribes to events**\n```jsx\nuseEffect(() => {\n  window.addEventListener('resize', handler);\n  return () => window.removeEventListener('resize', handler);\n}, []);\n```\n\n2. **Sets up timers**\n```jsx\nuseEffect(() => {\n  const id = setInterval(tick, 1000);\n  return () => clearInterval(id);\n}, []);\n```\n\n3. **Opens connections**\n```jsx\nuseEffect(() => {\n  const ws = new WebSocket(url);\n  return () => ws.close();\n}, [url]);\n```".to_string(),
         created_at: now - Duration::hours(5) + Duration::minutes(1),
         tokens_used: Some(80),
+            images: Vec::new(),
     })?;
     total_messages += 2;
 
@@ -1028,6 +1038,7 @@ pub fn insert_mock_data() -> Result<()> {
             content: content.to_string(),
             created_at: yesterday - Duration::hours(5) + Duration::minutes(i as i64 * 5),
             tokens_used: Some(content.len() as u32 / 4),
+            images: Vec::new(),
         })?;
         total_messages += 1;
     }
@@ -1053,6 +1064,7 @@ pub fn insert_mock_data() -> Result<()> {
         content: "Help me write a SQL query to get users with their orders".to_string(),
         created_at: yesterday - Duration::hours(8),
         tokens_used: Some(15),
+        images: Vec::new(),
     })?;
     save_message_without_update(&Message {
         id: uuid::Uuid::new_v4().to_string(),
@@ -1061,6 +1073,7 @@ pub fn insert_mock_data() -> Result<()> {
         content: "```sql\nSELECT \n    u.id,\n    u.name,\n    u.email,\n    COUNT(o.id) as order_count,\n    COALESCE(SUM(o.total), 0) as total_spent\nFROM users u\nLEFT JOIN orders o ON u.id = o.user_id\nWHERE u.active = true\nGROUP BY u.id, u.name, u.email\nHAVING COUNT(o.id) > 0\nORDER BY total_spent DESC\nLIMIT 100;\n```".to_string(),
         created_at: yesterday - Duration::hours(8) + Duration::minutes(1),
         tokens_used: Some(65),
+            images: Vec::new(),
     })?;
     total_messages += 2;
 
@@ -1085,6 +1098,7 @@ pub fn insert_mock_data() -> Result<()> {
         content: "Create a Kubernetes deployment for a web app".to_string(),
         created_at: yesterday - Duration::hours(10),
         tokens_used: Some(12),
+        images: Vec::new(),
     })?;
     save_message_without_update(&Message {
         id: uuid::Uuid::new_v4().to_string(),
@@ -1093,6 +1107,7 @@ pub fn insert_mock_data() -> Result<()> {
         content: "```yaml\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: web-app\n  labels:\n    app: web-app\nspec:\n  replicas: 3\n  selector:\n    matchLabels:\n      app: web-app\n  template:\n    metadata:\n      labels:\n        app: web-app\n    spec:\n      containers:\n      - name: web-app\n        image: myapp:latest\n        ports:\n        - containerPort: 8080\n        resources:\n          limits:\n            memory: \"256Mi\"\n            cpu: \"500m\"\n        livenessProbe:\n          httpGet:\n            path: /health\n            port: 8080\n          initialDelaySeconds: 30\n---\napiVersion: v1\nkind: Service\nmetadata:\n  name: web-app-service\nspec:\n  selector:\n    app: web-app\n  ports:\n  - port: 80\n    targetPort: 8080\n  type: LoadBalancer\n```".to_string(),
         created_at: yesterday - Duration::hours(10) + Duration::minutes(1),
         tokens_used: Some(120),
+            images: Vec::new(),
     })?;
     total_messages += 2;
 
@@ -1117,6 +1132,7 @@ pub fn insert_mock_data() -> Result<()> {
         content: "Show me CSS Grid examples".to_string(),
         created_at: yesterday - Duration::hours(12),
         tokens_used: Some(8),
+        images: Vec::new(),
     })?;
     save_message_without_update(&Message {
         id: uuid::Uuid::new_v4().to_string(),
@@ -1125,6 +1141,7 @@ pub fn insert_mock_data() -> Result<()> {
         content: "## CSS Grid Examples\n\n### Basic Grid\n```css\n.container {\n  display: grid;\n  grid-template-columns: repeat(3, 1fr);\n  gap: 20px;\n}\n```\n\n### Named Areas\n```css\n.layout {\n  display: grid;\n  grid-template-areas:\n    \"header header header\"\n    \"sidebar main main\"\n    \"footer footer footer\";\n  grid-template-columns: 200px 1fr 1fr;\n}\n\n.header { grid-area: header; }\n.sidebar { grid-area: sidebar; }\n.main { grid-area: main; }\n```".to_string(),
         created_at: yesterday - Duration::hours(12) + Duration::minutes(1),
         tokens_used: Some(75),
+            images: Vec::new(),
     })?;
     total_messages += 2;
 
@@ -1168,6 +1185,7 @@ pub fn insert_mock_data() -> Result<()> {
             content: content.to_string(),
             created_at: three_days_ago - Duration::hours(2) + Duration::minutes(i as i64 * 8),
             tokens_used: Some(content.len() as u32 / 4),
+            images: Vec::new(),
         })?;
         total_messages += 1;
     }
@@ -1194,6 +1212,7 @@ pub fn insert_mock_data() -> Result<()> {
         content: "How do I implement JWT authentication?".to_string(),
         created_at: four_days_ago,
         tokens_used: Some(10),
+        images: Vec::new(),
     })?;
     save_message_without_update(&Message {
         id: uuid::Uuid::new_v4().to_string(),
@@ -1202,6 +1221,7 @@ pub fn insert_mock_data() -> Result<()> {
         content: "## JWT Authentication\n\n```javascript\nconst jwt = require('jsonwebtoken');\n\n// Generate token\nconst token = jwt.sign(\n  { userId: user.id },\n  process.env.JWT_SECRET,\n  { expiresIn: '24h' }\n);\n\n// Verify token middleware\nfunction authenticate(req, res, next) {\n  const token = req.headers.authorization?.split(' ')[1];\n  try {\n    const decoded = jwt.verify(token, process.env.JWT_SECRET);\n    req.user = decoded;\n    next();\n  } catch (err) {\n    res.status(401).json({ error: 'Invalid token' });\n  }\n}\n```".to_string(),
         created_at: four_days_ago + Duration::minutes(1),
         tokens_used: Some(85),
+            images: Vec::new(),
     })?;
     total_messages += 2;
 
@@ -1240,6 +1260,7 @@ pub fn insert_mock_data() -> Result<()> {
             content: format!("Tell me about {}", topic),
             created_at: days_ago,
             tokens_used: Some(6),
+            images: Vec::new(),
         })?;
         save_message_without_update(&Message {
             id: uuid::Uuid::new_v4().to_string(),
@@ -1251,6 +1272,7 @@ pub fn insert_mock_data() -> Result<()> {
             ),
             created_at: days_ago + Duration::minutes(1),
             tokens_used: Some(20),
+            images: Vec::new(),
         })?;
         total_messages += 2;
     }
@@ -1292,6 +1314,7 @@ pub fn insert_mock_data() -> Result<()> {
             content: format!("Explain {} in detail", title.to_lowercase()),
             created_at: days_ago,
             tokens_used: Some(8),
+            images: Vec::new(),
         })?;
         save_message_without_update(&Message {
             id: uuid::Uuid::new_v4().to_string(),
@@ -1300,6 +1323,7 @@ pub fn insert_mock_data() -> Result<()> {
             content: format!("## {}\n\nThis is a comprehensive topic...\n\n(Mock content for testing the older section)", title),
             created_at: days_ago + Duration::minutes(1),
             tokens_used: Some(25),
+            images: Vec::new(),
         })?;
         total_messages += 2;
     }

@@ -66,7 +66,7 @@ pub use database::{
 
 // Image operations
 #[allow(unused_imports)]
-pub use image::decode_to_render_image;
+pub use image::{decode_to_render_image, encode_image_as_png};
 
 // Monitor/Init
 #[allow(unused_imports)]

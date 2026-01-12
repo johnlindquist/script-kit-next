@@ -222,6 +222,38 @@ impl Default for Chat {
     }
 }
 
+/// Image attachment for multimodal messages
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ImageAttachment {
+    /// Base64 encoded image data
+    pub data: String,
+
+    /// MIME type of the image (e.g., "image/png", "image/jpeg")
+    pub media_type: String,
+}
+
+impl ImageAttachment {
+    /// Create a new image attachment from base64 data
+    pub fn new(data: String, media_type: String) -> Self {
+        Self { data, media_type }
+    }
+
+    /// Create a PNG image attachment
+    pub fn png(data: String) -> Self {
+        Self::new(data, "image/png".to_string())
+    }
+
+    /// Create a JPEG image attachment
+    pub fn jpeg(data: String) -> Self {
+        Self::new(data, "image/jpeg".to_string())
+    }
+
+    /// Estimate size in bytes (base64 is ~4/3 of original)
+    pub fn estimated_size(&self) -> usize {
+        self.data.len() * 3 / 4
+    }
+}
+
 /// A message in a chat conversation
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Message {
@@ -242,6 +274,10 @@ pub struct Message {
 
     /// Token count for this message (if available)
     pub tokens_used: Option<u32>,
+
+    /// Image attachments for multimodal messages
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub images: Vec<ImageAttachment>,
 }
 
 impl Message {
@@ -254,6 +290,7 @@ impl Message {
             content: content.into(),
             created_at: Utc::now(),
             tokens_used: None,
+            images: Vec::new(),
         }
     }
 

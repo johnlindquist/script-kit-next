@@ -4259,6 +4259,7 @@ export default {
             schema: None,
             kit: None,
             source_path: scriptlet.file_path.clone(),
+            actions: vec![], // Scriptlet actions parsed from H3 headers
         };
 
         // Execute with default options (no inputs for now)

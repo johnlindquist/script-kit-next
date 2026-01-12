@@ -80,10 +80,7 @@ impl ScriptListApp {
                 logging::log("UI", "Reveal in Finder action");
                 // First check if we have a file search path (takes priority)
                 let path_opt = if let Some(path) = self.file_search_actions_path.take() {
-                    logging::log(
-                        "UI",
-                        &format!("Reveal in Finder (file search): {}", path),
-                    );
+                    logging::log("UI", &format!("Reveal in Finder (file search): {}", path));
                     Some(std::path::PathBuf::from(path))
                 } else if let Some(result) = self.get_selected_result() {
                     // Fall back to main menu selected result
@@ -182,8 +179,7 @@ impl ScriptListApp {
                             }
                             Err(e) => {
                                 logging::log("ERROR", &format!("pbcopy failed: {}", e));
-                                self.last_output =
-                                    Some(SharedString::from("Failed to copy path"));
+                                self.last_output = Some(SharedString::from("Failed to copy path"));
                             }
                         }
                     }
@@ -202,8 +198,7 @@ impl ScriptListApp {
                             }
                             Err(e) => {
                                 logging::log("ERROR", &format!("Failed to copy path: {}", e));
-                                self.last_output =
-                                    Some(SharedString::from("Failed to copy path"));
+                                self.last_output = Some(SharedString::from("Failed to copy path"));
                             }
                         }
                     }
@@ -388,9 +383,10 @@ impl ScriptListApp {
                         scripts::SearchResult::Script(m) => {
                             (format!("script/{}", m.script.name), m.script.name.clone())
                         }
-                        scripts::SearchResult::Scriptlet(m) => {
-                            (format!("scriptlet/{}", m.scriptlet.name), m.scriptlet.name.clone())
-                        }
+                        scripts::SearchResult::Scriptlet(m) => (
+                            format!("scriptlet/{}", m.scriptlet.name),
+                            m.scriptlet.name.clone(),
+                        ),
                         scripts::SearchResult::BuiltIn(m) => {
                             (format!("builtin/{}", m.entry.id), m.entry.name.clone())
                         }
@@ -406,13 +402,15 @@ impl ScriptListApp {
                             (format!("agent/{}", m.agent.name), m.agent.name.clone())
                         }
                         scripts::SearchResult::Window(_) => {
-                            self.last_output =
-                                Some(SharedString::from("Window aliases not supported - windows are transient"));
+                            self.last_output = Some(SharedString::from(
+                                "Window aliases not supported - windows are transient",
+                            ));
                             return;
                         }
-                        scripts::SearchResult::Fallback(m) => {
-                            (format!("fallback/{}", m.fallback.name()), m.fallback.name().to_string())
-                        }
+                        scripts::SearchResult::Fallback(m) => (
+                            format!("fallback/{}", m.fallback.name()),
+                            m.fallback.name().to_string(),
+                        ),
                     };
                     self.show_alias_input(command_id, command_name, cx);
                 } else {
@@ -725,10 +723,7 @@ impl ScriptListApp {
                             // This ensures the item is immediately removed from the Suggested section
                             self.invalidate_grouped_cache();
                             self.refresh_scripts(cx);
-                            logging::log(
-                                "UI",
-                                &format!("Reset ranking for: {}", script_info.name),
-                            );
+                            logging::log("UI", &format!("Reset ranking for: {}", script_info.name));
                             self.last_output = Some(SharedString::from(format!(
                                 "Ranking reset for \"{}\"",
                                 script_info.name
@@ -742,8 +737,7 @@ impl ScriptListApp {
                                 Some(SharedString::from("Item has no ranking to reset"));
                         }
                     } else {
-                        self.last_output =
-                            Some(SharedString::from("Item has no ranking to reset"));
+                        self.last_output = Some(SharedString::from("Item has no ranking to reset"));
                     }
                 } else {
                     self.last_output = Some(SharedString::from("No item selected"));
@@ -751,6 +745,152 @@ impl ScriptListApp {
                 // Don't hide main window - stay in the main menu so user can see the change
                 // The actions dialog is already closed by setting current_view = AppView::ScriptList
                 // at the start of handle_action()
+            }
+            // Handle scriptlet actions defined via H3 headers
+            action_id if action_id.starts_with("scriptlet_action:") => {
+                let action_command = action_id.strip_prefix("scriptlet_action:").unwrap_or("");
+                logging::log(
+                    "UI",
+                    &format!("Scriptlet action triggered: {}", action_command),
+                );
+
+                // Find the scriptlet and execute its action
+                if let Some(result) = self.get_selected_result() {
+                    if let scripts::SearchResult::Scriptlet(scriptlet_match) = result {
+                        // Get the file path from the UI scriptlet type
+                        // The file_path contains path#slug format
+                        let file_path = scriptlet_match.scriptlet.file_path.clone();
+                        let scriptlet_command = scriptlet_match.scriptlet.command.clone();
+
+                        // We need to re-parse the markdown file to get the full scriptlet with actions
+                        // because scripts::types::Scriptlet is a simplified type without actions
+                        let action_found = if let Some(ref path_with_anchor) = file_path {
+                            // Extract just the file path (before #anchor)
+                            let file_only = path_with_anchor
+                                .split('#')
+                                .next()
+                                .unwrap_or(path_with_anchor);
+
+                            // Read and parse the markdown file
+                            if let Ok(content) = std::fs::read_to_string(file_only) {
+                                let parsed_scriptlets = scriptlets::parse_markdown_as_scriptlets(
+                                    &content,
+                                    Some(file_only),
+                                );
+
+                                // Find the matching scriptlet by command
+                                let target_command = scriptlet_command.clone().unwrap_or_default();
+                                if let Some(full_scriptlet) = parsed_scriptlets
+                                    .iter()
+                                    .find(|s| s.command == target_command)
+                                {
+                                    // Find the action in the scriptlet
+                                    if let Some(action) = full_scriptlet
+                                        .actions
+                                        .iter()
+                                        .find(|a| a.command == action_command)
+                                    {
+                                        // Create a scriptlet for executing the action
+                                        let action_scriptlet = scriptlets::Scriptlet {
+                                            name: action.name.clone(),
+                                            command: action.command.clone(),
+                                            tool: action.tool.clone(),
+                                            scriptlet_content: action.code.clone(),
+                                            inputs: action.inputs.clone(),
+                                            group: full_scriptlet.group.clone(),
+                                            preview: None,
+                                            metadata: scriptlets::ScriptletMetadata {
+                                                shortcut: action.shortcut.clone(),
+                                                description: action.description.clone(),
+                                                ..Default::default()
+                                            },
+                                            typed_metadata: None,
+                                            schema: None,
+                                            kit: full_scriptlet.kit.clone(),
+                                            source_path: full_scriptlet.source_path.clone(),
+                                            actions: vec![], // Actions don't have nested actions
+                                        };
+
+                                        let options = executor::ScriptletExecOptions::default();
+                                        match executor::run_scriptlet(&action_scriptlet, options) {
+                                            Ok(exec_result) => {
+                                                if exec_result.success {
+                                                    logging::log(
+                                                        "UI",
+                                                        &format!(
+                                                            "Scriptlet action '{}' executed successfully",
+                                                            action.name
+                                                        ),
+                                                    );
+                                                    self.last_output = Some(SharedString::from(
+                                                        format!("Executed: {}", action.name),
+                                                    ));
+                                                } else {
+                                                    let error_msg = if exec_result.stderr.is_empty()
+                                                    {
+                                                        "Unknown error".to_string()
+                                                    } else {
+                                                        exec_result.stderr.clone()
+                                                    };
+                                                    logging::log(
+                                                        "ERROR",
+                                                        &format!(
+                                                            "Scriptlet action '{}' failed: {}",
+                                                            action.name, error_msg
+                                                        ),
+                                                    );
+                                                    self.last_output = Some(SharedString::from(
+                                                        format!("Error: {}", error_msg),
+                                                    ));
+                                                }
+                                            }
+                                            Err(e) => {
+                                                logging::log(
+                                                    "ERROR",
+                                                    &format!(
+                                                        "Failed to execute scriptlet action '{}': {}",
+                                                        action.name, e
+                                                    ),
+                                                );
+                                                self.last_output = Some(SharedString::from(
+                                                    format!("Error: {}", e),
+                                                ));
+                                            }
+                                        }
+                                        self.hide_main_and_reset(cx);
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                } else {
+                                    false
+                                }
+                            } else {
+                                logging::log(
+                                    "ERROR",
+                                    &format!("Failed to read scriptlet file: {}", file_only),
+                                );
+                                false
+                            }
+                        } else {
+                            false
+                        };
+
+                        if !action_found {
+                            logging::log(
+                                "ERROR",
+                                &format!("Scriptlet action not found: {}", action_command),
+                            );
+                            self.last_output =
+                                Some(SharedString::from("Scriptlet action not found"));
+                        }
+                    } else {
+                        self.last_output =
+                            Some(SharedString::from("Selected item is not a scriptlet"));
+                    }
+                } else {
+                    self.last_output = Some(SharedString::from("No item selected"));
+                }
             }
             _ => {
                 // Handle SDK actions using shared helper

@@ -18,13 +18,14 @@ use std::sync::Arc;
 
 use super::builders::{
     get_file_context_actions, get_global_actions, get_path_context_actions,
-    get_script_context_actions,
+    get_script_context_actions, get_scriptlet_context_actions_with_custom,
 };
 use super::constants::{
     ACTION_ITEM_HEIGHT, ACTION_ROW_INSET, HEADER_HEIGHT, KEYCAP_HEIGHT, KEYCAP_MIN_WIDTH,
     POPUP_MAX_HEIGHT, POPUP_WIDTH, SEARCH_INPUT_HEIGHT, SELECTION_RADIUS,
 };
 use crate::file_search::FileInfo;
+use crate::scriptlets::Scriptlet;
 
 // Keep ACCENT_BAR_WIDTH for backwards compatibility during transition
 #[allow(unused_imports)]
@@ -50,6 +51,8 @@ pub struct ActionsDialog {
     pub on_select: ActionCallback,
     /// Currently focused script for context-aware actions
     pub focused_script: Option<ScriptInfo>,
+    /// Currently focused scriptlet (for H3-defined custom actions)
+    pub focused_scriptlet: Option<Scriptlet>,
     /// Scroll handle for uniform_list virtualization
     pub scroll_handle: UniformListScrollHandle,
     /// Theme for consistent color styling
@@ -127,6 +130,7 @@ impl ActionsDialog {
             focus_handle,
             on_select,
             focused_script: None,
+            focused_scriptlet: None,
             scroll_handle: UniformListScrollHandle::new(),
             theme,
             design_variant: DesignVariant::Default,
@@ -166,6 +170,7 @@ impl ActionsDialog {
             focus_handle,
             on_select,
             focused_script: None,
+            focused_scriptlet: None,
             scroll_handle: UniformListScrollHandle::new(),
             theme,
             design_variant: DesignVariant::Default,
@@ -183,7 +188,7 @@ impl ActionsDialog {
         theme: Arc<theme::Theme>,
         design_variant: DesignVariant,
     ) -> Self {
-        let actions = Self::build_actions(&focused_script);
+        let actions = Self::build_actions(&focused_script, &None);
         let filtered_actions: Vec<usize> = (0..actions.len()).collect();
 
         logging::log(
@@ -216,6 +221,7 @@ impl ActionsDialog {
             focus_handle,
             on_select,
             focused_script,
+            focused_scriptlet: None,
             scroll_handle: UniformListScrollHandle::new(),
             theme,
             design_variant,
@@ -352,7 +358,7 @@ impl ActionsDialog {
                 "Clearing SDK actions, restoring built-in actions",
             );
             self.sdk_actions = None;
-            self.actions = Self::build_actions(&self.focused_script);
+            self.actions = Self::build_actions(&self.focused_script, &self.focused_scriptlet);
             self.filtered_actions = (0..self.actions.len()).collect();
             self.selected_index = 0;
             self.search_text.clear();
@@ -371,13 +377,25 @@ impl ActionsDialog {
             .and_then(|&idx| self.actions.get(idx))
     }
 
-    /// Build the complete actions list based on focused script
-    fn build_actions(focused_script: &Option<ScriptInfo>) -> Vec<Action> {
+    /// Build the complete actions list based on focused script and optional scriptlet
+    fn build_actions(
+        focused_script: &Option<ScriptInfo>,
+        focused_scriptlet: &Option<Scriptlet>,
+    ) -> Vec<Action> {
         let mut actions = Vec::new();
 
         // Add script-specific actions first if a script is focused
         if let Some(script) = focused_script {
-            actions.extend(get_script_context_actions(script));
+            // If this is a scriptlet with custom actions, use the enhanced builder
+            if script.is_scriptlet && focused_scriptlet.is_some() {
+                actions.extend(get_scriptlet_context_actions_with_custom(
+                    script,
+                    focused_scriptlet.as_ref(),
+                ));
+            } else {
+                // Use standard actions for regular scripts
+                actions.extend(get_script_context_actions(script));
+            }
         }
 
         // Add global actions
@@ -389,8 +407,35 @@ impl ActionsDialog {
     /// Update the focused script and rebuild actions
     pub fn set_focused_script(&mut self, script: Option<ScriptInfo>) {
         self.focused_script = script;
-        self.actions = Self::build_actions(&self.focused_script);
+        self.focused_scriptlet = None; // Clear scriptlet when only setting script
+        self.actions = Self::build_actions(&self.focused_script, &self.focused_scriptlet);
         self.refilter();
+    }
+
+    /// Update both the focused script and scriptlet for custom actions
+    ///
+    /// Use this when the focused item is a scriptlet with H3-defined custom actions.
+    /// The scriptlet's actions will appear in the Actions Menu.
+    pub fn set_focused_scriptlet(
+        &mut self,
+        script: Option<ScriptInfo>,
+        scriptlet: Option<Scriptlet>,
+    ) {
+        self.focused_script = script;
+        self.focused_scriptlet = scriptlet;
+        self.actions = Self::build_actions(&self.focused_script, &self.focused_scriptlet);
+        self.refilter();
+
+        logging::log(
+            "ACTIONS",
+            &format!(
+                "Set focused scriptlet with {} custom actions",
+                self.focused_scriptlet
+                    .as_ref()
+                    .map(|s| s.actions.len())
+                    .unwrap_or(0)
+            ),
+        );
     }
 
     /// Update the theme when hot-reloading
