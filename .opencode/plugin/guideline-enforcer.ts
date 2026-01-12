@@ -157,13 +157,17 @@ ${result.requiredActions.map((a, i) => `${i + 1}. ${a}`).join("\n")}
 `.trim()
 }
 
-// Type for tool execution input
-interface ToolInput {
+// Type definitions for hook inputs/outputs matching @opencode-ai/plugin types
+interface ToolExecuteAfterInput {
   tool: string
   sessionID: string
   callID: string
-  args?: Record<string, unknown>
-  result?: Record<string, unknown>
+}
+
+interface ToolExecuteAfterOutput {
+  title: string
+  output: string
+  metadata: Record<string, unknown>
 }
 
 // =============================================================================
@@ -220,17 +224,19 @@ const GuidelineEnforcer: Plugin = async () => {
     },
     
     // Track tool executions using the documented hook
-    "tool.execute.after": async (input: ToolInput) => {
+    "tool.execute.after": async (input: ToolExecuteAfterInput, output: ToolExecuteAfterOutput) => {
       const sessionId = input.sessionID
       const tool = input.tool
-      const args = input.args || {}
-      const result = input.result || {}
+      
+      // For tool.execute.after, extract args from metadata
+      const metadata = output.metadata || {}
+      const cmdOutput = output.output || ""
       
       const trackedActions: string[] = []
       
       // Track file modifications
       if (tool === "edit" || tool === "write") {
-        const filePath = (args.filePath as string) || ""
+        const filePath = (metadata.filePath as string) || ""
         if (CODE_FILE_PATTERNS.some(pattern => pattern.test(filePath))) {
           state.codeFilesModified = true
           trackedActions.push(`code file modified: ${filePath}`)
@@ -239,8 +245,7 @@ const GuidelineEnforcer: Plugin = async () => {
       
       // Track bash commands
       if (tool === "bash") {
-        const command = (args.command as string) || ""
-        const output = (result.output as string) || ""
+        const command = (metadata.command as string) || (metadata.description as string) || output.title || ""
         
         // Track verification commands
         if (/cargo\s+check/.test(command)) {
@@ -276,7 +281,7 @@ const GuidelineEnforcer: Plugin = async () => {
         }
         
         // Track screenshot capture in test output
-        if (output.includes("captureScreenshot") || output.includes("[SCREENSHOT]")) {
+        if (cmdOutput.includes("captureScreenshot") || cmdOutput.includes("[SCREENSHOT]")) {
           state.screenshotCaptured = true
           trackedActions.push("screenshot captured")
         }
@@ -284,7 +289,7 @@ const GuidelineEnforcer: Plugin = async () => {
       
       // Track file reads for screenshot verification
       if (tool === "read") {
-        const filePath = (args.filePath as string) || ""
+        const filePath = (metadata.filePath as string) || ""
         if (SCREENSHOT_DIR_PATTERN.test(filePath) && /\.png$/i.test(filePath)) {
           state.screenshotFileRead = true
           trackedActions.push(`screenshot file read: ${filePath}`)

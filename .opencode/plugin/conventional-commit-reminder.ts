@@ -95,13 +95,17 @@ const CONVENTIONAL_COMMIT_TYPES = `
 - \`ci\`: Changes to CI configuration files and scripts
 `.trim()
 
-// Type for tool execution input
-interface ToolInput {
+// Type definitions for hook inputs/outputs matching @opencode-ai/plugin types
+interface ToolExecuteAfterInput {
   tool: string
   sessionID: string
   callID: string
-  args?: Record<string, unknown>
-  result?: Record<string, unknown>
+}
+
+interface ToolExecuteAfterOutput {
+  title: string
+  output: string
+  metadata: Record<string, unknown>
 }
 
 // =============================================================================
@@ -130,10 +134,12 @@ const ConventionalCommitReminder: Plugin = async ({ client }) => {
     },
     
     // Track tool executions
-    "tool.execute.after": async (input: ToolInput) => {
+    "tool.execute.after": async (input: ToolExecuteAfterInput, output: ToolExecuteAfterOutput) => {
       const tool = input.tool
-      const args = input.args || {}
       const sessionId = input.sessionID
+      
+      // For tool.execute.after, extract args from metadata
+      const metadata = output.metadata || {}
       
       if (!sessionId) {
         logSkipped(null, PLUGIN_NAME, "tool.execute.after", "No session ID available")
@@ -145,7 +151,7 @@ const ConventionalCommitReminder: Plugin = async ({ client }) => {
       
       // Track file modifications
       if (tool === "edit" || tool === "write") {
-        const filePath = (args.filePath as string) || ""
+        const filePath = (metadata.filePath as string) || ""
         if (CODE_FILE_PATTERNS.some(pattern => pattern.test(filePath))) {
           state.codeFilesModified = true
           if (!state.modifiedFiles.includes(filePath)) {
@@ -157,7 +163,7 @@ const ConventionalCommitReminder: Plugin = async ({ client }) => {
       
       // Track bash commands for commits
       if (tool === "bash") {
-        const command = (args.command as string) || ""
+        const command = (metadata.command as string) || (metadata.description as string) || output.title || ""
         
         // Track git commits
         if (COMMIT_PATTERNS.some(pattern => pattern.test(command))) {

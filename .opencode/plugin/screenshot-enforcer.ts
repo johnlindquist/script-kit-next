@@ -65,13 +65,15 @@ This captures only the app window and provides consistent results.
 </screenshot-tool-policy>
 `.trim()
 
-// Type for tool execution input
-interface ToolInput {
+// Type definitions for hook inputs/outputs matching @opencode-ai/plugin types
+interface ToolExecuteBeforeInput {
   tool: string
   sessionID: string
   callID: string
-  args?: Record<string, unknown>
-  result?: Record<string, unknown>
+}
+
+interface ToolExecuteBeforeOutput {
+  args: Record<string, unknown>
 }
 
 /**
@@ -89,7 +91,7 @@ function detectBlockedScreenshotTool(command: string): { blocked: boolean; toolN
 const ScreenshotEnforcer: Plugin = async () => {
   const hooks: Hooks = {
     // Intercept bash commands before execution
-    "tool.execute.before": async (input: ToolInput) => {
+    "tool.execute.before": async (input: ToolExecuteBeforeInput, output: ToolExecuteBeforeOutput) => {
       const sessionId = input.sessionID
       
       if (input.tool !== "bash") {
@@ -97,7 +99,8 @@ const ScreenshotEnforcer: Plugin = async () => {
         return
       }
       
-      const args = input.args || {}
+      // For tool.execute.before, args are in the output object
+      const args = output.args || {}
       const command = (args.command as string) || ""
       
       const { blocked, toolName } = detectBlockedScreenshotTool(command)

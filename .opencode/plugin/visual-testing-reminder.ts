@@ -109,12 +109,17 @@ function isUiFile(filePath: string): boolean {
 // Plugin Export
 // =============================================================================
 
-interface ToolInput {
+// Type definitions for hook inputs/outputs matching @opencode-ai/plugin types
+interface ToolExecuteAfterInput {
   tool: string
   sessionID: string
   callID: string
-  args?: Record<string, unknown>
-  result?: Record<string, unknown>
+}
+
+interface ToolExecuteAfterOutput {
+  title: string
+  output: string
+  metadata: Record<string, unknown>
 }
 
 const VisualTestingReminder: Plugin = async ({ client }) => {
@@ -137,11 +142,13 @@ const VisualTestingReminder: Plugin = async ({ client }) => {
       
     },
 
-    "tool.execute.after": async (input: ToolInput) => {
+    "tool.execute.after": async (input: ToolExecuteAfterInput, output: ToolExecuteAfterOutput) => {
       const tool = input.tool
-      const args = input.args || {}
-      const result = input.result || {}
       const sessionId = input.sessionID
+      
+      // For tool.execute.after, extract args from metadata
+      const metadata = output.metadata || {}
+      const cmdOutput = output.output || ""
 
       if (!sessionId) {
         logSkipped(null, PLUGIN_NAME, "tool.execute.after", "No session ID available")
@@ -153,7 +160,7 @@ const VisualTestingReminder: Plugin = async ({ client }) => {
 
       // Track UI file modifications
       if (tool === "edit" || tool === "write") {
-        const filePath = (args.filePath as string) || ""
+        const filePath = (metadata.filePath as string) || ""
         if (isUiFile(filePath)) {
           state.uiFilesModified = true
           if (!state.modifiedUiFiles.includes(filePath)) {
@@ -165,14 +172,13 @@ const VisualTestingReminder: Plugin = async ({ client }) => {
 
       // Track screenshot captures (via bash output or specific patterns)
       if (tool === "bash") {
-        const command = (args.command as string) || ""
-        const output = (result.output as string) || ""
+        const command = (metadata.command as string) || (metadata.description as string) || output.title || ""
 
         if (
           command.includes("captureScreenshot") ||
-          output.includes("[SCREENSHOT]") ||
-          output.includes("test-screenshots/") ||
-          /screenshot.*\.png/i.test(output)
+          cmdOutput.includes("[SCREENSHOT]") ||
+          cmdOutput.includes("test-screenshots/") ||
+          /screenshot.*\.png/i.test(cmdOutput)
         ) {
           state.screenshotCaptured = true
           trackedActions.push("Screenshot captured")
@@ -181,7 +187,7 @@ const VisualTestingReminder: Plugin = async ({ client }) => {
 
       // Track if Read tool was used on a screenshot
       if (tool === "read") {
-        const filePath = (args.filePath as string) || ""
+        const filePath = (metadata.filePath as string) || ""
         if (/test-screenshots\/.*\.png$/i.test(filePath) || /screenshot.*\.png$/i.test(filePath)) {
           state.screenshotCaptured = true
           trackedActions.push(`Screenshot file read: ${filePath}`)
