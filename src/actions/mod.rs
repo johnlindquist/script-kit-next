@@ -25,7 +25,9 @@ mod window;
 // - ActionsDialog: the main dialog component
 // - Window functions for separate vibrancy window
 
-pub use builders::{to_deeplink_name, ClipboardEntryInfo};
+pub use builders::to_deeplink_name;
+#[allow(unused_imports)]
+pub use builders::ClipboardEntryInfo;
 pub use dialog::ActionsDialog;
 pub use types::ScriptInfo;
 
