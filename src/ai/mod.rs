@@ -32,6 +32,7 @@
 #![allow(unused_imports)]
 #![allow(dead_code)]
 
+pub mod command_bar;
 pub mod config;
 pub mod model;
 pub mod providers;
@@ -54,7 +55,7 @@ pub use providers::{AiProvider, ProviderMessage, ProviderRegistry};
 // Re-export window functions
 pub use window::{
     close_ai_window, is_ai_window_open, open_ai_window, open_ai_window_with_chat, set_ai_input,
-    set_ai_input_with_image, set_ai_search,
+    set_ai_input_with_image, set_ai_search, show_ai_command_bar,
 };
 
 // Re-export SDK handler

@@ -262,6 +262,14 @@ impl CommandBarDialog {
         (self.on_select)("__cancel__".to_string());
     }
 
+    /// Get the currently selected action ID (for external handling)
+    pub fn get_selected_action_id(&self) -> Option<String> {
+        self.filtered_indices
+            .get(self.selected_index)
+            .and_then(|&idx| self.actions.get(idx))
+            .map(|action| action.id.to_string())
+    }
+
     /// Toggle cursor visibility (for blinking)
     pub fn toggle_cursor(&mut self, cx: &mut Context<Self>) {
         self.cursor_visible = !self.cursor_visible;

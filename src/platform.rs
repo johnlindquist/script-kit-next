@@ -1615,6 +1615,144 @@ pub fn calculate_eye_line_bounds_on_mouse_display(
     }
 }
 
+/// Calculate window bounds centered on the display containing the mouse cursor.
+///
+/// Similar to `calculate_eye_line_bounds_on_mouse_display` but centers the window
+/// both horizontally and vertically on the mouse's display. Used for secondary windows
+/// like AI chat that should appear on the same display as the main window.
+///
+/// # Arguments
+/// * `window_size` - The desired size of the window
+///
+/// # Returns
+/// Bounds positioned at center of the display containing the mouse cursor,
+/// or centered on primary display if mouse position cannot be determined.
+pub fn calculate_centered_bounds_on_mouse_display(
+    window_size: gpui::Size<Pixels>,
+) -> Bounds<Pixels> {
+    let displays = get_macos_displays();
+
+    logging::log("POSITION", "");
+    logging::log(
+        "POSITION",
+        "╔════════════════════════════════════════════════════════════╗",
+    );
+    logging::log(
+        "POSITION",
+        "║  CALCULATING CENTERED POSITION ON MOUSE DISPLAY            ║",
+    );
+    logging::log(
+        "POSITION",
+        "╚════════════════════════════════════════════════════════════╝",
+    );
+    logging::log(
+        "POSITION",
+        &format!("Available displays: {}", displays.len()),
+    );
+
+    // Log all available displays for debugging
+    for (idx, display) in displays.iter().enumerate() {
+        let right = display.origin_x + display.width;
+        let bottom = display.origin_y + display.height;
+        logging::log(
+            "POSITION",
+            &format!(
+                "  Display {}: origin=({:.0}, {:.0}) size={:.0}x{:.0} [bounds: x={:.0}..{:.0}, y={:.0}..{:.0}]",
+                idx, display.origin_x, display.origin_y, display.width, display.height,
+                display.origin_x, right, display.origin_y, bottom
+            ),
+        );
+    }
+
+    // Try to get mouse position and find which display contains it
+    let target_display = if let Some((mouse_x, mouse_y)) = get_global_mouse_position() {
+        logging::log(
+            "POSITION",
+            &format!("Mouse cursor at ({:.0}, {:.0})", mouse_x, mouse_y),
+        );
+
+        // Find the display that contains the mouse cursor
+        let mut found_display = None;
+        for (idx, display) in displays.iter().enumerate() {
+            let in_x = mouse_x >= display.origin_x && mouse_x < display.origin_x + display.width;
+            let in_y = mouse_y >= display.origin_y && mouse_y < display.origin_y + display.height;
+            let contains = in_x && in_y;
+
+            if contains {
+                logging::log("POSITION", &format!("  -> Mouse is on display {}", idx));
+                found_display = Some(display.clone());
+                break;
+            }
+        }
+
+        found_display
+    } else {
+        logging::log(
+            "POSITION",
+            "Could not get mouse position, using primary display",
+        );
+        None
+    };
+
+    // Use the found display, or fall back to first display (primary)
+    let display = target_display.or_else(|| {
+        logging::log(
+            "POSITION",
+            "No display contains mouse, falling back to primary",
+        );
+        displays.first().cloned()
+    });
+
+    if let Some(display) = display {
+        logging::log(
+            "POSITION",
+            &format!(
+                "Selected display: origin=({:.0}, {:.0}) size={:.0}x{:.0}",
+                display.origin_x, display.origin_y, display.width, display.height
+            ),
+        );
+
+        // Center both horizontally and vertically on the display
+        let window_width: f64 = window_size.width.into();
+        let window_height: f64 = window_size.height.into();
+        let center_x = display.origin_x + (display.width - window_width) / 2.0;
+        let center_y = display.origin_y + (display.height - window_height) / 2.0;
+
+        let final_bounds = Bounds {
+            origin: point(px(center_x as f32), px(center_y as f32)),
+            size: window_size,
+        };
+
+        logging::log(
+            "POSITION",
+            &format!(
+                "Final centered bounds: origin=({:.0}, {:.0}) size={:.0}x{:.0}",
+                center_x,
+                center_y,
+                f64::from(window_size.width),
+                f64::from(window_size.height)
+            ),
+        );
+
+        final_bounds
+    } else {
+        logging::log(
+            "POSITION",
+            "No displays found, using default centered bounds",
+        );
+        // Fallback: just center on screen using 1512x982 as default (common MacBook)
+        let window_width: f64 = window_size.width.into();
+        let window_height: f64 = window_size.height.into();
+        Bounds {
+            origin: point(
+                px(((1512.0 - window_width) / 2.0) as f32),
+                px(((982.0 - window_height) / 2.0) as f32),
+            ),
+            size: window_size,
+        }
+    }
+}
+
 // ============================================================================
 // Screenshot Capture
 // ============================================================================

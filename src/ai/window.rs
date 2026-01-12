@@ -36,6 +36,7 @@ use gpui_component::{
 use objc::{msg_send, sel, sel_impl};
 use tracing::{debug, info};
 
+use super::command_bar::{CommandBarColors, CommandBarDialog};
 use super::config::ModelInfo;
 use super::model::{Chat, ChatId, ChatSource, Message, MessageRole};
 use super::providers::ProviderRegistry;
@@ -113,109 +114,6 @@ impl AiPreset {
                 preferred_model: None,
             },
         ]
-    }
-}
-
-/// Action available in the command bar (Cmd+K menu)
-#[derive(Clone)]
-struct AiAction {
-    /// Unique identifier for the action
-    id: &'static str,
-    /// Display name
-    name: &'static str,
-    /// Icon name (uses local SVG icons from LocalIconName)
-    icon: LocalIconName,
-    /// Keyboard shortcut display (e.g., "⌘C")
-    shortcut: Option<&'static str>,
-    /// Section group (for visual grouping)
-    section: &'static str,
-}
-
-impl AiAction {
-    /// Create all available AI actions
-    fn all_actions() -> Vec<AiAction> {
-        vec![
-            // Response actions
-            AiAction {
-                id: "copy_response",
-                name: "Copy Response",
-                icon: LocalIconName::Copy,
-                shortcut: Some("⇧⌘C"),
-                section: "Response",
-            },
-            AiAction {
-                id: "copy_chat",
-                name: "Copy Chat",
-                icon: LocalIconName::Copy,
-                shortcut: Some("⌥⇧⌘C"),
-                section: "Response",
-            },
-            AiAction {
-                id: "copy_last_code",
-                name: "Copy Last Code Block",
-                icon: LocalIconName::Code,
-                shortcut: Some("⌥⌘C"),
-                section: "Response",
-            },
-            // Submit actions
-            AiAction {
-                id: "submit",
-                name: "Submit",
-                icon: LocalIconName::ArrowUp,
-                shortcut: Some("↵"),
-                section: "Actions",
-            },
-            AiAction {
-                id: "new_chat",
-                name: "New Chat",
-                icon: LocalIconName::Plus,
-                shortcut: Some("⌘N"),
-                section: "Actions",
-            },
-            AiAction {
-                id: "delete_chat",
-                name: "Delete Chat",
-                icon: LocalIconName::Trash,
-                shortcut: Some("⌘⌫"),
-                section: "Actions",
-            },
-            // Attachments
-            AiAction {
-                id: "add_attachment",
-                name: "Add Attachments...",
-                icon: LocalIconName::Plus,
-                shortcut: Some("⇧⌘A"),
-                section: "Attachments",
-            },
-            AiAction {
-                id: "paste_image",
-                name: "Paste Image from Clipboard",
-                icon: LocalIconName::File,
-                shortcut: Some("⌘V"),
-                section: "Attachments",
-            },
-            // Settings
-            AiAction {
-                id: "change_model",
-                name: "Change Model",
-                icon: LocalIconName::Settings,
-                shortcut: None,
-                section: "Settings",
-            },
-        ]
-    }
-
-    /// Filter actions by search query
-    fn filter_actions(query: &str, actions: &[AiAction]) -> Vec<AiAction> {
-        if query.is_empty() {
-            return actions.to_vec();
-        }
-        let query_lower = query.to_lowercase();
-        actions
-            .iter()
-            .filter(|a| a.name.to_lowercase().contains(&query_lower))
-            .cloned()
-            .collect()
     }
 }
 
@@ -489,14 +387,8 @@ pub struct AiApp {
     /// Whether the command bar is visible (Cmd+K)
     showing_command_bar: bool,
 
-    /// Command bar search input state
-    command_bar_search_state: Entity<InputState>,
-
-    /// Selected action index in command bar
-    command_bar_selected_index: usize,
-
-    /// Filtered actions based on search query
-    command_bar_filtered_actions: Vec<AiAction>,
+    /// The command bar dialog entity (uses the reusable CommandBarDialog component)
+    command_bar_dialog: Option<Entity<CommandBarDialog>>,
 
     // === Model Picker State ===
     /// Whether the model picker dropdown is visible
@@ -621,19 +513,6 @@ impl AiApp {
             }
         });
 
-        // Create command bar search input
-        let command_bar_search_state =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Search for actions..."));
-
-        // Subscribe to command bar search changes
-        let command_bar_sub = cx.subscribe_in(&command_bar_search_state, window, {
-            move |this, _, ev: &InputEvent, window, cx| match ev {
-                InputEvent::Change => this.filter_command_bar_actions(cx),
-                InputEvent::PressEnter { .. } => this.execute_command_bar_action(window, cx),
-                _ => {}
-            }
-        });
-
         // Load messages for the selected chat
         let current_messages = selected_chat_id
             .and_then(|id| storage::get_chat_messages(&id).ok())
@@ -656,7 +535,7 @@ impl AiApp {
             available_models,
             selected_model,
             focus_handle,
-            _subscriptions: vec![input_sub, search_sub, api_key_sub, command_bar_sub],
+            _subscriptions: vec![input_sub, search_sub, api_key_sub],
             // Streaming state
             is_streaming: false,
             streaming_content: String::new(),
@@ -673,11 +552,9 @@ impl AiApp {
             setup_copied_at: None,
             showing_api_key_input: false,
             api_key_input_state,
-            // Command bar state
+            // Command bar state (uses the reusable CommandBarDialog component)
             showing_command_bar: false,
-            command_bar_search_state,
-            command_bar_selected_index: 0,
-            command_bar_filtered_actions: AiAction::all_actions(),
+            command_bar_dialog: None,
             // Model picker state
             showing_model_picker: false,
             model_picker_selected_index: 0,
@@ -1014,65 +891,80 @@ impl AiApp {
     // === Command Bar Methods ===
 
     /// Show the command bar overlay (Cmd+K)
+    /// Creates a new CommandBarDialog entity and displays it.
     fn show_command_bar(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.showing_command_bar = true;
-        self.command_bar_selected_index = 0;
-        self.command_bar_filtered_actions = AiAction::all_actions();
-        // Clear search and focus it
-        self.command_bar_search_state.update(cx, |state, cx| {
-            state.set_value("", window, cx);
+        // Create the dialog with a callback that handles action selection
+        let dialog = cx.new(|cx| {
+            CommandBarDialog::new(cx, |_action_id| {
+                // Action handling is done via submit_selected() -> on_select callback
+                // We handle it in the keyboard event handler instead
+            })
         });
-        self.command_bar_search_state
-            .focus_handle(cx)
-            .focus(window, cx);
+
+        // Set colors from theme
+        let theme = crate::theme::load_theme();
+        let colors = CommandBarColors {
+            background: theme.colors.background.main,
+            border: theme.colors.ui.border,
+            text_primary: 0xffffff,
+            text_secondary: 0xcccccc,
+            text_dimmed: theme.colors.text.muted,
+            accent: theme.colors.accent.selected,
+        };
+        dialog.update(cx, |d, cx| d.set_colors(colors, cx));
+
+        // Focus the dialog
+        dialog.focus_handle(cx).focus(window, cx);
+
+        self.command_bar_dialog = Some(dialog);
+        self.showing_command_bar = true;
         cx.notify();
     }
 
     /// Hide the command bar overlay
     fn hide_command_bar(&mut self, cx: &mut Context<Self>) {
         self.showing_command_bar = false;
+        self.command_bar_dialog = None;
         cx.notify();
     }
 
-    /// Filter command bar actions based on search query
-    fn filter_command_bar_actions(&mut self, cx: &mut Context<Self>) {
-        let query = self.command_bar_search_state.read(cx).value().to_string();
-        let all_actions = AiAction::all_actions();
-        self.command_bar_filtered_actions = AiAction::filter_actions(&query, &all_actions);
-        self.command_bar_selected_index = 0;
-        cx.notify();
+    /// Handle character input in command bar
+    fn command_bar_handle_char(&mut self, ch: char, cx: &mut Context<Self>) {
+        if let Some(dialog) = &self.command_bar_dialog {
+            dialog.update(cx, |d, cx| d.handle_char(ch, cx));
+        }
+    }
+
+    /// Handle backspace in command bar
+    fn command_bar_handle_backspace(&mut self, cx: &mut Context<Self>) {
+        if let Some(dialog) = &self.command_bar_dialog {
+            dialog.update(cx, |d, cx| d.handle_backspace(cx));
+        }
     }
 
     /// Move selection up in command bar
     fn command_bar_select_prev(&mut self, cx: &mut Context<Self>) {
-        if !self.command_bar_filtered_actions.is_empty() {
-            if self.command_bar_selected_index > 0 {
-                self.command_bar_selected_index -= 1;
-            } else {
-                self.command_bar_selected_index = self.command_bar_filtered_actions.len() - 1;
-            }
-            cx.notify();
+        if let Some(dialog) = &self.command_bar_dialog {
+            dialog.update(cx, |d, cx| d.move_up(cx));
         }
     }
 
     /// Move selection down in command bar
     fn command_bar_select_next(&mut self, cx: &mut Context<Self>) {
-        if !self.command_bar_filtered_actions.is_empty() {
-            self.command_bar_selected_index =
-                (self.command_bar_selected_index + 1) % self.command_bar_filtered_actions.len();
-            cx.notify();
+        if let Some(dialog) = &self.command_bar_dialog {
+            dialog.update(cx, |d, cx| d.move_down(cx));
         }
     }
 
     /// Execute the selected command bar action
     fn execute_command_bar_action(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(action) = self
-            .command_bar_filtered_actions
-            .get(self.command_bar_selected_index)
-            .cloned()
-        {
-            self.hide_command_bar(cx);
-            self.execute_action(action.id, window, cx);
+        if let Some(dialog) = &self.command_bar_dialog {
+            // Get the selected action ID before hiding
+            let action_id = dialog.read(cx).get_selected_action_id();
+            if let Some(action_id) = action_id {
+                self.hide_command_bar(cx);
+                self.execute_action(&action_id, window, cx);
+            }
         }
     }
 
@@ -3582,110 +3474,8 @@ impl Render for AiApp {
 
 impl AiApp {
     /// Render the command bar overlay (Raycast-style Cmd+K menu)
+    /// Uses the reusable CommandBarDialog component for consistent styling.
     fn render_command_bar_overlay(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        // Extract theme colors upfront to avoid borrow conflicts
-        let theme = cx.theme();
-        let bg_color = theme.background;
-        let border_color = theme.border;
-        let muted_fg = theme.muted_foreground;
-        let accent = theme.accent;
-        let accent_fg = theme.accent_foreground;
-        let fg = theme.foreground;
-
-        // Group actions by section
-        let section_order = ["Response", "Actions", "Attachments", "Settings"];
-        let mut sections: std::collections::HashMap<&str, Vec<(usize, &AiAction)>> =
-            std::collections::HashMap::new();
-        for (i, action) in self.command_bar_filtered_actions.iter().enumerate() {
-            sections
-                .entry(action.section)
-                .or_default()
-                .push((i, action));
-        }
-
-        // Build section elements (including items) inline
-        let section_elements: Vec<_> = section_order
-            .iter()
-            .filter_map(|&section_name| {
-                let items = sections.get(section_name)?;
-                if items.is_empty() {
-                    return None;
-                }
-
-                // Build item elements for this section
-                let item_elements: Vec<_> = items
-                    .iter()
-                    .map(|(idx, action)| {
-                        let is_selected = *idx == self.command_bar_selected_index;
-                        let action_id = action.id;
-                        let icon = action.icon;
-                        let name = action.name.to_string();
-                        let shortcut_text = action.shortcut.map(|s| s.to_string());
-
-                        let mut item = div()
-                            .id(SharedString::from(format!("cmd-action-{}", action_id)))
-                            .px_3()
-                            .py_2()
-                            .mx_1()
-                            .rounded_md()
-                            .flex()
-                            .items_center()
-                            .gap_3()
-                            .cursor_pointer()
-                            .when(is_selected, |el| el.bg(accent))
-                            .when(!is_selected, |el| el.hover(|el| el.bg(accent.opacity(0.5))))
-                            .on_click(cx.listener(move |this, _, window, cx| {
-                                this.hide_command_bar(cx);
-                                this.execute_action(action_id, window, cx);
-                            }))
-                            // Icon
-                            .child(
-                                svg()
-                                    .external_path(icon.external_path())
-                                    .size(px(16.))
-                                    .text_color(if is_selected { accent_fg } else { muted_fg }),
-                            )
-                            // Action name
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .text_sm()
-                                    .text_color(if is_selected { accent_fg } else { fg })
-                                    .child(name),
-                            );
-
-                        // Add shortcut if present
-                        if let Some(shortcut) = shortcut_text {
-                            item = item.child(
-                                div()
-                                    .text_xs()
-                                    .text_color(if is_selected { accent_fg } else { muted_fg })
-                                    .child(shortcut),
-                            );
-                        }
-                        item
-                    })
-                    .collect();
-
-                Some(
-                    div()
-                        .flex()
-                        .flex_col()
-                        // Section header
-                        .child(
-                            div()
-                                .px_3()
-                                .py_1()
-                                .text_xs()
-                                .text_color(muted_fg)
-                                .child(section_name.to_string()),
-                        )
-                        // Section items
-                        .children(item_elements),
-                )
-            })
-            .collect();
-
         // Semi-transparent overlay background
         div()
             .id("command-bar-overlay")
@@ -3699,78 +3489,16 @@ impl AiApp {
                 // Close when clicking outside the command bar
                 this.hide_command_bar(cx);
             }))
-            .child(
-                // Command bar container - stop propagation by having its own click handler
-                div()
-                    .id("command-bar-container")
-                    .w(px(500.0))
-                    .max_h(px(400.0))
-                    .bg(bg_color)
-                    .border_1()
-                    .border_color(border_color)
-                    .rounded_xl()
-                    .shadow_lg()
-                    .overflow_hidden()
-                    .flex()
-                    .flex_col()
-                    .on_click(cx.listener(|_, _, _, _| {
-                        // Stop propagation - don't close when clicking inside
-                    }))
-                    // Search input at top
-                    .child(
-                        div()
-                            .p_3()
-                            .border_b_1()
-                            .border_color(border_color)
-                            .child(Input::new(&self.command_bar_search_state).w_full()),
-                    )
-                    // Action list
-                    .child(
-                        div()
-                            .id("cmd-bar-actions")
-                            .flex_1()
-                            .overflow_y_scroll()
-                            .p_1()
-                            .children(section_elements),
-                    )
-                    // Footer with keyboard hints
-                    .child(
-                        div()
-                            .px_3()
-                            .py_2()
-                            .border_t_1()
-                            .border_color(border_color)
-                            .flex()
-                            .items_center()
-                            .gap_4()
-                            .text_xs()
-                            .text_color(muted_fg)
-                            .child(
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .gap_1()
-                                    .child("↑↓")
-                                    .child("Navigate"),
-                            )
-                            .child(
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .gap_1()
-                                    .child("↵")
-                                    .child("Select"),
-                            )
-                            .child(
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .gap_1()
-                                    .child("esc")
-                                    .child("Close"),
-                            ),
-                    ),
-            )
+            .when_some(self.command_bar_dialog.as_ref(), |el, dialog| {
+                el.child(
+                    div()
+                        .id("command-bar-container")
+                        .on_click(cx.listener(|_, _, _, _| {
+                            // Stop propagation - don't close when clicking inside
+                        }))
+                        .child(dialog.clone()),
+                )
+            })
     }
 
     /// Render the model picker dropdown overlay
@@ -4255,6 +3983,17 @@ pub fn open_ai_window(cx: &mut App) -> Result<()> {
 
         if window_valid {
             logging::log("AI", "AI window exists - bringing to front and focusing");
+
+            // Move the window to the display containing the mouse cursor
+            // This ensures the AI window appears on the same screen as where the user is working
+            let new_bounds = crate::platform::calculate_centered_bounds_on_mouse_display(size(
+                px(900.),
+                px(700.),
+            ));
+            let _ = handle.update(cx, |_root, window, cx| {
+                crate::window_ops::queue_move(new_bounds, window, cx);
+            });
+
             // Activate the app to ensure the window can receive focus
             cx.activate(true);
 
@@ -4291,8 +4030,10 @@ pub fn open_ai_window(cx: &mut App) -> Result<()> {
         gpui::WindowBackgroundAppearance::Opaque
     };
 
-    // Calculate position: try saved position first, then centered default
-    let default_bounds = gpui::Bounds::centered(None, size(px(900.), px(700.)), cx);
+    // Calculate position: try saved position first, then centered on mouse display
+    // Use mouse display positioning so AI window appears on the same screen as the main window
+    let default_bounds =
+        crate::platform::calculate_centered_bounds_on_mouse_display(size(px(900.), px(700.)));
     let displays = crate::platform::get_macos_displays();
     let bounds = crate::window_state::get_initial_bounds(
         crate::window_state::WindowRole::Ai,
