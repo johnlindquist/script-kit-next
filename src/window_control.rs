@@ -1258,13 +1258,19 @@ fn get_visible_display_bounds(x: i32, y: i32) -> Bounds {
             return get_visible_display_bounds_fallback(x, y);
         }
 
-        // Get the main screen height for coordinate conversion (do this once outside the loop)
-        let main_screen: *mut Object = msg_send![nsscreen_class, mainScreen];
-        let main_frame: CGRect = msg_send![main_screen, frame];
-        let main_height = main_frame.size.height;
+        // Get the PRIMARY screen height for coordinate conversion (do this once outside the loop)
+        // IMPORTANT: We MUST use screens[0] (the primary screen with the menu bar),
+        // NOT mainScreen (which is the screen with the key window).
+        // Cocoa coordinates have their origin at bottom-left of the PRIMARY screen,
+        // and CoreGraphics coordinates have origin at top-left of PRIMARY screen.
+        // Using mainScreen causes incorrect coordinate conversion on multi-monitor setups
+        // when the focused window is on a secondary display.
+        let primary_screen: *mut Object = msg_send![screens, objectAtIndex: 0usize];
+        let primary_frame: CGRect = msg_send![primary_screen, frame];
+        let primary_height = primary_frame.size.height;
 
         // Convert CG y to Cocoa y (once, outside the loop)
-        let cocoa_y = main_height - y as f64;
+        let cocoa_y = primary_height - y as f64;
 
         // Find the screen containing the point
         for i in 0..screen_count {
@@ -1286,10 +1292,10 @@ fn get_visible_display_bounds(x: i32, y: i32) -> Bounds {
                 let visible_frame: CGRect = msg_send![screen, visibleFrame];
 
                 // Convert Cocoa coordinates back to CoreGraphics coordinates
-                // CG origin is at top-left of main screen
-                // Cocoa origin.y is distance from bottom of main screen
-                // CG y = main_height - (cocoa_y + height)
-                let cg_y = main_height - (visible_frame.origin.y + visible_frame.size.height);
+                // CG origin is at top-left of primary screen
+                // Cocoa origin.y is distance from bottom of primary screen
+                // CG y = primary_height - (cocoa_y + height)
+                let cg_y = primary_height - (visible_frame.origin.y + visible_frame.size.height);
 
                 debug!(
                     screen_index = i,
