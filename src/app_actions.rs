@@ -811,7 +811,18 @@ impl ScriptListApp {
                                             actions: vec![], // Actions don't have nested actions
                                         };
 
-                                        let options = executor::ScriptletExecOptions::default();
+                                        // Pass the parent scriptlet's content to the action
+                                        // This allows actions to use {{content}} to access the
+                                        // parent's code (e.g., the URL for `open` tool scriptlets)
+                                        let mut inputs = std::collections::HashMap::new();
+                                        inputs.insert(
+                                            "content".to_string(),
+                                            full_scriptlet.scriptlet_content.trim().to_string(),
+                                        );
+                                        let options = executor::ScriptletExecOptions {
+                                            inputs,
+                                            ..Default::default()
+                                        };
                                         match executor::run_scriptlet(&action_scriptlet, options) {
                                             Ok(exec_result) => {
                                                 if exec_result.success {
