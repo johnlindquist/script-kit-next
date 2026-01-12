@@ -366,6 +366,11 @@ pub struct AiApp {
     /// Set this flag via window.update() and AiApp will process it on render.
     needs_focus_input: bool,
 
+    /// Flag to request main focus_handle focus on next render (for command bar keyboard routing).
+    /// When true, the render function will focus the main focus_handle instead of the input,
+    /// ensuring keyboard events route to the window's key handler for command bar navigation.
+    needs_command_bar_focus: bool,
+
     /// Track last persisted bounds for debounced save on close paths
     /// (traffic light, Cmd+W) that don't go through close_ai_window
     last_persisted_bounds: Option<gpui::WindowBounds>,
@@ -550,6 +555,7 @@ impl AiApp {
             messages_scroll_handle: ScrollHandle::new(),
             cached_box_shadows,
             needs_focus_input: false,
+            needs_command_bar_focus: false,
             last_persisted_bounds: None,
             last_bounds_save: std::time::Instant::now(),
             theme_rev_seen: crate::theme::service::theme_revision(),
@@ -943,7 +949,7 @@ impl AiApp {
 
         // Open the command bar in a separate vibrancy window
         // The window will be positioned relative to the AI window
-        cx.spawn(async move |_this, cx| {
+        cx.spawn(async move |this, cx| {
             cx.update(
                 |cx| match open_actions_window(cx, ai_window_bounds, display_id, dialog) {
                     Ok(_handle) => {
@@ -957,6 +963,16 @@ impl AiApp {
                     }
                 },
             )
+            .ok();
+
+            // Request re-focus after the vibrancy window opens
+            // The render function will apply focus to main focus_handle (not input)
+            // so keyboard events route to the window's key handler for command bar navigation
+            this.update(cx, |this, cx| {
+                this.needs_command_bar_focus = true;
+                cx.notify();
+                crate::logging::log("AI", "Requested command bar focus after window opened");
+            })
             .ok();
         })
         .detach();
@@ -3287,6 +3303,14 @@ impl Render for AiApp {
         {
             self.needs_focus_input = false;
             self.focus_input(window, cx);
+        }
+
+        // Process command bar focus request (set after vibrancy window opens)
+        // This ensures keyboard events route to the window's key handler for command bar navigation
+        if self.needs_command_bar_focus {
+            self.needs_command_bar_focus = false;
+            self.focus_handle.focus(window, cx);
+            crate::logging::log("AI", "Applied command bar focus in render");
         }
 
         // Process pending commands (for testing via stdin)
