@@ -129,15 +129,17 @@ mod tests {
     fn test_save_and_load_state_file() {
         with_temp_state_dir(|| {
             let state = WindowStateFile {
-                version: 1,
+                version: 3,
                 main: Some(PersistedWindowBounds::new(100.0, 200.0, 750.0, 475.0)),
                 main_per_display: std::collections::HashMap::new(),
                 notes: None,
+                notes_per_display: std::collections::HashMap::new(),
                 ai: None,
+                ai_per_display: std::collections::HashMap::new(),
             };
             assert!(save_state_file(&state));
             let loaded = load_state_file().expect("Should load saved state");
-            assert_eq!(loaded.version, 1);
+            assert_eq!(loaded.version, 3);
             assert!(loaded.main.is_some());
         });
     }
