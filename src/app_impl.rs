@@ -143,10 +143,13 @@ impl ScriptListApp {
                     this.update(cx, |app, cx| {
                         // Skip cursor blink when:
                         // 1. Window is hidden (no visual feedback needed)
-                        // 2. Window is not focused (prevents wasted work + incorrect UX)
+                        // 2. No window is focused (main window OR actions popup)
                         // 3. No input is focused (no cursor to blink)
+                        let actions_popup_open = is_actions_window_open();
+                        let any_window_focused =
+                            platform::is_main_window_focused() || actions_popup_open;
                         if !script_kit_gpui::is_main_window_visible()
-                            || !platform::is_main_window_focused()
+                            || !any_window_focused
                             || app.focused_input == FocusedInput::None
                         {
                             return;

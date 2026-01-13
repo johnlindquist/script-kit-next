@@ -1064,20 +1064,16 @@ impl Render for ActionsDialog {
 
         // Render action list using uniform_list for virtualized scrolling
         let actions_container = if self.filtered_actions.is_empty() {
+            // Empty state: fixed height matching one action item row
             div()
-                .flex()
-                .flex_col()
-                .flex_1()
                 .w_full()
-                .child(
-                    div()
-                        .w_full()
-                        .py(px(spacing.padding_lg))
-                        .px(px(spacing.item_padding_x))
-                        .text_color(dimmed_text)
-                        .text_sm()
-                        .child("No actions match your search"),
-                )
+                .h(px(ACTION_ITEM_HEIGHT))
+                .flex()
+                .items_center()
+                .px(px(spacing.item_padding_x))
+                .text_color(dimmed_text)
+                .text_sm()
+                .child("No actions match your search")
                 .into_any_element()
         } else {
             // Clone data needed for the uniform_list closure
@@ -1449,7 +1445,14 @@ impl Render for ActionsDialog {
             0.0
         };
         let border_height = visual.border_thin * 2.0; // top + bottom border
+                                                      // When no actions, still need space for "No actions match" message
+        let min_items_height = if num_items == 0 {
+            ACTION_ITEM_HEIGHT
+        } else {
+            0.0
+        };
         let items_height = (num_items as f32 * ACTION_ITEM_HEIGHT)
+            .max(min_items_height)
             .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
         let total_height = items_height + search_box_height + header_height + border_height;
 

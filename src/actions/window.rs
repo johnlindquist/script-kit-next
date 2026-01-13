@@ -360,7 +360,14 @@ pub fn resize_actions_window_direct(
         SEARCH_INPUT_HEIGHT
     };
     let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
+    // When no actions, still need space for "No actions match" message (use 1 row height)
+    let min_items_height = if num_actions == 0 {
+        ACTION_ITEM_HEIGHT
+    } else {
+        0.0
+    };
     let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT)
+        .max(min_items_height)
         .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
     let border_height = 2.0;
     let new_height_f32 = items_height + search_box_height + header_height + border_height;
@@ -489,7 +496,14 @@ pub fn resize_actions_window(cx: &mut App, dialog_entity: &Entity<ActionsDialog>
             SEARCH_INPUT_HEIGHT
         };
         let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
+        // When no actions, still need space for "No actions match" message
+        let min_items_height = if num_actions == 0 {
+            ACTION_ITEM_HEIGHT
+        } else {
+            0.0
+        };
         let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT)
+            .max(min_items_height)
             .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
         let border_height = 2.0; // top + bottom border
         let new_height_f32 = items_height + search_box_height + header_height + border_height;
