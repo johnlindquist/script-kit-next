@@ -68,7 +68,23 @@ impl ScriptListApp {
                         // Key consumed by actions dialog
                     }
                     ActionsRoute::NotHandled => {
-                        // Actions popup not open - SDK action shortcuts handled by DivPrompt's own key handler
+                        // Actions popup not open - check SDK action shortcuts
+                        let key_lower = key.to_lowercase();
+                        let shortcut_key = shortcuts::keystroke_to_shortcut(
+                            &key_lower,
+                            &event.keystroke.modifiers,
+                        );
+                        if let Some(action_name) = this.action_shortcuts.get(&shortcut_key).cloned()
+                        {
+                            logging::log(
+                                "KEY",
+                                &format!(
+                                    "SDK action shortcut matched in DivPrompt: {}",
+                                    action_name
+                                ),
+                            );
+                            this.trigger_action_by_name(&action_name, cx);
+                        }
                     }
                 }
             },

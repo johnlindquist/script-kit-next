@@ -15,6 +15,7 @@
 //! - [`PromptFooter`] - Footer component with logo, primary/secondary action buttons
 //! - [`PromptContainer`] - Container component for consistent prompt window layout
 //! - [`ShortcutRecorder`] - Modal for recording keyboard shortcuts with visual feedback
+//! - [`AliasInput`] - Modal for entering command aliases with keyboard focus
 //!
 //!
 //! # Design Patterns
@@ -25,6 +26,7 @@
 //! - **IntoElement trait**: Compatible with GPUI's element system
 //! - **Theme integration**: Use `from_theme()` or `from_design()` for colors
 
+pub mod alias_input;
 pub mod button;
 pub mod form_fields;
 #[cfg(test)]
@@ -42,6 +44,8 @@ pub mod unified_list_item;
 mod unified_list_item_tests;
 
 // Re-export commonly used types
+#[allow(unused_imports)]
+pub use alias_input::{AliasInput, AliasInputAction, AliasInputColors};
 pub use button::{Button, ButtonColors, ButtonVariant};
 #[allow(unused_imports)]
 pub use form_fields::{FormCheckbox, FormFieldColors, FormFieldState, FormTextArea, FormTextField};
