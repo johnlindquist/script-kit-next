@@ -1373,6 +1373,8 @@ struct ScriptListApp {
         Option<Entity<crate::components::shortcut_recorder::ShortcutRecorder>>,
     /// Alias input state - when Some, shows the alias input modal
     alias_input_state: Option<AliasInputState>,
+    /// The alias input entity (persisted to maintain focus)
+    alias_input_entity: Option<Entity<crate::components::alias_input::AliasInput>>,
     /// Input history for shell-like up/down navigation through previous inputs
     input_history: input_history::InputHistory,
     /// Pending API key configuration - tracks which provider is being configured

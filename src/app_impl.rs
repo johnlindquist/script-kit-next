@@ -164,6 +164,12 @@ impl ScriptListApp {
                             // Notify the actions window to repaint with new cursor state
                             notify_actions_window(cx);
                         }
+                        // Also update AliasInput cursor if it exists
+                        if let Some(ref alias_input) = app.alias_input_entity {
+                            alias_input.update(cx, |input, _cx| {
+                                input.set_cursor_visible(app.cursor_visible);
+                            });
+                        }
                         cx.notify();
                     })
                 });
@@ -376,6 +382,8 @@ impl ScriptListApp {
             shortcut_recorder_entity: None,
             // Alias input state - starts as None (no alias input showing)
             alias_input_state: None,
+            // Alias input entity - persisted to maintain focus
+            alias_input_entity: None,
             // Input history for shell-like up/down navigation
             input_history: {
                 let mut history = input_history::InputHistory::new();
@@ -3631,10 +3639,17 @@ export default {
     }
 
     /// Close the alias input and clear state.
+    /// Returns focus to the main filter input.
     pub fn close_alias_input(&mut self, cx: &mut Context<Self>) {
-        if self.alias_input_state.is_some() {
-            logging::log("ALIAS", "Closing alias input");
+        if self.alias_input_state.is_some() || self.alias_input_entity.is_some() {
+            logging::log(
+                "ALIAS",
+                "Closing alias input, returning focus to main filter",
+            );
             self.alias_input_state = None;
+            self.alias_input_entity = None; // Clear entity to reset for next open
+                                            // Return focus to the main filter input (like close_shortcut_recorder does)
+            self.pending_focus = Some(FocusTarget::MainFilter);
             cx.notify();
         }
     }
@@ -3650,7 +3665,8 @@ export default {
     }
 
     /// Save the current alias and close the input.
-    fn save_alias(&mut self, cx: &mut Context<Self>) {
+    /// If alias_from_entity is provided, use that; otherwise fall back to state.alias_text.
+    fn save_alias_with_text(&mut self, alias_from_entity: Option<String>, cx: &mut Context<Self>) {
         let Some(ref state) = self.alias_input_state else {
             logging::log("ALIAS", "No alias input state when trying to save");
             return;
@@ -3658,7 +3674,11 @@ export default {
 
         let command_id = state.command_id.clone();
         let command_name = state.command_name.clone();
-        let alias_text = state.alias_text.trim().to_string();
+        // Prefer alias from entity if provided, else use state
+        let alias_text = alias_from_entity
+            .unwrap_or_else(|| state.alias_text.clone())
+            .trim()
+            .to_string();
 
         if alias_text.is_empty() {
             // Empty alias means remove it
@@ -3719,143 +3739,102 @@ export default {
     /// Render the alias input overlay if state is set.
     ///
     /// Returns None if no alias input is active.
+    ///
+    /// The alias input entity is created once and persisted to maintain keyboard focus.
+    /// This follows the same pattern as render_shortcut_recorder_overlay.
     fn render_alias_input_overlay(
         &mut self,
-        _window: &mut Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Option<gpui::AnyElement> {
+        use crate::components::alias_input::{AliasInput, AliasInputAction};
+
+        // Check if we have state but no entity yet - need to create the input
         let state = self.alias_input_state.as_ref()?;
-        let command_name = state.command_name.clone();
-        let alias_text = state.alias_text.clone();
 
-        // Get design tokens for styling
-        let tokens = crate::designs::get_tokens(self.current_design);
-        let colors = tokens.colors();
-        let spacing = tokens.spacing();
-        let typography = tokens.typography();
-        let visual = tokens.visual();
+        // Create entity if needed (only once per show)
+        if self.alias_input_entity.is_none() {
+            let command_id = state.command_id.clone();
+            let command_name = state.command_name.clone();
+            let current_alias = if state.alias_text.is_empty() {
+                None
+            } else {
+                Some(state.alias_text.clone())
+            };
+            let theme = std::sync::Arc::clone(&self.theme);
 
-        // Create save handler
-        let on_save = cx.listener(|this, _: &gpui::ClickEvent, _window, cx| {
-            this.save_alias(cx);
-        });
+            let input_entity = cx.new(move |cx| {
+                // Create the alias input with its own focus handle from its own context
+                // This is CRITICAL for keyboard events to work
+                AliasInput::new(cx, theme)
+                    .with_command_name(command_name)
+                    .with_command_id(command_id)
+                    .with_current_alias(current_alias)
+            });
 
-        // Create cancel handler
-        let on_cancel = cx.listener(|this, _: &gpui::ClickEvent, _window, cx| {
-            this.close_alias_input(cx);
-        });
+            self.alias_input_entity = Some(input_entity);
+            logging::log("ALIAS", "Created new alias input entity");
+        }
 
-        // Create key handler for Enter/Escape
-        let on_key = cx.listener(|this, event: &gpui::KeyDownEvent, _window, cx| {
-            let key = event.keystroke.key.as_str();
-            match key {
-                "enter" | "Enter" => {
-                    this.save_alias(cx);
+        // Get the existing entity - clone it early to avoid borrow conflicts
+        let input_entity = self.alias_input_entity.clone()?;
+
+        // ALWAYS focus the input entity to ensure it captures keyboard input
+        // This is critical for modal behavior - the input must have focus
+        let input_fh = input_entity.read(cx).focus_handle.clone();
+        let was_focused = input_fh.is_focused(window);
+        window.focus(&input_fh, cx);
+        if !was_focused {
+            logging::log("ALIAS", "Focused alias input (was not focused)");
+        }
+
+        // Check for pending actions from the input entity (Save, Cancel, or Clear)
+        // We need to update() the entity to take the pending action
+        let pending_action = input_entity.update(cx, |input, _cx| input.take_pending_action());
+
+        if let Some(action) = pending_action {
+            match action {
+                AliasInputAction::Save(alias) => {
+                    logging::log("ALIAS", &format!("Handling save action: {}", alias));
+                    // Handle the save - need to defer to avoid borrow issues
+                    let app_entity = cx.entity().downgrade();
+                    cx.spawn(async move |_this, cx| {
+                        gpui::Timer::after(std::time::Duration::from_millis(1)).await;
+                        let _ = cx.update(|cx| {
+                            if let Some(app) = app_entity.upgrade() {
+                                app.update(cx, |this, cx| {
+                                    this.save_alias_with_text(Some(alias), cx);
+                                });
+                            }
+                        });
+                    })
+                    .detach();
                 }
-                "escape" | "Escape" => {
-                    this.close_alias_input(cx);
+                AliasInputAction::Cancel => {
+                    logging::log("ALIAS", "Handling cancel action");
+                    self.close_alias_input(cx);
                 }
-                _ => {}
+                AliasInputAction::Clear => {
+                    logging::log("ALIAS", "Handling clear action (remove alias)");
+                    // Clear means remove the alias - save with empty string
+                    let app_entity = cx.entity().downgrade();
+                    cx.spawn(async move |_this, cx| {
+                        gpui::Timer::after(std::time::Duration::from_millis(1)).await;
+                        let _ = cx.update(|cx| {
+                            if let Some(app) = app_entity.upgrade() {
+                                app.update(cx, |this, cx| {
+                                    this.save_alias_with_text(Some(String::new()), cx);
+                                });
+                            }
+                        });
+                    })
+                    .detach();
+                }
             }
-        });
+        }
 
-        // Build the overlay UI
-        Some(
-            div()
-                .id("alias-input-overlay")
-                .absolute()
-                .inset_0()
-                .flex()
-                .items_center()
-                .justify_center()
-                .bg(gpui::rgba(0x00000080)) // Semi-transparent background
-                .on_key_down(on_key)
-                .child(
-                    div()
-                        .id("alias-input-modal")
-                        .flex()
-                        .flex_col()
-                        .w(gpui::px(400.0))
-                        .p(gpui::px(spacing.padding_xl))
-                        .bg(gpui::rgb(colors.background))
-                        .rounded(gpui::px(visual.radius_lg))
-                        .border_1()
-                        .border_color(gpui::rgb(colors.border))
-                        .gap(gpui::px(spacing.gap_md))
-                        // Header
-                        .child(
-                            div()
-                                .text_lg()
-                                .font_weight(gpui::FontWeight::SEMIBOLD)
-                                .text_color(gpui::rgb(colors.text_primary))
-                                .font_family(typography.font_family)
-                                .child(format!("Set Alias for \"{}\"", command_name)),
-                        )
-                        // Description
-                        .child(
-                            div()
-                                .text_sm()
-                                .text_color(gpui::rgb(colors.text_muted))
-                                .font_family(typography.font_family)
-                                .child(
-                                    "Type the alias + space in the main menu to run this command",
-                                ),
-                        )
-                        // Input field (simplified - just show the current value)
-                        .child(
-                            div()
-                                .id("alias-input-field")
-                                .w_full()
-                                .px(gpui::px(spacing.padding_md))
-                                .py(gpui::px(spacing.padding_sm))
-                                .bg(gpui::rgb(colors.background_secondary))
-                                .rounded(gpui::px(visual.radius_md))
-                                .border_1()
-                                .border_color(gpui::rgb(colors.border))
-                                .text_color(gpui::rgb(colors.text_primary))
-                                .font_family(typography.font_family)
-                                .child(if alias_text.is_empty() {
-                                    div()
-                                        .text_color(gpui::rgb(colors.text_dimmed))
-                                        .child("Enter alias (e.g., 'ch' for Clipboard History)")
-                                } else {
-                                    div().child(alias_text.clone())
-                                }),
-                        )
-                        // Buttons
-                        .child(
-                            div()
-                                .flex()
-                                .gap(gpui::px(spacing.gap_sm))
-                                .justify_end()
-                                .child(
-                                    div()
-                                        .id("cancel-button")
-                                        .px(gpui::px(spacing.padding_md))
-                                        .py(gpui::px(spacing.padding_sm))
-                                        .rounded(gpui::px(visual.radius_md))
-                                        .bg(gpui::rgb(colors.background_tertiary))
-                                        .text_color(gpui::rgb(colors.text_primary))
-                                        .cursor_pointer()
-                                        .on_click(on_cancel)
-                                        .child("Cancel"),
-                                )
-                                .child(
-                                    div()
-                                        .id("save-button")
-                                        .px(gpui::px(spacing.padding_md))
-                                        .py(gpui::px(spacing.padding_sm))
-                                        .rounded(gpui::px(visual.radius_md))
-                                        .bg(gpui::rgb(colors.accent))
-                                        .text_color(gpui::rgb(colors.text_on_accent))
-                                        .cursor_pointer()
-                                        .on_click(on_save)
-                                        .child("Save"),
-                                ),
-                        ),
-                )
-                .into_any_element(),
-        )
+        // Return the entity's view as an element
+        Some(input_entity.into_any_element())
     }
 
     /// Execute a path action from the actions dialog
