@@ -158,6 +158,8 @@ impl ScriptListApp {
                             dialog.update(cx, |d, _cx| {
                                 d.set_cursor_visible(app.cursor_visible);
                             });
+                            // Notify the actions window to repaint with new cursor state
+                            notify_actions_window(cx);
                         }
                         cx.notify();
                     })
@@ -2995,6 +2997,8 @@ impl ScriptListApp {
 
         if is_key_backspace(key) {
             dialog.update(cx, |d, cx| d.handle_backspace(cx));
+            crate::actions::notify_actions_window(cx);
+            crate::actions::resize_actions_window(cx, dialog);
             return ActionsRoute::Handled;
         }
 
@@ -3003,6 +3007,8 @@ impl ScriptListApp {
         if !modifiers.platform && !modifiers.control && !modifiers.alt {
             if let Some(ch) = printable_char(key_char) {
                 dialog.update(cx, |d, cx| d.handle_char(ch, cx));
+                crate::actions::notify_actions_window(cx);
+                crate::actions::resize_actions_window(cx, dialog);
                 return ActionsRoute::Handled;
             }
         }

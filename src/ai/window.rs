@@ -36,16 +36,14 @@ use gpui_component::{
 use objc::{msg_send, sel, sel_impl};
 use tracing::{debug, info};
 
-// Using the unified ActionsDialog component for AI command bar (Cmd+K)
+// Using the unified CommandBar component for AI command bar (Cmd+K)
 // Opens in a separate vibrancy window for proper macOS blur effect
 use super::config::ModelInfo;
 use super::model::{Chat, ChatId, ChatSource, Message, MessageRole};
 use super::providers::ProviderRegistry;
 use super::storage;
-use crate::actions::{
-    close_actions_window, get_ai_command_bar_actions, notify_actions_window, open_actions_window,
-    ActionsDialog, ActionsDialogConfig, AnchorPosition, SearchPosition, SectionStyle,
-};
+use crate::actions::{get_ai_command_bar_actions, CommandBar, CommandBarConfig};
+use crate::theme;
 
 /// Events from the streaming thread
 enum StreamingEvent {
@@ -394,11 +392,8 @@ pub struct AiApp {
     api_key_input_state: Entity<InputState>,
 
     // === Command Bar State ===
-    /// Whether the command bar is visible (Cmd+K)
-    showing_command_bar: bool,
-
-    /// The command bar dialog entity (uses the unified ActionsDialog component)
-    command_bar_dialog: Option<Entity<ActionsDialog>>,
+    /// Command bar component (Cmd+K) - uses the unified CommandBar wrapper
+    command_bar: CommandBar,
 
     // === Model Picker State ===
     /// Whether the model picker dropdown is visible
@@ -563,9 +558,12 @@ impl AiApp {
             setup_copied_at: None,
             showing_api_key_input: false,
             api_key_input_state,
-            // Command bar state (uses the unified ActionsDialog component)
-            showing_command_bar: false,
-            command_bar_dialog: None,
+            // Command bar state (uses the unified CommandBar component)
+            command_bar: CommandBar::new(
+                get_ai_command_bar_actions(),
+                CommandBarConfig::ai_style(),
+                std::sync::Arc::new(theme::load_theme()),
+            ),
             // Model picker state
             showing_model_picker: false,
             model_picker_selected_index: 0,
@@ -900,140 +898,50 @@ impl AiApp {
     }
 
     // === Command Bar Methods ===
+    // These delegate to the CommandBar component which handles all window/state management.
 
     /// Show the command bar as a separate vibrancy window (Cmd+K)
-    /// Creates a new ActionsDialog entity and opens it in a floating window with macOS blur.
     fn show_command_bar(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        // Load theme
-        let theme = std::sync::Arc::new(crate::theme::load_theme());
-
-        // Get AI-specific actions from the unified actions module
-        let actions = get_ai_command_bar_actions();
-
-        // Configure for AI-style command bar:
-        // - Search at top (like Raycast Cmd+K)
-        // - Section headers (not separators)
-        // - Icons shown
-        // - Footer with keyboard hints
-        let config = ActionsDialogConfig {
-            search_position: SearchPosition::Top,
-            section_style: SectionStyle::Headers,
-            anchor: AnchorPosition::Top,
-            show_icons: true,
-            show_footer: true,
-        };
-
-        // Create the dialog with a callback for action selection
-        // The callback is unused here because we handle actions via get_selected_action_id()
-        let on_select: std::sync::Arc<dyn Fn(String) + Send + Sync> =
-            std::sync::Arc::new(|_action_id: String| {
-                // Action handling is done via execute_command_bar_action()
-            });
-
-        // Create the ActionsDialog with config
-        let dialog = cx.new(|cx| {
-            ActionsDialog::with_config(cx.focus_handle(), on_select, actions, theme, config)
-        });
-
-        // Get window bounds and display for positioning the vibrancy window
-        let ai_window_bounds = window.bounds();
-        let display_id = window.display(cx).map(|d| d.id());
-
-        // Store dialog for keyboard routing
-        self.command_bar_dialog = Some(dialog.clone());
-        self.showing_command_bar = true;
+        // Open the command bar (CommandBar handles window creation internally)
+        self.command_bar.open(window, cx);
 
         // CRITICAL: Focus main focus_handle so keyboard events route to us, not the vibrancy window
-        // This is the same pattern used by the main app when opening its actions popup
         self.focus_handle.focus(window, cx);
 
-        // Open the command bar in a separate vibrancy window
-        // The window will be positioned relative to the AI window
-        cx.spawn(async move |this, cx| {
-            cx.update(
-                |cx| match open_actions_window(cx, ai_window_bounds, display_id, dialog) {
-                    Ok(_handle) => {
-                        crate::logging::log("AI", "Command bar vibrancy window opened");
-                    }
-                    Err(e) => {
-                        crate::logging::log(
-                            "AI",
-                            &format!("Failed to open command bar window: {}", e),
-                        );
-                    }
-                },
-            )
-            .ok();
-
-            // Request re-focus after the vibrancy window opens
-            // The render function will apply focus to main focus_handle (not input)
-            // so keyboard events route to the window's key handler for command bar navigation
-            this.update(cx, |this, cx| {
-                this.needs_command_bar_focus = true;
-                cx.notify();
-                crate::logging::log("AI", "Requested command bar focus after window opened");
-            })
-            .ok();
-        })
-        .detach();
-
+        // Request command bar focus on next render for keyboard routing
+        self.needs_command_bar_focus = true;
         cx.notify();
     }
 
     /// Hide the command bar (closes the vibrancy window)
     fn hide_command_bar(&mut self, cx: &mut Context<Self>) {
-        self.showing_command_bar = false;
-        self.command_bar_dialog = None;
-        // Close the separate vibrancy window
-        close_actions_window(cx);
-        cx.notify();
+        self.command_bar.close(cx);
     }
 
     /// Handle character input in command bar
     fn command_bar_handle_char(&mut self, ch: char, cx: &mut Context<Self>) {
-        if let Some(dialog) = &self.command_bar_dialog {
-            dialog.update(cx, |d, cx| d.handle_char(ch, cx));
-            // Notify the vibrancy window to re-render with updated state
-            notify_actions_window(cx);
-        }
+        self.command_bar.handle_char(ch, cx);
     }
 
     /// Handle backspace in command bar
     fn command_bar_handle_backspace(&mut self, cx: &mut Context<Self>) {
-        if let Some(dialog) = &self.command_bar_dialog {
-            dialog.update(cx, |d, cx| d.handle_backspace(cx));
-            // Notify the vibrancy window to re-render with updated state
-            notify_actions_window(cx);
-        }
+        self.command_bar.handle_backspace(cx);
     }
 
     /// Move selection up in command bar
     fn command_bar_select_prev(&mut self, cx: &mut Context<Self>) {
-        if let Some(dialog) = &self.command_bar_dialog {
-            dialog.update(cx, |d, cx| d.move_up(cx));
-            // Notify the vibrancy window to re-render with updated state
-            notify_actions_window(cx);
-        }
+        self.command_bar.select_prev(cx);
     }
 
     /// Move selection down in command bar
     fn command_bar_select_next(&mut self, cx: &mut Context<Self>) {
-        if let Some(dialog) = &self.command_bar_dialog {
-            dialog.update(cx, |d, cx| d.move_down(cx));
-            // Notify the vibrancy window to re-render with updated state
-            notify_actions_window(cx);
-        }
+        self.command_bar.select_next(cx);
     }
 
     /// Execute the selected command bar action
     fn execute_command_bar_action(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(dialog) = &self.command_bar_dialog {
-            // Get the selected action ID before hiding
-            let action_id = dialog.read(cx).get_selected_action_id();
-            if let Some(action_id) = action_id {
-                self.hide_command_bar(cx);
-                self.execute_action(&action_id, window, cx);
-            }
+        if let Some(action_id) = self.command_bar.execute_selected_action(cx) {
+            self.execute_action(&action_id, window, cx);
         }
     }
 
@@ -1292,11 +1200,7 @@ impl AiApp {
     /// Hide all dropdowns (including closing the command bar vibrancy window)
     fn hide_all_dropdowns(&mut self, cx: &mut Context<Self>) {
         // Close command bar vibrancy window if open
-        if self.showing_command_bar {
-            close_actions_window(cx);
-        }
-        self.showing_command_bar = false;
-        self.command_bar_dialog = None;
+        self.command_bar.close_app(cx);
         self.showing_model_picker = false;
         self.showing_presets_dropdown = false;
         self.showing_attachments_picker = false;
@@ -3414,8 +3318,8 @@ impl Render for AiApp {
                 }
 
                 // Handle command bar navigation when it's open
-                // This routes all relevant keys to the ActionsDialog
-                if this.showing_command_bar {
+                // This routes all relevant keys to the CommandBar
+                if this.command_bar.is_open() {
                     match key {
                         "up" | "arrowup" => {
                             this.command_bar_select_prev(cx);
@@ -3513,7 +3417,7 @@ impl Render for AiApp {
                     match key {
                         // Cmd+K to toggle command bar (like Raycast)
                         "k" => {
-                            if this.showing_command_bar {
+                            if this.command_bar.is_open() {
                                 this.hide_command_bar(cx);
                             } else {
                                 this.hide_all_dropdowns(cx);
@@ -3566,7 +3470,7 @@ impl Render for AiApp {
 
                 // Escape closes any open dropdown
                 if key == "escape"
-                    && (this.showing_command_bar
+                    && (this.command_bar.is_open()
                         || this.showing_model_picker
                         || this.showing_presets_dropdown
                         || this.showing_attachments_picker)
@@ -3594,30 +3498,15 @@ impl AiApp {
     /// Render the command bar overlay (Raycast-style Cmd+K menu)
     /// NOTE: This is kept for reference but no longer used - command bar now uses separate vibrancy window
     #[allow(dead_code)]
-    fn render_command_bar_overlay(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        // Semi-transparent overlay background
-        div()
-            .id("command-bar-overlay")
-            .absolute()
-            .inset_0()
-            .flex()
-            .items_center()
-            .justify_center()
-            .bg(gpui::rgba(0x00000080)) // Semi-transparent black overlay
-            .on_click(cx.listener(|this, _, _, cx| {
-                // Close when clicking outside the command bar
-                this.hide_command_bar(cx);
-            }))
-            .when_some(self.command_bar_dialog.as_ref(), |el, dialog| {
-                el.child(
-                    div()
-                        .id("command-bar-container")
-                        .on_click(cx.listener(|_, _, _, _| {
-                            // Stop propagation - don't close when clicking inside
-                        }))
-                        .child(dialog.clone()),
-                )
-            })
+    /// Render the command bar overlay (deprecated - CommandBar now uses separate vibrancy window)
+    ///
+    /// This function is kept for API compatibility but returns an empty element.
+    /// The CommandBar component now manages its own window via `open_actions_window()`.
+    #[allow(dead_code)]
+    fn render_command_bar_overlay(&self, _cx: &mut Context<Self>) -> impl IntoElement {
+        // Command bar now renders in a separate vibrancy window (not inline)
+        // See CommandBar component for window management
+        div().id("command-bar-overlay-deprecated")
     }
 
     /// Render the model picker dropdown overlay

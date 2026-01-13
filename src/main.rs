@@ -522,7 +522,14 @@ fn hide_main_window_helper(app_entity: Entity<ScriptListApp>, cx: &mut App) {
             "VISIBILITY",
             "Using hide_main_window() - secondary windows are open",
         );
-        platform::hide_main_window();
+        // Defer the platform call to avoid RefCell borrow conflicts.
+        // GPUI may still have internal state borrowed; spawning defers to next event loop tick.
+        cx.spawn(async move |cx: &mut gpui::AsyncApp| {
+            let _ = cx.update(|_cx: &mut gpui::App| {
+                platform::hide_main_window();
+            });
+        })
+        .detach();
     } else {
         logging::log("VISIBILITY", "Using cx.hide() - no secondary windows");
         cx.hide();
@@ -1484,17 +1491,24 @@ impl Render for ScriptListApp {
             // Window just lost focus (user clicked another window)
             // Only auto-dismiss if we're in a dismissable view AND window is visible AND not pinned
             // AND we're past the focus grace period (prevents race condition on window open)
+            // AND the actions popup is not open (actions popup is a companion window, not "losing focus")
             if self.is_dismissable_view()
                 && script_kit_gpui::is_main_window_visible()
                 && !self.is_pinned
                 && !script_kit_gpui::is_within_focus_grace_period()
                 && !confirm::is_confirm_window_open()
+                && !actions::is_actions_window_open()
             {
                 logging::log(
                     "FOCUS",
                     "Main window lost focus while in dismissable view - closing",
                 );
                 self.close_and_reset_window(cx);
+            } else if actions::is_actions_window_open() {
+                logging::log(
+                    "FOCUS",
+                    "Main window lost focus but actions popup is open - staying open",
+                );
             } else if confirm::is_confirm_window_open() {
                 logging::log(
                     "FOCUS",
