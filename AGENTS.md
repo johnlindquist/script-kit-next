@@ -20,6 +20,99 @@ Do these, in order:
 
 ---
 
+## 0.5 Autonomous Fix-Verify Workflow (CRITICAL - NEVER SKIP)
+
+**This is the gold-standard workflow for AI agents fixing bugs.** Do NOT ask the user to test. Do NOT skip verification.
+
+### The Loop: Fix → Build → Launch → Check Logs → Verify
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  1. EXPLORE: Understand the problem                             │
+│     - Use Task tool with explore agent for codebase search      │
+│     - Read relevant files (grep/glob for keywords)              │
+│     - Identify root cause before writing any code               │
+├─────────────────────────────────────────────────────────────────┤
+│  2. FIX: Make the code change                                   │
+│     - Edit the file(s)                                          │
+│     - Keep changes minimal and focused                          │
+├─────────────────────────────────────────────────────────────────┤
+│  3. BUILD: Compile and verify                                   │
+│     cargo check && cargo clippy --all-targets -- -D warnings    │
+├─────────────────────────────────────────────────────────────────┤
+│  4. LAUNCH: Run the app with logging                            │
+│     echo '{"type":"show"}' | SCRIPT_KIT_AI_LOG=1 \              │
+│       ./target/debug/script-kit-gpui 2>&1                       │
+│                                                                 │
+│     For full debug logs: RUST_LOG=debug instead                 │
+├─────────────────────────────────────────────────────────────────┤
+│  5. CHECK LOGS: Verify the fix in logs                          │
+│     # Live filtering:                                           │
+│     ... | grep -iE 'keyword|pattern'                            │
+│                                                                 │
+│     # Check persisted logs:                                     │
+│     grep -i "keyword" ~/.scriptkit/logs/script-kit-gpui.jsonl   │
+├─────────────────────────────────────────────────────────────────┤
+│  6. VISUAL VERIFY (if UI change):                               │
+│     - Write test script with captureScreenshot()                │
+│     - Save PNG to ./test-screenshots/                           │
+│     - READ the PNG file to actually verify                      │
+├─────────────────────────────────────────────────────────────────┤
+│  7. RUN TESTS: Full verification gate                           │
+│     cargo test                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Example: Vibrancy Fix Session (Real Success)
+
+```bash
+# 1. Explored codebase with Task tool - found NSVisualEffectView config
+# 2. Fixed: Changed setState from 0 to 1 in platform.rs
+# 3. Built:
+cargo check && cargo clippy --all-targets -- -D warnings
+
+# 4. Launched app:
+timeout 8 bash -c 'echo '\''{"type":"show"}'\'' | \
+  SCRIPT_KIT_AI_LOG=1 ./target/debug/script-kit-gpui 2>&1'
+
+# 5. Checked logs for the specific config:
+grep -i "NSVisualEffectView config" ~/.scriptkit/logs/script-kit-gpui.jsonl | tail -3
+# Output showed: "state 1 -> 1" (fix confirmed!)
+
+# 6. Ran tests:
+cargo test
+# All passed!
+```
+
+### Log Modes
+
+| Mode | Command | Use Case |
+|------|---------|----------|
+| Compact AI logs | `SCRIPT_KIT_AI_LOG=1` | Default for AI agents (saves tokens) |
+| Full debug logs | `RUST_LOG=debug` | Deep debugging, trace issues |
+| Specific module | `RUST_LOG=script_kit::theme=debug` | Target one module |
+
+### Anti-Patterns (FAILURES)
+
+❌ "The user should test this manually"  
+❌ "I made the change, it should work"  
+❌ Making a fix without checking logs  
+❌ Capturing screenshot but not reading the PNG  
+❌ Skipping `cargo check` before launch  
+❌ Not using `SCRIPT_KIT_AI_LOG=1` or `RUST_LOG=debug`  
+
+### Success Indicators
+
+✅ Explored codebase before fixing  
+✅ Made targeted fix based on understanding  
+✅ `cargo check` + `cargo clippy` pass  
+✅ Launched app and checked relevant logs  
+✅ Logs confirm the change took effect  
+✅ `cargo test` passes  
+✅ (If visual) Screenshot captured AND read  
+
+---
+
 ## 1. UI testing (CRITICAL)
 
 ### 1.1 Stdin JSON protocol (ONLY supported way)

@@ -853,14 +853,16 @@ unsafe fn configure_visual_effect_views_recursive(view: id, count: &mut usize) {
         // ╔════════════════════════════════════════════════════════════════════════════╗
         // ║ NSVISUALEFFECTVIEW SETTINGS - DO NOT CHANGE WITHOUT TESTING               ║
         // ╠════════════════════════════════════════════════════════════════════════════╣
-        // ║ These settings match Electron's vibrancy:'popover' + visualEffectState:'followWindow' ║
-        // ║ Combined with windowBackgroundColor + 37% tint alpha in gpui_integration.rs ║
-        // ║ See: /Users/johnlindquist/dev/mac-panel-window/panel-window.mm           ║
+        // ║ These settings use 'active' state to prevent dimming when child windows   ║
+        // ║ (like Actions popup) take focus. Combined with tint alpha in              ║
+        // ║ gpui_integration.rs. See: /Users/johnlindquist/dev/mac-panel-window/      ║
         // ╚════════════════════════════════════════════════════════════════════════════╝
         // POPOVER (6) - matches Electron's vibrancy: 'popover'
         let _: () = msg_send![view, setMaterial: ns_visual_effect_material::POPOVER];
-        // State 0 = followsWindowActiveState (matches Electron's visualEffectState: 'followWindow')
-        let _: () = msg_send![view, setState: 0isize];
+        // State 1 = active (always vibrant, doesn't dim when window loses key focus)
+        // This prevents the main window from dimming when Actions popup opens
+        // NSVisualEffectState: 0=followsWindowActiveState, 1=active, 2=inactive
+        let _: () = msg_send![view, setState: 1isize];
         // BehindWindow blending (0) - blur content behind the window
         let _: () = msg_send![view, setBlendingMode: 0isize];
         // Emphasized for more contrast
