@@ -88,37 +88,25 @@ impl ScriptListApp {
                         scripts::SearchResult::Script(m) => Some(m.script.path.clone()),
                         scripts::SearchResult::App(m) => Some(m.app.path.clone()),
                         scripts::SearchResult::Agent(m) => Some(m.agent.path.clone()),
-                        scripts::SearchResult::Scriptlet(_) => {
-                            self.last_output =
-                                Some(SharedString::from("Cannot reveal scriptlets in Finder"));
-                            None
-                        }
-                        scripts::SearchResult::BuiltIn(_) => {
-                            self.last_output =
-                                Some(SharedString::from("Cannot reveal built-in features"));
-                            None
-                        }
-                        scripts::SearchResult::Window(_) => {
-                            self.last_output =
-                                Some(SharedString::from("Cannot reveal windows in Finder"));
-                            None
-                        }
-                        scripts::SearchResult::Fallback(_) => {
-                            self.last_output = Some(SharedString::from(
-                                "Cannot reveal fallback commands in Finder",
-                            ));
-                            None
-                        }
+                        scripts::SearchResult::Scriptlet(_) => None,
+                        scripts::SearchResult::BuiltIn(_) => None,
+                        scripts::SearchResult::Window(_) => None,
+                        scripts::SearchResult::Fallback(_) => None,
                     }
                 } else {
-                    self.last_output = Some(SharedString::from("No item selected"));
                     None
                 };
 
                 if let Some(path) = path_opt {
                     self.reveal_in_finder(&path);
-                    self.last_output = Some(SharedString::from("Revealed in Finder"));
+                    self.show_hud("Revealed in Finder".to_string(), Some(1500), cx);
                     self.hide_main_and_reset(cx);
+                } else {
+                    self.show_hud(
+                        "Cannot reveal this item type in Finder".to_string(),
+                        Some(2000),
+                        cx,
+                    );
                 }
             }
             "copy_path" => {
@@ -139,29 +127,21 @@ impl ScriptListApp {
                         scripts::SearchResult::Agent(m) => {
                             Some(m.agent.path.to_string_lossy().to_string())
                         }
-                        scripts::SearchResult::Scriptlet(_) => {
-                            self.last_output =
-                                Some(SharedString::from("Cannot copy scriptlet path"));
-                            None
-                        }
-                        scripts::SearchResult::BuiltIn(_) => {
-                            self.last_output =
-                                Some(SharedString::from("Cannot copy built-in path"));
-                            None
-                        }
-                        scripts::SearchResult::Window(_) => {
-                            self.last_output = Some(SharedString::from("Cannot copy window path"));
-                            None
-                        }
-                        scripts::SearchResult::Fallback(_) => {
-                            self.last_output =
-                                Some(SharedString::from("Cannot copy fallback command path"));
-                            None
-                        }
+                        scripts::SearchResult::Scriptlet(_) => None,
+                        scripts::SearchResult::BuiltIn(_) => None,
+                        scripts::SearchResult::Window(_) => None,
+                        scripts::SearchResult::Fallback(_) => None,
                     };
+                    if path_opt.is_none() {
+                        self.show_hud(
+                            "Cannot copy path for this item type".to_string(),
+                            Some(2000),
+                            cx,
+                        );
+                    }
                     path_opt
                 } else {
-                    self.last_output = Some(SharedString::from("No item selected"));
+                    self.show_hud("No item selected".to_string(), Some(2000), cx);
                     None
                 };
 
@@ -174,12 +154,11 @@ impl ScriptListApp {
                                     "UI",
                                     &format!("Copied path to clipboard: {}", path_str),
                                 );
-                                self.last_output =
-                                    Some(SharedString::from(format!("Copied: {}", path_str)));
+                                self.show_hud(format!("Copied: {}", path_str), Some(2000), cx);
                             }
                             Err(e) => {
                                 logging::log("ERROR", &format!("pbcopy failed: {}", e));
-                                self.last_output = Some(SharedString::from("Failed to copy path"));
+                                self.show_hud("Failed to copy path".to_string(), Some(3000), cx);
                             }
                         }
                     }
@@ -193,15 +172,15 @@ impl ScriptListApp {
                                     "UI",
                                     &format!("Copied path to clipboard: {}", path_str),
                                 );
-                                self.last_output =
-                                    Some(SharedString::from(format!("Copied: {}", path_str)));
+                                self.show_hud(format!("Copied: {}", path_str), Some(2000), cx);
                             }
                             Err(e) => {
                                 logging::log("ERROR", &format!("Failed to copy path: {}", e));
-                                self.last_output = Some(SharedString::from("Failed to copy path"));
+                                self.show_hud("Failed to copy path".to_string(), Some(3000), cx);
                             }
                         }
                     }
+                    self.hide_main_and_reset(cx);
                 }
             }
             "copy_deeplink" => {
@@ -219,13 +198,15 @@ impl ScriptListApp {
                                     "UI",
                                     &format!("Copied deeplink to clipboard: {}", deeplink_url),
                                 );
-                                self.last_output =
-                                    Some(SharedString::from(format!("Copied: {}", deeplink_url)));
+                                self.show_hud(format!("Copied: {}", deeplink_url), Some(2000), cx);
                             }
                             Err(e) => {
                                 logging::log("ERROR", &format!("pbcopy failed: {}", e));
-                                self.last_output =
-                                    Some(SharedString::from("Failed to copy deeplink"));
+                                self.show_hud(
+                                    "Failed to copy deeplink".to_string(),
+                                    Some(3000),
+                                    cx,
+                                );
                             }
                         }
                     }
@@ -239,19 +220,21 @@ impl ScriptListApp {
                                     "UI",
                                     &format!("Copied deeplink to clipboard: {}", deeplink_url),
                                 );
-                                self.last_output =
-                                    Some(SharedString::from(format!("Copied: {}", deeplink_url)));
+                                self.show_hud(format!("Copied: {}", deeplink_url), Some(2000), cx);
                             }
                             Err(e) => {
                                 logging::log("ERROR", &format!("Failed to copy deeplink: {}", e));
-                                self.last_output =
-                                    Some(SharedString::from("Failed to copy deeplink"));
+                                self.show_hud(
+                                    "Failed to copy deeplink".to_string(),
+                                    Some(3000),
+                                    cx,
+                                );
                             }
                         }
                     }
                     self.hide_main_and_reset(cx);
                 } else {
-                    self.last_output = Some(SharedString::from("No item selected"));
+                    self.show_hud("No item selected".to_string(), Some(2000), cx);
                 }
             }
             // Handle both legacy "configure_shortcut" and new dynamic actions
@@ -339,11 +322,7 @@ impl ScriptListApp {
                             }
                         }
                         scripts::SearchResult::Agent(m) => Some(format!("agent/{}", m.agent.name)),
-                        scripts::SearchResult::Window(_) => {
-                            self.last_output =
-                                Some(SharedString::from("Window shortcuts not supported"));
-                            None
-                        }
+                        scripts::SearchResult::Window(_) => None,
                         scripts::SearchResult::Fallback(m) => {
                             Some(format!("fallback/{}", m.fallback.name()))
                         }
@@ -357,22 +336,29 @@ impl ScriptListApp {
                                     "SHORTCUT",
                                     &format!("Removed shortcut for: {}", command_id),
                                 );
-                                self.last_output = Some(SharedString::from("Shortcut removed"));
+                                self.show_hud("Shortcut removed".to_string(), Some(2000), cx);
                                 // Refresh scripts to update shortcut display
                                 self.refresh_scripts(cx);
                             }
                             Err(e) => {
                                 logging::log("ERROR", &format!("Failed to remove shortcut: {}", e));
-                                self.last_output = Some(SharedString::from(format!(
-                                    "Failed to remove shortcut: {}",
-                                    e
-                                )));
+                                self.show_hud(
+                                    format!("Failed to remove shortcut: {}", e),
+                                    Some(3000),
+                                    cx,
+                                );
                             }
                         }
+                    } else {
+                        self.show_hud(
+                            "Cannot remove shortcut for this item type".to_string(),
+                            Some(2000),
+                            cx,
+                        );
                     }
                     self.hide_main_and_reset(cx);
                 } else {
-                    self.last_output = Some(SharedString::from("No item selected"));
+                    self.show_hud("No item selected".to_string(), Some(2000), cx);
                 }
             }
             // Alias actions: add_alias, update_alias open the alias input
@@ -442,11 +428,7 @@ impl ScriptListApp {
                             }
                         }
                         scripts::SearchResult::Agent(m) => Some(format!("agent/{}", m.agent.name)),
-                        scripts::SearchResult::Window(_) => {
-                            self.last_output =
-                                Some(SharedString::from("Window aliases not supported"));
-                            None
-                        }
+                        scripts::SearchResult::Window(_) => None,
                         scripts::SearchResult::Fallback(m) => {
                             Some(format!("fallback/{}", m.fallback.name()))
                         }
@@ -460,22 +442,29 @@ impl ScriptListApp {
                                     "ALIAS",
                                     &format!("Removed alias for: {}", command_id),
                                 );
-                                self.last_output = Some(SharedString::from("Alias removed"));
+                                self.show_hud("Alias removed".to_string(), Some(2000), cx);
                                 // Refresh scripts to update alias display and registry
                                 self.refresh_scripts(cx);
                             }
                             Err(e) => {
                                 logging::log("ERROR", &format!("Failed to remove alias: {}", e));
-                                self.last_output = Some(SharedString::from(format!(
-                                    "Failed to remove alias: {}",
-                                    e
-                                )));
+                                self.show_hud(
+                                    format!("Failed to remove alias: {}", e),
+                                    Some(3000),
+                                    cx,
+                                );
                             }
                         }
+                    } else {
+                        self.show_hud(
+                            "Cannot remove alias for this item type".to_string(),
+                            Some(2000),
+                            cx,
+                        );
                     }
                     self.hide_main_and_reset(cx);
                 } else {
-                    self.last_output = Some(SharedString::from("No item selected"));
+                    self.show_hud("No item selected".to_string(), Some(2000), cx);
                 }
             }
             "edit_script" => {
@@ -724,23 +713,27 @@ impl ScriptListApp {
                             self.invalidate_grouped_cache();
                             self.refresh_scripts(cx);
                             logging::log("UI", &format!("Reset ranking for: {}", script_info.name));
-                            self.last_output = Some(SharedString::from(format!(
-                                "Ranking reset for \"{}\"",
-                                script_info.name
-                            )));
+                            self.show_hud(
+                                format!("Ranking reset for \"{}\"", script_info.name),
+                                Some(2000),
+                                cx,
+                            );
                         } else {
                             logging::log(
                                 "UI",
                                 &format!("No frecency entry found for: {}", frecency_path),
                             );
-                            self.last_output =
-                                Some(SharedString::from("Item has no ranking to reset"));
+                            self.show_hud(
+                                "Item has no ranking to reset".to_string(),
+                                Some(2000),
+                                cx,
+                            );
                         }
                     } else {
-                        self.last_output = Some(SharedString::from("Item has no ranking to reset"));
+                        self.show_hud("Item has no ranking to reset".to_string(), Some(2000), cx);
                     }
                 } else {
-                    self.last_output = Some(SharedString::from("No item selected"));
+                    self.show_hud("No item selected".to_string(), Some(2000), cx);
                 }
                 // Don't hide main window - stay in the main menu so user can see the change
                 // The actions dialog is already closed by setting current_view = AppView::ScriptList
