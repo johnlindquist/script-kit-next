@@ -65,7 +65,7 @@ impl ScriptListApp {
                         }
                     }
                 });
-                self.last_output = Some(SharedString::from("Opened scripts folder"));
+                self.show_hud("Opened scripts folder".to_string(), Some(1500), cx);
                 self.hide_main_and_reset(cx);
             }
             "run_script" => {
@@ -274,9 +274,12 @@ impl ScriptListApp {
                             self.show_shortcut_recorder(command_id, command_name, cx);
                         }
                         scripts::SearchResult::Window(_) => {
-                            self.last_output = Some(SharedString::from(
-                                "Window shortcuts not supported - windows are transient",
-                            ));
+                            self.show_hud(
+                                "Window shortcuts not supported - windows are transient"
+                                    .to_string(),
+                                Some(2500),
+                                cx,
+                            );
                         }
                         scripts::SearchResult::Fallback(m) => {
                             match &m.fallback {
@@ -294,7 +297,7 @@ impl ScriptListApp {
                         }
                     }
                 } else {
-                    self.last_output = Some(SharedString::from("No item selected"));
+                    self.show_hud("No item selected".to_string(), Some(2000), cx);
                 }
             }
             // "remove_shortcut" removes the existing shortcut from the registry
@@ -388,9 +391,11 @@ impl ScriptListApp {
                             (format!("agent/{}", m.agent.name), m.agent.name.clone())
                         }
                         scripts::SearchResult::Window(_) => {
-                            self.last_output = Some(SharedString::from(
-                                "Window aliases not supported - windows are transient",
-                            ));
+                            self.show_hud(
+                                "Window aliases not supported - windows are transient".to_string(),
+                                Some(2500),
+                                cx,
+                            );
                             return;
                         }
                         scripts::SearchResult::Fallback(m) => (
@@ -400,7 +405,7 @@ impl ScriptListApp {
                     };
                     self.show_alias_input(command_id, command_name, cx);
                 } else {
-                    self.last_output = Some(SharedString::from("No item selected"));
+                    self.show_hud("No item selected".to_string(), Some(2000), cx);
                 }
             }
             // "remove_alias" removes the existing alias from persistence
@@ -473,46 +478,31 @@ impl ScriptListApp {
                     let path_opt = match result {
                         scripts::SearchResult::Script(m) => Some(m.script.path.clone()),
                         scripts::SearchResult::Agent(m) => Some(m.agent.path.clone()),
-                        scripts::SearchResult::Scriptlet(_) => {
-                            self.last_output = Some(SharedString::from("Cannot edit scriptlets"));
-                            None
-                        }
-                        scripts::SearchResult::BuiltIn(_) => {
-                            self.last_output =
-                                Some(SharedString::from("Cannot edit built-in features"));
-                            None
-                        }
-                        scripts::SearchResult::App(_) => {
-                            self.last_output = Some(SharedString::from("Cannot edit applications"));
-                            None
-                        }
-                        scripts::SearchResult::Window(_) => {
-                            self.last_output = Some(SharedString::from("Cannot edit windows"));
-                            None
-                        }
-                        scripts::SearchResult::Fallback(_) => {
-                            self.last_output =
-                                Some(SharedString::from("Cannot edit fallback commands"));
-                            None
-                        }
+                        scripts::SearchResult::Scriptlet(_) => None,
+                        scripts::SearchResult::BuiltIn(_) => None,
+                        scripts::SearchResult::App(_) => None,
+                        scripts::SearchResult::Window(_) => None,
+                        scripts::SearchResult::Fallback(_) => None,
                     };
 
                     if let Some(path) = path_opt {
                         self.edit_script(&path);
                         self.hide_main_and_reset(cx);
+                    } else {
+                        self.show_hud("Cannot edit this item type".to_string(), Some(2000), cx);
                     }
                 } else {
-                    self.last_output = Some(SharedString::from("No script selected"));
+                    self.show_hud("No script selected".to_string(), Some(2000), cx);
                 }
             }
             "reload_scripts" => {
                 logging::log("UI", "Reload scripts action");
                 self.refresh_scripts(cx);
-                self.last_output = Some(SharedString::from("Scripts reloaded"));
+                self.show_hud("Scripts reloaded".to_string(), Some(1500), cx);
             }
             "settings" => {
                 logging::log("UI", "Settings action");
-                self.last_output = Some(SharedString::from("Settings (TODO)"));
+                self.show_hud("Settings (TODO)".to_string(), Some(2000), cx);
             }
             "quit" => {
                 logging::log("UI", "Quit action");
@@ -573,8 +563,9 @@ impl ScriptListApp {
                         use arboard::Clipboard;
                         let _ = Clipboard::new().and_then(|mut c| c.set_text(filename));
                     }
-                    self.last_output = Some(SharedString::from(format!("Copied: {}", filename)));
+                    self.show_hud(format!("Copied: {}", filename), Some(2000), cx);
                     self.file_search_actions_path = None;
+                    self.hide_main_and_reset(cx);
                 }
             }
             // Scriptlet-specific actions
@@ -589,15 +580,21 @@ impl ScriptListApp {
                             self.edit_script(&path);
                             self.hide_main_and_reset(cx);
                         } else {
-                            self.last_output =
-                                Some(SharedString::from("Scriptlet has no source file path"));
+                            self.show_hud(
+                                "Scriptlet has no source file path".to_string(),
+                                Some(2000),
+                                cx,
+                            );
                         }
                     } else {
-                        self.last_output =
-                            Some(SharedString::from("Selected item is not a scriptlet"));
+                        self.show_hud(
+                            "Selected item is not a scriptlet".to_string(),
+                            Some(2000),
+                            cx,
+                        );
                     }
                 } else {
-                    self.last_output = Some(SharedString::from("No item selected"));
+                    self.show_hud("No item selected".to_string(), Some(2000), cx);
                 }
             }
             "reveal_scriptlet_in_finder" => {
@@ -609,18 +606,24 @@ impl ScriptListApp {
                             let path_str = file_path.split('#').next().unwrap_or(file_path);
                             let path = std::path::Path::new(path_str);
                             self.reveal_in_finder(path);
-                            self.last_output = Some(SharedString::from("Revealed in Finder"));
+                            self.show_hud("Revealed in Finder".to_string(), Some(1500), cx);
                             self.hide_main_and_reset(cx);
                         } else {
-                            self.last_output =
-                                Some(SharedString::from("Scriptlet has no source file path"));
+                            self.show_hud(
+                                "Scriptlet has no source file path".to_string(),
+                                Some(2000),
+                                cx,
+                            );
                         }
                     } else {
-                        self.last_output =
-                            Some(SharedString::from("Selected item is not a scriptlet"));
+                        self.show_hud(
+                            "Selected item is not a scriptlet".to_string(),
+                            Some(2000),
+                            cx,
+                        );
                     }
                 } else {
-                    self.last_output = Some(SharedString::from("No item selected"));
+                    self.show_hud("No item selected".to_string(), Some(2000), cx);
                 }
             }
             "copy_scriptlet_path" => {
@@ -642,15 +645,19 @@ impl ScriptListApp {
                                                 path_str
                                             ),
                                         );
-                                        self.last_output = Some(SharedString::from(format!(
-                                            "Copied: {}",
-                                            path_str
-                                        )));
+                                        self.show_hud(
+                                            format!("Copied: {}", path_str),
+                                            Some(2000),
+                                            cx,
+                                        );
                                     }
                                     Err(e) => {
                                         logging::log("ERROR", &format!("pbcopy failed: {}", e));
-                                        self.last_output =
-                                            Some(SharedString::from("Failed to copy path"));
+                                        self.show_hud(
+                                            "Failed to copy path".to_string(),
+                                            Some(3000),
+                                            cx,
+                                        );
                                     }
                                 }
                             }
@@ -667,31 +674,42 @@ impl ScriptListApp {
                                                 path_str
                                             ),
                                         );
-                                        self.last_output = Some(SharedString::from(format!(
-                                            "Copied: {}",
-                                            path_str
-                                        )));
+                                        self.show_hud(
+                                            format!("Copied: {}", path_str),
+                                            Some(2000),
+                                            cx,
+                                        );
                                     }
                                     Err(e) => {
                                         logging::log(
                                             "ERROR",
                                             &format!("Failed to copy path: {}", e),
                                         );
-                                        self.last_output =
-                                            Some(SharedString::from("Failed to copy path"));
+                                        self.show_hud(
+                                            "Failed to copy path".to_string(),
+                                            Some(3000),
+                                            cx,
+                                        );
                                     }
                                 }
                             }
+                            self.hide_main_and_reset(cx);
                         } else {
-                            self.last_output =
-                                Some(SharedString::from("Scriptlet has no source file path"));
+                            self.show_hud(
+                                "Scriptlet has no source file path".to_string(),
+                                Some(2000),
+                                cx,
+                            );
                         }
                     } else {
-                        self.last_output =
-                            Some(SharedString::from("Selected item is not a scriptlet"));
+                        self.show_hud(
+                            "Selected item is not a scriptlet".to_string(),
+                            Some(2000),
+                            cx,
+                        );
                     }
                 } else {
-                    self.last_output = Some(SharedString::from("No item selected"));
+                    self.show_hud("No item selected".to_string(), Some(2000), cx);
                 }
             }
             "reset_ranking" => {
@@ -826,9 +844,11 @@ impl ScriptListApp {
                                                             action.name
                                                         ),
                                                     );
-                                                    self.last_output = Some(SharedString::from(
+                                                    self.show_hud(
                                                         format!("Executed: {}", action.name),
-                                                    ));
+                                                        Some(2000),
+                                                        cx,
+                                                    );
                                                 } else {
                                                     let error_msg = if exec_result.stderr.is_empty()
                                                     {
@@ -843,9 +863,11 @@ impl ScriptListApp {
                                                             action.name, error_msg
                                                         ),
                                                     );
-                                                    self.last_output = Some(SharedString::from(
+                                                    self.show_hud(
                                                         format!("Error: {}", error_msg),
-                                                    ));
+                                                        Some(3000),
+                                                        cx,
+                                                    );
                                                 }
                                             }
                                             Err(e) => {
@@ -856,9 +878,11 @@ impl ScriptListApp {
                                                         action.name, e
                                                     ),
                                                 );
-                                                self.last_output = Some(SharedString::from(
+                                                self.show_hud(
                                                     format!("Error: {}", e),
-                                                ));
+                                                    Some(3000),
+                                                    cx,
+                                                );
                                             }
                                         }
                                         self.hide_main_and_reset(cx);
@@ -885,15 +909,17 @@ impl ScriptListApp {
                                 "ERROR",
                                 &format!("Scriptlet action not found: {}", action_command),
                             );
-                            self.last_output =
-                                Some(SharedString::from("Scriptlet action not found"));
+                            self.show_hud("Scriptlet action not found".to_string(), Some(2000), cx);
                         }
                     } else {
-                        self.last_output =
-                            Some(SharedString::from("Selected item is not a scriptlet"));
+                        self.show_hud(
+                            "Selected item is not a scriptlet".to_string(),
+                            Some(2000),
+                            cx,
+                        );
                     }
                 } else {
-                    self.last_output = Some(SharedString::from("No item selected"));
+                    self.show_hud("No item selected".to_string(), Some(2000), cx);
                 }
             }
             _ => {
