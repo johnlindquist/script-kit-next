@@ -1206,6 +1206,93 @@ pub fn configure_actions_popup_window(_window: *mut std::ffi::c_void) {
 }
 
 // ============================================================================
+// Secondary Window Vibrancy Configuration
+// ============================================================================
+
+/// Configure vibrancy for a secondary window (Notes, AI, etc.)
+///
+/// This applies the same VibrantDark appearance and NSVisualEffectView configuration
+/// that the main window and actions popup use, ensuring consistent blur effect
+/// across all Script Kit windows.
+///
+/// # Arguments
+/// * `window` - The NSWindow pointer to configure
+/// * `window_name` - Name for logging (e.g., "Notes", "AI")
+///
+/// # Safety
+/// - `window` must be a valid NSWindow pointer
+/// - Must be called on the main thread
+#[cfg(target_os = "macos")]
+pub unsafe fn configure_secondary_window_vibrancy(window: id, window_name: &str) {
+    if window.is_null() {
+        logging::log(
+            "PANEL",
+            &format!(
+                "WARNING: Cannot configure null window for {} vibrancy",
+                window_name
+            ),
+        );
+        return;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // VIBRANCY CONFIGURATION - Match main window settings for consistent blur
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    // Set window appearance to VibrantDark for consistent blur rendering
+    // VibrantDark provides better vibrancy effects than DarkAqua - this is what
+    // Raycast/Spotlight use for their blur effect
+    let vibrant_dark: id = msg_send![
+        class!(NSAppearance),
+        appearanceNamed: NSAppearanceNameVibrantDark
+    ];
+    if !vibrant_dark.is_null() {
+        let _: () = msg_send![window, setAppearance: vibrant_dark];
+        logging::log(
+            "PANEL",
+            &format!("{} window: Set appearance to VibrantDark", window_name),
+        );
+    }
+
+    // Use clearColor for window background to allow maximum blur transparency
+    let clear_color: id = msg_send![class!(NSColor), clearColor];
+    let _: () = msg_send![window, setBackgroundColor: clear_color];
+
+    // Mark window as non-opaque to allow transparency/vibrancy
+    let _: () = msg_send![window, setOpaque: false];
+
+    // Enable shadow for native depth perception
+    let _: () = msg_send![window, setHasShadow: true];
+
+    // Configure NSVisualEffectViews in the window hierarchy
+    let content_view: id = msg_send![window, contentView];
+    if !content_view.is_null() {
+        let mut count = 0;
+        configure_visual_effect_views_recursive(content_view, &mut count);
+        logging::log(
+            "PANEL",
+            &format!(
+                "{} window: Configured {} NSVisualEffectView(s)",
+                window_name, count
+            ),
+        );
+    }
+
+    logging::log(
+        "PANEL",
+        &format!(
+            "{} window vibrancy configured (VibrantDark + blur)",
+            window_name
+        ),
+    );
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn configure_secondary_window_vibrancy(_window: *mut std::ffi::c_void, _window_name: &str) {
+    // No-op on non-macOS platforms
+}
+
+// ============================================================================
 // Mouse Position
 // ============================================================================
 
