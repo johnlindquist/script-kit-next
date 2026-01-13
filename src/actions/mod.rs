@@ -15,6 +15,7 @@
 //! - `window`: Separate vibrancy window for actions panel
 
 mod builders;
+mod command_bar;
 mod constants;
 mod dialog;
 mod types;
@@ -45,6 +46,10 @@ pub use window::{
     resize_actions_window,
 };
 // get_actions_window_handle available but not re-exported (use window:: directly if needed)
+
+// CommandBar - high-level reusable component for command palette functionality
+#[allow(unused_imports)]
+pub use command_bar::{is_command_bar_open, CommandBar, CommandBarConfig, CommandBarHost};
 
 #[cfg(test)]
 mod tests {
