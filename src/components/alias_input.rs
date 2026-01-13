@@ -128,6 +128,8 @@ pub struct AliasInput {
     pub current_alias: Option<String>,
     /// Pending action for the parent to handle (polled after render)
     pub pending_action: Option<AliasInputAction>,
+    /// Cursor visibility for blinking (controlled by parent's blink timer)
+    pub cursor_visible: bool,
 }
 
 impl AliasInput {
@@ -148,6 +150,7 @@ impl AliasInput {
             input: TextInputState::new(),
             current_alias: None,
             pending_action: None,
+            cursor_visible: true,
         }
     }
 
@@ -234,6 +237,11 @@ impl AliasInput {
         self.theme = theme;
     }
 
+    /// Update cursor visibility (called from parent's blink timer)
+    pub fn set_cursor_visible(&mut self, visible: bool) {
+        self.cursor_visible = visible;
+    }
+
     /// Render the text input field with cursor and selection
     fn render_input_field(&self, _cx: &mut Context<Self>) -> impl IntoElement {
         let colors = self.colors;
@@ -291,12 +299,12 @@ impl AliasInput {
                     .text_color(rgb(colors.text_primary))
                     .child(before)
                     .child(
-                        // Cursor
+                        // Cursor - conditionally visible for blinking
                         div()
                             .w(px(2.))
                             .h(px(18.))
-                            .bg(rgb(colors.accent))
-                            .rounded(px(1.)),
+                            .rounded(px(1.))
+                            .when(self.cursor_visible, |d| d.bg(rgb(colors.accent))),
                     )
                     .child(after)
             }
