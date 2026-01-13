@@ -55,7 +55,27 @@ impl Focusable for ActionsWindow {
 }
 
 impl Render for ActionsWindow {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        // Log focus state AND window focus state
+        let is_focused = self.focus_handle.is_focused(window);
+        let window_is_active = window.is_window_active();
+        crate::logging::log(
+            "ACTIONS",
+            &format!(
+                "ActionsWindow render: focus_handle.is_focused={}, window_is_active={}",
+                is_focused, window_is_active
+            ),
+        );
+
+        // Ensure we have focus on each render
+        if !is_focused {
+            crate::logging::log(
+                "ACTIONS",
+                "ActionsWindow: focus_handle NOT focused, re-focusing",
+            );
+            self.focus_handle.focus(window, cx);
+        }
+
         // Key handler for the actions window
         // Since this is a separate window, it needs its own key handling
         // (the parent window can't route events to us)
@@ -63,12 +83,23 @@ impl Render for ActionsWindow {
             let key = event.keystroke.key.as_str();
             let modifiers = &event.keystroke.modifiers;
 
+            crate::logging::log(
+                "ACTIONS",
+                &format!(
+                    "ActionsWindow on_key_down received: key='{}', modifiers={:?}",
+                    key, modifiers
+                ),
+            );
+
             match key {
                 "up" | "arrowup" => {
+                    crate::logging::log("ACTIONS", "ActionsWindow: handling UP arrow");
+
                     this.dialog.update(cx, |d, cx| d.move_up(cx));
                     cx.notify();
                 }
                 "down" | "arrowdown" => {
+                    crate::logging::log("ACTIONS", "ActionsWindow: handling DOWN arrow");
                     this.dialog.update(cx, |d, cx| d.move_down(cx));
                     cx.notify();
                 }
@@ -229,7 +260,9 @@ pub fn open_actions_window(
         window_bounds: Some(WindowBounds::Windowed(bounds)),
         titlebar: None, // No titlebar = no drag affordance
         window_background,
-        focus: true, // Take focus so we receive keyboard events for navigation
+        // DON'T take focus - let the parent AI window keep focus and route keys to us
+        // macOS popup windows often don't receive keyboard events properly
+        focus: false,
         show: true,
         kind: WindowKind::PopUp, // Floating popup window
         display_id,              // CRITICAL: Position on same display as main window

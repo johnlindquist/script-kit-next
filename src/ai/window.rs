@@ -271,6 +271,11 @@ enum AiCommand {
     InitializeWithPendingChat,
     /// Show the command bar overlay (Cmd+K menu)
     ShowCommandBar,
+    /// Simulate a key press (for testing)
+    SimulateKey {
+        key: String,
+        modifiers: Vec<String>,
+    },
 }
 
 fn get_pending_commands() -> &'static std::sync::Mutex<Vec<AiCommand>> {
@@ -905,11 +910,31 @@ impl AiApp {
         // Open the command bar (CommandBar handles window creation internally)
         self.command_bar.open(window, cx);
 
-        // CRITICAL: Focus main focus_handle so keyboard events route to us, not the vibrancy window
+        // CRITICAL: Focus main focus_handle so keyboard events route to us
+        // The ActionsWindow is a visual-only popup - it does NOT take keyboard focus.
+        // macOS popup windows often don't receive keyboard events properly.
+        // This also unfocuses the Input component which would otherwise consume arrow keys.
         self.focus_handle.focus(window, cx);
 
         // Request command bar focus on next render for keyboard routing
+        // This ensures the focus persists even if something else tries to steal it
         self.needs_command_bar_focus = true;
+
+        // Log focus state for debugging - check both main handle AND input's focus state
+        let main_focused = self.focus_handle.is_focused(window);
+        let input_focused = self
+            .input_state
+            .read(cx)
+            .focus_handle(cx)
+            .is_focused(window);
+        crate::logging::log(
+            "AI",
+            &format!(
+                "show_command_bar: main_focus={} input_focus={} (input should be false for arrow keys to work)",
+                main_focused, input_focused
+            ),
+        );
+
         cx.notify();
     }
 
@@ -967,6 +992,120 @@ impl AiApp {
             }
             _ => {
                 tracing::warn!(action = action_id, "Unknown action");
+            }
+        }
+    }
+
+    /// Handle a simulated key press (for testing via stdin)
+    fn handle_simulated_key(
+        &mut self,
+        key: &str,
+        modifiers: &[String],
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let has_cmd = modifiers
+            .iter()
+            .any(|m| m == "cmd" || m == "meta" || m == "command");
+        let key_lower = key.to_lowercase();
+
+        crate::logging::log(
+            "AI",
+            &format!(
+                "SimulateKey: key='{}' modifiers={:?} command_bar_open={}",
+                key_lower,
+                modifiers,
+                self.command_bar.is_open()
+            ),
+        );
+
+        // Handle Cmd+K to toggle command bar
+        if has_cmd && key_lower == "k" {
+            crate::logging::log("AI", "SimulateKey: Cmd+K - toggling command bar");
+            if self.command_bar.is_open() {
+                self.hide_command_bar(cx);
+            } else {
+                self.hide_all_dropdowns(cx);
+                self.show_command_bar(window, cx);
+            }
+            return;
+        }
+
+        // Handle command bar navigation when it's open
+        if self.command_bar.is_open() {
+            match key_lower.as_str() {
+                "up" | "arrowup" => {
+                    crate::logging::log("AI", "SimulateKey: Up in command bar");
+                    self.command_bar_select_prev(cx);
+                }
+                "down" | "arrowdown" => {
+                    crate::logging::log("AI", "SimulateKey: Down in command bar");
+                    self.command_bar_select_next(cx);
+                }
+                "enter" => {
+                    crate::logging::log("AI", "SimulateKey: Enter in command bar");
+                    self.execute_command_bar_action(window, cx);
+                }
+                "escape" => {
+                    crate::logging::log("AI", "SimulateKey: Escape - closing command bar");
+                    self.hide_command_bar(cx);
+                }
+                "backspace" | "delete" => {
+                    crate::logging::log("AI", "SimulateKey: Backspace in command bar");
+                    self.command_bar_handle_backspace(cx);
+                }
+                _ => {
+                    // Handle printable characters for search
+                    if let Some(ch) = key_lower.chars().next() {
+                        if ch.is_alphanumeric() || ch.is_whitespace() || ch == '-' || ch == '_' {
+                            crate::logging::log(
+                                "AI",
+                                &format!("SimulateKey: Typing '{}' in command bar search", ch),
+                            );
+                            self.command_bar_handle_char(ch, cx);
+                        }
+                    }
+                }
+            }
+            return;
+        }
+
+        // Handle model picker navigation
+        if self.showing_model_picker {
+            match key_lower.as_str() {
+                "up" | "arrowup" => self.model_picker_select_prev(cx),
+                "down" | "arrowdown" => self.model_picker_select_next(cx),
+                "enter" => self.select_model_from_picker(cx),
+                "escape" => self.hide_model_picker(cx),
+                _ => {}
+            }
+            return;
+        }
+
+        // Handle presets dropdown navigation
+        if self.showing_presets_dropdown {
+            match key_lower.as_str() {
+                "up" | "arrowup" => self.presets_select_prev(cx),
+                "down" | "arrowdown" => self.presets_select_next(cx),
+                "enter" => self.create_chat_with_preset(window, cx),
+                "escape" => self.hide_presets_dropdown(cx),
+                _ => {}
+            }
+            return;
+        }
+
+        // Default key handling (when no overlays are open)
+        match key_lower.as_str() {
+            "escape" => {
+                if self.showing_attachments_picker {
+                    self.hide_attachments_picker(cx);
+                }
+            }
+            _ => {
+                crate::logging::log(
+                    "AI",
+                    &format!("SimulateKey: Unhandled key '{}' in AI window", key_lower),
+                );
             }
         }
     }
@@ -3210,21 +3349,23 @@ impl Render for AiApp {
         // Persist bounds on change (ensures bounds saved even on traffic light close)
         self.maybe_persist_bounds(window);
 
-        // Process focus request flag (set by open_ai_window when bringing existing window to front)
-        // Check both the instance flag and the global atomic flag
-        if self.needs_focus_input
-            || AI_FOCUS_REQUESTED.swap(false, std::sync::atomic::Ordering::SeqCst)
-        {
-            self.needs_focus_input = false;
-            self.focus_input(window, cx);
-        }
-
-        // Process command bar focus request (set after vibrancy window opens)
+        // Process command bar focus request FIRST (set after vibrancy window opens)
         // This ensures keyboard events route to the window's key handler for command bar navigation
+        // CRITICAL: Must check this BEFORE focus_input to prevent input from stealing focus
         if self.needs_command_bar_focus {
             self.needs_command_bar_focus = false;
             self.focus_handle.focus(window, cx);
             crate::logging::log("AI", "Applied command bar focus in render");
+        }
+        // Process focus request flag (set by open_ai_window when bringing existing window to front)
+        // Check both the instance flag and the global atomic flag
+        // SKIP if command bar is open - the main focus_handle should have focus for arrow key routing
+        else if !self.command_bar.is_open()
+            && (self.needs_focus_input
+                || AI_FOCUS_REQUESTED.swap(false, std::sync::atomic::Ordering::SeqCst))
+        {
+            self.needs_focus_input = false;
+            self.focus_input(window, cx);
         }
 
         // Process pending commands (for testing via stdin)
@@ -3286,6 +3427,9 @@ impl Render for AiApp {
                     self.show_command_bar(window, cx);
                     crate::logging::log("AI", "Command bar shown via stdin command");
                 }
+                AiCommand::SimulateKey { key, modifiers } => {
+                    self.handle_simulated_key(&key, &modifiers, window, cx);
+                }
             }
         }
 
@@ -3299,10 +3443,23 @@ impl Render for AiApp {
             .shadow(box_shadows)
             .text_color(cx.theme().foreground)
             .track_focus(&self.focus_handle)
-            .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
+            // CRITICAL: Use capture_key_down to intercept keys BEFORE Input component handles them
+            // This fires during the Capture phase (root->focused), before the Bubble phase (focused->root)
+            // Without this, the Input component would consume arrow keys and command bar navigation fails
+            .capture_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                 // Handle keyboard shortcuts
                 let key = event.keystroke.key.as_str();
                 let modifiers = &event.keystroke.modifiers;
+
+                // Debug: Log ALL key events to verify handler is firing
+                crate::logging::log(
+                    "AI",
+                    &format!(
+                        "AI capture_key_down: key='{}' command_bar_open={}",
+                        key,
+                        this.command_bar.is_open()
+                    ),
+                );
 
                 // Handle Enter key for setup mode (no modifiers needed)
                 if !modifiers.platform
@@ -3314,31 +3471,50 @@ impl Render for AiApp {
                     // In setup mode - Enter copies the setup command
                     this.copy_setup_command(cx);
                     window.activate_window();
+                    cx.stop_propagation(); // Prevent further handling
                     return;
                 }
 
                 // Handle command bar navigation when it's open
                 // This routes all relevant keys to the CommandBar
+                // CRITICAL: Must stop propagation to prevent Input from consuming the keys
                 if this.command_bar.is_open() {
+                    crate::logging::log(
+                        "AI",
+                        &format!("AI capture_key_down (command_bar open): key='{}'", key),
+                    );
                     match key {
                         "up" | "arrowup" => {
+                            crate::logging::log(
+                                "AI",
+                                "AI window: routing UP to command_bar_select_prev",
+                            );
                             this.command_bar_select_prev(cx);
+                            cx.stop_propagation(); // Prevent Input from handling
                             return;
                         }
                         "down" | "arrowdown" => {
+                            crate::logging::log(
+                                "AI",
+                                "AI window: routing DOWN to command_bar_select_next",
+                            );
                             this.command_bar_select_next(cx);
+                            cx.stop_propagation(); // Prevent Input from handling
                             return;
                         }
                         "enter" | "return" => {
                             this.execute_command_bar_action(window, cx);
+                            cx.stop_propagation(); // Prevent Input from handling
                             return;
                         }
                         "escape" => {
                             this.hide_command_bar(cx);
+                            cx.stop_propagation(); // Prevent further handling
                             return;
                         }
                         "backspace" | "delete" => {
                             this.command_bar_handle_backspace(cx);
+                            cx.stop_propagation(); // Prevent Input from handling
                             return;
                         }
                         _ => {
@@ -3352,12 +3528,15 @@ impl Render for AiApp {
                                         || ch == '_'
                                     {
                                         this.command_bar_handle_char(ch, cx);
+                                        cx.stop_propagation(); // Prevent Input from handling
                                         return;
                                     }
                                 }
                             }
                         }
                     }
+                    // Don't fall through to other handlers when command bar is open
+                    return;
                 }
 
                 // Handle model picker navigation
@@ -3365,18 +3544,22 @@ impl Render for AiApp {
                     match key {
                         "up" | "arrowup" => {
                             this.model_picker_select_prev(cx);
+                            cx.stop_propagation();
                             return;
                         }
                         "down" | "arrowdown" => {
                             this.model_picker_select_next(cx);
+                            cx.stop_propagation();
                             return;
                         }
                         "enter" | "return" => {
                             this.select_model_from_picker(cx);
+                            cx.stop_propagation();
                             return;
                         }
                         "escape" => {
                             this.hide_model_picker(cx);
+                            cx.stop_propagation();
                             return;
                         }
                         _ => {}
@@ -3388,18 +3571,22 @@ impl Render for AiApp {
                     match key {
                         "up" | "arrowup" => {
                             this.presets_select_prev(cx);
+                            cx.stop_propagation();
                             return;
                         }
                         "down" | "arrowdown" => {
                             this.presets_select_next(cx);
+                            cx.stop_propagation();
                             return;
                         }
                         "enter" | "return" => {
                             this.create_chat_with_preset(window, cx);
+                            cx.stop_propagation();
                             return;
                         }
                         "escape" => {
                             this.hide_presets_dropdown(cx);
+                            cx.stop_propagation();
                             return;
                         }
                         _ => {}
@@ -3409,6 +3596,7 @@ impl Render for AiApp {
                 // Handle attachments picker
                 if this.showing_attachments_picker && key == "escape" {
                     this.hide_attachments_picker(cx);
+                    cx.stop_propagation();
                     return;
                 }
 
@@ -4240,8 +4428,9 @@ pub fn set_ai_search(cx: &mut App, query: &str) {
         let _ = handle.update(cx, |_root, _window, cx| {
             cx.notify();
         });
+        logging::log("AI", &format!("Set AI search filter: {}", query));
     } else {
-        logging::log("AI", "Cannot set search - AI window not open");
+        logging::log("AI", "Cannot set search - AI window not found");
     }
 }
 
@@ -4333,6 +4522,36 @@ pub fn show_ai_command_bar(cx: &mut App) {
     } else {
         logging::log("AI", "Cannot show command bar - AI window handle not found");
     }
+}
+
+/// Simulate a key press in the AI window.
+///
+/// This is triggered by the stdin command `{"type":"simulateAiKey","key":"up","modifiers":["cmd"]}`.
+/// Used for testing keyboard navigation in the AI window, especially the command bar.
+pub fn simulate_ai_key(key: &str, modifiers: Vec<String>) {
+    use crate::logging;
+
+    // Check if AI window is open
+    if !is_ai_window_open() {
+        logging::log("AI", "Cannot simulate key - AI window not open");
+        return;
+    }
+
+    // Queue the command
+    push_ai_command(AiCommand::SimulateKey {
+        key: key.to_string(),
+        modifiers,
+    });
+
+    // The command is queued and will be processed in the next render cycle
+    // We don't have `cx` here so can't notify, but that's okay since rendering happens continuously
+    logging::log(
+        "AI",
+        &format!(
+            "Queued SimulateKey: key='{}' - will process on next render",
+            key
+        ),
+    );
 }
 
 /// Configure vibrancy for the AI window.

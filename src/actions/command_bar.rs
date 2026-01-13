@@ -217,7 +217,12 @@ impl CommandBar {
         let config = self.config.dialog_config.clone();
 
         let dialog = cx.new(|cx| {
-            ActionsDialog::with_config(cx.focus_handle(), on_select, actions, theme, config)
+            let mut d =
+                ActionsDialog::with_config(cx.focus_handle(), on_select, actions, theme, config);
+            // Tell dialog to skip track_focus - ActionsWindow handles focus instead
+            // This ensures keyboard events go to ActionsWindow's on_key_down handler
+            d.set_skip_track_focus(true);
+            d
         });
 
         // Get window bounds and display for positioning
@@ -324,16 +329,42 @@ impl CommandBar {
 
     /// Move selection up
     pub fn select_prev(&mut self, cx: &mut App) {
+        logging::log(
+            "COMMAND_BAR",
+            &format!(
+                "select_prev called, dialog exists: {}",
+                self.dialog.is_some()
+            ),
+        );
         if let Some(dialog) = &self.dialog {
+            let old_idx = dialog.read(cx).selected_index;
             dialog.update(cx, |d, cx| d.move_up(cx));
+            let new_idx = dialog.read(cx).selected_index;
+            logging::log(
+                "COMMAND_BAR",
+                &format!("select_prev: index {} -> {}", old_idx, new_idx),
+            );
             notify_actions_window(cx);
         }
     }
 
     /// Move selection down
     pub fn select_next(&mut self, cx: &mut App) {
+        logging::log(
+            "COMMAND_BAR",
+            &format!(
+                "select_next called, dialog exists: {}",
+                self.dialog.is_some()
+            ),
+        );
         if let Some(dialog) = &self.dialog {
+            let old_idx = dialog.read(cx).selected_index;
             dialog.update(cx, |d, cx| d.move_down(cx));
+            let new_idx = dialog.read(cx).selected_index;
+            logging::log(
+                "COMMAND_BAR",
+                &format!("select_next: index {} -> {}", old_idx, new_idx),
+            );
             notify_actions_window(cx);
         }
     }
