@@ -422,11 +422,13 @@ impl ScriptListApp {
 
                     match key_str.as_str() {
                         "l" => {
+                            logging::log("KEY", "Shortcut Cmd+L -> toggle_logs");
                             this.toggle_logs(cx);
                             return;
                         }
                         // Cmd+1 cycles through all designs
                         "1" => {
+                            logging::log("KEY", "Shortcut Cmd+1 -> cycle_design");
                             this.cycle_design(cx);
                             return;
                         }
@@ -434,57 +436,68 @@ impl ScriptListApp {
                         // Note: More specific patterns (with shift) must come BEFORE less specific ones
                         "k" if has_shift => {
                             // Cmd+Shift+K - Add/Update Keyboard Shortcut
+                            logging::log("KEY", "Shortcut Cmd+Shift+K -> add_shortcut");
                             this.handle_action("add_shortcut".to_string(), cx);
                             return;
                         }
                         "k" => {
                             // Cmd+K - Toggle actions menu
+                            logging::log("KEY", "Shortcut Cmd+K -> toggle_actions");
                             this.toggle_actions(cx, window);
                             return;
                         }
                         "e" => {
                             // Cmd+E - Edit Script
+                            logging::log("KEY", "Shortcut Cmd+E -> edit_script");
                             this.handle_action("edit_script".to_string(), cx);
                             return;
                         }
                         "f" if has_shift => {
                             // Cmd+Shift+F - Reveal in Finder
+                            logging::log("KEY", "Shortcut Cmd+Shift+F -> reveal_in_finder");
                             this.handle_action("reveal_in_finder".to_string(), cx);
                             return;
                         }
                         "c" if has_shift => {
                             // Cmd+Shift+C - Copy Path
+                            logging::log("KEY", "Shortcut Cmd+Shift+C -> copy_path");
                             this.handle_action("copy_path".to_string(), cx);
                             return;
                         }
                         "d" if has_shift => {
                             // Cmd+Shift+D - Copy Deeplink
+                            logging::log("KEY", "Shortcut Cmd+Shift+D -> copy_deeplink");
                             this.handle_action("copy_deeplink".to_string(), cx);
                             return;
                         }
                         "a" if has_shift => {
                             // Cmd+Shift+A - Add/Update Alias
+                            logging::log("KEY", "Shortcut Cmd+Shift+A -> add_alias");
                             this.handle_action("add_alias".to_string(), cx);
                             return;
                         }
                         // Global shortcuts
                         "n" => {
                             // Cmd+N - Create Script
+                            logging::log("KEY", "Shortcut Cmd+N -> create_script");
                             this.handle_action("create_script".to_string(), cx);
                             return;
                         }
                         "r" => {
                             // Cmd+R - Reload Scripts
+                            logging::log("KEY", "Shortcut Cmd+R -> reload_scripts");
                             this.handle_action("reload_scripts".to_string(), cx);
                             return;
                         }
                         "," => {
                             // Cmd+, - Settings
+                            logging::log("KEY", "Shortcut Cmd+, -> settings");
                             this.handle_action("settings".to_string(), cx);
                             return;
                         }
                         "q" => {
                             // Cmd+Q - Quit
+                            logging::log("KEY", "Shortcut Cmd+Q -> quit");
                             this.handle_action("quit".to_string(), cx);
                             return;
                         }
