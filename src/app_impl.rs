@@ -3985,10 +3985,10 @@ export default {
                     match Command::new("open").args(["-R", &path_to_reveal]).spawn() {
                         Ok(_) => {
                             logging::log("UI", &format!("Revealed in Finder: {}", path_info.path));
-                            // Hide window and set reset flag after opening external app
+                            // Hide main window only (not entire app) to keep HUD visible
                             script_kit_gpui::set_main_window_visible(false);
                             NEEDS_RESET.store(true, Ordering::SeqCst);
-                            cx.hide();
+                            platform::hide_main_window();
                         }
                         Err(e) => {
                             logging::log("ERROR", &format!("Failed to reveal in Finder: {}", e));
@@ -4010,10 +4010,10 @@ export default {
                 match std::process::Command::new(&editor).arg(&path_str).spawn() {
                     Ok(_) => {
                         logging::log("UI", &format!("Opened in editor: {}", path_str));
-                        // Hide window and set reset flag after opening external app
+                        // Hide main window only (not entire app) to keep HUD visible
                         script_kit_gpui::set_main_window_visible(false);
                         NEEDS_RESET.store(true, Ordering::SeqCst);
-                        cx.hide();
+                        platform::hide_main_window();
                     }
                     Err(e) => {
                         logging::log("ERROR", &format!("Failed to open in editor: {}", e));
@@ -4048,10 +4048,10 @@ export default {
                     match Command::new("osascript").args(["-e", &script]).spawn() {
                         Ok(_) => {
                             logging::log("UI", &format!("Opened terminal at: {}", dir_path));
-                            // Hide window and set reset flag after opening external app
+                            // Hide main window only (not entire app) to keep HUD visible
                             script_kit_gpui::set_main_window_visible(false);
                             NEEDS_RESET.store(true, Ordering::SeqCst);
-                            cx.hide();
+                            platform::hide_main_window();
                         }
                         Err(e) => {
                             logging::log("ERROR", &format!("Failed to open terminal: {}", e));
