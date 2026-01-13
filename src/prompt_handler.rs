@@ -428,10 +428,11 @@ impl ScriptListApp {
                 NEEDS_RESET.store(true, Ordering::SeqCst);
                 logging::log("VISIBILITY", "NEEDS_RESET set to: true");
 
-                cx.hide();
+                // Hide main window only (not entire app) to keep HUD visible
+                platform::hide_main_window();
                 logging::log(
                     "VISIBILITY",
-                    "cx.hide() called - window should now be hidden",
+                    "platform::hide_main_window() called - main window hidden, HUDs remain visible",
                 );
             }
             PromptMessage::OpenBrowser { url } => {

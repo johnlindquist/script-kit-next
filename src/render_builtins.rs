@@ -239,9 +239,9 @@ impl ScriptListApp {
                                     logging::log("ERROR", &format!("Failed to copy entry: {}", e));
                                 } else {
                                     logging::log("EXEC", "Entry copied to clipboard");
-                                    // Hide window first
+                                    // Hide main window only (not entire app) to keep HUD visible
                                     script_kit_gpui::set_main_window_visible(false);
-                                    cx.hide();
+                                    platform::hide_main_window();
                                     NEEDS_RESET.store(true, Ordering::SeqCst);
 
                                     // Simulate Cmd+V paste after a brief delay to let focus return
@@ -829,9 +829,9 @@ impl ScriptListApp {
                                     logging::log("ERROR", &format!("Failed to launch app: {}", e));
                                 } else {
                                     logging::log("EXEC", &format!("Launched: {}", app.name));
-                                    // Hide window after launching
+                                    // Hide main window only (not entire app) to keep HUD visible
                                     script_kit_gpui::set_main_window_visible(false);
-                                    cx.hide();
+                                    platform::hide_main_window();
                                     NEEDS_RESET.store(true, Ordering::SeqCst);
                                 }
                             }
@@ -1182,8 +1182,9 @@ impl ScriptListApp {
                                         "EXEC",
                                         &format!("Focused window: {}", window_info.title),
                                     );
+                                    // Hide main window only (not entire app) to keep HUD visible
                                     script_kit_gpui::set_main_window_visible(false);
-                                    cx.hide();
+                                    platform::hide_main_window();
                                     NEEDS_RESET.store(true, Ordering::SeqCst);
                                 }
                             }
