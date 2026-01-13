@@ -3,11 +3,15 @@
 // Contains: handle_action, trigger_action_by_name
 
 impl ScriptListApp {
-    /// Helper to hide main window and set reset flag
-    fn hide_main_and_reset(&self, cx: &mut Context<Self>) {
+    /// Helper to hide main window and set reset flag.
+    /// Uses platform::hide_main_window() to hide ONLY the main window,
+    /// keeping other windows like HUD notifications visible.
+    fn hide_main_and_reset(&self, _cx: &mut Context<Self>) {
         set_main_window_visible(false);
         NEEDS_RESET.store(true, Ordering::SeqCst);
-        cx.hide();
+        // Use platform-specific hide that only hides the main window,
+        // not the entire app (cx.hide() would hide HUD too)
+        platform::hide_main_window();
     }
 
     /// Helper to reveal a path in Finder (macOS)
