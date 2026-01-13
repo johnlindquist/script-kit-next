@@ -2168,9 +2168,14 @@ fn configure_notes_as_floating_panel() {
                         // Disable window restoration
                         let _: () = msg_send![window, setRestorable:false];
 
+                        // ═══════════════════════════════════════════════════════════════════════════
+                        // VIBRANCY CONFIGURATION - Match main window for consistent blur
+                        // ═══════════════════════════════════════════════════════════════════════════
+                        crate::platform::configure_secondary_window_vibrancy(window, "Notes");
+
                         logging::log(
                             "PANEL",
-                            "Notes window configured as floating panel (level=3, MoveToActiveSpace)",
+                            "Notes window configured as floating panel (level=3, MoveToActiveSpace, vibrancy)",
                         );
                         return;
                     }
