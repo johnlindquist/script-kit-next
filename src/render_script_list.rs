@@ -425,16 +425,23 @@ impl ScriptListApp {
                             this.toggle_logs(cx);
                             return;
                         }
-                        "k" => {
-                            this.toggle_actions(cx, window);
-                            return;
-                        }
                         // Cmd+1 cycles through all designs
                         "1" => {
                             this.cycle_design(cx);
                             return;
                         }
                         // Script context shortcuts (require a selected script)
+                        // Note: More specific patterns (with shift) must come BEFORE less specific ones
+                        "k" if has_shift => {
+                            // Cmd+Shift+K - Add/Update Keyboard Shortcut
+                            this.handle_action("add_shortcut".to_string(), cx);
+                            return;
+                        }
+                        "k" => {
+                            // Cmd+K - Toggle actions menu
+                            this.toggle_actions(cx, window);
+                            return;
+                        }
                         "e" => {
                             // Cmd+E - Edit Script
                             this.handle_action("edit_script".to_string(), cx);
@@ -448,6 +455,16 @@ impl ScriptListApp {
                         "c" if has_shift => {
                             // Cmd+Shift+C - Copy Path
                             this.handle_action("copy_path".to_string(), cx);
+                            return;
+                        }
+                        "d" if has_shift => {
+                            // Cmd+Shift+D - Copy Deeplink
+                            this.handle_action("copy_deeplink".to_string(), cx);
+                            return;
+                        }
+                        "a" if has_shift => {
+                            // Cmd+Shift+A - Add/Update Alias
+                            this.handle_action("add_alias".to_string(), cx);
                             return;
                         }
                         // Global shortcuts
@@ -578,7 +595,10 @@ impl ScriptListApp {
                                                 let dialog_for_resize = dialog.clone();
                                                 cx.spawn(async move |_this, cx| {
                                                     cx.update(|cx| {
-                                                        resize_actions_window(cx, &dialog_for_resize);
+                                                        resize_actions_window(
+                                                            cx,
+                                                            &dialog_for_resize,
+                                                        );
                                                     })
                                                     .ok();
                                                 })
@@ -700,7 +720,7 @@ impl ScriptListApp {
                             if let Err(e) = ai::open_ai_window(cx) {
                                 logging::log("ERROR", &format!("Failed to open AI window: {}", e));
                             } else {
-                                    // Set input in AI chat (don't auto-submit - let user review first)
+                                // Set input in AI chat (don't auto-submit - let user review first)
                                 ai::set_ai_input(cx, &query, false);
                             }
 
