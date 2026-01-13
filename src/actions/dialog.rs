@@ -82,6 +82,8 @@ pub struct ActionsDialog {
     pub context_title: Option<String>,
     /// Configuration for appearance and behavior
     pub config: ActionsDialogConfig,
+    /// When true, skip track_focus in render (parent handles focus, e.g., ActionsWindow)
+    pub skip_track_focus: bool,
 }
 
 impl ActionsDialog {
@@ -154,6 +156,7 @@ impl ActionsDialog {
             sdk_actions: None,
             context_title: Some(path_info.path.clone()),
             config: ActionsDialogConfig::default(),
+            skip_track_focus: false,
         }
     }
 
@@ -195,6 +198,7 @@ impl ActionsDialog {
             sdk_actions: None,
             context_title: Some(file_info.name.clone()),
             config: ActionsDialogConfig::default(),
+            skip_track_focus: false,
         }
     }
 
@@ -243,6 +247,7 @@ impl ActionsDialog {
             sdk_actions: None,
             context_title: Some(context_title),
             config: ActionsDialogConfig::default(),
+            skip_track_focus: false,
         }
     }
 
@@ -288,6 +293,7 @@ impl ActionsDialog {
             sdk_actions: None,
             context_title: Some(context_title),
             config: ActionsDialogConfig::default(),
+            skip_track_focus: false,
         }
     }
 
@@ -340,6 +346,7 @@ impl ActionsDialog {
             sdk_actions: None,
             context_title,
             config: ActionsDialogConfig::default(),
+            skip_track_focus: false,
         }
     }
 
@@ -363,6 +370,11 @@ impl ActionsDialog {
         self.config = config;
         // Update hide_search based on config for backwards compatibility
         self.hide_search = matches!(self.config.search_position, SearchPosition::Hidden);
+    }
+
+    /// Set skip_track_focus to let parent handle focus (used by ActionsWindow)
+    pub fn set_skip_track_focus(&mut self, skip: bool) {
+        self.skip_track_focus = skip;
     }
 
     /// Create ActionsDialog with custom configuration and actions
@@ -406,6 +418,7 @@ impl ActionsDialog {
             sdk_actions: None,
             context_title: None,
             config,
+            skip_track_focus: false,
         }
     }
 
@@ -1680,7 +1693,10 @@ impl Render for ActionsDialog {
             .overflow_hidden()
             .text_color(container_text)
             .key_context("actions_dialog")
-            .track_focus(&self.focus_handle)
+            // Only track focus if not delegated to parent (ActionsWindow sets skip_track_focus=true)
+            .when(!self.skip_track_focus, |d| {
+                d.track_focus(&self.focus_handle)
+            })
             // NOTE: No on_key_down here - parent handles all keyboard input
             // Search input at top (if config.search_position == Top)
             .when_some(input_container_top, |d, input| d.child(input))

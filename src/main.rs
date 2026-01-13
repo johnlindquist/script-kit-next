@@ -3227,6 +3227,13 @@ fn main() {
                                 logging::log("STDIN", "Showing AI command bar via stdin command");
                                 ai::show_ai_command_bar(ctx);
                             }
+                            ExternalCommand::SimulateAiKey { key, modifiers } => {
+                                logging::log(
+                                    "STDIN",
+                                    &format!("Simulating AI key: '{}' with modifiers: {:?}", key, modifiers),
+                                );
+                                ai::simulate_ai_key(&key, modifiers);
+                            }
                             ExternalCommand::CaptureWindow { title, path } => {
                                 logging::log("STDIN", &format!("Capturing window with title '{}' to '{}'", title, path));
                                 match capture_window_by_title(&title, false) {

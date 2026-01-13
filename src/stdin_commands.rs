@@ -91,6 +91,14 @@ pub enum ExternalCommand {
     OpenAiWithMockData,
     /// Show the AI command bar (Cmd+K menu) for testing the refactored ActionsDialog
     ShowAiCommandBar,
+    /// Simulate a key press in the AI window (for testing command bar navigation)
+    /// key: Key name like "enter", "escape", "up", "down", "k", etc.
+    /// modifiers: Optional array of modifiers ["cmd", "shift", "alt", "ctrl"]
+    SimulateAiKey {
+        key: String,
+        #[serde(default)]
+        modifiers: Vec<String>,
+    },
     /// Capture a screenshot of a window by title pattern and save to file (for testing)
     /// title: Title pattern to match (e.g., "Script Kit AI" for the AI window)
     /// path: File path to save the PNG screenshot
