@@ -2115,7 +2115,7 @@ impl AiApp {
 
     /// Render the chats sidebar with date groupings
     fn render_sidebar(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        // If sidebar is collapsed, show a thin strip (toggle moves to main panel titlebar)
+        // If sidebar is collapsed, just show a thin strip with toggle button
         if self.sidebar_collapsed {
             return div()
                 .flex()
@@ -2126,8 +2126,17 @@ impl AiApp {
                 .border_r_1()
                 .border_color(cx.theme().sidebar_border)
                 .items_center()
-                // Spacer for traffic light area (toggle is now in main panel titlebar)
-                .child(div().h(px(36.)))
+                // Top row - aligned with traffic lights (h=28px to match window chrome)
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_end()
+                        .w_full()
+                        .h(px(28.))
+                        .px_2()
+                        .child(self.render_sidebar_toggle(cx)),
+                )
                 // New chat button below
                 .child(
                     div().pt_1().child(
@@ -2156,14 +2165,14 @@ impl AiApp {
             .bg(Self::get_vibrancy_sidebar_background()) // Semi-transparent sidebar
             .border_r_1()
             .border_color(cx.theme().sidebar_border)
-            // Top row - sidebar toggle on right (240px width clears traffic lights)
+            // Top row - sidebar toggle aligned with traffic lights (right side of that row)
             .child(
                 div()
                     .flex()
                     .items_center()
-                    .justify_end() // Push toggle to right side
+                    .justify_end() // Push to right side (traffic lights are on left)
                     .w_full()
-                    .h(px(36.)) // Match main panel titlebar height
+                    .h(px(28.)) // Match traffic light row height
                     .px_2()
                     .child(self.render_sidebar_toggle(cx)),
             )
@@ -2966,37 +2975,24 @@ impl AiApp {
             .bg(Self::get_vibrancy_sidebar_background()) // Semi-transparent sidebar
             .border_b_1()
             .border_color(cx.theme().border)
-            // Left side: sidebar toggle (when collapsed) + chat title
             .child(
+                // Chat title (truncated)
                 div()
-                    .flex()
-                    .items_center()
-                    .gap_2()
                     .flex_1()
                     .overflow_hidden()
-                    // Sidebar toggle - only shown when sidebar is collapsed
-                    .when(self.sidebar_collapsed, |d| {
-                        d.child(self.render_sidebar_toggle(cx))
-                    })
-                    // Chat title (truncated)
+                    .text_ellipsis()
+                    .text_sm()
+                    .text_color(cx.theme().foreground)
                     .child(
-                        div()
-                            .flex_1()
-                            .overflow_hidden()
-                            .text_ellipsis()
-                            .text_sm()
-                            .text_color(cx.theme().foreground)
-                            .child(
-                                self.get_selected_chat()
-                                    .map(|c| {
-                                        if c.title.is_empty() {
-                                            "New Chat".to_string()
-                                        } else {
-                                            c.title.clone()
-                                        }
-                                    })
-                                    .unwrap_or_else(|| "AI Chat".to_string()),
-                            ),
+                        self.get_selected_chat()
+                            .map(|c| {
+                                if c.title.is_empty() {
+                                    "New Chat".to_string()
+                                } else {
+                                    c.title.clone()
+                                }
+                            })
+                            .unwrap_or_else(|| "AI Chat".to_string()),
                     ),
             )
             .when(has_selection, |d| {
@@ -4222,8 +4218,6 @@ pub fn open_ai_window(cx: &mut App) -> Result<()> {
 
     // NOTE: We do NOT configure as floating panel - this is a normal window
     // that can go behind other windows
-    // However, we DO want vibrancy configuration for proper blur effect
-    configure_ai_window_vibrancy();
 
     // NOTE: Theme hot-reload is now handled by the centralized ThemeService
     // (crate::theme::service::ensure_theme_service) which is started once at app init.
@@ -4446,50 +4440,6 @@ pub fn show_ai_command_bar(cx: &mut App) {
     }
 }
 
-/// Configure vibrancy for the AI window.
-///
-/// This sets VibrantDark appearance and configures NSVisualEffectViews
-/// for proper blur effect, without making it a floating panel.
-#[cfg(target_os = "macos")]
-fn configure_ai_window_vibrancy() {
-    use crate::logging;
-    use std::ffi::CStr;
-
-    unsafe {
-        let app: id = NSApp();
-        let windows: id = msg_send![app, windows];
-        let count: usize = msg_send![windows, count];
-
-        for i in 0..count {
-            let window: id = msg_send![windows, objectAtIndex: i];
-            let title: id = msg_send![window, title];
-
-            if title != nil {
-                let title_cstr: *const i8 = msg_send![title, UTF8String];
-                if !title_cstr.is_null() {
-                    let title_str = CStr::from_ptr(title_cstr).to_string_lossy();
-
-                    if title_str == "Script Kit AI" {
-                        // Found the AI window - configure vibrancy
-                        crate::platform::configure_secondary_window_vibrancy(window, "AI");
-                        return;
-                    }
-                }
-            }
-        }
-
-        logging::log(
-            "PANEL",
-            "Warning: AI window not found by title for vibrancy config",
-        );
-    }
-}
-
-#[cfg(not(target_os = "macos"))]
-fn configure_ai_window_vibrancy() {
-    // No-op on non-macOS platforms
-}
-
 /// Configure the AI window as a floating panel (always on top).
 ///
 /// This sets:
@@ -4532,14 +4482,9 @@ fn configure_ai_as_floating_panel() {
                         // Disable window restoration
                         let _: () = msg_send![window, setRestorable:false];
 
-                        // ═══════════════════════════════════════════════════════════════════════════
-                        // VIBRANCY CONFIGURATION - Match main window for consistent blur
-                        // ═══════════════════════════════════════════════════════════════════════════
-                        crate::platform::configure_secondary_window_vibrancy(window, "AI");
-
                         logging::log(
                             "PANEL",
-                            "AI window configured as floating panel (level=3, MoveToActiveSpace, vibrancy)",
+                            "AI window configured as floating panel (level=3, MoveToActiveSpace)",
                         );
                         return;
                     }
