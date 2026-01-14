@@ -2419,48 +2419,19 @@ impl AiApp {
             })
     }
 
-    /// Render the input field with proper cursor positioning
-    /// When empty: cursor on left, placeholder on right (like main menu)
-    /// When has text: standard Input behavior
+    /// Render the input field - uses Input component's native styling
     fn render_input_with_cursor(
         &self,
-        border_color: gpui::Hsla,
-        cx: &mut Context<Self>,
+        _border_color: gpui::Hsla,
+        _cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let input_text = self.input_state.read(cx).value().to_string();
-        let is_empty = input_text.is_empty();
-
-        // Cursor color from theme
-        let cursor_color = cx.theme().foreground;
-
-        div()
-            .flex_1()
-            .min_w_0()
-            .rounded_lg()
-            .border_1()
-            .border_color(border_color.opacity(0.6))
-            .overflow_hidden()
-            .flex()
-            .items_center()
-            // Cursor on left (only when empty)
-            // The Input's own cursor won't be visible since it shows at position 0
-            // which gpui_component renders after/alongside placeholder
-            .when(is_empty, |d| {
-                d.child(
-                    div()
-                        .w(px(2.0))
-                        .h(px(18.0))
-                        .ml(px(10.0)) // Match Input's left padding
-                        .bg(cursor_color),
-                )
-            })
-            // The actual Input component
-            .child(
-                Input::new(&self.input_state)
-                    .w_full()
-                    .appearance(false) // No border/background - we provide it
-                    .focus_bordered(false),
-            )
+        // Use Input's native appearance - no custom container
+        // This avoids any potential visual conflicts
+        Input::new(&self.input_state)
+            .w_full()
+            .appearance(true) // Use native Input styling
+            .bordered(true)
+            .focus_bordered(true)
     }
 
     /// Render the model picker button

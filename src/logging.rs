@@ -25,6 +25,7 @@
 //! {"timestamp":"2024-12-25T10:30:45.123Z","level":"INFO","target":"script_kit_gpui::main","message":"Script executed","fields":{"event_type":"script_event","script_id":"abc","duration_ms":42}}
 //! ```
 
+use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::fmt::Write as FmtWrite;
 use std::fs::{self, File, OpenOptions};
@@ -34,15 +35,60 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use serde_json::{Map, Value};
 use tracing::field::{Field, Visit};
 use tracing::{Level, Subscriber};
 use tracing_appender::non_blocking::WorkerGuard;
-use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::fmt::{FmtContext, FormatEvent, FormatFields, MakeWriter};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::registry::LookupSpan;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{fmt, EnvFilter};
+use uuid::Uuid;
+
+// =============================================================================
+// CORRELATION ID (MANDATORY FIELD)
+// =============================================================================
+// Global default correlation_id for events where no per-run/context value is set.
+static DEFAULT_CORRELATION_ID: OnceLock<String> = OnceLock::new();
+
+// Thread-local override used for request/interaction scoped correlation_ids.
+thread_local! {
+    static CORRELATION_ID: RefCell<Option<String>> = const { RefCell::new(None) };
+}
+
+/// Set the correlation_id for the current thread, returning a guard that restores the previous
+/// value on drop.
+pub fn set_correlation_id(id: impl Into<String>) -> CorrelationGuard {
+    let new_id = id.into();
+    let previous = CORRELATION_ID.with(|cell| cell.borrow_mut().replace(new_id));
+    CorrelationGuard { previous }
+}
+
+/// Guard that restores the previous correlation_id when dropped.
+pub struct CorrelationGuard {
+    previous: Option<String>,
+}
+
+impl Drop for CorrelationGuard {
+    fn drop(&mut self) {
+        let prev = self.previous.take();
+        CORRELATION_ID.with(|cell| {
+            *cell.borrow_mut() = prev;
+        });
+    }
+}
+
+/// Get the current correlation_id (thread-local if set, otherwise the global default).
+pub fn current_correlation_id() -> String {
+    CORRELATION_ID.with(|cell| {
+        cell.borrow().clone().unwrap_or_else(|| {
+            DEFAULT_CORRELATION_ID
+                .get_or_init(|| Uuid::new_v4().to_string())
+                .clone()
+        })
+    })
+}
 
 // =============================================================================
 // COMPACT AI FORMAT (SCRIPT_KIT_AI_LOG=1)
@@ -146,6 +192,7 @@ fn get_minute_timestamp() -> String {
 struct CategoryExtractor {
     category: Option<String>,
     message: String,
+    correlation_id: Option<String>,
 }
 
 impl CategoryExtractor {
@@ -153,6 +200,7 @@ impl CategoryExtractor {
         Self {
             category: None,
             message: String::new(),
+            correlation_id: None,
         }
     }
 }
@@ -162,6 +210,7 @@ impl Visit for CategoryExtractor {
         match field.name() {
             "category" => self.category = Some(value.to_string()),
             "message" => self.message = value.to_string(),
+            "correlation_id" => self.correlation_id = Some(value.to_string()),
             // Skip legacy field
             "legacy" => {}
             _ => {
@@ -178,6 +227,7 @@ impl Visit for CategoryExtractor {
         match field.name() {
             "category" => self.category = Some(format!("{:?}", value)),
             "message" => self.message = format!("{:?}", value),
+            "correlation_id" => self.correlation_id = Some(format!("{:?}", value)),
             // Skip legacy field
             "legacy" => {}
             _ => {
@@ -257,12 +307,141 @@ where
             infer_category_from_target(target)
         };
 
+        // Ensure correlation_id is always present
+        let correlation_id = extractor
+            .correlation_id
+            .unwrap_or_else(current_correlation_id);
+
         // Build the compact line
         writeln!(
             writer,
-            "{}|{}|{}|{}",
-            timestamp, level_char, category_code, extractor.message
+            "{}|{}|{}|cid={} {}",
+            timestamp, level_char, category_code, correlation_id, extractor.message
         )
+    }
+}
+
+// =============================================================================
+// JSON FORMATTER WITH CORRELATION ID INJECTION
+// =============================================================================
+
+#[derive(Default)]
+struct JsonFieldCollector {
+    fields: Map<String, Value>,
+}
+
+impl JsonFieldCollector {
+    fn take(self) -> Map<String, Value> {
+        self.fields
+    }
+}
+
+impl Visit for JsonFieldCollector {
+    fn record_str(&mut self, field: &Field, value: &str) {
+        self.fields
+            .insert(field.name().to_string(), Value::String(value.to_string()));
+    }
+
+    fn record_bool(&mut self, field: &Field, value: bool) {
+        self.fields
+            .insert(field.name().to_string(), Value::Bool(value));
+    }
+
+    fn record_i64(&mut self, field: &Field, value: i64) {
+        self.fields
+            .insert(field.name().to_string(), Value::Number(value.into()));
+    }
+
+    fn record_u64(&mut self, field: &Field, value: u64) {
+        self.fields
+            .insert(field.name().to_string(), Value::Number(value.into()));
+    }
+
+    fn record_f64(&mut self, field: &Field, value: f64) {
+        if let Some(num) = serde_json::Number::from_f64(value) {
+            self.fields
+                .insert(field.name().to_string(), Value::Number(num));
+        } else {
+            self.fields.insert(
+                field.name().to_string(),
+                Value::String(format!("{:.2}", value)),
+            );
+        }
+    }
+
+    fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
+        self.fields.insert(
+            field.name().to_string(),
+            Value::String(format!("{:?}", value)),
+        );
+    }
+}
+
+fn value_to_string(value: Value) -> String {
+    match value {
+        Value::String(s) => s,
+        other => other.to_string(),
+    }
+}
+
+/// Ensures every JSON log line includes a correlation_id and message field.
+#[derive(Default)]
+pub struct JsonWithCorrelation;
+
+impl<S, N> FormatEvent<S, N> for JsonWithCorrelation
+where
+    S: Subscriber + for<'a> LookupSpan<'a>,
+    N: for<'a> FormatFields<'a> + 'static,
+{
+    fn format_event(
+        &self,
+        _ctx: &FmtContext<'_, S, N>,
+        mut writer: fmt::format::Writer<'_>,
+        event: &tracing::Event<'_>,
+    ) -> std::fmt::Result {
+        let mut collector = JsonFieldCollector::default();
+        event.record(&mut collector);
+        let mut fields = collector.take();
+
+        let message = fields
+            .remove("message")
+            .map(value_to_string)
+            .unwrap_or_default();
+
+        let correlation_id = fields
+            .remove("correlation_id")
+            .map(value_to_string)
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(current_correlation_id);
+
+        let mut root = Map::new();
+        root.insert(
+            "timestamp".to_string(),
+            Value::String(chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true)),
+        );
+        root.insert(
+            "level".to_string(),
+            Value::String(event.metadata().level().to_string()),
+        );
+        root.insert(
+            "target".to_string(),
+            Value::String(event.metadata().target().to_string()),
+        );
+        root.insert("correlation_id".to_string(), Value::String(correlation_id));
+        root.insert("message".to_string(), Value::String(message));
+
+        if !fields.is_empty() {
+            root.insert("fields".to_string(), Value::Object(fields));
+        }
+
+        match serde_json::to_string(&Value::Object(root)) {
+            Ok(json) => writeln!(writer, "{}", json),
+            Err(e) => writeln!(
+                writer,
+                r#"{{"level":"ERROR","message":"failed to serialize log","error":"{}"}}"#,
+                e
+            ),
+        }
     }
 }
 
@@ -461,6 +640,9 @@ fn init_internal() -> LoggingGuard {
     // Initialize legacy log buffer for UI display
     let _ = LOG_BUFFER.set(Mutex::new(VecDeque::with_capacity(MAX_LOG_LINES)));
 
+    // Initialize global correlation_id (used as fallback when no contextual ID is set)
+    let _ = DEFAULT_CORRELATION_ID.get_or_init(|| Uuid::new_v4().to_string());
+
     // Check for AI compact log mode
     let ai_log_mode = std::env::var("SCRIPT_KIT_AI_LOG")
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
@@ -505,16 +687,9 @@ fn init_internal() -> LoggingGuard {
 
     // JSONL layer for file output (AI agents)
     let json_layer = fmt::layer()
-        .json()
+        .event_format(JsonWithCorrelation)
         .with_writer(non_blocking_file)
-        .with_timer(fmt::time::UtcTime::rfc_3339())
-        .with_target(true)
-        .with_level(true)
-        .with_thread_ids(false)
-        .with_thread_names(false)
-        .with_file(false)
-        .with_line_number(false)
-        .with_span_events(FmtSpan::NONE);
+        .with_ansi(false);
 
     if ai_log_mode {
         // Compact AI layer for stderr (token-efficient for AI agents)
@@ -586,18 +761,26 @@ pub fn log(category: &str, message: &str) {
     // Add to legacy buffer for UI display
     add_to_buffer(category, message);
 
+    let correlation_id = current_correlation_id();
+
     // Write to capture file if capture is enabled
     if is_capture_enabled() {
         let timestamp = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ");
         let json_line = format!(
-            r#"{{"timestamp":"{}","level":"INFO","category":"{}","message":"{}"}}"#,
-            timestamp, category, message
+            r#"{{"timestamp":"{}","level":"INFO","category":"{}","correlation_id":"{}","message":"{}"}}"#,
+            timestamp, category, correlation_id, message
         );
         write_to_capture(&json_line);
     }
 
     // Use tracing for actual logging
-    tracing::info!(category = category, legacy = true, "{}", message);
+    tracing::info!(
+        category = category,
+        correlation_id = %correlation_id,
+        legacy = true,
+        "{}",
+        message
+    );
 }
 
 /// Add a log entry to the in-memory buffer for UI display
@@ -1418,6 +1601,88 @@ pub use tracing;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Write as IoWrite;
+    use std::sync::{Arc, Mutex};
+    use tracing_subscriber::fmt::MakeWriter;
+    use tracing_subscriber::{fmt as fmt_sub, EnvFilter};
+
+    #[derive(Clone)]
+    struct BufferWriter(Arc<Mutex<Vec<u8>>>);
+
+    struct BufferGuard<'a> {
+        buf: &'a Arc<Mutex<Vec<u8>>>,
+    }
+
+    impl<'a> IoWrite for BufferGuard<'a> {
+        fn write(&mut self, data: &[u8]) -> std::io::Result<usize> {
+            let mut buf = self.buf.lock().unwrap();
+            buf.extend_from_slice(data);
+            Ok(data.len())
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    impl<'a> MakeWriter<'a> for BufferWriter {
+        type Writer = BufferGuard<'a>;
+
+        fn make_writer(&'a self) -> Self::Writer {
+            BufferGuard { buf: &self.0 }
+        }
+    }
+
+    #[test]
+    fn json_formatter_injects_correlation_id() {
+        let buffer = Arc::new(Mutex::new(Vec::new()));
+        let subscriber = fmt_sub()
+            .json()
+            .with_writer(BufferWriter(buffer.clone()))
+            .event_format(JsonWithCorrelation)
+            .with_env_filter(EnvFilter::new("info"))
+            .finish();
+
+        tracing::subscriber::with_default(subscriber, || {
+            tracing::info!("hello-json-correlation");
+        });
+
+        let output = String::from_utf8(buffer.lock().unwrap().clone()).unwrap();
+        let line = output.lines().next().unwrap();
+        let value: serde_json::Value = serde_json::from_str(line).unwrap();
+
+        let cid = value
+            .get("correlation_id")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default();
+
+        assert!(
+            !cid.is_empty(),
+            "correlation_id should be present and non-empty"
+        );
+    }
+
+    #[test]
+    fn compact_formatter_includes_correlation_id_token() {
+        let buffer = Arc::new(Mutex::new(Vec::new()));
+        let subscriber = fmt_sub()
+            .with_writer(BufferWriter(buffer.clone()))
+            .event_format(CompactAiFormatter)
+            .with_env_filter(EnvFilter::new("info"))
+            .finish();
+
+        tracing::subscriber::with_default(subscriber, || {
+            tracing::info!("hello-compact-correlation");
+        });
+
+        let output = String::from_utf8(buffer.lock().unwrap().clone()).unwrap();
+        let line = output.lines().next().unwrap_or("");
+        assert!(
+            line.contains("cid="),
+            "compact log should include cid token: {}",
+            line
+        );
+    }
 
     // -------------------------------------------------------------------------
     // category_to_code tests - using real category strings from logs

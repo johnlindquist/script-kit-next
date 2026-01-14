@@ -327,6 +327,8 @@ impl Render for EnvPrompt {
         let text_muted = design_colors.text_muted;
         let accent_color = design_colors.accent;
         let bg_surface = design_colors.background_secondary;
+        let success_color = design_colors.success;
+        let error_color = design_colors.error;
 
         // Build placeholder text for input
         let input_placeholder: SharedString = if self.exists_in_keyring {
@@ -529,7 +531,7 @@ impl Render for EnvPrompt {
                                             svg()
                                                 .external_path(IconName::Check.external_path())
                                                 .size(px(14.))
-                                                .text_color(rgb(0x22C55E)), // Green
+                                                .text_color(rgb(success_color)),
                                         )
                                         .child(
                                             div()
@@ -546,7 +548,7 @@ impl Render for EnvPrompt {
                                             div()
                                                 .id("delete-secret")
                                                 .text_sm()
-                                                .text_color(rgb(0xEF4444)) // Red
+                                                .text_color(rgb(error_color))
                                                 .cursor_pointer()
                                                 .hover(|s| s.opacity(0.8))
                                                 .on_click(move |_event, _window, cx| {
