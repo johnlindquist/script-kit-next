@@ -417,7 +417,11 @@ fn show_main_window_helper(
         win.activate_window();
     });
 
-    // 7. Focus input, reset resize debounce, and handle NEEDS_RESET
+    // 7. Send AI window to back (if open) so it doesn't come forward with main menu
+    // The AI window should only come forward via Cmd+Tab or explicit user action
+    platform::send_ai_window_to_back();
+
+    // 8. Focus input, reset resize debounce, and handle NEEDS_RESET
     app_entity.update(cx, |view, ctx| {
         let focus_handle = view.focus_handle(ctx);
         let _ = window.update(ctx, |_root, win, _cx| {
@@ -2778,6 +2782,10 @@ fn main() {
 
                                 ctx.activate(true);
                                 window.activate_window();
+
+                                // Send AI window to back so it doesn't come forward with main menu
+                                platform::send_ai_window_to_back();
+
                                 let focus_handle = view.focus_handle(ctx);
                                 window.focus(&focus_handle, ctx);
 
@@ -2844,6 +2852,10 @@ fn main() {
 
                                 ctx.activate(true);
                                 window.activate_window();
+
+                                // Send AI window to back so it doesn't come forward with main menu
+                                platform::send_ai_window_to_back();
+
                                 let focus_handle = view.focus_handle(ctx);
                                 window.focus(&focus_handle, ctx);
                             }
