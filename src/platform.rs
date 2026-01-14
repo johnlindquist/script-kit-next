@@ -164,6 +164,60 @@ pub fn set_accessory_app_mode() {
     // No-op on non-macOS platforms
 }
 
+/// Send the AI window to the back (behind other apps' windows).
+///
+/// This is called when the main menu is shown to prevent the AI window
+/// from being brought forward along with the main menu. The AI window
+/// should only come forward via Cmd+Tab or explicit user action.
+///
+/// # macOS Behavior
+///
+/// Finds the AI window by title and uses orderBack: to send it behind
+/// other windows without hiding it.
+///
+/// # Other Platforms
+///
+/// No-op on non-macOS platforms.
+#[cfg(target_os = "macos")]
+pub fn send_ai_window_to_back() {
+    debug_assert_main_thread();
+    unsafe {
+        use std::ffi::CStr;
+
+        let app: id = NSApp();
+        let windows: id = msg_send![app, windows];
+        let count: usize = msg_send![windows, count];
+
+        for i in 0..count {
+            let window: id = msg_send![windows, objectAtIndex: i];
+            let title: id = msg_send![window, title];
+
+            if title != nil {
+                let title_cstr: *const i8 = msg_send![title, UTF8String];
+                if !title_cstr.is_null() {
+                    let title_str = CStr::from_ptr(title_cstr).to_string_lossy();
+
+                    if title_str == "Script Kit AI" {
+                        // Found the AI window - send it to the back
+                        let _: () = msg_send![window, orderBack: nil];
+                        logging::log(
+                            "PANEL",
+                            "AI window sent to back (won't come forward with main menu)",
+                        );
+                        return;
+                    }
+                }
+            }
+        }
+        // AI window not found - that's fine, it may not be open
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn send_ai_window_to_back() {
+    // No-op on non-macOS platforms
+}
+
 // ============================================================================
 // Space Management
 // ============================================================================

@@ -161,6 +161,10 @@ impl HotkeyPoller {
                             logging::log("HOTKEY", "Configured window as floating panel (first show)");
                         }
 
+                        // Step 2.6: Send AI window to back so it doesn't come forward with main menu
+                        // The AI window should only come forward via Cmd+Tab or explicit user action
+                        platform::send_ai_window_to_back();
+
                         // Step 3: Activate the specific window, focus it, and queue deferred move
                         let _ = window_clone.update(
                             cx,
@@ -262,6 +266,8 @@ impl ScriptHotkeyPoller {
                     if should_show && !script_kit_gpui::is_main_window_visible() {
                         logging::log("HOTKEY", "Command needs main window, showing it");
                         cx.activate(true);
+                        // Send AI window to back so it doesn't come forward
+                        platform::send_ai_window_to_back();
                     } else if !should_show {
                         logging::log("HOTKEY", "Command doesn't need main window (app/ai/notes)");
                     }
