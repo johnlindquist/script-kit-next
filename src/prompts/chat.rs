@@ -1255,7 +1255,8 @@ impl ChatPrompt {
 
         let container_bg = rgba((colors.code_bg << 8) | 0x60);
         let copy_hover_bg = rgba((colors.code_bg << 8) | 0x80);
-        let error_bg = rgba(0xEF44_4440); // Red with transparency
+        let error_color = self.theme.colors.ui.error;
+        let error_bg = rgba((error_color << 8) | 0x40); // Theme error with transparency
         let retry_hover_bg = rgba((colors.accent_color << 8) | 0x40);
         let has_retry_callback = self.on_retry.is_some();
 
@@ -1284,7 +1285,7 @@ impl ChatPrompt {
             let mut error_row = div().flex().flex_row().items_center().gap(px(8.0)).child(
                 div()
                     .text_sm()
-                    .text_color(rgb(0xEF4444)) // Red
+                    .text_color(rgb(error_color))
                     .child(error_message.to_string()),
             );
 

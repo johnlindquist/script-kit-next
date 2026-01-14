@@ -71,51 +71,9 @@ pub enum SystemActionType {
     OpenNotificationsSettings,
 }
 
-/// Window action types for window management
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum WindowActionType {
-    // Half positions
-    TileLeft,
-    TileRight,
-    TileTop,
-    TileBottom,
-
-    // Quadrant positions
-    TileTopLeft,
-    TileTopRight,
-    TileBottomLeft,
-    TileBottomRight,
-
-    // Horizontal thirds positions
-    TileLeftThird,
-    TileCenterThird,
-    TileRightThird,
-
-    // Vertical thirds positions
-    TileTopThird,
-    TileMiddleThird,
-    TileBottomThird,
-
-    // Horizontal two-thirds positions
-    TileFirstTwoThirds,
-    TileLastTwoThirds,
-
-    // Vertical two-thirds positions
-    TileTopTwoThirds,
-    TileBottomTwoThirds,
-
-    // Centered positions
-    TileCenter,
-    TileAlmostMaximize,
-
-    // Full window operations
-    Maximize,
-    Minimize,
-
-    // Display operations
-    MoveToNextDisplay,
-    MoveToPreviousDisplay,
-}
+// NOTE: WindowActionType has been removed from built-ins.
+// Window management is now handled by the window-management extension.
+// SDK tileWindow() function still works via protocol messages in execute_script.rs.
 
 /// Notes window command types
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -243,8 +201,7 @@ pub enum BuiltInFeature {
     // === New Command Types ===
     /// System actions (power, UI controls, volume, brightness, settings)
     SystemAction(SystemActionType),
-    /// Window actions for the frontmost window (tile, maximize, minimize)
-    WindowAction(WindowActionType),
+    // NOTE: WindowAction removed - now handled by window-management extension
     /// Notes window commands
     NotesCommand(NotesCommandType),
     /// AI window commands
@@ -754,252 +711,8 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         "🔔",
     ));
 
-    // =========================================================================
-    // Window Actions (for frontmost window)
-    // =========================================================================
-
-    // --- Half positions ---
-    entries.push(BuiltInEntry::new_with_icon(
-        "builtin-tile-left",
-        "Left Half",
-        "Move window to left half of screen",
-        vec!["left", "half", "tile", "window", "snap", "split"],
-        BuiltInFeature::WindowAction(WindowActionType::TileLeft),
-        "◧",
-    ));
-
-    entries.push(BuiltInEntry::new_with_icon(
-        "builtin-tile-right",
-        "Right Half",
-        "Move window to right half of screen",
-        vec!["right", "half", "tile", "window", "snap", "split"],
-        BuiltInFeature::WindowAction(WindowActionType::TileRight),
-        "◨",
-    ));
-
-    entries.push(BuiltInEntry::new_with_icon(
-        "builtin-tile-top",
-        "Top Half",
-        "Move window to top half of screen",
-        vec!["top", "half", "tile", "window", "snap", "upper"],
-        BuiltInFeature::WindowAction(WindowActionType::TileTop),
-        "⬒",
-    ));
-
-    entries.push(BuiltInEntry::new_with_icon(
-        "builtin-tile-bottom",
-        "Bottom Half",
-        "Move window to bottom half of screen",
-        vec!["bottom", "half", "tile", "window", "snap", "lower"],
-        BuiltInFeature::WindowAction(WindowActionType::TileBottom),
-        "⬓",
-    ));
-
-    // --- Quadrant positions ---
-    entries.push(BuiltInEntry::new_with_icon(
-        "builtin-tile-top-left",
-        "Top Left",
-        "Move window to top-left quarter of screen",
-        vec![
-            "top", "left", "quarter", "quadrant", "tile", "window", "corner",
-        ],
-        BuiltInFeature::WindowAction(WindowActionType::TileTopLeft),
-        "◰",
-    ));
-
-    entries.push(BuiltInEntry::new_with_icon(
-        "builtin-tile-top-right",
-        "Top Right",
-        "Move window to top-right quarter of screen",
-        vec![
-            "top", "right", "quarter", "quadrant", "tile", "window", "corner",
-        ],
-        BuiltInFeature::WindowAction(WindowActionType::TileTopRight),
-        "◳",
-    ));
-
-    entries.push(BuiltInEntry::new_with_icon(
-        "builtin-tile-bottom-left",
-        "Bottom Left",
-        "Move window to bottom-left quarter of screen",
-        vec![
-            "bottom", "left", "quarter", "quadrant", "tile", "window", "corner",
-        ],
-        BuiltInFeature::WindowAction(WindowActionType::TileBottomLeft),
-        "◱",
-    ));
-
-    entries.push(BuiltInEntry::new_with_icon(
-        "builtin-tile-bottom-right",
-        "Bottom Right",
-        "Move window to bottom-right quarter of screen",
-        vec![
-            "bottom", "right", "quarter", "quadrant", "tile", "window", "corner",
-        ],
-        BuiltInFeature::WindowAction(WindowActionType::TileBottomRight),
-        "◲",
-    ));
-
-    // --- Thirds positions ---
-    entries.push(BuiltInEntry::new_with_icon(
-        "builtin-tile-left-third",
-        "Left Third",
-        "Move window to left third of screen",
-        vec!["left", "third", "tile", "window", "narrow"],
-        BuiltInFeature::WindowAction(WindowActionType::TileLeftThird),
-        "⫿",
-    ));
-
-    entries.push(BuiltInEntry::new_with_icon(
-        "builtin-tile-center-third",
-        "Center Third",
-        "Move window to center third of screen",
-        vec!["center", "middle", "third", "tile", "window"],
-        BuiltInFeature::WindowAction(WindowActionType::TileCenterThird),
-        "☰",
-    ));
-
-    entries.push(BuiltInEntry::new_with_icon(
-        "builtin-tile-right-third",
-        "Right Third",
-        "Move window to right third of screen",
-        vec!["right", "third", "tile", "window", "narrow"],
-        BuiltInFeature::WindowAction(WindowActionType::TileRightThird),
-        "⫾",
-    ));
-
-    // --- Vertical thirds positions ---
-    entries.push(BuiltInEntry::new_with_icon(
-        "builtin-tile-top-third",
-        "Top Third",
-        "Move window to top third of screen",
-        vec!["top", "third", "tile", "window", "upper", "vertical"],
-        BuiltInFeature::WindowAction(WindowActionType::TileTopThird),
-        "⬔",
-    ));
-
-    entries.push(BuiltInEntry::new_with_icon(
-        "builtin-tile-middle-third",
-        "Middle Third",
-        "Move window to middle third of screen",
-        vec!["middle", "center", "third", "tile", "window", "vertical"],
-        BuiltInFeature::WindowAction(WindowActionType::TileMiddleThird),
-        "▬",
-    ));
-
-    entries.push(BuiltInEntry::new_with_icon(
-        "builtin-tile-bottom-third",
-        "Bottom Third",
-        "Move window to bottom third of screen",
-        vec!["bottom", "third", "tile", "window", "lower", "vertical"],
-        BuiltInFeature::WindowAction(WindowActionType::TileBottomThird),
-        "⬕",
-    ));
-
-    // --- Horizontal two-thirds positions ---
-    entries.push(BuiltInEntry::new_with_icon(
-        "builtin-tile-first-two-thirds",
-        "First Two Thirds",
-        "Move window to left two-thirds of screen",
-        vec!["first", "two", "thirds", "left", "tile", "window", "wide"],
-        BuiltInFeature::WindowAction(WindowActionType::TileFirstTwoThirds),
-        "◫",
-    ));
-
-    entries.push(BuiltInEntry::new_with_icon(
-        "builtin-tile-last-two-thirds",
-        "Last Two Thirds",
-        "Move window to right two-thirds of screen",
-        vec!["last", "two", "thirds", "right", "tile", "window", "wide"],
-        BuiltInFeature::WindowAction(WindowActionType::TileLastTwoThirds),
-        "◪",
-    ));
-
-    // --- Vertical two-thirds positions ---
-    entries.push(BuiltInEntry::new_with_icon(
-        "builtin-tile-top-two-thirds",
-        "Top Two Thirds",
-        "Move window to top two-thirds of screen",
-        vec![
-            "top", "two", "thirds", "upper", "tile", "window", "tall", "vertical",
-        ],
-        BuiltInFeature::WindowAction(WindowActionType::TileTopTwoThirds),
-        "⬒",
-    ));
-
-    entries.push(BuiltInEntry::new_with_icon(
-        "builtin-tile-bottom-two-thirds",
-        "Bottom Two Thirds",
-        "Move window to bottom two-thirds of screen",
-        vec![
-            "bottom", "two", "thirds", "lower", "tile", "window", "tall", "vertical",
-        ],
-        BuiltInFeature::WindowAction(WindowActionType::TileBottomTwoThirds),
-        "⬓",
-    ));
-
-    // --- Centered positions ---
-    entries.push(BuiltInEntry::new_with_icon(
-        "builtin-tile-center",
-        "Center",
-        "Center window on screen (60% size)",
-        vec!["center", "middle", "tile", "window", "reasonable"],
-        BuiltInFeature::WindowAction(WindowActionType::TileCenter),
-        "◎",
-    ));
-
-    entries.push(BuiltInEntry::new_with_icon(
-        "builtin-almost-maximize",
-        "Almost Maximize",
-        "Expand window to 90% of screen with margins",
-        vec![
-            "almost", "maximize", "large", "big", "margins", "window", "fill",
-        ],
-        BuiltInFeature::WindowAction(WindowActionType::TileAlmostMaximize),
-        "▣",
-    ));
-
-    // --- Full window operations ---
-    entries.push(BuiltInEntry::new_with_icon(
-        "builtin-maximize-window",
-        "Maximize",
-        "Maximize window to fill screen",
-        vec!["maximize", "window", "fullscreen", "expand", "fill"],
-        BuiltInFeature::WindowAction(WindowActionType::Maximize),
-        "⬜",
-    ));
-
-    entries.push(BuiltInEntry::new_with_icon(
-        "builtin-minimize-window",
-        "Minimize",
-        "Minimize window to dock",
-        vec!["minimize", "window", "dock", "hide"],
-        BuiltInFeature::WindowAction(WindowActionType::Minimize),
-        "➖",
-    ));
-
-    // --- Display operations ---
-    entries.push(BuiltInEntry::new_with_icon(
-        "builtin-next-display",
-        "Next Display",
-        "Move window to next display",
-        vec![
-            "next", "display", "monitor", "screen", "move", "window", "right",
-        ],
-        BuiltInFeature::WindowAction(WindowActionType::MoveToNextDisplay),
-        "⏭",
-    ));
-
-    entries.push(BuiltInEntry::new_with_icon(
-        "builtin-previous-display",
-        "Previous Display",
-        "Move window to previous display",
-        vec![
-            "previous", "display", "monitor", "screen", "move", "window", "left",
-        ],
-        BuiltInFeature::WindowAction(WindowActionType::MoveToPreviousDisplay),
-        "⏮",
-    ));
+    // NOTE: Window Actions removed - now handled by window-management extension
+    // SDK tileWindow() function still works via protocol messages in execute_script.rs
 
     // =========================================================================
     // Notes Commands
@@ -1772,17 +1485,7 @@ mod tests {
         assert!(entries.iter().any(|e| e.id == "builtin-system-preferences"));
     }
 
-    #[test]
-    fn test_window_action_entries_exist() {
-        let config = BuiltInConfig::default();
-        let entries = get_builtin_entries(&config);
-
-        // Check that window action entries exist
-        assert!(entries.iter().any(|e| e.id == "builtin-tile-left"));
-        assert!(entries.iter().any(|e| e.id == "builtin-tile-right"));
-        assert!(entries.iter().any(|e| e.id == "builtin-maximize-window"));
-        assert!(entries.iter().any(|e| e.id == "builtin-minimize-window"));
-    }
+    // NOTE: test_window_action_entries_exist removed - window actions now in extension
 
     #[test]
     fn test_notes_command_entries_exist() {
@@ -1826,11 +1529,7 @@ mod tests {
         assert_ne!(SystemActionType::EmptyTrash, SystemActionType::LockScreen);
     }
 
-    #[test]
-    fn test_window_action_type_equality() {
-        assert_eq!(WindowActionType::TileLeft, WindowActionType::TileLeft);
-        assert_ne!(WindowActionType::TileLeft, WindowActionType::TileRight);
-    }
+    // NOTE: test_window_action_type_equality removed - WindowActionType no longer in builtins
 
     #[test]
     fn test_builtin_feature_system_action() {
@@ -1845,18 +1544,7 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_builtin_feature_window_action() {
-        let feature = BuiltInFeature::WindowAction(WindowActionType::Maximize);
-        assert_eq!(
-            feature,
-            BuiltInFeature::WindowAction(WindowActionType::Maximize)
-        );
-        assert_ne!(
-            feature,
-            BuiltInFeature::WindowAction(WindowActionType::Minimize)
-        );
-    }
+    // NOTE: test_builtin_feature_window_action removed - WindowAction no longer in BuiltInFeature
 
     #[test]
     fn test_file_search_builtin_exists() {
