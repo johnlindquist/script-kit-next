@@ -100,6 +100,70 @@ pub fn configure_as_accessory_app() {
     // No-op on non-macOS platforms
 }
 
+/// Temporarily switch to "regular" app mode so the app appears in Cmd+Tab.
+///
+/// This is used when the AI window is opened - it needs to be Cmd+Tab accessible
+/// unlike the main menu which is a utility panel.
+///
+/// # macOS Behavior
+///
+/// Sets NSApplicationActivationPolicyRegular (value = 0) on the app.
+/// The app will appear in the Dock and Cmd+Tab while in this mode.
+///
+/// # Other Platforms
+///
+/// No-op on non-macOS platforms.
+#[cfg(target_os = "macos")]
+pub fn set_regular_app_mode() {
+    debug_assert_main_thread();
+    unsafe {
+        let app: id = NSApp();
+        // NSApplicationActivationPolicyRegular = 0
+        // This makes the app appear in Dock and Cmd+Tab
+        let _: () = msg_send![app, setActivationPolicy: 0i64];
+        logging::log(
+            "PANEL",
+            "Switched to regular app mode (appears in Dock and Cmd+Tab)",
+        );
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn set_regular_app_mode() {
+    // No-op on non-macOS platforms
+}
+
+/// Switch back to "accessory" app mode after AI window is closed.
+///
+/// This restores the app to its normal state where it doesn't appear in
+/// the Dock or Cmd+Tab.
+///
+/// # macOS Behavior
+///
+/// Sets NSApplicationActivationPolicyAccessory (value = 1) on the app.
+///
+/// # Other Platforms
+///
+/// No-op on non-macOS platforms.
+#[cfg(target_os = "macos")]
+pub fn set_accessory_app_mode() {
+    debug_assert_main_thread();
+    unsafe {
+        let app: id = NSApp();
+        // NSApplicationActivationPolicyAccessory = 1
+        let _: () = msg_send![app, setActivationPolicy: 1i64];
+        logging::log(
+            "PANEL",
+            "Switched to accessory app mode (no Dock icon, no Cmd+Tab)",
+        );
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn set_accessory_app_mode() {
+    // No-op on non-macOS platforms
+}
+
 // ============================================================================
 // Space Management
 // ============================================================================
@@ -222,9 +286,11 @@ pub fn configure_as_floating_panel() {
         // OR in our desired flags instead of replacing:
         // - MoveToActiveSpace: window moves to current space when shown
         // - FullScreenAuxiliary: window can show over fullscreen apps without disrupting
+        // - IgnoresCycle: exclude from Cmd+Tab app switcher (main window is a utility)
         let desired = current
             | NS_WINDOW_COLLECTION_BEHAVIOR_MOVE_TO_ACTIVE_SPACE
-            | NS_WINDOW_COLLECTION_BEHAVIOR_FULL_SCREEN_AUXILIARY;
+            | NS_WINDOW_COLLECTION_BEHAVIOR_FULL_SCREEN_AUXILIARY
+            | NS_WINDOW_COLLECTION_BEHAVIOR_IGNORES_CYCLE;
 
         let _: () = msg_send![window, setCollectionBehavior:desired];
 
@@ -237,12 +303,21 @@ pub fn configure_as_floating_panel() {
         let empty_string: id = msg_send![class!(NSString), string];
         let _: () = msg_send![window, setFrameAutosaveName:empty_string];
 
+        // Log detailed breakdown of collection behavior bits
+        let has_participates = (desired & 128) != 0;
+        let has_ignores = (desired & 64) != 0;
+        let has_move_to_active = (desired & 2) != 0;
+
         logging::log(
             "PANEL",
             &format!(
-                "Configured window as floating panel (level={}, behavior={}->{}, restorable=false)",
-                NS_FLOATING_WINDOW_LEVEL, current, desired
+                "Main window: Cmd+Tab config - behavior={}->{} [ParticipatesInCycle={}, IgnoresCycle={}, MoveToActiveSpace={}]",
+                current, desired, has_participates, has_ignores, has_move_to_active
             ),
+        );
+        logging::log(
+            "PANEL",
+            "Main window: Will NOT appear in Cmd+Tab app switcher (floating utility panel)",
         );
     }
 }
@@ -409,6 +484,18 @@ pub const NS_WINDOW_COLLECTION_BEHAVIOR_MOVE_TO_ACTIVE_SPACE: u64 = 1 << 1;
 #[cfg(target_os = "macos")]
 #[allow(dead_code)]
 pub const NS_WINDOW_COLLECTION_BEHAVIOR_FULL_SCREEN_AUXILIARY: u64 = 1 << 8;
+
+/// NSWindowCollectionBehaviorIgnoresCycle constant value (1 << 6 = 64)
+/// Window is excluded from Cmd+Tab app switcher cycling.
+#[cfg(target_os = "macos")]
+#[allow(dead_code)]
+pub const NS_WINDOW_COLLECTION_BEHAVIOR_IGNORES_CYCLE: u64 = 1 << 6;
+
+/// NSWindowCollectionBehaviorParticipatesInCycle constant value (1 << 7 = 128)
+/// Window explicitly participates in Cmd+Tab app switcher cycling.
+#[cfg(target_os = "macos")]
+#[allow(dead_code)]
+pub const NS_WINDOW_COLLECTION_BEHAVIOR_PARTICIPATES_IN_CYCLE: u64 = 1 << 7;
 
 // ============================================================================
 // Window Vibrancy Material Configuration

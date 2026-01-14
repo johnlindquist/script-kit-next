@@ -2157,8 +2157,9 @@ fn configure_notes_as_floating_panel() {
 
                         // Get current collection behavior to preserve existing flags
                         let current: u64 = msg_send![window, collectionBehavior];
-                        // OR in MoveToActiveSpace (2) + FullScreenAuxiliary (256)
-                        let desired: u64 = current | 2 | 256;
+                        // OR in MoveToActiveSpace (2) + FullScreenAuxiliary (256) + IgnoresCycle (64)
+                        // IgnoresCycle excludes Notes from Cmd+Tab - it's a utility window
+                        let desired: u64 = current | 2 | 256 | 64;
                         let _: () = msg_send![window, setCollectionBehavior:desired];
 
                         // Ensure window content is shareable for captureScreenshot()
@@ -2173,9 +2174,21 @@ fn configure_notes_as_floating_panel() {
                         // ═══════════════════════════════════════════════════════════════════════════
                         crate::platform::configure_secondary_window_vibrancy(window, "Notes");
 
+                        // Log detailed breakdown of collection behavior bits
+                        let has_participates = (desired & 128) != 0;
+                        let has_ignores = (desired & 64) != 0;
+                        let has_move_to_active = (desired & 2) != 0;
+
                         logging::log(
                             "PANEL",
-                            "Notes window configured as floating panel (level=3, MoveToActiveSpace, vibrancy)",
+                            &format!(
+                                "Notes window: Cmd+Tab config - behavior={}->{} [ParticipatesInCycle={}, IgnoresCycle={}, MoveToActiveSpace={}]",
+                                current, desired, has_participates, has_ignores, has_move_to_active
+                            ),
+                        );
+                        logging::log(
+                            "PANEL",
+                            "Notes window: Will NOT appear in Cmd+Tab app switcher (floating utility panel)",
                         );
                         return;
                     }

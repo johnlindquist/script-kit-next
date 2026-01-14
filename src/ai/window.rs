@@ -491,8 +491,11 @@ impl AiApp {
 
         let search_state = cx.new(|cx| InputState::new(window, cx).placeholder("Search chats..."));
 
-        let api_key_input_state =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Enter your Vercel API key..."));
+        let api_key_input_state = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder("Enter your Vercel API key...")
+                .masked(true)
+        });
 
         let focus_handle = cx.focus_handle();
 
@@ -3338,6 +3341,11 @@ impl Drop for AiApp {
                 tracing::debug!("AiApp dropped - cleared global window handle");
             }
         }
+
+        // Restore accessory app mode when AI window closes
+        // This removes the app from Cmd+Tab and Dock (back to normal Script Kit behavior)
+        // SAFETY: This runs on main thread (GPUI window lifecycle is main-thread only)
+        crate::platform::set_accessory_app_mode();
     }
 }
 
@@ -4180,6 +4188,9 @@ pub fn open_ai_window(cx: &mut App) -> Result<()> {
         if window_valid {
             logging::log("AI", "AI window exists - bringing to front and focusing");
 
+            // Ensure regular app mode (in case it was switched back to accessory)
+            crate::platform::set_regular_app_mode();
+
             // Move the window to the display containing the mouse cursor
             // This ensures the AI window appears on the same screen as where the user is working
             let new_bounds = crate::platform::calculate_centered_bounds_on_mouse_display(size(
@@ -4296,6 +4307,11 @@ pub fn open_ai_window(cx: &mut App) -> Result<()> {
             *g = Some(handle);
         }
     }
+
+    // Switch to regular app mode so AI window appears in Cmd+Tab
+    // This is unique to the AI window - other windows (main, notes) stay in accessory mode
+    // The mode is restored to accessory when the AI window closes (see AiApp::drop)
+    crate::platform::set_regular_app_mode();
 
     // NOTE: We do NOT configure as floating panel - this is a normal window
     // that can go behind other windows
@@ -4554,10 +4570,14 @@ pub fn simulate_ai_key(key: &str, modifiers: Vec<String>) {
     );
 }
 
-/// Configure vibrancy for the AI window.
+/// Configure vibrancy and app switcher participation for the AI window.
 ///
 /// This sets VibrantDark appearance and configures NSVisualEffectViews
-/// for proper blur effect, without making it a floating panel.
+/// for proper blur effect. Unlike other windows, the AI window:
+/// - Does NOT float above other windows (stays at default level 0)
+/// - DOES participate in Cmd+Tab app switcher cycling
+///
+/// This makes AI the only window that can be Cmd+Tab'd back to.
 #[cfg(target_os = "macos")]
 fn configure_ai_window_vibrancy() {
     use crate::logging;
@@ -4580,6 +4600,33 @@ fn configure_ai_window_vibrancy() {
                     if title_str == "Script Kit AI" {
                         // Found the AI window - configure vibrancy
                         crate::platform::configure_secondary_window_vibrancy(window, "AI");
+
+                        // Configure as a regular window that participates in Cmd+Tab:
+                        // - Keep default window level (0) so it doesn't float
+                        // - Add ParticipatesInCycle (128) so it appears in Cmd+Tab
+                        // - Remove IgnoresCycle (64) if somehow set
+                        // - Add MoveToActiveSpace (2) so it follows the user
+                        let current: u64 = msg_send![window, collectionBehavior];
+                        // Clear IgnoresCycle bit, set ParticipatesInCycle and MoveToActiveSpace
+                        let desired: u64 = (current & !64) | 128 | 2;
+                        let _: () = msg_send![window, setCollectionBehavior:desired];
+
+                        // Log detailed breakdown of collection behavior bits
+                        let has_participates = (desired & 128) != 0;
+                        let has_ignores = (desired & 64) != 0;
+                        let has_move_to_active = (desired & 2) != 0;
+
+                        logging::log(
+                            "PANEL",
+                            &format!(
+                                "AI window: Cmd+Tab config - behavior={}->{} [ParticipatesInCycle={}, IgnoresCycle={}, MoveToActiveSpace={}]",
+                                current, desired, has_participates, has_ignores, has_move_to_active
+                            ),
+                        );
+                        logging::log(
+                            "PANEL",
+                            "AI window: WILL appear in Cmd+Tab app switcher (unique among Script Kit windows)",
+                        );
                         return;
                     }
                 }
