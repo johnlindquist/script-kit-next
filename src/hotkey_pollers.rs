@@ -151,9 +151,12 @@ impl HotkeyPoller {
                             ),
                         );
 
-                        // Step 2: NOW activate the app (makes window visible at new position)
-                        cx.activate(true);
-                        logging::log("HOTKEY", "App activated (window now visible)");
+                        // Step 2: Show window WITHOUT activating the app
+                        // This is critical for floating panels - we want to show and focus
+                        // the window without stealing focus from the previous app.
+                        // This allows tools like "copy selected text" to still work.
+                        platform::show_main_window_without_activation();
+                        logging::log("HOTKEY", "Window shown without app activation");
 
                         // Step 2.5: Configure as floating panel on first show only
                         if !PANEL_CONFIGURED.swap(true, std::sync::atomic::Ordering::SeqCst) {
@@ -265,7 +268,9 @@ impl ScriptHotkeyPoller {
                     // Only show window if command needs it (apps/ai/notes don't)
                     if should_show && !script_kit_gpui::is_main_window_visible() {
                         logging::log("HOTKEY", "Command needs main window, showing it");
-                        cx.activate(true);
+                        // Show WITHOUT activating (floating panel behavior)
+                        // This preserves focus on previous app for features like "copy selected text"
+                        platform::show_main_window_without_activation();
                         // Send AI window to back so it doesn't come forward
                         platform::send_ai_window_to_back();
                     } else if !should_show {

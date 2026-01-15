@@ -252,7 +252,7 @@ pub fn ensure_move_to_active_space() {
             None => {
                 logging::log(
                     "PANEL",
-                    "WARNING: Main window not registered, cannot set MoveToActiveSpace",
+                    "WARNING: Main window not registered, cannot set collection behavior",
                 );
                 return;
             }
@@ -261,20 +261,27 @@ pub fn ensure_move_to_active_space() {
         // Get current collection behavior to preserve existing flags
         let current: u64 = msg_send![window, collectionBehavior];
 
-        // OR in our desired flags:
-        // - MoveToActiveSpace: window moves to current space when shown
-        // - FullScreenAuxiliary: window can show over fullscreen apps without disrupting
-        let desired = current
-            | NS_WINDOW_COLLECTION_BEHAVIOR_MOVE_TO_ACTIVE_SPACE
-            | NS_WINDOW_COLLECTION_BEHAVIOR_FULL_SCREEN_AUXILIARY;
+        // Check if window has CanJoinAllSpaces (set by GPUI for PopUp windows)
+        // If so, we can't add MoveToActiveSpace (they're mutually exclusive)
+        let has_can_join_all_spaces = (current & 1) != 0; // NSWindowCollectionBehaviorCanJoinAllSpaces = 1
+
+        let desired = if has_can_join_all_spaces {
+            // PopUp window - only add FullScreenAuxiliary (no MoveToActiveSpace)
+            current | NS_WINDOW_COLLECTION_BEHAVIOR_FULL_SCREEN_AUXILIARY
+        } else {
+            // Normal window - add both MoveToActiveSpace and FullScreenAuxiliary
+            current
+                | NS_WINDOW_COLLECTION_BEHAVIOR_MOVE_TO_ACTIVE_SPACE
+                | NS_WINDOW_COLLECTION_BEHAVIOR_FULL_SCREEN_AUXILIARY
+        };
 
         let _: () = msg_send![window, setCollectionBehavior:desired];
 
         logging::log(
             "PANEL",
             &format!(
-                "Set collection behavior: {} -> {} (MoveToActiveSpace + FullScreenAuxiliary)",
-                current, desired
+                "Set collection behavior: {} -> {} (CanJoinAllSpaces={}, FullScreenAuxiliary)",
+                current, desired, has_can_join_all_spaces
             ),
         );
     }
@@ -337,14 +344,26 @@ pub fn configure_as_floating_panel() {
         // Get current collection behavior to preserve existing flags set by GPUI/AppKit
         let current: u64 = msg_send![window, collectionBehavior];
 
+        // Check if window has CanJoinAllSpaces (set by GPUI for PopUp windows)
+        // If so, we can't add MoveToActiveSpace (they're mutually exclusive)
+        let has_can_join_all_spaces = (current & 1) != 0; // NSWindowCollectionBehaviorCanJoinAllSpaces = 1
+
         // OR in our desired flags instead of replacing:
-        // - MoveToActiveSpace: window moves to current space when shown
         // - FullScreenAuxiliary: window can show over fullscreen apps without disrupting
         // - IgnoresCycle: exclude from Cmd+Tab app switcher (main window is a utility)
-        let desired = current
-            | NS_WINDOW_COLLECTION_BEHAVIOR_MOVE_TO_ACTIVE_SPACE
-            | NS_WINDOW_COLLECTION_BEHAVIOR_FULL_SCREEN_AUXILIARY
-            | NS_WINDOW_COLLECTION_BEHAVIOR_IGNORES_CYCLE;
+        // - MoveToActiveSpace: ONLY if CanJoinAllSpaces is not set (they're mutually exclusive)
+        let desired = if has_can_join_all_spaces {
+            // PopUp window - don't add MoveToActiveSpace
+            current
+                | NS_WINDOW_COLLECTION_BEHAVIOR_FULL_SCREEN_AUXILIARY
+                | NS_WINDOW_COLLECTION_BEHAVIOR_IGNORES_CYCLE
+        } else {
+            // Normal window - add MoveToActiveSpace
+            current
+                | NS_WINDOW_COLLECTION_BEHAVIOR_MOVE_TO_ACTIVE_SPACE
+                | NS_WINDOW_COLLECTION_BEHAVIOR_FULL_SCREEN_AUXILIARY
+                | NS_WINDOW_COLLECTION_BEHAVIOR_IGNORES_CYCLE
+        };
 
         let _: () = msg_send![window, setCollectionBehavior:desired];
 
@@ -358,15 +377,15 @@ pub fn configure_as_floating_panel() {
         let _: () = msg_send![window, setFrameAutosaveName:empty_string];
 
         // Log detailed breakdown of collection behavior bits
-        let has_participates = (desired & 128) != 0;
+        let has_can_join = (desired & 1) != 0;
         let has_ignores = (desired & 64) != 0;
         let has_move_to_active = (desired & 2) != 0;
 
         logging::log(
             "PANEL",
             &format!(
-                "Main window: Cmd+Tab config - behavior={}->{} [ParticipatesInCycle={}, IgnoresCycle={}, MoveToActiveSpace={}]",
-                current, desired, has_participates, has_ignores, has_move_to_active
+                "Main window: behavior={}->{} [CanJoinAllSpaces={}, IgnoresCycle={}, MoveToActiveSpace={}]",
+                current, desired, has_can_join, has_ignores, has_move_to_active
             ),
         );
         logging::log(
@@ -426,6 +445,60 @@ pub fn hide_main_window() {
 #[cfg(not(target_os = "macos"))]
 pub fn hide_main_window() {
     // No-op on non-macOS platforms
+}
+
+/// Show the main window WITHOUT activating the application.
+///
+/// This is critical for floating panel behavior - the window should appear
+/// and be able to receive keyboard input, but the previously focused app
+/// should remain the "active" app at the OS level. This allows features like
+/// "copy selected text from previous app" to still work.
+///
+/// # macOS Behavior
+///
+/// For PopUp windows (NSPanel with NonactivatingPanel style), uses
+/// `orderFrontRegardless` + `makeKeyWindow` to show the window and give it
+/// keyboard focus without activating the application.
+///
+/// # Other Platforms
+///
+/// No-op on non-macOS platforms.
+#[cfg(target_os = "macos")]
+pub fn show_main_window_without_activation() {
+    debug_assert_main_thread();
+    unsafe {
+        let window = match window_manager::get_main_window() {
+            Some(w) => w,
+            None => {
+                logging::log(
+                    "PANEL",
+                    "show_main_window_without_activation: Main window not registered",
+                );
+                return;
+            }
+        };
+
+        // orderFrontRegardless brings window to front without activating the app
+        let _: () = msg_send![window, orderFrontRegardless];
+
+        // Make the window key so it can receive keyboard input
+        // For NSPanel with NonactivatingPanel style (PopUp windows), this works
+        // without activating the application
+        let _: () = msg_send![window, makeKeyWindow];
+
+        logging::log(
+            "PANEL",
+            "Main window shown without activation (orderFrontRegardless + makeKeyWindow)",
+        );
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn show_main_window_without_activation() {
+    logging::log(
+        "PANEL",
+        "show_main_window_without_activation: Not implemented on this platform",
+    );
 }
 
 /// Get the current main window bounds in canonical top-left coordinates.

@@ -80,3 +80,89 @@ They fail when:
 ### Files Changed
 - `src/actions/window.rs` - Added `resize_actions_window_direct()` that takes `&mut Window` directly
 - Fixed actions popup resize after filtering
+
+---
+
+## Window Focus vs Activation (macOS)
+
+### Key Concepts
+
+On macOS, there's a critical distinction between **focusing** a window and **activating** an application:
+
+| Action | What it does | macOS API |
+|--------|--------------|-----------|
+| **Focus** | Window comes to front, receives keyboard input | `[NSWindow makeKeyAndOrderFront:]` or `orderFrontRegardless` |
+| **Activate** | App becomes frontmost, ALL windows come forward, steals focus from other apps | `[NSApp activateIgnoringOtherApps:YES]` |
+
+### Script Kit Window Behavior
+
+| Window | Focus | Activate | Why |
+|--------|-------|----------|-----|
+| **Main Menu** | YES | NO | Floating panel - should appear without stealing focus from other apps. Enables "copy selected text" workflows. |
+| **Notes** | YES | NO | Same as main menu - utility window that shouldn't disrupt other apps. |
+| **AI Chat** | YES | YES | Full application window - appears in Cmd+Tab, user expects it to behave like a normal app window. |
+
+### Implementation Details
+
+#### Main Menu & Notes (Focus without Activation)
+
+```rust
+// In platform.rs
+pub fn show_main_window_without_activation() {
+    // orderFrontRegardless brings window to front without activating app
+    let _: () = msg_send![window, orderFrontRegardless];
+    // makeKeyWindow lets it receive keyboard input
+    let _: () = msg_send![window, makeKeyWindow];
+}
+```
+
+**Why this matters:**
+1. User has text selected in another app (e.g., browser)
+2. User presses main hotkey (Cmd+;)
+3. Main menu appears WITHOUT the browser losing OS-level focus
+4. User runs a script that calls `getSelectedText()`
+5. Since browser still has focus, accessibility APIs can read the selection
+
+#### AI Window (Focus with Activation)
+
+```rust
+// In ai/window.rs
+cx.activate(true);  // Makes app frontmost
+window.activate_window();  // Brings this specific window forward
+```
+
+**Why AI is different:**
+- AI window participates in Cmd+Tab (via `set_regular_app_mode()`)
+- Users expect to switch between AI and other apps normally
+- It's a "workspace" window, not a quick utility panel
+
+### The Bug We Fixed
+
+**Before:** `cx.activate(true)` was called when showing the main menu, which:
+- Made Script Kit the frontmost application
+- Caused ALL Script Kit windows to come forward
+- Stole focus from the previously-focused app
+- Broke `getSelectedText()` and similar features
+
+**After:** Main menu uses `show_main_window_without_activation()`:
+- Window appears and receives keyboard input
+- Previous app retains OS-level focus
+- `getSelectedText()` can still read from the previous app
+
+### Related Code Locations
+
+- `src/platform.rs`: `show_main_window_without_activation()`, `configure_as_floating_panel()`
+- `src/hotkey_pollers.rs`: Main hotkey handler, script shortcut handler, AI hotkey handler
+- `src/main.rs`: `show_main_window_helper()`, stdin command handlers
+- `src/ai/window.rs`: `open_ai_window()` (uses activation)
+- `src/notes/window.rs`: `open_notes_window()` (should use focus-only)
+
+### Testing This Behavior
+
+1. Select text in a browser
+2. Press main hotkey (Cmd+;)
+3. Main menu should appear
+4. Run "Send Selected Text to AI" or similar
+5. The selected text should be captured correctly
+
+If activation is happening incorrectly, the text capture will fail because the browser lost focus.
