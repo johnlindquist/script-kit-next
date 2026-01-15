@@ -5533,6 +5533,9 @@ fn configure_ai_as_floating_panel() {
                         // Disable window restoration
                         let _: () = msg_send![window, setRestorable:false];
 
+                        // Disable close/hide animation for instant dismiss (NSWindowAnimationBehaviorNone = 2)
+                        let _: () = msg_send![window, setAnimationBehavior: 2i64];
+
                         // ═══════════════════════════════════════════════════════════════════════════
                         // VIBRANCY CONFIGURATION - Match main window for consistent blur
                         // ═══════════════════════════════════════════════════════════════════════════

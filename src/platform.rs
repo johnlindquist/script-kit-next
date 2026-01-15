@@ -376,6 +376,9 @@ pub fn configure_as_floating_panel() {
         let empty_string: id = msg_send![class!(NSString), string];
         let _: () = msg_send![window, setFrameAutosaveName:empty_string];
 
+        // Disable close/hide animation for instant dismiss (NSWindowAnimationBehaviorNone = 2)
+        let _: () = msg_send![window, setAnimationBehavior: 2i64];
+
         // Log detailed breakdown of collection behavior bits
         let has_can_join = (desired & 1) != 0;
         let has_ignores = (desired & 64) != 0;
