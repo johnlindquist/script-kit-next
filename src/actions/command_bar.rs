@@ -220,6 +220,11 @@ impl CommandBar {
         self.open_at_position(window, cx, super::window::WindowPosition::BottomRight);
     }
 
+    /// Open the command bar at top-center (Raycast-style, for Notes window)
+    pub fn open_centered<V: 'static>(&mut self, window: &mut Window, cx: &mut Context<V>) {
+        self.open_at_position(window, cx, super::window::WindowPosition::TopCenter);
+    }
+
     /// Open the command bar at a specific position
     pub fn open_at_position<V: 'static>(
         &mut self,
