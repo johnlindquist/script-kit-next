@@ -419,6 +419,10 @@ pub struct AiApp {
     /// Command bar component (Cmd+K) - uses the unified CommandBar wrapper
     command_bar: CommandBar,
 
+    /// New chat dropdown (Raycast-style + ▼ button in titlebar)
+    /// Uses CommandBar for consistent UI with Cmd+K actions
+    new_chat_command_bar: CommandBar,
+
     // === Model Picker State ===
     /// Whether the model picker dropdown is visible
     showing_model_picker: bool,
@@ -624,6 +628,12 @@ impl AiApp {
             command_bar: CommandBar::new(
                 get_ai_command_bar_actions(),
                 CommandBarConfig::ai_style(),
+                std::sync::Arc::new(theme::load_theme()),
+            ),
+            // New chat dropdown (Raycast-style, positioned at top-right)
+            new_chat_command_bar: CommandBar::new(
+                Vec::new(),                   // Actions will be set dynamically when opened
+                CommandBarConfig::ai_style(), // Same style as Cmd+K (search at top, headers)
                 std::sync::Arc::new(theme::load_theme()),
             ),
             // Model picker state
@@ -1034,6 +1044,155 @@ impl AiApp {
         if let Some(action_id) = self.command_bar.execute_selected_action(cx) {
             self.execute_action(&action_id, window, cx);
         }
+    }
+
+    // === New Chat Command Bar Methods ===
+    // Raycast-style dropdown in the titlebar using CommandBar component
+
+    /// Toggle the new chat command bar dropdown
+    fn toggle_new_chat_command_bar(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.new_chat_command_bar.is_open() {
+            self.hide_new_chat_command_bar(cx);
+        } else {
+            self.show_new_chat_command_bar(window, cx);
+        }
+    }
+
+    /// Show the new chat command bar with dynamically built actions
+    fn show_new_chat_command_bar(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        use crate::actions::{
+            get_new_chat_actions, NewChatModelInfo, NewChatPresetInfo, WindowPosition,
+        };
+
+        // Build last used settings from recent chats
+        let last_used: Vec<NewChatModelInfo> = self
+            .last_used_settings
+            .iter()
+            .map(|s| NewChatModelInfo {
+                model_id: s.model_id.clone(),
+                display_name: s.display_name.clone(),
+                provider: s.provider.clone(),
+                provider_display_name: s.provider_display_name.clone(),
+            })
+            .collect();
+
+        // Build presets list
+        let presets: Vec<NewChatPresetInfo> = self
+            .presets
+            .iter()
+            .map(|p| {
+                NewChatPresetInfo {
+                    id: p.id.to_string(),
+                    name: p.name.to_string(),
+                    icon: p.icon, // Use the preset's icon
+                }
+            })
+            .collect();
+
+        // Build models list
+        let models: Vec<NewChatModelInfo> = self
+            .available_models
+            .iter()
+            .map(|m| {
+                let provider_display = match m.provider.as_str() {
+                    "anthropic" => "Anthropic",
+                    "openai" => "OpenAI",
+                    "google" => "Google",
+                    "groq" => "Groq",
+                    "openrouter" => "OpenRouter",
+                    "vercel" => "Vercel",
+                    _ => &m.provider,
+                }
+                .to_string();
+                NewChatModelInfo {
+                    model_id: m.id.clone(),
+                    display_name: m.display_name.clone(),
+                    provider: m.provider.clone(),
+                    provider_display_name: provider_display,
+                }
+            })
+            .collect();
+
+        // Build actions and update the command bar
+        let actions = get_new_chat_actions(&last_used, &presets, &models);
+        self.new_chat_command_bar.set_actions(actions, cx);
+
+        // Open at top-right position (below titlebar)
+        self.new_chat_command_bar
+            .open_at_position(window, cx, WindowPosition::TopRight);
+
+        // Focus main handle for keyboard routing
+        self.focus_handle.focus(window, cx);
+
+        // Also hide other dropdowns
+        self.hide_model_picker(cx);
+        self.hide_presets_dropdown(cx);
+        self.hide_attachments_picker(cx);
+
+        cx.notify();
+    }
+
+    /// Hide the new chat command bar
+    fn hide_new_chat_command_bar(&mut self, cx: &mut Context<Self>) {
+        self.new_chat_command_bar.close(cx);
+        self.request_focus(cx);
+    }
+
+    /// Execute the selected new chat action
+    fn execute_new_chat_action(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(action_id) = self.new_chat_command_bar.execute_selected_action(cx) {
+            self.handle_new_chat_action(&action_id, window, cx);
+        }
+    }
+
+    /// Handle action from the new chat dropdown
+    fn handle_new_chat_action(
+        &mut self,
+        action_id: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if action_id.starts_with("last_used_") {
+            // Parse index from action ID
+            if let Some(idx_str) = action_id.strip_prefix("last_used_") {
+                if let Ok(idx) = idx_str.parse::<usize>() {
+                    if let Some(setting) = self.last_used_settings.get(idx) {
+                        let model_id = setting.model_id.clone();
+                        let provider = setting.provider.clone();
+                        self.create_chat_with_model(&model_id, &provider, window, cx);
+                    }
+                }
+            }
+        } else if action_id.starts_with("preset_") {
+            // Parse preset ID
+            if let Some(preset_id) = action_id.strip_prefix("preset_") {
+                if let Some(idx) = self.presets.iter().position(|p| p.id == preset_id) {
+                    self.presets_selected_index = idx;
+                    self.create_chat_with_preset(window, cx);
+                }
+            }
+        } else if action_id.starts_with("model_") {
+            // Parse model index
+            if let Some(idx_str) = action_id.strip_prefix("model_") {
+                if let Ok(idx) = idx_str.parse::<usize>() {
+                    if let Some(model) = self.available_models.get(idx) {
+                        let model_id = model.id.clone();
+                        let provider = model.provider.clone();
+                        self.create_chat_with_model(&model_id, &provider, window, cx);
+                    }
+                }
+            }
+        }
+    }
+
+    /// Move selection up in new chat dropdown
+    fn new_chat_command_bar_select_prev(&mut self, cx: &mut Context<Self>) {
+        self.new_chat_command_bar.select_prev(cx);
+    }
+
+    /// Move selection down in new chat dropdown
+    fn new_chat_command_bar_select_next(&mut self, cx: &mut Context<Self>) {
+        self.new_chat_command_bar.select_next(cx);
     }
 
     /// Execute an action by ID
@@ -3287,11 +3446,7 @@ impl AiApp {
                             .hover(|el| el.bg(cx.theme().muted.opacity(0.6)))
                             .on_click(cx.listener(|this, _, window, cx| {
                                 tracing::info!("[AI] New chat dropdown trigger clicked");
-                                if this.showing_new_chat_dropdown {
-                                    this.hide_new_chat_dropdown(cx);
-                                } else {
-                                    this.show_new_chat_dropdown(window, cx);
-                                }
+                                this.toggle_new_chat_command_bar(window, cx);
                             }))
                             .child(
                                 Icon::new(IconName::Plus)
@@ -3951,26 +4106,26 @@ impl Render for AiApp {
                     }
                 }
 
-                // Handle new chat dropdown navigation (Raycast-style)
-                if this.showing_new_chat_dropdown {
+                // Handle new chat dropdown navigation (Raycast-style CommandBar)
+                if this.new_chat_command_bar.is_open() {
                     match key {
                         "up" | "arrowup" => {
-                            this.new_chat_dropdown_select_prev(cx);
+                            this.new_chat_command_bar_select_prev(cx);
                             cx.stop_propagation();
                             return;
                         }
                         "down" | "arrowdown" => {
-                            this.new_chat_dropdown_select_next(cx);
+                            this.new_chat_command_bar_select_next(cx);
                             cx.stop_propagation();
                             return;
                         }
                         "enter" | "return" => {
-                            this.select_from_new_chat_dropdown(window, cx);
+                            this.execute_new_chat_action(window, cx);
                             cx.stop_propagation();
                             return;
                         }
                         "escape" => {
-                            this.hide_new_chat_dropdown(cx);
+                            this.hide_new_chat_command_bar(cx);
                             cx.stop_propagation();
                             return;
                         }

@@ -2929,8 +2929,14 @@ impl ScriptListApp {
 
             // Open the actions window via spawn, passing the shared dialog entity and display_id
             cx.spawn(async move |_this, cx| {
-                cx.update(
-                    |cx| match open_actions_window(cx, main_bounds, display_id, dialog) {
+                cx.update(|cx| {
+                    match open_actions_window(
+                        cx,
+                        main_bounds,
+                        display_id,
+                        dialog,
+                        crate::actions::WindowPosition::BottomRight,
+                    ) {
                         Ok(_handle) => {
                             logging::log("ACTIONS", "Actions popup window opened");
                         }
@@ -2940,8 +2946,8 @@ impl ScriptListApp {
                                 &format!("Failed to open actions window: {}", e),
                             );
                         }
-                    },
-                )
+                    }
+                })
                 .ok();
             })
             .detach();
@@ -3114,8 +3120,14 @@ impl ScriptListApp {
 
             // Open the actions window via spawn
             cx.spawn(async move |_this, cx| {
-                cx.update(
-                    |cx| match open_actions_window(cx, main_bounds, display_id, dialog) {
+                cx.update(|cx| {
+                    match open_actions_window(
+                        cx,
+                        main_bounds,
+                        display_id,
+                        dialog,
+                        crate::actions::WindowPosition::BottomRight,
+                    ) {
                         Ok(_handle) => {
                             logging::log("ACTIONS", "Chat actions popup window opened");
                         }
@@ -3125,8 +3137,8 @@ impl ScriptListApp {
                                 &format!("Failed to open chat actions window: {}", e),
                             );
                         }
-                    },
-                )
+                    }
+                })
                 .ok();
             })
             .detach();

@@ -1248,11 +1248,10 @@ impl NotesApp {
             .flex()
             .items_center()
             .justify_center() // Center the title
-            .h(px(36.)) // Standardized titlebar height (matches AI window)
+            .h(px(22.)) // Compact titlebar height (matches Bear/Raycast reference)
             .px_3()
             .relative() // For absolute positioning of icons
-            // Vibrancy-aware background - semi-transparent for blur effect
-            .bg(Self::get_vibrancy_title_bar_background(cx))
+            // NO .bg() - let vibrancy show through from root
             // Only show titlebar elements when window is hovered
             .on_hover(cx.listener(|this, hovered, _, cx| {
                 if this.force_hovered {
@@ -1370,6 +1369,7 @@ impl NotesApp {
 
         // Build character count footer - only visible on hover
         // Raycast style: character count CENTERED, T icon on RIGHT
+        // NOTE: No .bg() - let vibrancy show through from root
         let footer = div()
             .flex()
             .items_center()
@@ -1377,8 +1377,7 @@ impl NotesApp {
             .relative()
             .h(px(24.))
             .px_3()
-            // Vibrancy-aware background for footer
-            .bg(Self::get_vibrancy_background(cx))
+            // NO .bg() - let vibrancy show through from root
             // Hide when window not hovered
             .when(!window_hovered, |d| d.opacity(0.))
             .child(
@@ -1403,12 +1402,15 @@ impl NotesApp {
             );
 
         // Build main editor layout - Raycast style: clean, no visible input borders
+        // NOTE: Do NOT add .bg() here - the notes-window-root and gpui-component Root
+        // already provide the vibrancy background. Adding more semi-transparent backgrounds
+        // would compound opacity (0.37 × 0.30 × 0.30 = ~8% transparency left!)
         div()
             .flex_1()
             .flex()
             .flex_col()
             .h_full()
-            .bg(Self::get_vibrancy_background(cx))
+            // NO .bg() - let vibrancy show through from root
             .child(titlebar)
             // Toolbar hidden by default - only show when pinned
             .when(!is_trash && has_selection && show_toolbar, |d| {
@@ -1418,7 +1420,7 @@ impl NotesApp {
                 div()
                     .flex_1()
                     .p_3()
-                    .bg(Self::get_vibrancy_background(cx))
+                    // NO .bg() - let vibrancy show through from root
                     // Use a styled input that blends with background
                     .child(
                         Input::new(&self.editor_state).h_full().appearance(false), // No input styling - blends with background
@@ -1687,13 +1689,16 @@ impl Render for NotesApp {
         // Track window hover for traffic lights visibility
         let box_shadows = self.create_box_shadows();
 
+        // NOTE: Do NOT add .bg() here - gpui-component Root already provides
+        // .bg(cx.theme().background) with vibrancy alpha. Adding another semi-transparent
+        // background would compound opacity and hide the blur effect.
         div()
             .id("notes-window-root")
             .flex()
             .flex_col()
             .size_full()
             .relative()
-            .bg(Self::get_vibrancy_background(cx)) // Semi-transparent for vibrancy
+            // NO .bg() - gpui-component Root provides vibrancy background
             .shadow(box_shadows)
             .text_color(cx.theme().foreground)
             .track_focus(&self.focus_handle)
@@ -1991,7 +1996,7 @@ pub fn open_notes_window(cx: &mut App) -> Result<()> {
             appears_transparent: true,
             traffic_light_position: Some(gpui::Point {
                 x: px(8.),
-                y: px(8.),
+                y: px(5.), // Centered vertically in 22px header
             }),
         }),
         window_background,

@@ -200,8 +200,18 @@ impl CommandBar {
         }
     }
 
-    /// Open the command bar
+    /// Open the command bar at the default position (bottom-right)
     pub fn open<V: 'static>(&mut self, window: &mut Window, cx: &mut Context<V>) {
+        self.open_at_position(window, cx, super::window::WindowPosition::BottomRight);
+    }
+
+    /// Open the command bar at a specific position
+    pub fn open_at_position<V: 'static>(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<V>,
+        position: super::window::WindowPosition,
+    ) {
         if self.is_open {
             return;
         }
@@ -233,10 +243,13 @@ impl CommandBar {
         self.dialog = Some(dialog.clone());
         self.is_open = true;
 
-        // Open the vibrancy window
-        match open_actions_window(cx, bounds, display_id, dialog) {
+        // Open the vibrancy window at the specified position
+        match open_actions_window(cx, bounds, display_id, dialog, position) {
             Ok(_) => {
-                logging::log("COMMAND_BAR", "Command bar opened");
+                logging::log(
+                    "COMMAND_BAR",
+                    &format!("Command bar opened at {:?}", position),
+                );
             }
             Err(e) => {
                 logging::log("COMMAND_BAR", &format!("Failed to open command bar: {}", e));
