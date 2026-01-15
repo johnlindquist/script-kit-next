@@ -2124,7 +2124,9 @@ pub fn open_notes_window(cx: &mut App) -> Result<()> {
         window_background,
         focus: true,
         show: true,
-        kind: gpui::WindowKind::Normal,
+        // Use PopUp for floating panel behavior - allows keyboard input without
+        // activating the app (Raycast-like). Creates NSPanel with NonactivatingPanel mask.
+        kind: gpui::WindowKind::PopUp,
         ..Default::default()
     };
 
@@ -2284,9 +2286,19 @@ fn configure_notes_as_floating_panel() {
 
                         // Get current collection behavior to preserve existing flags
                         let current: u64 = msg_send![window, collectionBehavior];
-                        // OR in MoveToActiveSpace (2) + FullScreenAuxiliary (256) + IgnoresCycle (64)
+
+                        // Check if window has CanJoinAllSpaces (set by GPUI for PopUp windows)
+                        // If so, we can't add MoveToActiveSpace (they're mutually exclusive)
+                        let has_can_join_all_spaces = (current & 1) != 0;
+
+                        // OR in FullScreenAuxiliary (256) + IgnoresCycle (64)
                         // IgnoresCycle excludes Notes from Cmd+Tab - it's a utility window
-                        let desired: u64 = current | 2 | 256 | 64;
+                        // MoveToActiveSpace (2) only if not already CanJoinAllSpaces
+                        let desired: u64 = if has_can_join_all_spaces {
+                            current | 256 | 64
+                        } else {
+                            current | 2 | 256 | 64
+                        };
                         let _: () = msg_send![window, setCollectionBehavior:desired];
 
                         // Ensure window content is shareable for captureScreenshot()
@@ -2302,15 +2314,15 @@ fn configure_notes_as_floating_panel() {
                         crate::platform::configure_secondary_window_vibrancy(window, "Notes");
 
                         // Log detailed breakdown of collection behavior bits
-                        let has_participates = (desired & 128) != 0;
+                        let has_can_join = (desired & 1) != 0;
                         let has_ignores = (desired & 64) != 0;
                         let has_move_to_active = (desired & 2) != 0;
 
                         logging::log(
                             "PANEL",
                             &format!(
-                                "Notes window: Cmd+Tab config - behavior={}->{} [ParticipatesInCycle={}, IgnoresCycle={}, MoveToActiveSpace={}]",
-                                current, desired, has_participates, has_ignores, has_move_to_active
+                                "Notes window: behavior={}->{} [CanJoinAllSpaces={}, IgnoresCycle={}, MoveToActiveSpace={}]",
+                                current, desired, has_can_join, has_ignores, has_move_to_active
                             ),
                         );
                         logging::log(

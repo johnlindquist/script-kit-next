@@ -2440,6 +2440,10 @@ impl AiApp {
     fn render_search(&self, cx: &mut Context<Self>) -> impl IntoElement {
         // Fixed height container to prevent layout shift when typing
         // Style the container and use appearance(false) on Input to remove its default white background
+        // Use vibrancy-compatible background: white with low alpha (similar to selected items)
+        let search_bg = rgba((0xFFFFFF << 8) | 0x15); // White at ~8% opacity for subtle vibrancy
+        let border_color = cx.theme().border.opacity(0.3);
+
         div()
             .w_full()
             .h(px(36.)) // Fixed height to prevent layout shift
@@ -2448,8 +2452,8 @@ impl AiApp {
             .px_2()
             .rounded_md()
             .border_1()
-            .border_color(cx.theme().border.opacity(0.5))
-            .bg(cx.theme().input) // Use theme's input background
+            .border_color(border_color)
+            .bg(search_bg) // Vibrancy-compatible semi-transparent background
             .child(
                 Input::new(&self.search_state)
                     .w_full()
@@ -2824,19 +2828,35 @@ impl AiApp {
             })
     }
 
-    /// Render the input field - uses Input component's native styling
+    /// Render the input field with vibrancy-compatible styling
     fn render_input_with_cursor(
         &self,
-        _border_color: gpui::Hsla,
+        border_color: gpui::Hsla,
         _cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        // Use Input's native appearance - no custom container
-        // This avoids any potential visual conflicts
-        Input::new(&self.input_state)
-            .w_full()
-            .appearance(true) // Use native Input styling
-            .bordered(true)
-            .focus_bordered(true)
+        // Use vibrancy-compatible background: white with low alpha
+        // Similar to search input - lets blur show through
+        let input_bg = rgba((0xFFFFFF << 8) | 0x15); // White at ~8% opacity
+
+        // Wrap input in a styled container for vibrancy support
+        // Use accent border color since this input is always the main focus
+        div()
+            .flex_1()
+            .h(px(36.))
+            .px_3()
+            .rounded_md()
+            .border_1()
+            .border_color(border_color) // Always show accent border (input is primary focus)
+            .bg(input_bg) // Vibrancy-compatible semi-transparent background
+            .flex()
+            .items_center()
+            .child(
+                Input::new(&self.input_state)
+                    .w_full()
+                    .appearance(false) // No default styling - we provide our own
+                    .bordered(false)
+                    .focus_bordered(false),
+            )
     }
 
     /// Render the model picker button

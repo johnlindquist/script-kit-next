@@ -5,7 +5,7 @@ use gpui::{
     Application, BoxShadow, Context, ElementId, Entity, FocusHandle, Focusable, ListAlignment,
     ListOffset, ListSizingBehavior, ListState, Render, ScrollStrategy, SharedString, Subscription,
     Timer, UniformListScrollHandle, Window, WindowBackgroundAppearance, WindowBounds, WindowHandle,
-    WindowOptions,
+    WindowKind, WindowOptions,
 };
 
 // gpui-component Root wrapper for theme and context provision
@@ -411,8 +411,10 @@ fn show_main_window_helper(
         PANEL_CONFIGURED.store(true, Ordering::SeqCst);
     }
 
-    // 6. Activate window
-    cx.activate(true);
+    // 6. Show window WITHOUT activating (floating panel behavior)
+    // This allows the main menu to appear without stealing focus from other apps,
+    // enabling features like "copy selected text from previous app" to work correctly.
+    platform::show_main_window_without_activation();
     let _ = window.update(cx, |_root, win, _cx| {
         win.activate_window();
     });
@@ -2145,6 +2147,10 @@ fn main() {
                 window_background,
                 show: false, // Start hidden - only show on hotkey press
                 focus: false, // Don't focus on creation
+                // CRITICAL: Use PopUp for Raycast-like behavior
+                // Creates NSPanel with NonactivatingPanel style, allowing keyboard
+                // input without activating the application (preserves previous app focus)
+                kind: WindowKind::PopUp,
                 ..Default::default()
             },
             |window, cx| {
@@ -2826,7 +2832,8 @@ fn main() {
                                     PANEL_CONFIGURED.store(true, std::sync::atomic::Ordering::SeqCst);
                                 }
 
-                                ctx.activate(true);
+                                // Show window WITHOUT activating (floating panel behavior)
+                                platform::show_main_window_without_activation();
                                 window.activate_window();
 
                                 // Send AI window to back so it doesn't come forward with main menu
@@ -2896,7 +2903,8 @@ fn main() {
                                     PANEL_CONFIGURED.store(true, std::sync::atomic::Ordering::SeqCst);
                                 }
 
-                                ctx.activate(true);
+                                // Show window WITHOUT activating (floating panel behavior)
+                                platform::show_main_window_without_activation();
                                 window.activate_window();
 
                                 // Send AI window to back so it doesn't come forward with main menu
