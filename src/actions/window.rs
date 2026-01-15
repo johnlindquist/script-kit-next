@@ -17,8 +17,39 @@ use gpui::{
 use gpui_component::Root;
 use std::sync::{Mutex, OnceLock};
 
-use super::constants::{ACTION_ITEM_HEIGHT, HEADER_HEIGHT, POPUP_MAX_HEIGHT, SEARCH_INPUT_HEIGHT};
+use super::constants::{
+    ACTION_ITEM_HEIGHT, HEADER_HEIGHT, POPUP_MAX_HEIGHT, SEARCH_INPUT_HEIGHT, SECTION_HEADER_HEIGHT,
+};
 use super::dialog::ActionsDialog;
+use super::types::{Action, SectionStyle};
+
+/// Count the number of section headers in the filtered action list
+/// A section header appears when an action's section differs from the previous action's section
+fn count_section_headers(actions: &[Action], filtered_indices: &[usize]) -> usize {
+    if filtered_indices.is_empty() {
+        return 0;
+    }
+
+    let mut count = 0;
+    let mut prev_section: Option<&Option<String>> = None;
+
+    for &idx in filtered_indices {
+        if let Some(action) = actions.get(idx) {
+            let current_section = &action.section;
+            // Count as header if: first item with a section, or section changed
+            if current_section.is_some() {
+                match prev_section {
+                    None => count += 1,                                  // First item with a section
+                    Some(prev) if prev != current_section => count += 1, // Section changed
+                    _ => {}
+                }
+            }
+            prev_section = Some(current_section);
+        }
+    }
+
+    count
+}
 
 /// Global singleton for the actions window handle
 static ACTIONS_WINDOW: OnceLock<Mutex<Option<WindowHandle<Root>>>> = OnceLock::new();
@@ -224,13 +255,21 @@ pub fn open_actions_window(
     let hide_search = dialog.hide_search;
     let has_header = dialog.context_title.is_some();
 
+    // Count section headers when using Headers style
+    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
+        count_section_headers(&dialog.actions, &dialog.filtered_actions)
+    } else {
+        0
+    };
+
     let search_box_height = if hide_search {
         0.0
     } else {
         SEARCH_INPUT_HEIGHT
     };
     let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
-    let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT)
+    let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
+    let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
         .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
     let border_height = 2.0; // top + bottom border
     let dynamic_height = items_height + search_box_height + header_height + border_height;
@@ -429,6 +468,13 @@ pub fn resize_actions_window_direct(
         ),
     );
 
+    // Count section headers when using Headers style
+    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
+        count_section_headers(&dialog.actions, &dialog.filtered_actions)
+    } else {
+        0
+    };
+
     // Calculate new height
     let search_box_height = if hide_search {
         0.0
@@ -436,13 +482,14 @@ pub fn resize_actions_window_direct(
         SEARCH_INPUT_HEIGHT
     };
     let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
+    let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
     // When no actions, still need space for "No actions match" message (use 1 row height)
     let min_items_height = if num_actions == 0 {
         ACTION_ITEM_HEIGHT
     } else {
         0.0
     };
-    let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT)
+    let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
         .max(min_items_height)
         .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
     let border_height = 2.0;
@@ -565,6 +612,13 @@ pub fn resize_actions_window(cx: &mut App, dialog_entity: &Entity<ActionsDialog>
             ),
         );
 
+        // Count section headers when using Headers style
+        let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
+            count_section_headers(&dialog.actions, &dialog.filtered_actions)
+        } else {
+            0
+        };
+
         // Calculate new height (same logic as open_actions_window)
         let search_box_height = if hide_search {
             0.0
@@ -572,13 +626,14 @@ pub fn resize_actions_window(cx: &mut App, dialog_entity: &Entity<ActionsDialog>
             SEARCH_INPUT_HEIGHT
         };
         let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
+        let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
         // When no actions, still need space for "No actions match" message
         let min_items_height = if num_actions == 0 {
             ACTION_ITEM_HEIGHT
         } else {
             0.0
         };
-        let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT)
+        let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
             .max(min_items_height)
             .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
         let border_height = 2.0; // top + bottom border

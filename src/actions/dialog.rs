@@ -23,7 +23,7 @@ use super::builders::{
 };
 use super::constants::{
     ACTION_ITEM_HEIGHT, ACTION_ROW_INSET, HEADER_HEIGHT, KEYCAP_HEIGHT, KEYCAP_MIN_WIDTH,
-    POPUP_MAX_HEIGHT, POPUP_WIDTH, SEARCH_INPUT_HEIGHT, SELECTION_RADIUS,
+    POPUP_MAX_HEIGHT, POPUP_WIDTH, SEARCH_INPUT_HEIGHT, SECTION_HEADER_HEIGHT, SELECTION_RADIUS,
 };
 use crate::file_search::FileInfo;
 use crate::scriptlets::Scriptlet;
@@ -552,6 +552,34 @@ impl ActionsDialog {
         self.filtered_actions
             .get(self.selected_index)
             .and_then(|&idx| self.actions.get(idx))
+    }
+
+    /// Count the number of section headers in the filtered action list
+    /// A section header appears when an action's section differs from the previous action's section
+    pub fn count_section_headers(&self) -> usize {
+        if self.filtered_actions.is_empty() {
+            return 0;
+        }
+
+        let mut count = 0;
+        let mut prev_section: Option<&Option<String>> = None;
+
+        for &idx in &self.filtered_actions {
+            if let Some(action) = self.actions.get(idx) {
+                let current_section = &action.section;
+                // Count as header if: first item with a section, or section changed
+                if current_section.is_some() {
+                    match prev_section {
+                        None => count += 1,                                  // First item with a section
+                        Some(prev) if prev != current_section => count += 1, // Section changed
+                        _ => {}
+                    }
+                }
+                prev_section = Some(current_section);
+            }
+        }
+
+        count
     }
 
     /// Build the complete actions list based on focused script and optional scriptlet
@@ -1102,8 +1130,18 @@ impl Render for ActionsDialog {
             } else {
                 SEARCH_INPUT_HEIGHT
             };
-            let container_height = (filtered_len as f32 * ACTION_ITEM_HEIGHT)
+
+            // Count section headers for accurate height calculation
+            let section_header_count = if self.config.section_style == SectionStyle::Headers {
+                self.count_section_headers()
+            } else {
+                0
+            };
+            let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
+            let container_height = (filtered_len as f32 * ACTION_ITEM_HEIGHT
+                + section_headers_height)
                 .min(POPUP_MAX_HEIGHT - search_box_height);
+            // Approximate visible items (may be slightly off due to variable heights with section headers)
             let visible_items = (container_height / ACTION_ITEM_HEIGHT) as usize;
 
             // Use selected_index as approximate scroll offset
@@ -1255,12 +1293,22 @@ impl Render for ActionsDialog {
                                         rgba(hex_with_alpha(item_colors.border, 0xA0))
                                     };
 
+                                    // Calculate item height - taller when section header is shown
+                                    let has_section_header = is_section_start
+                                        && section_style == SectionStyle::Headers
+                                        && section_label.is_some();
+                                    let item_height = if has_section_header {
+                                        ACTION_ITEM_HEIGHT + SECTION_HEADER_HEIGHT
+                                    } else {
+                                        ACTION_ITEM_HEIGHT
+                                    };
+
                                     // Raycast-style: compact rows with pill-style selection
                                     // No left accent bar - using rounded background instead
                                     let mut action_item = div()
                                         .id(idx)
                                         .w_full()
-                                        .h(px(ACTION_ITEM_HEIGHT)) // Fixed height for uniform_list
+                                        .h(px(item_height)) // Dynamic height for section headers
                                         .px(px(ACTION_ROW_INSET)) // Horizontal inset for pill effect
                                         .py(px(2.0)) // Minimal vertical padding for tight spacing
                                         .flex()
