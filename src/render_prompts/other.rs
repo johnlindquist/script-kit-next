@@ -195,12 +195,47 @@ impl ScriptListApp {
         let _bg_with_alpha = crate::ui_foundation::hex_to_rgba_with_opacity(bg_hex, opacity.main);
         let box_shadows = self.create_box_shadows();
 
-        // Key handler for global shortcuts (Cmd+W, ESC)
+        // Key handler for global shortcuts and ⌘K to open actions
         let handle_key = cx.listener(
             move |this: &mut Self,
                   event: &gpui::KeyDownEvent,
-                  _window: &mut Window,
+                  window: &mut Window,
                   cx: &mut Context<Self>| {
+                let key = event.keystroke.key.as_str();
+                let key_char = event.keystroke.key_char.as_deref();
+                let has_cmd = event.keystroke.modifiers.platform;
+                let modifiers = &event.keystroke.modifiers;
+
+                // Check for Cmd+K to toggle actions popup
+                if has_cmd && crate::ui_foundation::is_key_k(key) {
+                    logging::log("KEY", "Cmd+K in ChatPrompt - calling toggle_chat_actions");
+                    this.toggle_chat_actions(cx, window);
+                    return;
+                }
+
+                // Route to shared actions dialog handler when open
+                match this.route_key_to_actions_dialog(
+                    key,
+                    key_char,
+                    modifiers,
+                    ActionsDialogHost::ChatPrompt,
+                    window,
+                    cx,
+                ) {
+                    ActionsRoute::Execute { action_id } => {
+                        // Handle chat-specific actions
+                        this.execute_chat_action(&action_id, cx);
+                        return;
+                    }
+                    ActionsRoute::Handled => {
+                        // Key consumed by actions dialog
+                        return;
+                    }
+                    ActionsRoute::NotHandled => {
+                        // Actions popup not open - continue with normal handling
+                    }
+                }
+
                 // Global shortcuts (Cmd+W, ESC for dismissable prompts)
                 // Other keys are handled by the ChatPrompt entity's own key handler
                 let _ = this.handle_global_shortcut_with_options(event, true, cx);
@@ -208,7 +243,7 @@ impl ScriptListApp {
         );
 
         // ChatPrompt entity has its own track_focus and on_key_down in its render method.
-        // We wrap with our own handler to intercept Cmd+W and ESC first.
+        // We wrap with our own handler to intercept Cmd+K and route actions first.
         div()
             .flex()
             .flex_col()
