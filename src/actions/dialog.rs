@@ -11,8 +11,8 @@ use crate::logging;
 use crate::protocol::ProtocolAction;
 use crate::theme;
 use gpui::{
-    div, prelude::*, px, rgb, rgba, svg, uniform_list, App, BoxShadow, Context, FocusHandle,
-    Focusable, Render, ScrollStrategy, SharedString, UniformListScrollHandle, Window,
+    div, list, prelude::*, px, rgb, rgba, svg, App, BoxShadow, Context, ElementId, FocusHandle,
+    Focusable, ListAlignment, ListState, Render, SharedString, Window,
 };
 use std::sync::Arc;
 
@@ -45,6 +45,95 @@ fn hex_with_alpha(hex: u32, alpha: u8) -> u32 {
     DesignColors::hex_with_alpha(hex, alpha)
 }
 
+/// Grouped action item for variable-height list rendering
+/// Section headers are 24px, action items are 44px
+#[derive(Clone, Debug)]
+pub enum GroupedActionItem {
+    /// A section header (e.g., "Actions", "Navigation")
+    SectionHeader(String),
+    /// An action item - usize is the index in filtered_actions
+    Item(usize),
+}
+
+/// Coerce action selection to skip section headers during navigation
+///
+/// When the given index lands on a header:
+/// 1. First tries searching DOWN to find the next Item
+/// 2. If not found, searches UP to find the previous Item
+/// 3. If still not found, returns None
+fn coerce_action_selection(rows: &[GroupedActionItem], ix: usize) -> Option<usize> {
+    if rows.is_empty() {
+        return None;
+    }
+
+    let ix = ix.min(rows.len() - 1);
+
+    // If already on a selectable item, done
+    if matches!(rows[ix], GroupedActionItem::Item(_)) {
+        return Some(ix);
+    }
+
+    // Search down for next selectable
+    for (j, item) in rows.iter().enumerate().skip(ix + 1) {
+        if matches!(item, GroupedActionItem::Item(_)) {
+            return Some(j);
+        }
+    }
+
+    // Search up for previous selectable
+    for (j, item) in rows.iter().enumerate().take(ix).rev() {
+        if matches!(item, GroupedActionItem::Item(_)) {
+            return Some(j);
+        }
+    }
+
+    None
+}
+
+/// Build grouped items from actions and filtered_actions
+/// This is a static helper used during construction to avoid borrowing issues
+fn build_grouped_items_static(
+    actions: &[Action],
+    filtered_actions: &[usize],
+    section_style: SectionStyle,
+) -> Vec<GroupedActionItem> {
+    let mut grouped = Vec::new();
+
+    if filtered_actions.is_empty() {
+        return grouped;
+    }
+
+    let mut prev_section: Option<String> = None;
+    let mut prev_category: Option<ActionCategory> = None;
+
+    for (filter_idx, &action_idx) in filtered_actions.iter().enumerate() {
+        if let Some(action) = actions.get(action_idx) {
+            match section_style {
+                SectionStyle::Headers => {
+                    // Add section header when section changes
+                    if let Some(ref section) = action.section {
+                        if prev_section.as_ref() != Some(section) {
+                            grouped.push(GroupedActionItem::SectionHeader(section.clone()));
+                            prev_section = Some(section.clone());
+                        }
+                    }
+                }
+                SectionStyle::Separators | SectionStyle::None => {
+                    // For separators, we track category changes but don't add headers
+                    // (separators are rendered inline in the item renderer)
+                    prev_category = Some(action.category.clone());
+                }
+            }
+            grouped.push(GroupedActionItem::Item(filter_idx));
+        }
+    }
+
+    // Suppress unused variable warning
+    let _ = prev_category;
+
+    grouped
+}
+
 /// ActionsDialog - Compact overlay popup for quick actions
 /// Implements Raycast-style design with individual keycap shortcuts
 ///
@@ -58,7 +147,7 @@ fn hex_with_alpha(hex: u32, alpha: u8) -> u32 {
 pub struct ActionsDialog {
     pub actions: Vec<Action>,
     pub filtered_actions: Vec<usize>, // Indices into actions
-    pub selected_index: usize,        // Index within filtered_actions
+    pub selected_index: usize,        // Index within grouped_items (visual row index)
     pub search_text: String,
     pub focus_handle: FocusHandle,
     pub on_select: ActionCallback,
@@ -66,8 +155,10 @@ pub struct ActionsDialog {
     pub focused_script: Option<ScriptInfo>,
     /// Currently focused scriptlet (for H3-defined custom actions)
     pub focused_scriptlet: Option<Scriptlet>,
-    /// Scroll handle for uniform_list virtualization
-    pub scroll_handle: UniformListScrollHandle,
+    /// List state for variable-height list (section headers 24px, items 44px)
+    pub list_state: ListState,
+    /// Grouped items for list rendering (includes section headers)
+    pub grouped_items: Vec<GroupedActionItem>,
     /// Theme for consistent color styling
     pub theme: Arc<theme::Theme>,
     /// Design variant for styling (defaults to Default for theme-based styling)
@@ -128,6 +219,10 @@ impl ActionsDialog {
     ) -> Self {
         let actions = get_path_context_actions(path_info);
         let filtered_actions: Vec<usize> = (0..actions.len()).collect();
+        let config = ActionsDialogConfig::default();
+        let grouped_items =
+            build_grouped_items_static(&actions, &filtered_actions, config.section_style);
+        let list_state = ListState::new(grouped_items.len(), ListAlignment::Top, px(100.));
 
         logging::log(
             "ACTIONS",
@@ -148,14 +243,15 @@ impl ActionsDialog {
             on_select,
             focused_script: None,
             focused_scriptlet: None,
-            scroll_handle: UniformListScrollHandle::new(),
+            list_state,
+            grouped_items,
             theme,
             design_variant: DesignVariant::Default,
             cursor_visible: true,
             hide_search: false,
             sdk_actions: None,
             context_title: Some(path_info.path.clone()),
-            config: ActionsDialogConfig::default(),
+            config,
             skip_track_focus: false,
         }
     }
@@ -170,6 +266,10 @@ impl ActionsDialog {
     ) -> Self {
         let actions = get_file_context_actions(file_info);
         let filtered_actions: Vec<usize> = (0..actions.len()).collect();
+        let config = ActionsDialogConfig::default();
+        let grouped_items =
+            build_grouped_items_static(&actions, &filtered_actions, config.section_style);
+        let list_state = ListState::new(grouped_items.len(), ListAlignment::Top, px(100.));
 
         logging::log(
             "ACTIONS",
@@ -190,14 +290,15 @@ impl ActionsDialog {
             on_select,
             focused_script: None,
             focused_scriptlet: None,
-            scroll_handle: UniformListScrollHandle::new(),
+            list_state,
+            grouped_items,
             theme,
             design_variant: DesignVariant::Default,
             cursor_visible: true,
             hide_search: false,
             sdk_actions: None,
             context_title: Some(file_info.name.clone()),
-            config: ActionsDialogConfig::default(),
+            config,
             skip_track_focus: false,
         }
     }
@@ -212,6 +313,10 @@ impl ActionsDialog {
     ) -> Self {
         let actions = get_clipboard_history_context_actions(entry_info);
         let filtered_actions: Vec<usize> = (0..actions.len()).collect();
+        let config = ActionsDialogConfig::default();
+        let grouped_items =
+            build_grouped_items_static(&actions, &filtered_actions, config.section_style);
+        let list_state = ListState::new(grouped_items.len(), ListAlignment::Top, px(100.));
 
         let context_title = if entry_info.preview.len() > 30 {
             format!("{}...", &entry_info.preview[..27])
@@ -239,14 +344,15 @@ impl ActionsDialog {
             on_select,
             focused_script: None,
             focused_scriptlet: None,
-            scroll_handle: UniformListScrollHandle::new(),
+            list_state,
+            grouped_items,
             theme,
             design_variant: DesignVariant::Default,
             cursor_visible: true,
             hide_search: false,
             sdk_actions: None,
             context_title: Some(context_title),
-            config: ActionsDialogConfig::default(),
+            config,
             skip_track_focus: false,
         }
     }
@@ -261,6 +367,10 @@ impl ActionsDialog {
     ) -> Self {
         let actions = get_chat_context_actions(chat_info);
         let filtered_actions: Vec<usize> = (0..actions.len()).collect();
+        let config = ActionsDialogConfig::default();
+        let grouped_items =
+            build_grouped_items_static(&actions, &filtered_actions, config.section_style);
+        let list_state = ListState::new(grouped_items.len(), ListAlignment::Top, px(100.));
 
         let context_title = chat_info
             .current_model
@@ -285,14 +395,15 @@ impl ActionsDialog {
             on_select,
             focused_script: None,
             focused_scriptlet: None,
-            scroll_handle: UniformListScrollHandle::new(),
+            list_state,
+            grouped_items,
             theme,
             design_variant: DesignVariant::Default,
             cursor_visible: true,
             hide_search: false,
             sdk_actions: None,
             context_title: Some(context_title),
-            config: ActionsDialogConfig::default(),
+            config,
             skip_track_focus: false,
         }
     }
@@ -306,6 +417,10 @@ impl ActionsDialog {
     ) -> Self {
         let actions = Self::build_actions(&focused_script, &None);
         let filtered_actions: Vec<usize> = (0..actions.len()).collect();
+        let config = ActionsDialogConfig::default();
+        let grouped_items =
+            build_grouped_items_static(&actions, &filtered_actions, config.section_style);
+        let list_state = ListState::new(grouped_items.len(), ListAlignment::Top, px(100.));
 
         logging::log(
             "ACTIONS",
@@ -338,14 +453,15 @@ impl ActionsDialog {
             on_select,
             focused_script,
             focused_scriptlet: None,
-            scroll_handle: UniformListScrollHandle::new(),
+            list_state,
+            grouped_items,
             theme,
             design_variant,
             cursor_visible: true,
             hide_search: false,
             sdk_actions: None,
             context_title,
-            config: ActionsDialogConfig::default(),
+            config,
             skip_track_focus: false,
         }
     }
@@ -391,6 +507,9 @@ impl ActionsDialog {
         config: ActionsDialogConfig,
     ) -> Self {
         let filtered_actions: Vec<usize> = (0..actions.len()).collect();
+        let grouped_items =
+            build_grouped_items_static(&actions, &filtered_actions, config.section_style);
+        let list_state = ListState::new(grouped_items.len(), ListAlignment::Top, px(100.));
 
         logging::log(
             "ACTIONS",
@@ -410,7 +529,8 @@ impl ActionsDialog {
             on_select,
             focused_script: None,
             focused_scriptlet: None,
-            scroll_handle: UniformListScrollHandle::new(),
+            list_state,
+            grouped_items,
             theme,
             design_variant: DesignVariant::Default,
             cursor_visible: true,
@@ -482,9 +602,11 @@ impl ActionsDialog {
 
         self.actions = converted;
         self.filtered_actions = (0..self.actions.len()).collect();
-        self.selected_index = 0;
         self.search_text.clear();
         self.sdk_actions = Some(actions);
+        // Rebuild grouped items and reset selection
+        self.rebuild_grouped_items();
+        self.selected_index = coerce_action_selection(&self.grouped_items, 0).unwrap_or(0);
     }
 
     /// Format a keyboard shortcut for display (e.g., "cmd+c" → "⌘C")
@@ -537,8 +659,10 @@ impl ActionsDialog {
             self.sdk_actions = None;
             self.actions = Self::build_actions(&self.focused_script, &self.focused_scriptlet);
             self.filtered_actions = (0..self.actions.len()).collect();
-            self.selected_index = 0;
             self.search_text.clear();
+            // Rebuild grouped items and reset selection
+            self.rebuild_grouped_items();
+            self.selected_index = coerce_action_selection(&self.grouped_items, 0).unwrap_or(0);
         }
     }
 
@@ -549,9 +673,14 @@ impl ActionsDialog {
 
     /// Get the currently selected action (for external handling)
     pub fn get_selected_action(&self) -> Option<&Action> {
-        self.filtered_actions
-            .get(self.selected_index)
-            .and_then(|&idx| self.actions.get(idx))
+        // Get the filter_idx from grouped_items, then action_idx from filtered_actions
+        match self.grouped_items.get(self.selected_index) {
+            Some(GroupedActionItem::Item(filter_idx)) => self
+                .filtered_actions
+                .get(*filter_idx)
+                .and_then(|&idx| self.actions.get(idx)),
+            _ => None, // Section headers are not selectable
+        }
     }
 
     /// Count the number of section headers in the filtered action list
@@ -707,10 +836,17 @@ impl ActionsDialog {
             self.selected_index = 0;
         }
 
+        // Rebuild grouped items after filter change
+        self.rebuild_grouped_items();
+
+        // Coerce selection to skip section headers
+        if let Some(valid_idx) = coerce_action_selection(&self.grouped_items, self.selected_index) {
+            self.selected_index = valid_idx;
+        }
+
         // Only scroll if we have results
-        if !self.filtered_actions.is_empty() {
-            self.scroll_handle
-                .scroll_to_item(self.selected_index, ScrollStrategy::Nearest);
+        if !self.grouped_items.is_empty() {
+            self.list_state.scroll_to_reveal_item(self.selected_index);
         }
 
         logging::log_debug(
@@ -721,6 +857,28 @@ impl ActionsDialog {
                 self.selected_index
             ),
         );
+    }
+
+    /// Rebuild grouped_items from current filtered_actions
+    fn rebuild_grouped_items(&mut self) {
+        self.grouped_items = build_grouped_items_static(
+            &self.actions,
+            &self.filtered_actions,
+            self.config.section_style,
+        );
+        // Update list state item count
+        let old_count = self.list_state.item_count();
+        let new_count = self.grouped_items.len();
+        self.list_state.splice(0..old_count, new_count);
+    }
+
+    /// Get the filtered_actions index for the current selection
+    /// Returns None if selection is on a section header
+    pub fn get_selected_filtered_index(&self) -> Option<usize> {
+        match self.grouped_items.get(self.selected_index) {
+            Some(GroupedActionItem::Item(filter_idx)) => Some(*filter_idx),
+            _ => None,
+        }
     }
 
     /// Score an action against a search query.
@@ -791,42 +949,60 @@ impl ActionsDialog {
         }
     }
 
-    /// Move selection up
+    /// Move selection up, skipping section headers
     pub fn move_up(&mut self, cx: &mut Context<Self>) {
         if self.selected_index > 0 {
-            self.selected_index -= 1;
-            self.scroll_handle
-                .scroll_to_item(self.selected_index, ScrollStrategy::Nearest);
-            logging::log_debug(
-                "ACTIONS_SCROLL",
-                &format!("Up: selected_index={}", self.selected_index),
-            );
-            cx.notify();
+            let new_index = self.selected_index - 1;
+            // Skip section headers
+            if let Some(valid_idx) = coerce_action_selection(&self.grouped_items, new_index) {
+                // Only move if we found a valid item before current position
+                if valid_idx < self.selected_index {
+                    self.selected_index = valid_idx;
+                    self.list_state.scroll_to_reveal_item(self.selected_index);
+                    logging::log_debug(
+                        "ACTIONS_SCROLL",
+                        &format!("Up: selected_index={}", self.selected_index),
+                    );
+                    cx.notify();
+                }
+            }
         }
     }
 
-    /// Move selection down
+    /// Move selection down, skipping section headers
     pub fn move_down(&mut self, cx: &mut Context<Self>) {
-        if self.selected_index < self.filtered_actions.len().saturating_sub(1) {
-            self.selected_index += 1;
-            self.scroll_handle
-                .scroll_to_item(self.selected_index, ScrollStrategy::Nearest);
-            logging::log_debug(
-                "ACTIONS_SCROLL",
-                &format!("Down: selected_index={}", self.selected_index),
-            );
-            cx.notify();
+        if self.selected_index < self.grouped_items.len().saturating_sub(1) {
+            let new_index = self.selected_index + 1;
+            // Skip section headers - search forward
+            for i in new_index..self.grouped_items.len() {
+                if matches!(self.grouped_items.get(i), Some(GroupedActionItem::Item(_))) {
+                    self.selected_index = i;
+                    self.list_state.scroll_to_reveal_item(self.selected_index);
+                    logging::log_debug(
+                        "ACTIONS_SCROLL",
+                        &format!("Down: selected_index={}", self.selected_index),
+                    );
+                    cx.notify();
+                    break;
+                }
+            }
         }
     }
 
     /// Get the currently selected action ID (for external handling)
     pub fn get_selected_action_id(&self) -> Option<String> {
-        if let Some(&action_idx) = self.filtered_actions.get(self.selected_index) {
-            if let Some(action) = self.actions.get(action_idx) {
-                return Some(action.id.clone());
+        // Get the filter_idx from grouped_items, then action_idx from filtered_actions
+        match self.grouped_items.get(self.selected_index) {
+            Some(GroupedActionItem::Item(filter_idx)) => {
+                if let Some(&action_idx) = self.filtered_actions.get(*filter_idx) {
+                    if let Some(action) = self.actions.get(action_idx) {
+                        return Some(action.id.clone());
+                    }
+                }
+                None
             }
+            _ => None, // Section headers are not selectable
         }
-        None
     }
 
     /// Get the currently selected ProtocolAction (for checking close behavior)
@@ -854,11 +1030,11 @@ impl ActionsDialog {
 
     /// Submit the selected action
     pub fn submit_selected(&mut self) {
-        if let Some(&action_idx) = self.filtered_actions.get(self.selected_index) {
-            if let Some(action) = self.actions.get(action_idx) {
-                logging::log("ACTIONS", &format!("Action selected: {}", action.id));
-                (self.on_select)(action.id.clone());
-            }
+        // Get action from grouped_items -> filtered_actions -> actions chain
+        if let Some(action) = self.get_selected_action() {
+            let action_id = action.id.clone();
+            logging::log("ACTIONS", &format!("Action selected: {}", action_id));
+            (self.on_select)(action_id);
         }
     }
 
@@ -1103,8 +1279,9 @@ impl Render for ActionsDialog {
                     }),
             );
 
-        // Render action list using uniform_list for virtualized scrolling
-        let actions_container = if self.filtered_actions.is_empty() {
+        // Render action list using list() for variable-height items
+        // Section headers are 24px, action items are 44px
+        let actions_container = if self.grouped_items.is_empty() {
             // Empty state: fixed height matching one action item row
             div()
                 .w_full()
@@ -1117,11 +1294,9 @@ impl Render for ActionsDialog {
                 .child("No actions match your search")
                 .into_any_element()
         } else {
-            // Clone data needed for the uniform_list closure
-            let selected_index = self.selected_index;
-            let filtered_len = self.filtered_actions.len();
+            // Clone data needed for the list closure
+            let grouped_items_clone = self.grouped_items.clone();
             let design_variant = self.design_variant;
-            // NOTE: Removed per-render log - fires every render frame during cursor blink
 
             // Calculate scrollbar parameters
             // Container height for actions (excluding search box)
@@ -1131,347 +1306,285 @@ impl Render for ActionsDialog {
                 SEARCH_INPUT_HEIGHT
             };
 
-            // Count section headers for accurate height calculation
-            let section_header_count = if self.config.section_style == SectionStyle::Headers {
-                self.count_section_headers()
-            } else {
-                0
-            };
-            let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
-            let container_height = (filtered_len as f32 * ACTION_ITEM_HEIGHT
-                + section_headers_height)
-                .min(POPUP_MAX_HEIGHT - search_box_height);
-            // Approximate visible items (may be slightly off due to variable heights with section headers)
-            let visible_items = (container_height / ACTION_ITEM_HEIGHT) as usize;
+            // Count section headers and items for accurate height calculation
+            let mut header_count = 0_usize;
+            let mut item_count = 0_usize;
+            for item in &self.grouped_items {
+                match item {
+                    GroupedActionItem::SectionHeader(_) => header_count += 1,
+                    GroupedActionItem::Item(_) => item_count += 1,
+                }
+            }
+            let total_content_height = (header_count as f32 * SECTION_HEADER_HEIGHT)
+                + (item_count as f32 * ACTION_ITEM_HEIGHT);
+            let container_height = total_content_height.min(POPUP_MAX_HEIGHT - search_box_height);
 
-            // Use selected_index as approximate scroll offset
-            // When scrolling, the selected item should be visible, so this gives a reasonable estimate
-            let scroll_offset = if selected_index > visible_items.saturating_sub(1) {
-                selected_index.saturating_sub(visible_items / 2)
+            // Estimate visible items based on average item height
+            let avg_item_height = if self.grouped_items.is_empty() {
+                ACTION_ITEM_HEIGHT
             } else {
-                0
+                total_content_height / self.grouped_items.len() as f32
             };
+            let visible_items = (container_height / avg_item_height).ceil() as usize;
+
+            // Get scroll offset from list state
+            let scroll_offset = self.list_state.logical_scroll_top().item_ix;
 
             // Get scrollbar colors from theme for consistent styling
             let scrollbar_colors = ScrollbarColors::from_theme(&self.theme);
 
             // Create scrollbar (only visible if content overflows)
-            let scrollbar =
-                Scrollbar::new(filtered_len, visible_items, scroll_offset, scrollbar_colors)
-                    .container_height(container_height);
+            let scrollbar = Scrollbar::new(
+                self.grouped_items.len(),
+                visible_items,
+                scroll_offset,
+                scrollbar_colors,
+            )
+            .container_height(container_height);
 
-            let list = uniform_list(
-                "actions-list",
-                filtered_len,
-                cx.processor(
-                    move |this: &mut ActionsDialog, visible_range, _window, _cx| {
-                        // NOTE: Removed visible range log - fires per render frame
+            // Capture entity handle for use in the render closure
+            let entity = cx.entity();
 
-                        // Get tokens for list item rendering
-                        let item_tokens = get_tokens(design_variant);
-                        let item_colors = item_tokens.colors();
-                        let item_spacing = item_tokens.spacing();
-                        let item_visual = item_tokens.visual();
+            let variable_height_list = list(self.list_state.clone(), move |ix, _window, cx| {
+                // Access entity state inside the closure
+                entity.update(cx, |this, _cx| {
+                    let current_selected = this.selected_index;
 
-                        // Extract colors for list items - use theme opacity for vibrancy
-                        let theme_opacity = this.theme.get_opacity();
-                        let selected_alpha = (theme_opacity.selected * 255.0) as u32;
-                        let hover_alpha = (theme_opacity.hover * 255.0) as u32;
+                    if let Some(grouped_item) = grouped_items_clone.get(ix) {
+                        match grouped_item {
+                            GroupedActionItem::SectionHeader(label) => {
+                                // Section header at 24px height
+                                let header_text = if this.design_variant == DesignVariant::Default {
+                                    rgb(this.theme.colors.text.dimmed)
+                                } else {
+                                    let tokens = get_tokens(this.design_variant);
+                                    rgb(tokens.colors().text_dimmed)
+                                };
+                                let border_color = if this.design_variant == DesignVariant::Default
+                                {
+                                    rgba(hex_with_alpha(this.theme.colors.ui.border, 0x40))
+                                } else {
+                                    let tokens = get_tokens(this.design_variant);
+                                    rgba(hex_with_alpha(tokens.colors().border, 0x40))
+                                };
 
-                        let (selected_bg, hover_bg, primary_text, secondary_text, dimmed_text) =
-                            if design_variant == DesignVariant::Default {
-                                (
-                                    rgba(
-                                        (this.theme.colors.accent.selected_subtle << 8)
-                                            | selected_alpha,
-                                    ),
-                                    rgba(
-                                        (this.theme.colors.accent.selected_subtle << 8)
-                                            | hover_alpha,
-                                    ),
-                                    rgb(this.theme.colors.text.primary),
-                                    rgb(this.theme.colors.text.secondary),
-                                    rgb(this.theme.colors.text.dimmed),
-                                )
-                            } else {
-                                (
-                                    rgba((item_colors.background_selected << 8) | selected_alpha),
-                                    rgba((item_colors.background_selected << 8) | hover_alpha),
-                                    rgb(item_colors.text_primary),
-                                    rgb(item_colors.text_secondary),
-                                    rgb(item_colors.text_dimmed),
-                                )
-                            };
-
-                        let mut items = Vec::new();
-
-                        // Get border color for category separators
-                        let separator_color = if design_variant == DesignVariant::Default {
-                            rgba(hex_with_alpha(this.theme.colors.ui.border, 0x40))
-                        } else {
-                            rgba(hex_with_alpha(item_colors.border_subtle, 0x40))
-                        };
-
-                        // Get section style from config
-                        let section_style = this.config.section_style;
-
-                        for idx in visible_range {
-                            if let Some(&action_idx) = this.filtered_actions.get(idx) {
-                                if let Some(action) = this.actions.get(action_idx) {
-                                    let action: &Action = action; // Explicit type annotation
-                                    let is_selected = idx == selected_index;
-
-                                    // Determine if this is the start of a new section/category
-                                    // For SectionStyle::Headers, use action.section
-                                    // For SectionStyle::Separators, use action.category
-                                    let (is_section_start, section_label) = if idx > 0 {
-                                        if let Some(&prev_action_idx) =
-                                            this.filtered_actions.get(idx - 1)
-                                        {
-                                            if let Some(prev_action) =
-                                                this.actions.get(prev_action_idx)
-                                            {
-                                                let prev_action: &Action = prev_action;
-                                                match section_style {
-                                                    SectionStyle::Headers => {
-                                                        // Compare section strings
-                                                        let different =
-                                                            prev_action.section != action.section;
-                                                        (different, action.section.clone())
-                                                    }
-                                                    SectionStyle::Separators
-                                                    | SectionStyle::None => {
-                                                        // Compare categories
-                                                        let different =
-                                                            prev_action.category != action.category;
-                                                        (different, None)
-                                                    }
-                                                }
-                                            } else {
-                                                (false, None)
-                                            }
-                                        } else {
-                                            (false, None)
-                                        }
-                                    } else {
-                                        // First item - show section header if using Headers style
-                                        match section_style {
-                                            SectionStyle::Headers => (true, action.section.clone()),
-                                            _ => (false, None),
-                                        }
-                                    };
-
-                                    // Match main list styling: bright text when selected, secondary when not
-                                    let title_color = if is_selected {
-                                        primary_text
-                                    } else {
-                                        secondary_text
-                                    };
-
-                                    let shortcut_color = dimmed_text;
-
-                                    // Clone strings for SharedString conversion
-                                    let title_str: String = action.title.clone();
-                                    let shortcut_opt: Option<String> = action.shortcut.clone();
-
-                                    // Note: First/last item rounding is handled by the outer container's overflow_hidden
-                                    // Keeping these vars commented for reference in case we need them later
-                                    // let is_first_item = idx == 0;
-                                    // let is_last_item = idx == filtered_len - 1;
-                                    let _ = item_visual.radius_lg; // Suppress unused warning
-
-                                    // Get keycap colors for Raycast-style shortcuts
-                                    let keycap_bg = if design_variant == DesignVariant::Default {
-                                        rgba(hex_with_alpha(this.theme.colors.ui.border, 0x80))
-                                    } else {
-                                        rgba(hex_with_alpha(item_colors.border, 0x80))
-                                    };
-                                    let keycap_border = if design_variant == DesignVariant::Default
-                                    {
-                                        rgba(hex_with_alpha(this.theme.colors.ui.border, 0xA0))
-                                    } else {
-                                        rgba(hex_with_alpha(item_colors.border, 0xA0))
-                                    };
-
-                                    // Calculate item height - taller when section header is shown
-                                    let has_section_header = is_section_start
-                                        && section_style == SectionStyle::Headers
-                                        && section_label.is_some();
-                                    let item_height = if has_section_header {
-                                        ACTION_ITEM_HEIGHT + SECTION_HEADER_HEIGHT
-                                    } else {
-                                        ACTION_ITEM_HEIGHT
-                                    };
-
-                                    // Raycast-style: compact rows with pill-style selection
-                                    // No left accent bar - using rounded background instead
-                                    let mut action_item = div()
-                                        .id(idx)
-                                        .w_full()
-                                        .h(px(item_height)) // Dynamic height for section headers
-                                        .px(px(ACTION_ROW_INSET)) // Horizontal inset for pill effect
-                                        .py(px(2.0)) // Minimal vertical padding for tight spacing
-                                        .flex()
-                                        .flex_col()
-                                        .justify_center();
-
-                                    // Add section indicator based on section_style config
-                                    match section_style {
-                                        SectionStyle::Separators => {
-                                            // Add top border for category separator (non-first items only)
-                                            if is_section_start && idx > 0 {
-                                                action_item = action_item
-                                                    .border_t_1()
-                                                    .border_color(separator_color);
-                                            }
-                                        }
-                                        SectionStyle::Headers => {
-                                            // Add section header text above the item
-                                            if is_section_start {
-                                                if let Some(ref label) = section_label {
-                                                    action_item = action_item
-                                                        .when(idx > 0, |d| {
-                                                            d.border_t_1()
-                                                                .border_color(separator_color)
-                                                        })
-                                                        .child(
-                                                            div()
-                                                                .px(px(16.0))
-                                                                .pt(px(if idx > 0 {
-                                                                    8.0
-                                                                } else {
-                                                                    4.0
-                                                                }))
-                                                                .pb(px(2.0))
-                                                                .text_xs()
-                                                                .font_weight(
-                                                                    gpui::FontWeight::SEMIBOLD,
-                                                                )
-                                                                .text_color(dimmed_text)
-                                                                .child(label.clone()),
-                                                        );
-                                                }
-                                            }
-                                        }
-                                        SectionStyle::None => {
-                                            // No section indicators
-                                        }
-                                    }
-
-                                    // Inner row fills available height (minus 4px for py(2) top+bottom)
-                                    let inner_row = div()
-                                        .w_full()
-                                        .flex_1() // Fill available height instead of fixed
-                                        .flex()
-                                        .flex_row()
-                                        .items_center()
-                                        .px(px(item_spacing.item_padding_x))
-                                        .rounded(px(SELECTION_RADIUS)) // Pill-style rounded corners
-                                        .bg(if is_selected {
-                                            selected_bg
-                                        } else {
-                                            rgba(0x00000000)
-                                        })
-                                        .hover(|s| s.bg(hover_bg))
-                                        .cursor_pointer();
-
-                                    // Get icon if config enables icons
-                                    let show_icons = this.config.show_icons;
-                                    let action_icon = action.icon;
-
-                                    // Content row: optional icon + label + shortcuts
-                                    let mut left_side =
-                                        div().flex().flex_row().items_center().gap(px(12.0));
-
-                                    // Add icon if enabled and present
-                                    if show_icons {
-                                        if let Some(icon) = action_icon {
-                                            left_side = left_side.child(
-                                                svg()
-                                                    .external_path(icon.external_path())
-                                                    .size(px(16.0))
-                                                    .text_color(if is_selected {
-                                                        primary_text
-                                                    } else {
-                                                        dimmed_text
-                                                    }),
-                                            );
-                                        }
-                                    }
-
-                                    // Add title
-                                    left_side = left_side.child(
+                                div()
+                                    .id(ElementId::NamedInteger("section-header".into(), ix as u64))
+                                    .h(px(SECTION_HEADER_HEIGHT))
+                                    .w_full()
+                                    .px(px(16.0))
+                                    .flex()
+                                    .items_center()
+                                    .when(ix > 0, |d| d.border_t_1().border_color(border_color))
+                                    .child(
                                         div()
-                                            .text_color(title_color)
-                                            .text_sm()
-                                            .font_weight(if is_selected {
-                                                gpui::FontWeight::MEDIUM
+                                            .text_xs()
+                                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                                            .text_color(header_text)
+                                            .child(label.clone()),
+                                    )
+                                    .into_any_element()
+                            }
+                            GroupedActionItem::Item(filter_idx) => {
+                                // Action item at 44px height
+                                if let Some(&action_idx) = this.filtered_actions.get(*filter_idx) {
+                                    if let Some(action) = this.actions.get(action_idx) {
+                                        let is_selected = ix == current_selected;
+
+                                        // Get tokens for styling
+                                        let item_tokens = get_tokens(design_variant);
+                                        let item_colors = item_tokens.colors();
+                                        let item_spacing = item_tokens.spacing();
+
+                                        // Extract colors for list items - use theme opacity for vibrancy
+                                        let theme_opacity = this.theme.get_opacity();
+                                        let selected_alpha =
+                                            (theme_opacity.selected * 255.0) as u32;
+                                        let hover_alpha = (theme_opacity.hover * 255.0) as u32;
+
+                                        let (
+                                            selected_bg,
+                                            hover_bg,
+                                            primary_text,
+                                            secondary_text,
+                                            dimmed_text,
+                                        ) = if design_variant == DesignVariant::Default {
+                                            (
+                                                rgba(
+                                                    (this.theme.colors.accent.selected_subtle << 8)
+                                                        | selected_alpha,
+                                                ),
+                                                rgba(
+                                                    (this.theme.colors.accent.selected_subtle << 8)
+                                                        | hover_alpha,
+                                                ),
+                                                rgb(this.theme.colors.text.primary),
+                                                rgb(this.theme.colors.text.secondary),
+                                                rgb(this.theme.colors.text.dimmed),
+                                            )
+                                        } else {
+                                            (
+                                                rgba(
+                                                    (item_colors.background_selected << 8)
+                                                        | selected_alpha,
+                                                ),
+                                                rgba(
+                                                    (item_colors.background_selected << 8)
+                                                        | hover_alpha,
+                                                ),
+                                                rgb(item_colors.text_primary),
+                                                rgb(item_colors.text_secondary),
+                                                rgb(item_colors.text_dimmed),
+                                            )
+                                        };
+
+                                        // Title color: bright when selected, secondary when not
+                                        let title_color = if is_selected {
+                                            primary_text
+                                        } else {
+                                            secondary_text
+                                        };
+                                        let shortcut_color = dimmed_text;
+
+                                        // Keycap colors
+                                        let keycap_bg = if design_variant == DesignVariant::Default
+                                        {
+                                            rgba(hex_with_alpha(this.theme.colors.ui.border, 0x80))
+                                        } else {
+                                            rgba(hex_with_alpha(item_colors.border, 0x80))
+                                        };
+                                        let keycap_border = if design_variant
+                                            == DesignVariant::Default
+                                        {
+                                            rgba(hex_with_alpha(this.theme.colors.ui.border, 0xA0))
+                                        } else {
+                                            rgba(hex_with_alpha(item_colors.border, 0xA0))
+                                        };
+
+                                        // Inner row with pill-style selection
+                                        let inner_row = div()
+                                            .w_full()
+                                            .flex_1()
+                                            .flex()
+                                            .flex_row()
+                                            .items_center()
+                                            .px(px(item_spacing.item_padding_x))
+                                            .rounded(px(SELECTION_RADIUS))
+                                            .bg(if is_selected {
+                                                selected_bg
                                             } else {
-                                                gpui::FontWeight::NORMAL
+                                                rgba(0x00000000)
                                             })
-                                            .child(title_str),
-                                    );
+                                            .hover(|s| s.bg(hover_bg))
+                                            .cursor_pointer();
 
-                                    let content = div()
-                                        .flex_1()
-                                        .flex()
-                                        .flex_row()
-                                        .items_center()
-                                        .justify_between()
-                                        .child(left_side);
+                                        // Content: optional icon + label + shortcuts
+                                        let show_icons = this.config.show_icons;
+                                        let action_icon = action.icon;
 
-                                    // Right side: keyboard shortcuts as individual keycaps (Raycast-style)
-                                    let content = if let Some(shortcut) = shortcut_opt {
-                                        // Parse shortcut into individual keycaps
-                                        let keycaps =
-                                            ActionsDialog::parse_shortcut_keycaps(&shortcut);
+                                        let mut left_side =
+                                            div().flex().flex_row().items_center().gap(px(12.0));
 
-                                        // Build keycap row
-                                        let mut keycap_row =
-                                            div().flex().flex_row().items_center().gap(px(3.));
-
-                                        for keycap in keycaps {
-                                            keycap_row = keycap_row.child(
-                                                div()
-                                                    .min_w(px(KEYCAP_MIN_WIDTH))
-                                                    .h(px(KEYCAP_HEIGHT))
-                                                    .px(px(6.))
-                                                    .flex()
-                                                    .items_center()
-                                                    .justify_center()
-                                                    .bg(keycap_bg)
-                                                    .border_1()
-                                                    .border_color(keycap_border)
-                                                    .rounded(px(5.))
-                                                    .text_xs()
-                                                    .text_color(shortcut_color)
-                                                    .child(keycap),
-                                            );
+                                        // Add icon if enabled and present
+                                        if show_icons {
+                                            if let Some(icon) = action_icon {
+                                                left_side = left_side.child(
+                                                    svg()
+                                                        .external_path(icon.external_path())
+                                                        .size(px(16.0))
+                                                        .text_color(if is_selected {
+                                                            primary_text
+                                                        } else {
+                                                            dimmed_text
+                                                        }),
+                                                );
+                                            }
                                         }
 
-                                        content.child(keycap_row)
+                                        // Add title
+                                        left_side = left_side.child(
+                                            div()
+                                                .text_color(title_color)
+                                                .text_sm()
+                                                .font_weight(if is_selected {
+                                                    gpui::FontWeight::MEDIUM
+                                                } else {
+                                                    gpui::FontWeight::NORMAL
+                                                })
+                                                .child(action.title.clone()),
+                                        );
+
+                                        let mut content = div()
+                                            .flex_1()
+                                            .flex()
+                                            .flex_row()
+                                            .items_center()
+                                            .justify_between()
+                                            .child(left_side);
+
+                                        // Right side: keyboard shortcuts as keycaps
+                                        if let Some(ref shortcut) = action.shortcut {
+                                            let keycaps =
+                                                ActionsDialog::parse_shortcut_keycaps(shortcut);
+                                            let mut keycap_row =
+                                                div().flex().flex_row().items_center().gap(px(3.));
+
+                                            for keycap in keycaps {
+                                                keycap_row = keycap_row.child(
+                                                    div()
+                                                        .min_w(px(KEYCAP_MIN_WIDTH))
+                                                        .h(px(KEYCAP_HEIGHT))
+                                                        .px(px(6.))
+                                                        .flex()
+                                                        .items_center()
+                                                        .justify_center()
+                                                        .bg(keycap_bg)
+                                                        .border_1()
+                                                        .border_color(keycap_border)
+                                                        .rounded(px(5.))
+                                                        .text_xs()
+                                                        .text_color(shortcut_color)
+                                                        .child(keycap),
+                                                );
+                                            }
+
+                                            content = content.child(keycap_row);
+                                        }
+
+                                        div()
+                                            .id(ElementId::NamedInteger(
+                                                "action-item".into(),
+                                                ix as u64,
+                                            ))
+                                            .h(px(ACTION_ITEM_HEIGHT))
+                                            .w_full()
+                                            .px(px(ACTION_ROW_INSET))
+                                            .py(px(2.0))
+                                            .flex()
+                                            .flex_col()
+                                            .justify_center()
+                                            .child(inner_row.child(content))
+                                            .into_any_element()
                                     } else {
-                                        content
-                                    };
-
-                                    // Build final action item with inner row
-                                    action_item = action_item.child(inner_row.child(content));
-
-                                    items.push(action_item);
+                                        // Fallback for missing action
+                                        div().h(px(ACTION_ITEM_HEIGHT)).into_any_element()
+                                    }
+                                } else {
+                                    // Fallback for missing filtered index
+                                    div().h(px(ACTION_ITEM_HEIGHT)).into_any_element()
                                 }
                             }
                         }
-                        items
-                    },
-                ),
-            )
+                    } else {
+                        // Fallback for out-of-bounds index
+                        div().h(px(ACTION_ITEM_HEIGHT)).into_any_element()
+                    }
+                })
+            })
             .flex_1()
-            .w_full()
-            .track_scroll(&self.scroll_handle);
+            .w_full();
 
-            // Wrap uniform_list in a relative container with scrollbar overlay
-            // NOTE: The wrapper needs flex + h_full for uniform_list to properly calculate visible range
-            // overflow_hidden clips children to parent bounds (including rounded corners)
+            // Wrap list in a relative container with scrollbar overlay
             div()
                 .relative()
                 .flex()
@@ -1480,7 +1593,7 @@ impl Render for ActionsDialog {
                 .w_full()
                 .h_full()
                 .overflow_hidden()
-                .child(list)
+                .child(variable_height_list)
                 .child(scrollbar)
                 .into_any_element()
         };
