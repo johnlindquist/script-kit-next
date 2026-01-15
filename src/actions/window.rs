@@ -27,8 +27,22 @@ static ACTIONS_WINDOW: OnceLock<Mutex<Option<WindowHandle<Root>>>> = OnceLock::n
 const ACTIONS_WINDOW_WIDTH: f32 = 320.0;
 /// Horizontal margin from main window right edge
 const ACTIONS_MARGIN_X: f32 = 8.0;
-/// Vertical margin from header
+/// Vertical margin from header/footer
 const ACTIONS_MARGIN_Y: f32 = 8.0;
+/// Titlebar height (for top-anchored positioning)
+#[allow(dead_code)] // Reserved for future TopRight positioning
+const TITLEBAR_HEIGHT: f32 = 36.0;
+
+/// Window position relative to the parent window
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[allow(dead_code)] // TopRight reserved for future use
+pub enum WindowPosition {
+    /// Bottom-right, above the footer (default for Cmd+K actions)
+    #[default]
+    BottomRight,
+    /// Top-right, below the titlebar (for new chat dropdown)
+    TopRight,
+}
 
 /// ActionsWindow wrapper that renders the shared ActionsDialog entity
 pub struct ActionsWindow {
@@ -179,6 +193,7 @@ impl Render for ActionsWindow {
 ///   (as returned by GPUI's window.bounds() - top-left origin relative to the window's screen)
 /// * `display_id` - The display where the main window is located (actions window will be on same display)
 /// * `dialog_entity` - The shared ActionsDialog entity (created by main app)
+/// * `position` - Where to position the window relative to the main window
 ///
 /// # Returns
 /// The window handle on success
@@ -187,6 +202,7 @@ pub fn open_actions_window(
     main_window_bounds: Bounds<Pixels>,
     display_id: Option<DisplayId>,
     dialog_entity: Entity<ActionsDialog>,
+    position: WindowPosition,
 ) -> anyhow::Result<WindowHandle<Root>> {
     // Close any existing actions window first
     close_actions_window(cx);
@@ -219,7 +235,9 @@ pub fn open_actions_window(
 
     // Calculate window position:
     // - X: Right edge of main window, minus actions width, minus margin
-    // - Y: Bottom-aligned with main window (above footer), minus margin
+    // - Y: Depends on position parameter:
+    //   - BottomRight: Above footer, aligned to bottom
+    //   - TopRight: Below titlebar, aligned to top
     //
     // CRITICAL: main_window_bounds must be in SCREEN-RELATIVE coordinates from GPUI's
     // window.bounds(). These are top-left origin, relative to the window's current screen.
@@ -231,11 +249,21 @@ pub fn open_actions_window(
     let window_x = main_window_bounds.origin.x + main_window_bounds.size.width
         - window_width
         - px(ACTIONS_MARGIN_X);
-    // Position popup above the footer (footer is 40px)
-    let window_y = main_window_bounds.origin.y + main_window_bounds.size.height
-        - window_height
-        - px(FOOTER_HEIGHT)
-        - px(ACTIONS_MARGIN_Y);
+
+    // Calculate Y position based on anchor position
+    let window_y = match position {
+        WindowPosition::BottomRight => {
+            // Position popup above the footer (footer is 40px)
+            main_window_bounds.origin.y + main_window_bounds.size.height
+                - window_height
+                - px(FOOTER_HEIGHT)
+                - px(ACTIONS_MARGIN_Y)
+        }
+        WindowPosition::TopRight => {
+            // Position popup below the titlebar
+            main_window_bounds.origin.y + px(TITLEBAR_HEIGHT) + px(ACTIONS_MARGIN_Y)
+        }
+    };
 
     let bounds = Bounds {
         origin: Point {

@@ -1031,6 +1031,83 @@ pub fn get_ai_command_bar_actions() -> Vec<Action> {
     ]
 }
 
+/// Information about a model for the new chat dropdown
+#[derive(Debug, Clone)]
+#[allow(dead_code)] // Public API - will be used by AI window
+pub struct NewChatModelInfo {
+    pub model_id: String,
+    pub display_name: String,
+    pub provider: String,
+    pub provider_display_name: String,
+}
+
+/// Information about a preset for the new chat dropdown
+#[derive(Debug, Clone)]
+pub struct NewChatPresetInfo {
+    pub id: String,
+    pub name: String,
+    pub icon: IconName,
+}
+
+/// Build actions for the AI new chat dropdown
+///
+/// Organizes items into sections:
+/// - "Last Used Settings" - Recent model+provider combinations
+/// - "Presets" - Pre-configured chat templates (General, Code, Writer, etc.)
+/// - "Models" - All available AI models
+#[allow(dead_code)] // Public API - used by AI window
+pub fn get_new_chat_actions(
+    last_used: &[NewChatModelInfo],
+    presets: &[NewChatPresetInfo],
+    models: &[NewChatModelInfo],
+) -> Vec<Action> {
+    let mut actions = Vec::new();
+
+    // Last Used Settings section
+    for (idx, setting) in last_used.iter().enumerate() {
+        actions.push(
+            Action::new(
+                format!("last_used_{}", idx),
+                &setting.display_name,
+                Some(setting.provider_display_name.clone()),
+                ActionCategory::ScriptContext,
+            )
+            .with_section("Last Used Settings")
+            .with_icon(IconName::BoltFilled),
+        );
+    }
+
+    // Presets section
+    for preset in presets {
+        actions.push(
+            Action::new(
+                format!("preset_{}", preset.id),
+                &preset.name,
+                None,
+                ActionCategory::ScriptContext,
+            )
+            .with_section("Presets")
+            .with_icon(preset.icon),
+        );
+    }
+
+    // Models section
+    for (idx, model) in models.iter().enumerate() {
+        actions.push(
+            Action::new(
+                format!("model_{}", idx),
+                &model.display_name,
+                Some(model.provider_display_name.clone()),
+                ActionCategory::ScriptContext,
+            )
+            .with_section("Models")
+            .with_icon(IconName::Settings),
+        );
+    }
+
+    actions
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -38,6 +38,8 @@ pub use types::ScriptInfo;
 #[allow(unused_imports)]
 pub use builders::get_ai_command_bar_actions;
 #[allow(unused_imports)]
+pub use builders::{get_new_chat_actions, NewChatModelInfo, NewChatPresetInfo};
+#[allow(unused_imports)]
 pub use types::{
     Action, ActionCategory, ActionsDialogConfig, AnchorPosition, SearchPosition, SectionStyle,
 };
@@ -45,7 +47,7 @@ pub use types::{
 // Window functions for separate vibrancy window
 pub use window::{
     close_actions_window, is_actions_window_open, notify_actions_window, open_actions_window,
-    resize_actions_window,
+    resize_actions_window, WindowPosition,
 };
 // get_actions_window_handle available but not re-exported (use window:: directly if needed)
 
