@@ -2613,7 +2613,7 @@ impl AiApp {
             .flex_col()
             .w(px(240.))
             .h_full()
-            .bg(Self::get_vibrancy_sidebar_background()) // Semi-transparent sidebar
+            // NO .bg() - let vibrancy show through from root
             .border_r_1()
             .border_color(cx.theme().sidebar_border)
             // Spacer for titlebar height (toggle button is now absolutely positioned in main container)
@@ -3383,95 +3383,13 @@ impl AiApp {
             has_selection
         );
 
-        // Build titlebar
+        // Build titlebar - just a spacer with border (title is now globally centered at window level)
         let titlebar = div()
             .id("ai-titlebar")
-            .flex()
-            .items_center()
-            .justify_between()
             .h(px(36.))
-            .px_3()
-            .bg(Self::get_vibrancy_sidebar_background()) // Semi-transparent sidebar
+            // NO .bg() - let vibrancy show through from root
             .border_b_1()
-            .border_color(cx.theme().border)
-            // Left side: chat title (toggle button is now absolutely positioned in main container)
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .overflow_hidden()
-                    .min_w_0() // Allow shrinking for long titles
-                    // Chat title (truncated)
-                    .child(
-                        div()
-                            .overflow_hidden()
-                            .text_ellipsis()
-                            .text_sm()
-                            .text_color(cx.theme().foreground)
-                            .child(
-                                self.get_selected_chat()
-                                    .map(|c| {
-                                        if c.title.is_empty() {
-                                            "New Chat".to_string()
-                                        } else {
-                                            c.title.clone()
-                                        }
-                                    })
-                                    .unwrap_or_else(|| "AI Chat".to_string()),
-                            ),
-                    ),
-            )
-            // Right side: New Chat dropdown + Delete button
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap_1()
-                    .flex_shrink_0() // Never shrink - always show buttons
-                    // New Chat dropdown trigger (Raycast-style + ▼ button)
-                    .child(
-                        div()
-                            .id("new-chat-dropdown-trigger")
-                            .flex()
-                            .items_center()
-                            .gap(px(2.))
-                            .px_2()
-                            .py(px(4.))
-                            .rounded_md()
-                            .cursor_pointer()
-                            .bg(cx.theme().muted.opacity(0.3)) // Subtle background for visibility
-                            .border_1()
-                            .border_color(cx.theme().border.opacity(0.5))
-                            .hover(|el| el.bg(cx.theme().muted.opacity(0.6)))
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                tracing::info!("[AI] New chat dropdown trigger clicked");
-                                this.toggle_new_chat_command_bar(window, cx);
-                            }))
-                            .child(
-                                Icon::new(IconName::Plus)
-                                    .size(px(14.))
-                                    .text_color(cx.theme().foreground),
-                            )
-                            .child(
-                                Icon::new(IconName::ChevronDown)
-                                    .size(px(10.))
-                                    .text_color(cx.theme().muted_foreground),
-                            ),
-                    )
-                    // Delete button (only shown when a chat is selected)
-                    .when(has_selection, |d| {
-                        d.child(
-                            Button::new("delete-chat")
-                                .ghost()
-                                .xsmall()
-                                .icon(IconName::Delete)
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    this.delete_selected_chat(cx);
-                                })),
-                        )
-                    }),
-            );
+            .border_color(cx.theme().border);
 
         // Build input area at bottom - Raycast-style layout:
         // Row 1: [+ icon] [input field with magenta border]
@@ -3488,7 +3406,7 @@ impl AiApp {
             .flex()
             .flex_col()
             .w_full()
-            .bg(Self::get_vibrancy_sidebar_background()) // Semi-transparent sidebar
+            // NO .bg() - let vibrancy show through from root
             .px_3()
             .pt_3()
             .pb_2() // Reduced bottom padding
@@ -3952,7 +3870,7 @@ impl Render for AiApp {
             .flex()
             .flex_row()
             .size_full()
-            .bg(Self::get_vibrancy_background()) // Semi-transparent for vibrancy
+            // NO .bg() - gpui-component Root provides vibrancy background
             .shadow(box_shadows)
             .text_color(cx.theme().foreground)
             .track_focus(&self.focus_handle)
@@ -4214,9 +4132,75 @@ impl Render for AiApp {
             .child(
                 div()
                     .absolute()
-                    .top(px(6.)) // Vertically centered in 36px titlebar: (36 - 24) / 2 = 6
+                    .top(px(4.)) // Align with traffic lights (~8px) and title center
                     .left(px(78.)) // After traffic lights (~70px) + small gap
                     .child(self.render_sidebar_toggle(cx)),
+            )
+            // Absolutely positioned CENTERED title - centered within main panel area
+            // When sidebar is open, offset by sidebar width (240px) to center in remaining space
+            .child(
+                div()
+                    .id("ai-centered-title")
+                    .absolute()
+                    .top_0()
+                    // Offset left by sidebar width when sidebar is open
+                    .when(self.sidebar_collapsed, |d| d.left_0())
+                    .when(!self.sidebar_collapsed, |d| d.left(px(240.))) // Sidebar width
+                    .right_0()
+                    .h(px(36.))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child(
+                        div()
+                            .text_sm()
+                            .text_color(cx.theme().muted_foreground)
+                            .child(
+                                self.get_selected_chat()
+                                    .map(|c| {
+                                        if c.title.is_empty() {
+                                            "New Chat".to_string()
+                                        } else {
+                                            c.title.clone()
+                                        }
+                                    })
+                                    .unwrap_or_else(|| "AI Chat".to_string()),
+                            ),
+                    ),
+            )
+            // Absolutely positioned right-side icons in header
+            .child(
+                div()
+                    .absolute()
+                    .top(px(10.)) // Vertically centered in 36px header
+                    .right(px(12.))
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    // Menu icon
+                    .child(
+                        div()
+                            .id("ai-menu-icon-global")
+                            .cursor_pointer()
+                            .text_color(cx.theme().muted_foreground.opacity(0.7))
+                            .hover(|s| s.text_color(cx.theme().muted_foreground))
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.toggle_new_chat_command_bar(window, cx);
+                            }))
+                            .child(Icon::new(IconName::Menu).size(px(16.))),
+                    )
+                    // Plus icon for new chat
+                    .child(
+                        div()
+                            .id("ai-new-chat-icon-global")
+                            .cursor_pointer()
+                            .text_color(cx.theme().muted_foreground.opacity(0.7))
+                            .hover(|s| s.text_color(cx.theme().muted_foreground))
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.create_chat(window, cx);
+                            }))
+                            .child(Icon::new(IconName::Plus).size(px(16.))),
+                    ),
             )
             // Overlay dropdowns (only one at a time)
             // NOTE: Command bar now renders in a separate vibrancy window (not inline)
@@ -4226,9 +4210,8 @@ impl Render for AiApp {
             .when(self.showing_presets_dropdown, |el| {
                 el.child(self.render_presets_dropdown(cx))
             })
-            .when(self.showing_new_chat_dropdown, |el| {
-                el.child(self.render_new_chat_dropdown(cx))
-            })
+            // NOTE: New chat dropdown now uses CommandBar (separate vibrancy window)
+            // No inline rendering needed - CommandBar manages its own window
             .when(self.showing_attachments_picker, |el| {
                 el.child(self.render_attachments_picker(cx))
             })

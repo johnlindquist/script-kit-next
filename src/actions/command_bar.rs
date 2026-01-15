@@ -105,6 +105,21 @@ impl CommandBarConfig {
             ..Default::default()
         }
     }
+
+    /// Create config for Notes window style (search at top, headers, icons)
+    /// Similar to AI style but tailored for Notes actions
+    pub fn notes_style() -> Self {
+        Self {
+            dialog_config: ActionsDialogConfig {
+                search_position: SearchPosition::Top,
+                section_style: SectionStyle::Headers,
+                anchor: AnchorPosition::Top,
+                show_icons: true,
+                show_footer: true,
+            },
+            ..Default::default()
+        }
+    }
 }
 
 /// Callback type for action execution

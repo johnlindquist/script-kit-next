@@ -26,6 +26,11 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tracing::{debug, info};
 
+// Use the unified ActionsDialog/CommandBar system
+use crate::actions::{get_notes_command_bar_actions, CommandBar, CommandBarConfig, NotesInfo};
+use crate::theme;
+
+// Keep legacy types for backwards compatibility during transition
 use super::actions_panel::{
     panel_height_for_rows, NotesAction, NotesActionItem, NotesActionsPanel,
 };
@@ -120,6 +125,10 @@ pub struct NotesApp {
 
     /// Entity for the actions panel (when shown)
     actions_panel: Option<Entity<NotesActionsPanel>>,
+
+    /// Command bar component (Cmd+K) - uses unified CommandBar wrapper
+    /// Opens in a separate vibrancy window for proper macOS blur effect
+    command_bar: CommandBar,
 
     /// Entity for the browse panel (when shown)
     browse_panel: Option<Entity<super::browse_panel::BrowsePanel>>,
@@ -246,6 +255,16 @@ impl NotesApp {
             show_actions_panel: false,
             show_browse_panel: false,
             actions_panel: None,
+            // Initialize CommandBar with notes-specific actions
+            command_bar: CommandBar::new(
+                get_notes_command_bar_actions(&NotesInfo {
+                    has_selection: selected_note_id.is_some(),
+                    is_trash_view: false,
+                    auto_sizing_enabled: true,
+                }),
+                CommandBarConfig::notes_style(),
+                std::sync::Arc::new(theme::load_theme()),
+            ),
             browse_panel: None,
             pending_action: Arc::new(Mutex::new(None)),
             actions_panel_prev_height: None,
@@ -812,38 +831,36 @@ impl NotesApp {
     }
 
     fn open_actions_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let actions = self.build_action_items();
-        let action_count = actions.len();
-        let pending_action = self.pending_action.clone();
-
-        let panel = cx.new(|cx| {
-            let focus_handle = cx.focus_handle();
-            NotesActionsPanel::new(
-                focus_handle,
-                actions,
-                Arc::new(move |action| {
-                    if let Ok(mut pending) = pending_action.lock() {
-                        *pending = Some(action);
-                    }
-                }),
-            )
+        // Update command bar actions based on current state (dynamic - depends on selection, etc.)
+        let actions = get_notes_command_bar_actions(&NotesInfo {
+            has_selection: self.selected_note_id.is_some(),
+            is_trash_view: self.view_mode == NotesViewMode::Trash,
+            auto_sizing_enabled: self.auto_sizing_enabled,
         });
+        self.command_bar.set_actions(actions, cx);
 
-        let panel_focus_handle = panel.read(cx).focus_handle();
-        self.actions_panel = Some(panel);
+        // Open the command bar (CommandBar handles window creation internally)
+        self.command_bar.open(window, cx);
+
+        // CRITICAL: Focus main focus_handle so keyboard events route to us
+        // The ActionsWindow is a visual-only popup - it does NOT take keyboard focus.
+        // macOS popup windows often don't receive keyboard events properly.
+        self.focus_handle.focus(window, cx);
+
+        // Update state flags
         self.show_actions_panel = true;
         self.show_browse_panel = false;
         self.browse_panel = None;
-        window.focus(&panel_focus_handle, cx);
 
-        self.ensure_actions_panel_height(window, action_count);
         cx.notify();
     }
 
     fn close_actions_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        // Close the command bar window
+        self.command_bar.close(cx);
+
         self.show_actions_panel = false;
         self.actions_panel = None;
-        self.restore_actions_panel_height(window);
 
         // Refocus the editor after closing the actions panel
         self.editor_state.update(cx, |state, cx| {
@@ -977,6 +994,37 @@ impl NotesApp {
         // Default: close actions panel and refocus editor
         self.close_actions_panel(window, cx);
         cx.notify();
+    }
+
+    /// Execute an action by ID (from CommandBar)
+    /// Maps string action IDs to NotesAction enum values
+    fn execute_action(&mut self, action_id: &str, window: &mut Window, cx: &mut Context<Self>) {
+        debug!(action_id, "Executing notes action from CommandBar");
+
+        // Map action ID strings to NotesAction enum
+        let action = match action_id {
+            "new_note" => Some(NotesAction::NewNote),
+            "duplicate_note" => Some(NotesAction::DuplicateNote),
+            "browse_notes" => Some(NotesAction::BrowseNotes),
+            "find_in_note" => Some(NotesAction::FindInNote),
+            "format" => Some(NotesAction::Format),
+            "copy_note_as" => Some(NotesAction::CopyNoteAs),
+            "copy_deeplink" => Some(NotesAction::CopyDeeplink),
+            "create_quicklink" => Some(NotesAction::CreateQuicklink),
+            "export" => Some(NotesAction::Export),
+            "enable_auto_sizing" => Some(NotesAction::EnableAutoSizing),
+            _ => {
+                tracing::warn!(action_id, "Unknown action ID from CommandBar");
+                None
+            }
+        };
+
+        if let Some(action) = action {
+            self.handle_action(action, window, cx);
+        } else {
+            // Unknown action - just close the command bar
+            self.close_actions_panel(window, cx);
+        }
     }
 
     /// Open the browse panel with current notes
@@ -1248,7 +1296,7 @@ impl NotesApp {
             .flex()
             .items_center()
             .justify_center() // Center the title
-            .h(px(22.)) // Compact titlebar height (matches Bear/Raycast reference)
+            .h(px(26.)) // Compact titlebar height (slightly taller for visual balance)
             .px_3()
             .relative() // For absolute positioning of icons
             // NO .bg() - let vibrancy show through from root
@@ -1682,7 +1730,10 @@ impl Render for NotesApp {
             self.save_current_note();
         }
 
-        let show_actions = self.show_actions_panel;
+        // Only show legacy actions panel overlay if it exists AND command bar is NOT open
+        // CommandBar renders in its own window, so we don't need the overlay
+        let show_actions =
+            self.show_actions_panel && self.actions_panel.is_some() && !self.command_bar.is_open();
         let show_browse = self.show_browse_panel;
 
         // Raycast-style single-note view: no sidebar, editor fills full width
@@ -1716,7 +1767,59 @@ impl Render for NotesApp {
                 let key = event.keystroke.key.to_lowercase();
                 let modifiers = &event.keystroke.modifiers;
 
-                if this.show_actions_panel {
+                // Handle command bar navigation when it's open
+                // This routes all relevant keys to the CommandBar
+                if this.command_bar.is_open() {
+                    match key.as_str() {
+                        "escape" | "esc" => {
+                            this.close_actions_panel(window, cx);
+                            return;
+                        }
+                        "up" | "arrowup" => {
+                            this.command_bar.select_prev(cx);
+                            return;
+                        }
+                        "down" | "arrowdown" => {
+                            this.command_bar.select_next(cx);
+                            return;
+                        }
+                        "enter" => {
+                            if let Some(action_id) = this.command_bar.execute_selected_action(cx) {
+                                this.execute_action(&action_id, window, cx);
+                            }
+                            return;
+                        }
+                        "backspace" | "delete" => {
+                            this.command_bar.handle_backspace(cx);
+                            return;
+                        }
+                        _ => {
+                            // Handle printable characters for search (when no modifiers)
+                            if !modifiers.platform && !modifiers.control && !modifiers.alt {
+                                if let Some(ch) = key.chars().next() {
+                                    if ch.is_alphanumeric()
+                                        || ch.is_whitespace()
+                                        || ch == '-'
+                                        || ch == '_'
+                                    {
+                                        this.command_bar.handle_char(ch, cx);
+                                        return;
+                                    }
+                                }
+                            }
+                            // Cmd+K also closes the command bar
+                            if modifiers.platform && key == "k" {
+                                this.close_actions_panel(window, cx);
+                                return;
+                            }
+                        }
+                    }
+                    // Don't fall through to other handlers when command bar is open
+                    return;
+                }
+
+                // Legacy: Handle old actions panel (for backwards compatibility during transition)
+                if this.show_actions_panel && this.actions_panel.is_some() {
                     if key == "escape" || (modifiers.platform && key == "k") || key == "esc" {
                         this.close_actions_panel(window, cx);
                         return;
@@ -1800,8 +1903,8 @@ impl Render for NotesApp {
                 if modifiers.platform {
                     match key.as_str() {
                         "k" => {
-                            // Toggle actions panel
-                            if this.show_actions_panel {
+                            // Toggle actions panel / command bar
+                            if this.command_bar.is_open() || this.show_actions_panel {
                                 this.close_actions_panel(window, cx);
                             } else {
                                 this.open_actions_panel(window, cx);
@@ -1996,7 +2099,7 @@ pub fn open_notes_window(cx: &mut App) -> Result<()> {
             appears_transparent: true,
             traffic_light_position: Some(gpui::Point {
                 x: px(8.),
-                y: px(5.), // Centered vertically in 22px header
+                y: px(7.), // Centered vertically in 26px header
             }),
         }),
         window_background,

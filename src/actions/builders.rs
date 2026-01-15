@@ -1049,6 +1049,165 @@ pub struct NewChatPresetInfo {
     pub icon: IconName,
 }
 
+/// Information about notes for action building
+#[derive(Debug, Clone)]
+pub struct NotesInfo {
+    /// Whether a note is currently selected
+    pub has_selection: bool,
+    /// Whether the current view is trash mode
+    pub is_trash_view: bool,
+    /// Whether auto-sizing is enabled
+    pub auto_sizing_enabled: bool,
+}
+
+/// Get actions for the Notes window command bar (Cmd+K menu)
+///
+/// Returns actions with icons and sections for:
+/// - Notes: New Note, Duplicate Note, Browse Notes
+/// - Edit: Find in Note, Format
+/// - Copy: Copy Note As, Copy Deeplink, Create Quicklink
+/// - Export: Export
+/// - Settings: Enable Auto-Sizing (conditional)
+pub fn get_notes_command_bar_actions(info: &NotesInfo) -> Vec<Action> {
+    let mut actions = Vec::new();
+
+    // Notes section - always available
+    actions.push(
+        Action::new(
+            "new_note",
+            "New Note",
+            Some("Create a new note".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("⌘N")
+        .with_icon(IconName::Plus)
+        .with_section("Notes"),
+    );
+
+    // Duplicate Note - only when a note is selected and not in trash
+    if info.has_selection && !info.is_trash_view {
+        actions.push(
+            Action::new(
+                "duplicate_note",
+                "Duplicate Note",
+                Some("Create a copy of the current note".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌘D")
+            .with_icon(IconName::Copy)
+            .with_section("Notes"),
+        );
+    }
+
+    actions.push(
+        Action::new(
+            "browse_notes",
+            "Browse Notes",
+            Some("Open note browser/picker".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("⌘P")
+        .with_icon(IconName::FolderOpen)
+        .with_section("Notes"),
+    );
+
+    // Edit section - only when a note is selected and not in trash
+    if info.has_selection && !info.is_trash_view {
+        actions.push(
+            Action::new(
+                "find_in_note",
+                "Find in Note",
+                Some("Search within current note".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌘F")
+            .with_icon(IconName::MagnifyingGlass)
+            .with_section("Edit"),
+        );
+
+        actions.push(
+            Action::new(
+                "format",
+                "Format...",
+                Some("Open formatting toolbar".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⇧⌘T")
+            .with_icon(IconName::Code)
+            .with_section("Edit"),
+        );
+    }
+
+    // Copy section - only when a note is selected and not in trash
+    if info.has_selection && !info.is_trash_view {
+        actions.push(
+            Action::new(
+                "copy_note_as",
+                "Copy Note As...",
+                Some("Copy note in a chosen format".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⇧⌘C")
+            .with_icon(IconName::Copy)
+            .with_section("Copy"),
+        );
+
+        actions.push(
+            Action::new(
+                "copy_deeplink",
+                "Copy Deeplink",
+                Some("Copy a deeplink to the note".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⇧⌘D")
+            .with_icon(IconName::ArrowRight)
+            .with_section("Copy"),
+        );
+
+        actions.push(
+            Action::new(
+                "create_quicklink",
+                "Create Quicklink",
+                Some("Copy a markdown quicklink".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⇧⌘L")
+            .with_icon(IconName::Star)
+            .with_section("Copy"),
+        );
+
+        // Export section
+        actions.push(
+            Action::new(
+                "export",
+                "Export...",
+                Some("Export note content".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⇧⌘E")
+            .with_icon(IconName::ArrowRight)
+            .with_section("Export"),
+        );
+    }
+
+    // Settings section - conditional
+    if !info.auto_sizing_enabled {
+        actions.push(
+            Action::new(
+                "enable_auto_sizing",
+                "Enable Auto-Sizing",
+                Some("Window grows/shrinks with content".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌘A")
+            .with_icon(IconName::Settings)
+            .with_section("Settings"),
+        );
+    }
+
+    actions
+}
+
 /// Build actions for the AI new chat dropdown
 ///
 /// Organizes items into sections:
