@@ -39,6 +39,10 @@ pub struct ButtonColors {
     pub accent: u32,
     /// Border color
     pub border: u32,
+    /// Focus ring color (shown when button is focused)
+    pub focus_ring: u32,
+    /// Subtle background tint when focused
+    pub focus_tint: u32,
 }
 
 impl ButtonColors {
@@ -52,6 +56,8 @@ impl ButtonColors {
             background_hover: theme.colors.accent.selected_subtle,
             accent: theme.colors.accent.selected, // Yellow/gold - matches logo & highlights
             border: theme.colors.ui.border,
+            focus_ring: theme.colors.accent.selected, // Accent color for focus ring
+            focus_tint: theme.colors.accent.selected_subtle, // Subtle tint when focused
         }
     }
 
@@ -65,6 +71,8 @@ impl ButtonColors {
             background_hover: colors.background_hover,
             accent: colors.accent, // Primary accent (yellow/gold for default)
             border: colors.border,
+            focus_ring: colors.accent, // Accent color for focus ring
+            focus_tint: colors.background_selected, // Subtle tint when focused
         }
     }
 }
@@ -78,6 +86,8 @@ impl Default for ButtonColors {
             background_hover: 0x323232, // Slightly lighter
             accent: 0xfbbf24,           // Yellow/gold (Script Kit brand color)
             border: 0x464647,           // Border color
+            focus_ring: 0xfbbf24,       // Yellow/gold for focus ring
+            focus_tint: 0x2a2a2a,       // Subtle tint when focused
         }
     }
 }
@@ -92,6 +102,7 @@ pub type OnClickCallback = Box<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'sta
 /// - Keyboard shortcut display (optional)
 /// - Three variants: Primary, Ghost, Icon
 /// - Hover states with themed colors
+/// - Focus ring styling
 /// - Click callback
 ///
 #[derive(IntoElement)]
@@ -101,6 +112,7 @@ pub struct Button {
     variant: ButtonVariant,
     shortcut: Option<String>,
     disabled: bool,
+    focused: bool,
     on_click: Option<Rc<OnClickCallback>>,
 }
 
@@ -113,6 +125,7 @@ impl Button {
             variant: ButtonVariant::default(),
             shortcut: None,
             disabled: false,
+            focused: false,
             on_click: None,
         }
     }
@@ -141,6 +154,12 @@ impl Button {
         self
     }
 
+    /// Set whether the button is focused (shows focus ring)
+    pub fn focused(mut self, focused: bool) -> Self {
+        self.focused = focused;
+        self
+    }
+
     /// Set the click callback
     pub fn on_click(mut self, callback: OnClickCallback) -> Self {
         self.on_click = Some(Rc::new(callback));
@@ -154,11 +173,15 @@ impl Button {
     }
 }
 
+/// Focus ring border width
+const FOCUS_BORDER_WIDTH: f32 = 2.0;
+
 impl RenderOnce for Button {
     fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
         let colors = self.colors;
         let variant = self.variant;
         let disabled = self.disabled;
+        let focused = self.focused;
         let on_click_callback = self.on_click;
         let label_for_log = self.label.clone();
 
@@ -166,10 +189,25 @@ impl RenderOnce for Button {
         // Hover uses white at ~15% alpha - universal "lift" effect that works on any dark bg
         let hover_overlay = rgba(0xffffff26); // white at ~15% alpha (0x26 = 38/255 ≈ 15%)
 
+        // Focus styling colors
+        // 0xA0 = 62.5% opacity for visible focus ring
+        let focus_ring_color = rgba((colors.focus_ring << 8) | 0xA0);
+        // 0x20 = 12.5% opacity for subtle background tint
+        let focus_tint = rgba((colors.focus_tint << 8) | 0x20);
+        // 0x40 = 25% opacity for unfocused border
+        let unfocused_border = rgba((colors.border << 8) | 0x40);
+
         let (text_color, bg_color, hover_bg) = match variant {
             ButtonVariant::Primary => {
                 // Primary: filled background with accent color
-                let bg = rgba((colors.background << 8) | 0x80);
+                // When focused, add subtle tint on top
+                let base_bg = rgba((colors.background << 8) | 0x80);
+                let bg = if focused {
+                    // Brighter when focused
+                    rgba((colors.background << 8) | 0xA0)
+                } else {
+                    base_bg
+                };
                 (
                     rgb(colors.accent),
                     bg,
@@ -178,12 +216,21 @@ impl RenderOnce for Button {
             }
             ButtonVariant::Ghost => {
                 // Ghost: text only (accent color), white overlay on hover
-                let bg = rgba(0x00000000);
+                // When focused, add subtle tint
+                let bg = if focused {
+                    focus_tint
+                } else {
+                    rgba(0x00000000)
+                };
                 (rgb(colors.accent), bg, hover_overlay)
             }
             ButtonVariant::Icon => {
                 // Icon: compact, accent color, white overlay on hover
-                let bg = rgba(0x00000000);
+                let bg = if focused {
+                    focus_tint
+                } else {
+                    rgba(0x00000000)
+                };
                 (rgb(colors.accent), bg, hover_overlay)
             }
         };
@@ -227,6 +274,15 @@ impl RenderOnce for Button {
             .cursor_pointer()
             .child(self.label)
             .child(shortcut_element);
+
+        // Apply focus ring styling
+        if focused {
+            button = button
+                .border(px(FOCUS_BORDER_WIDTH))
+                .border_color(focus_ring_color);
+        } else {
+            button = button.border_1().border_color(unfocused_border);
+        }
 
         // Apply hover styles unless disabled
         // Keep text color the same, just add subtle background lift

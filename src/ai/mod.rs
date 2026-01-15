@@ -32,11 +32,6 @@
 #![allow(unused_imports)]
 #![allow(dead_code)]
 
-// NOTE: command_bar module is deprecated - use crate::actions::ActionsDialog instead
-// The AI window now uses the unified ActionsDialog component via get_ai_command_bar_actions()
-// Keeping the module for reference but it's no longer used
-#[allow(dead_code)]
-mod command_bar;
 pub mod config;
 pub mod model;
 pub mod providers;

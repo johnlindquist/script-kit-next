@@ -3,11 +3,38 @@
 
 impl ScriptListApp {
     fn render_script_list(&mut self, cx: &mut Context<Self>) -> AnyElement {
+        let render_list_start = std::time::Instant::now();
+        let filter_for_log = self.filter_text.clone();
+
+        // Log every render_script_list call
+        logging::log(
+            "RENDER_PERF",
+            &format!(
+                "[RENDER_SCRIPT_LIST_START] filter='{}' computed_filter='{}' selected_idx={}",
+                filter_for_log, self.computed_filter_text, self.selected_index
+            ),
+        );
+
         // Get grouped or flat results based on filter state (cached) - MUST come first
         // to avoid borrow conflicts with theme access below
         // When filter is empty, use frecency-grouped results with RECENT/MAIN sections
         // When filtering, use flat fuzzy search results
         let (grouped_items, flat_results) = self.get_grouped_results_cached();
+        let get_results_elapsed = render_list_start.elapsed();
+
+        logging::log(
+            "RENDER_PERF",
+            &format!(
+                "[RENDER_GET_RESULTS] filter='{}' items={} results={} took={:.2}ms",
+                filter_for_log,
+                grouped_items.len(),
+                flat_results.len(),
+                get_results_elapsed.as_secs_f64() * 1000.0
+            ),
+        );
+
+        // NOTE: Removed per-frame logging here - was causing 6 log calls per frame
+        // which includes mutex locks and file I/O. Log only on cache MISS in get_grouped_results_cached.
         // Clone for use in closures and to avoid borrow issues
         let grouped_items = grouped_items.clone();
         let flat_results = flat_results.clone();
@@ -162,8 +189,13 @@ impl ScriptListApp {
             // theme_colors was pre-computed above to avoid borrow conflicts
             let current_design = self.current_design;
 
+            // Track filter for closure logging
+            let filter_for_closure = self.filter_text.clone();
+
             let variable_height_list =
                 list(self.main_list_state.clone(), move |ix, _window, cx| {
+                    let _item_render_start = std::time::Instant::now();
+                    
                     // Access entity state inside the closure
                     entity.update(cx, |this, cx| {
                         let current_selected = this.selected_index;
@@ -250,6 +282,7 @@ impl ScriptListApp {
                                         // Dispatch to design-specific item renderer
                                         // Note: Confirmation for dangerous builtins is now handled
                                         // via modal dialog, not inline overlay
+                                        let design_render_start = std::time::Instant::now();
                                         let item_element = render_design_item(
                                             current_design,
                                             result,
@@ -258,6 +291,21 @@ impl ScriptListApp {
                                             is_hovered,
                                             theme_colors,
                                         );
+                                        let design_elapsed = design_render_start.elapsed();
+                                        
+                                        // Log slow items (>1ms)
+                                        if design_elapsed.as_micros() > 1000 {
+                                            logging::log(
+                                                "FILTER_PERF",
+                                                &format!(
+                                                    "[SLOW_ITEM] ix={} name='{}' design_render={:.2}ms filter='{}'",
+                                                    ix,
+                                                    result.name(),
+                                                    design_elapsed.as_secs_f64() * 1000.0,
+                                                    filter_for_closure
+                                                ),
+                                            );
+                                        }
 
                                         div()
                                             .id(ElementId::NamedInteger(
@@ -967,7 +1015,19 @@ impl ScriptListApp {
                     )
                     // Right side: Preview panel (50% width) with actions overlay
                     // Preview ALWAYS renders, actions panel overlays on top when visible
-                    .child(
+                    .child({
+                        let preview_start = std::time::Instant::now();
+                        let preview_panel = self.render_preview_panel(cx);
+                        let preview_elapsed = preview_start.elapsed();
+                        // ALWAYS log preview panel render time for debugging
+                        logging::log(
+                            "PREVIEW_PERF",
+                            &format!(
+                                "[PREVIEW_PANEL_DONE] filter='{}' took {:.2}ms",
+                                filter_for_log,
+                                preview_elapsed.as_secs_f64() * 1000.0
+                            ),
+                        );
                         div()
                             .relative() // Enable absolute positioning for overlay
                             .w_1_2() // 50% width
@@ -977,8 +1037,8 @@ impl ScriptListApp {
                             // Preview panel ALWAYS renders
                             // NOTE: Actions dialog is now rendered in a separate popup window
                             // (see actions/window.rs) - no inline overlay needed here
-                            .child(self.render_preview_panel(cx)),
-                    ),
+                            .child(preview_panel)
+                    }),
             );
 
         // Footer: Logo left | Run Script ↵ | divider | Actions ⌘K right
@@ -1034,6 +1094,17 @@ impl ScriptListApp {
         // via the Root wrapper. Toasts are flushed in render() via flush_pending_toasts().
 
         // Note: HUD overlay is added at the top-level render() method for all views
+
+        // Log total render_script_list time
+        let total_elapsed = render_list_start.elapsed();
+        logging::log(
+            "RENDER_PERF",
+            &format!(
+                "[RENDER_SCRIPT_LIST_END] filter='{}' total={:.2}ms",
+                filter_for_log,
+                total_elapsed.as_secs_f64() * 1000.0
+            ),
+        );
 
         main_div.into_any_element()
     }

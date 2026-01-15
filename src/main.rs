@@ -1287,6 +1287,10 @@ struct ScriptListApp {
     // Preview cache: avoid re-reading file and re-highlighting on every render
     preview_cache_path: Option<String>,
     preview_cache_lines: Vec<syntax::HighlightedLine>,
+    // Scriptlet preview cache: avoid re-highlighting scriptlet code on every render
+    // Key is scriptlet name (unique within session), value is highlighted lines
+    scriptlet_preview_cache_key: Option<String>,
+    scriptlet_preview_cache_lines: Vec<syntax::HighlightedLine>,
     // Current design variant for hot-swappable UI designs
     current_design: DesignVariant,
     // Toast manager for notification queue
@@ -1307,6 +1311,8 @@ struct ScriptListApp {
     cached_fallbacks: Vec<crate::fallbacks::FallbackItem>,
     // P0-2: Debounce hover notify calls (16ms window to reduce 50% unnecessary re-renders)
     last_hover_notify: std::time::Instant,
+    // Filter performance tracking: start time of filter change event
+    filter_perf_start: Option<std::time::Instant>,
     // Pending path action - when set, show ActionsDialog for this path
     // Uses Arc<Mutex<>> so callbacks can write to it
     pending_path_action: Arc<Mutex<Option<PathInfo>>>,
@@ -1445,6 +1451,26 @@ impl Focusable for ScriptListApp {
 
 impl Render for ScriptListApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        // Track render timing for filter perf analysis
+        let render_start = std::time::Instant::now();
+        let filter_snapshot = self.filter_text.clone();
+
+        // Always log render start for "gr" prefix filters to debug the issue
+        if filter_snapshot.starts_with("gr") {
+            crate::logging::log(
+                "FILTER_PERF",
+                &format!(
+                    "[FRAME_START] filter='{}' selected_idx={} view={:?}",
+                    filter_snapshot,
+                    self.selected_index,
+                    match &self.current_view {
+                        AppView::ScriptList => "ScriptList",
+                        _ => "Other",
+                    }
+                ),
+            );
+        }
+
         // Flush any pending toasts to gpui-component's NotificationList
         // This is needed because toast push sites don't have window access
         self.flush_pending_toasts(window, cx);
@@ -1697,6 +1723,24 @@ impl Render for ScriptListApp {
 
         // Build alias input overlay if state is set
         let alias_input_overlay = self.render_alias_input_overlay(window, cx);
+
+        // Log render timing for filter perf analysis - always log for "gr" filters
+        let render_elapsed = render_start.elapsed();
+        if filter_snapshot.starts_with("gr") {
+            crate::logging::log(
+                "FILTER_PERF",
+                &format!(
+                    "[FRAME_END] filter='{}' total={:.2}ms",
+                    filter_snapshot,
+                    render_elapsed.as_secs_f64() * 1000.0
+                ),
+            );
+        }
+
+        // Clear perf tracking after one complete render cycle
+        if self.filter_perf_start.is_some() && !self.filter_text.is_empty() {
+            self.filter_perf_start = None;
+        }
 
         div()
             .w_full()

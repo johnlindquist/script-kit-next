@@ -215,6 +215,19 @@ impl ScriptListApp {
                     cx.notify();
                 }
                 InputEvent::Change => {
+                    let input_received_at = std::time::Instant::now();
+                    // Read the current input value to see what we're processing
+                    let current_value = this.gpui_input_state.read(cx).value().to_string();
+                    logging::log(
+                        "FILTER_PERF",
+                        &format!(
+                            "[1/5] INPUT_CHANGE value='{}' len={} at {:?}",
+                            current_value,
+                            current_value.len(),
+                            input_received_at
+                        ),
+                    );
+                    this.filter_perf_start = Some(input_received_at);
                     this.handle_filter_input_change(window, cx);
                 }
                 InputEvent::PressEnter { .. } => {
@@ -311,6 +324,9 @@ impl ScriptListApp {
             // Preview cache: start empty, will populate on first render
             preview_cache_path: None,
             preview_cache_lines: Vec::new(),
+            // Scriptlet preview cache: avoid re-highlighting on every render
+            scriptlet_preview_cache_key: None,
+            scriptlet_preview_cache_lines: Vec::new(),
             // Design system: start with default design
             current_design: DesignVariant::default(),
             // Toast manager: initialize for error notifications
@@ -327,6 +343,8 @@ impl ScriptListApp {
             cached_fallbacks: Vec::new(),
             // P0-2: Initialize hover debounce timer
             last_hover_notify: std::time::Instant::now(),
+            // Filter performance tracking - None until first filter change
+            filter_perf_start: None,
             // Pending path action - starts as None (Arc<Mutex<>> for callback access)
             pending_path_action: Arc::new(Mutex::new(None)),
             // Signal to close path actions dialog
@@ -1555,9 +1573,16 @@ impl ScriptListApp {
     /// Call this when you need to ensure cache is updated
     fn get_filtered_results_cached(&mut self) -> &Vec<scripts::SearchResult> {
         if self.filter_text != self.filter_cache_key {
-            logging::log_debug(
-                "CACHE",
-                &format!("Filter cache MISS - recomputing for '{}'", self.filter_text),
+            logging::log(
+                "FILTER_PERF",
+                &format!(
+                    "[4a/5] SEARCH_START for '{}' (scripts={}, scriptlets={}, builtins={}, apps={})",
+                    self.filter_text,
+                    self.scripts.len(),
+                    self.scriptlets.len(),
+                    self.builtin_entries.len(),
+                    self.apps.len()
+                ),
             );
             let search_start = std::time::Instant::now();
             self.cached_filtered_results = scripts::fuzzy_search_unified_all(
@@ -1570,21 +1595,15 @@ impl ScriptListApp {
             self.filter_cache_key = self.filter_text.clone();
             let search_elapsed = search_start.elapsed();
 
-            if !self.filter_text.is_empty() {
-                logging::log(
-                    "PERF",
-                    &format!(
-                        "Search '{}' took {:.2}ms ({} results from {} total)",
-                        self.filter_text,
-                        search_elapsed.as_secs_f64() * 1000.0,
-                        self.cached_filtered_results.len(),
-                        self.scripts.len()
-                            + self.scriptlets.len()
-                            + self.builtin_entries.len()
-                            + self.apps.len()
-                    ),
-                );
-            }
+            logging::log(
+                "FILTER_PERF",
+                &format!(
+                    "[4a/5] SEARCH_DONE '{}' in {:.2}ms -> {} results",
+                    self.filter_text,
+                    search_elapsed.as_secs_f64() * 1000.0,
+                    self.cached_filtered_results.len(),
+                ),
+            );
         }
         // NOTE: Removed cache HIT log - fires every render, only log MISS for diagnostics
         &self.cached_filtered_results
@@ -1617,12 +1636,9 @@ impl ScriptListApp {
         }
 
         // Cache miss - need to recompute
-        logging::log_debug(
-            "CACHE",
-            &format!(
-                "Grouped cache MISS - recomputing for '{}'",
-                self.computed_filter_text
-            ),
+        logging::log(
+            "FILTER_PERF",
+            &format!("[4b/5] GROUP_START for '{}'", self.computed_filter_text),
         );
 
         let start = std::time::Instant::now();
@@ -1673,14 +1689,26 @@ impl ScriptListApp {
         self.cached_grouped_flat_results = flat_results.into();
         self.grouped_cache_key = self.computed_filter_text.clone();
 
-        if !self.computed_filter_text.is_empty() {
-            logging::log_debug(
-                "CACHE",
+        logging::log(
+            "FILTER_PERF",
+            &format!(
+                "[4b/5] GROUP_DONE '{}' in {:.2}ms -> {} items (from {} results)",
+                self.computed_filter_text,
+                elapsed.as_secs_f64() * 1000.0,
+                self.cached_grouped_items.len(),
+                self.cached_grouped_flat_results.len()
+            ),
+        );
+
+        // Log total time from input to grouped results if we have the start time
+        if let Some(perf_start) = self.filter_perf_start {
+            let total_elapsed = perf_start.elapsed();
+            logging::log(
+                "FILTER_PERF",
                 &format!(
-                    "Grouped results computed in {:.2}ms for '{}' ({} items)",
-                    elapsed.as_secs_f64() * 1000.0,
+                    "[5/5] TOTAL_TIME '{}': {:.2}ms (input->grouped)",
                     self.computed_filter_text,
-                    self.cached_grouped_items.len()
+                    total_elapsed.as_secs_f64() * 1000.0
                 ),
             );
         }
@@ -1738,23 +1766,53 @@ impl ScriptListApp {
         }
 
         // Cache miss - need to re-read and re-highlight
-        logging::log_debug(
-            "CACHE",
-            &format!("Preview cache MISS - loading '{}'", script_path),
+        let cache_miss_start = std::time::Instant::now();
+        logging::log(
+            "FILTER_PERF",
+            &format!("[PREVIEW_CACHE_MISS] Loading '{}'", script_path),
         );
 
         self.preview_cache_path = Some(script_path.to_string());
+
+        let read_start = std::time::Instant::now();
         self.preview_cache_lines = match std::fs::read_to_string(script_path) {
             Ok(content) => {
+                let read_elapsed = read_start.elapsed();
+
                 // Only take first 15 lines for preview
+                let highlight_start = std::time::Instant::now();
                 let preview: String = content.lines().take(15).collect::<Vec<_>>().join("\n");
-                syntax::highlight_code_lines(&preview, lang)
+                let lines = syntax::highlight_code_lines(&preview, lang);
+                let highlight_elapsed = highlight_start.elapsed();
+
+                logging::log(
+                    "FILTER_PERF",
+                    &format!(
+                        "[PREVIEW_CACHE_MISS] read={:.2}ms highlight={:.2}ms ({} bytes, {} lines)",
+                        read_elapsed.as_secs_f64() * 1000.0,
+                        highlight_elapsed.as_secs_f64() * 1000.0,
+                        content.len(),
+                        lines.len()
+                    ),
+                );
+
+                lines
             }
             Err(e) => {
                 logging::log("ERROR", &format!("Failed to read preview: {}", e));
                 Vec::new()
             }
         };
+
+        let cache_miss_elapsed = cache_miss_start.elapsed();
+        logging::log(
+            "FILTER_PERF",
+            &format!(
+                "[PREVIEW_CACHE_MISS] Total={:.2}ms for '{}'",
+                cache_miss_elapsed.as_secs_f64() * 1000.0,
+                script_path
+            ),
+        );
 
         &self.preview_cache_lines
     }
@@ -2135,6 +2193,8 @@ impl ScriptListApp {
     }
 
     fn handle_filter_input_change(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let handler_start = std::time::Instant::now();
+
         if self.suppress_filter_events {
             return;
         }
@@ -2405,12 +2465,29 @@ impl ScriptListApp {
         // Menu bar items are now pre-fetched by frontmost_app_tracker
         // No lazy loading needed - items are already in cache when we open
 
-        self.queue_filter_compute(new_text, cx);
+        self.queue_filter_compute(new_text.clone(), cx);
+
+        // Log handler timing
+        let handler_elapsed = handler_start.elapsed();
+        if handler_elapsed.as_millis() > 5 {
+            logging::log(
+                "FILTER_PERF",
+                &format!(
+                    "[HANDLER_SLOW] handle_filter_input_change took {:.2}ms for '{}'",
+                    handler_elapsed.as_secs_f64() * 1000.0,
+                    new_text
+                ),
+            );
+        }
     }
 
     fn queue_filter_compute(&mut self, value: String, cx: &mut Context<Self>) {
         // P3: Debounce expensive search/window resize work.
         // Use 8ms debounce (half a frame) to batch rapid keystrokes.
+        logging::log(
+            "FILTER_PERF",
+            &format!("[2/5] QUEUE_FILTER value='{}' len={}", value, value.len()),
+        );
         if self.filter_coalescer.queue(value) {
             cx.spawn(async move |this, cx| {
                 // Wait 8ms for coalescing window (half frame at 60fps)
@@ -2420,7 +2497,15 @@ impl ScriptListApp {
                     this.update(cx, |app, cx| {
                         if let Some(latest) = app.filter_coalescer.take_latest() {
                             if app.computed_filter_text != latest {
-                                app.computed_filter_text = latest;
+                                let coalesce_start = std::time::Instant::now();
+                                logging::log(
+                                    "FILTER_PERF",
+                                    &format!(
+                                        "[3/5] COALESCE_PROCESS value='{}' (after 8ms debounce)",
+                                        latest
+                                    ),
+                                );
+                                app.computed_filter_text = latest.clone();
                                 // Sync list component state and validate selection
                                 // This moves state mutation OUT of render() (anti-pattern fix)
                                 app.sync_list_state();
@@ -2431,6 +2516,15 @@ impl ScriptListApp {
                                 app.last_scrolled_index = Some(app.selected_index);
                                 // This will trigger window resize
                                 app.update_window_size();
+                                let coalesce_elapsed = coalesce_start.elapsed();
+                                logging::log(
+                                    "FILTER_PERF",
+                                    &format!(
+                                        "[3/5] COALESCE_DONE in {:.2}ms for '{}'",
+                                        coalesce_elapsed.as_secs_f64() * 1000.0,
+                                        latest
+                                    ),
+                                );
                                 cx.notify();
                             }
                         }
