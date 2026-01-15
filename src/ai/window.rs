@@ -1002,9 +1002,11 @@ impl AiApp {
         cx.notify();
     }
 
-    /// Hide the command bar (closes the vibrancy window)
+    /// Hide the command bar (closes the vibrancy window) and refocus the input
     fn hide_command_bar(&mut self, cx: &mut Context<Self>) {
         self.command_bar.close(cx);
+        // Refocus the chat input after closing the command bar
+        self.request_focus(cx);
     }
 
     /// Handle character input in command bar
@@ -2436,32 +2438,10 @@ impl AiApp {
 
     /// Render the chats sidebar with date groupings
     fn render_sidebar(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        // If sidebar is collapsed, show a thin strip (toggle moves to main panel titlebar)
+        // If sidebar is collapsed, completely hide it (Raycast-style)
+        // The toggle button is absolutely positioned in the main container
         if self.sidebar_collapsed {
-            return div()
-                .flex()
-                .flex_col()
-                .w(px(48.))
-                .h_full()
-                .bg(Self::get_vibrancy_sidebar_background()) // Semi-transparent sidebar
-                .border_r_1()
-                .border_color(cx.theme().sidebar_border)
-                .items_center()
-                // Spacer for traffic light area (toggle is now in main panel titlebar)
-                .child(div().h(px(36.)))
-                // New chat button below
-                .child(
-                    div().pt_1().child(
-                        Button::new("new-chat-collapsed")
-                            .ghost()
-                            .xsmall()
-                            .icon(IconName::Plus)
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.create_chat(window, cx);
-                            })),
-                    ),
-                )
-                .into_any_element();
+            return div().w(px(0.)).h_full().into_any_element();
         }
 
         let selected_id = self.selected_chat_id;
@@ -2477,17 +2457,8 @@ impl AiApp {
             .bg(Self::get_vibrancy_sidebar_background()) // Semi-transparent sidebar
             .border_r_1()
             .border_color(cx.theme().sidebar_border)
-            // Top row - sidebar toggle on right (240px width clears traffic lights)
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_end() // Push toggle to right side
-                    .w_full()
-                    .h(px(36.)) // Match main panel titlebar height
-                    .px_2()
-                    .child(self.render_sidebar_toggle(cx)),
-            )
+            // Spacer for titlebar height (toggle button is now absolutely positioned in main container)
+            .child(div().h(px(36.)))
             // Header with new chat button and search
             .child(
                 div()
@@ -3247,6 +3218,12 @@ impl AiApp {
     fn render_main_panel(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let has_selection = self.selected_chat_id.is_some();
 
+        // Debug log to verify titlebar is rendering
+        tracing::debug!(
+            "[AI] render_main_panel called, has_selection={}",
+            has_selection
+        );
+
         // Build titlebar
         let titlebar = div()
             .id("ai-titlebar")
@@ -3258,22 +3235,17 @@ impl AiApp {
             .bg(Self::get_vibrancy_sidebar_background()) // Semi-transparent sidebar
             .border_b_1()
             .border_color(cx.theme().border)
-            // Left side: sidebar toggle (when collapsed) + chat title
+            // Left side: chat title (toggle button is now absolutely positioned in main container)
             .child(
                 div()
                     .flex()
                     .items_center()
                     .gap_2()
-                    .flex_1()
                     .overflow_hidden()
-                    // Sidebar toggle - only shown when sidebar is collapsed
-                    .when(self.sidebar_collapsed, |d| {
-                        d.child(self.render_sidebar_toggle(cx))
-                    })
+                    .min_w_0() // Allow shrinking for long titles
                     // Chat title (truncated)
                     .child(
                         div()
-                            .flex_1()
                             .overflow_hidden()
                             .text_ellipsis()
                             .text_sm()
@@ -3297,6 +3269,7 @@ impl AiApp {
                     .flex()
                     .items_center()
                     .gap_1()
+                    .flex_shrink_0() // Never shrink - always show buttons
                     // New Chat dropdown trigger (Raycast-style + ▼ button)
                     .child(
                         div()
@@ -3308,8 +3281,12 @@ impl AiApp {
                             .py(px(4.))
                             .rounded_md()
                             .cursor_pointer()
-                            .hover(|el| el.bg(cx.theme().muted.opacity(0.5)))
+                            .bg(cx.theme().muted.opacity(0.3)) // Subtle background for visibility
+                            .border_1()
+                            .border_color(cx.theme().border.opacity(0.5))
+                            .hover(|el| el.bg(cx.theme().muted.opacity(0.6)))
                             .on_click(cx.listener(|this, _, window, cx| {
+                                tracing::info!("[AI] New chat dropdown trigger clicked");
                                 if this.showing_new_chat_dropdown {
                                     this.hide_new_chat_dropdown(cx);
                                 } else {
@@ -3816,6 +3793,7 @@ impl Render for AiApp {
         let box_shadows = self.create_box_shadows();
 
         div()
+            .relative() // Required for absolutely positioned sidebar toggle
             .flex()
             .flex_row()
             .size_full()
@@ -4077,6 +4055,14 @@ impl Render for AiApp {
             }))
             .child(self.render_sidebar(cx))
             .child(self.render_main_panel(cx))
+            // Absolutely positioned sidebar toggle - stays fixed regardless of sidebar state (like Raycast)
+            .child(
+                div()
+                    .absolute()
+                    .top(px(6.)) // Vertically centered in 36px titlebar: (36 - 24) / 2 = 6
+                    .left(px(78.)) // After traffic lights (~70px) + small gap
+                    .child(self.render_sidebar_toggle(cx)),
+            )
             // Overlay dropdowns (only one at a time)
             // NOTE: Command bar now renders in a separate vibrancy window (not inline)
             .when(self.showing_model_picker, |el| {
