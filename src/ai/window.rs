@@ -72,6 +72,25 @@ struct AiPreset {
     preferred_model: Option<&'static str>,
 }
 
+/// A recently used model+provider configuration (for "Last Used Settings" in dropdown)
+#[derive(Clone, Debug, PartialEq)]
+struct LastUsedSetting {
+    /// Model ID (e.g., "claude-3-5-sonnet-20241022")
+    model_id: String,
+    /// Provider name (e.g., "anthropic")
+    provider: String,
+    /// Display name for the model
+    display_name: String,
+    /// Provider display name
+    provider_display_name: String,
+}
+
+/// Internal enum for handling new chat dropdown selection
+enum NewChatAction {
+    Model { model_id: String, provider: String },
+    Preset { index: usize },
+}
+
 impl AiPreset {
     /// Get default presets
     fn default_presets() -> Vec<AiPreset> {
@@ -417,6 +436,25 @@ pub struct AiApp {
     /// Selected preset index
     presets_selected_index: usize,
 
+    // === New Chat Dropdown State (Raycast-style) ===
+    /// Whether the new chat dropdown is visible (header dropdown)
+    showing_new_chat_dropdown: bool,
+
+    /// Filter text for new chat dropdown search
+    new_chat_dropdown_filter: String,
+
+    /// Input state for new chat dropdown search
+    new_chat_dropdown_input: Entity<InputState>,
+
+    /// Selected section and index in the dropdown (section: 0=last_used, 1=presets, 2=models)
+    new_chat_dropdown_section: usize,
+
+    /// Selected index within the current section
+    new_chat_dropdown_index: usize,
+
+    /// Last used settings (derived from recent chats)
+    last_used_settings: Vec<LastUsedSetting>,
+
     // === Attachments State ===
     /// Whether the attachments picker is visible
     showing_attachments_picker: bool,
@@ -497,6 +535,10 @@ impl AiApp {
                 .masked(true)
         });
 
+        // New chat dropdown search input
+        let new_chat_dropdown_input =
+            cx.new(|cx| InputState::new(window, cx).placeholder("New chat with..."));
+
         let focus_handle = cx.focus_handle();
 
         // Subscribe to input changes and Enter key
@@ -526,6 +568,15 @@ impl AiApp {
             }
         });
 
+        // Subscribe to new chat dropdown input changes
+        let new_chat_dropdown_sub = cx.subscribe_in(&new_chat_dropdown_input, window, {
+            move |this, _, ev: &InputEvent, window, cx| match ev {
+                InputEvent::Change => this.on_new_chat_dropdown_filter_change(cx),
+                InputEvent::PressEnter { .. } => this.select_from_new_chat_dropdown(window, cx),
+                _ => {}
+            }
+        });
+
         // Load messages for the selected chat
         let current_messages = selected_chat_id
             .and_then(|id| storage::get_chat_messages(&id).ok())
@@ -535,6 +586,9 @@ impl AiApp {
 
         // Pre-compute box shadows from theme (avoid reloading on every render)
         let cached_box_shadows = Self::compute_box_shadows();
+
+        // Compute last used settings before moving chats and available_models
+        let last_used_settings = Self::compute_last_used_settings(&chats, &available_models);
 
         Self {
             chats,
@@ -548,7 +602,7 @@ impl AiApp {
             available_models,
             selected_model,
             focus_handle,
-            _subscriptions: vec![input_sub, search_sub, api_key_sub],
+            _subscriptions: vec![input_sub, search_sub, api_key_sub, new_chat_dropdown_sub],
             // Streaming state
             is_streaming: false,
             streaming_content: String::new(),
@@ -579,6 +633,13 @@ impl AiApp {
             showing_presets_dropdown: false,
             presets: AiPreset::default_presets(),
             presets_selected_index: 0,
+            // New chat dropdown state (Raycast-style)
+            showing_new_chat_dropdown: false,
+            new_chat_dropdown_filter: String::new(),
+            new_chat_dropdown_input,
+            new_chat_dropdown_section: 0,
+            new_chat_dropdown_index: 0,
+            last_used_settings,
             // Attachments state
             showing_attachments_picker: false,
             pending_attachments: Vec::new(),
@@ -1303,6 +1364,218 @@ impl AiApp {
         }
     }
 
+    // === New Chat Dropdown Methods (Raycast-style) ===
+
+    /// Show the new chat dropdown (Raycast-style with search, last used, presets, models)
+    fn show_new_chat_dropdown(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        self.hide_all_dropdowns(cx);
+        self.new_chat_dropdown_filter.clear();
+        self.new_chat_dropdown_section = 0;
+        self.new_chat_dropdown_index = 0;
+        self.showing_new_chat_dropdown = true;
+
+        // Clear the search input - InputState::set_value takes window and cx
+        // For now just clear the filter; the input will be cleared on next type
+        // Actually we just set needs_focus_input flag since we can't easily clear
+
+        cx.notify();
+    }
+
+    /// Hide the new chat dropdown
+    fn hide_new_chat_dropdown(&mut self, cx: &mut Context<Self>) {
+        self.showing_new_chat_dropdown = false;
+        self.new_chat_dropdown_filter.clear();
+        cx.notify();
+    }
+
+    /// Handle filter change in the new chat dropdown
+    fn on_new_chat_dropdown_filter_change(&mut self, cx: &mut Context<Self>) {
+        let filter = self.new_chat_dropdown_input.read(cx).value().to_string();
+        self.new_chat_dropdown_filter = filter;
+        // Reset selection when filter changes
+        self.new_chat_dropdown_section = 0;
+        self.new_chat_dropdown_index = 0;
+        cx.notify();
+    }
+
+    /// Get filtered items for the new chat dropdown
+    /// Returns (last_used: Vec<&LastUsedSetting>, presets: Vec<&AiPreset>, models: Vec<&ModelInfo>)
+    fn get_filtered_new_chat_items(
+        &self,
+    ) -> (Vec<&LastUsedSetting>, Vec<&AiPreset>, Vec<&ModelInfo>) {
+        let filter = self.new_chat_dropdown_filter.to_lowercase();
+
+        let filtered_last_used: Vec<_> = if filter.is_empty() {
+            self.last_used_settings.iter().collect()
+        } else {
+            self.last_used_settings
+                .iter()
+                .filter(|s| {
+                    s.display_name.to_lowercase().contains(&filter)
+                        || s.provider_display_name.to_lowercase().contains(&filter)
+                })
+                .collect()
+        };
+
+        let filtered_presets: Vec<_> = if filter.is_empty() {
+            self.presets.iter().collect()
+        } else {
+            self.presets
+                .iter()
+                .filter(|p| {
+                    p.name.to_lowercase().contains(&filter)
+                        || p.description.to_lowercase().contains(&filter)
+                })
+                .collect()
+        };
+
+        let filtered_models: Vec<_> = if filter.is_empty() {
+            self.available_models.iter().collect()
+        } else {
+            self.available_models
+                .iter()
+                .filter(|m| {
+                    m.display_name.to_lowercase().contains(&filter)
+                        || m.provider.to_lowercase().contains(&filter)
+                })
+                .collect()
+        };
+
+        (filtered_last_used, filtered_presets, filtered_models)
+    }
+
+    /// Move selection up in new chat dropdown
+    fn new_chat_dropdown_select_prev(&mut self, cx: &mut Context<Self>) {
+        let (last_used, presets, models) = self.get_filtered_new_chat_items();
+        let section_sizes = [last_used.len(), presets.len(), models.len()];
+
+        if self.new_chat_dropdown_index > 0 {
+            self.new_chat_dropdown_index -= 1;
+        } else {
+            // Move to previous section
+            let mut prev_section = if self.new_chat_dropdown_section > 0 {
+                self.new_chat_dropdown_section - 1
+            } else {
+                2 // wrap to last section
+            };
+
+            // Find a non-empty section
+            for _ in 0..3 {
+                if section_sizes[prev_section] > 0 {
+                    self.new_chat_dropdown_section = prev_section;
+                    self.new_chat_dropdown_index = section_sizes[prev_section] - 1;
+                    break;
+                }
+                prev_section = if prev_section > 0 {
+                    prev_section - 1
+                } else {
+                    2
+                };
+            }
+        }
+        cx.notify();
+    }
+
+    /// Move selection down in new chat dropdown
+    fn new_chat_dropdown_select_next(&mut self, cx: &mut Context<Self>) {
+        let (last_used, presets, models) = self.get_filtered_new_chat_items();
+        let section_sizes = [last_used.len(), presets.len(), models.len()];
+
+        let current_section_size = section_sizes[self.new_chat_dropdown_section];
+        if current_section_size > 0 && self.new_chat_dropdown_index < current_section_size - 1 {
+            self.new_chat_dropdown_index += 1;
+        } else {
+            // Move to next section
+            let mut next_section = (self.new_chat_dropdown_section + 1) % 3;
+
+            // Find a non-empty section
+            for _ in 0..3 {
+                if section_sizes[next_section] > 0 {
+                    self.new_chat_dropdown_section = next_section;
+                    self.new_chat_dropdown_index = 0;
+                    break;
+                }
+                next_section = (next_section + 1) % 3;
+            }
+        }
+        cx.notify();
+    }
+
+    /// Select the current item in the new chat dropdown
+    fn select_from_new_chat_dropdown(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let (last_used, presets, models) = self.get_filtered_new_chat_items();
+        let section = self.new_chat_dropdown_section;
+        let index = self.new_chat_dropdown_index;
+
+        // Clone the data we need before mutable operations
+        let action: Option<NewChatAction> = match section {
+            0 => {
+                // Last Used Settings
+                last_used.get(index).map(|setting| NewChatAction::Model {
+                    model_id: setting.model_id.clone(),
+                    provider: setting.provider.clone(),
+                })
+            }
+            1 => {
+                // Presets - find the original index
+                presets.get(index).and_then(|preset| {
+                    self.presets
+                        .iter()
+                        .position(|p| p.id == preset.id)
+                        .map(|idx| NewChatAction::Preset { index: idx })
+                })
+            }
+            2 => {
+                // Models
+                models.get(index).map(|model| NewChatAction::Model {
+                    model_id: model.id.clone(),
+                    provider: model.provider.clone(),
+                })
+            }
+            _ => None,
+        };
+
+        // Now perform the action (borrows released)
+        match action {
+            Some(NewChatAction::Model { model_id, provider }) => {
+                self.hide_new_chat_dropdown(cx);
+                self.create_chat_with_model(&model_id, &provider, window, cx);
+            }
+            Some(NewChatAction::Preset { index }) => {
+                self.presets_selected_index = index;
+                self.hide_new_chat_dropdown(cx);
+                self.create_chat_with_preset(window, cx);
+            }
+            None => {
+                self.hide_new_chat_dropdown(cx);
+            }
+        }
+    }
+
+    /// Create a new chat with a specific model
+    fn create_chat_with_model(
+        &mut self,
+        model_id: &str,
+        provider: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        // Set the selected model
+        if let Some(model) = self
+            .available_models
+            .iter()
+            .find(|m| m.id == model_id && m.provider == provider)
+        {
+            self.selected_model = Some(model.clone());
+        }
+
+        // Update last used settings
+        self.update_last_used_settings(model_id, provider);
+
+        // Create the chat
+        self.create_chat(window, cx);
+    }
+
     // === Attachments Picker Methods ===
 
     /// Show the attachments picker
@@ -1346,6 +1619,8 @@ impl AiApp {
         self.showing_model_picker = false;
         self.showing_presets_dropdown = false;
         self.showing_attachments_picker = false;
+        self.showing_new_chat_dropdown = false;
+        self.new_chat_dropdown_filter.clear();
         cx.notify();
     }
 
@@ -3016,19 +3291,55 @@ impl AiApp {
                             ),
                     ),
             )
-            .when(has_selection, |d| {
-                d.child(
-                    div().flex().items_center().gap_1().child(
-                        Button::new("delete-chat")
-                            .ghost()
-                            .xsmall()
-                            .icon(IconName::Delete)
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.delete_selected_chat(cx);
-                            })),
-                    ),
-                )
-            });
+            // Right side: New Chat dropdown + Delete button
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_1()
+                    // New Chat dropdown trigger (Raycast-style + ▼ button)
+                    .child(
+                        div()
+                            .id("new-chat-dropdown-trigger")
+                            .flex()
+                            .items_center()
+                            .gap(px(2.))
+                            .px_2()
+                            .py(px(4.))
+                            .rounded_md()
+                            .cursor_pointer()
+                            .hover(|el| el.bg(cx.theme().muted.opacity(0.5)))
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                if this.showing_new_chat_dropdown {
+                                    this.hide_new_chat_dropdown(cx);
+                                } else {
+                                    this.show_new_chat_dropdown(window, cx);
+                                }
+                            }))
+                            .child(
+                                Icon::new(IconName::Plus)
+                                    .size(px(14.))
+                                    .text_color(cx.theme().foreground),
+                            )
+                            .child(
+                                Icon::new(IconName::ChevronDown)
+                                    .size(px(10.))
+                                    .text_color(cx.theme().muted_foreground),
+                            ),
+                    )
+                    // Delete button (only shown when a chat is selected)
+                    .when(has_selection, |d| {
+                        d.child(
+                            Button::new("delete-chat")
+                                .ghost()
+                                .xsmall()
+                                .icon(IconName::Delete)
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    this.delete_selected_chat(cx);
+                                })),
+                        )
+                    }),
+            );
 
         // Build input area at bottom - Raycast-style layout:
         // Row 1: [+ icon] [input field with magenta border]
@@ -3113,7 +3424,7 @@ impl AiApp {
                             .items_center()
                             .gap_1()
                             .flex_shrink_0()
-                            // Submit ↵ - clickable text
+                            // Submit ↵ - clickable text with accent color
                             .child(
                                 div()
                                     .flex()
@@ -3122,9 +3433,9 @@ impl AiApp {
                                     .py(px(2.)) // Reduced vertical padding
                                     .rounded_md()
                                     .cursor_pointer()
-                                    .hover(|s| s.bg(cx.theme().muted.opacity(0.3)))
+                                    .hover(|s| s.bg(cx.theme().accent.opacity(0.15)))
                                     .text_sm()
-                                    .text_color(cx.theme().muted_foreground)
+                                    .text_color(cx.theme().accent) // Yellow accent like main menu
                                     .on_mouse_down(
                                         gpui::MouseButton::Left,
                                         cx.listener(|this, _, window, cx| {
@@ -3144,9 +3455,9 @@ impl AiApp {
                                     .py(px(2.)) // Reduced vertical padding to match Submit
                                     .rounded_md()
                                     .cursor_pointer()
-                                    .hover(|s| s.bg(cx.theme().muted.opacity(0.3)))
+                                    .hover(|s| s.bg(cx.theme().accent.opacity(0.15)))
                                     .text_sm()
-                                    .text_color(cx.theme().muted_foreground)
+                                    .text_color(cx.theme().accent) // Yellow accent like main menu
                                     .on_mouse_down(
                                         gpui::MouseButton::Left,
                                         cx.listener(|this, _, window, cx| {
@@ -3248,6 +3559,96 @@ impl AiApp {
     /// Update cached box shadows when theme changes
     pub fn update_theme(&mut self, _cx: &mut Context<Self>) {
         self.cached_box_shadows = Self::compute_box_shadows();
+    }
+
+    /// Compute the list of last used model+provider settings from recent chats
+    /// Returns up to 3 unique model+provider combinations, most recent first
+    fn compute_last_used_settings(
+        chats: &[Chat],
+        available_models: &[ModelInfo],
+    ) -> Vec<LastUsedSetting> {
+        use std::collections::HashSet;
+
+        let mut seen = HashSet::new();
+        let mut result = Vec::new();
+
+        // Iterate through chats (already sorted by updated_at DESC)
+        for chat in chats.iter().take(20) {
+            let key = format!("{}:{}", chat.model_id, chat.provider);
+            if seen.contains(&key) {
+                continue;
+            }
+            seen.insert(key);
+
+            // Look up display names from available models
+            let display_name = available_models
+                .iter()
+                .find(|m| m.id == chat.model_id)
+                .map(|m| m.display_name.clone())
+                .unwrap_or_else(|| chat.model_id.clone());
+
+            let provider_display_name = match chat.provider.as_str() {
+                "anthropic" => "Anthropic".to_string(),
+                "openai" => "OpenAI".to_string(),
+                "google" => "Google".to_string(),
+                "groq" => "Groq".to_string(),
+                "openrouter" => "OpenRouter".to_string(),
+                "vercel" => "Vercel".to_string(),
+                other => other.to_string(),
+            };
+
+            result.push(LastUsedSetting {
+                model_id: chat.model_id.clone(),
+                provider: chat.provider.clone(),
+                display_name,
+                provider_display_name,
+            });
+
+            // Stop after 3 unique settings
+            if result.len() >= 3 {
+                break;
+            }
+        }
+
+        result
+    }
+
+    /// Update the last used settings when a new chat is created
+    fn update_last_used_settings(&mut self, model_id: &str, provider: &str) {
+        // Find display names
+        let display_name = self
+            .available_models
+            .iter()
+            .find(|m| m.id == model_id)
+            .map(|m| m.display_name.clone())
+            .unwrap_or_else(|| model_id.to_string());
+
+        let provider_display_name = match provider {
+            "anthropic" => "Anthropic".to_string(),
+            "openai" => "OpenAI".to_string(),
+            "google" => "Google".to_string(),
+            "groq" => "Groq".to_string(),
+            "openrouter" => "OpenRouter".to_string(),
+            "vercel" => "Vercel".to_string(),
+            other => other.to_string(),
+        };
+
+        let new_setting = LastUsedSetting {
+            model_id: model_id.to_string(),
+            provider: provider.to_string(),
+            display_name,
+            provider_display_name,
+        };
+
+        // Remove any existing entry with same model+provider
+        self.last_used_settings
+            .retain(|s| !(s.model_id == model_id && s.provider == provider));
+
+        // Insert at front
+        self.last_used_settings.insert(0, new_setting);
+
+        // Keep only 3
+        self.last_used_settings.truncate(3);
     }
 
     // =====================================================
@@ -3572,6 +3973,35 @@ impl Render for AiApp {
                     }
                 }
 
+                // Handle new chat dropdown navigation (Raycast-style)
+                if this.showing_new_chat_dropdown {
+                    match key {
+                        "up" | "arrowup" => {
+                            this.new_chat_dropdown_select_prev(cx);
+                            cx.stop_propagation();
+                            return;
+                        }
+                        "down" | "arrowdown" => {
+                            this.new_chat_dropdown_select_next(cx);
+                            cx.stop_propagation();
+                            return;
+                        }
+                        "enter" | "return" => {
+                            this.select_from_new_chat_dropdown(window, cx);
+                            cx.stop_propagation();
+                            return;
+                        }
+                        "escape" => {
+                            this.hide_new_chat_dropdown(cx);
+                            cx.stop_propagation();
+                            return;
+                        }
+                        _ => {
+                            // Let printable characters fall through to the search input
+                        }
+                    }
+                }
+
                 // Handle attachments picker
                 if this.showing_attachments_picker && key == "escape" {
                     this.hide_attachments_picker(cx);
@@ -3654,6 +4084,9 @@ impl Render for AiApp {
             })
             .when(self.showing_presets_dropdown, |el| {
                 el.child(self.render_presets_dropdown(cx))
+            })
+            .when(self.showing_new_chat_dropdown, |el| {
+                el.child(self.render_new_chat_dropdown(cx))
             })
             .when(self.showing_attachments_picker, |el| {
                 el.child(self.render_attachments_picker(cx))
@@ -3929,6 +4362,302 @@ impl AiApp {
                             .text_xs()
                             .text_color(muted_fg)
                             .child("Select a preset to start a new chat"),
+                    ),
+            )
+    }
+
+    /// Render the new chat dropdown (Raycast-style with search, last used, presets, models)
+    fn render_new_chat_dropdown(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = cx.theme();
+        let bg_color = theme.background;
+        let border_color = theme.border;
+        let muted_fg = theme.muted_foreground;
+        let accent = theme.accent;
+        let accent_fg = theme.accent_foreground;
+        let fg = theme.foreground;
+
+        let (filtered_last_used, filtered_presets, filtered_models) =
+            self.get_filtered_new_chat_items();
+
+        let current_section = self.new_chat_dropdown_section;
+        let current_index = self.new_chat_dropdown_index;
+
+        // Build "Last Used Settings" section items
+        let last_used_items: Vec<_> = filtered_last_used
+            .iter()
+            .enumerate()
+            .map(|(idx, setting)| {
+                let is_selected = current_section == 0 && idx == current_index;
+                let display_name = setting.display_name.clone();
+                let provider_name = setting.provider_display_name.clone();
+                let model_id = setting.model_id.clone();
+                let provider = setting.provider.clone();
+
+                div()
+                    .id(SharedString::from(format!("last-used-{}", idx)))
+                    .px_3()
+                    .py_2()
+                    .mx_1()
+                    .rounded_md()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .cursor_pointer()
+                    .when(is_selected, |el| el.bg(accent))
+                    .when(!is_selected, |el| el.hover(|el| el.bg(accent.opacity(0.5))))
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.hide_new_chat_dropdown(cx);
+                        this.create_chat_with_model(&model_id, &provider, window, cx);
+                    }))
+                    .child(
+                        div()
+                            .text_sm()
+                            .text_color(if is_selected { accent_fg } else { fg })
+                            .child(display_name),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(if is_selected {
+                                accent_fg.opacity(0.7)
+                            } else {
+                                muted_fg
+                            })
+                            .child(provider_name),
+                    )
+            })
+            .collect();
+
+        // Build "Presets" section items
+        let preset_items: Vec<_> = filtered_presets
+            .iter()
+            .enumerate()
+            .map(|(idx, preset)| {
+                let is_selected = current_section == 1 && idx == current_index;
+                let preset_id = preset.id;
+                let name = preset.name.to_string();
+                let icon = preset.icon;
+
+                // Find the original preset index for create_chat_with_preset
+                let original_idx = self
+                    .presets
+                    .iter()
+                    .position(|p| p.id == preset_id)
+                    .unwrap_or(0);
+
+                div()
+                    .id(SharedString::from(format!("ncd-preset-{}", idx)))
+                    .px_3()
+                    .py_2()
+                    .mx_1()
+                    .rounded_md()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .cursor_pointer()
+                    .when(is_selected, |el| el.bg(accent))
+                    .when(!is_selected, |el| el.hover(|el| el.bg(accent.opacity(0.5))))
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.presets_selected_index = original_idx;
+                        this.hide_new_chat_dropdown(cx);
+                        this.create_chat_with_preset(window, cx);
+                    }))
+                    .child(
+                        svg()
+                            .external_path(icon.external_path())
+                            .size(px(14.))
+                            .text_color(if is_selected { accent_fg } else { muted_fg }),
+                    )
+                    .child(
+                        div()
+                            .text_sm()
+                            .text_color(if is_selected { accent_fg } else { fg })
+                            .child(name),
+                    )
+            })
+            .collect();
+
+        // Build "Recently Used" models section items
+        let model_items: Vec<_> = filtered_models
+            .iter()
+            .enumerate()
+            .map(|(idx, model)| {
+                let is_selected = current_section == 2 && idx == current_index;
+                let display_name = model.display_name.clone();
+                let provider = model.provider.clone();
+                let model_id = model.id.clone();
+
+                // Provider display name
+                let provider_display = match provider.as_str() {
+                    "anthropic" => "Anthropic",
+                    "openai" => "OpenAI",
+                    "google" => "Google",
+                    "groq" => "Groq",
+                    "openrouter" => "OpenRouter",
+                    "vercel" => "Vercel",
+                    _ => &provider,
+                }
+                .to_string();
+
+                div()
+                    .id(SharedString::from(format!("ncd-model-{}", idx)))
+                    .px_3()
+                    .py_2()
+                    .mx_1()
+                    .rounded_md()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .cursor_pointer()
+                    .when(is_selected, |el| el.bg(accent))
+                    .when(!is_selected, |el| el.hover(|el| el.bg(accent.opacity(0.5))))
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.hide_new_chat_dropdown(cx);
+                        this.create_chat_with_model(&model_id, &provider, window, cx);
+                    }))
+                    .child(
+                        div()
+                            .text_sm()
+                            .text_color(if is_selected { accent_fg } else { fg })
+                            .child(display_name),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(if is_selected {
+                                accent_fg.opacity(0.7)
+                            } else {
+                                muted_fg
+                            })
+                            .child(provider_display.to_string()),
+                    )
+            })
+            .collect();
+
+        // Build the dropdown overlay - positioned near the header + button
+        div()
+            .id("new-chat-dropdown-overlay")
+            .absolute()
+            .inset_0()
+            .flex()
+            .items_start()
+            .justify_end() // Align to right (near the + button)
+            .pt(px(40.)) // Below the titlebar
+            .pr_3() // Right padding
+            .on_click(cx.listener(|this, _, _, cx| {
+                this.hide_new_chat_dropdown(cx);
+            }))
+            .child(
+                div()
+                    .id("new-chat-dropdown-container")
+                    .w(px(320.0))
+                    .max_h(px(450.0))
+                    .bg(bg_color)
+                    .border_1()
+                    .border_color(border_color)
+                    .rounded_lg()
+                    .shadow_lg()
+                    .overflow_hidden()
+                    .flex()
+                    .flex_col()
+                    .on_click(cx.listener(|_, _, _, _| {})) // Prevent click-through
+                    // Search input header
+                    .child(
+                        div()
+                            .px_3()
+                            .py_2()
+                            .border_b_1()
+                            .border_color(border_color)
+                            .child(
+                                Input::new(&self.new_chat_dropdown_input)
+                                    .w_full()
+                                    .appearance(false) // Minimal appearance
+                                    .bordered(false),
+                            ),
+                    )
+                    // Scrollable sections
+                    .child(
+                        div()
+                            .id("new-chat-dropdown-sections")
+                            .flex_1()
+                            .overflow_y_scroll()
+                            .p_1()
+                            // Last Used Settings section (if not empty)
+                            .when(!last_used_items.is_empty(), |d| {
+                                d.child(
+                                    div()
+                                        .flex()
+                                        .flex_col()
+                                        .w_full()
+                                        .mb_2()
+                                        .child(
+                                            div()
+                                                .text_xs()
+                                                .font_weight(gpui::FontWeight::MEDIUM)
+                                                .text_color(muted_fg)
+                                                .px_3()
+                                                .py_1()
+                                                .child("Last Used Settings"),
+                                        )
+                                        .children(last_used_items),
+                                )
+                            })
+                            // Presets section (if not empty)
+                            .when(!preset_items.is_empty(), |d| {
+                                d.child(
+                                    div()
+                                        .flex()
+                                        .flex_col()
+                                        .w_full()
+                                        .mb_2()
+                                        .child(
+                                            div()
+                                                .text_xs()
+                                                .font_weight(gpui::FontWeight::MEDIUM)
+                                                .text_color(muted_fg)
+                                                .px_3()
+                                                .py_1()
+                                                .child("Presets"),
+                                        )
+                                        .children(preset_items),
+                                )
+                            })
+                            // Recently Used / All Models section (if not empty)
+                            .when(!model_items.is_empty(), |d| {
+                                d.child(
+                                    div()
+                                        .flex()
+                                        .flex_col()
+                                        .w_full()
+                                        .child(
+                                            div()
+                                                .text_xs()
+                                                .font_weight(gpui::FontWeight::MEDIUM)
+                                                .text_color(muted_fg)
+                                                .px_3()
+                                                .py_1()
+                                                .child("Models"),
+                                        )
+                                        .children(model_items),
+                                )
+                            }),
+                    )
+                    // Footer with keyboard hint
+                    .child(
+                        div()
+                            .px_3()
+                            .py_2()
+                            .border_t_1()
+                            .border_color(border_color)
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(muted_fg)
+                                    .child("↑↓ Navigate  ↵ Select  ⎋ Close"),
+                            ),
                     ),
             )
     }
