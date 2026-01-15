@@ -2141,15 +2141,14 @@ pub fn open_notes_window(cx: &mut App) -> Result<()> {
         cx.new(|cx| Root::new(view, window, cx))
     })?;
 
-    // CRITICAL: Activate the app FIRST before focusing the window
-    // This brings the app to the foreground on macOS, which is required
-    // for the window to receive keyboard focus when the app wasn't already active
-    cx.activate(true);
-
-    // CRITICAL: Hide the main window AFTER activating the app
-    // When we activate the app, macOS may bring all windows to the front.
-    // We need to explicitly hide the main window to prevent it from appearing.
-    // This uses orderOut: which hides just the main window, not the entire app.
+    // NOTE: We do NOT call cx.activate(true) here!
+    // Notes is a PopUp window (NSPanel with NonactivatingPanel style), which means
+    // it can receive keyboard input without activating the application.
+    // Calling activate(true) would bring ALL windows forward (including main window),
+    // causing a flash before we could hide it.
+    //
+    // Instead, we just ensure the main window is hidden (in case it was visible)
+    // and let the PopUp window handle focus naturally.
     crate::platform::hide_main_window();
 
     // Focus the editor input in the Notes window
