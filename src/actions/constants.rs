@@ -21,6 +21,10 @@ pub const ACCENT_BAR_WIDTH: f32 = 3.0;
 /// Height for the header row showing context title (matches section header style)
 pub const HEADER_HEIGHT: f32 = 24.0;
 
+/// Height for section headers within the action list (used when SectionStyle::Headers is enabled)
+/// This includes the text (~12px) + top padding (4-8px) + bottom padding (2px)
+pub const SECTION_HEADER_HEIGHT: f32 = 22.0;
+
 /// Horizontal inset for action rows (creates rounded pill appearance)
 pub const ACTION_ROW_INSET: f32 = 6.0;
 
