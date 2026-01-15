@@ -7,6 +7,7 @@
 //! - Footer with model selector and "Continue in Chat"
 //! - Actions menu (⌘+K) with model picker
 
+use crate::components::prompt_footer::{PromptFooter, PromptFooterColors, PromptFooterConfig};
 use crate::components::TextInputState;
 use crate::designs::icon_variations::IconName;
 use gpui::{
@@ -107,6 +108,9 @@ pub type ChatRetryCallback = Arc<dyn Fn(String, String) + Send + Sync>;
 
 /// Callback type for "Configure API" action: () -> triggers API key setup
 pub type ChatConfigureCallback = Arc<dyn Fn() + Send + Sync>;
+
+/// Callback type for showing actions menu: (prompt_id) -> triggers ActionsDialog
+pub type ChatShowActionsCallback = Arc<dyn Fn(String) + Send + Sync>;
 
 /// A conversation turn: user prompt + optional AI response
 #[derive(Clone, Debug)]
@@ -223,6 +227,8 @@ pub struct ChatPrompt {
     // Setup mode: when true, shows API key configuration card instead of chat
     needs_setup: bool,
     on_configure: Option<ChatConfigureCallback>,
+    // Callback for showing actions dialog (handled by parent)
+    on_show_actions: Option<ChatShowActionsCallback>,
 }
 
 impl ChatPrompt {
@@ -277,7 +283,13 @@ impl ChatPrompt {
             cursor_blink_started: false,
             needs_setup: false,
             on_configure: None,
+            on_show_actions: None,
         }
+    }
+
+    /// Set the callback for showing actions dialog
+    pub fn set_on_show_actions(&mut self, callback: ChatShowActionsCallback) {
+        self.on_show_actions = Some(callback);
     }
 
     /// Start the cursor blink timer
@@ -834,7 +846,7 @@ impl ChatPrompt {
         );
     }
 
-    fn handle_continue_in_chat(&mut self, cx: &mut Context<Self>) {
+    pub fn handle_continue_in_chat(&mut self, cx: &mut Context<Self>) {
         logging::log("CHAT", "Continue in Chat - opening AI window");
 
         // Collect conversation history from messages
@@ -867,7 +879,7 @@ impl ChatPrompt {
         }
     }
 
-    fn handle_copy_last_response(&mut self, cx: &mut Context<Self>) {
+    pub fn handle_copy_last_response(&mut self, cx: &mut Context<Self>) {
         // Find the last assistant message
         if let Some(last_assistant) = self.messages.iter().rev().find(|m| !m.is_user()) {
             let content = last_assistant.get_content().to_string();
@@ -887,28 +899,18 @@ impl ChatPrompt {
     // Actions Menu Methods
     // ============================================
 
-    fn toggle_actions_menu(&mut self, cx: &mut Context<Self>) {
-        self.actions_menu_open = !self.actions_menu_open;
-        self.actions_menu_selected = 0;
-        logging::log(
-            "CHAT",
-            &format!(
-                "Actions menu: {}",
-                if self.actions_menu_open {
-                    "opened"
-                } else {
-                    "closed"
-                }
-            ),
-        );
-        cx.notify();
+    fn toggle_actions_menu(&mut self, _cx: &mut Context<Self>) {
+        // Delegate to parent via callback to open standard ActionsDialog
+        if let Some(ref callback) = self.on_show_actions {
+            logging::log("CHAT", "Requesting actions dialog via callback");
+            callback(self.id.clone());
+        } else {
+            logging::log("CHAT", "No on_show_actions callback set");
+        }
     }
 
-    fn close_actions_menu(&mut self, cx: &mut Context<Self>) {
-        if self.actions_menu_open {
-            self.actions_menu_open = false;
-            cx.notify();
-        }
+    fn close_actions_menu(&mut self, _cx: &mut Context<Self>) {
+        // Actions menu is now handled by parent - nothing to do here
     }
 
     /// Get the list of action items for the menu
@@ -1659,65 +1661,29 @@ impl ChatPrompt {
             )
     }
 
-    /// Render the footer with model selector and Continue in Chat
-    fn render_footer(&self) -> impl IntoElement {
-        let colors = &self.prompt_colors;
+    /// Render the footer using the standard PromptFooter component
+    /// Shows: Logo + Model name | Continue in Chat ⌘↵ | Actions ⌘K
+    fn render_footer(&self, _cx: &mut Context<Self>) -> impl IntoElement {
+        // Use standard PromptFooter colors from theme
+        let footer_colors = PromptFooterColors::from_theme(&self.theme);
 
-        div()
-            .w_full()
-            .flex()
-            .flex_row()
-            .items_center()
-            .justify_between()
-            .px(px(12.0))
-            .py(px(8.0))
-            .border_t_1()
-            .border_color(rgba((colors.quote_border << 8) | 0x40))
-            .child(
-                // Model selector (left side)
-                div()
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .gap(px(6.0))
-                    .child(
-                        div()
-                            .w(px(8.0))
-                            .h(px(8.0))
-                            .rounded_full()
-                            .bg(rgb(colors.accent_color)),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(rgb(colors.text_secondary))
-                            .child(self.model.clone().unwrap_or_else(|| "Model".into())),
-                    ),
-            )
-            .child(
-                // Continue in Chat (right side)
-                div()
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .gap(px(8.0))
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(rgb(colors.text_tertiary))
-                            .child("Continue in Chat"),
-                    )
-                    .child(
-                        div()
-                            .px(px(6.0))
-                            .py(px(2.0))
-                            .bg(rgba((colors.code_bg << 8) | 0x80))
-                            .rounded(px(4.0))
-                            .text_xs()
-                            .text_color(rgb(colors.text_tertiary))
-                            .child("⌘↵"),
-                    ),
-            )
+        // Build model display text (show model name if available)
+        let model_text = self.model.clone().unwrap_or_else(|| "Select Model".into());
+
+        // Configure footer with chat-specific labels
+        let footer_config = PromptFooterConfig::new()
+            .primary_label("Continue in Chat")
+            .primary_shortcut("⌘↵")
+            .secondary_label("Actions")
+            .secondary_shortcut("⌘K")
+            .show_logo(true)
+            .show_secondary(true)
+            .helper_text(model_text); // Show model name next to logo
+
+        // Note: Click handlers are not wired up here because PromptFooter uses
+        // RenderOnce with static callbacks. The keyboard shortcuts (⌘↵ and ⌘K)
+        // handle the actual functionality via the parent's key handler.
+        PromptFooter::new(footer_config, footer_colors)
     }
 }
 
@@ -1748,7 +1714,6 @@ impl Render for ChatPrompt {
 
         let colors = &self.prompt_colors;
 
-        let actions_menu_open = self.actions_menu_open;
         let needs_setup = self.needs_setup;
         let on_configure = self.on_configure.clone();
 
@@ -1776,18 +1741,8 @@ impl Render for ChatPrompt {
                 return;
             }
 
-            // Handle actions menu keys when open
-            if actions_menu_open {
-                match key.as_str() {
-                    "escape" => this.close_actions_menu(cx),
-                    "up" | "arrowup" => this.actions_menu_up(cx),
-                    "down" | "arrowdown" => this.actions_menu_down(cx),
-                    "enter" => this.actions_menu_select(cx),
-                    "k" if has_cmd => this.toggle_actions_menu(cx),
-                    _ => {}
-                }
-                return;
-            }
+            // Note: Actions menu keyboard navigation is handled by ActionsDialog window
+            // We just need to handle ⌘K to open it via callback
 
             match key.as_str() {
                 // Escape - close chat
@@ -1884,8 +1839,6 @@ impl Render for ChatPrompt {
             );
         }
 
-        let show_actions_menu = self.actions_menu_open;
-
         div()
             .id("chat-prompt")
             .relative() // For absolute positioning of actions menu
@@ -1911,10 +1864,10 @@ impl Render for ChatPrompt {
                     .track_scroll(&self.scroll_handle)
                     .child(message_list),
             )
-            // Footer with model selector and Continue in Chat
-            .child(self.render_footer())
-            // Actions menu overlay (when open)
-            .when(show_actions_menu, |d| d.child(self.render_actions_menu(cx)))
+            // Footer with model selector, Continue in Chat, and Actions
+            .child(self.render_footer(cx))
+            // Note: Actions menu is now handled by parent via on_show_actions callback
+            // The parent opens the standard ActionsDialog window
             .into_any_element()
     }
 }

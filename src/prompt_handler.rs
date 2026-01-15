@@ -1627,6 +1627,9 @@ impl ScriptListApp {
                 // Configure history saving
                 chat_prompt = chat_prompt.with_save_history(save_history);
 
+                // Note: ⌘K for actions is handled at the main app level in handle_key_event
+                // The ChatPrompt's on_show_actions callback is not needed when main app handles it
+
                 let entity = cx.new(|_| chat_prompt);
                 self.current_view = AppView::ChatPrompt { id, entity };
                 self.focused_input = FocusedInput::None;

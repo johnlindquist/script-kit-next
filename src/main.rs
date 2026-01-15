@@ -922,6 +922,8 @@ enum ActionsDialogHost {
     TermPrompt,
     /// Actions in form prompt (restore focus to None - form handles field focus)
     FormPrompt,
+    /// Actions in chat prompt (restore focus to ChatPrompt input)
+    ChatPrompt,
     /// Actions in main script list (restore focus to MainFilter)
     MainList,
     /// Actions in file search (restore focus to file search input)
@@ -3249,6 +3251,21 @@ fn main() {
                                             view.cancel_script_execution(ctx);
                                         } else {
                                             logging::log("STDIN", &format!("SimulateKey: Unhandled key '{}' in EditorPrompt", key_lower));
+                                        }
+                                    }
+                                    AppView::ChatPrompt { entity, .. } => {
+                                        // ChatPrompt key handling - mainly for ⌘K to open actions
+                                        logging::log("STDIN", &format!("SimulateKey: Dispatching '{}' to ChatPrompt", key_lower));
+
+                                        if has_cmd && key_lower == "k" {
+                                            logging::log("STDIN", "SimulateKey: Cmd+K - toggle chat actions");
+                                            view.toggle_chat_actions(ctx, window);
+                                        } else {
+                                            // Forward other keys to the ChatPrompt entity
+                                            entity.update(ctx, |_chat, _cx| {
+                                                // Most key handling is done within ChatPrompt's Render
+                                                logging::log("STDIN", &format!("SimulateKey: Forwarding '{}' to ChatPrompt", key_lower));
+                                            });
                                         }
                                     }
                                     _ => {

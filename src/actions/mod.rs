@@ -29,6 +29,8 @@ mod window;
 pub use builders::to_deeplink_name;
 #[allow(unused_imports)]
 pub use builders::ClipboardEntryInfo;
+// Chat prompt info types for ActionsDialog::with_chat
+pub use builders::{ChatModelInfo, ChatPromptInfo};
 pub use dialog::ActionsDialog;
 pub use types::ScriptInfo;
 

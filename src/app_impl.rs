@@ -3019,6 +3019,172 @@ impl ScriptListApp {
         cx.notify();
     }
 
+    /// Toggle actions dialog for chat prompts
+    /// Opens ActionsDialog with model selection and chat-specific actions
+    pub fn toggle_chat_actions(&mut self, cx: &mut Context<Self>, window: &mut Window) {
+        use crate::actions::{ChatModelInfo, ChatPromptInfo};
+
+        logging::log(
+            "KEY",
+            &format!(
+                "toggle_chat_actions called: show_actions_popup={}, actions_dialog.is_some={}",
+                self.show_actions_popup,
+                self.actions_dialog.is_some()
+            ),
+        );
+
+        if self.show_actions_popup || is_actions_window_open() {
+            // Close - return focus to chat prompt
+            self.show_actions_popup = false;
+            self.actions_dialog = None;
+            self.focused_input = FocusedInput::None;
+            self.pending_focus = Some(FocusTarget::AppRoot);
+
+            // Close the separate actions window via spawn
+            cx.spawn(async move |_this, cx| {
+                cx.update(|cx| {
+                    close_actions_window(cx);
+                })
+                .ok();
+            })
+            .detach();
+
+            window.focus(&self.focus_handle, cx);
+            logging::log("FOCUS", "Chat actions closed, focus returned to ChatPrompt");
+        } else {
+            // Get chat info from current ChatPrompt entity
+            let chat_info = if let AppView::ChatPrompt { entity, .. } = &self.current_view {
+                let chat = entity.read(cx);
+                ChatPromptInfo {
+                    current_model: chat.model.clone(),
+                    available_models: chat
+                        .models
+                        .iter()
+                        .map(|m| ChatModelInfo {
+                            id: m.id.clone(),
+                            display_name: m.name.clone(),
+                            provider: m.provider.clone(),
+                        })
+                        .collect(),
+                    has_messages: !chat.messages.is_empty(),
+                    has_response: chat
+                        .messages
+                        .iter()
+                        .any(|m| m.position == crate::protocol::ChatMessagePosition::Left),
+                }
+            } else {
+                logging::log(
+                    "KEY",
+                    "toggle_chat_actions called but current view is not ChatPrompt",
+                );
+                return;
+            };
+
+            // Open actions as a separate window with vibrancy blur
+            self.show_actions_popup = true;
+            self.focused_input = FocusedInput::ActionsSearch;
+
+            let theme_arc = std::sync::Arc::clone(&self.theme);
+            let dialog = cx.new(|cx| {
+                let focus_handle = cx.focus_handle();
+                ActionsDialog::with_chat(
+                    focus_handle,
+                    std::sync::Arc::new(|_action_id| {}), // Callback handled via main app
+                    &chat_info,
+                    theme_arc,
+                )
+            });
+
+            // Store the dialog entity for keyboard routing
+            self.actions_dialog = Some(dialog.clone());
+
+            // Get main window bounds and display_id for positioning
+            let main_bounds = window.bounds();
+            let display_id = window.display(cx).map(|d| d.id());
+
+            logging::log(
+                "ACTIONS",
+                &format!(
+                    "Chat actions: Main window bounds origin=({:?}, {:?}), size={:?}x{:?}, display_id={:?}",
+                    main_bounds.origin.x, main_bounds.origin.y,
+                    main_bounds.size.width, main_bounds.size.height,
+                    display_id
+                ),
+            );
+
+            // Open the actions window via spawn
+            cx.spawn(async move |_this, cx| {
+                cx.update(
+                    |cx| match open_actions_window(cx, main_bounds, display_id, dialog) {
+                        Ok(_handle) => {
+                            logging::log("ACTIONS", "Chat actions popup window opened");
+                        }
+                        Err(e) => {
+                            logging::log(
+                                "ACTIONS",
+                                &format!("Failed to open chat actions window: {}", e),
+                            );
+                        }
+                    },
+                )
+                .ok();
+            })
+            .detach();
+
+            logging::log("FOCUS", "Chat actions opened, keyboard routing active");
+        }
+        cx.notify();
+    }
+
+    /// Execute an action selected from the chat actions dialog
+    pub fn execute_chat_action(&mut self, action_id: &str, cx: &mut Context<Self>) {
+        logging::log("ACTIONS", &format!("execute_chat_action: {}", action_id));
+
+        // Handle model selection (action_id starts with "select_model_")
+        if let Some(model_id) = action_id.strip_prefix("select_model_") {
+            if let AppView::ChatPrompt { entity, .. } = &self.current_view {
+                let model_id_owned = model_id.to_string();
+                entity.update(cx, |chat, cx| {
+                    // Find model by ID and set it
+                    if let Some(model) = chat.models.iter().find(|m| m.id == model_id_owned) {
+                        chat.model = Some(model.name.clone());
+                        logging::log("CHAT", &format!("Model changed to: {}", model.name));
+                        cx.notify();
+                    }
+                });
+            }
+            return;
+        }
+
+        // Handle other chat actions
+        match action_id {
+            "continue_in_chat" => {
+                if let AppView::ChatPrompt { entity, .. } = &self.current_view {
+                    entity.update(cx, |chat, cx| {
+                        chat.handle_continue_in_chat(cx);
+                    });
+                }
+            }
+            "copy_response" => {
+                if let AppView::ChatPrompt { entity, .. } = &self.current_view {
+                    entity.update(cx, |chat, cx| {
+                        chat.handle_copy_last_response(cx);
+                    });
+                }
+            }
+            "clear_conversation" => {
+                if let AppView::ChatPrompt { entity, .. } = &self.current_view {
+                    entity.update(cx, |chat, cx| {
+                        chat.clear_messages(cx);
+                    });
+                }
+            }
+            _ => {
+                logging::log("ACTIONS", &format!("Unknown chat action: {}", action_id));
+            }
+        }
+    }
+
     // ========================================================================
     // Actions Dialog Routing - Shared key routing for all prompt types
     // ========================================================================
@@ -3236,6 +3402,11 @@ impl ScriptListApp {
             | ActionsDialogHost::TermPrompt
             | ActionsDialogHost::FormPrompt => {
                 self.focused_input = FocusedInput::None;
+            }
+            ActionsDialogHost::ChatPrompt => {
+                // ChatPrompt handles its own focus - restore to app root
+                self.focused_input = FocusedInput::None;
+                self.pending_focus = Some(FocusTarget::AppRoot);
             }
             ActionsDialogHost::MainList => {
                 self.focused_input = FocusedInput::MainFilter;
