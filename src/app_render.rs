@@ -63,6 +63,18 @@ impl ScriptListApp {
 
     /// Render the preview panel showing details of the selected script/scriptlet
     fn render_preview_panel(&mut self, _cx: &mut Context<Self>) -> impl IntoElement {
+        let _preview_start = std::time::Instant::now();
+        let filter_for_log = self.filter_text.clone();
+
+        // Log every preview panel render call
+        logging::log(
+            "PREVIEW_PERF",
+            &format!(
+                "[PREVIEW_START] filter='{}' selected_idx={}",
+                filter_for_log, self.selected_index
+            ),
+        );
+
         // Get grouped results to map from selected_index to actual result (cached)
         // Clone to avoid borrow issues with self.selected_index access
         let selected_index = self.selected_index;
@@ -137,8 +149,21 @@ impl ScriptListApp {
         match selected_result {
             Some(ref result) => {
                 // P4: Lazy match indices computation for preview panel
+                let match_start = std::time::Instant::now();
                 let match_indices =
                     scripts::compute_match_indices_for_result(result, &computed_filter);
+                let match_elapsed = match_start.elapsed();
+                if match_elapsed.as_micros() > 500 {
+                    logging::log(
+                        "FILTER_PERF",
+                        &format!(
+                            "[PREVIEW] match_indices for '{}' took {:.2}ms (filter='{}')",
+                            result.name(),
+                            match_elapsed.as_secs_f64() * 1000.0,
+                            filter_for_log
+                        ),
+                    );
+                }
 
                 match result {
                     scripts::SearchResult::Script(script_match) => {
@@ -265,9 +290,23 @@ impl ScriptListApp {
                         // Use cached syntax-highlighted lines (avoids file I/O and highlighting on every render)
                         let script_path = script.path.to_string_lossy().to_string();
                         let lang = script.extension.clone();
+                        let cache_start = std::time::Instant::now();
                         let lines = self
                             .get_or_update_preview_cache(&script_path, &lang)
                             .to_vec();
+                        let cache_elapsed = cache_start.elapsed();
+                        if cache_elapsed.as_micros() > 500 {
+                            logging::log(
+                                "FILTER_PERF",
+                                &format!(
+                                    "[PREVIEW] preview_cache for '{}' took {:.2}ms ({} lines, filter='{}')",
+                                    script.name,
+                                    cache_elapsed.as_secs_f64() * 1000.0,
+                                    lines.len(),
+                                    filter_for_log
+                                ),
+                            );
+                        }
 
                         // Build code container - render line by line with monospace font
                         let mut code_container = div()
@@ -432,24 +471,52 @@ impl ScriptListApp {
                                 .child("Content Preview"),
                         );
 
-                        // Display scriptlet code with syntax highlighting (first 15 lines)
-                        // Note: Scriptlets store code in memory, no file I/O needed (no cache benefit)
-                        let code_preview: String = scriptlet
-                            .code
-                            .lines()
-                            .take(15)
-                            .collect::<Vec<_>>()
-                            .join("\n");
+                        // Display scriptlet code with syntax highlighting
+                        // PERF DEBUG: Detailed timing for each step
+                        let total_start = std::time::Instant::now();
 
-                        // Determine language from tool (bash, js, etc.)
-                        let lang = match scriptlet.tool.as_str() {
-                            "bash" | "zsh" | "sh" => "bash",
-                            "node" | "bun" => "js",
-                            _ => &scriptlet.tool,
+                        // Step 1: Cache key check
+                        let cache_key = scriptlet.name.clone();
+                        let is_cache_hit =
+                            self.scriptlet_preview_cache_key.as_ref() == Some(&cache_key);
+
+                        // Step 2: Get highlighted lines (from cache or compute)
+                        let step2_start = std::time::Instant::now();
+                        let lines = if is_cache_hit {
+                            self.scriptlet_preview_cache_lines.clone()
+                        } else {
+                            // PERF: Truncate long lines to prevent minified code from
+                            // creating thousands of syntax highlighting spans.
+                            // 120 chars is a reasonable max for preview display.
+                            const MAX_LINE_LENGTH: usize = 120;
+                            let code_preview: String = scriptlet
+                                .code
+                                .lines()
+                                .take(15)
+                                .map(|line| {
+                                    if line.len() > MAX_LINE_LENGTH {
+                                        format!("{}...", &line[..MAX_LINE_LENGTH])
+                                    } else {
+                                        line.to_string()
+                                    }
+                                })
+                                .collect::<Vec<_>>()
+                                .join("\n");
+
+                            let lang = match scriptlet.tool.as_str() {
+                                "bash" | "zsh" | "sh" => "bash",
+                                "node" | "bun" => "js",
+                                _ => &scriptlet.tool,
+                            };
+                            let highlighted = highlight_code_lines(&code_preview, lang);
+                            self.scriptlet_preview_cache_key = Some(cache_key);
+                            self.scriptlet_preview_cache_lines = highlighted.clone();
+                            highlighted
                         };
-                        let lines = highlight_code_lines(&code_preview, lang);
+                        let step2_ms = step2_start.elapsed().as_secs_f64() * 1000.0;
 
-                        // Build code container - render line by line with monospace font
+                        // Step 3: Create container div
+                        let step3_start = std::time::Instant::now();
                         let mut code_container = div()
                             .w_full()
                             .min_w(px(280.))
@@ -459,8 +526,13 @@ impl ScriptListApp {
                             .overflow_hidden()
                             .flex()
                             .flex_col();
+                        let step3_ms = step3_start.elapsed().as_secs_f64() * 1000.0;
 
-                        // Render each line as a row of spans with monospace font
+                        // Step 4: Create line divs with spans
+                        let step4_start = std::time::Instant::now();
+                        let line_count = lines.len();
+                        let mut span_count = 0usize;
+
                         for line in lines {
                             let mut line_div = div()
                                 .flex()
@@ -468,12 +540,12 @@ impl ScriptListApp {
                                 .w_full()
                                 .font_family(typography.font_family_mono)
                                 .text_xs()
-                                .min_h(px(spacing.padding_lg)); // Line height
+                                .min_h(px(spacing.padding_lg));
 
                             if line.spans.is_empty() {
-                                // Empty line - add a space to preserve height
                                 line_div = line_div.child(" ");
                             } else {
+                                span_count += line.spans.len();
                                 for span in line.spans {
                                     line_div = line_div
                                         .child(div().text_color(rgb(span.color)).child(span.text));
@@ -482,8 +554,31 @@ impl ScriptListApp {
 
                             code_container = code_container.child(line_div);
                         }
+                        let step4_ms = step4_start.elapsed().as_secs_f64() * 1000.0;
 
+                        // Step 5: Add to panel
+                        let step5_start = std::time::Instant::now();
                         panel = panel.child(code_container);
+                        let step5_ms = step5_start.elapsed().as_secs_f64() * 1000.0;
+
+                        let total_ms = total_start.elapsed().as_secs_f64() * 1000.0;
+
+                        // Always log for debugging
+                        logging::log(
+                            "CODE_PERF",
+                            &format!(
+                                "[SYNTAX] {} lines={} spans={} | cache={} get={:.2}ms container={:.2}ms lines={:.2}ms add={:.2}ms TOTAL={:.2}ms",
+                                if is_cache_hit { "HIT" } else { "MISS" },
+                                line_count,
+                                span_count,
+                                if is_cache_hit { "hit" } else { "miss" },
+                                step2_ms,
+                                step3_ms,
+                                step4_ms,
+                                step5_ms,
+                                total_ms
+                            ),
+                        );
                     }
                     scripts::SearchResult::BuiltIn(builtin_match) => {
                         let builtin = &builtin_match.entry;

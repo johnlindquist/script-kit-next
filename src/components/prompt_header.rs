@@ -347,6 +347,8 @@ impl PromptHeader {
             background_hover: colors.background,
             accent: colors.accent,
             border: colors.border,
+            focus_ring: colors.accent,
+            focus_tint: colors.background,
         };
 
         let on_primary = self.on_primary_click.clone();

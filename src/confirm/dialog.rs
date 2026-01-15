@@ -4,6 +4,7 @@
 //! Supports keyboard shortcuts: Enter = confirm, Escape = cancel.
 //! Tab/Arrow keys navigate between buttons with visual focus indication.
 
+use crate::components::button::{Button, ButtonColors, ButtonVariant};
 use crate::logging;
 use crate::theme;
 use gpui::{
@@ -12,10 +13,7 @@ use gpui::{
 };
 use std::sync::Arc;
 
-use super::constants::{
-    BUTTON_GAP, BUTTON_PADDING_X, BUTTON_PADDING_Y, BUTTON_RADIUS, BUTTON_ROW_HEIGHT,
-    CONFIRM_PADDING, CONFIRM_WIDTH, DIALOG_RADIUS,
-};
+use super::constants::{BUTTON_GAP, CONFIRM_PADDING, CONFIRM_WIDTH, DIALOG_RADIUS};
 
 /// Callback for confirm/cancel selection
 /// Signature: (confirmed: bool)
@@ -26,9 +24,6 @@ pub type ConfirmCallback = Arc<dyn Fn(bool) + Send + Sync>;
 fn hex_with_alpha(hex: u32, alpha: u8) -> u32 {
     (hex << 8) | (alpha as u32)
 }
-
-/// Focus ring border width for focused buttons
-const FOCUS_BORDER_WIDTH: f32 = 2.0;
 
 /// ConfirmDialog - Simple confirmation modal with message and two buttons
 pub struct ConfirmDialog {
@@ -141,102 +136,49 @@ impl Render for ConfirmDialog {
 
         // Text colors
         let primary_text = rgb(colors.text.primary);
-        let secondary_text = rgb(colors.text.secondary);
 
-        // Button colors - both buttons now use consistent semi-transparent styling
+        // Border color for dialog
         let border_color = rgba(hex_with_alpha(colors.ui.border, 0x60));
-        let button_bg = rgba(hex_with_alpha(colors.background.search_box, 0x40));
-
-        // Confirm button uses accent color with reduced opacity for vibrancy consistency
-        // 0x60 = 37.5% opacity - visible but not harsh like solid yellow
-        let confirm_bg = rgba(hex_with_alpha(colors.accent.selected, 0x50));
-        let confirm_hover = rgba(hex_with_alpha(colors.accent.selected, 0x70));
-        let cancel_hover = rgba(hex_with_alpha(colors.accent.selected_subtle, 0x30));
-
-        // Focus colors - visible ring around focused button
-        // Higher alpha (0xA0 = 62.5%) for clear focus indication
-        let focus_ring_color = rgba(hex_with_alpha(colors.accent.selected, 0xA0));
-        let unfocused_border = rgba(hex_with_alpha(colors.ui.border, 0x40));
-
-        // Focus background tint - subtle background change when button is focused
-        let focus_tint = rgba(hex_with_alpha(colors.accent.selected_subtle, 0x20));
 
         let message_str: SharedString = self.message.clone().into();
-        let cancel_str: SharedString = self.cancel_text.clone().into();
-        let confirm_str: SharedString = self.confirm_text.clone().into();
 
         let is_cancel_focused = self.focused_button == 0;
         let is_confirm_focused = self.focused_button == 1;
 
-        // Cancel button - secondary action with subtle styling
-        // When focused: accent border ring + slight background tint
+        // Create ButtonColors from theme for consistent styling
+        let button_colors = ButtonColors::from_theme(&self.theme);
+
+        // Cancel button - Ghost variant (secondary action)
+        // Wrap in flex_1 div for equal width
         let cancel_button = div()
-            .id("cancel-button")
+            .id("cancel-wrapper")
             .flex_1()
-            .h(px(BUTTON_ROW_HEIGHT))
-            .px(px(BUTTON_PADDING_X))
-            .py(px(BUTTON_PADDING_Y))
-            .flex()
-            .items_center()
-            .justify_center()
-            .rounded(px(BUTTON_RADIUS))
-            .bg(if is_cancel_focused {
-                // Add subtle tint when focused
-                focus_tint
-            } else {
-                button_bg
-            })
-            .border_color(if is_cancel_focused {
-                focus_ring_color
-            } else {
-                unfocused_border
-            })
-            .when(is_cancel_focused, |d| d.border(px(FOCUS_BORDER_WIDTH)))
-            .when(!is_cancel_focused, |d| d.border_1())
-            .hover(|s| s.bg(cancel_hover))
-            .cursor_pointer()
-            .text_color(secondary_text)
-            .text_sm()
-            .child(cancel_str)
+            .child(
+                Button::new(self.cancel_text.clone(), button_colors)
+                    .variant(ButtonVariant::Ghost)
+                    .focused(is_cancel_focused)
+                    .on_click(Box::new(|_event, window, _cx| {
+                        window.remove_window();
+                    })),
+            )
             .on_click(cx.listener(|this, _e, window, _cx| {
                 this.cancel();
                 window.remove_window();
             }));
 
-        // Confirm button - primary action with accent color at reduced opacity
-        // Matches vibrancy theme while still standing out as the primary action
-        // When focused: brighter accent border ring
+        // Confirm button - Primary variant (primary action)
+        // Wrap in flex_1 div for equal width
         let confirm_button = div()
-            .id("confirm-button")
+            .id("confirm-wrapper")
             .flex_1()
-            .h(px(BUTTON_ROW_HEIGHT))
-            .px(px(BUTTON_PADDING_X))
-            .py(px(BUTTON_PADDING_Y))
-            .flex()
-            .items_center()
-            .justify_center()
-            .rounded(px(BUTTON_RADIUS))
-            .bg(if is_confirm_focused {
-                // Slightly brighter when focused
-                rgba(hex_with_alpha(colors.accent.selected, 0x60))
-            } else {
-                confirm_bg
-            })
-            .border_color(if is_confirm_focused {
-                focus_ring_color
-            } else {
-                // Subtle accent border even when unfocused to indicate primary action
-                rgba(hex_with_alpha(colors.accent.selected, 0x40))
-            })
-            .when(is_confirm_focused, |d| d.border(px(FOCUS_BORDER_WIDTH)))
-            .when(!is_confirm_focused, |d| d.border_1())
-            .hover(|s| s.bg(confirm_hover))
-            .cursor_pointer()
-            // Use primary text color for better readability on semi-transparent bg
-            .text_color(primary_text)
-            .text_sm()
-            .font_weight(gpui::FontWeight::MEDIUM)
-            .child(confirm_str)
+            .child(
+                Button::new(self.confirm_text.clone(), button_colors)
+                    .variant(ButtonVariant::Primary)
+                    .focused(is_confirm_focused)
+                    .on_click(Box::new(|_event, window, _cx| {
+                        window.remove_window();
+                    })),
+            )
             .on_click(cx.listener(|this, _e, window, _cx| {
                 this.confirm();
                 window.remove_window();

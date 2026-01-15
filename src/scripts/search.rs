@@ -969,33 +969,59 @@ pub fn fuzzy_search_unified_all(
     apps: &[AppInfo],
     query: &str,
 ) -> Vec<SearchResult> {
+    use crate::logging;
+    let total_start = std::time::Instant::now();
     let mut results = Vec::new();
 
     // Search built-ins first (they should appear at top when scores are equal)
+    let builtin_start = std::time::Instant::now();
     let builtin_matches = fuzzy_search_builtins(builtins, query);
+    let builtin_elapsed = builtin_start.elapsed();
     for bm in builtin_matches {
         results.push(SearchResult::BuiltIn(bm));
     }
 
     // Search apps (appear after built-ins but before scripts)
+    let apps_start = std::time::Instant::now();
     let app_matches = fuzzy_search_apps(apps, query);
+    let apps_elapsed = apps_start.elapsed();
     for am in app_matches {
         results.push(SearchResult::App(am));
     }
 
     // Search scripts
+    let scripts_start = std::time::Instant::now();
     let script_matches = fuzzy_search_scripts(scripts, query);
+    let scripts_elapsed = scripts_start.elapsed();
     for sm in script_matches {
         results.push(SearchResult::Script(sm));
     }
 
     // Search scriptlets
+    let scriptlets_start = std::time::Instant::now();
     let scriptlet_matches = fuzzy_search_scriptlets(scriptlets, query);
+    let scriptlets_elapsed = scriptlets_start.elapsed();
     for sm in scriptlet_matches {
         results.push(SearchResult::Scriptlet(sm));
     }
 
+    // Log search timing breakdown
+    if !query.is_empty() {
+        logging::log(
+            "FILTER_PERF",
+            &format!(
+                "[SEARCH_BREAKDOWN] '{}': builtins={:.2}ms apps={:.2}ms scripts={:.2}ms scriptlets={:.2}ms",
+                query,
+                builtin_elapsed.as_secs_f64() * 1000.0,
+                apps_elapsed.as_secs_f64() * 1000.0,
+                scripts_elapsed.as_secs_f64() * 1000.0,
+                scriptlets_elapsed.as_secs_f64() * 1000.0
+            ),
+        );
+    }
+
     // Sort by score (highest first), then by type (builtins first, apps, windows, scripts, scriptlets, agents), then by name
+    let sort_start = std::time::Instant::now();
     results.sort_by(|a, b| {
         match b.score().cmp(&a.score()) {
             Ordering::Equal => {
@@ -1022,6 +1048,22 @@ pub fn fuzzy_search_unified_all(
             other => other,
         }
     });
+
+    // Log sort and total timing
+    if !query.is_empty() {
+        let sort_elapsed = sort_start.elapsed();
+        let total_elapsed = total_start.elapsed();
+        logging::log(
+            "FILTER_PERF",
+            &format!(
+                "[SEARCH_TOTAL] '{}': sort={:.2}ms total={:.2}ms ({} results)",
+                query,
+                sort_elapsed.as_secs_f64() * 1000.0,
+                total_elapsed.as_secs_f64() * 1000.0,
+                results.len()
+            ),
+        );
+    }
 
     results
 }
