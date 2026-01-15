@@ -2751,10 +2751,10 @@ impl AiApp {
         let preview = self.message_previews.get(&chat_id).cloned();
 
         // Vibrancy-compatible selection/hover colors (white with alpha)
-        // Same pattern as main menu list items - 0x54 = 33%, 0x26 = 15%
+        // Lower opacity for better vibrancy effect - 0x28 = 16%, 0x18 = 9%
         // Formula: (hex_color << 8) | alpha
-        let selected_bg = rgba((0xFFFFFF << 8) | 0x54);
-        let hover_bg = rgba((0xFFFFFF << 8) | 0x26);
+        let selected_bg = rgba((0xFFFFFF << 8) | 0x28); // Reduced from 0x54 for more transparency
+        let hover_bg = rgba((0xFFFFFF << 8) | 0x18); // Reduced from 0x26
 
         // Text colors change based on selection state (matching main menu behavior)
         // Selected: bright white for high contrast against dark-tinted selection
@@ -2838,15 +2838,17 @@ impl AiApp {
         // Similar to search input - lets blur show through
         let input_bg = rgba((0xFFFFFF << 8) | 0x15); // White at ~8% opacity
 
+        // Make border semi-transparent for vibrancy (40% opacity)
+        let transparent_border = border_color.opacity(0.4);
+
         // Wrap input in a styled container for vibrancy support
-        // Use accent border color since this input is always the main focus
         div()
             .flex_1()
             .h(px(36.))
             .px_3()
             .rounded_md()
             .border_1()
-            .border_color(border_color) // Always show accent border (input is primary focus)
+            .border_color(transparent_border) // Semi-transparent accent border
             .bg(input_bg) // Vibrancy-compatible semi-transparent background
             .flex()
             .items_center()
