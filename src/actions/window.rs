@@ -35,13 +35,15 @@ const TITLEBAR_HEIGHT: f32 = 36.0;
 
 /// Window position relative to the parent window
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-#[allow(dead_code)] // TopRight reserved for future use
+#[allow(dead_code)] // Some variants reserved for future use
 pub enum WindowPosition {
     /// Bottom-right, above the footer (default for Cmd+K actions)
     #[default]
     BottomRight,
     /// Top-right, below the titlebar (for new chat dropdown)
     TopRight,
+    /// Top-center, below the titlebar, horizontally centered (Raycast-style for Notes)
+    TopCenter,
 }
 
 /// ActionsWindow wrapper that renders the shared ActionsDialog entity
@@ -263,6 +265,19 @@ pub fn open_actions_window(
             // Position popup below the titlebar
             main_window_bounds.origin.y + px(TITLEBAR_HEIGHT) + px(ACTIONS_MARGIN_Y)
         }
+        WindowPosition::TopCenter => {
+            // Position popup below the titlebar (same Y as TopRight)
+            main_window_bounds.origin.y + px(TITLEBAR_HEIGHT) + px(ACTIONS_MARGIN_Y)
+        }
+    };
+
+    // Override X position for TopCenter - center horizontally in the parent window
+    let window_x = match position {
+        WindowPosition::TopCenter => {
+            // Center horizontally within the parent window
+            main_window_bounds.origin.x + (main_window_bounds.size.width - window_width) / 2.0
+        }
+        _ => window_x, // Keep the right-aligned X for other positions
     };
 
     let bounds = Bounds {

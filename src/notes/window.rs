@@ -840,7 +840,7 @@ impl NotesApp {
         self.command_bar.set_actions(actions, cx);
 
         // Open the command bar (CommandBar handles window creation internally)
-        self.command_bar.open(window, cx);
+        self.command_bar.open_centered(window, cx);
 
         // CRITICAL: Focus main focus_handle so keyboard events route to us
         // The ActionsWindow is a visual-only popup - it does NOT take keyboard focus.
@@ -1753,6 +1753,15 @@ impl Render for NotesApp {
             .shadow(box_shadows)
             .text_color(cx.theme().foreground)
             .track_focus(&self.focus_handle)
+            // Close command bar when clicking anywhere on the notes window
+            .on_mouse_down(
+                gpui::MouseButton::Left,
+                cx.listener(|this, _, window, cx| {
+                    if this.command_bar.is_open() {
+                        this.close_actions_panel(window, cx);
+                    }
+                }),
+            )
             // Track window hover for showing/hiding chrome
             .on_hover(cx.listener(|this, hovered, _, cx| {
                 if this.force_hovered {
@@ -1762,35 +1771,43 @@ impl Render for NotesApp {
                 this.window_hovered = *hovered;
                 cx.notify();
             }))
-            .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
+            // CRITICAL: Use capture_key_down to intercept keys BEFORE Input component handles them
+            // This ensures arrow keys go to CommandBar navigation instead of Input cursor movement
+            .capture_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                 // Handle keyboard shortcuts
                 let key = event.keystroke.key.to_lowercase();
                 let modifiers = &event.keystroke.modifiers;
 
                 // Handle command bar navigation when it's open
                 // This routes all relevant keys to the CommandBar
+                // CRITICAL: Must stop propagation to prevent Input from consuming the keys
                 if this.command_bar.is_open() {
                     match key.as_str() {
                         "escape" | "esc" => {
                             this.close_actions_panel(window, cx);
+                            cx.stop_propagation();
                             return;
                         }
                         "up" | "arrowup" => {
                             this.command_bar.select_prev(cx);
+                            cx.stop_propagation();
                             return;
                         }
                         "down" | "arrowdown" => {
                             this.command_bar.select_next(cx);
+                            cx.stop_propagation();
                             return;
                         }
                         "enter" => {
                             if let Some(action_id) = this.command_bar.execute_selected_action(cx) {
                                 this.execute_action(&action_id, window, cx);
                             }
+                            cx.stop_propagation();
                             return;
                         }
                         "backspace" | "delete" => {
                             this.command_bar.handle_backspace(cx);
+                            cx.stop_propagation();
                             return;
                         }
                         _ => {
@@ -1803,6 +1820,7 @@ impl Render for NotesApp {
                                         || ch == '_'
                                     {
                                         this.command_bar.handle_char(ch, cx);
+                                        cx.stop_propagation();
                                         return;
                                     }
                                 }
@@ -1810,6 +1828,7 @@ impl Render for NotesApp {
                             // Cmd+K also closes the command bar
                             if modifiers.platform && key == "k" {
                                 this.close_actions_panel(window, cx);
+                                cx.stop_propagation();
                                 return;
                             }
                         }
