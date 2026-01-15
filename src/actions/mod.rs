@@ -39,6 +39,9 @@ pub use types::ScriptInfo;
 pub use builders::get_ai_command_bar_actions;
 #[allow(unused_imports)]
 pub use builders::{get_new_chat_actions, NewChatModelInfo, NewChatPresetInfo};
+// Public API for Notes window integration
+#[allow(unused_imports)]
+pub use builders::{get_notes_command_bar_actions, NotesInfo};
 #[allow(unused_imports)]
 pub use types::{
     Action, ActionCategory, ActionsDialogConfig, AnchorPosition, SearchPosition, SectionStyle,
