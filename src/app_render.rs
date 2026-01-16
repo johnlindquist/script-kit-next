@@ -63,17 +63,21 @@ impl ScriptListApp {
 
     /// Render the preview panel showing details of the selected script/scriptlet
     fn render_preview_panel(&mut self, _cx: &mut Context<Self>) -> impl IntoElement {
-        let _preview_start = std::time::Instant::now();
+        let preview_start = std::time::Instant::now();
         let filter_for_log = self.filter_text.clone();
 
-        // Log every preview panel render call
-        logging::log(
-            "PREVIEW_PERF",
-            &format!(
-                "[PREVIEW_START] filter='{}' selected_idx={}",
-                filter_for_log, self.selected_index
-            ),
-        );
+        // Only log when meaningful state changed (flag set by render_script_list)
+        // This eliminates cursor-blink log spam
+        if self.log_this_render {
+            logging::log(
+                "PREVIEW_PERF",
+                &format!(
+                    "[PREVIEW_START] filter='{}' selected_idx={}",
+                    filter_for_log, self.selected_index
+                ),
+            );
+        }
+        let _ = preview_start; // Used in PREVIEW_PANEL_DONE below
 
         // Get grouped results to map from selected_index to actual result (cached)
         // Clone to avoid borrow issues with self.selected_index access

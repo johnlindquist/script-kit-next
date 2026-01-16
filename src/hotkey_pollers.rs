@@ -198,6 +198,11 @@ impl HotkeyPoller {
                                         "NEEDS_RESET was true - clearing and resetting to script list",
                                     );
                                     view.reset_to_script_list(ctx);
+                                } else {
+                                    // FIX: Always ensure selection is at the first item when showing.
+                                    // This fixes the bug where the main menu sometimes opened with a
+                                    // random item selected (e.g., "Reset Window Positions" instead of "AI Chat").
+                                    view.ensure_selection_at_first_item(ctx);
                                 }
 
                                 // Step 5: Queue window move via Window::defer (replaces Timer::after pattern)

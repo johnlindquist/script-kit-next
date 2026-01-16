@@ -45,5 +45,6 @@ pub use model::*;
 pub use storage::*;
 #[allow(unused_imports)]
 pub use window::{
-    close_notes_window, is_notes_window_open, open_notes_window, quick_capture, NotesApp,
+    close_notes_window, is_notes_window, is_notes_window_open, open_notes_window, quick_capture,
+    NotesApp,
 };

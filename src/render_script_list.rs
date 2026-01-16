@@ -6,15 +6,6 @@ impl ScriptListApp {
         let render_list_start = std::time::Instant::now();
         let filter_for_log = self.filter_text.clone();
 
-        // Log every render_script_list call
-        logging::log(
-            "RENDER_PERF",
-            &format!(
-                "[RENDER_SCRIPT_LIST_START] filter='{}' computed_filter='{}' selected_idx={}",
-                filter_for_log, self.computed_filter_text, self.selected_index
-            ),
-        );
-
         // Get grouped or flat results based on filter state (cached) - MUST come first
         // to avoid borrow conflicts with theme access below
         // When filter is empty, use frecency-grouped results with RECENT/MAIN sections
@@ -22,16 +13,36 @@ impl ScriptListApp {
         let (grouped_items, flat_results) = self.get_grouped_results_cached();
         let get_results_elapsed = render_list_start.elapsed();
 
-        logging::log(
-            "RENDER_PERF",
-            &format!(
-                "[RENDER_GET_RESULTS] filter='{}' items={} results={} took={:.2}ms",
-                filter_for_log,
-                grouped_items.len(),
-                flat_results.len(),
-                get_results_elapsed.as_secs_f64() * 1000.0
-            ),
-        );
+        // Deduplicate render logs: only log when meaningful state changes (not cursor blink)
+        // This reduces log spam from ~2 logs/sec (cursor blink) to only on actual changes
+        let state_changed = self.filter_text != self.last_render_log_filter
+            || self.selected_index != self.last_render_log_selection
+            || grouped_items.len() != self.last_render_log_item_count;
+
+        // Set flag for render_preview_panel to check (called later in this render)
+        self.log_this_render = state_changed;
+        // Capture item count for deferred state update
+        let item_count_for_log = grouped_items.len();
+
+        if state_changed {
+            logging::log(
+                "RENDER_PERF",
+                &format!(
+                    "[RENDER_SCRIPT_LIST_START] filter='{}' computed_filter='{}' selected_idx={}",
+                    filter_for_log, self.computed_filter_text, self.selected_index
+                ),
+            );
+            logging::log(
+                "RENDER_PERF",
+                &format!(
+                    "[RENDER_GET_RESULTS] filter='{}' items={} results={} took={:.2}ms",
+                    filter_for_log,
+                    grouped_items.len(),
+                    flat_results.len(),
+                    get_results_elapsed.as_secs_f64() * 1000.0
+                ),
+            );
+        }
 
         // NOTE: Removed per-frame logging here - was causing 6 log calls per frame
         // which includes mutex locks and file I/O. Log only on cache MISS in get_grouped_results_cached.
@@ -1019,15 +1030,17 @@ impl ScriptListApp {
                         let preview_start = std::time::Instant::now();
                         let preview_panel = self.render_preview_panel(cx);
                         let preview_elapsed = preview_start.elapsed();
-                        // ALWAYS log preview panel render time for debugging
-                        logging::log(
-                            "PREVIEW_PERF",
-                            &format!(
-                                "[PREVIEW_PANEL_DONE] filter='{}' took {:.2}ms",
-                                filter_for_log,
-                                preview_elapsed.as_secs_f64() * 1000.0
-                            ),
-                        );
+                        // Log preview panel render time only when state changed (reduces cursor-blink spam)
+                        if state_changed {
+                            logging::log(
+                                "PREVIEW_PERF",
+                                &format!(
+                                    "[PREVIEW_PANEL_DONE] filter='{}' took {:.2}ms",
+                                    filter_for_log,
+                                    preview_elapsed.as_secs_f64() * 1000.0
+                                ),
+                            );
+                        }
                         div()
                             .relative() // Enable absolute positioning for overlay
                             .w_1_2() // 50% width
@@ -1095,16 +1108,22 @@ impl ScriptListApp {
 
         // Note: HUD overlay is added at the top-level render() method for all views
 
-        // Log total render_script_list time
-        let total_elapsed = render_list_start.elapsed();
-        logging::log(
-            "RENDER_PERF",
-            &format!(
-                "[RENDER_SCRIPT_LIST_END] filter='{}' total={:.2}ms",
-                filter_for_log,
-                total_elapsed.as_secs_f64() * 1000.0
-            ),
-        );
+        // Log total render_script_list time and update tracking state (only if state changed)
+        if state_changed {
+            let total_elapsed = render_list_start.elapsed();
+            logging::log(
+                "RENDER_PERF",
+                &format!(
+                    "[RENDER_SCRIPT_LIST_END] filter='{}' total={:.2}ms",
+                    filter_for_log,
+                    total_elapsed.as_secs_f64() * 1000.0
+                ),
+            );
+            // Deferred state update: update after all logging (including preview panel) is done
+            self.last_render_log_filter = self.filter_text.clone();
+            self.last_render_log_selection = self.selected_index;
+            self.last_render_log_item_count = item_count_for_log;
+        }
 
         main_div.into_any_element()
     }

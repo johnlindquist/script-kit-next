@@ -246,6 +246,21 @@ impl CommandBar {
         let actions = self.actions.clone();
         let config = self.config.dialog_config.clone();
 
+        // Log what actions we're creating the dialog with
+        logging::log(
+            "COMMAND_BAR",
+            &format!(
+                "Creating dialog with {} actions: [{}]",
+                actions.len(),
+                actions
+                    .iter()
+                    .take(5)
+                    .map(|a| a.title.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+        );
+
         let dialog = cx.new(|cx| {
             let mut d =
                 ActionsDialog::with_config(cx.focus_handle(), on_select, actions, theme, config);

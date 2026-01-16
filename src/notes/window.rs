@@ -837,6 +837,19 @@ impl NotesApp {
             is_trash_view: self.view_mode == NotesViewMode::Trash,
             auto_sizing_enabled: self.auto_sizing_enabled,
         });
+
+        // Log what actions we're setting
+        info!(
+            "Notes open_actions_panel: setting {} actions: [{}]",
+            actions.len(),
+            actions
+                .iter()
+                .take(5)
+                .map(|a| a.title.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+
         self.command_bar.set_actions(actions, cx);
 
         // Open the command bar (CommandBar handles window creation internally)
@@ -2248,6 +2261,22 @@ pub fn is_notes_window_open() -> bool {
     let window_handle = NOTES_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
     let guard = window_handle.lock().unwrap();
     guard.is_some()
+}
+
+/// Check if the given window handle matches the Notes window
+///
+/// Returns true if the window is the Notes window.
+/// Used by keystroke interceptors to avoid handling keys meant for Notes.
+pub fn is_notes_window(window: &gpui::Window) -> bool {
+    let window_handle = NOTES_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
+    if let Ok(guard) = window_handle.lock() {
+        if let Some(notes_handle) = guard.as_ref() {
+            // Convert WindowHandle<Root> to AnyWindowHandle via Into trait
+            let notes_any: gpui::AnyWindowHandle = (*notes_handle).into();
+            return window.window_handle() == notes_any;
+        }
+    }
+    false
 }
 
 /// Configure the Notes window as a floating panel (always on top).
