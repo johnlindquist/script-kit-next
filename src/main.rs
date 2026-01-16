@@ -444,6 +444,11 @@ fn show_main_window_helper(
                 "NEEDS_RESET was true - resetting to script list",
             );
             view.reset_to_script_list(ctx);
+        } else {
+            // FIX: Always ensure selection is at the first item when showing.
+            // This fixes the bug where the main menu sometimes opened with a
+            // random item selected (e.g., "Reset Window Positions" instead of "AI Chat").
+            view.ensure_selection_at_first_item(ctx);
         }
 
         // Always ensure window size matches current view using deferred resize.
@@ -1315,6 +1320,13 @@ struct ScriptListApp {
     cached_fallbacks: Vec<crate::fallbacks::FallbackItem>,
     // P0-2: Debounce hover notify calls (16ms window to reduce 50% unnecessary re-renders)
     last_hover_notify: std::time::Instant,
+    // Render log deduplication: only log when meaningful state changes (not cursor blink)
+    last_render_log_filter: String,
+    last_render_log_selection: usize,
+    last_render_log_item_count: usize,
+    /// Transient flag: true if current render has state changes worth logging
+    /// Set at start of render_script_list, read by render_preview_panel
+    log_this_render: bool,
     // Filter performance tracking: start time of filter change event
     filter_perf_start: Option<std::time::Instant>,
     // Pending path action - when set, show ActionsDialog for this path

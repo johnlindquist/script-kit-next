@@ -127,11 +127,18 @@ impl Render for ConfirmDialog {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         // Get theme colors
         let colors = &self.theme.colors;
-        let opacity = self.theme.get_opacity();
 
         // Background with vibrancy support
+        // When vibrancy is enabled, we need a darker tint (~50%) to make the dialog stand out
+        // When vibrancy is disabled, use near-opaque (~95%) for solid appearance
         let use_vibrancy = self.theme.is_vibrancy_enabled();
-        let dialog_alpha = (opacity.dialog * 255.0) as u8;
+        let dialog_alpha = if use_vibrancy {
+            // Dialogs need higher opacity than main window (0.37) to stand out
+            (0.50 * 255.0) as u8
+        } else {
+            // Near-opaque when vibrancy disabled
+            (0.95 * 255.0) as u8
+        };
         let main_bg = rgba(hex_with_alpha(colors.background.main, dialog_alpha));
 
         // Text colors
@@ -200,7 +207,7 @@ impl Render for ConfirmDialog {
             .flex_col()
             .p(px(CONFIRM_PADDING))
             .gap(px(CONFIRM_PADDING))
-            .when(!use_vibrancy, |d| d.bg(main_bg))
+            .bg(main_bg) // Always apply background with vibrancy-aware opacity
             .rounded(px(DIALOG_RADIUS))
             .border_1()
             .border_color(border_color)

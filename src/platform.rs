@@ -1362,8 +1362,11 @@ pub unsafe fn configure_actions_popup_window(window: id) {
     // Match main window level (NSFloatingWindowLevel = 3)
     let _: () = msg_send![window, setLevel: NS_FLOATING_WINDOW_LEVEL];
 
-    // Hide when app deactivates (loses focus to another app)
-    let _: () = msg_send![window, setHidesOnDeactivate: true];
+    // NOTE: We intentionally do NOT set setHidesOnDeactivate:true here.
+    // The main window is a non-activating panel (WindowKind::PopUp), so the app
+    // is never "active" in the macOS sense. If we set hidesOnDeactivate, the
+    // actions popup would immediately hide since the app isn't active.
+    // Instead, we manage visibility ourselves via close_actions_window().
 
     // Enable shadow - Raycast/Spotlight use shadow for depth perception
     let _: () = msg_send![window, setHasShadow: true];

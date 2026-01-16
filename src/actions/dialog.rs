@@ -950,21 +950,27 @@ impl ActionsDialog {
     }
 
     /// Move selection up, skipping section headers
+    ///
+    /// When moving up and landing on a section header, we must search UPWARD
+    /// (not downward) to find the previous selectable item. This ensures
+    /// navigation past section headers works correctly.
     pub fn move_up(&mut self, cx: &mut Context<Self>) {
-        if self.selected_index > 0 {
-            let new_index = self.selected_index - 1;
-            // Skip section headers
-            if let Some(valid_idx) = coerce_action_selection(&self.grouped_items, new_index) {
-                // Only move if we found a valid item before current position
-                if valid_idx < self.selected_index {
-                    self.selected_index = valid_idx;
-                    self.list_state.scroll_to_reveal_item(self.selected_index);
-                    logging::log_debug(
-                        "ACTIONS_SCROLL",
-                        &format!("Up: selected_index={}", self.selected_index),
-                    );
-                    cx.notify();
-                }
+        if self.selected_index == 0 {
+            return;
+        }
+
+        // Search backwards from current position to find the previous selectable item
+        // This correctly skips section headers when moving up
+        for i in (0..self.selected_index).rev() {
+            if matches!(self.grouped_items.get(i), Some(GroupedActionItem::Item(_))) {
+                self.selected_index = i;
+                self.list_state.scroll_to_reveal_item(self.selected_index);
+                logging::log_debug(
+                    "ACTIONS_SCROLL",
+                    &format!("Up: selected_index={}", self.selected_index),
+                );
+                cx.notify();
+                return;
             }
         }
     }
@@ -1102,10 +1108,17 @@ impl ActionsDialog {
         &self,
         colors: &crate::designs::DesignColors,
     ) -> (gpui::Rgba, gpui::Rgba, gpui::Rgba) {
-        // Use theme opacity for dialog background to support vibrancy
-        // The theme's opacity.dialog controls how transparent the popup is
-        let opacity = self.theme.get_opacity();
-        let dialog_alpha = (opacity.dialog * 255.0) as u8;
+        // Vibrancy-aware dialog background:
+        // - When vibrancy enabled: ~50% opacity to show blur but remain visible
+        // - When vibrancy disabled: ~95% opacity for near-solid appearance
+        let use_vibrancy = self.theme.is_vibrancy_enabled();
+        let dialog_alpha = if use_vibrancy {
+            // Dialogs need higher opacity than main window (0.37) to stand out
+            (0.50 * 255.0) as u8
+        } else {
+            // Near-opaque when vibrancy disabled
+            (0.95 * 255.0) as u8
+        };
 
         if self.design_variant == DesignVariant::Default {
             (
@@ -1671,10 +1684,8 @@ impl Render for ActionsDialog {
         // Fixed width, dynamic height based on content, rounded corners, shadow
         // NOTE: Using visual.radius_lg from design tokens for consistency with child item rounding
         //
-        // VIBRANCY: When vibrancy is enabled, do NOT apply a background here.
-        // The window's native vibrancy blur provides the frosted glass effect.
-        // Only apply a background when vibrancy is disabled for a solid fallback.
-        let use_vibrancy = self.theme.is_vibrancy_enabled();
+        // VIBRANCY: Background is handled in get_container_colors() with vibrancy-aware opacity
+        // (~50% when vibrancy enabled, ~95% when disabled)
 
         // Build footer with keyboard hints (if enabled)
         let footer_height = if self.config.show_footer { 32.0 } else { 0.0 };
@@ -1846,7 +1857,7 @@ impl Render for ActionsDialog {
             .flex_col()
             .w(px(POPUP_WIDTH))
             .h(px(total_height)) // Use calculated height including footer
-            .when(!use_vibrancy, |d| d.bg(main_bg)) // Only apply bg when vibrancy disabled
+            .bg(main_bg) // Always apply background with vibrancy-aware opacity
             .rounded(px(visual.radius_lg))
             .shadow(Self::create_popup_shadow())
             .border_1()

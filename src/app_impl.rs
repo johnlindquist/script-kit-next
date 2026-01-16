@@ -343,6 +343,11 @@ impl ScriptListApp {
             cached_fallbacks: Vec::new(),
             // P0-2: Initialize hover debounce timer
             last_hover_notify: std::time::Instant::now(),
+            // Render log deduplication: track last logged state to skip cursor-blink spam
+            last_render_log_filter: String::new(),
+            last_render_log_selection: usize::MAX, // Use MAX to ensure first render logs
+            last_render_log_item_count: usize::MAX,
+            log_this_render: true, // Default to true for first render
             // Filter performance tracking - None until first filter change
             filter_perf_start: None,
             // Pending path action - starts as None (Arc<Mutex<>> for callback access)
@@ -885,14 +890,22 @@ impl ScriptListApp {
         });
         app.gpui_input_subscriptions.push(arrow_interceptor);
 
-        // Add interceptor for actions popup in FileSearchView
+        // Add interceptor for actions popup in FileSearchView and ScriptList
         // This handles Cmd+K (toggle), Escape (close), Enter (submit), and typing
         let app_entity_for_actions = cx.entity().downgrade();
         let actions_interceptor = cx.intercept_keystrokes({
             let app_entity = app_entity_for_actions;
             move |event, window, cx| {
+                // CRITICAL: Skip processing if this keystroke is from Notes or AI window
+                // intercept_keystrokes is GLOBAL and fires for ALL windows in the app
+                // We only want to handle keystrokes for the main window
+                if crate::notes::is_notes_window(window) || crate::ai::is_ai_window(window) {
+                    return; // Let the secondary window handle its own keystrokes
+                }
+
                 let key = event.keystroke.key.to_lowercase();
                 let has_cmd = event.keystroke.modifiers.platform;
+                let has_shift = event.keystroke.modifiers.shift;
                 let key_char = event.keystroke.key_char.as_deref();
 
                 if let Some(app) = app_entity.upgrade() {
@@ -905,55 +918,156 @@ impl ScriptListApp {
                             return;
                         }
 
-                        // Only handle when in FileSearchView with actions popup open
-                        if !matches!(this.current_view, AppView::FileSearchView { .. }) {
-                            return;
-                        }
-
-                        // Handle Cmd+K to toggle actions popup
-                        if has_cmd && key == "k" {
-                            if let AppView::FileSearchView {
-                                selected_index,
-                                query,
-                            } = &mut this.current_view
-                            {
-                                // Get the filter pattern for directory path parsing
-                                let filter_pattern = if let Some(parsed) =
-                                    crate::file_search::parse_directory_path(query)
-                                {
-                                    parsed.filter
-                                } else if !query.is_empty() {
-                                    Some(query.clone())
-                                } else {
-                                    None
-                                };
-
-                                let filtered_results: Vec<_> =
-                                    if let Some(ref pattern) = filter_pattern {
-                                        crate::file_search::filter_results_nucleo_simple(
-                                            &this.cached_file_results,
-                                            pattern,
-                                        )
+                        // Handle Cmd+K to toggle actions popup (works in ScriptList, FileSearchView, ArgPrompt)
+                        // This MUST be intercepted here because the Input component has focus and
+                        // normal on_key_down handlers won't receive the event
+                        if has_cmd && key == "k" && !has_shift {
+                            match &mut this.current_view {
+                                AppView::ScriptList => {
+                                    // Toggle actions for the main script list
+                                    logging::log("KEY", "Interceptor: Cmd+K -> toggle_actions (ScriptList)");
+                                    this.toggle_actions(cx, window);
+                                    cx.stop_propagation();
+                                    return;
+                                }
+                                AppView::FileSearchView {
+                                    selected_index,
+                                    query,
+                                } => {
+                                    // Get the filter pattern for directory path parsing
+                                    let filter_pattern = if let Some(parsed) =
+                                        crate::file_search::parse_directory_path(query)
+                                    {
+                                        parsed.filter
+                                    } else if !query.is_empty() {
+                                        Some(query.clone())
                                     } else {
-                                        this.cached_file_results.iter().enumerate().collect()
+                                        None
                                     };
 
-                                // Defensive bounds check: clamp selected_index if out of bounds
-                                let filtered_len = filtered_results.len();
-                                if filtered_len > 0 && *selected_index >= filtered_len {
-                                    *selected_index = filtered_len - 1;
-                                }
+                                    let filtered_results: Vec<_> =
+                                        if let Some(ref pattern) = filter_pattern {
+                                            crate::file_search::filter_results_nucleo_simple(
+                                                &this.cached_file_results,
+                                                pattern,
+                                            )
+                                        } else {
+                                            this.cached_file_results.iter().enumerate().collect()
+                                        };
 
-                                if let Some((_, file)) = filtered_results.get(*selected_index) {
-                                    let file_clone = (*file).clone();
-                                    this.toggle_file_search_actions(&file_clone, window, cx);
+                                    // Defensive bounds check: clamp selected_index if out of bounds
+                                    let filtered_len = filtered_results.len();
+                                    if filtered_len > 0 && *selected_index >= filtered_len {
+                                        *selected_index = filtered_len - 1;
+                                    }
+
+                                    if let Some((_, file)) = filtered_results.get(*selected_index) {
+                                        let file_clone = (*file).clone();
+                                        this.toggle_file_search_actions(&file_clone, window, cx);
+                                    }
+                                    cx.stop_propagation();
+                                    return;
+                                }
+                                AppView::ArgPrompt { .. } => {
+                                    // Toggle actions for arg prompts (SDK setActions)
+                                    logging::log("KEY", "Interceptor: Cmd+K -> toggle_arg_actions (ArgPrompt)");
+                                    this.toggle_arg_actions(cx, window);
+                                    cx.stop_propagation();
+                                    return;
+                                }
+                                AppView::ChatPrompt { .. } => {
+                                    // Toggle actions for chat prompts
+                                    logging::log("KEY", "Interceptor: Cmd+K -> toggle_chat_actions (ChatPrompt)");
+                                    this.toggle_chat_actions(cx, window);
+                                    cx.stop_propagation();
+                                    return;
+                                }
+                                _ => {
+                                    // Other views don't support Cmd+K actions
                                 }
                             }
+                        }
+
+                        // Handle Cmd+Shift+K for add_shortcut in ScriptList
+                        if has_cmd && key == "k" && has_shift
+                            && matches!(this.current_view, AppView::ScriptList)
+                        {
+                            logging::log("KEY", "Interceptor: Cmd+Shift+K -> add_shortcut (ScriptList)");
+                            this.handle_action("add_shortcut".to_string(), cx);
                             cx.stop_propagation();
                             return;
                         }
 
-                        // Only handle remaining keys if actions popup is open
+                        // Only handle remaining keys if in FileSearchView with actions popup open
+                        if !matches!(this.current_view, AppView::FileSearchView { .. }) {
+                            // For ScriptList with actions open, handle Escape/Enter/typing
+                            if matches!(this.current_view, AppView::ScriptList) && this.show_actions_popup {
+                                // Handle Escape to close actions popup
+                                if key == "escape" {
+                                    this.close_actions_popup(ActionsDialogHost::MainList, window, cx);
+                                    cx.stop_propagation();
+                                    return;
+                                }
+
+                                // Handle Enter to submit selected action
+                                if key == "enter" {
+                                    if let Some(ref dialog) = this.actions_dialog {
+                                        let action_id = dialog.read(cx).get_selected_action_id();
+                                        let should_close = dialog.read(cx).selected_action_should_close();
+
+                                        if let Some(action_id) = action_id {
+                                            crate::logging::log(
+                                                "ACTIONS",
+                                                &format!(
+                                                    "ScriptList actions executing action: {} (close={})",
+                                                    action_id, should_close
+                                                ),
+                                            );
+
+                                            if should_close {
+                                                this.close_actions_popup(
+                                                    ActionsDialogHost::MainList,
+                                                    window,
+                                                    cx,
+                                                );
+                                            }
+
+                                            this.handle_action(action_id, cx);
+                                        }
+                                    }
+                                    cx.stop_propagation();
+                                    return;
+                                }
+
+                                // Handle Backspace for actions search
+                                if key == "backspace" {
+                                    if let Some(ref dialog) = this.actions_dialog {
+                                        dialog.update(cx, |d, cx| d.handle_backspace(cx));
+                                        crate::actions::notify_actions_window(cx);
+                                        crate::actions::resize_actions_window(cx, dialog);
+                                    }
+                                    cx.stop_propagation();
+                                    return;
+                                }
+
+                                // Handle printable character input for actions search
+                                if let Some(chars) = key_char {
+                                    if let Some(ch) = chars.chars().next() {
+                                        if ch.is_ascii_graphic() || ch == ' ' {
+                                            if let Some(ref dialog) = this.actions_dialog {
+                                                dialog.update(cx, |d, cx| d.handle_char(ch, cx));
+                                                crate::actions::notify_actions_window(cx);
+                                                crate::actions::resize_actions_window(cx, dialog);
+                                            }
+                                            cx.stop_propagation();
+                                        }
+                                    }
+                                }
+                            }
+                            return;
+                        }
+
+                        // Only handle remaining keys if actions popup is open (FileSearchView)
                         if !this.show_actions_popup {
                             return;
                         }
@@ -2847,7 +2961,15 @@ impl ScriptListApp {
     }
 
     fn toggle_actions(&mut self, cx: &mut Context<Self>, window: &mut Window) {
-        logging::log("KEY", "Toggling actions popup");
+        let popup_state = self.show_actions_popup;
+        let window_open = is_actions_window_open();
+        logging::log(
+            "KEY",
+            &format!(
+                "Toggling actions popup (show_actions_popup={}, is_actions_window_open={})",
+                popup_state, window_open
+            ),
+        );
         if self.show_actions_popup || is_actions_window_open() {
             // Close - return focus to main filter
             self.show_actions_popup = false;
@@ -5398,6 +5520,46 @@ export default {
         logging::log(
             "UI",
             "State reset complete - view is now ScriptList (filter, selection, scroll cleared)",
+        );
+        cx.notify();
+    }
+
+    /// Ensure the selection is at the first selectable item.
+    ///
+    /// This is a lightweight method that only resets the selection position,
+    /// without clearing the filter or other state. Call this when showing
+    /// the main menu to ensure the user always starts at the top.
+    ///
+    /// FIX: Resolves bug where main menu sometimes opened with a random item
+    /// selected instead of the first item (e.g., "Reset Window Positions"
+    /// instead of "AI Chat").
+    pub fn ensure_selection_at_first_item(&mut self, cx: &mut Context<Self>) {
+        // Only reset selection if we're in the script list view
+        if !matches!(self.current_view, AppView::ScriptList) {
+            return;
+        }
+
+        // Invalidate cache to ensure fresh data
+        self.invalidate_grouped_cache();
+        self.sync_list_state();
+
+        // Reset selection to first item
+        self.selected_index = 0;
+        self.validate_selection_bounds(cx);
+
+        // Scroll to top
+        self.main_list_state.scroll_to(ListOffset {
+            item_ix: 0,
+            offset_in_item: px(0.),
+        });
+        self.last_scrolled_index = Some(self.selected_index);
+
+        logging::log(
+            "UI",
+            &format!(
+                "Selection reset to first item: selected_index={}",
+                self.selected_index
+            ),
         );
         cx.notify();
     }

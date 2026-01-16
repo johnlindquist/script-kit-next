@@ -5277,6 +5277,22 @@ pub fn is_ai_window_open() -> bool {
     guard.is_some()
 }
 
+/// Check if the given window handle matches the AI window
+///
+/// Returns true if the window is the AI window.
+/// Used by keystroke interceptors to avoid handling keys meant for AI.
+pub fn is_ai_window(window: &gpui::Window) -> bool {
+    let window_handle = AI_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
+    if let Ok(guard) = window_handle.lock() {
+        if let Some(ai_handle) = guard.as_ref() {
+            // Convert WindowHandle<Root> to AnyWindowHandle via Into trait
+            let ai_any: gpui::AnyWindowHandle = (*ai_handle).into();
+            return window.window_handle() == ai_any;
+        }
+    }
+    false
+}
+
 /// Set the search filter text in the AI window.
 /// Used for testing the search functionality via stdin commands.
 pub fn set_ai_search(cx: &mut App, query: &str) {
