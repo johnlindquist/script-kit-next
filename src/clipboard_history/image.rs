@@ -169,9 +169,14 @@ fn decode_blob_to_render_image(content: &str) -> Option<Arc<RenderImage>> {
     let png_bytes = load_blob(content)?;
 
     let img = image::load_from_memory_with_format(&png_bytes, image::ImageFormat::Png).ok()?;
-    let rgba = img.to_rgba8();
+    let mut rgba = img.to_rgba8();
     let img_width = rgba.width();
     let img_height = rgba.height();
+
+    // Convert RGBA to BGRA for Metal/GPUI (swap R and B channels)
+    for pixel in rgba.chunks_exact_mut(4) {
+        pixel.swap(0, 2);
+    }
 
     let frame = image::Frame::new(rgba);
     // Use smallvec! macro to avoid cloning the frame buffer
@@ -193,9 +198,14 @@ fn decode_png_to_render_image(content: &str) -> Option<Arc<RenderImage>> {
     let png_bytes = BASE64.decode(base64_data).ok()?;
 
     let img = image::load_from_memory_with_format(&png_bytes, image::ImageFormat::Png).ok()?;
-    let rgba = img.to_rgba8();
+    let mut rgba = img.to_rgba8();
     let img_width = rgba.width();
     let img_height = rgba.height();
+
+    // Convert RGBA to BGRA for Metal/GPUI (swap R and B channels)
+    for pixel in rgba.chunks_exact_mut(4) {
+        pixel.swap(0, 2);
+    }
 
     let frame = image::Frame::new(rgba);
     // Use smallvec! macro to avoid cloning the frame buffer
@@ -221,7 +231,7 @@ fn decode_rgba_to_render_image(content: &str) -> Option<Arc<RenderImage>> {
 
     let width: u32 = parts[1].parse().ok()?;
     let height: u32 = parts[2].parse().ok()?;
-    let rgba_bytes = BASE64.decode(parts[3]).ok()?;
+    let mut rgba_bytes = BASE64.decode(parts[3]).ok()?;
 
     let expected_bytes = (width as usize) * (height as usize) * 4;
     if rgba_bytes.len() != expected_bytes {
@@ -231,6 +241,11 @@ fn decode_rgba_to_render_image(content: &str) -> Option<Arc<RenderImage>> {
             rgba_bytes.len()
         );
         return None;
+    }
+
+    // Convert RGBA to BGRA for Metal/GPUI (swap R and B channels)
+    for pixel in rgba_bytes.chunks_exact_mut(4) {
+        pixel.swap(0, 2);
     }
 
     let rgba_image = image::RgbaImage::from_raw(width, height, rgba_bytes)?;
