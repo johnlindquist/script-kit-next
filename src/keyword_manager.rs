@@ -19,6 +19,9 @@
 //!    d. Resumes keyboard monitor
 //!
 
+n// This entire module is macOS-only
+#![cfg(target_os = "macos")]
+
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};

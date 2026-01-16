@@ -35,6 +35,7 @@ pub mod platform;
 pub mod prompts;
 pub mod protocol;
 pub mod scripts;
+#[cfg(target_os = "macos")]
 pub mod selected_text;
 pub mod shortcuts;
 pub mod syntax;
@@ -59,10 +60,15 @@ pub mod windows;
 // Phase 1 system API modules
 pub mod clipboard_history;
 pub mod file_search;
+#[cfg(target_os = "macos")]
+pub mod window_control;
+#[cfg(not(target_os = "macos"))]
+#[path = "window_control_stub.rs"]
 pub mod window_control;
 
 // Enhanced window control - backends + capabilities architecture
 // Provides WindowBounds (AX coords), capability detection, DisplayInfo, SpaceManager
+#[cfg(target_os = "macos")]
 pub mod window_control_enhanced;
 
 // System actions - macOS AppleScript-based system commands
@@ -73,6 +79,7 @@ pub mod system_actions;
 pub mod script_creation;
 
 // Permissions wizard - Check and request macOS permissions
+#[cfg(target_os = "macos")]
 pub mod permissions_wizard;
 
 // Menu bar reader - macOS Accessibility API for reading app menus
@@ -141,6 +148,7 @@ pub mod form_parser;
 pub mod template_variables;
 
 // Text injection for text expansion/snippet systems
+#[cfg(target_os = "macos")]
 pub mod text_injector;
 
 // Keyword trigger matching for text expansion
@@ -225,6 +233,7 @@ pub mod secrets;
 
 // macOS launch-at-login via SMAppService
 // Uses SMAppService on macOS 13+ for modern login item management
+#[cfg(target_os = "macos")]
 pub mod login_item;
 
 // UI transitions/animations (self-contained module, no external crate dependency)

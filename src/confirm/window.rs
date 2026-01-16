@@ -6,7 +6,6 @@
 //! - Centered over the main window
 //! - Auto-closes when choice is made
 
-use crate::platform;
 use crate::theme;
 use gpui::{
     div, prelude::*, px, App, Bounds, Context, DisplayId, Entity, FocusHandle, Focusable, Pixels,

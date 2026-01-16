@@ -483,7 +483,7 @@ fn find_conflicts_detects_os_reserved() {
         ShortcutCategory::System,
     ));
 
-    let conflicts = registry.find_conflicts();
+    let _conflicts = registry.find_conflicts();
 
     // Should have unreachable conflict on macOS
     #[cfg(target_os = "macos")]
@@ -602,7 +602,7 @@ fn would_conflict_detects_os_reserved() {
     let registry = ShortcutRegistry::new();
 
     let reserved_shortcut = make_shortcut("tab", true, false); // Cmd+Tab
-    let conflicts = registry.would_conflict(
+    let _conflicts = registry.would_conflict(
         &reserved_shortcut,
         ShortcutContext::Global,
         BindingSource::Builtin,

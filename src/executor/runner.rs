@@ -277,8 +277,10 @@ impl ProcessHandle {
     /// This gives scripts a chance to clean up before being forcefully killed.
     pub fn kill(&mut self) {
         /// Grace period after SIGTERM before escalating to SIGKILL (milliseconds)
+        #[allow(dead_code)]
         const TERM_GRACE_MS: u64 = 250;
         /// How often to check if process has exited during grace period
+        #[allow(dead_code)]
         const POLL_INTERVAL_MS: u64 = 50;
 
         if self.killed {

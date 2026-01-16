@@ -253,6 +253,7 @@ impl ScriptListApp {
                                     // Simulate Cmd+V paste after a brief delay to let focus return
                                     std::thread::spawn(|| {
                                         std::thread::sleep(std::time::Duration::from_millis(100));
+                                        #[cfg(target_os = "macos")]
                                         if let Err(e) = selected_text::simulate_paste_with_cg() {
                                             logging::log(
                                                 "ERROR",
@@ -260,6 +261,14 @@ impl ScriptListApp {
                                             );
                                         } else {
                                             logging::log("EXEC", "Simulated Cmd+V paste");
+                                        }
+
+                                        #[cfg(not(target_os = "macos"))]
+                                        {
+                                            logging::log(
+                                                "EXEC",
+                                                "Paste simulation not available on Windows",
+                                            );
                                         }
                                     });
                                 }
@@ -2222,7 +2231,6 @@ impl ScriptListApp {
                                     let file_clone = (*file).clone();
                                     this.toggle_file_search_actions(&file_clone, window, cx);
                                 }
-                                return;
                             }
                             // Handle Cmd+Y (Quick Look) - macOS only
                             #[cfg(target_os = "macos")]
