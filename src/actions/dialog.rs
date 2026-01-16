@@ -511,19 +511,24 @@ impl ActionsDialog {
             build_grouped_items_static(&actions, &filtered_actions, config.section_style);
         let list_state = ListState::new(grouped_items.len(), ListAlignment::Top, px(100.));
 
+        // Coerce initial selection to skip section headers
+        let initial_selection = coerce_action_selection(&grouped_items, 0).unwrap_or(0);
+
         logging::log(
             "ACTIONS",
             &format!(
-                "ActionsDialog created with config: {} actions, search={:?}",
+                "ActionsDialog created with config: {} actions, search={:?}, section_style={:?}, initial_selection={}",
                 actions.len(),
-                config.search_position
+                config.search_position,
+                config.section_style,
+                initial_selection
             ),
         );
 
         ActionsDialog {
             actions,
             filtered_actions,
-            selected_index: 0,
+            selected_index: initial_selection,
             search_text: String::new(),
             focus_handle,
             on_select,
