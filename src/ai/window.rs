@@ -3831,13 +3831,16 @@ impl Render for AiApp {
                     crate::logging::log("AI", &format!("Search filter set to: {}", query));
                 }
                 AiCommand::SetInput { text, submit } => {
+                    // Sanitize newlines - single-line Input can't handle them
+                    // (GPUI's shape_line panics on newlines)
+                    let sanitized_text = text.replace('\n', " ");
                     self.input_state.update(cx, |state, cx| {
-                        state.set_value(text.clone(), window, cx);
+                        state.set_value(sanitized_text.clone(), window, cx);
                         // Ensure cursor is at end of text with proper focus for editing
                         let text_len = state.text().len();
                         state.set_selection(text_len, text_len, window, cx);
                     });
-                    crate::logging::log("AI", &format!("Input set to: {}", text));
+                    crate::logging::log("AI", &format!("Input set to: {}", sanitized_text));
                     if submit {
                         self.submit_message(window, cx);
                         crate::logging::log("AI", "Message submitted - streaming started");
@@ -3848,8 +3851,11 @@ impl Render for AiApp {
                     image_base64,
                     submit,
                 } => {
+                    // Sanitize newlines - single-line Input can't handle them
+                    // (GPUI's shape_line panics on newlines)
+                    let sanitized_text = text.replace('\n', " ");
                     self.input_state.update(cx, |state, cx| {
-                        state.set_value(text.clone(), window, cx);
+                        state.set_value(sanitized_text.clone(), window, cx);
                         // Ensure cursor is at end of text with proper focus for editing
                         let text_len = state.text().len();
                         state.set_selection(text_len, text_len, window, cx);
