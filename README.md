@@ -27,7 +27,7 @@ This rewrite takes a **focused approach** to the SDK:
 > **Important**: This is NOT a drop-in replacement for previous Script Kit versions.
 
 What's preserved:
-- Core prompt APIs (`arg`, `div`, `editor`, `fields`, `form`, `drop`, `hotkey`, `path`, `term`, `chat`, `mic`, `webcam`, `screenshot`)
+- Core prompt APIs (`arg`, `div`, `editor`, `fields`, `form`, `drop`, `hotkey`, `path`, `term`, `chat`, `mic`, `webcam`)
 - Choice/option structure and props
 - Basic script metadata format
 
@@ -141,7 +141,7 @@ const shortcut = await hotkey("Press a shortcut");
 await term("htop");
 
 // Drop zone for files
-const files = await drop("Drop files here");
+const files = await drop();
 ```
 
 ### Using Bun Packages
@@ -156,14 +156,13 @@ bun add zod lodash-es date-fns
 Then use them in your scripts:
 
 ```typescript
+import { z } from "zod";
+import { groupBy } from "lodash-es";
+
 metadata = {
   name: "Process Data",
   description: "Using external packages"
 }
-
-import { z } from "zod";
-import { groupBy } from "lodash-es";
-import { format } from "date-fns";
 
 const data = await arg("Enter JSON data");
 const parsed = z.object({ items: z.array(z.string()) }).parse(JSON.parse(data));
@@ -190,7 +189,7 @@ metadata = {
 // Your code here...
 ```
 
-> **Note:** The global `metadata` format is the recommended approach. It provides TypeScript type checking, better IDE support, and access to more fields. Comment-based metadata (`// Name:`, `// Description:`) still works for backwards compatibility.
+> **Note:** The global `metadata` variable is typed as `ScriptMetadata`, providing TypeScript type checking and IDE support. Comment-based metadata (`// Name:`, `// Description:`) still works for backwards compatibility.
 
 ## Configuration
 
@@ -213,7 +212,8 @@ export default {
   // Built-in features
   builtIns: {
     clipboardHistory: true,
-    appLauncher: true
+    appLauncher: true,
+    windowSwitcher: true
   },
   
   // Custom paths
@@ -249,16 +249,16 @@ Customize the look and feel:
 ```json
 {
   "colors": {
-    "background": { "main": 1973790 },
-    "text": { "primary": 15066597 },
-    "accent": { "selected": 3447003 }
+    "background": { "main": "#1E1E1E" },
+    "text": { "primary": "#FFFFFF" },
+    "accent": { "selected": "#FBBF24" }
   },
-  "opacity": { "background": 0.95 },
-  "vibrancy": { "enabled": true, "style": "popover" }
+  "opacity": { "main": 0.3, "selected": 0.12 },
+  "vibrancy": { "enabled": true, "material": "popover" }
 }
 ```
 
-See `theme.example.json` for all available options.
+See `kit-init/theme.example.json` for all available options.
 
 ## Development
 
@@ -322,8 +322,9 @@ cargo bundle --release
 
 - **Clipboard History** - Access your clipboard history (enable in config)
 - **App Launcher** - Quick launch applications
+- **Window Switcher** - Switch between open windows (enable in config)
 - **Notes Window** - Floating notes with Markdown support (`Cmd+Shift+N`)
-- **AI Chat** - BYOK chat interface (`Cmd+Shift+Space`, supports OpenAI, Anthropic, Vercel AI Gateway)
+- **AI Chat** - BYOK chat interface (`Cmd+Shift+Space`, supports OpenAI, Anthropic, Google, Groq, OpenRouter, Vercel AI Gateway)
 - **System Tray** - Menu bar icon with quick actions
 - **Global Hotkeys** - Trigger scripts from anywhere
 
@@ -337,7 +338,7 @@ cargo bundle --release
 | `fields(definitions)` | Form with multiple inputs |
 | `form(html)` | Custom HTML form |
 | `path(options?)` | File/folder picker |
-| `drop(placeholder?)` | Drag and drop zone |
+| `drop()` | Drag and drop zone |
 | `hotkey(placeholder?)` | Capture keyboard shortcut |
 | `term(command?)` | Interactive terminal |
 | `chat(options?)` | Chat interface |
