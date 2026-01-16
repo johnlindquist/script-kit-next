@@ -397,6 +397,7 @@ pub fn format_relative_time(unix_timestamp: u64) -> String {
         format!("{} year{} ago", years, if years == 1 { "" } else { "s" })
     }
 }
+
 /// Filter and sort FileResults using Nucleo fuzzy matching
 ///
 /// This function filters cached file results by fuzzy-matching the filter pattern

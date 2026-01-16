@@ -98,6 +98,7 @@ impl ClipboardChangeDetector {
 
     /// Get the last known change count (for debugging).
     #[cfg(test)]
+    #[allow(dead_code)]
     pub fn last_count(&self) -> Option<i64> {
         self.last_change_count
     }
@@ -132,7 +133,7 @@ mod tests {
 
     #[test]
     fn test_change_detector_consecutive_calls_without_change() {
-        let mut detector = ClipboardChangeDetector::new();
+        let _detector = ClipboardChangeDetector::new();
 
         #[cfg(target_os = "macos")]
         {
@@ -153,7 +154,7 @@ mod tests {
 
     #[test]
     fn test_reset_causes_next_check_to_return_changed() {
-        let mut detector = ClipboardChangeDetector::new();
+        let _detector = ClipboardChangeDetector::new();
 
         #[cfg(target_os = "macos")]
         {

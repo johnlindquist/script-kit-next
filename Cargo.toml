@@ -116,7 +116,6 @@ gpui-component = { path = "vendor/gpui-component/crates/ui", package = "gpui-com
 # Tree-sitter markdown grammar for Notes editor highlighting
 tree-sitter-md = "0.5.2"
 
-
 # Cron scheduling support
 croner = "3.0"                 # Parse and validate cron expressions
 english-to-cron = "0.1"        # Convert natural language schedules to cron

@@ -16,11 +16,19 @@ use std::sync::Arc;
 use tracing::instrument;
 
 use crate::app_launcher::AppInfo;
-use crate::builtins::{menu_bar_items_to_entries, BuiltInEntry};
+#[cfg(target_os = "macos")]
+use crate::builtins::menu_bar_items_to_entries;
+use crate::builtins::BuiltInEntry;
 use crate::config::SuggestedConfig;
 use crate::frecency::FrecencyStore;
 use crate::list_item::GroupedListItem;
+#[cfg(target_os = "macos")]
 use crate::menu_bar::MenuBarItem;
+
+// Stub type for non-macOS platforms
+#[cfg(not(target_os = "macos"))]
+#[derive(Debug, Clone)]
+pub struct MenuBarItem;
 
 use super::search::fuzzy_search_unified_all;
 use super::types::{Script, Scriptlet, SearchResult};
@@ -62,11 +70,13 @@ pub fn get_grouped_results(
     frecency_store: &FrecencyStore,
     filter_text: &str,
     suggested_config: &SuggestedConfig,
-    menu_bar_items: &[MenuBarItem],
-    menu_bar_bundle_id: Option<&str>,
+    _menu_bar_items: &[MenuBarItem],
+    _menu_bar_bundle_id: Option<&str>,
 ) -> (Vec<GroupedListItem>, Vec<SearchResult>) {
     // When filter is non-empty and we have menu bar items, include them in search.
+    #[cfg(target_os = "macos")]
     let all_builtins: Vec<BuiltInEntry>;
+    #[cfg(target_os = "macos")]
     let builtins_to_use: &[BuiltInEntry] = if let Some(bundle_id) =
         menu_bar_bundle_id.filter(|_| !filter_text.is_empty() && !menu_bar_items.is_empty())
     {
@@ -77,6 +87,9 @@ pub fn get_grouped_results(
     } else {
         builtins
     };
+
+    #[cfg(not(target_os = "macos"))]
+    let builtins_to_use: &[BuiltInEntry] = builtins;
 
     let results = fuzzy_search_unified_all(scripts, scriptlets, builtins_to_use, apps, filter_text);
 
