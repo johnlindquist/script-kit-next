@@ -113,6 +113,10 @@ pub fn init_ai_db() -> Result<()> {
             content_rowid='rowid'
         );
 
+        -- Recreate triggers atomically to avoid race conditions in concurrent test processes
+        -- Using IMMEDIATE transaction to prevent concurrent DROP+CREATE conflicts
+        BEGIN IMMEDIATE;
+
         -- Drop old triggers first (IF NOT EXISTS won't update existing triggers)
         -- This is needed to migrate from AFTER UPDATE to AFTER UPDATE OF column
         DROP TRIGGER IF EXISTS chats_ai;
@@ -161,6 +165,8 @@ pub fn init_ai_db() -> Result<()> {
             INSERT INTO messages_fts(rowid, content)
             VALUES (NEW.rowid, NEW.content);
         END;
+
+        COMMIT;
         "#,
     )
     .context("Failed to create AI tables")?;
