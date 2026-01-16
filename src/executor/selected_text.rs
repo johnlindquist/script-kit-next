@@ -5,7 +5,7 @@
 
 use crate::logging;
 use crate::protocol::Message;
-use tracing::{debug, info, instrument, warn};
+use tracing::{debug, instrument, warn};
 
 // Conditionally import selected_text for macOS only
 #[cfg(target_os = "macos")]

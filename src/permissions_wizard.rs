@@ -40,6 +40,9 @@
 //! The structures are designed to be UI-ready, containing all information
 //! needed to render a permissions wizard dialog.
 
+// This entire module is macOS-only
+#![cfg(target_os = "macos")]
+
 use macos_accessibility_client::accessibility;
 use tracing::{debug, info, instrument};
 

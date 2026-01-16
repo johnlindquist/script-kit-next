@@ -14,12 +14,10 @@ use cocoa::foundation::{NSPoint, NSRect, NSSize};
 use objc::{msg_send, sel, sel_impl};
 
 use gpui::{px, Pixels};
-use tracing::{debug, warn};
 
 use crate::logging;
 
 use crate::list_item::LIST_ITEM_HEIGHT;
-use crate::window_manager;
 
 /// Layout constants for height calculations
 pub mod layout {

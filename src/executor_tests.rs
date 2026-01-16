@@ -1,7 +1,6 @@
 use super::*;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::process::Command;
 
 #[test]
 fn test_is_typescript() {
@@ -1146,7 +1145,6 @@ fn test_scriptlet_exec_options_default() {
 // Tests for execute_shell_scriptlet() function and SHELL_TOOLS constant.
 // These tests verify shell tool execution, error handling, and platform guards.
 
-use super::execute_shell_scriptlet;
 use crate::scriptlets::SHELL_TOOLS;
 
 /// Verify SHELL_TOOLS constant contains all expected shells

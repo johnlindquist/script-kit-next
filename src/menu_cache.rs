@@ -4,6 +4,9 @@
 //! Caches menu hierarchies by bundle_id to avoid expensive rescanning.
 //! Follows the same patterns as notes/storage.rs for consistency.
 
+n// This entire module is macOS-only
+#![cfg(target_os = "macos")]
+
 use anyhow::{Context, Result};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};

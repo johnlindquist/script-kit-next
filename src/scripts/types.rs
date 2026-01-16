@@ -103,6 +103,16 @@ pub struct AppMatch {
 
 /// Represents a scored match result for fuzzy search on windows
 #[derive(Clone, Debug)]
+#[cfg(target_os = "macos")]
+pub struct WindowMatch {
+    pub window: crate::window_control::WindowInfo,
+    pub score: i32,
+}
+
+/// Stub for non-macOS platforms
+#[cfg(not(target_os = "macos"))]
+#[derive(Clone, Debug)]
+#[allow(dead_code)]
 pub struct WindowMatch {
     pub window: crate::window_control::WindowInfo,
     pub score: i32,
