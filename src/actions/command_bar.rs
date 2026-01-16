@@ -106,13 +106,13 @@ impl CommandBarConfig {
         }
     }
 
-    /// Create config for Notes window style (search at top, headers, icons)
-    /// Similar to AI style but tailored for Notes actions
+    /// Create config for Notes window style (search at top, separators, icons)
+    /// Uses SectionStyle::Separators to match main menu's denser item spacing
     pub fn notes_style() -> Self {
         Self {
             dialog_config: ActionsDialogConfig {
                 search_position: SearchPosition::Top,
-                section_style: SectionStyle::Headers,
+                section_style: SectionStyle::Separators,
                 anchor: AnchorPosition::Top,
                 show_icons: true,
                 show_footer: true,

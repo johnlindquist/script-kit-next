@@ -1919,7 +1919,7 @@ impl Render for NotesApp {
                     return;
                 }
 
-                // Handle Escape to close panels
+                // Handle Escape to close panels, or close window if no panels open
                 if key == "escape" {
                     if this.show_actions_panel {
                         this.close_actions_panel(window, cx);
@@ -1929,6 +1929,14 @@ impl Render for NotesApp {
                         this.close_browse_panel(window, cx);
                         return;
                     }
+                    // No panels open - close the window (same as Cmd+W)
+                    let wb = window.window_bounds();
+                    crate::window_state::save_window_from_gpui(
+                        crate::window_state::WindowRole::Notes,
+                        wb,
+                    );
+                    window.remove_window();
+                    return;
                 }
 
                 // platform modifier = Cmd on macOS, Ctrl on Windows/Linux
