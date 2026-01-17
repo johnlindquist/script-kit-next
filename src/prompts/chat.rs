@@ -1492,8 +1492,9 @@ impl ChatPrompt {
     ) -> impl IntoElement {
         let colors = &self.prompt_colors;
 
-        let container_bg = rgba((colors.code_bg << 8) | 0x60);
-        let copy_hover_bg = rgba((colors.code_bg << 8) | 0x80);
+        // VIBRANCY: Use white at low opacity for subtle brightening that lets blur show through
+        let container_bg = rgba((0xFFFFFF << 8) | 0x15); // White at ~8% opacity
+        let copy_hover_bg = rgba((0xFFFFFF << 8) | 0x28); // White at ~16% for hover
         let error_color = self.theme.colors.ui.error;
         let error_bg = rgba((error_color << 8) | 0x40); // Theme error with transparency
         let retry_hover_bg = rgba((colors.accent_color << 8) | 0x40);
