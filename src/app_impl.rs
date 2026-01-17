@@ -4943,6 +4943,24 @@ export default {
             }
         }
 
+        // Check if command_id matches a scriptlet by name or file_path
+        // Scriptlets don't need immediate window show - they control their own visibility
+        if let Some(scriptlet) = self.scriptlets.iter().find(|s| {
+            s.name == command_id
+                || s.file_path
+                    .as_ref()
+                    .map(|p| p == command_id)
+                    .unwrap_or(false)
+        }) {
+            logging::log(
+                "EXEC",
+                &format!("Found scriptlet by name/path: {}", scriptlet.name),
+            );
+            let scriptlet_clone = scriptlet.clone();
+            self.execute_scriptlet(&scriptlet_clone, cx);
+            return false; // Scriptlets don't need immediate window show
+        }
+
         // Fall back to path-based execution (legacy behavior)
         // Scripts typically need the main window for prompts
         self.execute_script_by_path(command_id, cx);
