@@ -898,6 +898,10 @@ impl ScriptListApp {
 
                 match cmd_type {
                     SettingsCommandType::ResetWindowPositions => {
+                        // Suppress position saving to prevent the bounds change callback
+                        // from immediately re-saving after we delete the state file
+                        crate::window_state::suppress_save();
+
                         // Reset all window positions to defaults
                         crate::window_state::reset_all_positions();
                         logging::log("EXEC", "Reset all window positions to defaults");
@@ -911,10 +915,9 @@ impl ScriptListApp {
                             .duration_ms(Some(3000)),
                         );
 
-                        // Reset window state and ensure correct height
-                        self.reset_to_script_list(cx);
-                        resize_to_view_sync(ViewType::ScriptList, 0);
-                        cx.notify();
+                        // Close and reset window - this hides the window which is required
+                        // for the reset to take effect (as the toast message states)
+                        self.close_and_reset_window(cx);
                     }
                     SettingsCommandType::ConfigureVercelApiKey => {
                         self.show_api_key_prompt(

@@ -16,9 +16,38 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::logging;
 use crate::platform::DisplayBounds;
+
+// ============================================================================
+// Save Suppression (for reset operations)
+// ============================================================================
+
+/// Flag to temporarily suppress position saving after a reset.
+/// This prevents the bounds change callback from immediately re-saving
+/// the position after reset_all_positions() deletes the state file.
+static SUPPRESS_SAVE: AtomicBool = AtomicBool::new(false);
+
+/// Suppress position saving temporarily.
+/// Call this before reset_all_positions() to prevent immediate re-save.
+pub fn suppress_save() {
+    SUPPRESS_SAVE.store(true, Ordering::SeqCst);
+    logging::log("WINDOW_STATE", "Position saving suppressed");
+}
+
+/// Allow position saving again.
+/// Call this when the window is shown again after a reset.
+pub fn allow_save() {
+    SUPPRESS_SAVE.store(false, Ordering::SeqCst);
+    logging::log("WINDOW_STATE", "Position saving allowed");
+}
+
+/// Check if position saving is currently suppressed.
+pub fn is_save_suppressed() -> bool {
+    SUPPRESS_SAVE.load(Ordering::SeqCst)
+}
 
 // ============================================================================
 // Types
@@ -241,8 +270,18 @@ pub fn load_window_bounds(role: WindowRole) -> Option<PersistedWindowBounds> {
     }
 }
 
-/// Save bounds for a specific window role
+/// Save bounds for a specific window role.
+/// Respects the save suppression flag for the Main window role.
 pub fn save_window_bounds(role: WindowRole, bounds: PersistedWindowBounds) {
+    // Skip saving Main window position if suppressed (e.g., after reset)
+    if role == WindowRole::Main && is_save_suppressed() {
+        logging::log(
+            "WINDOW_STATE",
+            "Skipping save_window_bounds(Main) - position saving is suppressed",
+        );
+        return;
+    }
+
     let mut state = load_state_file().unwrap_or_default();
     state.version = 3;
     match role {
@@ -323,7 +362,17 @@ pub fn find_display_for_bounds<'a>(
 }
 
 /// Save main window position for a specific display.
+/// Respects the save suppression flag (set during reset_all_positions).
 pub fn save_main_position_for_display(display: &DisplayBounds, bounds: PersistedWindowBounds) {
+    // Skip saving if suppressed (e.g., right after reset_all_positions)
+    if is_save_suppressed() {
+        logging::log(
+            "WINDOW_STATE",
+            "Skipping save - position saving is suppressed (reset in progress)",
+        );
+        return;
+    }
+
     let key = display_key(display);
     let mut state = load_state_file().unwrap_or_default();
     state.version = 3;

@@ -161,7 +161,7 @@ impl ScriptListApp {
             let mut item_count_regular = 0_usize;
             for item in grouped_items.iter() {
                 match item {
-                    GroupedListItem::SectionHeader(_) => header_count += 1,
+                    GroupedListItem::SectionHeader(..) => header_count += 1,
                     GroupedListItem::Item(_) => item_count_regular += 1,
                 }
             }
@@ -214,7 +214,7 @@ impl ScriptListApp {
 
                         if let Some(grouped_item) = grouped_items_clone.get(ix) {
                             match grouped_item {
-                                GroupedListItem::SectionHeader(label) => {
+                                GroupedListItem::SectionHeader(label, icon) => {
                                     // Section header at 24px height (SECTION_HEADER_HEIGHT)
                                     div()
                                         .id(ElementId::NamedInteger(
@@ -222,7 +222,7 @@ impl ScriptListApp {
                                             ix as u64,
                                         ))
                                         .h(px(SECTION_HEADER_HEIGHT))
-                                        .child(render_section_header(label, theme_colors))
+                                        .child(render_section_header(label, icon.as_deref(), theme_colors))
                                         .into_any_element()
                                 }
                                 GroupedListItem::Item(result_idx) => {
@@ -1074,7 +1074,7 @@ impl ScriptListApp {
                 .get(self.selected_index)
                 .and_then(|item| match item {
                     GroupedListItem::Item(idx) => flat_results.get(*idx),
-                    GroupedListItem::SectionHeader(_) => None,
+                    GroupedListItem::SectionHeader(..) => None,
                 })
                 .map(|result| result.get_default_action_text())
                 .unwrap_or("Run");

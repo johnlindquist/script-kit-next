@@ -28,8 +28,10 @@ use cocoa::base::{id, nil};
 use gpui_component::{
     button::{Button, ButtonCustomVariant, ButtonVariants},
     input::{Input, InputEvent, InputState},
+    kbd::Kbd,
     scroll::ScrollableElement,
     theme::ActiveTheme,
+    tooltip::Tooltip,
     Icon, IconName, Root, Sizable,
 };
 #[cfg(target_os = "macos")]
@@ -859,6 +861,15 @@ impl AiApp {
             state.set_selection(text_len, text_len, window, cx);
         });
         info!("AI input focused for immediate typing");
+    }
+
+    /// Focus the search input in the sidebar (Cmd+Shift+F)
+    fn focus_search(&self, window: &mut Window, cx: &mut Context<Self>) {
+        self.search_state.update(cx, |state, cx| {
+            let text_len = state.text().len();
+            state.set_selection(text_len, text_len, window, cx);
+        });
+        info!("AI search focused via Cmd+Shift+F");
     }
 
     /// Request focus on next render cycle.
@@ -2445,6 +2456,7 @@ impl AiApp {
         let border_color = cx.theme().border.opacity(0.3);
 
         div()
+            .id("search-container")
             .w_full()
             .h(px(36.)) // Fixed height to prevent layout shift
             .flex()
@@ -2454,6 +2466,11 @@ impl AiApp {
             .border_1()
             .border_color(border_color)
             .bg(search_bg) // Vibrancy-compatible semi-transparent background
+            .tooltip(|window, cx| {
+                Tooltip::new("Search chats")
+                    .key_binding(gpui::Keystroke::parse("cmd-shift-f").ok().map(Kbd::new))
+                    .build(window, cx)
+            })
             .child(
                 Input::new(&self.search_state)
                     .w_full()
@@ -2842,10 +2859,11 @@ impl AiApp {
         let transparent_border = border_color.opacity(0.4);
 
         // Wrap input in a styled container for vibrancy support
+        // No px padding - let Input component handle text positioning
         div()
             .flex_1()
             .h(px(32.))
-            .px_2()
+            .pl_2() // Small left padding for visual alignment with border
             .rounded_md()
             .border_1()
             .border_color(transparent_border) // Semi-transparent accent border
@@ -3291,6 +3309,10 @@ impl AiApp {
     fn render_message(&self, message: &Message, cx: &mut Context<Self>) -> impl IntoElement {
         let is_user = message.role == MessageRole::User;
 
+        // Vibrancy-compatible backgrounds: white with low alpha for transparency
+        let user_bg = rgba((0xFFFFFF << 8) | 0x18); // White at ~9% opacity
+        let assistant_bg = rgba((0xFFFFFF << 8) | 0x10); // White at ~6% opacity
+
         div()
             .flex()
             .flex_col()
@@ -3306,13 +3328,13 @@ impl AiApp {
                     .child(if is_user { "You" } else { "Assistant" }),
             )
             .child(
-                // Message content
+                // Message content - vibrancy-compatible backgrounds
                 div()
                     .w_full()
                     .p_3()
                     .rounded_md()
-                    .when(is_user, |d| d.bg(cx.theme().secondary))
-                    .when(!is_user, |d| d.bg(cx.theme().muted.opacity(0.3)))
+                    .when(is_user, |d| d.bg(user_bg))
+                    .when(!is_user, |d| d.bg(assistant_bg))
                     .child(
                         div()
                             .text_sm()
@@ -3324,6 +3346,9 @@ impl AiApp {
 
     /// Render streaming content (assistant response in progress)
     fn render_streaming_content(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        // Vibrancy-compatible background
+        let streaming_bg = rgba((0xFFFFFF << 8) | 0x10); // White at ~6% opacity
+
         div()
             .flex()
             .flex_col()
@@ -3349,19 +3374,16 @@ impl AiApp {
                     ),
             )
             .child(
-                // Streaming content
-                div()
-                    .w_full()
-                    .p_3()
-                    .rounded_md()
-                    .bg(cx.theme().muted.opacity(0.3))
-                    .child(div().text_sm().text_color(cx.theme().foreground).child(
+                // Streaming content - vibrancy-compatible background
+                div().w_full().p_3().rounded_md().bg(streaming_bg).child(
+                    div().text_sm().text_color(cx.theme().foreground).child(
                         if self.streaming_content.is_empty() {
                             "...".to_string()
                         } else {
                             self.streaming_content.clone()
                         },
-                    )),
+                    ),
+                ),
             )
     }
 
@@ -4117,6 +4139,18 @@ impl Render for AiApp {
                             } else {
                                 this.hide_all_dropdowns(cx);
                                 this.show_model_picker(window, cx);
+                            }
+                        }
+                        // Cmd+Shift+F to focus search (expand sidebar if collapsed)
+                        "f" => {
+                            if modifiers.shift {
+                                // Expand sidebar if collapsed before focusing search
+                                if this.sidebar_collapsed {
+                                    this.sidebar_collapsed = false;
+                                }
+                                this.hide_all_dropdowns(cx);
+                                this.focus_search(window, cx);
+                                cx.stop_propagation();
                             }
                         }
                         "enter" | "return" => this.submit_message(window, cx),

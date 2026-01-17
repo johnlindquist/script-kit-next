@@ -47,7 +47,7 @@ pub const SECTION_HEADER_HEIGHT: f32 = 24.0;
 #[derive(Clone, Debug)]
 pub enum GroupedListItem {
     /// A section header (e.g., "SUGGESTED", "MAIN")
-    SectionHeader(String),
+    SectionHeader(String, Option<String>),
     /// A regular list item - usize is the index in the flat results array
     Item(usize),
 }
@@ -149,7 +149,7 @@ impl GroupedListState {
         let mut header_indices = std::collections::HashSet::new();
 
         for (idx, item) in items.iter().enumerate() {
-            if matches!(item, GroupedListItem::SectionHeader(_)) {
+            if matches!(item, GroupedListItem::SectionHeader(..)) {
                 header_indices.insert(idx);
             }
         }
@@ -797,9 +797,14 @@ pub fn icon_from_png(png_data: &[u8]) -> Option<IconKind> {
 ///
 /// # Arguments
 /// * `label` - The section label (displayed as-is, standard casing)
+/// * `icon` - Optional icon name (lucide icon, e.g., "settings")
 /// * `colors` - ListItemColors for theme-aware styling
 ///
-pub fn render_section_header(label: &str, colors: ListItemColors) -> impl IntoElement {
+pub fn render_section_header(
+    label: &str,
+    icon: Option<&str>,
+    colors: ListItemColors,
+) -> impl IntoElement {
     // Compact section header with explicit height (SECTION_HEADER_HEIGHT = 24px)
     // Used with GPUI's list() component which supports variable-height items.
     //
@@ -807,6 +812,30 @@ pub fn render_section_header(label: &str, colors: ListItemColors) -> impl IntoEl
     // - pt(8px) top padding for visual separation from above item
     // - ~8px text height (text_xs)
     // - pb(4px) bottom padding for visual separation from below item
+
+    // Build the inner content row with label and optional icon
+    let mut content = div()
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap(px(6.))
+        .text_xs() // 10-11px font
+        .font_weight(FontWeight::SEMIBOLD)
+        .text_color(rgb(colors.text_dimmed))
+        .child(label.to_string());
+
+    // Add icon if provided
+    if let Some(name) = icon {
+        if let Some(icon_name) = icon_name_from_str(name) {
+            content = content.child(
+                svg()
+                    .external_path(icon_name.external_path())
+                    .size(px(12.))
+                    .text_color(rgb(colors.text_dimmed)),
+            );
+        }
+    }
+
     div()
         .w_full()
         .h(px(SECTION_HEADER_HEIGHT)) // Explicit 24px height for variable-height list
@@ -816,13 +845,7 @@ pub fn render_section_header(label: &str, colors: ListItemColors) -> impl IntoEl
         .flex()
         .flex_col()
         .justify_center() // Center content vertically
-        .child(
-            div()
-                .text_xs() // 10-11px font
-                .font_weight(FontWeight::SEMIBOLD) // Slightly lighter than BOLD
-                .text_color(rgb(colors.text_dimmed))
-                .child(label.to_string()), // Standard casing (not uppercased)
-        )
+        .child(content)
 }
 
 // Note: Tests omitted for this module due to GPUI macro recursion limit issues.

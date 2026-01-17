@@ -2822,7 +2822,7 @@ fn test_get_grouped_results_search_mode_flat_list() {
     // Find first section header (should be the "Use with..." section)
     let first_header_idx = grouped
         .iter()
-        .position(|item| matches!(item, GroupedListItem::SectionHeader(_)));
+        .position(|item| matches!(item, GroupedListItem::SectionHeader(..)));
 
     // Items before the header should all be Item entries
     if let Some(idx) = first_header_idx {
@@ -2884,7 +2884,7 @@ fn test_get_grouped_results_empty_filter_grouped_view() {
     assert!(!grouped.is_empty());
 
     // First item should be MAIN section header (scripts without kit_name default to "main" kit)
-    assert!(matches!(&grouped[0], GroupedListItem::SectionHeader(s) if s == "MAIN"));
+    assert!(matches!(&grouped[0], GroupedListItem::SectionHeader(s, _) if s == "MAIN"));
 }
 
 #[test]
@@ -2949,7 +2949,7 @@ fn test_get_grouped_results_with_frecency() {
     let section_headers: Vec<&str> = grouped
         .iter()
         .filter_map(|item| match item {
-            GroupedListItem::SectionHeader(s) => Some(s.as_str()),
+            GroupedListItem::SectionHeader(s, _) => Some(s.as_str()),
             _ => None,
         })
         .collect();
@@ -3020,7 +3020,7 @@ fn test_get_grouped_results_frecency_script_appears_before_builtins() {
 
     // First should be SUGGESTED header
     assert!(
-        matches!(&grouped[0], GroupedListItem::SectionHeader(s) if s == "SUGGESTED"),
+        matches!(&grouped[0], GroupedListItem::SectionHeader(s, _) if s == "SUGGESTED"),
         "First item should be SUGGESTED section header, got {:?}",
         grouped[0]
     );
@@ -3045,7 +3045,7 @@ fn test_get_grouped_results_frecency_script_appears_before_builtins() {
     let section_headers: Vec<&str> = grouped
         .iter()
         .filter_map(|item| match item {
-            GroupedListItem::SectionHeader(s) => Some(s.as_str()),
+            GroupedListItem::SectionHeader(s, _) => Some(s.as_str()),
             _ => None,
         })
         .collect();
@@ -3140,7 +3140,7 @@ fn test_get_grouped_results_builtin_with_frecency_vs_script_frecency() {
 
     // Both should be in SUGGESTED, but script should come FIRST (higher frecency)
     assert!(
-        matches!(&grouped[0], GroupedListItem::SectionHeader(s) if s == "SUGGESTED"),
+        matches!(&grouped[0], GroupedListItem::SectionHeader(s, _) if s == "SUGGESTED"),
         "First item should be SUGGESTED header"
     );
 
@@ -3258,7 +3258,7 @@ fn test_get_grouped_results_selection_priority_with_frecency() {
     let grouped_names: Vec<String> = grouped
         .iter()
         .map(|item| match item {
-            GroupedListItem::SectionHeader(s) => format!("[{}]", s),
+            GroupedListItem::SectionHeader(s, _) => format!("[{}]", s),
             GroupedListItem::Item(idx) => results[*idx].name().to_string(),
         })
         .collect();
@@ -3329,7 +3329,7 @@ fn test_get_grouped_results_no_frecency_items_in_type_sections() {
     let grouped_names: Vec<String> = grouped
         .iter()
         .map(|item| match item {
-            GroupedListItem::SectionHeader(s) => format!("[{}]", s),
+            GroupedListItem::SectionHeader(s, _) => format!("[{}]", s),
             GroupedListItem::Item(idx) => results[*idx].name().to_string(),
         })
         .collect();
@@ -4487,7 +4487,7 @@ fn test_get_grouped_results_respects_frecency_ordering() {
     // Should now have SUGGESTED header, at least one recent item, MAIN header, remaining items
     // The first section header should be "SUGGESTED"
     let first_header = grouped2.iter().find_map(|item| match item {
-        GroupedListItem::SectionHeader(s) => Some(s.clone()),
+        GroupedListItem::SectionHeader(s, _) => Some(s.clone()),
         _ => None,
     });
     assert_eq!(
@@ -4501,7 +4501,7 @@ fn test_get_grouped_results_respects_frecency_ordering() {
     let mut first_recent_item: Option<&SearchResult> = None;
     for item in grouped2.iter() {
         match item {
-            GroupedListItem::SectionHeader(s) if s == "SUGGESTED" => {
+            GroupedListItem::SectionHeader(s, _) if s == "SUGGESTED" => {
                 found_recent_header = true;
             }
             GroupedListItem::Item(idx) if found_recent_header && first_recent_item.is_none() => {
@@ -4593,10 +4593,10 @@ fn test_get_grouped_results_updates_after_frecency_change() {
     let mut recent_items: Vec<&str> = vec![];
     for item in grouped2.iter() {
         match item {
-            GroupedListItem::SectionHeader(s) if s == "SUGGESTED" => {
+            GroupedListItem::SectionHeader(s, _) if s == "SUGGESTED" => {
                 in_recent_section = true;
             }
-            GroupedListItem::SectionHeader(_) => {
+            GroupedListItem::SectionHeader(..) => {
                 in_recent_section = false;
             }
             GroupedListItem::Item(idx) if in_recent_section => {
@@ -4728,8 +4728,8 @@ fn test_frecency_cache_invalidation_required() {
     let mut in_recent = false;
     for item in correct_grouped.iter() {
         match item {
-            GroupedListItem::SectionHeader(s) if s == "SUGGESTED" => in_recent = true,
-            GroupedListItem::SectionHeader(_) => in_recent = false,
+            GroupedListItem::SectionHeader(s, _) if s == "SUGGESTED" => in_recent = true,
+            GroupedListItem::SectionHeader(..) => in_recent = false,
             GroupedListItem::Item(idx) if in_recent => {
                 if let Some(r) = correct_results.get(*idx) {
                     correct_recent_items.push(r.name());
@@ -4744,8 +4744,8 @@ fn test_frecency_cache_invalidation_required() {
     let mut in_recent_buggy = false;
     for item in buggy_grouped.iter() {
         match item {
-            GroupedListItem::SectionHeader(s) if s == "SUGGESTED" => in_recent_buggy = true,
-            GroupedListItem::SectionHeader(_) => in_recent_buggy = false,
+            GroupedListItem::SectionHeader(s, _) if s == "SUGGESTED" => in_recent_buggy = true,
+            GroupedListItem::SectionHeader(..) => in_recent_buggy = false,
             GroupedListItem::Item(idx) if in_recent_buggy => {
                 if let Some(r) = buggy_results.get(*idx) {
                     buggy_recent_items.push(r.name());
@@ -4898,7 +4898,7 @@ fn test_frecency_change_invalidates_cache() {
     // Verify initial state: no SUGGESTED section (no frecency data)
     let initial_has_recent = initial_grouped
         .iter()
-        .any(|item| matches!(item, GroupedListItem::SectionHeader(s) if s == "SUGGESTED"));
+        .any(|item| matches!(item, GroupedListItem::SectionHeader(s, _) if s == "SUGGESTED"));
     assert!(
         !initial_has_recent,
         "Initially there should be no SUGGESTED section"
@@ -4928,8 +4928,8 @@ fn test_frecency_change_invalidates_cache() {
     let mut in_recent = false;
     for item in second_grouped.iter() {
         match item {
-            GroupedListItem::SectionHeader(s) if s == "SUGGESTED" => in_recent = true,
-            GroupedListItem::SectionHeader(_) => in_recent = false,
+            GroupedListItem::SectionHeader(s, _) if s == "SUGGESTED" => in_recent = true,
+            GroupedListItem::SectionHeader(..) => in_recent = false,
             GroupedListItem::Item(idx) if in_recent => {
                 if let Some(r) = second_results.get(*idx) {
                     recent_items.push(r.name());
