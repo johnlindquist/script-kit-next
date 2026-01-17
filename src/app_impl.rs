@@ -385,7 +385,10 @@ impl ScriptListApp {
             // Pin state - when true, window stays open on blur
             is_pinned: false,
             // Pending focus: start with MainFilter since that's what we want focused initially
+            // DEPRECATED: Use focus_coordinator instead. This remains for gradual migration.
             pending_focus: Some(FocusTarget::MainFilter),
+            // Focus coordinator: unified focus management with push/pop overlay semantics
+            focus_coordinator: focus_coordinator::FocusCoordinator::with_main_filter_focus(),
             // Scroll stabilization: track last scrolled index for each handle
             last_scrolled_main: None,
             last_scrolled_arg: None,
@@ -1238,6 +1241,104 @@ impl ScriptListApp {
     pub fn request_focus(&mut self, target: FocusTarget, cx: &mut Context<Self>) {
         self.pending_focus = Some(target);
         cx.notify();
+    }
+
+    // === FocusCoordinator Integration Methods ===
+    // These methods provide a unified focus management API using the new FocusCoordinator.
+    // They exist alongside the old system for gradual migration.
+
+    /// Request focus using the new coordinator system.
+    ///
+    /// This sets both the coordinator's pending request AND syncs to the old system
+    /// for backward compatibility during migration.
+    #[allow(dead_code)]
+    pub fn focus_via_coordinator(
+        &mut self,
+        request: focus_coordinator::FocusRequest,
+        cx: &mut Context<Self>,
+    ) {
+        self.focus_coordinator.request(request);
+        // Sync to old system for backward compatibility
+        self.sync_coordinator_to_legacy();
+        cx.notify();
+    }
+
+    /// Push an overlay (like actions dialog) with automatic restore on pop.
+    ///
+    /// Saves current focus state and requests focus to the overlay.
+    /// Call `pop_focus_overlay()` when the overlay closes to restore.
+    pub fn push_focus_overlay(
+        &mut self,
+        overlay_request: focus_coordinator::FocusRequest,
+        cx: &mut Context<Self>,
+    ) {
+        self.focus_coordinator.push_overlay(overlay_request);
+        // Sync to old system
+        self.sync_coordinator_to_legacy();
+        cx.notify();
+    }
+
+    /// Pop an overlay and restore previous focus state.
+    ///
+    /// Called when an overlay (actions dialog, shortcut recorder, etc.) closes.
+    /// Restores focus to whatever was focused before the overlay opened.
+    pub fn pop_focus_overlay(&mut self, cx: &mut Context<Self>) {
+        self.focus_coordinator.pop_overlay();
+        // Sync to old system
+        self.sync_coordinator_to_legacy();
+        cx.notify();
+    }
+
+    /// Clear all overlays and return to main filter focus.
+    ///
+    /// Useful for "escape all" or error recovery scenarios.
+    #[allow(dead_code)]
+    pub fn clear_focus_overlays(&mut self, cx: &mut Context<Self>) {
+        self.focus_coordinator.clear_overlays();
+        // Sync to old system
+        self.sync_coordinator_to_legacy();
+        cx.notify();
+    }
+
+    /// Get the current cursor owner from the coordinator.
+    #[allow(dead_code)]
+    pub fn current_cursor_owner(&self) -> focus_coordinator::CursorOwner {
+        self.focus_coordinator.cursor_owner()
+    }
+
+    /// Sync coordinator state to legacy focused_input/pending_focus fields.
+    ///
+    /// This bridges the new and old systems during migration.
+    fn sync_coordinator_to_legacy(&mut self) {
+        // Sync cursor owner to focused_input
+        self.focused_input = match self.focus_coordinator.cursor_owner() {
+            focus_coordinator::CursorOwner::MainFilter => FocusedInput::MainFilter,
+            focus_coordinator::CursorOwner::ActionsSearch => FocusedInput::ActionsSearch,
+            focus_coordinator::CursorOwner::ArgPrompt => FocusedInput::ArgPrompt,
+            focus_coordinator::CursorOwner::ChatPrompt => FocusedInput::None, // ChatPrompt not in old enum
+            focus_coordinator::CursorOwner::None => FocusedInput::None,
+        };
+
+        // Sync pending target to pending_focus
+        if let Some(request) = self.focus_coordinator.peek_pending() {
+            self.pending_focus = Some(match request.target {
+                focus_coordinator::FocusTarget::MainFilter => FocusTarget::MainFilter,
+                focus_coordinator::FocusTarget::ActionsDialog => FocusTarget::ActionsDialog,
+                focus_coordinator::FocusTarget::ArgPrompt => FocusTarget::AppRoot, // ArgPrompt uses AppRoot
+                focus_coordinator::FocusTarget::PathPrompt => FocusTarget::PathPrompt,
+                focus_coordinator::FocusTarget::FormPrompt => FocusTarget::FormPrompt,
+                focus_coordinator::FocusTarget::EditorPrompt => FocusTarget::EditorPrompt,
+                focus_coordinator::FocusTarget::SelectPrompt => FocusTarget::SelectPrompt,
+                focus_coordinator::FocusTarget::EnvPrompt => FocusTarget::EnvPrompt,
+                focus_coordinator::FocusTarget::DropPrompt => FocusTarget::DropPrompt,
+                focus_coordinator::FocusTarget::TemplatePrompt => FocusTarget::TemplatePrompt,
+                focus_coordinator::FocusTarget::TermPrompt => FocusTarget::TermPrompt,
+                focus_coordinator::FocusTarget::ChatPrompt => FocusTarget::ChatPrompt,
+                focus_coordinator::FocusTarget::DivPrompt => FocusTarget::AppRoot, // DivPrompt uses AppRoot
+                focus_coordinator::FocusTarget::ScratchPad => FocusTarget::EditorPrompt,
+                focus_coordinator::FocusTarget::QuickTerminal => FocusTarget::TermPrompt,
+            });
+        }
     }
 
     /// Apply pending focus if set. Called at the start of render() when window
@@ -2966,11 +3067,9 @@ impl ScriptListApp {
             ),
         );
         if self.show_actions_popup || is_actions_window_open() {
-            // Close - return focus to main filter
+            // Close - use coordinator to restore previous focus
             self.show_actions_popup = false;
             self.actions_dialog = None;
-            self.focused_input = FocusedInput::MainFilter;
-            self.pending_focus = Some(FocusTarget::MainFilter);
 
             // Close the separate actions window via spawn
             cx.spawn(async move |_this, cx| {
@@ -2981,19 +3080,27 @@ impl ScriptListApp {
             })
             .detach();
 
-            // Refocus main filter
+            // Use coordinator to restore focus (will pop the overlay and set pending_focus)
+            self.pop_focus_overlay(cx);
+
+            // Also directly focus main filter for immediate feedback
             self.focus_main_filter(window, cx);
-            logging::log("FOCUS", "Actions closed, focus returned to MainFilter");
+            logging::log(
+                "FOCUS",
+                "Actions closed via toggle, focus restored via coordinator",
+            );
         } else {
             // Open actions as a separate window with vibrancy blur
             self.show_actions_popup = true;
+
+            // Use coordinator to push overlay - saves current focus state for restore
+            self.push_focus_overlay(focus_coordinator::FocusRequest::actions_dialog(), cx);
 
             // CRITICAL: Transfer focus from Input to main focus_handle
             // This prevents the Input from receiving text (which would go to main filter)
             // while keeping keyboard focus in main window for routing to actions dialog
             self.focus_handle.focus(window, cx);
             self.gpui_input_focused = false;
-            self.focused_input = FocusedInput::ActionsSearch;
 
             let script_info = self.get_focused_script_info();
 
@@ -3031,16 +3138,12 @@ impl ScriptListApp {
                     app_entity.update(cx, |app, cx| {
                         app.show_actions_popup = false;
                         app.actions_dialog = None;
-                        // Match what close_actions_popup does for MainList host:
-                        // Set focused_input first, then pending_focus to AppRoot
-                        // (AppRoot checks focused_input to know what to focus)
-                        app.focused_input = FocusedInput::MainFilter;
-                        app.pending_focus = Some(FocusTarget::AppRoot);
+                        // Use coordinator to pop overlay and restore previous focus
+                        app.pop_focus_overlay(cx);
                         logging::log(
                             "FOCUS",
-                            "Actions closed via escape, pending_focus=AppRoot, focused_input=MainFilter",
+                            "Actions closed via escape, focus restored via coordinator",
                         );
-                        cx.notify();
                     });
                 }));
             });
@@ -3108,24 +3211,28 @@ impl ScriptListApp {
             ),
         );
         if self.show_actions_popup {
-            // Close - return focus to arg prompt
+            // Close - use coordinator to restore to arg prompt
             self.show_actions_popup = false;
             self.actions_dialog = None;
-            self.focused_input = FocusedInput::ArgPrompt;
-            self.pending_focus = Some(FocusTarget::AppRoot); // ArgPrompt uses parent focus
+            self.pop_focus_overlay(cx);
             window.focus(&self.focus_handle, cx);
-            logging::log("FOCUS", "Arg actions closed, focus returned to ArgPrompt");
+            logging::log(
+                "FOCUS",
+                "Arg actions closed, focus restored via coordinator",
+            );
         } else {
+            // Clone SDK actions early to avoid borrow conflicts
+            let sdk_actions_opt = self.sdk_actions.clone();
+
             // Check if we have SDK actions
-            if let Some(ref sdk_actions) = self.sdk_actions {
+            if let Some(sdk_actions) = sdk_actions_opt {
                 logging::log("KEY", &format!("SDK actions count: {}", sdk_actions.len()));
                 if !sdk_actions.is_empty() {
-                    // Open - create dialog entity with SDK actions
+                    // Open - push overlay to save arg prompt focus state
                     self.show_actions_popup = true;
-                    self.focused_input = FocusedInput::ActionsSearch;
+                    self.push_focus_overlay(focus_coordinator::FocusRequest::actions_dialog(), cx);
 
                     let theme_arc = std::sync::Arc::clone(&self.theme);
-                    let sdk_actions_clone = sdk_actions.clone();
                     let dialog = cx.new(|cx| {
                         let focus_handle = cx.focus_handle();
                         let mut dialog = ActionsDialog::with_script(
@@ -3135,7 +3242,7 @@ impl ScriptListApp {
                             theme_arc,
                         );
                         // Set SDK actions to replace built-in actions
-                        dialog.set_sdk_actions(sdk_actions_clone);
+                        dialog.set_sdk_actions(sdk_actions);
                         dialog
                     });
 
@@ -3143,7 +3250,6 @@ impl ScriptListApp {
 
                     // Focus the dialog's internal focus handle
                     self.actions_dialog = Some(dialog.clone());
-                    self.pending_focus = Some(FocusTarget::ActionsDialog);
                     let dialog_focus_handle = dialog.read(cx).focus_handle.clone();
                     window.focus(&dialog_focus_handle, cx);
                     logging::log(
@@ -3161,7 +3267,6 @@ impl ScriptListApp {
                 logging::log("KEY", "No SDK actions defined for this arg prompt (None)");
             }
         }
-        cx.notify();
     }
 
     /// Toggle actions dialog for chat prompts
@@ -3179,11 +3284,9 @@ impl ScriptListApp {
         );
 
         if self.show_actions_popup || is_actions_window_open() {
-            // Close - return focus to chat prompt
+            // Close - use coordinator to restore to chat prompt
             self.show_actions_popup = false;
             self.actions_dialog = None;
-            self.focused_input = FocusedInput::None;
-            self.pending_focus = Some(FocusTarget::AppRoot);
 
             // Close the separate actions window via spawn
             cx.spawn(async move |_this, cx| {
@@ -3194,8 +3297,13 @@ impl ScriptListApp {
             })
             .detach();
 
+            // Use coordinator to pop overlay and restore previous focus
+            self.pop_focus_overlay(cx);
             window.focus(&self.focus_handle, cx);
-            logging::log("FOCUS", "Chat actions closed, focus returned to ChatPrompt");
+            logging::log(
+                "FOCUS",
+                "Chat actions closed, focus restored via coordinator",
+            );
         } else {
             // Get chat info from current ChatPrompt entity
             let chat_info = if let AppView::ChatPrompt { entity, .. } = &self.current_view {
@@ -3227,7 +3335,8 @@ impl ScriptListApp {
 
             // Open actions as a separate window with vibrancy blur
             self.show_actions_popup = true;
-            self.focused_input = FocusedInput::ActionsSearch;
+            // Push overlay to save chat prompt focus state
+            self.push_focus_overlay(focus_coordinator::FocusRequest::actions_dialog(), cx);
 
             let theme_arc = std::sync::Arc::clone(&self.theme);
             let dialog = cx.new(|cx| {
@@ -3244,21 +3353,18 @@ impl ScriptListApp {
             self.actions_dialog = Some(dialog.clone());
 
             // Set up the on_close callback to restore focus when escape is pressed in ActionsWindow
-            // Match what close_actions_popup does for ChatPrompt host
             let app_entity = cx.entity().clone();
             dialog.update(cx, |d, _cx| {
                 d.set_on_close(std::sync::Arc::new(move |cx| {
                     app_entity.update(cx, |app, cx| {
                         app.show_actions_popup = false;
                         app.actions_dialog = None;
-                        // ChatPrompt handles its own focus - restore to app root
-                        app.focused_input = FocusedInput::None;
-                        app.pending_focus = Some(FocusTarget::ChatPrompt);
+                        // Use coordinator to pop overlay and restore previous focus
+                        app.pop_focus_overlay(cx);
                         logging::log(
                             "FOCUS",
-                            "Chat actions closed via escape, pending_focus=ChatPrompt",
+                            "Chat actions closed via escape, focus restored via coordinator",
                         );
-                        cx.notify();
                     });
                 }));
             });
@@ -3540,6 +3646,10 @@ impl ScriptListApp {
     ///
     /// This centralizes close behavior, ensuring cx.notify() is always called
     /// and focus is correctly restored based on which prompt hosted the dialog.
+    ///
+    /// NOTE: The `host` parameter is now deprecated. Focus restoration is handled
+    /// automatically by the FocusCoordinator's overlay stack. The host is kept
+    /// for logging purposes only.
     fn close_actions_popup(
         &mut self,
         host: ActionsDialogHost,
@@ -3562,40 +3672,21 @@ impl ScriptListApp {
             .detach();
         }
 
-        // Restore focus based on host type
-        match host {
-            ActionsDialogHost::ArgPrompt => {
-                self.focused_input = FocusedInput::ArgPrompt;
-                self.pending_focus = Some(FocusTarget::AppRoot);
-            }
-            ActionsDialogHost::DivPrompt
-            | ActionsDialogHost::EditorPrompt
-            | ActionsDialogHost::TermPrompt
-            | ActionsDialogHost::FormPrompt => {
-                self.focused_input = FocusedInput::None;
-            }
-            ActionsDialogHost::ChatPrompt => {
-                // ChatPrompt handles its own focus - restore to app root
-                self.focused_input = FocusedInput::None;
-                self.pending_focus = Some(FocusTarget::AppRoot);
-            }
-            ActionsDialogHost::MainList => {
-                self.focused_input = FocusedInput::MainFilter;
-                self.pending_focus = Some(FocusTarget::AppRoot);
-            }
-            ActionsDialogHost::FileSearch => {
-                // File search uses MainFilter input - restore focus to it
-                self.focused_input = FocusedInput::MainFilter;
-                self.pending_focus = Some(FocusTarget::AppRoot);
-            }
-        }
+        // Use coordinator to pop overlay and restore previous focus
+        // The coordinator's stack tracks where we came from, so no need
+        // to manually switch on host type anymore.
+        self.pop_focus_overlay(cx);
 
+        // Also directly focus the app root for immediate feedback
         window.focus(&self.focus_handle, cx);
         logging::log(
             "FOCUS",
-            &format!("Actions popup closed, focus restored for {:?}", host),
+            &format!(
+                "Actions popup closed (host={:?}), focus restored via coordinator",
+                host
+            ),
         );
-        cx.notify();
+        // cx.notify() already called by pop_focus_overlay
     }
 
     /// Edit a script in configured editor (config.editor > $EDITOR > "code")
