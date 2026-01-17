@@ -1840,10 +1840,11 @@ mod tests {
             ("MOUSE_HOVER", 'M'),
             ("SCROLL_STATE", 'L'),
             ("SCROLL_PERF", 'Q'),
-            ("SCRIPT", 'B'),
+            ("SCRIPT", 'G'), // Changed from B to G
             ("CONFIG", 'N'),
             ("RESIZE", 'Z'),
             ("DESIGN", 'D'),
+            ("BENCH", 'B'), // New: Benchmark timing
         ];
 
         for (category, expected_code) in mappings {

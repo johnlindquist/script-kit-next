@@ -66,18 +66,9 @@ fn handle_get_selected_text(request_id: &str) -> Message {
     logging::log("EXEC", &format!("GetSelectedText request: {}", request_id));
     logging::bench_log("get_selected_text_handler_start");
 
-    // Hide the main window first so the previous app regains focus
-    // This is required for the AX API to access the text selection
-    if crate::is_main_window_visible() {
-        logging::bench_log("hiding_window_for_ax");
-        crate::platform::hide_main_window();
-    }
-
-    // Small delay to ensure focus has transferred to the previous app
-    // Testing shows 10-20ms is usually sufficient (was 50ms in SDK)
-    logging::bench_log("focus_delay_start");
-    std::thread::sleep(std::time::Duration::from_millis(20));
-    logging::bench_log("focus_delay_done");
+    // NOTE: Window hiding must happen on the main thread (see platform::hide_main_window).
+    // The SDK is responsible for calling hide() before getSelectedText().
+    // We just call the AX API here - the window should already be hidden.
 
     logging::bench_log("ax_api_call_start");
     let result = selected_text::get_selected_text();

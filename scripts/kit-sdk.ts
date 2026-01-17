@@ -4524,12 +4524,16 @@ globalThis.setSelectedText = async function setSelectedText(text: string): Promi
  */
 globalThis.getSelectedText = async function getSelectedText(): Promise<string> {
   bench('getSelectedText_start');
-  // NOTE: Window hiding and focus delay are now handled in Rust for better performance.
-  // The Rust handler:
-  // 1. Hides the window if visible
-  // 2. Waits 20ms for focus transfer (reduced from 50ms)
-  // 3. Calls the AX API
-  // This eliminates the SDK→Rust round trip for hide() and the 50ms JS delay.
+  
+  // Hide the window so the previous app regains focus
+  // This is required for the AX API to read text from the focused app
+  await hide();
+  bench('getSelectedText_hide_done');
+  
+  // Brief delay to ensure focus has transferred to the previous app
+  // 20ms is typically sufficient (reduced from original 50ms)
+  await sleep(20);
+  bench('getSelectedText_delay_done');
 
   const id = nextId();
 
