@@ -4882,7 +4882,10 @@ export default {
                         let scriptlet_clone = scriptlet.clone();
                         logging::log("EXEC", &format!("Executing scriptlet: {}", identifier));
                         self.execute_scriptlet(&scriptlet_clone, cx);
-                        return true; // Scriptlets typically need the main window for prompts
+                        // Don't show window immediately - scriptlets that need it (like getSelectedText)
+                        // will call hide() first, then their prompts (chat, arg, etc.) will show the window.
+                        // This prevents the flash of main menu before the scriptlet UI appears.
+                        return false;
                     }
                     logging::log("ERROR", &format!("Scriptlet not found: {}", identifier));
                     return false;
