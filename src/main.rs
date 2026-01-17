@@ -1071,6 +1071,7 @@ enum PromptMessage {
         model: Option<String>,
         models: Vec<String>,
         save_history: bool,
+        use_builtin_ai: bool,
     },
     /// Add a message to an active chat prompt
     ChatAddMessage {
@@ -2351,6 +2352,15 @@ fn main() {
                         &format!("Executing command_id: {}", id_clone),
                     );
 
+                    // Clear NEEDS_RESET before executing new command - we're starting a fresh script
+                    // and shouldn't reset based on previous script's exit state
+                    if NEEDS_RESET.swap(false, Ordering::SeqCst) {
+                        logging::log(
+                            "HOTKEY",
+                            "Cleared NEEDS_RESET before executing new command",
+                        );
+                    }
+
                     // Use app_entity.update to access ScriptListApp directly
                     // Returns whether main window should be shown (apps/certain builtins don't need it)
                     let should_show_window = app_entity_inner.update(cx, |view, ctx| {
@@ -2407,6 +2417,15 @@ fn main() {
                         "DEEPLINK",
                         &format!("Executing command_id: {}", id_clone),
                     );
+
+                    // Clear NEEDS_RESET before executing new command - we're starting a fresh script
+                    // and shouldn't reset based on previous script's exit state
+                    if NEEDS_RESET.swap(false, Ordering::SeqCst) {
+                        logging::log(
+                            "DEEPLINK",
+                            "Cleared NEEDS_RESET before executing new command",
+                        );
+                    }
 
                     // Use app_entity.update to access ScriptListApp directly
                     // Returns whether main window should be shown (apps/certain builtins don't need it)

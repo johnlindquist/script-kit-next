@@ -9,6 +9,11 @@ use std::sync::Arc;
 /// Signature: (action_id: String)
 pub type ActionCallback = Arc<dyn Fn(String) + Send + Sync>;
 
+/// Callback for dialog close (escape pressed, window dismissed)
+/// Used to notify the main app to restore focus
+/// Takes &mut App so the callback can update the main app entity
+pub type CloseCallback = Arc<dyn Fn(&mut gpui::App) + Send + Sync>;
+
 /// Information about the currently focused/selected script
 /// Used for context-aware actions in the actions dialog
 #[derive(Debug, Clone)]
@@ -41,6 +46,9 @@ pub struct ScriptInfo {
     /// The frecency path used to track this item's usage
     /// Used by "Reset Ranking" to know which frecency entry to remove
     pub frecency_path: Option<String>,
+    /// Whether this is an agent file (.claude.md or similar)
+    /// Agents have their own actions (Edit Agent, Copy Content, etc.)
+    pub is_agent: bool,
 }
 
 impl ScriptInfo {
@@ -51,6 +59,7 @@ impl ScriptInfo {
             path: path.into(),
             is_script: true,
             is_scriptlet: false,
+            is_agent: false,
             action_verb: "Run".to_string(),
             shortcut: None,
             alias: None,
@@ -71,6 +80,7 @@ impl ScriptInfo {
             path: path.into(),
             is_script: true,
             is_scriptlet: false,
+            is_agent: false,
             action_verb: "Run".to_string(),
             shortcut,
             alias: None,
@@ -92,6 +102,7 @@ impl ScriptInfo {
             path: markdown_path.into(),
             is_script: false,
             is_scriptlet: true,
+            is_agent: false,
             action_verb: "Run".to_string(),
             shortcut,
             alias,
@@ -113,6 +124,7 @@ impl ScriptInfo {
             path: path.into(),
             is_script: true,
             is_scriptlet: false,
+            is_agent: false,
             action_verb: "Run".to_string(),
             shortcut,
             alias,
@@ -130,6 +142,7 @@ impl ScriptInfo {
             path: String::new(),
             is_script: false,
             is_scriptlet: false,
+            is_agent: false,
             action_verb: "Run".to_string(),
             shortcut: None,
             alias: None,
@@ -150,6 +163,7 @@ impl ScriptInfo {
             path: path.into(),
             is_script,
             is_scriptlet: false,
+            is_agent: false,
             action_verb: "Run".to_string(),
             shortcut: None,
             alias: None,
@@ -170,6 +184,7 @@ impl ScriptInfo {
             path: path.into(),
             is_script,
             is_scriptlet: false,
+            is_agent: false,
             action_verb: action_verb.into(),
             shortcut: None,
             alias: None,
@@ -192,6 +207,7 @@ impl ScriptInfo {
             path: path.into(),
             is_script,
             is_scriptlet: false,
+            is_agent: false,
             action_verb: action_verb.into(),
             shortcut,
             alias: None,
@@ -215,6 +231,7 @@ impl ScriptInfo {
             path: path.into(),
             is_script,
             is_scriptlet: false,
+            is_agent: false,
             action_verb: action_verb.into(),
             shortcut,
             alias,

@@ -52,7 +52,8 @@ fn get_displays() -> anyhow::Result<Vec<protocol::DisplayInfo>> {
             // Estimate visible bounds by subtracting menu bar height from the top
             // This is an approximation - dock and menu bar sizes can vary with settings
             let visible_y = bounds.origin.y as i32 + MACOS_MENU_BAR_HEIGHT;
-            let visible_height = (bounds.size.height as u32).saturating_sub(MACOS_MENU_BAR_HEIGHT as u32);
+            let visible_height =
+                (bounds.size.height as u32).saturating_sub(MACOS_MENU_BAR_HEIGHT as u32);
 
             displays.push(protocol::DisplayInfo {
                 display_id,
@@ -832,11 +833,15 @@ impl ScriptListApp {
                                             }
                                         }
                                         protocol::WindowActionType::Tile => {
-                                            if let (Some(id), Some(pos)) = (window_id, tile_position) {
+                                            if let (Some(id), Some(pos)) =
+                                                (window_id, tile_position)
+                                            {
                                                 let wc_pos = protocol_tile_to_window_control(pos);
                                                 window_control::tile_window(*id, wc_pos)
                                             } else {
-                                                Err(anyhow::anyhow!("Missing window_id or tile_position"))
+                                                Err(anyhow::anyhow!(
+                                                    "Missing window_id or tile_position"
+                                                ))
                                             }
                                         }
                                         protocol::WindowActionType::MoveToNextDisplay => {
@@ -885,9 +890,10 @@ impl ScriptListApp {
                                     );
 
                                     let response = match get_displays() {
-                                        Ok(displays) => {
-                                            Message::display_list_result(request_id.clone(), displays)
-                                        }
+                                        Ok(displays) => Message::display_list_result(
+                                            request_id.clone(),
+                                            displays,
+                                        ),
                                         Err(e) => {
                                             logging::log(
                                                 "ERROR",
@@ -914,47 +920,48 @@ impl ScriptListApp {
                                         &format!("FrontmostWindow request: {}", request_id),
                                     );
 
-                                    let response = match window_control::get_frontmost_window_of_previous_app() {
-                                        Ok(Some(window)) => {
-                                            let window_info = protocol::SystemWindowInfo {
-                                                window_id: window.id,
-                                                title: window.title,
-                                                app_name: window.app,
-                                                bounds: Some(protocol::TargetWindowBounds {
-                                                    x: window.bounds.x,
-                                                    y: window.bounds.y,
-                                                    width: window.bounds.width,
-                                                    height: window.bounds.height,
-                                                }),
-                                                is_minimized: None,
-                                                is_active: Some(true),
-                                            };
-                                            Message::frontmost_window_result(
-                                                request_id.clone(),
-                                                Some(window_info),
-                                                None,
-                                            )
-                                        }
-                                        Ok(None) => {
-                                            Message::frontmost_window_result(
+                                    let response =
+                                        match window_control::get_frontmost_window_of_previous_app()
+                                        {
+                                            Ok(Some(window)) => {
+                                                let window_info = protocol::SystemWindowInfo {
+                                                    window_id: window.id,
+                                                    title: window.title,
+                                                    app_name: window.app,
+                                                    bounds: Some(protocol::TargetWindowBounds {
+                                                        x: window.bounds.x,
+                                                        y: window.bounds.y,
+                                                        width: window.bounds.width,
+                                                        height: window.bounds.height,
+                                                    }),
+                                                    is_minimized: None,
+                                                    is_active: Some(true),
+                                                };
+                                                Message::frontmost_window_result(
+                                                    request_id.clone(),
+                                                    Some(window_info),
+                                                    None,
+                                                )
+                                            }
+                                            Ok(None) => Message::frontmost_window_result(
                                                 request_id.clone(),
                                                 None,
                                                 Some("No frontmost window found".to_string()),
-                                            )
-                                        }
-                                        Err(e) => {
-                                            Message::frontmost_window_result(
+                                            ),
+                                            Err(e) => Message::frontmost_window_result(
                                                 request_id.clone(),
                                                 None,
                                                 Some(e.to_string()),
-                                            )
-                                        }
-                                    };
+                                            ),
+                                        };
 
                                     if let Err(e) = reader_response_tx.send(response) {
                                         logging::log(
                                             "EXEC",
-                                            &format!("Failed to send frontmost window response: {}", e),
+                                            &format!(
+                                                "Failed to send frontmost window response: {}",
+                                                e
+                                            ),
                                         );
                                     }
                                     continue;
@@ -1344,6 +1351,7 @@ impl ScriptListApp {
                                         model,
                                         models,
                                         save_history,
+                                        use_builtin_ai,
                                     } => Some(PromptMessage::ShowChat {
                                         id,
                                         placeholder,
@@ -1354,6 +1362,7 @@ impl ScriptListApp {
                                         model,
                                         models,
                                         save_history,
+                                        use_builtin_ai,
                                     }),
                                     Message::ChatMessage { id, message } => {
                                         Some(PromptMessage::ChatAddMessage { id, message })
@@ -1382,9 +1391,15 @@ impl ScriptListApp {
                                     Message::ChatClear { id } => {
                                         Some(PromptMessage::ChatClear { id })
                                     }
-                                    Message::ChatSetError { id, message_id, error } => {
-                                        Some(PromptMessage::ChatSetError { id, message_id, error })
-                                    }
+                                    Message::ChatSetError {
+                                        id,
+                                        message_id,
+                                        error,
+                                    } => Some(PromptMessage::ChatSetError {
+                                        id,
+                                        message_id,
+                                        error,
+                                    }),
                                     Message::ChatClearError { id, message_id } => {
                                         Some(PromptMessage::ChatClearError { id, message_id })
                                     }

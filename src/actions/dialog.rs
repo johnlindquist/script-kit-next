@@ -33,8 +33,8 @@ use crate::scriptlets::Scriptlet;
 use super::constants::ACCENT_BAR_WIDTH;
 #[allow(unused_imports)] // AnchorPosition reserved for future use
 use super::types::{
-    Action, ActionCallback, ActionCategory, ActionsDialogConfig, AnchorPosition, ScriptInfo,
-    SearchPosition, SectionStyle,
+    Action, ActionCallback, ActionCategory, ActionsDialogConfig, AnchorPosition, CloseCallback,
+    ScriptInfo, SearchPosition, SectionStyle,
 };
 use crate::prompts::PathInfo;
 
@@ -175,6 +175,9 @@ pub struct ActionsDialog {
     pub config: ActionsDialogConfig,
     /// When true, skip track_focus in render (parent handles focus, e.g., ActionsWindow)
     pub skip_track_focus: bool,
+    /// Callback for when the dialog is closed (escape pressed, window dismissed)
+    /// Used to notify the main app to restore focus
+    pub on_close: Option<CloseCallback>,
 }
 
 impl ActionsDialog {
@@ -253,6 +256,7 @@ impl ActionsDialog {
             context_title: Some(path_info.path.clone()),
             config,
             skip_track_focus: false,
+            on_close: None,
         }
     }
 
@@ -300,6 +304,7 @@ impl ActionsDialog {
             context_title: Some(file_info.name.clone()),
             config,
             skip_track_focus: false,
+            on_close: None,
         }
     }
 
@@ -354,6 +359,7 @@ impl ActionsDialog {
             context_title: Some(context_title),
             config,
             skip_track_focus: false,
+            on_close: None,
         }
     }
 
@@ -405,6 +411,7 @@ impl ActionsDialog {
             context_title: Some(context_title),
             config,
             skip_track_focus: false,
+            on_close: None,
         }
     }
 
@@ -463,6 +470,7 @@ impl ActionsDialog {
             context_title,
             config,
             skip_track_focus: false,
+            on_close: None,
         }
     }
 
@@ -491,6 +499,23 @@ impl ActionsDialog {
     /// Set skip_track_focus to let parent handle focus (used by ActionsWindow)
     pub fn set_skip_track_focus(&mut self, skip: bool) {
         self.skip_track_focus = skip;
+    }
+
+    /// Set the callback for when the dialog is closed (escape pressed, window dismissed)
+    /// Used to notify the main app to restore focus
+    pub fn set_on_close(&mut self, callback: CloseCallback) {
+        self.on_close = Some(callback);
+    }
+
+    /// Call the on_close callback if set
+    /// Returns true if a callback was called, false otherwise
+    pub fn trigger_on_close(&self, cx: &mut gpui::App) -> bool {
+        if let Some(ref callback) = self.on_close {
+            callback(cx);
+            true
+        } else {
+            false
+        }
     }
 
     /// Create ActionsDialog with custom configuration and actions
@@ -544,6 +569,7 @@ impl ActionsDialog {
             context_title: None,
             config,
             skip_track_focus: false,
+            on_close: None,
         }
     }
 

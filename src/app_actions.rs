@@ -716,6 +716,115 @@ impl ScriptListApp {
                     self.show_hud("No item selected".to_string(), Some(2000), cx);
                 }
             }
+            "copy_content" => {
+                logging::log("UI", "Copy content action");
+                if let Some(result) = self.get_selected_result() {
+                    // Get the file path based on the result type
+                    let file_path_opt: Option<String> = match result {
+                        scripts::SearchResult::Script(m) => {
+                            Some(m.script.path.to_string_lossy().to_string())
+                        }
+                        scripts::SearchResult::Agent(m) => {
+                            Some(m.agent.path.to_string_lossy().to_string())
+                        }
+                        scripts::SearchResult::Scriptlet(m) => {
+                            // Extract just the path without the anchor (e.g., "/path/to/file.md#slug" -> "/path/to/file.md")
+                            m.scriptlet
+                                .file_path
+                                .as_ref()
+                                .map(|p| p.split('#').next().unwrap_or(p).to_string())
+                        }
+                        _ => None,
+                    };
+
+                    if let Some(file_path) = file_path_opt {
+                        // Read the file content
+                        match std::fs::read_to_string(&file_path) {
+                            Ok(content) => {
+                                #[cfg(target_os = "macos")]
+                                {
+                                    match self.pbcopy(&content) {
+                                        Ok(_) => {
+                                            logging::log(
+                                                "UI",
+                                                &format!(
+                                                    "Copied content to clipboard from: {}",
+                                                    file_path
+                                                ),
+                                            );
+                                            self.show_hud(
+                                                "Content copied to clipboard".to_string(),
+                                                Some(2000),
+                                                cx,
+                                            );
+                                        }
+                                        Err(e) => {
+                                            logging::log("ERROR", &format!("pbcopy failed: {}", e));
+                                            self.show_hud(
+                                                "Failed to copy content".to_string(),
+                                                Some(3000),
+                                                cx,
+                                            );
+                                        }
+                                    }
+                                }
+
+                                #[cfg(not(target_os = "macos"))]
+                                {
+                                    use arboard::Clipboard;
+                                    match Clipboard::new().and_then(|mut c| c.set_text(&content)) {
+                                        Ok(_) => {
+                                            logging::log(
+                                                "UI",
+                                                &format!(
+                                                    "Copied content to clipboard from: {}",
+                                                    file_path
+                                                ),
+                                            );
+                                            self.show_hud(
+                                                "Content copied to clipboard".to_string(),
+                                                Some(2000),
+                                                cx,
+                                            );
+                                        }
+                                        Err(e) => {
+                                            logging::log(
+                                                "ERROR",
+                                                &format!("Failed to copy content: {}", e),
+                                            );
+                                            self.show_hud(
+                                                "Failed to copy content".to_string(),
+                                                Some(3000),
+                                                cx,
+                                            );
+                                        }
+                                    }
+                                }
+                                self.hide_main_and_reset(cx);
+                            }
+                            Err(e) => {
+                                logging::log(
+                                    "ERROR",
+                                    &format!("Failed to read file {}: {}", file_path, e),
+                                );
+                                self.show_hud(
+                                    format!("Failed to read file: {}", e),
+                                    Some(3000),
+                                    cx,
+                                );
+                            }
+                        }
+                    } else {
+                        self.show_hud(
+                            "Cannot copy content for this item type".to_string(),
+                            Some(2000),
+                            cx,
+                        );
+                    }
+                } else {
+                    self.show_hud("No item selected".to_string(), Some(2000), cx);
+                }
+            }
             "reset_ranking" => {
                 logging::log("UI", "Reset ranking action");
                 // Get the frecency path from the focused script info

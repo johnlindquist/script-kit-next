@@ -2071,6 +2071,8 @@ interface ChatMessageType {
   model?: string;
   models?: string[];
   saveHistory?: boolean;
+  /** When true, the app handles AI calls instead of SDK callbacks */
+  useBuiltinAi?: boolean;
 }
 
 /** Add a message to an active chat */
@@ -2467,6 +2469,9 @@ process.stdin.on('data', (chunk: string) => {
         let id: string | undefined;
         if (msg.type === 'submit') {
           id = (msg as SubmitMessage).id;
+        } else if (msg.type === 'chatSubmit') {
+          // Chat submit messages have 'id' field, not 'requestId'
+          id = (msg as { id: string; text: string }).id;
         } else if ('requestId' in msg) {
           id = (msg as { requestId: string }).requestId;
         }
@@ -2477,6 +2482,11 @@ process.stdin.on('data', (chunk: string) => {
             // Pass the full message object so resolvers can check msg.value, msg.type, etc.
             resolver(msg);
           }
+        }
+
+        // Emit chatSubmit events for the onMessage handler in chat()
+        if (msg.type === 'chatSubmit') {
+          process.emit('chatSubmit' as any, msg);
         }
         
         // Handle actionTriggered messages
@@ -4816,6 +4826,10 @@ const chatFn: ChatFunction = async function chat(options?: ChatOptions): Promise
   const initialMessages = inputMessages.map((msg, i) => normalizeMessage(msg, i));
   chatMessages = [...initialMessages];
 
+  // Determine if we should use built-in AI mode
+  // When no onInit/onMessage callbacks are provided, the app handles AI calls
+  const useBuiltinAi = !options?.onInit && !options?.onMessage;
+
   // Send the initial chat message to open the UI
   const message: ChatMessageType = {
     type: 'chat',
@@ -4828,8 +4842,13 @@ const chatFn: ChatFunction = async function chat(options?: ChatOptions): Promise
     model: options?.model,
     models: options?.models,
     saveHistory: options?.saveHistory ?? true,
+    useBuiltinAi,
   };
   send(message);
+
+  // IMPORTANT: Ref stdin BEFORE onInit to prevent process from exiting
+  // while onInit runs async work. addPending() will manage ref counting after.
+  (process.stdin as any).ref?.();
 
   // Call onInit if provided (allows script to add initial messages)
   if (options?.onInit) {

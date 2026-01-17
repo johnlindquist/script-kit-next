@@ -1748,6 +1748,9 @@ pub struct ChatPromptConfig {
     /// Save conversation to database (default: true)
     #[serde(default = "default_save_history")]
     pub save_history: bool,
+    /// Use built-in AI mode (app handles AI calls instead of SDK)
+    #[serde(default)]
+    pub use_builtin_ai: bool,
 }
 
 /// Default value for save_history (true)
@@ -1767,6 +1770,7 @@ impl Default for ChatPromptConfig {
             model: None,
             models: Vec::new(),
             save_history: true,
+            use_builtin_ai: false,
         }
     }
 }

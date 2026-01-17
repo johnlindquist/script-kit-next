@@ -70,6 +70,25 @@ impl ScriptListApp {
             // Store the dialog entity for keyboard routing
             self.actions_dialog = Some(dialog.clone());
 
+            // Set up the on_close callback to restore focus when escape is pressed in ActionsWindow
+            let app_entity = cx.entity().clone();
+            dialog.update(cx, |d, _cx| {
+                d.set_on_close(std::sync::Arc::new(move |cx| {
+                    app_entity.update(cx, |app, cx| {
+                        app.show_actions_popup = false;
+                        app.actions_dialog = None;
+                        app.file_search_actions_path = None;
+                        app.focused_input = FocusedInput::MainFilter;
+                        app.gpui_input_focused = true;
+                        logging::log(
+                            "FOCUS",
+                            "File search actions closed via escape, focus restored",
+                        );
+                        cx.notify();
+                    });
+                }));
+            });
+
             // Get main window bounds and display_id for positioning
             let main_bounds = window.bounds();
             let display_id = window.display(cx).map(|d| d.id());

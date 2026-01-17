@@ -221,6 +221,8 @@ pub struct ChatPrompt {
     builtin_is_streaming: bool,
     // Auto-submit flag: when true, submit the input on first render (for Tab from main menu)
     pending_submit: bool,
+    // Auto-respond flag: when true, respond to initial messages on first render (for scriptlets)
+    needs_initial_response: bool,
     // Cursor blink state for input field
     cursor_visible: bool,
     cursor_blink_started: bool,
@@ -279,6 +281,7 @@ impl ChatPrompt {
             builtin_streaming_content: String::new(),
             builtin_is_streaming: false,
             pending_submit: false,
+            needs_initial_response: false,
             cursor_visible: true,
             cursor_blink_started: false,
             needs_setup: false,
@@ -419,6 +422,13 @@ impl ChatPrompt {
     /// Used for Tab from main menu to immediately send the query to AI
     pub fn with_pending_submit(mut self, submit: bool) -> Self {
         self.pending_submit = submit;
+        self
+    }
+
+    /// Set needs_initial_response flag - when true, auto-respond to initial messages on first render
+    /// Used for scriptlets that call chat() with pre-populated messages
+    pub fn with_needs_initial_response(mut self, needs: bool) -> Self {
+        self.needs_initial_response = needs;
         self
     }
 
@@ -745,6 +755,233 @@ impl ChatPrompt {
                                 logging::log(
                                     "CHAT",
                                     &format!("Built-in AI complete: {} chars", content.len()),
+                                );
+                                // Set final content
+                                if let Some(msg) = chat
+                                    .messages
+                                    .iter_mut()
+                                    .find(|m| m.id.as_deref() == Some(&msg_id_clone))
+                                {
+                                    msg.set_content(&content);
+                                    msg.streaming = false;
+                                }
+                            }
+                            cx.notify();
+                        })
+                        .ok();
+                    });
+                    break;
+                }
+            }
+        })
+        .detach();
+    }
+
+    /// Handle initial response for pre-populated messages (scriptlets using chat())
+    /// Unlike handle_builtin_ai_submit, this doesn't add a new user message - messages are already in self.messages
+    fn handle_initial_response(&mut self, cx: &mut Context<Self>) {
+        // Don't allow if already streaming
+        if self.builtin_is_streaming {
+            return;
+        }
+
+        // Check if we have messages and the last one is from user
+        let has_user_message = self.messages.last().map(|m| m.is_user()).unwrap_or(false);
+
+        if !has_user_message {
+            logging::log(
+                "CHAT",
+                "handle_initial_response: No user message to respond to",
+            );
+            return;
+        }
+
+        logging::log(
+            "CHAT",
+            &format!(
+                "handle_initial_response: Auto-responding to {} initial messages",
+                self.messages.len()
+            ),
+        );
+
+        // Get the selected model and provider
+        let (model_id, provider) = match &self.selected_model {
+            Some(m) => (m.id.clone(), m.provider.clone()),
+            None => {
+                logging::log("CHAT", "No model selected for built-in AI initial response");
+                let error_msg = ChatPromptMessage::assistant(
+                    "No AI model configured. Please set up an API key.",
+                );
+                self.messages.push(error_msg);
+                cx.notify();
+                return;
+            }
+        };
+
+        let registry = match &self.provider_registry {
+            Some(r) => r.clone(),
+            None => return,
+        };
+
+        let ai_provider = match registry.find_provider_for_model(&model_id) {
+            Some(p) => p.clone(),
+            None => {
+                logging::log(
+                    "CHAT",
+                    &format!("No provider found for model: {}", model_id),
+                );
+                let error_msg = ChatPromptMessage::assistant(format!(
+                    "Provider not found for model: {}",
+                    model_id
+                ));
+                self.messages.push(error_msg);
+                cx.notify();
+                return;
+            }
+        };
+
+        // Build messages for the API call (convert our messages to provider format)
+        let api_messages: Vec<ProviderMessage> = self
+            .messages
+            .iter()
+            .map(|m| {
+                if m.is_user() {
+                    ProviderMessage::user(m.get_content())
+                } else if matches!(m.role, Some(crate::protocol::ChatMessageRole::System)) {
+                    ProviderMessage::system(m.get_content())
+                } else {
+                    ProviderMessage::assistant(m.get_content())
+                }
+            })
+            .collect();
+
+        // Set streaming state
+        self.builtin_is_streaming = true;
+        self.builtin_streaming_content.clear();
+
+        // Add placeholder for assistant response
+        let assistant_message = ChatPromptMessage::assistant("").with_streaming(true);
+        let assistant_msg_id = assistant_message.id.clone().unwrap_or_default();
+        self.messages.push(assistant_message);
+        self.streaming_message_id = Some(assistant_msg_id.clone());
+        cx.notify();
+
+        logging::log(
+            "CHAT",
+            &format!(
+                "Starting built-in AI initial response: model={}, provider={}, messages={}",
+                model_id,
+                provider,
+                api_messages.len()
+            ),
+        );
+
+        // Use shared buffer for streaming content
+        let shared_content = Arc::new(std::sync::Mutex::new(String::new()));
+        let shared_done = Arc::new(AtomicBool::new(false));
+        let shared_error = Arc::new(std::sync::Mutex::new(None::<String>));
+
+        let content_clone = shared_content.clone();
+        let done_clone = shared_done.clone();
+        let error_clone = shared_error.clone();
+        let model_id_clone = model_id.clone();
+
+        // Spawn background thread for streaming
+        std::thread::spawn(move || {
+            let result = ai_provider.stream_message(
+                &api_messages,
+                &model_id_clone,
+                Box::new(move |chunk| {
+                    if let Ok(mut content) = content_clone.lock() {
+                        content.push_str(&chunk);
+                    }
+                }),
+            );
+
+            match result {
+                Ok(()) => {
+                    done_clone.store(true, Ordering::SeqCst);
+                }
+                Err(e) => {
+                    if let Ok(mut err) = error_clone.lock() {
+                        *err = Some(e.to_string());
+                    }
+                    done_clone.store(true, Ordering::SeqCst);
+                }
+            }
+        });
+
+        // Poll for streaming updates
+        let content_for_poll = shared_content.clone();
+        let done_for_poll = shared_done.clone();
+        let error_for_poll = shared_error.clone();
+        let msg_id = assistant_msg_id.clone();
+
+        cx.spawn(async move |this, cx| {
+            let mut last_content_len = 0;
+
+            loop {
+                Timer::after(std::time::Duration::from_millis(50)).await;
+
+                // Check for new content
+                if let Ok(content) = content_for_poll.lock() {
+                    if content.len() > last_content_len {
+                        let new_content = content.clone();
+                        last_content_len = content.len();
+
+                        let msg_id_clone = msg_id.clone();
+                        let _ = cx.update(|cx| {
+                            this.update(cx, |chat, cx| {
+                                // Update the streaming message content
+                                if let Some(msg) = chat
+                                    .messages
+                                    .iter_mut()
+                                    .find(|m| m.id.as_deref() == Some(&msg_id_clone))
+                                {
+                                    msg.set_content(&new_content);
+                                }
+                                chat.builtin_streaming_content = new_content;
+                                chat.scroll_handle.scroll_to_bottom();
+                                cx.notify();
+                            })
+                            .ok();
+                        });
+                    }
+                }
+
+                // Check if done
+                if done_for_poll.load(Ordering::SeqCst) {
+                    let final_content = content_for_poll.lock().ok().map(|c| c.clone());
+                    let error = error_for_poll.lock().ok().and_then(|e| e.clone());
+
+                    let msg_id_clone = msg_id.clone();
+                    let _ = cx.update(|cx| {
+                        this.update(cx, |chat, cx| {
+                            // Complete streaming
+                            chat.builtin_is_streaming = false;
+                            chat.streaming_message_id = None;
+
+                            if let Some(err) = error {
+                                logging::log(
+                                    "CHAT",
+                                    &format!("Built-in AI initial response error: {}", err),
+                                );
+                                // Set error on the message
+                                if let Some(msg) = chat
+                                    .messages
+                                    .iter_mut()
+                                    .find(|m| m.id.as_deref() == Some(&msg_id_clone))
+                                {
+                                    msg.error = Some(err);
+                                    msg.streaming = false;
+                                }
+                            } else if let Some(content) = final_content {
+                                logging::log(
+                                    "CHAT",
+                                    &format!(
+                                        "Built-in AI initial response complete: {} chars",
+                                        content.len()
+                                    ),
                                 );
                                 // Set final content
                                 if let Some(msg) = chat
@@ -1710,6 +1947,17 @@ impl Render for ChatPrompt {
                 "Processing pending_submit - auto-submitting query from Tab",
             );
             self.handle_submit(cx);
+        }
+
+        // Process needs_initial_response on first render (used for scriptlets with pre-populated messages)
+        // Skip if in setup mode, requires built-in AI to be enabled
+        if !self.needs_setup && self.needs_initial_response && self.has_builtin_ai() {
+            self.needs_initial_response = false;
+            logging::log(
+                "CHAT",
+                "Processing needs_initial_response - auto-responding to initial messages",
+            );
+            self.handle_initial_response(cx);
         }
 
         let colors = &self.prompt_colors;
