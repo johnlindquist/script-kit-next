@@ -4532,7 +4532,8 @@ globalThis.getSelectedText = async function getSelectedText(): Promise<string> {
   
   // Brief delay to ensure focus has transferred to the previous app
   // 20ms is typically sufficient (reduced from original 50ms)
-  await sleep(20);
+  // Using inline Promise since globalThis.wait may not be defined yet
+  await new Promise(r => setTimeout(r, 20));
   bench('getSelectedText_delay_done');
 
   const id = nextId();
