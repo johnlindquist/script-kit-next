@@ -256,6 +256,12 @@ impl ScriptHotkeyPoller {
 
                 let id_clone = command_id.clone();
                 let _ = cx.update(move |cx: &mut App| {
+                    // Clear NEEDS_RESET before executing new command - we're starting a fresh script
+                    // and shouldn't reset based on previous script's exit state
+                    if NEEDS_RESET.swap(false, std::sync::atomic::Ordering::SeqCst) {
+                        logging::log("HOTKEY", "Cleared NEEDS_RESET before executing new command");
+                    }
+
                     // Execute command and check if main window should be shown
                     let should_show = window
                         .update(

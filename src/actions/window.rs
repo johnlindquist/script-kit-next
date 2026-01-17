@@ -157,11 +157,21 @@ impl Render for ActionsWindow {
                         // Execute the action's callback
                         let callback = this.dialog.read(cx).on_select.clone();
                         callback(action_id.clone());
+                        // Notify main app to restore focus before closing
+                        let on_close = this.dialog.read(cx).on_close.clone();
+                        if let Some(callback) = on_close {
+                            callback(cx);
+                        }
                         // Close the window
                         window.remove_window();
                     }
                 }
                 "escape" => {
+                    // Notify main app to restore focus before closing
+                    let on_close = this.dialog.read(cx).on_close.clone();
+                    if let Some(callback) = on_close {
+                        callback(cx);
+                    }
                     // Close the window
                     window.remove_window();
                 }

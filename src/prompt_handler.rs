@@ -11,6 +11,19 @@ impl ScriptListApp {
                 choices,
                 actions,
             } => {
+                // Clear NEEDS_RESET when receiving a UI prompt from an active script
+                // This prevents the window from resetting when shown (script wants to use UI)
+                if NEEDS_RESET.swap(false, Ordering::SeqCst) {
+                    logging::log("UI", "Cleared NEEDS_RESET - script is showing arg UI");
+                }
+
+                // Show window if hidden (script may have called hide() for getSelectedText)
+                if !script_kit_gpui::is_main_window_visible() {
+                    logging::log("UI", "Window hidden - requesting show for arg UI");
+                    script_kit_gpui::set_main_window_visible(true);
+                    script_kit_gpui::request_show_main_window();
+                }
+
                 logging::log(
                     "UI",
                     &format!(
@@ -76,6 +89,18 @@ impl ScriptListApp {
                 container_padding,
                 opacity,
             } => {
+                // Clear NEEDS_RESET when receiving a UI prompt from an active script
+                if NEEDS_RESET.swap(false, Ordering::SeqCst) {
+                    logging::log("UI", "Cleared NEEDS_RESET - script is showing div UI");
+                }
+
+                // Show window if hidden
+                if !script_kit_gpui::is_main_window_visible() {
+                    logging::log("UI", "Window hidden - requesting show for div UI");
+                    script_kit_gpui::set_main_window_visible(true);
+                    script_kit_gpui::request_show_main_window();
+                }
+
                 logging::log("UI", &format!("Showing div prompt: {}", id));
                 // Store SDK actions for the actions panel (Cmd+K)
                 self.sdk_actions = actions;
@@ -1554,7 +1579,21 @@ impl ScriptListApp {
                 model,
                 models,
                 save_history,
+                use_builtin_ai,
             } => {
+                // Clear NEEDS_RESET when receiving a UI prompt from an active script
+                // This prevents the window from resetting when shown (script wants to use UI)
+                if NEEDS_RESET.swap(false, Ordering::SeqCst) {
+                    logging::log("CHAT", "Cleared NEEDS_RESET - script is showing chat UI");
+                }
+
+                // Show window if hidden (script may have called hide() for getSelectedText)
+                if !script_kit_gpui::is_main_window_visible() {
+                    logging::log("CHAT", "Window hidden - requesting show for chat UI");
+                    script_kit_gpui::set_main_window_visible(true);
+                    script_kit_gpui::request_show_main_window();
+                }
+
                 tracing::info!(
                     id,
                     ?placeholder,
@@ -1562,16 +1601,18 @@ impl ScriptListApp {
                     ?model,
                     model_count = models.len(),
                     save_history,
+                    use_builtin_ai,
                     "ShowChat received"
                 );
                 logging::log(
                     "UI",
                     &format!(
-                        "ShowChat prompt received: {} ({} messages, {} models, save={})",
+                        "ShowChat prompt received: {} ({} messages, {} models, save={}, builtin_ai={})",
                         id,
                         messages.len(),
                         models.len(),
-                        save_history
+                        save_history,
+                        use_builtin_ai
                     ),
                 );
 
@@ -1626,6 +1667,38 @@ impl ScriptListApp {
 
                 // Configure history saving
                 chat_prompt = chat_prompt.with_save_history(save_history);
+
+                // If SDK requested built-in AI mode, enable it with the app's AI providers
+                if use_builtin_ai {
+                    use crate::ai::ProviderRegistry;
+
+                    let registry = ProviderRegistry::from_environment();
+                    if registry.has_any_provider() {
+                        logging::log(
+                            "CHAT",
+                            &format!(
+                                "Enabling built-in AI with {} providers",
+                                registry.provider_ids().len()
+                            ),
+                        );
+                        chat_prompt = chat_prompt.with_builtin_ai(registry, true);
+                        // Auto-respond if there are initial user messages (scriptlets with pre-populated messages)
+                        if chat_prompt
+                            .messages
+                            .iter()
+                            .any(|m| m.role == Some(crate::protocol::ChatMessageRole::User))
+                        {
+                            logging::log(
+                                "CHAT",
+                                "Found user messages - enabling needs_initial_response",
+                            );
+                            chat_prompt = chat_prompt.with_needs_initial_response(true);
+                        }
+                    } else {
+                        logging::log("CHAT", "Built-in AI requested but no providers configured");
+                        chat_prompt = chat_prompt.with_needs_setup(true);
+                    }
+                }
 
                 // Note: ⌘K for actions is handled at the main app level in handle_key_event
                 // The ChatPrompt's on_show_actions callback is not needed when main app handles it

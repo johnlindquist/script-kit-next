@@ -403,6 +403,16 @@ pub fn get_scriptlet_context_actions_with_custom(
         .with_shortcut("⌘⇧C"),
     );
 
+    actions.push(
+        Action::new(
+            "copy_content",
+            "Copy Content",
+            Some("Copy entire file content to clipboard".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("⌘⌥C"),
+    );
+
     // 6. Copy deeplink
     let deeplink_name = to_deeplink_name(&script.name);
     actions.push(
@@ -561,6 +571,16 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
             )
             .with_shortcut("⌘⇧C"),
         );
+
+        actions.push(
+            Action::new(
+                "copy_content",
+                "Copy Content",
+                Some("Copy entire file content to clipboard".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌘⌥C"),
+        );
     }
 
     // Scriptlet-specific actions (work with the markdown file containing the scriptlet)
@@ -593,6 +613,59 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
                 ActionCategory::ScriptContext,
             )
             .with_shortcut("⌘⇧C"),
+        );
+
+        actions.push(
+            Action::new(
+                "copy_content",
+                "Copy Content",
+                Some("Copy entire file content to clipboard".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌘⌥C"),
+        );
+    }
+
+    // Agent-specific actions
+    if script.is_agent {
+        actions.push(
+            Action::new(
+                "edit_script",
+                "Edit Agent",
+                Some("Open the agent file in $EDITOR".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌘E"),
+        );
+
+        actions.push(
+            Action::new(
+                "reveal_in_finder",
+                "Reveal in Finder",
+                Some("Show agent file in Finder".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌘⇧F"),
+        );
+
+        actions.push(
+            Action::new(
+                "copy_path",
+                "Copy Path",
+                Some("Copy agent path to clipboard".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌘⇧C"),
+        );
+
+        actions.push(
+            Action::new(
+                "copy_content",
+                "Copy Content",
+                Some("Copy entire file content to clipboard".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌘⌥C"),
         );
     }
 

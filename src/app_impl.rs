@@ -3028,6 +3028,22 @@ impl ScriptListApp {
             // Store the dialog entity for keyboard routing
             self.actions_dialog = Some(dialog.clone());
 
+            // Set up the on_close callback to restore focus when escape is pressed in ActionsWindow
+            // This ensures the same cleanup happens whether closing via Cmd+K toggle or Escape
+            let app_entity = cx.entity().clone();
+            dialog.update(cx, |d, _cx| {
+                d.set_on_close(std::sync::Arc::new(move |cx| {
+                    app_entity.update(cx, |app, cx| {
+                        app.show_actions_popup = false;
+                        app.actions_dialog = None;
+                        app.focused_input = FocusedInput::None;
+                        app.pending_focus = Some(FocusTarget::AppRoot);
+                        logging::log("FOCUS", "Chat actions closed via escape, focus restored");
+                        cx.notify();
+                    });
+                }));
+            });
+
             // Get main window bounds and display_id for positioning the actions popup
             //
             // CRITICAL: We use GPUI's window.bounds() which returns SCREEN-RELATIVE coordinates
@@ -3225,6 +3241,24 @@ impl ScriptListApp {
 
             // Store the dialog entity for keyboard routing
             self.actions_dialog = Some(dialog.clone());
+
+            // Set up the on_close callback to restore focus when escape is pressed in ActionsWindow
+            let app_entity = cx.entity().clone();
+            dialog.update(cx, |d, _cx| {
+                d.set_on_close(std::sync::Arc::new(move |cx| {
+                    app_entity.update(cx, |app, cx| {
+                        app.show_actions_popup = false;
+                        app.actions_dialog = None;
+                        app.focused_input = FocusedInput::MainFilter;
+                        app.pending_focus = Some(FocusTarget::MainFilter);
+                        logging::log(
+                            "FOCUS",
+                            "Actions closed via escape, focus restored to MainFilter",
+                        );
+                        cx.notify();
+                    });
+                }));
+            });
 
             // Get main window bounds and display_id for positioning
             let main_bounds = window.bounds();
