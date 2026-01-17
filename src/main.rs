@@ -39,6 +39,7 @@ mod editor;
 mod error;
 mod executor;
 mod filter_coalescer;
+mod focus_coordinator;
 mod form_prompt;
 #[allow(dead_code)] // TODO: Re-enable once hotkey_pollers is updated for Root wrapper
 mod hotkey_pollers;
@@ -1381,7 +1382,11 @@ struct ScriptListApp {
     is_pinned: bool,
     /// Pending focus target - when set, focus will be applied once on next render
     /// then cleared. This avoids the "perpetually enforce focus in render()" anti-pattern.
+    /// DEPRECATED: Use focus_coordinator instead. This remains for gradual migration.
     pending_focus: Option<FocusTarget>,
+    /// Focus coordinator - centralized focus management with push/pop overlay semantics.
+    /// This is the new unified focus system that replaces focused_input + pending_focus.
+    focus_coordinator: focus_coordinator::FocusCoordinator,
     // Show warning banner when bun is not available
     show_bun_warning: bool,
     // Builtin confirmation channel - for modal callback to signal completion

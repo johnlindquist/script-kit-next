@@ -23,6 +23,7 @@ pub mod designs;
 pub mod editor;
 pub mod error;
 pub mod executor;
+pub mod focus_coordinator;
 pub mod form_prompt;
 pub mod hotkeys;
 pub mod icons;
