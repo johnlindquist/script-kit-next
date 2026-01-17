@@ -360,7 +360,7 @@ pub fn render_design_item(
             use crate::list_item::{IconKind, ListItem};
 
             // Extract name, description, shortcut, and icon based on result type
-            let (name, description, shortcut, icon_kind) = match result {
+            let (name, _description, shortcut, icon_kind) = match result {
                 SearchResult::Script(sm) => {
                     // Use script's icon metadata if present, otherwise default to "Code" SVG
                     let icon = match &sm.script.icon {
@@ -471,10 +471,10 @@ pub fn render_design_item(
                 }
             };
 
+            // Compact design: no description, just name + icon + shortcut
             ListItem::new(name, list_colors)
                 .index(index)
                 .icon_kind_opt(icon_kind)
-                .description_opt(description)
                 .shortcut_opt(shortcut)
                 .selected(is_selected)
                 .hovered(is_hovered)
