@@ -3031,11 +3031,14 @@ impl ScriptListApp {
                     app_entity.update(cx, |app, cx| {
                         app.show_actions_popup = false;
                         app.actions_dialog = None;
+                        // Match what close_actions_popup does for MainList host:
+                        // Set focused_input first, then pending_focus to AppRoot
+                        // (AppRoot checks focused_input to know what to focus)
                         app.focused_input = FocusedInput::MainFilter;
-                        app.pending_focus = Some(FocusTarget::MainFilter);
+                        app.pending_focus = Some(FocusTarget::AppRoot);
                         logging::log(
                             "FOCUS",
-                            "Actions closed via escape, focus restored to MainFilter",
+                            "Actions closed via escape, pending_focus=AppRoot, focused_input=MainFilter",
                         );
                         cx.notify();
                     });
@@ -3241,17 +3244,19 @@ impl ScriptListApp {
             self.actions_dialog = Some(dialog.clone());
 
             // Set up the on_close callback to restore focus when escape is pressed in ActionsWindow
+            // Match what close_actions_popup does for ChatPrompt host
             let app_entity = cx.entity().clone();
             dialog.update(cx, |d, _cx| {
                 d.set_on_close(std::sync::Arc::new(move |cx| {
                     app_entity.update(cx, |app, cx| {
                         app.show_actions_popup = false;
                         app.actions_dialog = None;
-                        app.focused_input = FocusedInput::MainFilter;
-                        app.pending_focus = Some(FocusTarget::MainFilter);
+                        // ChatPrompt handles its own focus - restore to app root
+                        app.focused_input = FocusedInput::None;
+                        app.pending_focus = Some(FocusTarget::ChatPrompt);
                         logging::log(
                             "FOCUS",
-                            "Actions closed via escape, focus restored to MainFilter",
+                            "Chat actions closed via escape, pending_focus=ChatPrompt",
                         );
                         cx.notify();
                     });

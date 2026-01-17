@@ -71,6 +71,7 @@ impl ScriptListApp {
             self.actions_dialog = Some(dialog.clone());
 
             // Set up the on_close callback to restore focus when escape is pressed in ActionsWindow
+            // Match what close_actions_popup does for FileSearch host
             let app_entity = cx.entity().clone();
             dialog.update(cx, |d, _cx| {
                 d.set_on_close(std::sync::Arc::new(move |cx| {
@@ -78,11 +79,12 @@ impl ScriptListApp {
                         app.show_actions_popup = false;
                         app.actions_dialog = None;
                         app.file_search_actions_path = None;
+                        // File search uses MainFilter input - restore focus to it
                         app.focused_input = FocusedInput::MainFilter;
-                        app.gpui_input_focused = true;
+                        app.pending_focus = Some(FocusTarget::AppRoot);
                         logging::log(
                             "FOCUS",
-                            "File search actions closed via escape, focus restored",
+                            "File search actions closed via escape, pending_focus=AppRoot",
                         );
                         cx.notify();
                     });

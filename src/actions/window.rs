@@ -164,8 +164,10 @@ impl Render for ActionsWindow {
                         }
                         // Activate the main window so it can receive focus
                         platform::activate_main_window();
-                        // Close the window
-                        window.remove_window();
+                        // Defer window removal to give the main window time to become key
+                        window.defer(cx, |window, _cx| {
+                            window.remove_window();
+                        });
                     }
                 }
                 "escape" => {
@@ -175,10 +177,13 @@ impl Render for ActionsWindow {
                         callback(cx);
                     }
                     // Activate the main window so it can receive focus
-                    // This is needed because apply_pending_focus checks is_main_window_focused()
                     platform::activate_main_window();
-                    // Close this window
-                    window.remove_window();
+                    // Defer window removal to give the main window time to become key
+                    // and process the pending focus. This matches how close_actions_popup
+                    // uses cx.spawn() to close the window asynchronously.
+                    window.defer(cx, |window, _cx| {
+                        window.remove_window();
+                    });
                 }
                 "backspace" | "delete" => {
                     crate::logging::log("ACTIONS", "ActionsWindow: backspace pressed");
