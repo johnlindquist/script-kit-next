@@ -9,8 +9,8 @@ pub const POPUP_WIDTH: f32 = 320.0;
 pub const POPUP_MAX_HEIGHT: f32 = 400.0;
 
 /// Fixed height for action items (required for uniform_list virtualization)
-/// Standardized to 44px for consistent touch targets (matches iOS guidelines, Notes panel)
-pub const ACTION_ITEM_HEIGHT: f32 = 44.0;
+/// Compact height at 36px for visual consistency with main menu list items
+pub const ACTION_ITEM_HEIGHT: f32 = 36.0;
 
 /// Fixed height for the search input row (matches Notes panel PANEL_SEARCH_HEIGHT)
 pub const SEARCH_INPUT_HEIGHT: f32 = 44.0;
@@ -50,8 +50,8 @@ mod tests {
     #[test]
     fn test_action_item_height_constant() {
         // Fixed height is required for uniform_list virtualization
-        // Standardized to 44px for consistent touch targets (matches iOS guidelines)
-        assert_eq!(ACTION_ITEM_HEIGHT, 44.0);
+        // Compact height at 36px for visual consistency with main menu list items
+        assert_eq!(ACTION_ITEM_HEIGHT, 36.0);
         // Ensure item height is positive and reasonable
         const _: () = assert!(ACTION_ITEM_HEIGHT > 0.0);
         const _: () = assert!(ACTION_ITEM_HEIGHT < POPUP_MAX_HEIGHT);

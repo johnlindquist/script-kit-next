@@ -28,7 +28,7 @@ pub enum IconKind {
 /// IMPORTANT: When using GPUI `uniform_list`, the item closure must render
 /// at exactly this height (including padding). If you change visuals, keep the
 /// total height stable or update this constant everywhere it is used.
-pub const LIST_ITEM_HEIGHT: f32 = 48.0;
+pub const LIST_ITEM_HEIGHT: f32 = 36.0;
 
 /// Fixed height for section headers (RECENT, MAIN, etc.)
 /// Total height includes: pt(8px) + text (~8px via text_xs) + pb(4px) = ~20px content
@@ -581,7 +581,7 @@ impl RenderOnce for ListItem {
                 .text_xs()
                 .text_color(rgb(colors.text_dimmed))
                 .px(px(6.))
-                .py(px(2.))
+                .py(px(4.))
                 .rounded(px(3.))
                 .bg(rgba((colors.background << 8) | 0x40))
                 .child(sc)
@@ -601,7 +601,7 @@ impl RenderOnce for ListItem {
         };
 
         // Build the inner content div with all styling
-        // Horizontal padding px(12.) and vertical padding py(6.) for comfortable spacing
+        // Horizontal padding px(12.) and vertical padding py(2.) for compact spacing
         //
         // HOVER TRANSITIONS: We use GPUI's built-in .hover() modifier for instant visual
         // feedback on non-selected items. This provides CSS-like instant hover effects
@@ -612,7 +612,7 @@ impl RenderOnce for ListItem {
             .w_full()
             .h_full()
             .px(px(12.))
-            .py(px(6.))
+            .py(px(2.))
             .bg(bg_color)
             .text_color(if self.selected {
                 rgb(colors.text_primary)
