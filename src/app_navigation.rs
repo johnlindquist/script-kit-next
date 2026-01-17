@@ -27,7 +27,7 @@ impl ScriptListApp {
 
             // Skip section headers when moving up
             while new_index > 0 {
-                if let Some(GroupedListItem::SectionHeader(_)) = grouped_items.get(new_index) {
+                if let Some(GroupedListItem::SectionHeader(..)) = grouped_items.get(new_index) {
                     new_index -= 1;
                 } else {
                     break;
@@ -35,7 +35,7 @@ impl ScriptListApp {
             }
 
             // Make sure we didn't land on a section header at index 0
-            if let Some(GroupedListItem::SectionHeader(_)) = grouped_items.get(new_index) {
+            if let Some(GroupedListItem::SectionHeader(..)) = grouped_items.get(new_index) {
                 // Stay at current position if we can't find a valid item
                 return;
             }
@@ -73,7 +73,7 @@ impl ScriptListApp {
 
             // Skip section headers when moving down
             while new_index < item_count.saturating_sub(1) {
-                if let Some(GroupedListItem::SectionHeader(_)) = grouped_items.get(new_index) {
+                if let Some(GroupedListItem::SectionHeader(..)) = grouped_items.get(new_index) {
                     new_index += 1;
                 } else {
                     break;
@@ -81,7 +81,7 @@ impl ScriptListApp {
             }
 
             // Make sure we didn't land on a section header at the end
-            if let Some(GroupedListItem::SectionHeader(_)) = grouped_items.get(new_index) {
+            if let Some(GroupedListItem::SectionHeader(..)) = grouped_items.get(new_index) {
                 // Stay at current position if we can't find a valid item
                 return;
             }
@@ -223,7 +223,7 @@ impl ScriptListApp {
         // Final validation: ensure we're not on a header
         if matches!(
             grouped_items.get(new_index),
-            Some(GroupedListItem::SectionHeader(_))
+            Some(GroupedListItem::SectionHeader(..))
         ) {
             // Can't find a valid position, stay put
             return;

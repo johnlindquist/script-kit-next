@@ -349,11 +349,14 @@ fn show_main_window_helper(
     // 1. Set visibility state
     set_main_window_visible(true);
 
-    // 2. Mark window shown timestamp for focus grace period
+    // 2. Re-enable position saving (may have been suppressed by reset)
+    window_state::allow_save();
+
+    // 3. Mark window shown timestamp for focus grace period
     // This prevents the window from being closed by focus loss immediately after opening
     script_kit_gpui::mark_window_shown();
 
-    // 3. Move to active space (macOS)
+    // 4. Move to active space (macOS)
     platform::ensure_move_to_active_space();
 
     // 4. Position window - try per-display saved position first, then fall back to eye-line

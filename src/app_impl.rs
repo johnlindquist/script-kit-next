@@ -2140,7 +2140,7 @@ impl ScriptListApp {
         // Get the grouped item at selected_index and extract the result index
         let result_idx = match grouped_items.get(self.selected_index) {
             Some(GroupedListItem::Item(idx)) => Some(*idx),
-            Some(GroupedListItem::SectionHeader(_)) => None, // Section headers are not selectable
+            Some(GroupedListItem::SectionHeader(..)) => None, // Section headers are not selectable
             None => None,
         };
 
@@ -5632,6 +5632,7 @@ export default {
         self.invalidate_grouped_cache(); // Ensure cache is fresh
         self.sync_list_state();
         self.selected_index = 0;
+        self.hovered_index = None; // Reset hover state to prevent stale highlight on reopen
         self.validate_selection_bounds(cx);
         // Scroll to the very top of the list (not just reveal the item)
         // This ensures the first item is at the top, not just visible somewhere in the viewport
@@ -5696,6 +5697,7 @@ export default {
 
         // Reset selection to first item
         self.selected_index = 0;
+        self.hovered_index = None; // Reset hover state to prevent stale highlight on reopen
         self.validate_selection_bounds(cx);
 
         // Scroll to top
@@ -5708,7 +5710,7 @@ export default {
         logging::log(
             "UI",
             &format!(
-                "Selection reset to first item: selected_index={}",
+                "Selection reset to first item: selected_index={}, hovered_index=None",
                 self.selected_index
             ),
         );
