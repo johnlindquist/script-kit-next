@@ -452,6 +452,12 @@ fn show_main_window_helper(
             // This fixes the bug where the main menu sometimes opened with a
             // random item selected (e.g., "Reset Window Positions" instead of "AI Chat").
             view.ensure_selection_at_first_item(ctx);
+
+            // FIX: Set pending_focus to MainFilter so the input gets focused
+            // when the window is shown. Without this, the cursor won't blink
+            // and typing won't work until the user clicks the input.
+            view.focused_input = FocusedInput::MainFilter;
+            view.pending_focus = Some(FocusTarget::MainFilter);
         }
 
         // Always ensure window size matches current view using deferred resize.
