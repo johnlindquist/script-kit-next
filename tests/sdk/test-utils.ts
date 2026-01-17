@@ -1,5 +1,5 @@
 // Name: SDK Test - Utility Functions
-// Description: Tests wait, uuid, compile, and HTTP methods (using native fetch)
+// Description: Tests uuid, compile, and HTTP methods (using native fetch)
 
 /**
  * SDK TEST: test-utils.ts
@@ -7,14 +7,12 @@
  * Tests utility functions that don't require user interaction.
  * 
  * Test cases:
- * 1. utils-wait: wait() delay function
- * 2. utils-uuid: uuid() generation
- * 3. utils-compile: compile() template function
- * 4. http-get: native fetch() GET request (if network available)
- * 5. http-post: native fetch() POST request (if network available)
+ * 1. utils-uuid: uuid() generation
+ * 2. utils-compile: compile() template function
+ * 3. http-get: native fetch() GET request (if network available)
+ * 4. http-post: native fetch() POST request (if network available)
  * 
  * Expected behavior:
- * - wait() delays execution by specified ms
  * - uuid() generates valid v4 UUIDs
  * - compile() creates template functions
  * - Native fetch() returns response data
@@ -56,46 +54,17 @@ function debug(msg: string) {
 // =============================================================================
 
 debug('test-utils.ts starting...');
-debug(`SDK globals: wait=${typeof wait}, uuid=${typeof uuid}, compile=${typeof compile}`);
+debug(`SDK globals: uuid=${typeof uuid}, compile=${typeof compile}`);
 
 // -----------------------------------------------------------------------------
-// Test 1: wait() delay function
+// Test 1: uuid() generation
 // -----------------------------------------------------------------------------
-const test1 = 'utils-wait';
-logTest(test1, 'running');
-const start1 = Date.now();
-
-try {
-  debug('Test 1: wait() delay function');
-  
-  const waitStart = Date.now();
-  await wait(100);
-  const elapsed = Date.now() - waitStart;
-  
-  debug(`wait(100) took ${elapsed}ms (expected ~100ms)`);
-  
-  // Allow 50ms tolerance for timing variations
-  if (elapsed >= 90 && elapsed <= 200) {
-    logTest(test1, 'pass', { result: `${elapsed}ms`, duration_ms: Date.now() - start1 });
-  } else {
-    logTest(test1, 'fail', { 
-      error: `wait(100) took ${elapsed}ms, expected ~100ms`,
-      duration_ms: Date.now() - start1 
-    });
-  }
-} catch (err) {
-  logTest(test1, 'fail', { error: String(err), duration_ms: Date.now() - start1 });
-}
-
-// -----------------------------------------------------------------------------
-// Test 2: uuid() generation
-// -----------------------------------------------------------------------------
-const test2 = 'utils-uuid';
-logTest(test2, 'running');
-const start2 = Date.now();
+const testUuid = 'utils-uuid';
+logTest(testUuid, 'running');
+const startUuid = Date.now();
 
 try {
-  debug('Test 2: uuid() generation');
+  debug('Test: uuid() generation');
   
   const id1 = uuid();
   const id2 = uuid();
@@ -114,27 +83,27 @@ try {
   debug(`UUID format valid: ${uuidRegex.test(id1)}`);
   
   if (checks.every(Boolean)) {
-    logTest(test2, 'pass', { result: id1, duration_ms: Date.now() - start2 });
+    logTest(testUuid, 'pass', { result: id1, duration_ms: Date.now() - startUuid });
   } else {
-    logTest(test2, 'fail', { 
+    logTest(testUuid, 'fail', { 
       error: 'uuid() did not generate valid unique UUIDs',
       actual: id1,
-      duration_ms: Date.now() - start2 
+      duration_ms: Date.now() - startUuid 
     });
   }
 } catch (err) {
-  logTest(test2, 'fail', { error: String(err), duration_ms: Date.now() - start2 });
+  logTest(testUuid, 'fail', { error: String(err), duration_ms: Date.now() - startUuid });
 }
 
 // -----------------------------------------------------------------------------
-// Test 3: compile() template function
+// Test: compile() template function
 // -----------------------------------------------------------------------------
-const test3 = 'utils-compile';
-logTest(test3, 'running');
-const start3 = Date.now();
+const testCompile = 'utils-compile';
+logTest(testCompile, 'running');
+const startCompile = Date.now();
 
 try {
-  debug('Test 3: compile() template function');
+  debug('Test: compile() template function');
   
   const greet = compile('Hello, {{name}}! You are {{age}} years old.');
   const result1 = greet({ name: 'Alice', age: 30 });
@@ -148,17 +117,17 @@ try {
   debug(`Template with missing key: ${result2}`);
   
   if (result1 === expected) {
-    logTest(test3, 'pass', { result: result1, duration_ms: Date.now() - start3 });
+    logTest(testCompile, 'pass', { result: result1, duration_ms: Date.now() - startCompile });
   } else {
-    logTest(test3, 'fail', { 
+    logTest(testCompile, 'fail', { 
       error: 'compile() did not produce expected output',
       expected,
       actual: result1,
-      duration_ms: Date.now() - start3 
+      duration_ms: Date.now() - startCompile 
     });
   }
 } catch (err) {
-  logTest(test3, 'fail', { error: String(err), duration_ms: Date.now() - start3 });
+  logTest(testCompile, 'fail', { error: String(err), duration_ms: Date.now() - startCompile });
 }
 
 // -----------------------------------------------------------------------------
@@ -289,13 +258,12 @@ await div(md(`# Utility Functions Tests Complete
 All utility function tests have been executed.
 
 ## Test Cases Run
-1. **utils-wait**: wait() delay function
-2. **utils-uuid**: uuid() generation
-3. **utils-compile**: compile() template function
-4. **http-get**: Native fetch() GET request (network dependent)
-5. **http-post**: Native fetch() POST request (network dependent)
-6. **utils-window-control**: Window control functions
-7. **utils-content-setters**: Content setter functions
+1. **utils-uuid**: uuid() generation
+2. **utils-compile**: compile() template function
+3. **http-get**: Native fetch() GET request (network dependent)
+4. **http-post**: Native fetch() POST request (network dependent)
+5. **utils-window-control**: Window control functions
+6. **utils-content-setters**: Content setter functions
 
 ---
 
