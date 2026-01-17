@@ -55,13 +55,6 @@ const EMBEDDED_QUICKLINKS_ACTIONS: &str =
 const EMBEDDED_WINDOW_MANAGEMENT_EXTENSION: &str =
     include_str!("../kit-init/extensions/window-management/main.md");
 
-/// Embedded Conductor extension (built-in extension that ships with the app)
-const EMBEDDED_CONDUCTOR_EXTENSION: &str = include_str!("../kit-init/extensions/conductor/main.md");
-
-/// Embedded Conductor shared actions (built-in actions for all conductor scriptlets)
-const EMBEDDED_CONDUCTOR_ACTIONS: &str =
-    include_str!("../kit-init/extensions/conductor/main.actions.md");
-
 /// Embedded AI Text Tools extension (built-in extension that ships with the app)
 const EMBEDDED_AI_TEXT_TOOLS_EXTENSION: &str =
     include_str!("../kit-init/extensions/ai-text-tools/main.md");
@@ -75,16 +68,6 @@ const EMBEDDED_EXAMPLES_ADVANCED: &str =
 
 /// Embedded Examples extension - howto guide (built-in extension that ships with the app)
 const EMBEDDED_EXAMPLES_HOWTO: &str = include_str!("../kit-init/extensions/examples/howto.md");
-
-/// Embedded Conductor SDK module - provides TypeScript APIs for Conductor integration
-/// Used by conductor extension scriptlets via `import from '../../conductor'`
-const EMBEDDED_CONDUCTOR_SDK_INDEX: &str = include_str!("../kit-init/conductor/index.ts");
-const EMBEDDED_CONDUCTOR_SDK_CONFIG: &str = include_str!("../kit-init/conductor/config.ts");
-const EMBEDDED_CONDUCTOR_SDK_ENV: &str = include_str!("../kit-init/conductor/env.ts");
-const EMBEDDED_CONDUCTOR_SDK_HOOKS: &str = include_str!("../kit-init/conductor/hooks.ts");
-const EMBEDDED_CONDUCTOR_SDK_LAUNCH: &str = include_str!("../kit-init/conductor/launch.ts");
-const EMBEDDED_CONDUCTOR_SDK_TYPES: &str = include_str!("../kit-init/conductor/types.ts");
-const EMBEDDED_CONDUCTOR_SDK_README: &str = include_str!("../kit-init/conductor/README.md");
 
 /// Embedded AGENTS.md guide for AI agents writing user scripts
 const EMBEDDED_AGENTS_MD: &str = r###"# Script Kit User Scripts Guide
@@ -1051,8 +1034,6 @@ pub fn ensure_kit_setup() -> SetupResult {
             .join("kit")
             .join("window-management")
             .join("extensions"),
-        // Built-in Conductor extension kit
-        kit_dir.join("kit").join("conductor").join("extensions"),
         // Built-in AI Text Tools extension kit
         kit_dir.join("kit").join("ai-text-tools").join("extensions"),
         // Built-in Examples extension kit (scriptlet pattern reference)
@@ -1155,34 +1136,6 @@ pub fn ensure_kit_setup() -> SetupResult {
         "kit/window-management/extensions/main.md",
     );
 
-    // App-managed: Built-in Conductor extension (refresh if changed)
-    // This extension ships with the app and provides Conductor integration
-    let conductor_path = kit_dir
-        .join("kit")
-        .join("conductor")
-        .join("extensions")
-        .join("main.md");
-    write_string_if_changed(
-        &conductor_path,
-        EMBEDDED_CONDUCTOR_EXTENSION,
-        &mut warnings,
-        "kit/conductor/extensions/main.md",
-    );
-
-    // App-managed: Built-in Conductor shared actions (refresh if changed)
-    // These actions are automatically available for all Conductor scriptlets
-    let conductor_actions_path = kit_dir
-        .join("kit")
-        .join("conductor")
-        .join("extensions")
-        .join("main.actions.md");
-    write_string_if_changed(
-        &conductor_actions_path,
-        EMBEDDED_CONDUCTOR_ACTIONS,
-        &mut warnings,
-        "kit/conductor/extensions/main.actions.md",
-    );
-
     // App-managed: Built-in AI Text Tools extension (refresh if changed)
     // This extension ships with the app and provides AI-powered text transformations
     let ai_text_tools_path = kit_dir
@@ -1217,53 +1170,6 @@ pub fn ensure_kit_setup() -> SetupResult {
         EMBEDDED_EXAMPLES_HOWTO,
         &mut warnings,
         "kit/examples/extensions/howto.md",
-    );
-
-    // App-managed: Conductor SDK module (refresh if changed)
-    // Provides TypeScript APIs for Conductor integration, used by conductor extension
-    // scriptlets via `import from '../../conductor'`
-    let conductor_sdk_dir = kit_dir.join("kit").join("conductor");
-    write_string_if_changed(
-        &conductor_sdk_dir.join("index.ts"),
-        EMBEDDED_CONDUCTOR_SDK_INDEX,
-        &mut warnings,
-        "kit/conductor/index.ts",
-    );
-    write_string_if_changed(
-        &conductor_sdk_dir.join("config.ts"),
-        EMBEDDED_CONDUCTOR_SDK_CONFIG,
-        &mut warnings,
-        "kit/conductor/config.ts",
-    );
-    write_string_if_changed(
-        &conductor_sdk_dir.join("env.ts"),
-        EMBEDDED_CONDUCTOR_SDK_ENV,
-        &mut warnings,
-        "kit/conductor/env.ts",
-    );
-    write_string_if_changed(
-        &conductor_sdk_dir.join("hooks.ts"),
-        EMBEDDED_CONDUCTOR_SDK_HOOKS,
-        &mut warnings,
-        "kit/conductor/hooks.ts",
-    );
-    write_string_if_changed(
-        &conductor_sdk_dir.join("launch.ts"),
-        EMBEDDED_CONDUCTOR_SDK_LAUNCH,
-        &mut warnings,
-        "kit/conductor/launch.ts",
-    );
-    write_string_if_changed(
-        &conductor_sdk_dir.join("types.ts"),
-        EMBEDDED_CONDUCTOR_SDK_TYPES,
-        &mut warnings,
-        "kit/conductor/types.ts",
-    );
-    write_string_if_changed(
-        &conductor_sdk_dir.join("README.md"),
-        EMBEDDED_CONDUCTOR_SDK_README,
-        &mut warnings,
-        "kit/conductor/README.md",
     );
 
     // User-owned: config.ts (only create if missing)

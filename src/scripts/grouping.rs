@@ -140,27 +140,23 @@ pub fn get_grouped_results(
         if menu_bar_count > 0 {
             grouped.push(GroupedListItem::SectionHeader(
                 "MENU BAR ACTIONS".to_string(),
+                None,
             ));
             for idx in menu_bar_indices {
                 grouped.push(GroupedListItem::Item(idx));
             }
         }
 
-        // Collect fallback commands and append as "Use {query} with..." section OR as primary results
+        // Collect fallback commands and append as "Use {query} with..." section
         let fallbacks = collect_fallbacks(filter_text, scripts);
         let fallback_count = fallbacks.len();
 
         if !fallbacks.is_empty() {
-            // When there are no other results, fallbacks are elevated to primary (no header)
-            // This gives Raycast-style behavior where fallbacks become the main focus
-            if has_other_results {
-                // Add section header with the actual query text (fallbacks are secondary)
-                grouped.push(GroupedListItem::SectionHeader(format!(
-                    "Use \"{}\" with...",
-                    filter_text
-                )));
-            }
-            // When has_other_results is false, no header is added - fallbacks become primary
+            // Always show "Use X with..." header (no icon)
+            grouped.push(GroupedListItem::SectionHeader(
+                format!("Use \"{}\" with...", filter_text),
+                None,
+            ));
 
             // Append fallback items to the results vec and add their indices to grouped
             for fallback in fallbacks {
@@ -320,7 +316,10 @@ pub fn get_grouped_results(
     // Build grouped list in order: SUGGESTED, MAIN, COMMANDS, other kits, APPS
     // 1. SUGGESTED (frecency-based)
     if suggested_config.enabled && !suggested_indices.is_empty() {
-        grouped.push(GroupedListItem::SectionHeader("SUGGESTED".to_string()));
+        grouped.push(GroupedListItem::SectionHeader(
+            "SUGGESTED".to_string(),
+            None,
+        ));
         for (idx, _score) in &suggested_indices {
             grouped.push(GroupedListItem::Item(*idx));
         }
@@ -329,7 +328,7 @@ pub fn get_grouped_results(
     // 2. MAIN kit (if it has items)
     if let Some(main_indices) = kit_indices.get("main") {
         if !main_indices.is_empty() {
-            grouped.push(GroupedListItem::SectionHeader("MAIN".to_string()));
+            grouped.push(GroupedListItem::SectionHeader("MAIN".to_string(), None));
             for idx in main_indices {
                 grouped.push(GroupedListItem::Item(*idx));
             }
@@ -338,7 +337,7 @@ pub fn get_grouped_results(
 
     // 3. COMMANDS (built-ins and window controls)
     if !commands_indices.is_empty() {
-        grouped.push(GroupedListItem::SectionHeader("COMMANDS".to_string()));
+        grouped.push(GroupedListItem::SectionHeader("COMMANDS".to_string(), None));
         for idx in &commands_indices {
             grouped.push(GroupedListItem::Item(*idx));
         }
@@ -349,7 +348,10 @@ pub fn get_grouped_results(
         if let Some(indices) = kit_indices.get(*kit_name) {
             if !indices.is_empty() {
                 // Use uppercase kit name as section header
-                grouped.push(GroupedListItem::SectionHeader(kit_name.to_uppercase()));
+                grouped.push(GroupedListItem::SectionHeader(
+                    kit_name.to_uppercase(),
+                    None,
+                ));
                 for idx in indices {
                     grouped.push(GroupedListItem::Item(*idx));
                 }
@@ -359,7 +361,7 @@ pub fn get_grouped_results(
 
     // 5. APPS (installed applications)
     if !apps_indices.is_empty() {
-        grouped.push(GroupedListItem::SectionHeader("APPS".to_string()));
+        grouped.push(GroupedListItem::SectionHeader("APPS".to_string(), None));
         for idx in &apps_indices {
             grouped.push(GroupedListItem::Item(*idx));
         }
