@@ -1315,6 +1315,8 @@ pub(crate) fn start_hotkey_listener(config: config::Config) {
                         }
                     }
                     Some(HotkeyAction::Script(path)) => {
+                        // Start benchmark timing for hotkey → chat latency analysis
+                        logging::bench_start(&format!("hotkey:{}", path));
                         logging::log("HOTKEY", &format!("Script shortcut triggered: {}", path));
                         // NON-BLOCKING: Use try_send to prevent hotkey thread from blocking
                         if script_hotkey_channel().0.try_send(path.clone()).is_err() {

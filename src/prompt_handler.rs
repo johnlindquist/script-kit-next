@@ -1581,6 +1581,8 @@ impl ScriptListApp {
                 save_history,
                 use_builtin_ai,
             } => {
+                logging::bench_log("ShowChat_received");
+
                 // Clear NEEDS_RESET when receiving a UI prompt from an active script
                 // This prevents the window from resetting when shown (script wants to use UI)
                 if NEEDS_RESET.swap(false, Ordering::SeqCst) {
@@ -1589,6 +1591,7 @@ impl ScriptListApp {
 
                 // Show window if hidden (script may have called hide() for getSelectedText)
                 if !script_kit_gpui::is_main_window_visible() {
+                    logging::bench_log("window_show_requested");
                     logging::log("CHAT", "Window hidden - requesting show for chat UI");
                     script_kit_gpui::set_main_window_visible(true);
                     script_kit_gpui::request_show_main_window();
@@ -1703,13 +1706,17 @@ impl ScriptListApp {
                 // Note: ⌘K for actions is handled at the main app level in handle_key_event
                 // The ChatPrompt's on_show_actions callback is not needed when main app handles it
 
+                logging::bench_log("ChatPrompt_creating");
                 let entity = cx.new(|_| chat_prompt);
                 self.current_view = AppView::ChatPrompt { id, entity };
                 self.focused_input = FocusedInput::None;
                 self.pending_focus = Some(FocusTarget::ChatPrompt);
+                logging::bench_log("ChatPrompt_created");
 
                 resize_to_view_sync(ViewType::DivPrompt, 0);
+                logging::bench_log("resize_queued");
                 cx.notify();
+                logging::bench_end("hotkey_to_chat_visible");
             }
             PromptMessage::ChatAddMessage { id, message } => {
                 logging::log("CHAT", &format!("ChatAddMessage for {}", id));

@@ -162,6 +162,8 @@ impl Render for ActionsWindow {
                         if let Some(callback) = on_close {
                             callback(cx);
                         }
+                        // Activate the main window so it can receive focus
+                        platform::activate_main_window();
                         // Close the window
                         window.remove_window();
                     }
@@ -172,7 +174,10 @@ impl Render for ActionsWindow {
                     if let Some(callback) = on_close {
                         callback(cx);
                     }
-                    // Close the window
+                    // Activate the main window so it can receive focus
+                    // This is needed because apply_pending_focus checks is_main_window_focused()
+                    platform::activate_main_window();
+                    // Close this window
                     window.remove_window();
                 }
                 "backspace" | "delete" => {

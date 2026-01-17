@@ -342,6 +342,7 @@ fn show_main_window_helper(
     app_entity: Entity<ScriptListApp>,
     cx: &mut App,
 ) {
+    logging::bench_log("show_main_window_helper_start");
     logging::log("VISIBILITY", "show_main_window_helper called");
 
     // 1. Set visibility state
@@ -414,10 +415,12 @@ fn show_main_window_helper(
     // 6. Show window WITHOUT activating (floating panel behavior)
     // This allows the main menu to appear without stealing focus from other apps,
     // enabling features like "copy selected text from previous app" to work correctly.
+    logging::bench_log("window_show_native_start");
     platform::show_main_window_without_activation();
     let _ = window.update(cx, |_root, win, _cx| {
         win.activate_window();
     });
+    logging::bench_log("window_activated");
 
     // 7. Send AI window to back (if open) so it doesn't come forward with main menu
     // The AI window should only come forward via Cmd+Tab or explicit user action

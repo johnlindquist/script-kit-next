@@ -1245,11 +1245,6 @@ impl ScriptListApp {
     ///
     /// Returns true if focus was applied (for logging/debugging).
     fn apply_pending_focus(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
-        // Only apply if window is actually focused (avoid focus thrash)
-        if !platform::is_main_window_focused() {
-            return false;
-        }
-
         let Some(target) = self.pending_focus.take() else {
             return false;
         };
@@ -3036,9 +3031,12 @@ impl ScriptListApp {
                     app_entity.update(cx, |app, cx| {
                         app.show_actions_popup = false;
                         app.actions_dialog = None;
-                        app.focused_input = FocusedInput::None;
-                        app.pending_focus = Some(FocusTarget::AppRoot);
-                        logging::log("FOCUS", "Chat actions closed via escape, focus restored");
+                        app.focused_input = FocusedInput::MainFilter;
+                        app.pending_focus = Some(FocusTarget::MainFilter);
+                        logging::log(
+                            "FOCUS",
+                            "Actions closed via escape, focus restored to MainFilter",
+                        );
                         cx.notify();
                     });
                 }));
@@ -4878,7 +4876,9 @@ export default {
             match cmd_type {
                 "scriptlet" => {
                     // Find scriptlet by name
+                    logging::bench_log("scriptlet_lookup_start");
                     if let Some(scriptlet) = self.scriptlets.iter().find(|s| s.name == identifier) {
+                        logging::bench_log("scriptlet_found");
                         let scriptlet_clone = scriptlet.clone();
                         logging::log("EXEC", &format!("Executing scriptlet: {}", identifier));
                         self.execute_scriptlet(&scriptlet_clone, cx);
