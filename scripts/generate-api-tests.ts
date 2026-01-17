@@ -836,22 +836,6 @@ await runTest('del-request', async () => {
 
 `;
 
-  // wait tests
-  content += `// -----------------------------------------------------------------------------
-// wait() tests
-// -----------------------------------------------------------------------------
-
-await runTest('wait-basic', async () => {
-  const start = Date.now();
-  await wait(100);
-  const elapsed = Date.now() - start;
-  if (elapsed < 90) {
-    throw new Error(\`wait() returned too quickly: \${elapsed}ms\`);
-  }
-});
-
-`;
-
   // Fire-and-forget tests
   content += `// -----------------------------------------------------------------------------
 // Window control tests (fire-and-forget)

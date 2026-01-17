@@ -3088,12 +3088,6 @@ declare global {
   function exit(code?: number): void;
   
   /**
-   * Promise-based delay
-   * @param ms - Milliseconds to wait
-   */
-  function wait(ms: number): Promise<void>;
-  
-  /**
    * Set the panel HTML content
    * @param html - HTML content
    */
@@ -4532,7 +4526,6 @@ globalThis.getSelectedText = async function getSelectedText(): Promise<string> {
   
   // Brief delay to ensure focus has transferred to the previous app
   // 20ms is typically sufficient (reduced from original 50ms)
-  // Using inline Promise since globalThis.wait may not be defined yet
   await new Promise(r => setTimeout(r, 20));
   bench('getSelectedText_delay_done');
 
@@ -6196,10 +6189,6 @@ globalThis.exit = function exit(code?: number): void {
   process.exit(code ?? 0);
 };
 
-globalThis.wait = function wait(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-};
-
 // Content Setters
 globalThis.setPanel = function setPanel(html: string): void {
   const message: SetPanelMessage = { type: 'setPanel', html };
@@ -7471,7 +7460,6 @@ declare global {
   function centerWindow(): Promise<void>;
   function submit(value: unknown): void;
   function exit(code?: number): void;
-  function wait(ms: number): Promise<void>;
   function setPanel(html: string): void;
   function setPreview(html: string): void;
   function setPrompt(html: string): void;
