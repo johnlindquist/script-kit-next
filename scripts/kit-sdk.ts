@@ -5,6 +5,16 @@ import * as fs from 'node:fs/promises';
 import { constants as fsConstants } from 'node:fs';
 
 // =============================================================================
+// SDK Benchmarking - for hotkey → chat latency analysis
+// =============================================================================
+const SDK_BENCH_START = performance.now();
+const bench = (step: string) => {
+  const elapsed = Math.round(performance.now() - SDK_BENCH_START);
+  console.error(`[BENCH] [+${String(elapsed).padStart(4)}ms] SDK: ${step}`);
+};
+bench('imports_complete');
+
+// =============================================================================
 // SDK Version - Used to verify correct version is loaded
 // =============================================================================
 export const SDK_VERSION = '0.2.0';
@@ -2406,6 +2416,7 @@ if (SDK_TEST_AUTOSUBMIT) {
 // This works better with bun's --preload mode
 let stdinBuffer = '';
 
+bench('stdin_setup_start');
 console.error('[SDK] Setting up stdin handler...');
 
 // Set up raw stdin handling
@@ -2415,6 +2426,7 @@ process.stdin.resume();
 // Unref stdin so it doesn't keep the process alive when script completes
 // This allows the process to exit naturally when all async work is done
 (process.stdin as any).unref?.();
+bench('stdin_ready');
 console.error('[SDK] stdin resumed, readable:', process.stdin.readable);
 
 // Helper to manage stdin ref counting for pending operations
@@ -4511,17 +4523,19 @@ globalThis.setSelectedText = async function setSelectedText(text: string): Promi
  * @throws If accessibility permission not granted
  */
 globalThis.getSelectedText = async function getSelectedText(): Promise<string> {
-  // Auto-hide the Script Kit window so the previous app regains focus
-  // and its text selection becomes accessible
-  await globalThis.hide();
-
-  // Small delay to ensure focus has transferred to the previous app
-  await new Promise(resolve => setTimeout(resolve, 50));
+  bench('getSelectedText_start');
+  // NOTE: Window hiding and focus delay are now handled in Rust for better performance.
+  // The Rust handler:
+  // 1. Hides the window if visible
+  // 2. Waits 20ms for focus transfer (reduced from 50ms)
+  // 3. Calls the AX API
+  // This eliminates the SDK→Rust round trip for hide() and the 50ms JS delay.
 
   const id = nextId();
 
   return new Promise((resolve, reject) => {
     addPending(id, (msg: SubmitMessage) => {
+      bench('getSelectedText_response');
       // Check if there was an error
       if (msg.value && msg.value.startsWith('ERROR:')) {
         reject(new Error(msg.value.substring(6).trim()));
@@ -4531,6 +4545,7 @@ globalThis.getSelectedText = async function getSelectedText(): Promise<string> {
     }, { value: '' }); // Auto-submit: empty selection
 
     const message: GetSelectedTextMessage = { type: 'getSelectedText', requestId: id };
+    bench('getSelectedText_request_sent');
     send(message);
   });
 };
@@ -4809,6 +4824,7 @@ function buildChatResult(action: 'escape' | 'continue'): ChatResult {
 
 // The chat function with attached controller methods
 const chatFn: ChatFunction = async function chat(options?: ChatOptions): Promise<ChatResult> {
+  bench('chat_function_start');
   const id = nextId();
   currentChatId = id;
   currentConversationId = `conv-${id}`;
@@ -4831,6 +4847,7 @@ const chatFn: ChatFunction = async function chat(options?: ChatOptions): Promise
   const useBuiltinAi = !options?.onInit && !options?.onMessage;
 
   // Send the initial chat message to open the UI
+  bench('chat_building_message');
   const message: ChatMessageType = {
     type: 'chat',
     id,
@@ -4844,6 +4861,7 @@ const chatFn: ChatFunction = async function chat(options?: ChatOptions): Promise
     saveHistory: options?.saveHistory ?? true,
     useBuiltinAi,
   };
+  bench('chat_sending_message');
   send(message);
 
   // IMPORTANT: Ref stdin BEFORE onInit to prevent process from exiting

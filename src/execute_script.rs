@@ -1352,18 +1352,21 @@ impl ScriptListApp {
                                         models,
                                         save_history,
                                         use_builtin_ai,
-                                    } => Some(PromptMessage::ShowChat {
-                                        id,
-                                        placeholder,
-                                        messages,
-                                        hint,
-                                        footer,
-                                        actions,
-                                        model,
-                                        models,
-                                        save_history,
-                                        use_builtin_ai,
-                                    }),
+                                    } => {
+                                        logging::bench_log("Chat_message_parsed");
+                                        Some(PromptMessage::ShowChat {
+                                            id,
+                                            placeholder,
+                                            messages,
+                                            hint,
+                                            footer,
+                                            actions,
+                                            model,
+                                            models,
+                                            save_history,
+                                            use_builtin_ai,
+                                        })
+                                    }
                                     Message::ChatMessage { id, message } => {
                                         Some(PromptMessage::ChatAddMessage { id, message })
                                     }

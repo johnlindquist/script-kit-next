@@ -563,6 +563,7 @@ impl ScriptSession {
 #[instrument(skip_all, fields(script_path = %path.display()))]
 pub fn execute_script_interactive(path: &Path) -> Result<ScriptSession, String> {
     let start = Instant::now();
+    logging::bench_log("execute_script_interactive_start");
     debug!(path = %path.display(), "Starting interactive script execution");
     logging::log(
         "EXEC",
@@ -579,12 +580,14 @@ pub fn execute_script_interactive(path: &Path) -> Result<ScriptSession, String> 
     // Try bun with preload (preferred - supports TypeScript natively)
     if let Some(ref sdk) = sdk_path {
         let sdk_str = sdk.to_str().unwrap_or("");
+        logging::bench_log("bun_spawn_start");
         logging::log(
             "EXEC",
             &format!("Trying: bun run --preload {} {}", sdk_str, path_str),
         );
         match spawn_script("bun", &["run", "--preload", sdk_str, path_str], path_str) {
             Ok(session) => {
+                logging::bench_log(&format!("bun_spawned ({}ms)", start.elapsed().as_millis()));
                 info!(
                     duration_ms = start.elapsed().as_millis() as u64,
                     runtime = "bun",

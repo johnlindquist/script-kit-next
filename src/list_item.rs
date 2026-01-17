@@ -545,16 +545,16 @@ impl RenderOnce for ListItem {
             .flex_col()
             .justify_center();
 
-        // Name - text_sm (0.875rem ≈ 14px), medium weight (tighter than before)
+        // Name - 15px font size, medium weight
         // Single-line with ellipsis truncation for long content
         item_content = item_content.child(
             div()
-                .text_sm()
+                .text_size(px(15.))
                 .font_weight(FontWeight::MEDIUM)
                 .overflow_hidden()
                 .text_ellipsis()
                 .whitespace_nowrap()
-                .line_height(px(18.))
+                .line_height(px(20.))
                 .child(self.name),
         );
 

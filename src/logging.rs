@@ -31,9 +31,9 @@ use std::fmt::Write as FmtWrite;
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use serde_json::{Map, Value};
 use tracing::field::{Field, Visit};
@@ -91,6 +91,70 @@ pub fn current_correlation_id() -> String {
 }
 
 // =============================================================================
+// BENCHMARKING UTILITIES (for hotkey → prompt latency analysis)
+// =============================================================================
+// Stores the instant when benchmarking started (as nanos since process start)
+static BENCH_START_NANOS: AtomicU64 = AtomicU64::new(0);
+static BENCH_EPOCH: OnceLock<Instant> = OnceLock::new();
+
+/// Start a benchmark session. Call this when a hotkey is triggered.
+/// Returns the benchmark ID (timestamp) for correlation.
+pub fn bench_start(label: &str) -> u64 {
+    let epoch = BENCH_EPOCH.get_or_init(Instant::now);
+    let now = epoch.elapsed().as_nanos() as u64;
+    BENCH_START_NANOS.store(now, Ordering::SeqCst);
+    let id = now / 1_000_000; // Use millis as ID
+    log("BENCH", &format!("▶ START [{}] {}", id, label));
+    id
+}
+
+/// Log a benchmark checkpoint with elapsed time from bench_start().
+/// Format: [+XXXms] step_name
+pub fn bench_log(step: &str) {
+    let epoch = match BENCH_EPOCH.get() {
+        Some(e) => e,
+        None => {
+            log("BENCH", &format!("⚠ {} (no bench_start called)", step));
+            return;
+        }
+    };
+    let start = BENCH_START_NANOS.load(Ordering::SeqCst);
+    if start == 0 {
+        log("BENCH", &format!("⚠ {} (bench not started)", step));
+        return;
+    }
+    let now = epoch.elapsed().as_nanos() as u64;
+    let elapsed_ms = (now - start) / 1_000_000;
+    log("BENCH", &format!("[+{:>4}ms] {}", elapsed_ms, step));
+}
+
+/// Log a benchmark checkpoint with a custom elapsed time (for cross-process timing).
+pub fn bench_log_with_elapsed(step: &str, elapsed_ms: u64) {
+    log("BENCH", &format!("[+{:>4}ms] {}", elapsed_ms, step));
+}
+
+/// Get elapsed milliseconds since bench_start().
+pub fn bench_elapsed_ms() -> u64 {
+    let epoch = match BENCH_EPOCH.get() {
+        Some(e) => e,
+        None => return 0,
+    };
+    let start = BENCH_START_NANOS.load(Ordering::SeqCst);
+    if start == 0 {
+        return 0;
+    }
+    let now = epoch.elapsed().as_nanos() as u64;
+    (now - start) / 1_000_000
+}
+
+/// End the benchmark and log total time.
+pub fn bench_end(label: &str) {
+    let elapsed = bench_elapsed_ms();
+    log("BENCH", &format!("◼ END [+{}ms] {}", elapsed, label));
+    BENCH_START_NANOS.store(0, Ordering::SeqCst);
+}
+
+// =============================================================================
 // COMPACT AI FORMAT (SCRIPT_KIT_AI_LOG=1)
 // =============================================================================
 
@@ -115,11 +179,12 @@ fn category_to_code(category: &str) -> char {
         "MOUSE_HOVER" => 'M',
         "SCROLL_STATE" => 'L',
         "SCROLL_PERF" => 'Q',
-        "SCRIPT" => 'B', // B for Bun/script
+        "SCRIPT" => 'G', // G for script loaGing (changed from B)
         "CONFIG" => 'N', // N for coNfig
         "RESIZE" => 'Z',
         "TRAY" => 'H',   // Tray is part of Hotkey subsystem
         "DESIGN" => 'D', // Design system
+        "BENCH" => 'B',  // B for Benchmark timing
         _ => '-',        // Unknown category
     }
 }

@@ -249,6 +249,7 @@ impl ScriptHotkeyPoller {
             logging::log("HOTKEY", "Script hotkey listener started");
 
             while let Ok(command_id) = hotkeys::script_hotkey_channel().1.recv().await {
+                logging::bench_log("channel_received");
                 logging::log(
                     "HOTKEY",
                     &format!("Script shortcut received: {}", command_id),

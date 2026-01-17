@@ -504,6 +504,46 @@ pub fn show_main_window_without_activation() {
     );
 }
 
+/// Activate the main window and bring it to front.
+///
+/// This makes the main window the key window and activates the application.
+/// Used when returning focus to the main window after closing overlays like the actions popup.
+#[cfg(target_os = "macos")]
+pub fn activate_main_window() {
+    debug_assert_main_thread();
+    unsafe {
+        let window = match window_manager::get_main_window() {
+            Some(w) => w,
+            None => {
+                logging::log("PANEL", "activate_main_window: Main window not registered");
+                return;
+            }
+        };
+
+        // Get the NSApplication
+        let app: id = NSApp();
+
+        // Activate the application, ignoring other apps
+        let _: () = msg_send![app, activateIgnoringOtherApps: true];
+
+        // Make our window key and bring it to front
+        let _: () = msg_send![window, makeKeyAndOrderFront: nil];
+
+        logging::log(
+            "PANEL",
+            "Main window activated (activateIgnoringOtherApps + makeKeyAndOrderFront)",
+        );
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn activate_main_window() {
+    logging::log(
+        "PANEL",
+        "activate_main_window: Not implemented on this platform",
+    );
+}
+
 /// Get the current main window bounds in canonical top-left coordinates.
 /// Returns (x, y, width, height) or None if window not available.
 #[cfg(target_os = "macos")]
