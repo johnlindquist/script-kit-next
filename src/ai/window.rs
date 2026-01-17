@@ -2844,8 +2844,8 @@ impl AiApp {
         // Wrap input in a styled container for vibrancy support
         div()
             .flex_1()
-            .h(px(36.))
-            .px_3()
+            .h(px(32.))
+            .px_2()
             .rounded_md()
             .border_1()
             .border_color(transparent_border) // Semi-transparent accent border
@@ -3429,10 +3429,10 @@ impl AiApp {
             .flex_col()
             .w_full()
             // NO .bg() - let vibrancy show through from root
-            .px_3()
-            .pt_3()
-            .pb_2() // Reduced bottom padding
-            .gap_2()
+            .px_2()
+            .pt_2()
+            .pb_1() // Tighter padding for cleaner look
+            .gap_1()
             // Handle image file drops
             .on_drop(cx.listener(|this, paths: &ExternalPaths, _window, cx| {
                 this.handle_file_drop(paths, cx);
@@ -3446,7 +3446,7 @@ impl AiApp {
                 div()
                     .flex()
                     .items_center()
-                    .gap_2()
+                    .gap_1()
                     .w_full()
                     // Plus button on the left - opens attachments picker
                     .child(
@@ -3455,7 +3455,7 @@ impl AiApp {
                             .flex()
                             .items_center()
                             .justify_center()
-                            .size(px(28.))
+                            .size(px(24.))
                             .rounded_full()
                             .border_1()
                             .border_color(cx.theme().muted_foreground.opacity(0.4))
@@ -3472,7 +3472,7 @@ impl AiApp {
                             .child(
                                 svg()
                                     .external_path(LocalIconName::Plus.external_path())
-                                    .size(px(14.))
+                                    .size(px(12.))
                                     .text_color(cx.theme().muted_foreground),
                             ),
                     )
@@ -4205,29 +4205,37 @@ impl Render for AiApp {
                     .flex()
                     .items_center()
                     .gap_2()
-                    // Menu icon
-                    .child(
-                        div()
-                            .id("ai-menu-icon-global")
-                            .cursor_pointer()
-                            .text_color(cx.theme().muted_foreground.opacity(0.7))
-                            .hover(|s| s.text_color(cx.theme().muted_foreground))
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.toggle_new_chat_command_bar(window, cx);
-                            }))
-                            .child(Icon::new(IconName::Menu).size(px(16.))),
-                    )
-                    // Plus icon for new chat
+                    // Plus icon for new chat (using SVG for reliable rendering)
                     .child(
                         div()
                             .id("ai-new-chat-icon-global")
                             .cursor_pointer()
-                            .text_color(cx.theme().muted_foreground.opacity(0.7))
-                            .hover(|s| s.text_color(cx.theme().muted_foreground))
+                            .hover(|s| s.opacity(1.0))
                             .on_click(cx.listener(|this, _, window, cx| {
                                 this.create_chat(window, cx);
                             }))
-                            .child(Icon::new(IconName::Plus).size(px(16.))),
+                            .child(
+                                svg()
+                                    .external_path(LocalIconName::Plus.external_path())
+                                    .size(px(16.))
+                                    .text_color(cx.theme().muted_foreground.opacity(0.7)),
+                            ),
+                    )
+                    // Dropdown chevron icon (using SVG for reliable rendering)
+                    .child(
+                        div()
+                            .id("ai-menu-icon-global")
+                            .cursor_pointer()
+                            .hover(|s| s.opacity(1.0))
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.toggle_new_chat_command_bar(window, cx);
+                            }))
+                            .child(
+                                svg()
+                                    .external_path(LocalIconName::ChevronDown.external_path())
+                                    .size(px(16.))
+                                    .text_color(cx.theme().muted_foreground.opacity(0.7)),
+                            ),
                     ),
             )
             // Overlay dropdowns (only one at a time)
