@@ -27,14 +27,19 @@ use std::time::{Duration, Instant};
 use tracing::{debug, info};
 
 // Use the unified ActionsDialog/CommandBar system
-use crate::actions::{get_notes_command_bar_actions, CommandBar, CommandBarConfig, NotesInfo};
+use crate::actions::{
+    get_note_switcher_actions, get_notes_command_bar_actions, CommandBar, CommandBarConfig,
+    NoteSwitcherNoteInfo, NotesInfo,
+};
 use crate::theme;
 
 // Keep legacy types for backwards compatibility during transition
 use super::actions_panel::{
     panel_height_for_rows, NotesAction, NotesActionItem, NotesActionsPanel,
 };
-use super::browse_panel::{BrowsePanel, NoteAction, NoteListItem};
+// Note: BrowsePanel is no longer used - note switcher now uses CommandBar
+// Keeping NoteAction and NoteListItem for backwards compatibility during transition
+use super::browse_panel::{NoteAction, NoteListItem};
 use super::model::{ExportFormat, Note, NoteId};
 use super::storage;
 
@@ -130,7 +135,13 @@ pub struct NotesApp {
     /// Opens in a separate vibrancy window for proper macOS blur effect
     command_bar: CommandBar,
 
-    /// Entity for the browse panel (when shown)
+    /// Note switcher command bar (Cmd+P) - uses unified CommandBar wrapper
+    /// Opens in a separate vibrancy window for proper macOS blur effect
+    /// This replaces the legacy BrowsePanel for consistent theming and behavior
+    note_switcher: CommandBar,
+
+    /// Entity for the browse panel (when shown) - LEGACY, kept for backwards compatibility
+    /// Will be removed once note_switcher is fully tested
     browse_panel: Option<Entity<super::browse_panel::BrowsePanel>>,
 
     /// Pending action from actions panel clicks
@@ -234,6 +245,24 @@ impl NotesApp {
         // Pre-compute box shadows from theme (avoid reloading on every render)
         let cached_box_shadows = Self::compute_box_shadows();
 
+        // Pre-compute note switcher actions before moving notes into struct
+        let note_switcher_actions = get_note_switcher_actions(
+            &notes
+                .iter()
+                .map(|n| NoteSwitcherNoteInfo {
+                    id: n.id.as_str().to_string(),
+                    title: if n.title.is_empty() {
+                        "Untitled Note".to_string()
+                    } else {
+                        n.title.clone()
+                    },
+                    char_count: n.char_count(),
+                    is_current: Some(n.id) == selected_note_id,
+                    is_pinned: n.is_pinned,
+                })
+                .collect::<Vec<_>>(),
+        );
+
         Self {
             notes,
             deleted_notes,
@@ -262,6 +291,12 @@ impl NotesApp {
                     is_trash_view: false,
                     auto_sizing_enabled: true,
                 }),
+                CommandBarConfig::notes_style(),
+                std::sync::Arc::new(theme::load_theme()),
+            ),
+            // Initialize note switcher CommandBar (Cmd+P) with note list
+            note_switcher: CommandBar::new(
+                note_switcher_actions,
                 CommandBarConfig::notes_style(),
                 std::sync::Arc::new(theme::load_theme()),
             ),
@@ -1040,52 +1075,81 @@ impl NotesApp {
         }
     }
 
-    /// Open the browse panel with current notes
+    /// Execute an action from the note switcher (Cmd+P)
+    /// Handles note selection when action_id starts with "note_"
+    fn execute_note_switcher_action(
+        &mut self,
+        action_id: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        debug!(action_id, "Executing note switcher action");
+
+        // Handle note selection (action_id format: "note_{uuid}")
+        if let Some(note_id_str) = action_id.strip_prefix("note_") {
+            // Find the note by ID string
+            if let Some(note) = self.notes.iter().find(|n| n.id.as_str() == note_id_str) {
+                let note_id = note.id;
+                self.close_browse_panel(window, cx);
+                self.select_note(note_id, window, cx);
+                return;
+            }
+        }
+
+        // Handle "no_notes" placeholder action
+        if action_id == "no_notes" {
+            self.close_browse_panel(window, cx);
+            self.create_note(window, cx);
+            return;
+        }
+
+        // Unknown action - just close
+        tracing::warn!(action_id, "Unknown note switcher action");
+        self.close_browse_panel(window, cx);
+    }
+
+    /// Open the browse panel (note switcher) with current notes
+    /// Uses CommandBar for consistent theming with the Cmd+K actions dialog
     fn open_browse_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        // Create NoteListItems from current notes
-        let note_items: Vec<NoteListItem> = self
-            .notes
-            .iter()
-            .map(|note| NoteListItem::from_note(note, Some(note.id) == self.selected_note_id))
-            .collect();
-
-        // Clone Arcs for the callbacks
-        let pending_select = self.pending_browse_select.clone();
-        let pending_close = self.pending_browse_close.clone();
-        let pending_action = self.pending_browse_action.clone();
-
-        let browse_panel = cx.new(|cx| {
-            BrowsePanel::new(note_items, window, cx)
-                .on_select(move |id| {
-                    if let Ok(mut guard) = pending_select.lock() {
-                        *guard = Some(id);
-                    }
+        // Update note switcher actions based on current notes
+        let note_switcher_actions = get_note_switcher_actions(
+            &self
+                .notes
+                .iter()
+                .map(|n| NoteSwitcherNoteInfo {
+                    id: n.id.as_str().to_string(),
+                    title: if n.title.is_empty() {
+                        "Untitled Note".to_string()
+                    } else {
+                        n.title.clone()
+                    },
+                    char_count: n.char_count(),
+                    is_current: Some(n.id) == self.selected_note_id,
+                    is_pinned: n.is_pinned,
                 })
-                .on_close({
-                    let pending_close = pending_close.clone();
-                    move || {
-                        if let Ok(mut guard) = pending_close.lock() {
-                            *guard = true;
-                        }
-                    }
-                })
-                .on_action(move |id, action| {
-                    if let Ok(mut guard) = pending_action.lock() {
-                        *guard = Some((id, action));
-                    }
-                })
-        });
+                .collect::<Vec<_>>(),
+        );
 
-        // Focus the browse panel and its search input
-        let panel_focus_handle = browse_panel.read(cx).focus_handle(cx);
-        window.focus(&panel_focus_handle, cx);
+        // Log what actions we're setting
+        info!(
+            "Notes open_browse_panel: setting {} note actions",
+            note_switcher_actions.len(),
+        );
 
-        // Focus the search input so user can start typing immediately
-        browse_panel.update(cx, |panel, cx| {
-            panel.focus_search(window, cx);
-        });
+        self.note_switcher.set_actions(note_switcher_actions, cx);
 
-        self.browse_panel = Some(browse_panel);
+        // Open the note switcher (CommandBar handles window creation internally)
+        self.note_switcher.open_centered(window, cx);
+
+        // CRITICAL: Focus main focus_handle so keyboard events route to us
+        // The ActionsWindow is a visual-only popup - it does NOT take keyboard focus.
+        self.focus_handle.focus(window, cx);
+
+        // Update state flags
+        self.show_browse_panel = true;
+        self.show_actions_panel = false;
+        self.browse_panel = None; // Clear legacy browse panel
+
         cx.notify();
     }
 
@@ -1140,8 +1204,11 @@ impl NotesApp {
         cx.notify();
     }
 
-    /// Close the browse panel and refocus the editor
+    /// Close the browse panel (note switcher) and refocus the editor
     fn close_browse_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        // Close the note switcher CommandBar window
+        self.note_switcher.close(cx);
+
         self.show_browse_panel = false;
         self.browse_panel = None;
 
@@ -1747,7 +1814,7 @@ impl Render for NotesApp {
         // CommandBar renders in its own window, so we don't need the overlay
         let show_actions =
             self.show_actions_panel && self.actions_panel.is_some() && !self.command_bar.is_open();
-        let show_browse = self.show_browse_panel;
+        // Note: show_browse removed - note_switcher uses CommandBar which renders in its own window
 
         // Raycast-style single-note view: no sidebar, editor fills full width
         // Track window hover for traffic lights visibility
@@ -1766,12 +1833,15 @@ impl Render for NotesApp {
             .shadow(box_shadows)
             .text_color(cx.theme().foreground)
             .track_focus(&self.focus_handle)
-            // Close command bar when clicking anywhere on the notes window
+            // Close any open CommandBar when clicking anywhere on the notes window
             .on_mouse_down(
                 gpui::MouseButton::Left,
                 cx.listener(|this, _, window, cx| {
                     if this.command_bar.is_open() {
                         this.close_actions_panel(window, cx);
+                    }
+                    if this.note_switcher.is_open() {
+                        this.close_browse_panel(window, cx);
                     }
                 }),
             )
@@ -1890,42 +1960,71 @@ impl Render for NotesApp {
                     return;
                 }
 
-                // Handle browse panel keyboard events
-                if this.show_browse_panel {
-                    if key == "escape" || (modifiers.platform && key == "p") || key == "esc" {
-                        this.close_browse_panel(window, cx);
-                        return;
-                    }
-
-                    if let Some(ref panel) = this.browse_panel {
-                        match key.as_str() {
-                            "up" | "arrowup" => {
-                                panel.update(cx, |panel, cx| panel.move_up(cx));
+                // Handle note switcher (Cmd+P) keyboard events - uses CommandBar
+                if this.note_switcher.is_open() {
+                    match key.as_str() {
+                        "escape" | "esc" => {
+                            this.close_browse_panel(window, cx);
+                            cx.stop_propagation();
+                            return;
+                        }
+                        "up" | "arrowup" => {
+                            this.note_switcher.select_prev(cx);
+                            cx.stop_propagation();
+                            return;
+                        }
+                        "down" | "arrowdown" => {
+                            this.note_switcher.select_next(cx);
+                            cx.stop_propagation();
+                            return;
+                        }
+                        "enter" => {
+                            if let Some(action_id) = this.note_switcher.execute_selected_action(cx)
+                            {
+                                this.execute_note_switcher_action(&action_id, window, cx);
                             }
-                            "down" | "arrowdown" => {
-                                panel.update(cx, |panel, cx| panel.move_down(cx));
-                            }
-                            "enter" => {
-                                if let Some(id) = panel.read(cx).get_selected_note_id() {
-                                    this.handle_browse_select(id, window, cx);
+                            cx.stop_propagation();
+                            return;
+                        }
+                        "backspace" | "delete" => {
+                            this.note_switcher.handle_backspace(cx);
+                            cx.stop_propagation();
+                            return;
+                        }
+                        _ => {
+                            // Handle printable characters for search (when no modifiers)
+                            if !modifiers.platform && !modifiers.control && !modifiers.alt {
+                                if let Some(ch) = key.chars().next() {
+                                    if ch.is_alphanumeric()
+                                        || ch.is_whitespace()
+                                        || ch == '-'
+                                        || ch == '_'
+                                    {
+                                        this.note_switcher.handle_char(ch, cx);
+                                        cx.stop_propagation();
+                                        return;
+                                    }
                                 }
                             }
-                            _ => {
-                                // Let BrowsePanel handle other keys (like search input)
+                            // Cmd+P also closes the note switcher
+                            if modifiers.platform && key == "p" {
+                                this.close_browse_panel(window, cx);
+                                cx.stop_propagation();
+                                return;
                             }
                         }
                     }
-
+                    // Don't fall through to other handlers when note switcher is open
                     return;
                 }
 
                 // Handle Escape to close panels, or close window if no panels open
                 if key == "escape" {
-                    if this.show_actions_panel {
+                    if this.show_actions_panel || this.command_bar.is_open() {
                         this.close_actions_panel(window, cx);
                         return;
                     }
-                    if this.show_browse_panel {
+                    if this.note_switcher.is_open() {
                         this.close_browse_panel(window, cx);
                         return;
                     }
@@ -1951,19 +2050,20 @@ impl Render for NotesApp {
                             }
                         }
                         "p" => {
-                            // Toggle browse panel
-                            this.show_browse_panel = !this.show_browse_panel;
+                            // Toggle note switcher (browse panel)
                             this.close_actions_panel(window, cx);
-                            if this.show_browse_panel {
-                                this.open_browse_panel(window, cx);
+                            if this.note_switcher.is_open() {
+                                this.close_browse_panel(window, cx);
                             } else {
-                                this.browse_panel = None;
+                                this.open_browse_panel(window, cx);
                             }
-                            cx.notify();
                         }
                         "n" => this.create_note(window, cx),
                         "w" => {
                             // Close the notes window (standard macOS pattern)
+                            // Close any open CommandBar windows first
+                            this.command_bar.close_app(cx);
+                            this.note_switcher.close_app(cx);
                             // Save bounds before closing
                             let wb = window.window_bounds();
                             crate::window_state::save_window_from_gpui(
@@ -1981,13 +2081,12 @@ impl Render for NotesApp {
             }))
             // Single note view - editor takes full width
             .child(self.render_editor(cx))
-            // Overlay panels
+            // Legacy actions panel overlay (only shown when not using CommandBar)
             .when(show_actions, |d| {
                 d.child(self.render_actions_panel_overlay(cx))
             })
-            .when(show_browse, |d| {
-                d.child(self.render_browse_panel_overlay(cx))
-            })
+        // Note: browse panel overlay removed - note_switcher now uses CommandBar
+        // which renders in its own window, not as an overlay
     }
 }
 
@@ -2076,6 +2175,9 @@ pub fn open_notes_window(cx: &mut App) -> Result<()> {
             })
             .is_ok()
         {
+            // Close any open CommandBar windows (command_bar and note_switcher)
+            // They use a global singleton, so we close it via the actions module
+            crate::actions::close_actions_window(cx);
             logging::log("PANEL", "Notes window was open - closing (toggle OFF)");
             // Clear the stored handle
             let slot = NOTES_WINDOW.get_or_init(|| std::sync::Mutex::new(None));

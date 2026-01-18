@@ -31,6 +31,18 @@ use super::types::{FallbackMatch, Script, Scriptlet, SearchResult};
 /// Default maximum number of items to show in the RECENT section
 pub const DEFAULT_MAX_RECENT_ITEMS: usize = 10;
 
+/// Default suggested item names for new users without frecency data.
+/// These appear in the SUGGESTED section when the user has no usage history.
+/// Order matters - items will appear in this order.
+pub const DEFAULT_SUGGESTED_ITEMS: &[&str] = &[
+    "AI Chat",
+    "Notes",
+    "Clipboard History",
+    "Quick Terminal",
+    "Search Files",
+    "Configure Vercel AI Gateway",
+];
+
 /// Maximum number of menu bar items to show in search results
 /// This prevents menu bar actions from overwhelming the results
 pub const MAX_MENU_BAR_ITEMS: usize = 5;
@@ -289,6 +301,29 @@ pub fn get_grouped_results(
     // Limit suggested items to max_items from config
     suggested_indices.truncate(suggested_config.max_items);
 
+    // If no frecency-based suggestions and frecency store is empty (new user),
+    // populate with default suggested items to help users discover features
+    let default_suggested_indices: Vec<usize> =
+        if suggested_indices.is_empty() && frecency_store.is_empty() && suggested_config.enabled {
+            // Find indices of default suggested items by name (preserve order from DEFAULT_SUGGESTED_ITEMS)
+            DEFAULT_SUGGESTED_ITEMS
+                .iter()
+                .filter_map(|&default_name| results.iter().position(|r| r.name() == default_name))
+                .collect()
+        } else {
+            Vec::new()
+        };
+
+    // Remove default suggested items from other sections to avoid duplication
+    if !default_suggested_indices.is_empty() {
+        let default_set: HashSet<usize> = default_suggested_indices.iter().copied().collect();
+        commands_indices.retain(|idx| !default_set.contains(idx));
+        apps_indices.retain(|idx| !default_set.contains(idx));
+        for indices in kit_indices.values_mut() {
+            indices.retain(|idx| !default_set.contains(idx));
+        }
+    }
+
     // Sort each section alphabetically by name (case-insensitive)
     let sort_alphabetically = |indices: &mut Vec<usize>| {
         indices.sort_by(|&a, &b| {
@@ -314,14 +349,26 @@ pub fn get_grouped_results(
     other_kit_names.sort_by_key(|a| a.to_lowercase());
 
     // Build grouped list in order: SUGGESTED, MAIN, COMMANDS, other kits, APPS
-    // 1. SUGGESTED (frecency-based)
-    if suggested_config.enabled && !suggested_indices.is_empty() {
-        grouped.push(GroupedListItem::SectionHeader(
-            "SUGGESTED".to_string(),
-            None,
-        ));
-        for (idx, _score) in &suggested_indices {
-            grouped.push(GroupedListItem::Item(*idx));
+    // 1. SUGGESTED (frecency-based, or default items for new users)
+    if suggested_config.enabled {
+        if !suggested_indices.is_empty() {
+            // User has frecency data - show their frequently used items
+            grouped.push(GroupedListItem::SectionHeader(
+                "SUGGESTED".to_string(),
+                None,
+            ));
+            for (idx, _score) in &suggested_indices {
+                grouped.push(GroupedListItem::Item(*idx));
+            }
+        } else if !default_suggested_indices.is_empty() {
+            // New user with no frecency - show default suggestions
+            grouped.push(GroupedListItem::SectionHeader(
+                "SUGGESTED".to_string(),
+                None,
+            ));
+            for idx in &default_suggested_indices {
+                grouped.push(GroupedListItem::Item(*idx));
+            }
         }
     }
 

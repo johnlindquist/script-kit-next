@@ -2602,6 +2602,11 @@ impl AiApp {
             .rounded_md()
             .cursor_pointer()
             .hover(|s| s.bg(cx.theme().muted.opacity(0.3)))
+            .tooltip(|window, cx| {
+                Tooltip::new("Toggle sidebar")
+                    .key_binding(gpui::Keystroke::parse("cmd-b").ok().map(Kbd::new))
+                    .build(window, cx)
+            })
             .on_mouse_down(
                 gpui::MouseButton::Left,
                 cx.listener(|this, _, _, cx| {
@@ -2656,24 +2661,37 @@ impl AiApp {
                             .justify_end()
                             .w_full()
                             .gap_1()
-                            // New chat button
+                            // New chat button - use Button's native tooltip (⌘N)
                             .child(
                                 Button::new("new-chat")
                                     .ghost()
                                     .xsmall()
                                     .icon(IconName::Plus)
+                                    .tooltip("New chat (⌘N)")
                                     .on_click(cx.listener(|this, _, window, cx| {
                                         this.create_chat(window, cx);
                                     })),
                             )
-                            // Presets dropdown trigger
+                            // Presets dropdown trigger - use svg directly for better tooltip control
                             .child(
                                 div()
                                     .id("presets-trigger")
-                                    .px_1()
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .size(px(20.))
                                     .rounded(px(4.))
                                     .cursor_pointer()
                                     .hover(|el| el.bg(cx.theme().sidebar_accent.opacity(0.5)))
+                                    .tooltip(|window, cx| {
+                                        Tooltip::new("New chat with preset")
+                                            .key_binding(
+                                                gpui::Keystroke::parse("cmd-shift-n")
+                                                    .ok()
+                                                    .map(Kbd::new),
+                                            )
+                                            .build(window, cx)
+                                    })
                                     .on_click(cx.listener(|this, _, window, cx| {
                                         if this.showing_presets_dropdown {
                                             this.hide_presets_dropdown(cx);
