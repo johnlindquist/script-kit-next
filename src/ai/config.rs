@@ -134,6 +134,18 @@ pub mod env_vars {
     pub const OPENROUTER_API_KEY: &str = "SCRIPT_KIT_OPENROUTER_API_KEY";
     /// Vercel API key environment variable
     pub const VERCEL_API_KEY: &str = "SCRIPT_KIT_VERCEL_API_KEY";
+
+    // Claude Code CLI configuration
+    /// Path to the `claude` CLI binary (default: "claude")
+    pub const CLAUDE_CODE_PATH: &str = "SCRIPT_KIT_CLAUDE_PATH";
+    /// Permission mode for Claude Code: "plan", "dontAsk", etc. (default: "plan")
+    pub const CLAUDE_CODE_PERMISSION_MODE: &str = "SCRIPT_KIT_CLAUDE_PERMISSION_MODE";
+    /// Comma-separated list of allowed tools (e.g., "Bash(git:*),Read,Edit")
+    pub const CLAUDE_CODE_ALLOWED_TOOLS: &str = "SCRIPT_KIT_CLAUDE_ALLOWED_TOOLS";
+    /// Comma-separated paths to add to the Claude Code workspace
+    pub const CLAUDE_CODE_ADD_DIRS: &str = "SCRIPT_KIT_CLAUDE_ADD_DIRS";
+    /// Enable Claude Code CLI provider (set to "1" or "true" to enable)
+    pub const CLAUDE_CODE_ENABLED: &str = "SCRIPT_KIT_CLAUDE_CODE_ENABLED";
 }
 
 /// Read an environment variable, trimming whitespace and filtering empty values.

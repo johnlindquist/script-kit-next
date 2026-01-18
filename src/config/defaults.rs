@@ -47,3 +47,12 @@ pub const DEFAULT_CONFIRMATION_COMMANDS: &[&str] = &[
 /// Commands that should be excluded from frecency/suggested tracking.
 /// These are commands that don't make sense to suggest (e.g., quit).
 pub const DEFAULT_FRECENCY_EXCLUDED_COMMANDS: &[&str] = &["builtin-quit-script-kit"];
+
+// ============================================
+// CLAUDE CODE CLI DEFAULTS
+// ============================================
+
+/// Whether Claude Code CLI provider is enabled (default: false, requires opt-in)
+pub const DEFAULT_CLAUDE_CODE_ENABLED: bool = false;
+/// Default permission mode for Claude Code CLI ("plan" is safe, "dontAsk" for sandbox)
+pub const DEFAULT_CLAUDE_CODE_PERMISSION_MODE: &str = "plan";

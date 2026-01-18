@@ -470,6 +470,7 @@ mod tests {
             ai_hotkey: None,
             logs_hotkey: None,
             commands: None,
+            claude_code: None,
         };
         assert_eq!(default_config.get_editor(), "code");
 
@@ -490,6 +491,7 @@ mod tests {
             ai_hotkey: None,
             logs_hotkey: None,
             commands: None,
+            claude_code: None,
         };
         assert_eq!(custom_config.get_editor(), "vim");
 
