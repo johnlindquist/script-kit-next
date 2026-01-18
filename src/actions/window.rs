@@ -7,7 +7,6 @@
 //! - Auto-closes when app loses focus
 //! - Shares the ActionsDialog entity with the main app for keyboard routing
 
-use crate::platform;
 use crate::theme;
 use crate::window_resize::layout::FOOTER_HEIGHT;
 use gpui::{

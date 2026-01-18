@@ -16,6 +16,8 @@
 //! Requires Accessibility permission in System Preferences > Privacy & Security > Accessibility
 //!
 
+// This entire module is macOS-only
+#![cfg(target_os = "macos")]
 #![allow(non_upper_case_globals)]
 #![allow(dead_code)]
 

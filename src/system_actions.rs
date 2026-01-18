@@ -10,6 +10,9 @@
 //! All functions use `osascript` to execute AppleScript commands and return
 //! `Result<(), String>` for consistent error handling.
 
+n// This entire module is macOS-only
+#![cfg(target_os = "macos")]
+
 use std::process::Command;
 use tracing::{debug, error, info};
 

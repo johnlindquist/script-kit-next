@@ -685,7 +685,7 @@ impl NotesApp {
     fn export_note(&self, format: ExportFormat) {
         if let Some(id) = self.selected_note_id {
             if let Some(note) = self.notes.iter().find(|n| n.id == id) {
-                let content = match format {
+                let _content = match format {
                     ExportFormat::PlainText => note.content.clone(),
                     // For Markdown, just export the content as-is.
                     // The title is derived from the first line of content,

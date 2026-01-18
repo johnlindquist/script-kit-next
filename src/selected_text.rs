@@ -13,6 +13,9 @@
 //!
 //! Requires Accessibility permission in System Preferences > Privacy & Security > Accessibility
 
+// This entire module is macOS-only
+#![cfg(target_os = "macos")]
+
 use anyhow::{bail, Context, Result};
 use arboard::Clipboard;
 use get_selected_text::get_selected_text as get_selected_text_impl;

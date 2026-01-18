@@ -16,7 +16,9 @@ use gpui_component::{Sizable, Size};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 mod process_manager;
+#[cfg(target_os = "macos")]
 use cocoa::base::id;
+#[cfg(target_os = "macos")]
 use cocoa::foundation::NSRect;
 use process_manager::PROCESS_MANAGER;
 
@@ -24,6 +26,7 @@ use process_manager::PROCESS_MANAGER;
 use platform::{
     calculate_eye_line_bounds_on_mouse_display, capture_app_screenshot, capture_window_by_title,
 };
+#[cfg(target_os = "macos")]
 #[macro_use]
 extern crate objc;
 
@@ -85,6 +88,10 @@ mod windows;
 mod clipboard_history;
 mod file_search;
 mod toast_manager;
+#[cfg(target_os = "macos")]
+mod window_control;
+#[cfg(not(target_os = "macos"))]
+#[path = "window_control_stub.rs"]
 mod window_control;
 
 // Secrets - age-encrypted secrets storage (replacement for keyring)
@@ -98,12 +105,14 @@ mod system_actions;
 mod script_creation;
 
 // Permissions wizard - Check and request macOS permissions
+#[cfg(target_os = "macos")]
 mod permissions_wizard;
 
 // Built-in features registry
 mod app_launcher;
 mod builtins;
 mod fallbacks;
+#[cfg(target_os = "macos")]
 mod menu_bar;
 
 // Frontmost app tracker - Background observer for tracking active application

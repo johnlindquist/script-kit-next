@@ -46,6 +46,10 @@ pub use search::{
 // Re-export grouping functions (always used)
 pub use grouping::get_grouped_results;
 
+// Re-export MenuBarItem type (needed for cross-platform compatibility)
+#[cfg(not(target_os = "macos"))]
+pub use grouping::MenuBarItem;
+
 // Re-export scheduling functions (always used)
 pub use scheduling::register_scheduled_scripts;
 

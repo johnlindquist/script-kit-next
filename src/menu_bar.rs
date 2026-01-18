@@ -27,6 +27,9 @@
 //! ```
 
 // Note: #[cfg(target_os = "macos")] is applied at the lib.rs level
+// This entire module is macOS-only
+#![cfg(target_os = "macos")]
+
 #![allow(non_upper_case_globals)]
 #![allow(dead_code)]
 
