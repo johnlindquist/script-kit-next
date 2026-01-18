@@ -1265,6 +1265,491 @@ impl AiProvider for VercelGatewayProvider {
     }
 }
 
+/// Claude Code CLI provider implementation.
+///
+/// This provider wraps the local `claude` CLI in headless mode, speaking JSONL
+/// over stdin/stdout. It allows Script Kit to use Claude Code as a first-class
+/// AI provider with session persistence and tool access.
+///
+/// # Configuration
+///
+/// The provider is configured via environment variables:
+/// - `SCRIPT_KIT_CLAUDE_CODE_ENABLED`: Set to "1" or "true" to enable
+/// - `SCRIPT_KIT_CLAUDE_PATH`: Path to `claude` binary (default: "claude")
+/// - `SCRIPT_KIT_CLAUDE_PERMISSION_MODE`: Permission mode (default: "plan")
+/// - `SCRIPT_KIT_CLAUDE_ALLOWED_TOOLS`: Comma-separated tools (optional)
+/// - `SCRIPT_KIT_CLAUDE_ADD_DIRS`: Comma-separated workspace paths (optional)
+///
+/// # Protocol
+///
+/// Uses Claude Code's stream-json protocol:
+/// - Spawns `claude` with `--print --input-format stream-json --output-format stream-json`
+/// - Writes one JSON object per line to stdin for user messages
+/// - Reads JSON objects from stdout, streaming text from `stream_event` deltas
+///
+/// # Session Persistence
+///
+/// Each conversation gets a UUID session ID passed via `--session-id`, allowing
+/// Claude Code to maintain context across messages within a chat.
+pub struct ClaudeCodeProvider {
+    claude_path: String,
+    permission_mode: String,
+    allowed_tools: Option<String>,
+    add_dirs: Vec<std::path::PathBuf>,
+}
+
+impl Clone for ClaudeCodeProvider {
+    fn clone(&self) -> Self {
+        Self {
+            claude_path: self.claude_path.clone(),
+            permission_mode: self.permission_mode.clone(),
+            allowed_tools: self.allowed_tools.clone(),
+            add_dirs: self.add_dirs.clone(),
+        }
+    }
+}
+
+impl ClaudeCodeProvider {
+    /// Create a ClaudeCodeProvider from a config file configuration.
+    ///
+    /// This is the preferred method when using `~/.scriptkit/config.ts`.
+    ///
+    /// Returns `Some(provider)` if:
+    /// 1. `config.enabled` is true
+    /// 2. The `claude` CLI is available in PATH (or at custom path)
+    ///
+    /// Returns `None` if the provider is not enabled or `claude` is not found.
+    pub fn from_config(config: &crate::config::ClaudeCodeConfig) -> Option<Self> {
+        if !config.enabled {
+            tracing::debug!("Claude Code CLI provider not enabled in config");
+            return None;
+        }
+
+        let claude_path = config.path.clone().unwrap_or_else(|| "claude".to_string());
+
+        // Verify `claude` is available
+        if !Self::is_available(&claude_path) {
+            tracing::warn!(
+                path = %claude_path,
+                "Claude Code CLI not found at configured path - provider disabled"
+            );
+            return None;
+        }
+
+        let permission_mode = config.permission_mode.clone();
+        let allowed_tools = config.allowed_tools.clone();
+        let add_dirs: Vec<std::path::PathBuf> = config
+            .add_dirs
+            .iter()
+            .map(std::path::PathBuf::from)
+            .collect();
+
+        tracing::info!(
+            path = %claude_path,
+            permission_mode = %permission_mode,
+            add_dirs_count = add_dirs.len(),
+            "Claude Code CLI provider initialized from config"
+        );
+
+        Some(Self {
+            claude_path,
+            permission_mode,
+            allowed_tools,
+            add_dirs,
+        })
+    }
+
+    /// Attempt to create a ClaudeCodeProvider from environment variables.
+    ///
+    /// This is the fallback method when config is not available.
+    /// Prefer `from_config()` when loading from `~/.scriptkit/config.ts`.
+    ///
+    /// Returns `Some(provider)` if:
+    /// 1. `SCRIPT_KIT_CLAUDE_CODE_ENABLED` is set to "1" or "true"
+    /// 2. The `claude` CLI is available in PATH (or at custom path)
+    ///
+    /// Returns `None` if the provider is not enabled or `claude` is not found.
+    pub fn detect_from_env() -> Option<Self> {
+        use super::config::env_vars;
+
+        // Check if explicitly enabled
+        let enabled = std::env::var(env_vars::CLAUDE_CODE_ENABLED)
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
+
+        if !enabled {
+            tracing::debug!(
+                "Claude Code CLI provider not enabled (set SCRIPT_KIT_CLAUDE_CODE_ENABLED=1)"
+            );
+            return None;
+        }
+
+        let claude_path =
+            std::env::var(env_vars::CLAUDE_CODE_PATH).unwrap_or_else(|_| "claude".to_string());
+
+        // Verify `claude` is available
+        if !Self::is_available(&claude_path) {
+            tracing::warn!(
+                path = %claude_path,
+                "Claude Code CLI not found - provider disabled"
+            );
+            return None;
+        }
+
+        let permission_mode = std::env::var(env_vars::CLAUDE_CODE_PERMISSION_MODE)
+            .unwrap_or_else(|_| "plan".to_string());
+
+        let allowed_tools = std::env::var(env_vars::CLAUDE_CODE_ALLOWED_TOOLS).ok();
+
+        let add_dirs = std::env::var(env_vars::CLAUDE_CODE_ADD_DIRS)
+            .ok()
+            .map(|v| {
+                v.split(',')
+                    .map(|s| s.trim())
+                    .filter(|s| !s.is_empty())
+                    .map(std::path::PathBuf::from)
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+
+        tracing::info!(
+            path = %claude_path,
+            permission_mode = %permission_mode,
+            add_dirs_count = add_dirs.len(),
+            "Claude Code CLI provider initialized from environment"
+        );
+
+        Some(Self {
+            claude_path,
+            permission_mode,
+            allowed_tools,
+            add_dirs,
+        })
+    }
+
+    /// Check if the `claude` CLI is available at the given path.
+    fn is_available(path: &str) -> bool {
+        use std::process::{Command, Stdio};
+
+        Command::new(path)
+            .arg("--version")
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false)
+    }
+
+    /// Extract the system prompt from messages (if any).
+    fn extract_system_prompt(messages: &[ProviderMessage]) -> Option<String> {
+        messages
+            .iter()
+            .find(|m| m.role == "system")
+            .map(|m| m.content.clone())
+    }
+
+    /// Extract the last user message text.
+    fn extract_last_user_text(messages: &[ProviderMessage]) -> Result<String> {
+        let last_user = messages
+            .iter()
+            .rev()
+            .find(|m| m.role == "user")
+            .ok_or_else(|| anyhow!("No user message found"))?;
+
+        if !last_user.images.is_empty() {
+            return Err(anyhow!(
+                "Claude Code CLI provider currently does not support image messages"
+            ));
+        }
+
+        Ok(last_user.content.clone())
+    }
+
+    /// Build a user message JSON for the stream-json protocol.
+    fn make_user_message_json(content: &str) -> serde_json::Value {
+        // The Agent SDK stream-json format: a per-line user message
+        serde_json::json!({
+            "type": "user",
+            "message": {
+                "role": "user",
+                "content": content
+            }
+        })
+    }
+
+    /// Execute a single streaming request to Claude Code CLI.
+    ///
+    /// # Arguments
+    /// * `session_id` - UUID for session persistence
+    /// * `model_id` - Model to use ("sonnet", "opus", "default")
+    /// * `system_prompt` - Optional system prompt
+    /// * `user_prompt` - The user's message
+    /// * `on_chunk` - Callback for streaming text chunks
+    ///
+    /// # Returns
+    /// The final result text from the `type:"result"` message.
+    fn stream_claude_once(
+        &self,
+        session_id: &str,
+        model_id: &str,
+        system_prompt: Option<&str>,
+        user_prompt: &str,
+        on_chunk: &StreamCallback,
+    ) -> Result<String> {
+        use std::io::{BufRead, Write};
+        use std::process::{Command, Stdio};
+
+        let mut cmd = Command::new(&self.claude_path);
+
+        // Core headless mode flags
+        cmd.arg("--print")
+            .arg("--input-format")
+            .arg("stream-json")
+            .arg("--output-format")
+            .arg("stream-json")
+            .arg("--session-id")
+            .arg(session_id);
+
+        // Model selection (if not default)
+        if !model_id.is_empty() && model_id != "default" {
+            cmd.arg("--model").arg(model_id);
+        }
+
+        // System prompt
+        if let Some(sp) = system_prompt {
+            if !sp.trim().is_empty() {
+                cmd.arg("--system-prompt").arg(sp);
+            }
+        }
+
+        // Permission mode (safe default: "plan")
+        if !self.permission_mode.trim().is_empty() {
+            cmd.arg("--permission-mode").arg(&self.permission_mode);
+        }
+
+        // Allowed tools
+        if let Some(allowed) = &self.allowed_tools {
+            if !allowed.trim().is_empty() {
+                cmd.arg("--allowed-tools").arg(allowed);
+            }
+        }
+
+        // Additional workspace directories
+        for dir in &self.add_dirs {
+            cmd.arg("--add-dir").arg(dir);
+        }
+
+        cmd.stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+
+        tracing::debug!(
+            session_id = %session_id,
+            model_id = %model_id,
+            "Spawning Claude Code CLI"
+        );
+
+        let mut child = cmd.spawn().context("Failed to spawn `claude` CLI")?;
+
+        // Drain stderr in a separate thread to prevent deadlock
+        if let Some(stderr) = child.stderr.take() {
+            std::thread::spawn(move || {
+                let reader = BufReader::new(stderr);
+                for line in reader.lines().map_while(Result::ok) {
+                    // Log stderr for debugging (but don't spam)
+                    if !line.trim().is_empty() {
+                        tracing::trace!(stderr = %line, "Claude CLI stderr");
+                    }
+                }
+            });
+        }
+
+        // Send one user message line, then close stdin (EOF ends the query)
+        {
+            let mut stdin = child
+                .stdin
+                .take()
+                .ok_or_else(|| anyhow!("No stdin handle"))?;
+            let msg = Self::make_user_message_json(user_prompt);
+            let line = serde_json::to_string(&msg)?;
+
+            tracing::trace!(message = %line, "Sending to Claude CLI stdin");
+
+            stdin.write_all(line.as_bytes())?;
+            stdin.write_all(b"\n")?;
+            // stdin drops here, sending EOF
+        }
+
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| anyhow!("No stdout handle"))?;
+        let reader = BufReader::new(stdout);
+
+        let mut saw_text_delta = false;
+        let mut final_result: Option<String> = None;
+
+        for line in reader.lines() {
+            let line = line.context("Failed to read Claude CLI stdout")?;
+
+            if line.trim().is_empty() {
+                continue;
+            }
+
+            let v: serde_json::Value = match serde_json::from_str(&line) {
+                Ok(v) => v,
+                Err(_) => {
+                    // Ignore non-JSON lines (e.g., debug output)
+                    tracing::trace!(line = %line, "Non-JSON line from Claude CLI");
+                    continue;
+                }
+            };
+
+            let msg_type = v.get("type").and_then(|x| x.as_str()).unwrap_or("");
+
+            match msg_type {
+                "stream_event" => {
+                    // Anthropic-style streaming deltas wrapped by Claude Code
+                    // Look for content_block_delta with text_delta
+                    let event = &v["event"];
+                    let event_type = event.get("type").and_then(|x| x.as_str());
+
+                    if event_type == Some("content_block_delta") {
+                        let delta_type = event["delta"].get("type").and_then(|x| x.as_str());
+
+                        if delta_type == Some("text_delta") {
+                            if let Some(text) = event["delta"].get("text").and_then(|x| x.as_str())
+                            {
+                                saw_text_delta = true;
+                                on_chunk(text.to_string());
+                            }
+                        }
+                    }
+                }
+                "assistant" => {
+                    // Fallback: extract text from assistant message if no streaming deltas
+                    if !saw_text_delta {
+                        if let Some(content) =
+                            v.pointer("/message/content").and_then(|x| x.as_array())
+                        {
+                            let mut text = String::new();
+                            for block in content {
+                                if block.get("type").and_then(|x| x.as_str()) == Some("text") {
+                                    if let Some(t) = block.get("text").and_then(|x| x.as_str()) {
+                                        text.push_str(t);
+                                    }
+                                }
+                            }
+                            if !text.is_empty() {
+                                on_chunk(text.clone());
+                            }
+                        }
+                    }
+                }
+                "result" => {
+                    // Final result message - check for errors
+                    let is_error = v.get("is_error").and_then(|x| x.as_bool()).unwrap_or(false);
+                    if is_error {
+                        let errors = v.get("errors").cloned().unwrap_or(serde_json::Value::Null);
+                        return Err(anyhow!("Claude Code returned error: {}", errors));
+                    }
+                    if let Some(r) = v.get("result").and_then(|x| x.as_str()) {
+                        final_result = Some(r.to_string());
+                    }
+                    break;
+                }
+                _ => {
+                    // Ignore other message types (e.g., "init", "system", etc.)
+                    tracing::trace!(msg_type = %msg_type, "Ignoring Claude CLI message type");
+                }
+            }
+        }
+
+        // Wait for the process to finish
+        let status = child.wait().context("Failed to wait for Claude CLI")?;
+        if !status.success() {
+            return Err(anyhow!("`claude` CLI exited with status: {}", status));
+        }
+
+        tracing::debug!(
+            session_id = %session_id,
+            saw_streaming = saw_text_delta,
+            "Claude Code CLI request completed"
+        );
+
+        Ok(final_result.unwrap_or_default())
+    }
+}
+
+impl AiProvider for ClaudeCodeProvider {
+    fn provider_id(&self) -> &str {
+        "claude_code"
+    }
+
+    fn display_name(&self) -> &str {
+        "Claude Code (CLI)"
+    }
+
+    fn available_models(&self) -> Vec<ModelInfo> {
+        vec![
+            ModelInfo::new(
+                "sonnet",
+                "Claude Code - Sonnet",
+                "claude_code",
+                true,
+                200_000,
+            ),
+            ModelInfo::new("opus", "Claude Code - Opus", "claude_code", true, 200_000),
+            ModelInfo::new(
+                "default",
+                "Claude Code - Default",
+                "claude_code",
+                true,
+                200_000,
+            ),
+        ]
+    }
+
+    fn send_message(&self, messages: &[ProviderMessage], model_id: &str) -> Result<String> {
+        // Generate a new session ID for this standalone request
+        let session_id = uuid::Uuid::new_v4().to_string();
+        let system_prompt = Self::extract_system_prompt(messages);
+        let user_prompt = Self::extract_last_user_text(messages)?;
+
+        // Use a no-op callback since we don't need streaming for send_message
+        let noop: StreamCallback = Box::new(|_| {});
+        self.stream_claude_once(
+            &session_id,
+            model_id,
+            system_prompt.as_deref(),
+            &user_prompt,
+            &noop,
+        )
+    }
+
+    fn stream_message(
+        &self,
+        messages: &[ProviderMessage],
+        model_id: &str,
+        on_chunk: StreamCallback,
+    ) -> Result<()> {
+        // Generate a new session ID for this standalone request
+        let session_id = uuid::Uuid::new_v4().to_string();
+        let system_prompt = Self::extract_system_prompt(messages);
+        let user_prompt = Self::extract_last_user_text(messages)?;
+
+        let _ = self.stream_claude_once(
+            &session_id,
+            model_id,
+            system_prompt.as_deref(),
+            &user_prompt,
+            &on_chunk,
+        )?;
+
+        Ok(())
+    }
+}
+
 /// Registry of available AI providers.
 ///
 /// The registry automatically discovers available providers based on
@@ -1282,11 +1767,30 @@ impl ProviderRegistry {
         }
     }
 
-    /// Create a registry populated from environment variables.
+    /// Create a registry populated from environment variables only.
     ///
     /// Scans for `SCRIPT_KIT_*_API_KEY` environment variables and
     /// creates providers for each detected key.
+    ///
+    /// For Claude Code CLI, uses environment variables only.
+    /// Prefer `from_environment_with_config` when loading from `~/.scriptkit/config.ts`.
     pub fn from_environment() -> Self {
+        Self::from_environment_with_config(None)
+    }
+
+    /// Create a registry populated from environment variables and optional config.
+    ///
+    /// Scans for `SCRIPT_KIT_*_API_KEY` environment variables and
+    /// creates providers for each detected key.
+    ///
+    /// For Claude Code CLI:
+    /// - If config is provided and has `claudeCode.enabled = true`, uses config settings
+    /// - Otherwise falls back to environment variables (`SCRIPT_KIT_CLAUDE_CODE_ENABLED=1`)
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - Optional Script Kit configuration from `~/.scriptkit/config.ts`
+    pub fn from_environment_with_config(config: Option<&crate::config::Config>) -> Self {
         let keys = DetectedKeys::from_environment();
         let mut registry = Self::new();
 
@@ -1310,12 +1814,23 @@ impl ProviderRegistry {
             registry.register(Arc::new(VercelGatewayProvider::new(key)));
         }
 
+        // Claude Code CLI provider
+        // Priority: config > environment variables
+        let claude_provider = config
+            .map(|c| c.get_claude_code())
+            .and_then(|claude_config| ClaudeCodeProvider::from_config(&claude_config))
+            .or_else(ClaudeCodeProvider::detect_from_env);
+
+        if let Some(claude_cli) = claude_provider {
+            registry.register(Arc::new(claude_cli));
+        }
+
         // Log which providers are available (without exposing keys)
         let available: Vec<_> = registry.providers.keys().collect();
         if !available.is_empty() {
             tracing::info!(
                 providers = ?available,
-                "AI providers initialized from environment"
+                "AI providers initialized"
             );
         } else {
             tracing::debug!("No AI provider API keys found in environment");
@@ -1773,5 +2288,200 @@ mod tests {
         let detail = "Invalid API key provided";
         let result = simplify_auth_error(detail);
         assert_eq!(result, detail);
+    }
+
+    // ================= Claude Code CLI Provider Tests =================
+
+    #[test]
+    fn test_claude_code_provider_metadata() {
+        // Create provider manually for testing (bypasses env detection)
+        let provider = ClaudeCodeProvider {
+            claude_path: "claude".to_string(),
+            permission_mode: "plan".to_string(),
+            allowed_tools: None,
+            add_dirs: vec![],
+        };
+
+        assert_eq!(provider.provider_id(), "claude_code");
+        assert_eq!(provider.display_name(), "Claude Code (CLI)");
+
+        let models = provider.available_models();
+        assert_eq!(models.len(), 3);
+        assert!(models.iter().any(|m| m.id == "sonnet"));
+        assert!(models.iter().any(|m| m.id == "opus"));
+        assert!(models.iter().any(|m| m.id == "default"));
+
+        // All models should support streaming
+        assert!(models.iter().all(|m| m.supports_streaming));
+        // All models should have 200k context
+        assert!(models.iter().all(|m| m.context_window == 200_000));
+    }
+
+    #[test]
+    fn test_claude_code_extract_system_prompt() {
+        let messages = vec![
+            ProviderMessage::system("You are a helpful assistant"),
+            ProviderMessage::user("Hello"),
+        ];
+        let result = ClaudeCodeProvider::extract_system_prompt(&messages);
+        assert_eq!(result, Some("You are a helpful assistant".to_string()));
+
+        // No system message
+        let messages = vec![ProviderMessage::user("Hello")];
+        let result = ClaudeCodeProvider::extract_system_prompt(&messages);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_claude_code_extract_last_user_text() {
+        let messages = vec![
+            ProviderMessage::user("First"),
+            ProviderMessage::assistant("Response"),
+            ProviderMessage::user("Second"),
+        ];
+        let result = ClaudeCodeProvider::extract_last_user_text(&messages);
+        assert_eq!(result.unwrap(), "Second");
+
+        // No user message
+        let messages = vec![ProviderMessage::assistant("Hello")];
+        let result = ClaudeCodeProvider::extract_last_user_text(&messages);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_claude_code_make_user_message_json() {
+        let json = ClaudeCodeProvider::make_user_message_json("Hello, Claude!");
+        assert_eq!(json["type"], "user");
+        assert_eq!(json["message"]["role"], "user");
+        assert_eq!(json["message"]["content"], "Hello, Claude!");
+    }
+
+    #[test]
+    fn test_claude_code_is_not_available_for_nonexistent_binary() {
+        // A nonexistent binary should return false
+        assert!(!ClaudeCodeProvider::is_available(
+            "/nonexistent/path/to/claude"
+        ));
+    }
+
+    #[test]
+    fn test_claude_code_detect_from_env_disabled_by_default() {
+        // Clear any existing env vars for this test
+        let original_enabled = std::env::var("SCRIPT_KIT_CLAUDE_CODE_ENABLED").ok();
+
+        std::env::remove_var("SCRIPT_KIT_CLAUDE_CODE_ENABLED");
+
+        // Should return None when not explicitly enabled
+        let result = ClaudeCodeProvider::detect_from_env();
+        assert!(result.is_none());
+
+        // Restore
+        if let Some(val) = original_enabled {
+            std::env::set_var("SCRIPT_KIT_CLAUDE_CODE_ENABLED", val);
+        }
+    }
+
+    #[test]
+    fn test_claude_code_registry_registration() {
+        let mut registry = ProviderRegistry::new();
+        let provider = ClaudeCodeProvider {
+            claude_path: "claude".to_string(),
+            permission_mode: "plan".to_string(),
+            allowed_tools: Some("Read,Edit".to_string()),
+            add_dirs: vec![std::path::PathBuf::from("/tmp")],
+        };
+        registry.register(Arc::new(provider));
+
+        assert!(registry.has_any_provider());
+        assert!(registry.get_provider("claude_code").is_some());
+
+        let models = registry.get_models_for_provider("claude_code");
+        assert_eq!(models.len(), 3);
+    }
+
+    #[test]
+    fn test_claude_code_find_provider_for_model() {
+        let mut registry = ProviderRegistry::new();
+        registry.register(Arc::new(ClaudeCodeProvider {
+            claude_path: "claude".to_string(),
+            permission_mode: "plan".to_string(),
+            allowed_tools: None,
+            add_dirs: vec![],
+        }));
+
+        let provider = registry.find_provider_for_model("sonnet");
+        assert!(provider.is_some());
+        assert_eq!(provider.unwrap().provider_id(), "claude_code");
+
+        let provider = registry.find_provider_for_model("opus");
+        assert!(provider.is_some());
+        assert_eq!(provider.unwrap().provider_id(), "claude_code");
+
+        let provider = registry.find_provider_for_model("default");
+        assert!(provider.is_some());
+        assert_eq!(provider.unwrap().provider_id(), "claude_code");
+    }
+
+    #[test]
+    fn test_claude_code_clone() {
+        let provider = ClaudeCodeProvider {
+            claude_path: "/custom/path/to/claude".to_string(),
+            permission_mode: "dontAsk".to_string(),
+            allowed_tools: Some("Bash,Read".to_string()),
+            add_dirs: vec![
+                std::path::PathBuf::from("/home/user/project"),
+                std::path::PathBuf::from("/tmp"),
+            ],
+        };
+
+        let cloned = provider.clone();
+
+        assert_eq!(cloned.claude_path, provider.claude_path);
+        assert_eq!(cloned.permission_mode, provider.permission_mode);
+        assert_eq!(cloned.allowed_tools, provider.allowed_tools);
+        assert_eq!(cloned.add_dirs, provider.add_dirs);
+    }
+
+    /// Test real Claude Code CLI execution (requires `claude` CLI installed)
+    /// Run with: cargo test --features system-tests test_claude_code_real -- --ignored
+    #[test]
+    #[ignore = "Requires Claude Code CLI installed - run with `claude` in PATH"]
+    fn test_claude_code_real() {
+        // Check if claude is available
+        if !ClaudeCodeProvider::is_available("claude") {
+            eprintln!("Skipping: `claude` CLI not found in PATH");
+            return;
+        }
+
+        let provider = ClaudeCodeProvider {
+            claude_path: "claude".to_string(),
+            permission_mode: "plan".to_string(),
+            allowed_tools: None,
+            add_dirs: vec![],
+        };
+
+        let messages = vec![
+            ProviderMessage::system("You are a helpful assistant. Reply with exactly 'Hello from Claude Code!' and nothing else."),
+            ProviderMessage::user("Say hello"),
+        ];
+
+        // Test streaming
+        let chunks = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let chunks_clone = chunks.clone();
+
+        let result = provider.stream_message(
+            &messages,
+            "default",
+            Box::new(move |chunk| {
+                chunks_clone.lock().unwrap().push(chunk);
+            }),
+        );
+
+        assert!(result.is_ok(), "stream_message failed: {:?}", result.err());
+
+        let collected = chunks.lock().unwrap();
+        let full_response: String = collected.iter().cloned().collect();
+        assert!(!full_response.is_empty(), "No response received");
+        println!("Claude Code response: {}", full_response);
     }
 }

@@ -808,6 +808,84 @@ export interface ProcessLimits {
 }
 
 /**
+ * Configuration for the Claude Code CLI provider.
+ *
+ * This allows Script Kit's AI Chat to use the local `claude` CLI as an AI provider,
+ * speaking JSONL over stdin/stdout for streaming responses with tool support.
+ *
+ * @example Basic enabled configuration
+ * ```typescript
+ * claudeCode: {
+ *   enabled: true
+ * }
+ * ```
+ *
+ * @example Full configuration with tool restrictions
+ * ```typescript
+ * claudeCode: {
+ *   enabled: true,
+ *   path: "/opt/homebrew/bin/claude",
+ *   permissionMode: "plan",
+ *   allowedTools: "Read,Edit,Bash(git:*)",
+ *   addDirs: ["/home/user/projects", "/tmp/scratch"]
+ * }
+ * ```
+ */
+export interface ClaudeCodeConfig {
+  /**
+   * Enable the Claude Code CLI provider.
+   * When enabled, "Claude Code" models will appear in the AI chat model picker.
+   *
+   * @default false (requires explicit opt-in)
+   * @example true // Enable Claude Code as a provider
+   */
+  enabled?: boolean;
+
+  /**
+   * Custom path to the `claude` CLI binary.
+   * If not specified, will look for `claude` in your PATH.
+   *
+   * @default undefined (uses "claude" from PATH)
+   * @example "/opt/homebrew/bin/claude"
+   * @example "/usr/local/bin/claude"
+   */
+  path?: string;
+
+  /**
+   * Permission mode for Claude Code tool execution.
+   * - "plan": Safe default - Claude plans but asks before executing tools
+   * - "dontAsk": Agent can execute tools without confirmation (for trusted sandboxes only!)
+   *
+   * @default "plan"
+   * @example "plan" // Safe: Claude asks before running commands
+   * @example "dontAsk" // Dangerous: Claude runs tools without asking
+   */
+  permissionMode?: string;
+
+  /**
+   * Comma-separated list of allowed tools.
+   * Restricts which tools Claude Code can use.
+   * Follows Claude Code CLI's tool permission syntax.
+   *
+   * @default undefined (uses Claude Code's default tool set)
+   * @example "Read,Edit,Bash(git:*)" // Read, Edit, and git commands only
+   * @example "Read,Edit" // Read and Edit only, no shell access
+   * @example "Read,Edit,Bash,Write" // Common set for development
+   */
+  allowedTools?: string;
+
+  /**
+   * Additional directories to add to Claude Code's workspace.
+   * Each path is passed as `--add-dir` to the CLI, giving Claude access to those directories.
+   *
+   * @default [] (empty array)
+   * @example ["/home/user/projects"] // Single project directory
+   * @example ["/home/user/projects", "/tmp/scratch"] // Multiple directories
+   */
+  addDirs?: string[];
+}
+
+/**
  * Script Kit configuration schema.
  * 
  * This configuration is loaded from `~/.scriptkit/config.ts` and controls
@@ -986,6 +1064,32 @@ export interface Config {
    * ```
    */
   commands?: Record<string, CommandConfig>;
+
+  /**
+   * Claude Code CLI provider configuration.
+   * Enable and configure the local `claude` CLI as an AI provider in Script Kit's AI Chat.
+   *
+   * Requires the Claude Code CLI to be installed: https://claude.ai/code
+   *
+   * @default undefined (Claude Code provider disabled)
+   * @example Basic usage
+   * ```typescript
+   * claudeCode: {
+   *   enabled: true
+   * }
+   * ```
+   * @example Full configuration
+   * ```typescript
+   * claudeCode: {
+   *   enabled: true,
+   *   path: "/opt/homebrew/bin/claude",
+   *   permissionMode: "plan",
+   *   allowedTools: "Read,Edit,Bash(git:*)",
+   *   addDirs: ["/home/user/projects"]
+   * }
+   * ```
+   */
+  claudeCode?: ClaudeCodeConfig;
 }
 
 // =============================================================================

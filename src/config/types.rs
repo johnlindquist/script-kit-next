@@ -229,6 +229,93 @@ pub fn command_id_to_deeplink(command_id: &str) -> String {
 }
 
 // ============================================
+// CLAUDE CODE CLI CONFIG
+// ============================================
+
+/// Configuration for the Claude Code CLI provider.
+///
+/// This allows Script Kit to use the local `claude` CLI as an AI provider,
+/// speaking JSONL over stdin/stdout for streaming responses.
+///
+/// # Example
+///
+/// ```typescript
+/// // In ~/.scriptkit/config.ts
+/// export default {
+///   hotkey: { modifiers: ["meta"], key: "Semicolon" },
+///   claudeCode: {
+///     enabled: true,
+///     permissionMode: "plan",
+///     allowedTools: "Read,Edit,Bash(git:*)",
+///     addDirs: ["/home/user/projects"]
+///   }
+/// } satisfies Config;
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClaudeCodeConfig {
+    /// Enable the Claude Code CLI provider.
+    /// When enabled, "Claude Code" models will appear in the AI chat model picker.
+    ///
+    /// @default false (requires explicit opt-in)
+    #[serde(default = "default_claude_code_enabled")]
+    pub enabled: bool,
+
+    /// Custom path to the `claude` CLI binary.
+    /// If not specified, will look for `claude` in PATH.
+    ///
+    /// @default undefined (uses "claude" from PATH)
+    /// @example "/opt/homebrew/bin/claude"
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
+
+    /// Permission mode for Claude Code.
+    /// - "plan": Safe default - Claude plans but asks before executing tools
+    /// - "dontAsk": Agent can execute tools without confirmation (sandbox only!)
+    ///
+    /// @default "plan"
+    #[serde(default = "default_claude_code_permission_mode")]
+    pub permission_mode: String,
+
+    /// Comma-separated list of allowed tools.
+    /// Restricts which tools Claude Code can use.
+    ///
+    /// @default undefined (uses Claude Code defaults)
+    /// @example "Read,Edit,Bash(git:*)"
+    /// @example "Read,Edit,Bash,Write"
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub allowed_tools: Option<String>,
+
+    /// Additional directories to add to Claude Code's workspace.
+    /// Each path is passed as `--add-dir` to the CLI.
+    ///
+    /// @default [] (empty)
+    /// @example ["/home/user/projects", "/tmp/scratch"]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub add_dirs: Vec<String>,
+}
+
+fn default_claude_code_enabled() -> bool {
+    DEFAULT_CLAUDE_CODE_ENABLED
+}
+
+fn default_claude_code_permission_mode() -> String {
+    DEFAULT_CLAUDE_CODE_PERMISSION_MODE.to_string()
+}
+
+impl Default for ClaudeCodeConfig {
+    fn default() -> Self {
+        ClaudeCodeConfig {
+            enabled: DEFAULT_CLAUDE_CODE_ENABLED,
+            path: None,
+            permission_mode: DEFAULT_CLAUDE_CODE_PERMISSION_MODE.to_string(),
+            allowed_tools: None,
+            add_dirs: vec![],
+        }
+    }
+}
+
+// ============================================
 // HOTKEY CONFIG
 // ============================================
 
@@ -430,6 +517,14 @@ pub struct Config {
     /// Per-command configuration overrides (shortcuts, visibility)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub commands: Option<HashMap<String, CommandConfig>>,
+    /// Claude Code CLI provider configuration.
+    /// Enable and configure the local `claude` CLI as an AI provider.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "claudeCode"
+    )]
+    pub claude_code: Option<ClaudeCodeConfig>,
 }
 
 impl Default for Config {
@@ -453,6 +548,7 @@ impl Default for Config {
             ai_hotkey: None,          // Will use HotkeyConfig::default_ai_hotkey() via getter
             logs_hotkey: None,        // Will use HotkeyConfig::default_logs_hotkey() via getter
             commands: None,           // No per-command overrides by default
+            claude_code: None,        // Will use ClaudeCodeConfig::default() via getter
         }
     }
 }
@@ -577,6 +673,19 @@ impl Config {
         }
         // Fall back to defaults
         DEFAULT_CONFIRMATION_COMMANDS.contains(&command_id)
+    }
+
+    /// Returns the Claude Code CLI configuration, or defaults if not configured.
+    ///
+    /// Use this to check if Claude Code is enabled and get its settings:
+    /// ```ignore
+    /// let claude_config = config.get_claude_code();
+    /// if claude_config.enabled {
+    ///     // Register Claude Code provider
+    /// }
+    /// ```
+    pub fn get_claude_code(&self) -> ClaudeCodeConfig {
+        self.claude_code.clone().unwrap_or_default()
     }
 }
 

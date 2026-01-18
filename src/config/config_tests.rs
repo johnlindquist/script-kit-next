@@ -40,6 +40,7 @@ fn test_config_serialization() {
         ai_hotkey: None,
         logs_hotkey: None,
         commands: None,
+        claude_code: None,
     };
 
     let json = serde_json::to_string(&config).unwrap();
@@ -83,6 +84,7 @@ fn test_config_with_bun_path() {
         ai_hotkey: None,
         logs_hotkey: None,
         commands: None,
+        claude_code: None,
     };
     assert_eq!(config.bun_path, Some("/custom/path/bun".to_string()));
 }
@@ -108,6 +110,7 @@ fn test_config_without_bun_path() {
         ai_hotkey: None,
         logs_hotkey: None,
         commands: None,
+        claude_code: None,
     };
     assert_eq!(config.bun_path, None);
 }
@@ -133,6 +136,7 @@ fn test_config_serialization_skip_none_bun_path() {
         ai_hotkey: None,
         logs_hotkey: None,
         commands: None,
+        claude_code: None,
     };
 
     let json = serde_json::to_string(&config).unwrap();
@@ -163,6 +167,7 @@ fn test_config_serialization_preserves_multiple_modifiers() {
         ai_hotkey: None,
         logs_hotkey: None,
         commands: None,
+        claude_code: None,
     };
 
     let json = serde_json::to_string(&config).unwrap();
@@ -260,6 +265,7 @@ fn test_config_with_empty_modifiers_list() {
         ai_hotkey: None,
         logs_hotkey: None,
         commands: None,
+        claude_code: None,
     };
 
     assert_eq!(config.hotkey.modifiers.len(), 0);
@@ -291,6 +297,7 @@ fn test_config_key_preservation() {
             ai_hotkey: None,
             logs_hotkey: None,
             commands: None,
+            claude_code: None,
         };
 
         let json = serde_json::to_string(&config).unwrap();
@@ -321,6 +328,7 @@ fn test_config_with_editor() {
         ai_hotkey: None,
         logs_hotkey: None,
         commands: None,
+        claude_code: None,
     };
 
     let json = serde_json::to_string(&config).unwrap();
@@ -351,6 +359,7 @@ fn test_config_without_editor() {
         ai_hotkey: None,
         logs_hotkey: None,
         commands: None,
+        claude_code: None,
     };
 
     let json = serde_json::to_string(&config).unwrap();
@@ -382,6 +391,7 @@ fn test_get_editor_from_config() {
         ai_hotkey: None,
         logs_hotkey: None,
         commands: None,
+        claude_code: None,
     };
 
     // Config editor takes precedence
@@ -415,6 +425,7 @@ fn test_get_editor_from_env() {
         ai_hotkey: None,
         logs_hotkey: None,
         commands: None,
+        claude_code: None,
     };
 
     // Should fall back to EDITOR env var
@@ -454,6 +465,7 @@ fn test_get_editor_default() {
         ai_hotkey: None,
         logs_hotkey: None,
         commands: None,
+        claude_code: None,
     };
 
     // Should fall back to "code" default
@@ -493,6 +505,7 @@ fn test_config_editor_priority() {
         ai_hotkey: None,
         logs_hotkey: None,
         commands: None,
+        claude_code: None,
     };
 
     // Config editor should win
@@ -601,6 +614,7 @@ fn test_config_get_padding_custom() {
         ai_hotkey: None,
         logs_hotkey: None,
         commands: None,
+        claude_code: None,
     };
 
     let padding = config.get_padding();
@@ -636,6 +650,7 @@ fn test_config_get_editor_font_size_custom() {
         ai_hotkey: None,
         logs_hotkey: None,
         commands: None,
+        claude_code: None,
     };
 
     assert_eq!(config.get_editor_font_size(), 16.0);
@@ -668,6 +683,7 @@ fn test_config_get_terminal_font_size_custom() {
         ai_hotkey: None,
         logs_hotkey: None,
         commands: None,
+        claude_code: None,
     };
 
     assert_eq!(config.get_terminal_font_size(), 12.0);
@@ -700,6 +716,7 @@ fn test_config_get_ui_scale_custom() {
         ai_hotkey: None,
         logs_hotkey: None,
         commands: None,
+        claude_code: None,
     };
 
     assert_eq!(config.get_ui_scale(), 1.5);
@@ -793,6 +810,7 @@ fn test_config_serialization_includes_set_ui_settings() {
         ai_hotkey: None,
         logs_hotkey: None,
         commands: None,
+        claude_code: None,
     };
 
     let json = serde_json::to_string(&config).unwrap();
@@ -894,6 +912,7 @@ fn test_config_with_builtins() {
         ai_hotkey: None,
         logs_hotkey: None,
         commands: None,
+        claude_code: None,
     };
 
     let builtins = config.get_builtins();
@@ -987,6 +1006,7 @@ fn test_config_serialization_includes_set_builtins() {
         ai_hotkey: None,
         logs_hotkey: None,
         commands: None,
+        claude_code: None,
     };
 
     let json = serde_json::to_string(&config).unwrap();
@@ -1131,6 +1151,7 @@ fn test_config_with_process_limits() {
         ai_hotkey: None,
         logs_hotkey: None,
         commands: None,
+        claude_code: None,
     };
 
     let limits = config.get_process_limits();
@@ -1230,6 +1251,7 @@ fn test_config_serialization_includes_set_process_limits() {
         ai_hotkey: None,
         logs_hotkey: None,
         commands: None,
+        claude_code: None,
     };
 
     let json = serde_json::to_string(&config).unwrap();
@@ -1343,6 +1365,7 @@ fn test_requires_confirmation_user_override_disable() {
         ai_hotkey: None,
         logs_hotkey: None,
         commands: Some(commands),
+        claude_code: None,
     };
 
     // Should NOT require confirmation because user disabled it
@@ -1383,6 +1406,7 @@ fn test_requires_confirmation_user_override_enable() {
         ai_hotkey: None,
         logs_hotkey: None,
         commands: Some(commands),
+        claude_code: None,
     };
 
     // Should require confirmation because user enabled it
@@ -1536,6 +1560,7 @@ fn test_requires_confirmation_with_partial_command_config() {
         ai_hotkey: None,
         logs_hotkey: None,
         commands: Some(commands),
+        claude_code: None,
     };
 
     // Should still require confirmation (falls back to default)
