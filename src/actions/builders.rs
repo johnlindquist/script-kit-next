@@ -1340,6 +1340,82 @@ pub fn get_new_chat_actions(
     actions
 }
 
+/// Information about a note for the note switcher dialog
+#[derive(Debug, Clone)]
+pub struct NoteSwitcherNoteInfo {
+    /// Note ID (UUID)
+    pub id: String,
+    /// Note title (or "Untitled Note" if empty)
+    pub title: String,
+    /// Character count
+    pub char_count: usize,
+    /// Whether this is the currently selected note
+    pub is_current: bool,
+    /// Whether this note is pinned
+    pub is_pinned: bool,
+}
+
+/// Get actions for the note switcher dialog (Cmd+P in Notes window)
+///
+/// Each note becomes an action with:
+/// - ID: "note_{uuid}" for note selection
+/// - Title: Note title (with current indicator)
+/// - Description: Character count
+/// - Icon: Star if pinned, Circle if current
+pub fn get_note_switcher_actions(notes: &[NoteSwitcherNoteInfo]) -> Vec<Action> {
+    let mut actions = Vec::new();
+
+    for note in notes {
+        let icon = if note.is_pinned {
+            IconName::StarFilled
+        } else if note.is_current {
+            IconName::Check
+        } else {
+            IconName::File
+        };
+
+        // Add current indicator to title if this is the current note
+        let title = if note.is_current {
+            format!("• {}", note.title)
+        } else {
+            note.title.clone()
+        };
+
+        let description = format!(
+            "{} character{}",
+            note.char_count,
+            if note.char_count == 1 { "" } else { "s" }
+        );
+
+        actions.push(
+            Action::new(
+                format!("note_{}", note.id),
+                title,
+                Some(description),
+                ActionCategory::ScriptContext,
+            )
+            .with_icon(icon)
+            .with_section("Notes"),
+        );
+    }
+
+    // If no notes, show a helpful message
+    if actions.is_empty() {
+        actions.push(
+            Action::new(
+                "no_notes",
+                "No notes yet",
+                Some("Press ⌘N to create a new note".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_icon(IconName::Plus)
+            .with_section("Notes"),
+        );
+    }
+
+    actions
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
