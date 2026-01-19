@@ -202,7 +202,7 @@ pub fn open_confirm_window(
         window_bounds: Some(WindowBounds::Windowed(bounds)),
         titlebar: None,
         window_background,
-        focus: true, // Confirm window handles its own key events
+        focus: false, // CRITICAL: Don't take focus - main window keeps it and routes keys to us
         show: true,
         kind: WindowKind::PopUp,
         display_id,
