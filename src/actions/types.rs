@@ -1,6 +1,39 @@
 //! Action types and data structures
 //!
 //! Core types for the actions system including Action, ActionCategory, and ScriptInfo.
+//!
+//! # Architecture Overview
+//!
+//! The actions system is **intentionally decoupled** from the standard selection callbacks:
+//!
+//! - **on_select callback is bypassed by design** for keyboard navigation
+//! - Actions route through `handle_action()` in the main app via keyboard events
+//! - This enables consistent keyboard-driven action execution across all contexts
+//!
+//! ## Key Types
+//!
+//! - [`Action`]: Represents a single action item with id, title, category, and optional shortcut
+//! - [`ActionCategory`]: Categorizes actions (ScriptContext, ScriptOps, GlobalOps)
+//! - [`ScriptInfo`]: Context about the focused script/item for building context-specific actions
+//!
+//! ## Action ID Conventions
+//!
+//! All built-in action IDs use **snake_case** format:
+//! - `run_script`, `edit_script`, `copy_path`, `reveal_in_finder`
+//! - `add_shortcut`, `update_shortcut`, `remove_shortcut`
+//! - `add_alias`, `update_alias`, `remove_alias`
+//! - `copy_deeplink`, `reset_ranking`
+//!
+//! SDK-provided actions (from ProtocolAction) use their `name` field as-is for the ID.
+//!
+//! ## has_action Field
+//!
+//! The `has_action` field determines routing:
+//! - `has_action=true`: Send ActionTriggered event to SDK, let SDK handle the action
+//! - `has_action=false`: Submit value directly via protocol (built-in actions)
+//!
+//! Built-in actions (from `builders.rs`) have `has_action=false` by default.
+//! SDK actions with handlers should set `has_action=true`.
 
 use crate::designs::icon_variations::IconName;
 use std::sync::Arc;
@@ -248,28 +281,81 @@ impl ScriptInfo {
     }
 }
 
-/// Available actions in the actions menu
+/// Represents a single action item in the actions menu.
 ///
-/// Note: The `has_action` and `value` fields are populated from ProtocolAction
-/// for consistency, but the actual routing logic reads from the original
-/// ProtocolAction. These fields are kept for future use cases where Action
-/// might need independent behavior.
+/// Actions are created by builder functions in `builders.rs` or converted from
+/// SDK-provided `ProtocolAction` messages. Each action has a unique identifier,
+/// display title, and category for grouping.
+///
+/// # Action ID Convention
+///
+/// - Built-in actions: snake_case IDs (`edit_script`, `copy_path`, etc.)
+/// - SDK actions: Use the `name` field from ProtocolAction as-is
+/// - Scriptlet actions: Prefixed with `scriptlet_action:` followed by command
+///
+/// # Routing via has_action
+///
+/// The `has_action` field determines how actions are executed:
+/// - `false` (default for built-ins): Handle locally in Rust via `handle_action()`
+/// - `true` (SDK actions): Send `ActionTriggered` message to script for handling
+///
+/// Note: The routing logic in `handle_action()` may also read from the original
+/// `ProtocolAction` for SDK-provided actions to ensure consistency.
+///
+/// # Examples
+///
+/// ```ignore
+/// // Built-in action (has_action defaults to false)
+/// let action = Action::new(
+///     "edit_script",
+///     "Edit Script",
+///     Some("Open in $EDITOR".to_string()),
+///     ActionCategory::ScriptContext,
+/// ).with_shortcut("⌘E");
+///
+/// // Scriptlet action (has_action=true for SDK handling)
+/// let mut action = Action::new(
+///     "scriptlet_action:copy-to-clipboard",
+///     "Copy to Clipboard",
+///     None,
+///     ActionCategory::ScriptContext,
+/// );
+/// action.has_action = true;
+/// action.value = Some("copy-to-clipboard".to_string());
+/// ```
 #[derive(Debug, Clone)]
 pub struct Action {
+    /// Unique identifier for action routing.
+    /// Built-in IDs use snake_case (e.g., `edit_script`, `copy_path`).
+    /// SDK action IDs match the ProtocolAction name.
     pub id: String,
+
+    /// Display title shown in the actions menu
     pub title: String,
+
+    /// Optional description shown below the title
     pub description: Option<String>,
+
+    /// Category for grouping actions in the menu
     pub category: ActionCategory,
-    /// Optional keyboard shortcut hint (e.g., "⌘E")
+
+    /// Optional keyboard shortcut hint (e.g., "⌘E", "⇧⌘K")
+    /// Displayed as a badge next to the action title
     pub shortcut: Option<String>,
-    /// If true, send ActionTriggered to SDK; if false, submit value directly
+
+    /// Routing flag: if true, send ActionTriggered to SDK; if false, handle locally.
+    /// Built-in actions default to false. SDK actions with handlers set this to true.
     #[allow(dead_code)]
     pub has_action: bool,
-    /// Optional value to submit when action is triggered
+
+    /// Optional value to submit when action is triggered.
+    /// For scriptlet actions, this contains the command to execute.
     #[allow(dead_code)]
     pub value: Option<String>,
-    /// Optional icon to display next to the action
+
+    /// Optional icon to display next to the action title
     pub icon: Option<IconName>,
+
     /// Section/group name for display (used with SectionStyle::Headers)
     pub section: Option<String>,
 }
@@ -327,13 +413,30 @@ pub struct ActionsDialogConfig {
     pub show_footer: bool,
 }
 
+/// Category for grouping actions in the actions menu.
+///
+/// Actions are organized by category to help users find relevant options:
+/// - `ScriptContext`: Actions specific to the currently focused script/item
+/// - `ScriptOps`: Script management operations (reserved for future use)
+/// - `GlobalOps`: Application-wide actions like Settings, Quit (reserved)
+///
+/// Currently, most actions are `ScriptContext` since they operate on the
+/// focused list item. The other categories are reserved for future expansion.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ActionCategory {
-    ScriptContext, // Actions specific to the focused script
+    /// Actions specific to the currently focused script/item.
+    /// Examples: Run, Edit, Copy Path, Configure Shortcut, Reset Ranking
+    ScriptContext,
+
+    /// Script management operations (reserved for future use).
+    /// Intended for: Create Script, Delete Script, Duplicate Script
     #[allow(dead_code)]
-    ScriptOps, // Edit, Create, Delete script operations (reserved for future use)
+    ScriptOps,
+
+    /// Application-wide actions (reserved for future use).
+    /// Intended for: Open Settings, Quit App, Check for Updates
     #[allow(dead_code)]
-    GlobalOps, // Settings, Quit, etc.
+    GlobalOps,
 }
 
 impl Action {

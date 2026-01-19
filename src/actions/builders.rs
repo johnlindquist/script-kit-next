@@ -1,6 +1,41 @@
 //! Action builders
 //!
 //! Factory functions for creating context-specific action lists.
+//!
+//! # Overview
+//!
+//! This module provides builder functions that generate lists of [`Action`]s
+//! based on the current context (focused script, clipboard entry, file, etc.).
+//!
+//! # Builder Functions
+//!
+//! | Function | Context | Primary Use |
+//! |----------|---------|-------------|
+//! | [`get_script_context_actions`] | Script/scriptlet/builtin | Main menu item actions |
+//! | [`get_scriptlet_context_actions_with_custom`] | Scriptlet with H3 actions | Scriptlet-specific |
+//! | [`get_clipboard_history_context_actions`] | Clipboard entry | Clipboard history |
+//! | [`get_file_context_actions`] | File search result | File browser |
+//! | [`get_path_context_actions`] | Path selector | Path picker |
+//! | [`get_chat_context_actions`] | AI chat | Chat prompt |
+//! | [`get_ai_command_bar_actions`] | AI window Cmd+K | Command palette |
+//! | [`get_notes_command_bar_actions`] | Notes window Cmd+K | Notes command palette |
+//!
+//! # Action ID Convention
+//!
+//! All built-in actions use **snake_case** identifiers for consistency:
+//! - Primary: `run_script`, `open_file`, `open_directory`
+//! - Edit: `edit_script`, `edit_scriptlet`
+//! - Copy: `copy_path`, `copy_content`, `copy_deeplink`, `copy_filename`
+//! - Reveal: `reveal_in_finder`, `reveal_scriptlet_in_finder`
+//! - Shortcuts: `add_shortcut`, `update_shortcut`, `remove_shortcut`
+//! - Aliases: `add_alias`, `update_alias`, `remove_alias`
+//! - Clipboard: `clipboard_paste`, `clipboard_copy`, `clipboard_pin`
+//!
+//! # has_action Flag
+//!
+//! Built-in actions have `has_action=false` (handled locally in Rust).
+//! Only scriptlet-defined actions (from H3 headers) set `has_action=true`
+//! because they need SDK-side execution.
 
 use crate::designs::icon_variations::IconName;
 
@@ -27,9 +62,21 @@ pub struct ClipboardEntryInfo {
 }
 
 /// Get actions specific to a file search result
-/// Actions: Open (default), Show in Finder, Quick Look, Open With..., Show Info
+///
+/// Actions vary based on whether the item is a file or directory:
+/// - Directory: `open_directory` as primary
+/// - File: `open_file` as primary, plus Quick Look (macOS)
+///
+/// Common actions for both: reveal_in_finder, copy_path, copy_filename
 pub fn get_file_context_actions(file_info: &FileInfo) -> Vec<Action> {
     let mut actions = Vec::new();
+
+    tracing::debug!(
+        target: "script_kit::actions",
+        name = %file_info.name,
+        is_dir = file_info.is_dir,
+        "Building file context actions"
+    );
 
     // Primary action - Open file
     if file_info.is_dir {
@@ -240,6 +287,9 @@ fn format_shortcut_hint(shortcut: &str) -> String {
 /// Each H3 header with a valid tool codefence in the scriptlet markdown
 /// becomes an action that can execute that code.
 ///
+/// **Important**: These actions have `has_action=true` because they require
+/// SDK-side execution of the action code, unlike built-in actions.
+///
 /// # Example
 /// ```markdown
 /// ## My Scriptlet
@@ -254,7 +304,7 @@ fn format_shortcut_hint(shortcut: &str) -> String {
 /// ```
 /// ```
 pub fn get_scriptlet_defined_actions(scriptlet: &Scriptlet) -> Vec<Action> {
-    scriptlet
+    let actions: Vec<Action> = scriptlet
         .actions
         .iter()
         .map(|sa| {
@@ -274,9 +324,28 @@ pub fn get_scriptlet_defined_actions(scriptlet: &Scriptlet) -> Vec<Action> {
             action.has_action = true;
             action.value = Some(sa.command.clone());
 
+            tracing::debug!(
+                target: "script_kit::actions",
+                action_id = %action.id,
+                has_action = action.has_action,
+                has_shortcut = action.shortcut.is_some(),
+                "Created scriptlet-defined action (has_action=true)"
+            );
+
             action
         })
-        .collect()
+        .collect();
+
+    if !actions.is_empty() {
+        tracing::debug!(
+            target: "script_kit::actions",
+            scriptlet_name = %scriptlet.name,
+            custom_action_count = actions.len(),
+            "Built scriptlet-defined actions from H3 headers"
+        );
+    }
+
+    actions
 }
 
 /// Get actions for a scriptlet, including both custom (H3-defined) and built-in actions
@@ -442,9 +511,31 @@ pub fn get_scriptlet_context_actions_with_custom(
 }
 
 /// Get actions specific to the focused script
-/// Actions are filtered based on whether this is a real script or a built-in command
+///
+/// Actions are filtered based on the type of item:
+/// - `is_script=true`: Full script actions (edit, logs, reveal, copy path/content)
+/// - `is_scriptlet=true`: Scriptlet actions (edit scriptlet, reveal bundle)
+/// - `is_agent=true`: Agent actions (edit agent, reveal, copy)
+/// - Built-in (none of above): Minimal actions (run, shortcut, alias, deeplink)
+///
+/// Dynamic actions based on current state:
+/// - Shortcut: Shows "Add" if none, "Update"/"Remove" if exists
+/// - Alias: Shows "Add" if none, "Update"/"Remove" if exists
+/// - Reset Ranking: Only shown if `is_suggested=true`
 pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
     let mut actions = Vec::new();
+
+    tracing::debug!(
+        target: "script_kit::actions",
+        name = %script.name,
+        is_script = script.is_script,
+        is_scriptlet = script.is_scriptlet,
+        is_agent = script.is_agent,
+        has_shortcut = script.shortcut.is_some(),
+        has_alias = script.alias.is_some(),
+        is_suggested = script.is_suggested,
+        "Building script context actions"
+    );
 
     // Primary action - always available for both scripts and built-ins
     // Uses the action_verb from ScriptInfo (e.g., "Run", "Launch", "Switch to")
@@ -694,6 +785,13 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
         ));
     }
 
+    tracing::debug!(
+        target: "script_kit::actions",
+        action_count = actions.len(),
+        action_ids = ?actions.iter().map(|a| a.id.as_str()).collect::<Vec<_>>(),
+        "Created script context actions"
+    );
+
     actions
 }
 
@@ -704,10 +802,23 @@ pub fn get_global_actions() -> Vec<Action> {
 }
 
 /// Get actions specific to a clipboard history entry
-/// Actions vary based on content type (text vs image) and pin status
+///
+/// Actions vary based on:
+/// - Content type: Text entries get text-specific actions, images get OCR/preview
+/// - Pin status: Shows "Pin" or "Unpin" based on current state
+///
+/// All clipboard actions use `clipboard_` prefix for consistent identification.
 #[allow(clippy::vec_init_then_push)] // Actions are conditionally added based on entry type
 pub fn get_clipboard_history_context_actions(entry: &ClipboardEntryInfo) -> Vec<Action> {
     let mut actions = Vec::new();
+
+    tracing::debug!(
+        target: "script_kit::actions",
+        entry_id = %entry.id,
+        content_type = ?entry.content_type,
+        pinned = entry.pinned,
+        "Building clipboard history actions"
+    );
 
     // Primary action - Paste to focused app (simulates Cmd+V after copying)
     actions.push(
@@ -906,6 +1017,12 @@ pub fn get_clipboard_history_context_actions(entry: &ClipboardEntryInfo) -> Vec<
             ActionCategory::ScriptContext,
         )
         .with_shortcut("⌃⇧X"),
+    );
+
+    tracing::debug!(
+        target: "script_kit::actions",
+        action_count = actions.len(),
+        "Created clipboard history actions"
     );
 
     actions
