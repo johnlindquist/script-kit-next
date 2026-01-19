@@ -1501,10 +1501,29 @@ impl ClaudeCodeProvider {
 
         let mut cmd = Command::new(&self.claude_path);
 
+        // ASSISTANT MODE: Disable all coding features, act as a helpful assistant
+        // This makes Claude Code CLI behave as a conversational AI, not a coding agent
+
+        // Disable all setting sources (project settings, local settings, etc.)
+        cmd.arg("--setting-sources").arg("");
+
+        // Disable hooks, limit permissions to safe read-only operations
+        let settings_json = r#"{"disableAllHooks": true, "permissions": {"allow": ["WebSearch", "WebFetch", "Read"]}}"#;
+        cmd.arg("--settings").arg(settings_json);
+
+        // Only allow safe, non-destructive tools
+        cmd.arg("--tools").arg("WebSearch, WebFetch, Read");
+
+        // Disable Chrome integration and slash commands
+        cmd.arg("--no-chrome");
+        cmd.arg("--disable-slash-commands");
+
         // Core headless mode flags
         // NOTE: --verbose is REQUIRED when using --output-format stream-json with --print
+        // --include-partial-messages enables real-time streaming chunks
         cmd.arg("--print")
             .arg("--verbose")
+            .arg("--include-partial-messages")
             .arg("--input-format")
             .arg("stream-json")
             .arg("--output-format")
@@ -1517,29 +1536,11 @@ impl ClaudeCodeProvider {
             cmd.arg("--model").arg(model_id);
         }
 
-        // System prompt
-        if let Some(sp) = system_prompt {
-            if !sp.trim().is_empty() {
-                cmd.arg("--system-prompt").arg(sp);
-            }
-        }
-
-        // Permission mode (safe default: "plan")
-        if !self.permission_mode.trim().is_empty() {
-            cmd.arg("--permission-mode").arg(&self.permission_mode);
-        }
-
-        // Allowed tools
-        if let Some(allowed) = &self.allowed_tools {
-            if !allowed.trim().is_empty() {
-                cmd.arg("--allowed-tools").arg(allowed);
-            }
-        }
-
-        // Additional workspace directories
-        for dir in &self.add_dirs {
-            cmd.arg("--add-dir").arg(dir);
-        }
+        // System prompt - use provided or default to helpful assistant
+        let effective_system_prompt = system_prompt
+            .filter(|sp| !sp.trim().is_empty())
+            .unwrap_or("You are a helpful AI assistant");
+        cmd.arg("--system-prompt").arg(effective_system_prompt);
 
         cmd.stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -1728,6 +1729,7 @@ impl AiProvider for ClaudeCodeProvider {
                 200_000,
             ),
             ModelInfo::new("opus", "Claude Code - Opus", "claude_code", true, 200_000),
+            ModelInfo::new("haiku", "Claude Code - Haiku", "claude_code", true, 200_000),
             ModelInfo::new(
                 "default",
                 "Claude Code - Default",
@@ -2334,9 +2336,10 @@ mod tests {
         assert_eq!(provider.display_name(), "Claude Code (CLI)");
 
         let models = provider.available_models();
-        assert_eq!(models.len(), 3);
+        assert_eq!(models.len(), 4);
         assert!(models.iter().any(|m| m.id == "sonnet"));
         assert!(models.iter().any(|m| m.id == "opus"));
+        assert!(models.iter().any(|m| m.id == "haiku"));
         assert!(models.iter().any(|m| m.id == "default"));
 
         // All models should support streaming
@@ -2424,7 +2427,7 @@ mod tests {
         assert!(registry.get_provider("claude_code").is_some());
 
         let models = registry.get_models_for_provider("claude_code");
-        assert_eq!(models.len(), 3);
+        assert_eq!(models.len(), 4); // sonnet, opus, haiku, default
     }
 
     #[test]
