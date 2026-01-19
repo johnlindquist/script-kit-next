@@ -363,7 +363,7 @@ impl CommandBar {
     pub fn handle_char(&mut self, ch: char, cx: &mut App) {
         if let Some(dialog) = &self.dialog {
             dialog.update(cx, |d, cx| d.handle_char(ch, cx));
-            notify_actions_window(cx);
+            resize_actions_window(cx, dialog);
         }
     }
 
@@ -371,7 +371,7 @@ impl CommandBar {
     pub fn handle_backspace(&mut self, cx: &mut App) {
         if let Some(dialog) = &self.dialog {
             dialog.update(cx, |d, cx| d.handle_backspace(cx));
-            notify_actions_window(cx);
+            resize_actions_window(cx, dialog);
         }
     }
 
