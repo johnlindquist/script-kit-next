@@ -304,6 +304,9 @@ impl ScriptListApp {
             file_search_current_dir: None,
             file_search_frozen_filter: None,
             file_search_actions_path: None,
+            file_search_gen: 0,
+            file_search_cancel: None,
+            file_search_display_indices: Vec::new(),
             show_actions_popup: false,
             actions_dialog: None,
             cursor_visible: true,
@@ -464,9 +467,12 @@ impl ScriptListApp {
                     if let Some(app) = app_entity.upgrade() {
                         app.update(cx, |this, cx| {
                             // FIRST: If confirm dialog is open, route Tab to it for button switching
-                            if crate::confirm::is_confirm_window_open()
-                                && crate::confirm::dispatch_confirm_key(&key, cx)
-                            {
+                            let confirm_open = crate::confirm::is_confirm_window_open();
+                            crate::logging::log(
+                                "KEY",
+                                &format!("Tab intercepted, confirm_open={}", confirm_open),
+                            );
+                            if confirm_open && crate::confirm::dispatch_confirm_key(&key, cx) {
                                 cx.stop_propagation();
                                 return;
                             }
@@ -913,8 +919,11 @@ impl ScriptListApp {
 
                 if let Some(app) = app_entity.upgrade() {
                     app.update(cx, |this, cx| {
-                        // FIRST: If confirm dialog is open, route Enter/Escape/Tab to it
-                        if crate::confirm::is_confirm_window_open()
+                        // FIRST: If confirm dialog is open, route Enter/Escape to it
+                        // NOTE: Tab is handled by the dedicated Tab interceptor above, so
+                        // we exclude it here to avoid double-dispatching toggle_focus()
+                        if key != "tab"
+                            && crate::confirm::is_confirm_window_open()
                             && crate::confirm::dispatch_confirm_key(&key, cx)
                         {
                             cx.stop_propagation();
@@ -2459,6 +2468,17 @@ impl ScriptListApp {
                 selected_index,
             } => {
                 if *query != new_text {
+                    logging::log(
+                        "SEARCH",
+                        &format!(
+                            "Query changed: '{}' -> '{}' (cached_results={}, display_indices={})",
+                            query,
+                            new_text,
+                            self.cached_file_results.len(),
+                            self.file_search_display_indices.len()
+                        ),
+                    );
+
                     // Get old filter BEFORE updating query (for frozen filter during transitions)
                     let old_filter =
                         if let Some(old_parsed) = crate::file_search::parse_directory_path(query) {
@@ -2473,7 +2493,18 @@ impl ScriptListApp {
                     *query = new_text.clone();
                     *selected_index = 0;
 
-                    // Cancel existing debounce task
+                    // CRITICAL: Increment generation and cancel previous search
+                    // This ensures stale results are ignored AND mdfind process is killed
+                    self.file_search_gen += 1;
+                    let gen = self.file_search_gen;
+                    logging::log("SEARCH", &format!("Generation incremented to {}", gen));
+
+                    // Cancel any in-flight search by setting the cancel token
+                    if let Some(cancel) = self.file_search_cancel.take() {
+                        cancel.store(true, std::sync::atomic::Ordering::Relaxed);
+                    }
+
+                    // Cancel existing debounce task (drops the Task, stopping the async work)
                     self.file_search_debounce_task = None;
 
                     // Check if this is a directory path with potential filter
@@ -2494,32 +2525,88 @@ impl ScriptListApp {
                             // Don't reset scroll - keep position stable during transition
                             cx.notify();
 
+                            // Create new cancel token for this search
+                            let cancel = crate::file_search::new_cancel_token();
+                            self.file_search_cancel = Some(cancel.clone());
+
                             let dir_to_list = parsed.directory.clone();
                             let task = cx.spawn(async move |this, cx| {
-                                // Small debounce for directory listing
-                                Timer::after(std::time::Duration::from_millis(50)).await;
+                                // Small debounce for directory listing (reduced from 50ms to 30ms)
+                                Timer::after(std::time::Duration::from_millis(30)).await;
 
+                                // Use channel for streaming results
                                 let (tx, rx) = std::sync::mpsc::channel();
-                                std::thread::spawn(move || {
-                                    let results = crate::file_search::list_directory(
-                                        &dir_to_list,
-                                        crate::file_search::DEFAULT_CACHE_LIMIT,
-                                    );
-                                    let _ = tx.send(results);
+
+                                // Start streaming directory listing in background thread
+                                std::thread::spawn({
+                                    let cancel = cancel.clone();
+                                    let dir = dir_to_list.clone();
+                                    move || {
+                                        crate::file_search::list_directory_streaming(
+                                            &dir,
+                                            cancel,
+                                            false, // include metadata
+                                            |event| {
+                                                let _ = tx.send(event);
+                                            },
+                                        );
+                                    }
                                 });
 
-                                loop {
-                                    Timer::after(std::time::Duration::from_millis(10)).await;
-                                    match rx.try_recv() {
-                                        Ok(results) => {
-                                            let _ = cx.update(|cx| {
-                                                this.update(cx, |app, cx| {
-                                                    app.cached_file_results = results;
+                                let mut pending: Vec<crate::file_search::FileResult> = Vec::new();
+                                let mut done = false;
+                                let mut first_batch = true; // Track if we need to clear old results
+
+                                // Batch UI updates at ~60fps (16ms intervals)
+                                while !done {
+                                    Timer::after(std::time::Duration::from_millis(16)).await;
+
+                                    // Drain all available results
+                                    while let Ok(event) = rx.try_recv() {
+                                        match event {
+                                            crate::file_search::SearchEvent::Result(r) => {
+                                                pending.push(r);
+                                            }
+                                            crate::file_search::SearchEvent::Done => {
+                                                done = true;
+                                                break;
+                                            }
+                                        }
+                                    }
+
+                                    // Update UI with batched results
+                                    if !pending.is_empty() || done {
+                                        let batch = std::mem::take(&mut pending);
+                                        let is_done = done;
+                                        let is_first = first_batch;
+                                        first_batch = false;
+                                        let _ = cx.update(|cx| {
+                                            this.update(cx, |app, cx| {
+                                                // Ignore stale generations
+                                                if app.file_search_gen != gen {
+                                                    return;
+                                                }
+
+                                                // Clear old results on first batch to prevent accumulation
+                                                // This happens AFTER debounce so frozen filter had time to display
+                                                if is_first {
+                                                    app.cached_file_results.clear();
+                                                }
+
+                                                // Append batch
+                                                for r in batch {
+                                                    app.cached_file_results.push(r);
+                                                }
+
+                                                if is_done {
                                                     app.file_search_loading = false;
                                                     // Clear frozen filter - now using real results
                                                     app.file_search_frozen_filter = None;
-                                                    // Reset selected_index when async results arrive
-                                                    // to prevent bounds issues if results shrink
+                                                    // Sort by directories first, then alphabetically
+                                                    app.sort_directory_results();
+                                                    // Recompute display indices after loading completes
+                                                    app.recompute_file_search_display_indices();
+                                                    // Reset selected_index when results finish loading
                                                     if let AppView::FileSearchView {
                                                         selected_index,
                                                         ..
@@ -2529,13 +2616,11 @@ impl ScriptListApp {
                                                     }
                                                     app.file_search_scroll_handle
                                                         .scroll_to_item(0, ScrollStrategy::Top);
-                                                    cx.notify();
-                                                })
-                                            });
-                                            break;
-                                        }
-                                        Err(std::sync::mpsc::TryRecvError::Empty) => continue,
-                                        Err(std::sync::mpsc::TryRecvError::Disconnected) => break,
+                                                }
+
+                                                cx.notify();
+                                            })
+                                        });
                                     }
                                 }
                             });
@@ -2545,76 +2630,140 @@ impl ScriptListApp {
                             // Clear any frozen filter since we're not in transition
                             self.file_search_frozen_filter = None;
                             self.file_search_loading = false;
+                            // Recompute display indices for new filter
+                            self.recompute_file_search_display_indices();
                             cx.notify();
                         }
                         return; // Don't run main menu filter logic
                     }
 
-                    // Not a directory path - do regular file search with debounce
+                    // Not a directory path - do regular file search with streaming
+                    logging::log(
+                        "SEARCH",
+                        &format!("Starting mdfind search for query: '{}'", new_text),
+                    );
                     self.file_search_current_dir = None;
                     self.file_search_loading = true;
+                    // Clear cached results for new search
+                    self.cached_file_results.clear();
+                    self.file_search_display_indices.clear();
                     cx.notify();
 
-                    // Debounce: wait 200ms before searching
+                    // Create new cancel token for this search
+                    let cancel = crate::file_search::new_cancel_token();
+                    self.file_search_cancel = Some(cancel.clone());
+
+                    // Shorter debounce for streaming (75ms instead of 200ms)
                     let search_query = new_text.clone();
                     let task = cx.spawn(async move |this, cx| {
                         // Wait for debounce period
-                        Timer::after(std::time::Duration::from_millis(200)).await;
+                        Timer::after(std::time::Duration::from_millis(75)).await;
 
-                        // Run search in background thread
+                        // Use channel for streaming results
                         let (tx, rx) = std::sync::mpsc::channel();
-                        let query_for_thread = search_query.clone();
-                        std::thread::spawn(move || {
-                            let results = crate::file_search::search_files(
-                                &query_for_thread,
-                                None,
-                                crate::file_search::DEFAULT_SEARCH_LIMIT,
-                            );
-                            let _ = tx.send(results);
+
+                        // Start streaming search in background thread
+                        std::thread::spawn({
+                            let cancel = cancel.clone();
+                            let q = search_query.clone();
+                            move || {
+                                crate::file_search::search_files_streaming(
+                                    &q,
+                                    None,
+                                    crate::file_search::DEFAULT_SEARCH_LIMIT,
+                                    cancel,
+                                    false, // include metadata (can set true for faster first results)
+                                    |event| {
+                                        let _ = tx.send(event);
+                                    },
+                                );
+                            }
                         });
 
-                        // Poll for results
-                        loop {
-                            Timer::after(std::time::Duration::from_millis(10)).await;
-                            match rx.try_recv() {
-                                Ok(results) => {
-                                    let result_count = results.len();
-                                    let _ = cx.update(|cx| {
-                                        this.update(cx, |app, cx| {
-                                            // Only update if query still matches (user hasn't typed more)
-                                            if let AppView::FileSearchView { query, .. } =
-                                                &app.current_view
-                                            {
-                                                if *query == search_query {
-                                                    logging::log(
-                                                        "EXEC",
-                                                        &format!(
-                                                            "File search for '{}' found {} results",
-                                                            search_query, result_count
-                                                        ),
-                                                    );
-                                                    app.cached_file_results = results;
-                                                    app.file_search_loading = false;
-                                                    // Reset selected_index when async results arrive
-                                                    // to prevent bounds issues if results shrink
-                                                    if let AppView::FileSearchView {
-                                                        selected_index,
-                                                        ..
-                                                    } = &mut app.current_view
-                                                    {
-                                                        *selected_index = 0;
-                                                    }
-                                                    app.file_search_scroll_handle
-                                                        .scroll_to_item(0, ScrollStrategy::Top);
-                                                    cx.notify();
-                                                }
-                                            }
-                                        })
-                                    });
-                                    break;
+                        let mut pending: Vec<crate::file_search::FileResult> = Vec::new();
+                        let mut done = false;
+
+                        // Batch UI updates at ~60fps (16ms intervals)
+                        while !done {
+                            Timer::after(std::time::Duration::from_millis(16)).await;
+
+                            // Drain all available results
+                            while let Ok(event) = rx.try_recv() {
+                                match event {
+                                    crate::file_search::SearchEvent::Result(r) => {
+                                        pending.push(r);
+                                    }
+                                    crate::file_search::SearchEvent::Done => {
+                                        done = true;
+                                        break;
+                                    }
                                 }
-                                Err(std::sync::mpsc::TryRecvError::Empty) => continue,
-                                Err(std::sync::mpsc::TryRecvError::Disconnected) => break,
+                            }
+
+                            // Update UI with batched results
+                            if !pending.is_empty() || done {
+                                let batch = std::mem::take(&mut pending);
+                                let batch_count = batch.len();
+                                let is_done = done;
+                                let query_for_log = search_query.clone();
+                                let _ = cx.update(|cx| {
+                                    this.update(cx, |app, cx| {
+                                        // Ignore stale generations
+                                        if app.file_search_gen != gen {
+                                            return;
+                                        }
+
+                                        // Verify query still matches (extra safety)
+                                        if let AppView::FileSearchView { query, .. } =
+                                            &app.current_view
+                                        {
+                                            if *query != query_for_log {
+                                                return;
+                                            }
+                                        }
+
+                                        // Append batch
+                                        let old_count = app.cached_file_results.len();
+                                        for r in batch {
+                                            app.cached_file_results.push(r);
+                                        }
+
+                                        if is_done {
+                                            logging::log(
+                                                "EXEC",
+                                                &format!(
+                                                    "File search for '{}' found {} results (streaming)",
+                                                    query_for_log,
+                                                    app.cached_file_results.len()
+                                                ),
+                                            );
+                                            app.file_search_loading = false;
+                                            // Recompute display indices now that all results are in
+                                            app.recompute_file_search_display_indices();
+                                            // Reset selected_index when search completes
+                                            if let AppView::FileSearchView {
+                                                selected_index,
+                                                ..
+                                            } = &mut app.current_view
+                                            {
+                                                *selected_index = 0;
+                                            }
+                                            app.file_search_scroll_handle
+                                                .scroll_to_item(0, ScrollStrategy::Top);
+                                        } else if batch_count > 0 && old_count == 0 {
+                                            // First batch arrived - log it
+                                            logging::log(
+                                                "EXEC",
+                                                &format!(
+                                                    "File search first batch: {} results",
+                                                    batch_count
+                                                ),
+                                            );
+                                        }
+
+                                        cx.notify();
+                                    })
+                                });
                             }
                         }
                     });
@@ -5153,7 +5302,8 @@ export default {
         // Reset pin state when window is closed
         self.is_pinned = false;
 
-        // Close actions window FIRST if open (it's a child of main window)
+        // Close child windows FIRST if open (they are children of main window)
+        // Actions window
         if self.show_actions_popup || is_actions_window_open() {
             self.show_actions_popup = false;
             self.actions_dialog = None;
@@ -5165,6 +5315,12 @@ export default {
             })
             .detach();
             logging::log("VISIBILITY", "Closed actions window before hiding main");
+        }
+
+        // Confirm window (modal)
+        if crate::confirm::is_confirm_window_open() {
+            crate::confirm::close_confirm_window(cx);
+            logging::log("VISIBILITY", "Closed confirm window before hiding main");
         }
 
         // Save window position BEFORE hiding (main window is hidden, not closed)
@@ -5885,8 +6041,8 @@ export default {
             let _ = escape_sender.try_send(());
         });
 
-        // Initialize provider registry from environment
-        let registry = ProviderRegistry::from_environment();
+        // Initialize provider registry from environment with config
+        let registry = ProviderRegistry::from_environment_with_config(Some(&self.config));
 
         if !registry.has_any_provider() {
             crate::logging::log("CHAT", "No AI providers configured - showing setup card");

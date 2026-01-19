@@ -162,7 +162,8 @@ mod tests {
         // Find the function and check if it checks Notes/AI windows
         if let Some(start) = content.find("fn close_and_reset_window") {
             // Get a reasonable chunk after the function signature
-            let function_chunk = &content[start..std::cmp::min(start + 2000, content.len())];
+            // Use 3000 chars to account for child window cleanup (actions + confirm)
+            let function_chunk = &content[start..std::cmp::min(start + 3000, content.len())];
             let has_notes_check = function_chunk.contains("is_notes_window_open");
             let has_ai_check = function_chunk.contains("is_ai_window_open");
 

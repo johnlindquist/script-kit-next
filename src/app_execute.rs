@@ -232,21 +232,38 @@ impl ScriptListApp {
             }
             builtins::BuiltInFeature::AiChat => {
                 logging::log("EXEC", "Opening AI Chat window");
-                // Reset state, hide main window, and open AI window
+                // Reset state and hide main window first
                 script_kit_gpui::set_main_window_visible(false);
                 self.reset_to_script_list(cx);
                 platform::hide_main_window();
-                if let Err(e) = ai::open_ai_window(cx) {
-                    logging::log("ERROR", &format!("Failed to open AI window: {}", e));
-                    self.toast_manager.push(
-                        components::toast::Toast::error(
-                            format!("Failed to open AI: {}", e),
-                            &self.theme,
-                        )
-                        .duration_ms(Some(5000)),
-                    );
-                    cx.notify();
-                }
+
+                // Defer AI window creation to avoid RefCell borrow conflicts
+                // The reset_to_script_list calls cx.notify() which schedules a render,
+                // opening a new window immediately can cause GPUI RefCell conflicts
+                cx.spawn(async move |this, cx| {
+                    // Small yield to let any pending GPUI operations complete
+                    cx.background_executor()
+                        .timer(std::time::Duration::from_millis(1))
+                        .await;
+
+                    cx.update(|cx| {
+                        if let Err(e) = ai::open_ai_window(cx) {
+                            logging::log("ERROR", &format!("Failed to open AI window: {}", e));
+                            let _ = this.update(cx, |this, cx| {
+                                this.toast_manager.push(
+                                    components::toast::Toast::error(
+                                        format!("Failed to open AI: {}", e),
+                                        &this.theme,
+                                    )
+                                    .duration_ms(Some(5000)),
+                                );
+                                cx.notify();
+                            });
+                        }
+                    })
+                    .ok();
+                })
+                .detach();
             }
             builtins::BuiltInFeature::Notes => {
                 logging::log("EXEC", "Opening Notes window");
@@ -1479,7 +1496,91 @@ impl ScriptListApp {
         self.pending_focus = Some(FocusTarget::MainFilter);
         self.focused_input = FocusedInput::MainFilter;
 
+        // Initialize file search state for streaming
+        self.file_search_gen = 0;
+        self.file_search_cancel = None;
+        self.file_search_display_indices.clear();
+
+        // Compute initial display indices
+        self.recompute_file_search_display_indices();
+
         cx.notify();
+    }
+
+    /// Sort directory listing results: directories first, then alphabetically
+    pub fn sort_directory_results(&mut self) {
+        // Sort the cached results in place
+        self.cached_file_results.sort_by(|a, b| {
+            let a_is_dir = matches!(a.file_type, crate::file_search::FileType::Directory);
+            let b_is_dir = matches!(b.file_type, crate::file_search::FileType::Directory);
+
+            match (a_is_dir, b_is_dir) {
+                (true, false) => std::cmp::Ordering::Less,
+                (false, true) => std::cmp::Ordering::Greater,
+                _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+            }
+        });
+    }
+
+    /// Recompute file_search_display_indices based on current filter pattern
+    ///
+    /// This is called when:
+    /// 1. Results change (new directory listing or search results)
+    /// 2. Filter pattern changes (user types in existing directory)
+    /// 3. Loading completes (final sort/rank)
+    ///
+    /// By computing this OUTSIDE of render, we ensure that animation tickers
+    /// calling cx.notify() at 60fps don't re-run expensive Nucleo scoring.
+    pub fn recompute_file_search_display_indices(&mut self) {
+        // Get current filter pattern from the query
+        let filter_pattern = if let AppView::FileSearchView { ref query, .. } = self.current_view {
+            // Use frozen filter if set (during directory transitions)
+            if let Some(ref frozen) = self.file_search_frozen_filter {
+                frozen.clone()
+            } else if let Some(parsed) = crate::file_search::parse_directory_path(query) {
+                parsed.filter
+            } else if !query.is_empty() {
+                Some(query.clone())
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        let cached_count = self.cached_file_results.len();
+
+        // Compute display indices
+        self.file_search_display_indices = if let Some(ref pattern) = filter_pattern {
+            // Use Nucleo fuzzy matching and return only the indices, sorted by score
+            let indices: Vec<usize> = crate::file_search::filter_results_nucleo_simple(
+                &self.cached_file_results,
+                pattern,
+            )
+            .into_iter()
+            .map(|(idx, _)| idx)
+            .collect();
+            logging::log(
+                "SEARCH",
+                &format!(
+                    "recompute_display_indices: pattern='{}' cached={} -> display={}",
+                    pattern,
+                    cached_count,
+                    indices.len()
+                ),
+            );
+            indices
+        } else {
+            // No filter - show all results in order
+            logging::log(
+                "SEARCH",
+                &format!(
+                    "recompute_display_indices: no_filter cached={} -> display={}",
+                    cached_count, cached_count
+                ),
+            );
+            (0..self.cached_file_results.len()).collect()
+        };
     }
 
     /// Open the quick terminal

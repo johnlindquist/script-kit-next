@@ -5,6 +5,10 @@
 //! - Non-draggable (fixed position relative to main window)
 //! - Centered over the main window
 //! - Auto-closes when choice is made
+//!
+//! Uses the same pattern as ActionsWindow:
+//! - `track_focus` + `on_key_down` for direct key handling
+//! - No actions/key bindings needed
 
 use crate::platform;
 use crate::theme;
@@ -49,9 +53,86 @@ impl Focusable for ConfirmWindow {
 }
 
 impl Render for ConfirmWindow {
-    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        div().child(self.dialog.clone())
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        // Ensure we have focus for key events (same pattern as ActionsWindow)
+        if !self.focus_handle.is_focused(window) {
+            crate::logging::log(
+                "CONFIRM",
+                "ConfirmWindow: focus_handle NOT focused, re-focusing",
+            );
+            self.focus_handle.focus(window, cx);
+        }
+
+        // Key handler - same simple pattern as ActionsWindow
+        // Direct on_key_down with string matching, no actions/key bindings needed
+        let handle_key = cx.listener(move |this, event: &gpui::KeyDownEvent, _window, cx| {
+            let key = event.keystroke.key.as_str();
+
+            crate::logging::log(
+                "CONFIRM",
+                &format!("ConfirmWindow on_key_down received: key='{}'", key),
+            );
+
+            match key {
+                // Enter/Return = submit current selection
+                "enter" | "return" => {
+                    crate::logging::log("CONFIRM", "Enter pressed - submitting");
+                    this.dialog.update(cx, |d, _cx| d.submit());
+                }
+                // Space = submit current selection
+                " " | "space" => {
+                    crate::logging::log("CONFIRM", "Space pressed - submitting");
+                    this.dialog.update(cx, |d, _cx| d.submit());
+                }
+                // Escape = cancel
+                "escape" => {
+                    crate::logging::log("CONFIRM", "Escape pressed - cancelling");
+                    this.dialog.update(cx, |d, _cx| d.cancel());
+                }
+                // Tab = toggle between buttons
+                "tab" => {
+                    this.dialog.update(cx, |d, cx| {
+                        d.toggle_focus(cx);
+                        crate::logging::log(
+                            "CONFIRM",
+                            &format!("Tab pressed, focused_button now: {}", d.focused_button),
+                        );
+                    });
+                    cx.notify();
+                }
+                // Left arrow = focus cancel button (index 0)
+                "left" | "arrowleft" => {
+                    crate::logging::log("CONFIRM", "Left arrow - focusing cancel");
+                    this.dialog.update(cx, |d, cx| d.focus_cancel(cx));
+                    cx.notify();
+                }
+                // Right arrow = focus confirm button (index 1)
+                "right" | "arrowright" => {
+                    crate::logging::log("CONFIRM", "Right arrow - focusing confirm");
+                    this.dialog.update(cx, |d, cx| d.focus_confirm(cx));
+                    cx.notify();
+                }
+                _ => {}
+            }
+        });
+
+        // Render with focus tracking and key handler (same pattern as ActionsWindow)
+        div()
+            .track_focus(&self.focus_handle)
+            .on_key_down(handle_key)
+            .child(self.dialog.clone())
     }
+}
+
+/// Initialize confirm bindings (currently a no-op, key handling done via on_key_down)
+///
+/// This function exists for API compatibility. The ConfirmWindow handles
+/// keyboard events directly via on_key_down rather than through action bindings.
+pub fn init_confirm_bindings(_cx: &mut App) {
+    crate::logging::log(
+        "CONFIRM",
+        "init_confirm_bindings called (no-op, keys handled via on_key_down)",
+    );
 }
 
 /// Open the confirm window as a separate floating window with vibrancy
@@ -121,7 +202,7 @@ pub fn open_confirm_window(
         window_bounds: Some(WindowBounds::Windowed(bounds)),
         titlebar: None,
         window_background,
-        focus: false, // CRITICAL: Don't take focus - main window keeps it and routes keys
+        focus: true, // Confirm window handles its own key events
         show: true,
         kind: WindowKind::PopUp,
         display_id,
@@ -148,30 +229,44 @@ pub fn open_confirm_window(
         dialog_entity_holder = Some(dialog.clone());
 
         // Create the window wrapper
-        let confirm_window = cx.new(|cx| ConfirmWindow::new(dialog, cx));
+        let confirm_window = cx.new(|cx| {
+            let cw = ConfirmWindow::new(dialog, cx);
+            // Focus the confirm window so it receives keyboard events
+            cw.focus_handle.focus(window, cx);
+            cw
+        });
 
         // Wrap in Root for gpui-component theming and vibrancy
         cx.new(|cx| Root::new(confirm_window, window, cx))
     })?;
 
     // Configure the window as non-movable on macOS
+    // Use window.defer() to avoid RefCell borrow conflicts - GPUI may still have
+    // internal state borrowed immediately after open_window returns.
     #[cfg(target_os = "macos")]
     {
-        use cocoa::appkit::NSApp;
-        use cocoa::base::nil;
-        use objc::{msg_send, sel, sel_impl};
+        let _ = handle.update(cx, |_root, window, cx| {
+            window.defer(cx, |_window, _cx| {
+                use cocoa::appkit::NSApp;
+                use cocoa::base::nil;
+                use objc::{msg_send, sel, sel_impl};
 
-        unsafe {
-            let app: cocoa::base::id = NSApp();
-            let windows: cocoa::base::id = msg_send![app, windows];
-            let count: usize = msg_send![windows, count];
-            if count > 0 {
-                let ns_window: cocoa::base::id = msg_send![windows, lastObject];
-                if ns_window != nil {
-                    platform::configure_actions_popup_window(ns_window);
+                // Get the NSWindow from the app's windows array
+                // The popup window should be the most recently created one
+                unsafe {
+                    let app: cocoa::base::id = NSApp();
+                    let windows: cocoa::base::id = msg_send![app, windows];
+                    let count: usize = msg_send![windows, count];
+                    if count > 0 {
+                        // Get the last window (most recently created)
+                        let ns_window: cocoa::base::id = msg_send![windows, lastObject];
+                        if ns_window != nil {
+                            platform::configure_actions_popup_window(ns_window);
+                        }
+                    }
                 }
-            }
-        }
+            });
+        });
     }
 
     // Store the handle globally
@@ -277,6 +372,12 @@ pub fn dispatch_confirm_key(key: &str, cx: &mut App) -> bool {
             close_confirm_window(cx);
             true
         }
+        // Space = activate focused button (standard HTML UX)
+        "space" | "Space" | " " => {
+            dialog.update(cx, |d, _cx| d.submit());
+            close_confirm_window(cx);
+            true
+        }
         // Escape = cancel and close
         "escape" | "Escape" => {
             dialog.update(cx, |d, _cx| d.cancel());
@@ -285,7 +386,13 @@ pub fn dispatch_confirm_key(key: &str, cx: &mut App) -> bool {
         }
         // Tab = toggle focus between buttons
         "tab" | "Tab" => {
-            dialog.update(cx, |d, cx| d.toggle_focus(cx));
+            dialog.update(cx, |d, cx| {
+                d.toggle_focus(cx);
+                crate::logging::log(
+                    "CONFIRM",
+                    &format!("Tab pressed, focused_button now: {}", d.focused_button),
+                );
+            });
             notify_confirm_window(cx);
             true
         }

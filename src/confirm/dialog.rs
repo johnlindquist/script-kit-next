@@ -4,12 +4,11 @@
 //! Supports keyboard shortcuts: Enter = confirm, Escape = cancel.
 //! Tab/Arrow keys navigate between buttons with visual focus indication.
 
-use crate::components::button::{Button, ButtonColors, ButtonVariant};
 use crate::logging;
 use crate::theme;
 use gpui::{
-    div, prelude::*, px, rgb, rgba, App, Context, FocusHandle, Focusable, Render, SharedString,
-    Window,
+    div, prelude::*, px, rgb, rgba, App, Context, FocusHandle, Focusable, FontWeight, Render,
+    SharedString, Window,
 };
 use std::sync::Arc;
 
@@ -125,16 +124,32 @@ impl Focusable for ConfirmDialog {
 
 impl Render for ConfirmDialog {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        // Log render with focus state for debugging
+        logging::log(
+            "CONFIRM",
+            &format!(
+                "ConfirmDialog::render() called, focused_button={}",
+                self.focused_button
+            ),
+        );
+
         // Get theme colors
         let colors = &self.theme.colors;
 
         // Background with vibrancy support
-        // When vibrancy is enabled, we need a darker tint (~50%) to make the dialog stand out
-        // When vibrancy is disabled, use near-opaque (~95%) for solid appearance
+        // Use the theme's opacity setting to match the main window's vibrancy look
         let use_vibrancy = self.theme.is_vibrancy_enabled();
         let dialog_alpha = if use_vibrancy {
-            // Dialogs need higher opacity than main window (0.37) to stand out
-            (0.50 * 255.0) as u8
+            // Use theme's opacity setting (typically 0.30-0.37) for consistent vibrancy
+            // This allows the blur to show through the dialog
+            let opacity = self
+                .theme
+                .opacity
+                .as_ref()
+                .map(|o| o.main)
+                .unwrap_or(0.37)
+                .clamp(0.25, 0.50);
+            (opacity * 255.0) as u8
         } else {
             // Near-opaque when vibrancy disabled
             (0.95 * 255.0) as u8
@@ -152,44 +167,91 @@ impl Render for ConfirmDialog {
         let is_cancel_focused = self.focused_button == 0;
         let is_confirm_focused = self.focused_button == 1;
 
-        // Create ButtonColors from theme for consistent styling
-        let button_colors = ButtonColors::from_theme(&self.theme);
+        // Button styling with OBVIOUS focus indication
+        // Focused button gets accent background + bright border (like macOS default button)
+        // Unfocused button is subtle/transparent
+        let accent_hex = colors.accent.selected;
+        let accent_color = rgb(accent_hex);
 
-        // Cancel button - Ghost variant (secondary action)
-        // Wrap in flex_1 div for equal width
+        // Focused: accent background at 40% opacity (very visible), white text
+        let focused_bg = rgba(hex_with_alpha(accent_hex, 0x66)); // 40% accent
+        let focused_text = rgb(0xFFFFFF); // White text on accent
+
+        // Unfocused: barely visible, accent text
+        let unfocused_bg = rgba(0xffffff10); // 6% white
+        let hover_bg = rgba(0xffffff20); // 12% white on hover
+
+        // Focus ring: bright accent border, unfocused gets subtle border
+        let focus_border = rgba(hex_with_alpha(accent_hex, 0xFF)); // 100% accent
+        let unfocused_border = rgba(0xffffff30); // 19% white
+
+        // Cancel button
         let cancel_button = div()
-            .id("cancel-wrapper")
+            .id("cancel-btn")
             .flex_1()
-            .child(
-                Button::new(self.cancel_text.clone(), button_colors)
-                    .variant(ButtonVariant::Ghost)
-                    .focused(is_cancel_focused)
-                    .on_click(Box::new(|_event, window, _cx| {
-                        window.remove_window();
-                    })),
-            )
-            .on_click(cx.listener(|this, _e, window, _cx| {
+            .h(px(44.0))
+            .flex()
+            .items_center()
+            .justify_center()
+            .rounded(px(8.0))
+            .cursor_pointer()
+            .font_weight(FontWeight::MEDIUM)
+            // Focused: accent bg + white text, Unfocused: transparent + accent text
+            .bg(if is_cancel_focused {
+                focused_bg
+            } else {
+                unfocused_bg
+            })
+            .text_color(if is_cancel_focused {
+                focused_text
+            } else {
+                accent_color
+            })
+            .border_2() // Thick border for visibility
+            .border_color(if is_cancel_focused {
+                focus_border
+            } else {
+                unfocused_border
+            })
+            .hover(|style| style.bg(hover_bg))
+            .on_click(cx.listener(|this, _e, _window, _cx| {
                 this.cancel();
-                window.remove_window();
-            }));
+            }))
+            .child(self.cancel_text.clone());
 
-        // Confirm button - Primary variant (primary action)
-        // Wrap in flex_1 div for equal width
+        // Confirm button - same styling pattern
         let confirm_button = div()
-            .id("confirm-wrapper")
+            .id("confirm-btn")
             .flex_1()
-            .child(
-                Button::new(self.confirm_text.clone(), button_colors)
-                    .variant(ButtonVariant::Primary)
-                    .focused(is_confirm_focused)
-                    .on_click(Box::new(|_event, window, _cx| {
-                        window.remove_window();
-                    })),
-            )
-            .on_click(cx.listener(|this, _e, window, _cx| {
+            .h(px(44.0))
+            .flex()
+            .items_center()
+            .justify_center()
+            .rounded(px(8.0))
+            .cursor_pointer()
+            .font_weight(FontWeight::MEDIUM)
+            // Focused: accent bg + white text, Unfocused: transparent + accent text
+            .bg(if is_confirm_focused {
+                focused_bg
+            } else {
+                unfocused_bg
+            })
+            .text_color(if is_confirm_focused {
+                focused_text
+            } else {
+                accent_color
+            })
+            .border_2() // Thick border for visibility
+            .border_color(if is_confirm_focused {
+                focus_border
+            } else {
+                unfocused_border
+            })
+            .hover(|style| style.bg(hover_bg))
+            .on_click(cx.listener(|this, _e, _window, _cx| {
                 this.confirm();
-                window.remove_window();
-            }));
+            }))
+            .child(self.confirm_text.clone());
 
         // Button row
         let button_row = div()
@@ -201,49 +263,20 @@ impl Render for ConfirmDialog {
             .child(confirm_button);
 
         // Main dialog container
+        // NOTE: No background - let window vibrancy show through
+        let _ = main_bg; // Suppress unused warning
         div()
             .w(px(CONFIRM_WIDTH))
             .flex()
             .flex_col()
             .p(px(CONFIRM_PADDING))
             .gap(px(CONFIRM_PADDING))
-            .bg(main_bg) // Always apply background with vibrancy-aware opacity
+            // No .bg() - vibrancy comes from the window
             .rounded(px(DIALOG_RADIUS))
             .border_1()
             .border_color(border_color)
             .overflow_hidden()
-            .track_focus(&self.focus_handle)
-            .key_context("confirm_dialog")
-            // Keyboard event handling
-            .on_key_down(cx.listener(|this, event: &gpui::KeyDownEvent, window, cx| {
-                let key = event.keystroke.key.as_str();
-                logging::log("CONFIRM", &format!("Key pressed: {}", key));
-                match key {
-                    // Enter = submit current selection and close
-                    "enter" | "Enter" => {
-                        this.submit();
-                        window.remove_window();
-                    }
-                    // Escape = cancel and close
-                    "escape" | "Escape" => {
-                        this.cancel();
-                        window.remove_window();
-                    }
-                    // Tab = toggle focus between buttons
-                    "tab" | "Tab" => {
-                        this.toggle_focus(cx);
-                    }
-                    // Left arrow = focus cancel button
-                    "left" | "arrowleft" | "Left" | "ArrowLeft" => {
-                        this.focus_cancel(cx);
-                    }
-                    // Right arrow = focus confirm button
-                    "right" | "arrowright" | "Right" | "ArrowRight" => {
-                        this.focus_confirm(cx);
-                    }
-                    _ => {}
-                }
-            }))
+            // NOTE: Key handling is done by ConfirmWindow, not here
             // Message
             .child(
                 div()

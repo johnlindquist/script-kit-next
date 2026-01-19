@@ -1281,6 +1281,15 @@ struct ScriptListApp {
     file_search_frozen_filter: Option<Option<String>>,
     // Path of the file selected for actions (for file search actions handling)
     file_search_actions_path: Option<String>,
+    // Generation counter for ignoring stale search results
+    // Incremented on each new search, results with old gen are discarded
+    file_search_gen: u64,
+    // Cancel token for in-flight search (set to true to stop mdfind)
+    file_search_cancel: Option<file_search::CancelToken>,
+    // Pre-computed display indices after Nucleo filtering/sorting
+    // This is computed once when results change or filter changes (not in render)
+    // Vec of indices into cached_file_results, sorted by match quality
+    file_search_display_indices: Vec<usize>,
     // Actions popup overlay
     show_actions_popup: bool,
     // ActionsDialog entity for focus management
@@ -2113,6 +2122,9 @@ fn main() {
         // Initialize gpui-component (theme, context providers)
         // Must be called before opening windows that use Root wrapper
         gpui_component::init(cx);
+
+        // Initialize confirm dialog key bindings (Escape, Enter, Space)
+        confirm::init_confirm_bindings(cx);
 
         // Sync Script Kit theme with gpui-component's ThemeColor system
         // This ensures all gpui-component widgets use our colors
