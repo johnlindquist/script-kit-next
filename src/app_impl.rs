@@ -3867,7 +3867,7 @@ impl ScriptListApp {
     /// which provides an inline modal UI for recording shortcuts.
     #[allow(dead_code)]
     fn open_config_for_shortcut(&mut self, command_id: &str) {
-        let config_path = shellexpand::tilde("~/.scriptkit/config.ts").to_string();
+        let config_path = shellexpand::tilde("~/.scriptkit/kit/config.ts").to_string();
         let editor = self.config.get_editor();
 
         logging::log(

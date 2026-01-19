@@ -228,7 +228,7 @@ const CONFIG_SCHEMA: ConfigOption[] = [
 // Utilities
 // =============================================================================
 
-const CONFIG_PATH = path.join(os.homedir(), '.scriptkit', 'config.ts');
+const CONFIG_PATH = path.join(os.homedir(), '.scriptkit', 'kit', 'config.ts');
 
 interface Result<T> {
   success: boolean;

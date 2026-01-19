@@ -224,6 +224,24 @@ export interface FindOptions {
   onlyin?: string;
 }
 
+/**
+ * Configuration for form() prompt
+ */
+export interface FormConfig {
+  /** HTML content for the form */
+  html: string;
+  /** Optional actions for the form */
+  actions?: Action[];
+}
+
+/**
+ * Configuration for template() prompt
+ */
+export interface TemplateOptions {
+  /** Language for syntax highlighting */
+  language?: string;
+}
+
 export interface WindowBounds {
   x: number;
   y: number;
@@ -2171,7 +2189,27 @@ type ResponseMessage =
   | WindowActionResultMessage
   | ClipboardHistoryActionResultMessage
   | ScreenshotResultMessage
-  | ActionTriggeredMessage;
+  | ActionTriggeredMessage
+  | LayoutInfoResultMessage
+  | AiIsOpenResultMessage
+  | AiActiveChatResultMessage
+  | AiChatListResultMessage
+  | AiConversationResultMessage
+  | AiChatCreatedMessage
+  | AiMessageAppendedMessage
+  | AiMessageSentMessage
+  | AiFocusResultMessage
+  | AiStreamingStatusResultMessage
+  | AiSubscribedMessage
+  | AiStreamChunkMessage
+  | AiStreamCompleteMessage
+  | AiNewMessageMessage
+  | AiErrorMessage
+  | MenuBarResultMessage
+  | MenuActionResultMessage
+  | { type: 'chatSubmit'; id: string; text: string }
+  | { type: 'displayListResult'; requestId: string; displays: DisplayInfo[] }
+  | { type: 'frontmostWindowResult'; requestId: string; window?: SystemWindowInfo };
 
 /** Initial chat message to show the prompt */
 interface ChatMessageType {
@@ -2546,7 +2584,7 @@ function addPending(id: string, resolver: (msg: any) => void, autoSubmitValue?: 
     return;
   }
 
-  const wasEmpty = pending.size === 0;
+  const wasEmpty: boolean = pending.size === 0;
   // Note: This is the internal call in addPending, don't change to addPending
   pending.set(id, resolver);
   // If this is the first pending operation, ref stdin to keep process alive
@@ -2572,8 +2610,8 @@ process.stdin.on('data', (chunk: string) => {
   stdinBuffer += chunk;
   
   // Process complete lines
-  let newlineIndex;
-  while ((newlineIndex = stdinBuffer.indexOf('\n')) !== -1) {
+  let newlineIndex: number = stdinBuffer.indexOf('\n');
+  while (newlineIndex !== -1) {
     const line = stdinBuffer.substring(0, newlineIndex);
     stdinBuffer = stdinBuffer.substring(newlineIndex + 1);
     
@@ -2623,6 +2661,7 @@ process.stdin.on('data', (chunk: string) => {
         // Ignore parse errors - they're usually test output
       }
     }
+    newlineIndex = stdinBuffer.indexOf('\n');
   }
 });
 
@@ -2722,10 +2761,12 @@ declare global {
    * // Shorthand with custom buttons
    * const yes = await confirm("Continue?", "Yes", "No");
    */
-  function confirm(): Promise<boolean>;
-  function confirm(message: string): Promise<boolean>;
-  function confirm(message: string, confirmText: string, cancelText: string): Promise<boolean>;
-  function confirm(config: ConfirmConfig): Promise<boolean>;
+  // Note: confirm is assigned via (globalThis as any).confirm to avoid conflict with DOM's confirm()
+  // The actual function signature is:
+  // confirm(): Promise<boolean>;
+  // confirm(message: string): Promise<boolean>;
+  // confirm(message: string, confirmText: string, cancelText: string): Promise<boolean>;
+  // confirm(config: ConfirmConfig): Promise<boolean>;
 
   /**
    * Convert Markdown to HTML
@@ -2943,17 +2984,17 @@ declare global {
   /**
    * Clipboard API object
    */
-  const clipboard: ClipboardAPI;
+  var clipboard: ClipboardAPI;
   
   /**
    * Keyboard API object
    */
-  const keyboard: KeyboardAPI;
+  var keyboard: KeyboardAPI;
   
   /**
    * Mouse API object
    */
-  const mouse: MouseAPI;
+  var mouse: MouseAPI;
   
   // =============================================================================
   // TIER 4A: Chat Prompt (Inline UI in Main Window)
@@ -3287,7 +3328,7 @@ declare global {
   /**
    * In-memory map (not persisted)
    */
-  const memoryMap: MemoryMapAPI;
+  var memoryMap: MemoryMapAPI;
   
   // =============================================================================
   // TIER 5B: Browser/App Utilities
@@ -3450,6 +3491,78 @@ declare global {
    * @returns Array of matching file results
    */
   function fileSearch(query: string, options?: FindOptions): Promise<FileSearchResult[]>;
+
+  // =============================================================================
+  // AI-First Protocol (Metadata, Schema, Input/Output)
+  // =============================================================================
+
+  /** Typed metadata for scripts (replaces comment-based metadata) */
+  var metadata: ScriptMetadata;
+
+  /**
+   * Schema definition for typed input/output.
+   * Use `as const` for full type inference with input() and output().
+   * 
+   * @example
+   * ```typescript
+   * schema = {
+   *   input: {
+   *     greeting: { type: 'string', required: true },
+   *     count: { type: 'number' }
+   *   },
+   *   output: {
+   *     message: { type: 'string' }
+   *   }
+   * } as const
+   * 
+   * // Types are automatically inferred!
+   * const { greeting, count } = await input()
+   * output({ message: `${greeting} x${count}` })
+   * ```
+   */
+  var schema: ScriptSchema;
+
+  /**
+   * Define a schema and get typed input/output functions.
+   * This is the recommended way to use schema with full type inference.
+   * 
+   * @example
+   * ```typescript
+   * const { input, output } = defineSchema({
+   *   input: {
+   *     greeting: { type: 'string', required: true },
+   *     count: { type: 'number' }
+   *   },
+   *   output: {
+   *     message: { type: 'string' }
+   *   }
+   * } as const)
+   * 
+   * // Types are fully inferred!
+   * const { greeting, count } = await input()
+   * output({ message: `Hello ${greeting}!` })
+   * ```
+   */
+  function defineSchema<T extends ScriptSchema>(
+    schema: T
+  ): TypedSchemaAPI<InferInput<T>, InferOutput<T>> & { schema: T };
+
+  /**
+   * Get input data. For typed version, use defineSchema().
+   */
+  function input<T extends Record<string, unknown> = Record<string, unknown>>(): Promise<T>;
+
+  /**
+   * Send output data. For typed version, use defineSchema().
+   */
+  function output(data: Record<string, unknown>): void;
+
+  /** @internal */
+  function _setScriptInput(data: Record<string, unknown>): void;
+  /** @internal */
+  function _getScriptOutput(): Record<string, unknown>;
+  /** @internal */
+  function _resetScriptIO(): void;
 }
 
 /**
@@ -3776,7 +3889,7 @@ globalThis.div = async function div(
  * @param cancelText - Optional text for the cancel button (default: "Cancel")
  * @returns Promise resolving to true (confirmed) or false (cancelled)
  */
-globalThis.confirm = async function confirm(
+(globalThis as any).confirm = async function confirm(
   messageOrConfig?: string | ConfirmConfig,
   confirmText?: string,
   cancelText?: string
@@ -7361,252 +7474,5 @@ globalThis._resetScriptIO = function _resetScriptIO(): void {
   scriptInputData = null;
   scriptOutputData = {};
 };
-
-// =============================================================================
-// Global Type Declarations
-// =============================================================================
-
-declare global {
-  // SDK Version
-  const SDK_VERSION: string;
-
-  // Metadata and Schema globals (set at top of script, parsed by app)
-  var metadata: ScriptMetadata;
-  
-  /**
-   * Schema definition for typed input/output.
-   * Use `as const` for full type inference with input() and output().
-   * 
-   * @example
-   * ```typescript
-   * schema = {
-   *   input: {
-   *     greeting: { type: 'string', required: true },
-   *     count: { type: 'number' }
-   *   },
-   *   output: {
-   *     message: { type: 'string' }
-   *   }
-   * } as const
-   * 
-   * // Types are automatically inferred!
-   * const { greeting, count } = await input()
-   * //      ^ string   ^ number | undefined
-   * 
-   * output({ message: `${greeting} x${count}` })
-   * ```
-   */
-  var schema: ScriptSchema;
-
-  // Schema type inference utilities - use with `typeof schema`
-  type InferInput<S> = S extends { input: infer I extends Record<string, SchemaFieldDef> }
-    ? { [K in keyof I as I[K] extends { required: true } ? K : never]: 
-        I[K] extends { enum: readonly (infer E)[] } ? E :
-        I[K] extends { type: 'array'; items: infer IT extends SchemaFieldType } ? SchemaTypeMap[IT][] :
-        I[K] extends { type: infer T extends SchemaFieldType } ? SchemaTypeMap[T] : unknown 
-      } & { [K in keyof I as I[K] extends { required: true } ? never : K]?: 
-        I[K] extends { enum: readonly (infer E)[] } ? E :
-        I[K] extends { type: 'array'; items: infer IT extends SchemaFieldType } ? SchemaTypeMap[IT][] :
-        I[K] extends { type: infer T extends SchemaFieldType } ? SchemaTypeMap[T] : unknown 
-      }
-    : Record<string, unknown>;
-    
-  type InferOutput<S> = S extends { output: infer O extends Record<string, SchemaFieldDef> }
-    ? { [K in keyof O]?: 
-        O[K] extends { enum: readonly (infer E)[] } ? E :
-        O[K] extends { type: 'array'; items: infer IT extends SchemaFieldType } ? SchemaTypeMap[IT][] :
-        O[K] extends { type: infer T extends SchemaFieldType } ? SchemaTypeMap[T] : unknown 
-      }
-    : Record<string, unknown>;
-    
-  type SchemaTypeMap = {
-    string: string;
-    number: number;
-    boolean: boolean;
-    array: unknown[];
-    object: Record<string, unknown>;
-    any: unknown;
-  };
-
-  /** Typed API returned by defineSchema */
-  interface TypedSchemaAPI<TInput, TOutput> {
-    input: () => Promise<TInput>;
-    output: (data: Partial<TOutput>) => void;
-  }
-
-  /**
-   * Define a schema and get typed input/output functions.
-   * This is the recommended way to use schema with full type inference.
-   * 
-   * @example
-   * ```typescript
-   * const { input, output } = defineSchema({
-   *   input: {
-   *     greeting: { type: 'string', required: true },
-   *     count: { type: 'number' }
-   *   },
-   *   output: {
-   *     message: { type: 'string' }
-   *   }
-   * } as const)
-   * 
-   * // Types are fully inferred!
-   * const { greeting, count } = await input()
-   * output({ message: `Hello ${greeting}!` })
-   * ```
-   */
-  function defineSchema<T extends ScriptSchema>(
-    schema: T
-  ): TypedSchemaAPI<InferInput<T>, InferOutput<T>> & { schema: T };
-
-  // AI-First Protocol functions (untyped versions - use defineSchema for typed versions)
-  /**
-   * Get input data. For typed version, use defineSchema().
-   */
-  function input<T = Record<string, unknown>>(): Promise<T>;
-  
-  /**
-   * Send output data. For typed version, use defineSchema().
-   */
-  function output(data: Record<string, unknown>): void;
-  /** @internal */
-  function _setScriptInput(data: Record<string, unknown>): void;
-  /** @internal */
-  function _getScriptOutput(): Record<string, unknown>;
-  /** @internal */
-  function _resetScriptIO(): void;
-
-  // Core prompt functions
-  function arg(placeholderOrConfig?: string | ArgConfig, choices?: ChoicesInput, actions?: Action[]): Promise<string>;
-  function div(html?: string | DivConfig, actions?: Action[]): Promise<void>;
-  function md(markdown: string): string;
-  function editor(content?: string, language?: string, actions?: Action[]): Promise<string>;
-  function mini(placeholderOrConfig?: string | ArgConfig, choices?: ChoicesInput): Promise<string>;
-  function micro(placeholderOrConfig?: string | ArgConfig, choices?: ChoicesInput): Promise<string>;
-  function select(placeholderOrConfig?: string | ArgConfig, choices?: ChoicesInput): Promise<string>;
-  function fields(fieldDefs: FieldDef[]): Promise<string[]>;
-  function form(htmlOrConfig: string | FormConfig): Promise<Record<string, string>>;
-  function path(hint?: string | PathOptions): Promise<string>;
-  function hotkey(placeholder?: string): Promise<HotkeyInfo>;
-  function drop(): Promise<FileInfo[]>;
-  function template(content: string, options?: TemplateOptions): Promise<string>;
-  function env(name: string, defaultValue?: string): Promise<string>;
-
-  // Chat (TIER 4A)
-  function chat(options?: ChatOptions): Promise<ChatResult>;
-
-  // Widget/Term/Media (TIER 4B)
-  function widget(html: string, options?: WidgetOptions): Promise<WidgetController>;
-  function term(command?: string): Promise<string>;
-  function webcam(): Promise<Buffer>;
-  function mic(): Promise<Buffer>;
-  function eyeDropper(): Promise<ColorInfo>;
-  function find(name: string, options?: FindOptions): Promise<string[]>;
-
-  // System
-  function beep(): Promise<void>;
-  function say(text: string, voice?: string): Promise<void>;
-  function notify(options: string | NotifyOptions): Promise<void>;
-  function hud(message: string, options?: { duration?: number }): void;
-  function setStatus(options: StatusOptions): Promise<void>;
-  function menu(icon: string, scripts?: string[]): Promise<void>;
-  function setSelectedText(text: string): Promise<void>;
-  function getSelectedText(): Promise<string>;
-  function hasAccessibilityPermission(): Promise<boolean>;
-  function requestAccessibilityPermission(): Promise<boolean>;
-
-  // Clipboard
-  const clipboard: ClipboardAPI;
-  function copy(text: string): Promise<void>;
-  function paste(): Promise<string>;
-
-  // Clipboard History
-  function clipboardHistory(): Promise<ClipboardHistoryEntry[]>;
-  function clipboardHistoryPin(entryId: string): Promise<void>;
-  function clipboardHistoryUnpin(entryId: string): Promise<void>;
-  function clipboardHistoryRemove(entryId: string): Promise<void>;
-  function clipboardHistoryClear(): Promise<void>;
-  function clipboardHistoryTrimOversize(): Promise<void>;
-
-  // Window Management
-  function getWindows(): Promise<SystemWindowInfo[]>;
-  function focusWindow(windowId: number): Promise<void>;
-  function closeWindow(windowId: number): Promise<void>;
-  function minimizeWindow(windowId: number): Promise<void>;
-  function maximizeWindow(windowId: number): Promise<void>;
-  function moveWindow(windowId: number, x: number, y: number): Promise<void>;
-  function resizeWindow(windowId: number, width: number, height: number): Promise<void>;
-  function tileWindow(windowId: number, position: TilePosition): Promise<void>;
-  function getDisplays(): Promise<DisplayInfo[]>;
-  function getFrontmostWindow(): Promise<SystemWindowInfo | null>;
-  function moveToNextDisplay(windowId: number): Promise<void>;
-  function moveToPreviousDisplay(windowId: number): Promise<void>;
-
-  // File Search
-  function fileSearch(query: string, options?: FindOptions): Promise<FileSearchResult[]>;
-
-  // Menu Bar
-  function getMenuBar(bundleId?: string): Promise<MenuBarItem[]>;
-  function executeMenuAction(bundleId: string, menuPath: string[]): Promise<void>;
-
-  // Input
-  const keyboard: KeyboardAPI;
-  const mouse: MouseAPI;
-
-  // UI Control
-  function show(): Promise<void>;
-  function hide(): Promise<void>;
-  function showGrid(options?: GridOptions): Promise<void>;
-  function hideGrid(): Promise<void>;
-  function blur(): Promise<void>;
-  function getWindowBounds(): Promise<WindowBounds>;
-  function setWindowBounds(bounds: Partial<WindowBounds>): Promise<void>;
-  function centerWindow(): Promise<void>;
-  function submit(value: unknown): void;
-  function exit(code?: number): void;
-  function setPanel(html: string): void;
-  function setPreview(html: string): void;
-  function setPrompt(html: string): void;
-  function setInput(text: string): void;
-  function captureScreenshot(options?: ScreenshotOptions): Promise<ScreenshotData>;
-  function getLayoutInfo(): Promise<LayoutInfo>;
-
-  // AI Chat SDK
-  function aiIsOpen(): Promise<{ isOpen: boolean; activeChatId?: string }>;
-  function aiGetActiveChat(): Promise<AiChatInfo | null>;
-  function aiListChats(limit?: number, includeDeleted?: boolean): Promise<AiChatInfo[]>;
-  function aiGetConversation(chatId?: string, limit?: number): Promise<AiMessageInfo[]>;
-  function aiStartChat(message: string, options?: AiChatOptions): Promise<AiStartChatResult>;
-  function aiAppendMessage(chatId: string, content: string, role: 'user' | 'assistant' | 'system'): Promise<string>;
-  function aiSendMessage(chatId: string, content: string, imagePath?: string): Promise<{ userMessageId: string; streamingStarted: boolean }>;
-  function aiSetSystemPrompt(chatId: string, prompt: string): Promise<void>;
-  function aiFocus(): Promise<{ wasOpen: boolean }>;
-  function aiGetStreamingStatus(chatId?: string): Promise<{ isStreaming: boolean; chatId?: string; partialContent?: string }>;
-  function aiDeleteChat(chatId: string, permanent?: boolean): Promise<void>;
-  function aiOn(eventType: AiEventType, handler: AiEventHandler, chatId?: string): Promise<() => void>;
-
-  // Utilities
-  function uuid(): string;
-  function compile(template: string): (data: Record<string, string>) => string;
-  function home(...segments: string[]): string;
-  function skPath(...segments: string[]): string;
-  function kitPath(...segments: string[]): string;
-  function tmpPath(...segments: string[]): string;
-  function isFile(filePath: string): Promise<boolean>;
-  function isDir(dirPath: string): Promise<boolean>;
-  function isBin(filePath: string): Promise<boolean>;
-
-  // Memory
-  const memoryMap: MemoryMapAPI;
-
-  // File operations
-  function browse(url: string): Promise<void>;
-  function editFile(filePath: string): Promise<void>;
-  function run(scriptName: string, ...args: string[]): Promise<unknown>;
-  function inspect(data: unknown): Promise<void>;
-  
-  // Actions API
-  function setActions(actions: Action[]): Promise<void>;
-}
 
 export {};

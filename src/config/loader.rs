@@ -117,3 +117,72 @@ pub fn load_config() -> Config {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    /// Code audit test: Verify all config.ts path references use the authoritative path.
+    ///
+    /// AUTHORITATIVE PATH: ~/.scriptkit/kit/config.ts
+    ///
+    /// This test ensures no code accidentally references the wrong path like:
+    /// - ~/.scriptkit/config.ts (missing /kit/)
+    ///
+    /// The correct pattern is always: ~/.scriptkit/kit/config.ts
+    #[test]
+    fn test_config_path_consistency() {
+        // Files to audit for config path references
+        // Note: We exclude this file (loader.rs) since it contains the test pattern strings
+        let files_to_check = [
+            "src/main.rs",
+            "src/app_impl.rs",
+            "src/config/mod.rs",
+            "src/config/types.rs",
+            "src/watcher.rs",
+            "src/setup.rs",
+            "src/lib.rs",
+        ];
+
+        // The wrong pattern we're looking for (split to avoid self-detection)
+        let wrong_pattern = format!(".scriptkit{}config.ts", "/");
+
+        let mut violations = Vec::new();
+
+        for file in files_to_check {
+            let content = match fs::read_to_string(file) {
+                Ok(c) => c,
+                Err(_) => continue, // Skip files that don't exist
+            };
+
+            for (line_num, line) in content.lines().enumerate() {
+                // Skip comments (documentation)
+                if line.trim_start().starts_with("//") || line.trim_start().starts_with("///") {
+                    continue;
+                }
+
+                // Detect WRONG pattern: .scriptkit/config.ts (missing /kit/)
+                // This catches: "~/.scriptkit/config.ts" or ".scriptkit/config.ts"
+                // But NOT: "~/.scriptkit/kit/config.ts" (the correct path)
+                if line.contains(&wrong_pattern) {
+                    violations.push(format!(
+                        "{}:{}: {}\n  Found: {} (missing /kit/)\n  Expected: .scriptkit/kit/config.ts",
+                        file,
+                        line_num + 1,
+                        line.trim(),
+                        wrong_pattern
+                    ));
+                }
+            }
+        }
+
+        if !violations.is_empty() {
+            panic!(
+                "Found {} inconsistent config path reference(s):\n\n{}\n\n\
+                AUTHORITATIVE PATH: ~/.scriptkit/kit/config.ts",
+                violations.len(),
+                violations.join("\n\n")
+            );
+        }
+    }
+}
