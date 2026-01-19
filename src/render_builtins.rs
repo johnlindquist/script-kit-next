@@ -2094,31 +2094,45 @@ impl ScriptListApp {
         let selected_alpha = (opacity.selected * 255.0) as u32;
         let hover_alpha = (opacity.hover * 255.0) as u32;
 
-        // Filter results based on query
-        // When query is a directory path, extract the filter component for instant filtering
-        // e.g., ~/dev/fin -> filter by "fin" on directory contents
-        let filter_pattern = if let Some(parsed) = crate::file_search::parse_directory_path(query) {
-            parsed.filter // Some("fin") or None
-        } else if !query.is_empty() {
-            // Not a directory path - use query as filter for search results
-            Some(query.to_string())
-        } else {
-            None
-        };
+        // Use pre-computed display indices instead of running Nucleo in render
+        // This is CRITICAL for animation performance - render must be cheap
+        // The display_indices are computed in recompute_file_search_display_indices()
+        // which is called when:
+        // 1. Results change (new directory listing or search results)
+        // 2. Filter pattern changes (user types in existing directory)
+        // 3. Loading completes
+        let display_indices = &self.file_search_display_indices;
+        let filtered_len = display_indices.len();
 
-        // Use Nucleo fuzzy matching for filtering - gives better match quality ranking
-        let filtered_results: Vec<_> = if let Some(ref pattern) = filter_pattern {
-            file_search::filter_results_nucleo_simple(&self.cached_file_results, pattern)
-        } else {
-            // No filter - show all results
-            self.cached_file_results.iter().enumerate().collect()
-        };
-        let filtered_len = filtered_results.len();
+        // Log render state (throttled - only when state changes meaningfully)
+        static LAST_LOG: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let now_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0);
+        let last = LAST_LOG.load(std::sync::atomic::Ordering::Relaxed);
+        if now_ms.saturating_sub(last) > 500 {
+            // Log at most every 500ms
+            LAST_LOG.store(now_ms, std::sync::atomic::Ordering::Relaxed);
+            logging::log(
+                "SEARCH",
+                &format!(
+                    "render_file_search: query='{}' loading={} cached={} display={} selected={}",
+                    query,
+                    self.file_search_loading,
+                    self.cached_file_results.len(),
+                    filtered_len,
+                    selected_index
+                ),
+            );
+        }
 
         // Get selected file for preview (if any)
-        let selected_file = filtered_results
+        // Use display_indices to map visible index -> actual result index
+        let selected_file = display_indices
             .get(selected_index)
-            .map(|(_, r)| (*r).clone());
+            .and_then(|&result_idx| self.cached_file_results.get(result_idx))
+            .cloned();
 
         // Key handler for file search
         let handle_key = cx.listener(
@@ -2185,31 +2199,18 @@ impl ScriptListApp {
                 }
 
                 if let AppView::FileSearchView {
-                    query,
+                    query: _,
                     selected_index,
                 } = &mut this.current_view
                 {
-                    // Apply filter to get current filtered list
-                    // Use parse_directory_path to extract filter pattern
-                    let filter_pattern =
-                        if let Some(parsed) = crate::file_search::parse_directory_path(query) {
-                            parsed.filter
-                        } else if !query.is_empty() {
-                            Some(query.clone())
-                        } else {
-                            None
-                        };
-
-                    // Use Nucleo fuzzy matching for filtering
-                    let filtered_results: Vec<_> = if let Some(ref pattern) = filter_pattern {
-                        crate::file_search::filter_results_nucleo_simple(
-                            &this.cached_file_results,
-                            pattern,
-                        )
-                    } else {
-                        this.cached_file_results.iter().enumerate().collect()
+                    // Use pre-computed display_indices to get the selected file
+                    // This is consistent with what render shows and avoids re-running Nucleo
+                    let get_selected_file = || {
+                        this.file_search_display_indices
+                            .get(*selected_index)
+                            .and_then(|&idx| this.cached_file_results.get(idx))
+                            .cloned()
                     };
-                    let _filtered_len = filtered_results.len();
 
                     match key_str.as_str() {
                         // Arrow keys are handled by arrow_interceptor in app_impl.rs
@@ -2223,12 +2224,12 @@ impl ScriptListApp {
                         "enter" => {
                             // Check for Cmd+Enter (reveal in finder) first
                             if has_cmd {
-                                if let Some((_, file)) = filtered_results.get(*selected_index) {
+                                if let Some(file) = get_selected_file() {
                                     let _ = file_search::reveal_in_finder(&file.path);
                                 }
                             } else {
                                 // Open file with default app
-                                if let Some((_, file)) = filtered_results.get(*selected_index) {
+                                if let Some(file) = get_selected_file() {
                                     let _ = file_search::open_file(&file.path);
                                     // Close window after opening file
                                     this.close_and_reset_window(cx);
@@ -2238,17 +2239,15 @@ impl ScriptListApp {
                         _ => {
                             // Handle Cmd+K (toggle actions)
                             if has_cmd && key_str == "k" {
-                                if let Some((_, file)) = filtered_results.get(*selected_index) {
-                                    // Clone the file to avoid borrow issues
-                                    let file_clone = (*file).clone();
-                                    this.toggle_file_search_actions(&file_clone, window, cx);
+                                if let Some(file) = get_selected_file() {
+                                    this.toggle_file_search_actions(&file, window, cx);
                                 }
                                 return;
                             }
                             // Handle Cmd+Y (Quick Look) - macOS only
                             #[cfg(target_os = "macos")]
                             if has_cmd && key_str == "y" {
-                                if let Some((_, file)) = filtered_results.get(*selected_index) {
+                                if let Some(file) = get_selected_file() {
                                     let _ = file_search::quick_look(&file.path);
                                 }
                                 return;
@@ -2256,14 +2255,14 @@ impl ScriptListApp {
                             // Handle Cmd+I (Show Info) - macOS only
                             #[cfg(target_os = "macos")]
                             if has_cmd && key_str == "i" {
-                                if let Some((_, file)) = filtered_results.get(*selected_index) {
+                                if let Some(file) = get_selected_file() {
                                     let _ = file_search::show_info(&file.path);
                                 }
                             }
                             // Handle Cmd+O (Open With) - macOS only
                             #[cfg(target_os = "macos")]
                             if has_cmd && key_str == "o" {
-                                if let Some((_, file)) = filtered_results.get(*selected_index) {
+                                if let Some(file) = get_selected_file() {
                                     let _ = file_search::open_with(&file.path);
                                 }
                             }
@@ -2274,18 +2273,65 @@ impl ScriptListApp {
         );
 
         // Clone data for the uniform_list closure
-        let files_for_closure: Vec<_> = filtered_results
+        // Use display_indices to get files in the correct order (filtered + sorted)
+        // Include the original result index for animation timestamp lookup
+        let files_for_closure: Vec<(usize, file_search::FileResult)> = display_indices
             .iter()
-            .map(|(_, file)| (*file).clone())
+            .filter_map(|&idx| self.cached_file_results.get(idx).map(|f| (idx, f.clone())))
             .collect();
         let current_selected = selected_index;
         let is_loading = self.file_search_loading;
 
         // Use uniform_list for virtualized scrolling
-        // Note: Loading state with 0 results is handled by the main content section (full-width spinner)
-        // This list_element is only used in the 50/50 split when we have results
-        let list_element = if filtered_len == 0 {
-            // No results and not loading
+        // Skeleton loading: show placeholder rows while loading and no results yet
+        let list_element = if is_loading && filtered_len == 0 {
+            // Loading with no results yet - show static skeleton rows
+            let skeleton_bg = rgba((ui_border << 8) | 0x30); // ~18% opacity
+
+            // Render 6 skeleton rows
+            div()
+                .w_full()
+                .h_full()
+                .flex()
+                .flex_col()
+                .children((0..6).map(|ix| {
+                    div()
+                        .id(ix)
+                        .w_full()
+                        .h(px(52.))
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .px(px(12.))
+                        .gap(px(12.))
+                        // Icon placeholder
+                        .child(div().w(px(24.)).h(px(24.)).rounded(px(6.)).bg(skeleton_bg))
+                        // Text placeholders
+                        .child(
+                            div()
+                                .flex_1()
+                                .flex()
+                                .flex_col()
+                                .gap(px(6.))
+                                .child(div().w(px(160.)).h(px(12.)).rounded(px(4.)).bg(skeleton_bg))
+                                .child(
+                                    div().w(px(240.)).h(px(10.)).rounded(px(4.)).bg(skeleton_bg),
+                                ),
+                        )
+                        // Right side placeholders (size/time)
+                        .child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .items_end()
+                                .gap(px(6.))
+                                .child(div().w(px(56.)).h(px(10.)).rounded(px(4.)).bg(skeleton_bg))
+                                .child(div().w(px(72.)).h(px(10.)).rounded(px(4.)).bg(skeleton_bg)),
+                        )
+                }))
+                .into_any_element()
+        } else if filtered_len == 0 {
+            // No results and not loading - show empty state message
             div()
                 .w_full()
                 .py(px(design_spacing.padding_xl))
@@ -2304,8 +2350,9 @@ impl ScriptListApp {
                 move |visible_range, _window, _cx| {
                     visible_range
                         .map(|ix| {
-                            if let Some(file) = files_for_closure.get(ix) {
+                            if let Some((_result_idx, file)) = files_for_closure.get(ix) {
                                 let is_selected = ix == current_selected;
+
                                 // Use theme opacity for vibrancy-compatible selection
                                 let bg = if is_selected {
                                     rgba((list_selected << 8) | selected_alpha)

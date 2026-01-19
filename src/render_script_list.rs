@@ -564,16 +564,11 @@ impl ScriptListApp {
                     }
                 }
 
-                // FIRST: If confirm dialog is open, route keyboard events to it
+                // If confirm dialog is open, just return - key routing is handled by
+                // the dedicated interceptors in app_impl.rs (Tab at line 462-478,
+                // arrows at line 645-659, all others at line 920-928)
+                // We must NOT dispatch here or it will double-fire toggle_focus!
                 if crate::confirm::is_confirm_window_open() {
-                    // Dispatch to confirm dialog
-                    cx.spawn(async move |_this, cx| {
-                        cx.update(|cx| {
-                            crate::confirm::dispatch_confirm_key(key_str.as_str(), cx);
-                        })
-                        .ok();
-                    })
-                    .detach();
                     return;
                 }
 

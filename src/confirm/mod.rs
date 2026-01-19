@@ -23,4 +23,7 @@ mod dialog;
 mod window;
 
 pub use dialog::ConfirmCallback;
-pub use window::{dispatch_confirm_key, is_confirm_window_open, open_confirm_window};
+pub use window::{
+    close_confirm_window, dispatch_confirm_key, init_confirm_bindings, is_confirm_window_open,
+    open_confirm_window,
+};

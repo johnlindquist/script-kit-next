@@ -114,14 +114,14 @@ impl Render for ActionsWindow {
             ),
         );
 
-        // Ensure we have focus on each render
-        if !is_focused {
-            crate::logging::log(
-                "ACTIONS",
-                "ActionsWindow: focus_handle NOT focused, re-focusing",
-            );
-            self.focus_handle.focus(window, cx);
-        }
+        // NOTE: We intentionally do NOT focus this window's focus_handle.
+        // The parent window (AI window, Notes window, etc.) keeps keyboard focus
+        // and routes events to us via its capture_key_down handler.
+        // This approach works better on macOS where popup windows often don't
+        // receive keyboard events reliably.
+        //
+        // The on_key_down handler below is still registered as a fallback for
+        // cases where the popup window does receive focus (e.g., user clicks on it).
 
         // Key handler for the actions window
         // Since this is a separate window, it needs its own key handling
@@ -372,13 +372,12 @@ pub fn open_actions_window(
     };
 
     // Create the window with the shared dialog entity
+    // NOTE: We DON'T focus the ActionsWindow's focus_handle here.
+    // The parent window (AI window, Notes window, etc.) keeps focus and routes
+    // keyboard events to us via its own capture_key_down handler.
+    // This avoids focus conflicts where both windows try to handle keys.
     let handle = cx.open_window(window_options, |window, cx| {
-        let actions_window = cx.new(|cx| {
-            let aw = ActionsWindow::new(dialog_entity, cx);
-            // Focus the actions window so it receives keyboard events
-            aw.focus_handle.focus(window, cx);
-            aw
-        });
+        let actions_window = cx.new(|cx| ActionsWindow::new(dialog_entity, cx));
         // Wrap in Root for gpui-component theming and vibrancy
         cx.new(|cx| Root::new(actions_window, window, cx))
     })?;

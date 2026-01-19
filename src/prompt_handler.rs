@@ -1675,7 +1675,8 @@ impl ScriptListApp {
                 if use_builtin_ai {
                     use crate::ai::ProviderRegistry;
 
-                    let registry = ProviderRegistry::from_environment();
+                    let registry =
+                        ProviderRegistry::from_environment_with_config(Some(&self.config));
                     if registry.has_any_provider() {
                         logging::log(
                             "CHAT",

@@ -425,13 +425,6 @@ pub struct AiApp {
     /// Uses CommandBar for consistent UI with Cmd+K actions
     new_chat_command_bar: CommandBar,
 
-    // === Model Picker State ===
-    /// Whether the model picker dropdown is visible
-    showing_model_picker: bool,
-
-    /// Selected index in model picker
-    model_picker_selected_index: usize,
-
     // === Presets State ===
     /// Whether the new chat dropdown (presets) is visible
     showing_presets_dropdown: bool,
@@ -498,8 +491,9 @@ impl AiApp {
             }
         }
 
-        // Initialize provider registry from environment
-        let provider_registry = ProviderRegistry::from_environment();
+        // Initialize provider registry from environment with config
+        let config = crate::config::load_config();
+        let provider_registry = ProviderRegistry::from_environment_with_config(Some(&config));
         let available_models = provider_registry.get_all_models();
 
         // Select default model (prefer Claude Haiku 4.5, then 3.5 Haiku, then Sonnet, then GPT-4o)
@@ -638,9 +632,6 @@ impl AiApp {
                 CommandBarConfig::ai_style(), // Same style as Cmd+K (search at top, headers)
                 std::sync::Arc::new(theme::load_theme()),
             ),
-            // Model picker state
-            showing_model_picker: false,
-            model_picker_selected_index: 0,
             // Presets state
             showing_presets_dropdown: false,
             presets: AiPreset::default_presets(),
@@ -1136,7 +1127,6 @@ impl AiApp {
         self.focus_handle.focus(window, cx);
 
         // Also hide other dropdowns
-        self.hide_model_picker(cx);
         self.hide_presets_dropdown(cx);
         self.hide_attachments_picker(cx);
 
@@ -1224,7 +1214,9 @@ impl AiApp {
             }
             "paste_image" => self.paste_image_from_clipboard(cx),
             "change_model" => {
-                self.show_model_picker(window, cx);
+                // Model selection now available via Actions (Cmd+K)
+                // Cycle to next model as a convenience
+                self.cycle_model(cx);
             }
             _ => {
                 tracing::warn!(action = action_id, "Unknown action");
@@ -1302,18 +1294,6 @@ impl AiApp {
                         }
                     }
                 }
-            }
-            return;
-        }
-
-        // Handle model picker navigation
-        if self.showing_model_picker {
-            match key_lower.as_str() {
-                "up" | "arrowup" => self.model_picker_select_prev(cx),
-                "down" | "arrowdown" => self.model_picker_select_next(cx),
-                "enter" => self.select_model_from_picker(cx),
-                "escape" => self.hide_model_picker(cx),
-                _ => {}
             }
             return;
         }
@@ -1414,56 +1394,6 @@ impl AiApp {
         info!("Paste image from clipboard - checking for image data");
         // TODO: Implement proper image clipboard support when GPUI supports it
         cx.notify();
-    }
-
-    // === Model Picker Methods ===
-
-    /// Show the model picker dropdown
-    fn show_model_picker(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        // Find current model index
-        self.model_picker_selected_index = self
-            .selected_model
-            .as_ref()
-            .and_then(|sm| self.available_models.iter().position(|m| m.id == sm.id))
-            .unwrap_or(0);
-        self.showing_model_picker = true;
-        cx.notify();
-    }
-
-    /// Hide the model picker dropdown
-    fn hide_model_picker(&mut self, cx: &mut Context<Self>) {
-        self.showing_model_picker = false;
-        cx.notify();
-    }
-
-    /// Move selection up in model picker
-    fn model_picker_select_prev(&mut self, cx: &mut Context<Self>) {
-        if !self.available_models.is_empty() {
-            if self.model_picker_selected_index > 0 {
-                self.model_picker_selected_index -= 1;
-            } else {
-                self.model_picker_selected_index = self.available_models.len() - 1;
-            }
-            cx.notify();
-        }
-    }
-
-    /// Move selection down in model picker
-    fn model_picker_select_next(&mut self, cx: &mut Context<Self>) {
-        if !self.available_models.is_empty() {
-            self.model_picker_selected_index =
-                (self.model_picker_selected_index + 1) % self.available_models.len();
-            cx.notify();
-        }
-    }
-
-    /// Select the current model in the picker
-    fn select_model_from_picker(&mut self, cx: &mut Context<Self>) {
-        if let Some(model) = self.available_models.get(self.model_picker_selected_index) {
-            self.selected_model = Some(model.clone());
-            self.on_model_change(self.model_picker_selected_index, cx);
-        }
-        self.hide_model_picker(cx);
     }
 
     // === Presets Dropdown Methods ===
@@ -1788,7 +1718,6 @@ impl AiApp {
     fn hide_all_dropdowns(&mut self, cx: &mut Context<Self>) {
         // Close command bar vibrancy window if open
         self.command_bar.close_app(cx);
-        self.showing_model_picker = false;
         self.showing_presets_dropdown = false;
         self.showing_attachments_picker = false;
         self.showing_new_chat_dropdown = false;
@@ -2553,7 +2482,8 @@ impl AiApp {
         info!("Vercel API key saved successfully");
 
         // Reinitialize the provider registry to pick up the new key
-        self.provider_registry = ProviderRegistry::from_environment();
+        let config = crate::config::load_config();
+        self.provider_registry = ProviderRegistry::from_environment_with_config(Some(&config));
         self.available_models = self.provider_registry.get_all_models();
 
         // Select default model if available
@@ -2966,19 +2896,18 @@ impl AiApp {
             .unwrap_or_else(|| "Select Model".to_string())
             .into();
 
-        // Model picker button - clicking opens dropdown
-        Button::new("model-picker")
-            .ghost()
-            .xsmall()
-            .icon(IconName::ChevronDown)
+        // Model display (read-only) - model selection now available via Actions (Cmd+K)
+        div()
+            .id("model-display")
+            .flex()
+            .items_center()
+            .gap_1()
+            .px_2()
+            .py(px(2.))
+            .rounded_md()
+            .text_xs()
+            .text_color(cx.theme().muted_foreground)
             .child(model_label)
-            .on_click(cx.listener(|this, _, window, cx| {
-                if this.showing_model_picker {
-                    this.hide_model_picker(cx);
-                } else {
-                    this.show_model_picker(window, cx);
-                }
-            }))
             .into_any_element()
     }
 
@@ -4038,33 +3967,6 @@ impl Render for AiApp {
                     return;
                 }
 
-                // Handle model picker navigation
-                if this.showing_model_picker {
-                    match key {
-                        "up" | "arrowup" => {
-                            this.model_picker_select_prev(cx);
-                            cx.stop_propagation();
-                            return;
-                        }
-                        "down" | "arrowdown" => {
-                            this.model_picker_select_next(cx);
-                            cx.stop_propagation();
-                            return;
-                        }
-                        "enter" | "return" => {
-                            this.select_model_from_picker(cx);
-                            cx.stop_propagation();
-                            return;
-                        }
-                        "escape" => {
-                            this.hide_model_picker(cx);
-                            cx.stop_propagation();
-                            return;
-                        }
-                        _ => {}
-                    }
-                }
-
                 // Handle presets dropdown navigation
                 if this.showing_presets_dropdown {
                     match key {
@@ -4150,15 +4052,6 @@ impl Render for AiApp {
                                 this.create_chat(window, cx);
                             }
                         }
-                        // Cmd+M to toggle model picker
-                        "m" => {
-                            if this.showing_model_picker {
-                                this.hide_model_picker(cx);
-                            } else {
-                                this.hide_all_dropdowns(cx);
-                                this.show_model_picker(window, cx);
-                            }
-                        }
                         // Cmd+Shift+F to focus search (expand sidebar if collapsed)
                         "f" => {
                             if modifiers.shift {
@@ -4199,7 +4092,6 @@ impl Render for AiApp {
                 // Escape closes any open dropdown
                 if key == "escape"
                     && (this.command_bar.is_open()
-                        || this.showing_model_picker
                         || this.showing_presets_dropdown
                         || this.showing_attachments_picker)
                 {
@@ -4292,9 +4184,7 @@ impl Render for AiApp {
             )
             // Overlay dropdowns (only one at a time)
             // NOTE: Command bar now renders in a separate vibrancy window (not inline)
-            .when(self.showing_model_picker, |el| {
-                el.child(self.render_model_picker_dropdown(cx))
-            })
+            // NOTE: Model picker dropdown removed - model selection now via Actions (Cmd+K)
             .when(self.showing_presets_dropdown, |el| {
                 el.child(self.render_presets_dropdown(cx))
             })
@@ -4319,131 +4209,6 @@ impl AiApp {
         // Command bar now renders in a separate vibrancy window (not inline)
         // See CommandBar component for window management
         div().id("command-bar-overlay-deprecated")
-    }
-
-    /// Render the model picker dropdown overlay
-    fn render_model_picker_dropdown(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let theme = cx.theme();
-        let bg_color = theme.background;
-        let border_color = theme.border;
-        let muted_fg = theme.muted_foreground;
-        let accent = theme.accent;
-        let accent_fg = theme.accent_foreground;
-        let fg = theme.foreground;
-
-        // Build model items
-        let model_items: Vec<_> = self
-            .available_models
-            .iter()
-            .enumerate()
-            .map(|(idx, model)| {
-                let is_selected = idx == self.model_picker_selected_index;
-                let model_id = model.id.clone();
-                let display_name = model.display_name.clone();
-                let provider = model.provider.clone();
-
-                div()
-                    .id(SharedString::from(format!("model-{}", idx)))
-                    .px_3()
-                    .py_2()
-                    .mx_1()
-                    .rounded_md()
-                    .flex()
-                    .items_center()
-                    .gap_3()
-                    .cursor_pointer()
-                    .when(is_selected, |el| el.bg(accent))
-                    .when(!is_selected, |el| el.hover(|el| el.bg(accent.opacity(0.5))))
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.model_picker_selected_index = idx;
-                        this.select_model_from_picker(cx);
-                    }))
-                    // Model name
-                    .child(
-                        div()
-                            .flex_1()
-                            .flex()
-                            .flex_col()
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .text_color(if is_selected { accent_fg } else { fg })
-                                    .child(display_name),
-                            )
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(if is_selected {
-                                        accent_fg.opacity(0.7)
-                                    } else {
-                                        muted_fg
-                                    })
-                                    .child(format!("{} • {}", provider, model_id)),
-                            ),
-                    )
-                    // Check mark if currently selected model
-                    .when(
-                        self.selected_model.as_ref().map(|m| &m.id) == Some(&model_id),
-                        |el| {
-                            el.child(
-                                svg()
-                                    .external_path(LocalIconName::Check.external_path())
-                                    .size(px(14.))
-                                    .text_color(if is_selected { accent_fg } else { accent }),
-                            )
-                        },
-                    )
-            })
-            .collect();
-
-        // Overlay
-        div()
-            .id("model-picker-overlay")
-            .absolute()
-            .inset_0()
-            .flex()
-            .items_end()
-            .justify_center()
-            .pb_20() // Position above the input area
-            .on_click(cx.listener(|this, _, _, cx| {
-                this.hide_model_picker(cx);
-            }))
-            .child(
-                div()
-                    .id("model-picker-container")
-                    .w(px(350.0))
-                    .max_h(px(300.0))
-                    .bg(bg_color)
-                    .border_1()
-                    .border_color(border_color)
-                    .rounded_lg()
-                    .shadow_lg()
-                    .overflow_hidden()
-                    .flex()
-                    .flex_col()
-                    .on_click(cx.listener(|_, _, _, _| {}))
-                    // Header
-                    .child(
-                        div()
-                            .px_3()
-                            .py_2()
-                            .border_b_1()
-                            .border_color(border_color)
-                            .text_sm()
-                            .font_weight(gpui::FontWeight::MEDIUM)
-                            .text_color(fg)
-                            .child("Select Model"),
-                    )
-                    // Model list
-                    .child(
-                        div()
-                            .id("model-list")
-                            .flex_1()
-                            .overflow_y_scroll()
-                            .p_1()
-                            .children(model_items),
-                    ),
-            )
     }
 
     /// Render the presets dropdown overlay
