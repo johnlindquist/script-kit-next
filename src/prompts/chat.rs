@@ -664,6 +664,8 @@ impl ChatPrompt {
         let done_clone = shared_done.clone();
         let error_clone = shared_error.clone();
         let model_id_clone = model_id.clone();
+        // Use prompt ID as session ID for Claude Code CLI conversation continuity
+        let session_id = self.id.clone();
 
         // Spawn background thread for streaming
         std::thread::spawn(move || {
@@ -675,7 +677,7 @@ impl ChatPrompt {
                         content.push_str(&chunk);
                     }
                 }),
-                None, // SDK chat prompts don't need session persistence
+                Some(&session_id),
             );
 
             match result {
@@ -886,6 +888,8 @@ impl ChatPrompt {
         let done_clone = shared_done.clone();
         let error_clone = shared_error.clone();
         let model_id_clone = model_id.clone();
+        // Use prompt ID as session ID for Claude Code CLI conversation continuity
+        let session_id = self.id.clone();
 
         // Spawn background thread for streaming
         std::thread::spawn(move || {
@@ -897,7 +901,7 @@ impl ChatPrompt {
                         content.push_str(&chunk);
                     }
                 }),
-                None, // SDK chat prompts don't need session persistence
+                Some(&session_id),
             );
 
             match result {
