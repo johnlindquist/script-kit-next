@@ -23,6 +23,7 @@
 //! - Type to search/filter actions
 
 use crate::designs::icon_variations::IconName;
+use crate::protocol::ProtocolAction;
 use gpui::{
     div, point, prelude::*, px, rgba, svg, uniform_list, App, BoxShadow, Context, FocusHandle,
     Focusable, Hsla, MouseButton, Render, ScrollStrategy, SharedString, UniformListScrollHandle,
@@ -250,7 +251,7 @@ pub const PANEL_WIDTH: f32 = 320.0;
 /// Standardized to match main ActionsDialog POPUP_MAX_HEIGHT (was 580.0)
 pub const PANEL_MAX_HEIGHT: f32 = 400.0;
 pub const PANEL_CORNER_RADIUS: f32 = 12.0;
-pub const ACTION_ITEM_HEIGHT: f32 = 44.0;
+pub const ACTION_ITEM_HEIGHT: f32 = 36.0;
 pub const PANEL_SEARCH_HEIGHT: f32 = 44.0;
 pub const PANEL_BORDER_HEIGHT: f32 = 2.0;
 /// Horizontal inset for action rows (creates rounded pill appearance)
@@ -282,6 +283,8 @@ pub struct NotesActionsPanel {
     scroll_handle: UniformListScrollHandle,
     /// Cursor blink visibility
     cursor_visible: bool,
+    /// SDK-provided actions (when present, replaces built-in actions)
+    pub sdk_actions: Option<Vec<ProtocolAction>>,
 }
 
 impl NotesActionsPanel {
@@ -305,12 +308,30 @@ impl NotesActionsPanel {
             on_action,
             scroll_handle: UniformListScrollHandle::new(),
             cursor_visible: true,
+            sdk_actions: None,
         }
     }
 
     /// Set cursor visibility (for blink animation)
     pub fn set_cursor_visible(&mut self, visible: bool) {
         self.cursor_visible = visible;
+    }
+
+    /// Set SDK-provided actions (replaces built-in actions when present)
+    pub fn set_sdk_actions(&mut self, actions: Vec<ProtocolAction>) {
+        self.sdk_actions = Some(actions);
+        self.refilter();
+    }
+
+    /// Clear SDK actions and restore built-in actions
+    pub fn clear_sdk_actions(&mut self) {
+        self.sdk_actions = None;
+        self.refilter();
+    }
+
+    /// Check if SDK actions are currently active
+    pub fn has_sdk_actions(&self) -> bool {
+        self.sdk_actions.is_some()
     }
 
     pub fn focus_handle(&self) -> FocusHandle {
@@ -872,7 +893,7 @@ mod tests {
         assert_eq!(PANEL_WIDTH, 320.0);
         assert_eq!(PANEL_MAX_HEIGHT, 400.0); // Standardized to match main dialog
         assert_eq!(PANEL_CORNER_RADIUS, 12.0);
-        assert_eq!(ACTION_ITEM_HEIGHT, 44.0);
+        assert_eq!(ACTION_ITEM_HEIGHT, 36.0); // Unified with main dialog ACTION_ITEM_HEIGHT
         assert_eq!(ACTION_ROW_INSET, 6.0);
         assert_eq!(SELECTION_RADIUS, 8.0);
     }

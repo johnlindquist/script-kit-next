@@ -608,14 +608,7 @@ impl ScriptListApp {
                                     );
                                     // Only close if action has close: true (default)
                                     if should_close {
-                                        this.show_actions_popup = false;
-                                        this.actions_dialog = None;
-                                        // Close the actions window
-                                        cx.spawn(async move |_this, cx| {
-                                            cx.update(close_actions_window).ok();
-                                        })
-                                        .detach();
-                                        this.focus_main_filter(window, cx);
+                                        this.close_actions_popup(ActionsDialogHost::MainList, window, cx);
                                     }
                                     this.handle_action(action_id, cx);
                                 }
@@ -624,14 +617,7 @@ impl ScriptListApp {
                                 return;
                             }
                             "escape" => {
-                                this.show_actions_popup = false;
-                                this.actions_dialog = None;
-                                // Close the actions window
-                                cx.spawn(async move |_this, cx| {
-                                    cx.update(close_actions_window).ok();
-                                })
-                                .detach();
-                                this.focus_main_filter(window, cx);
+                                this.close_actions_popup(ActionsDialogHost::MainList, window, cx);
                                 cx.notify();
                                 return;
                             }
@@ -705,14 +691,8 @@ impl ScriptListApp {
                                             keystroke_shortcut, action_id
                                         ),
                                     );
-                                    // Close the dialog
-                                    this.show_actions_popup = false;
-                                    this.actions_dialog = None;
-                                    cx.spawn(async move |_this, cx| {
-                                        cx.update(close_actions_window).ok();
-                                    })
-                                    .detach();
-                                    this.focus_main_filter(window, cx);
+                                    // Close the dialog using centralized helper
+                                    this.close_actions_popup(ActionsDialogHost::MainList, window, cx);
                                     // Execute the action
                                     this.handle_action(action_id, cx);
                                     cx.notify();
