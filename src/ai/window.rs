@@ -2101,6 +2101,8 @@ impl AiApp {
         let content_clone = shared_content.clone();
         let done_clone = shared_done.clone();
         let error_clone = shared_error.clone();
+        // Use chat_id as session_id for Claude Code CLI conversation continuity
+        let session_id = chat_id.to_string();
 
         // Spawn background thread for streaming
         std::thread::spawn(move || {
@@ -2112,6 +2114,7 @@ impl AiApp {
                         content.push_str(&chunk);
                     }
                 }),
+                Some(&session_id),
             );
 
             match result {

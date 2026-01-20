@@ -675,6 +675,7 @@ impl ChatPrompt {
                         content.push_str(&chunk);
                     }
                 }),
+                None, // SDK chat prompts don't need session persistence
             );
 
             match result {
@@ -896,6 +897,7 @@ impl ChatPrompt {
                         content.push_str(&chunk);
                     }
                 }),
+                None, // SDK chat prompts don't need session persistence
             );
 
             match result {
