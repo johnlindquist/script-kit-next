@@ -312,6 +312,7 @@ pub trait AiProvider: Send + Sync {
     /// * `messages` - The conversation history
     /// * `model_id` - The model to use for generation
     /// * `on_chunk` - Callback invoked for each chunk of the response
+    /// * `session_id` - Optional session ID for conversation continuity (used by Claude Code CLI)
     ///
     /// # Returns
     ///
@@ -321,6 +322,7 @@ pub trait AiProvider: Send + Sync {
         messages: &[ProviderMessage],
         model_id: &str,
         on_chunk: StreamCallback,
+        session_id: Option<&str>,
     ) -> Result<()>;
 }
 
@@ -516,6 +518,7 @@ impl AiProvider for OpenAiProvider {
         messages: &[ProviderMessage],
         model_id: &str,
         on_chunk: StreamCallback,
+        _session_id: Option<&str>,
     ) -> Result<()> {
         let body = self.build_request_body(messages, model_id, true);
 
@@ -777,6 +780,7 @@ impl AiProvider for AnthropicProvider {
         messages: &[ProviderMessage],
         model_id: &str,
         on_chunk: StreamCallback,
+        _session_id: Option<&str>,
     ) -> Result<()> {
         let body = self.build_request_body(messages, model_id, true);
 
@@ -874,6 +878,7 @@ impl AiProvider for GoogleProvider {
         messages: &[ProviderMessage],
         model_id: &str,
         on_chunk: StreamCallback,
+        _session_id: Option<&str>,
     ) -> Result<()> {
         let response = self.send_message(messages, model_id)?;
 
@@ -933,6 +938,7 @@ impl AiProvider for GroqProvider {
         messages: &[ProviderMessage],
         model_id: &str,
         on_chunk: StreamCallback,
+        _session_id: Option<&str>,
     ) -> Result<()> {
         let response = self.send_message(messages, model_id)?;
 
@@ -1214,6 +1220,7 @@ impl AiProvider for VercelGatewayProvider {
         messages: &[ProviderMessage],
         model_id: &str,
         on_chunk: StreamCallback,
+        _session_id: Option<&str>,
     ) -> Result<()> {
         let body = self.build_request_body(messages, model_id, true);
 
@@ -1495,6 +1502,7 @@ impl ClaudeCodeProvider {
         system_prompt: Option<&str>,
         user_prompt: &str,
         on_chunk: &StreamCallback,
+        is_resuming: bool,
     ) -> Result<String> {
         use std::io::{BufRead, Write};
         use std::process::{Command, Stdio};
@@ -1527,9 +1535,19 @@ impl ClaudeCodeProvider {
             .arg("--input-format")
             .arg("stream-json")
             .arg("--output-format")
-            .arg("stream-json")
-            .arg("--session-id")
-            .arg(session_id);
+            .arg("stream-json");
+
+        // Session persistence: use --session-id for new sessions, --resume for continuing
+        // This is CRITICAL for conversation continuity:
+        // - --session-id creates a NEW session and saves it to disk
+        // - --resume loads an EXISTING session from disk and continues it
+        if is_resuming {
+            tracing::debug!(session_id = %session_id, "Resuming existing Claude Code session");
+            cmd.arg("--resume").arg(session_id);
+        } else {
+            tracing::debug!(session_id = %session_id, "Creating new Claude Code session");
+            cmd.arg("--session-id").arg(session_id);
+        }
 
         // Model selection (if not default)
         if !model_id.is_empty() && model_id != "default" {
@@ -1537,6 +1555,7 @@ impl ClaudeCodeProvider {
         }
 
         // System prompt - use provided or default to helpful assistant
+        // Note: System prompt is only applied on new sessions; resumed sessions use the original
         let effective_system_prompt = system_prompt
             .filter(|sp| !sp.trim().is_empty())
             .unwrap_or("You are a helpful AI assistant");
@@ -1747,6 +1766,7 @@ impl AiProvider for ClaudeCodeProvider {
         let user_prompt = Self::extract_last_user_text(messages)?;
 
         // Use a no-op callback since we don't need streaming for send_message
+        // send_message is always a new session (no persistence)
         let noop: StreamCallback = Box::new(|_| {});
         self.stream_claude_once(
             &session_id,
@@ -1754,6 +1774,7 @@ impl AiProvider for ClaudeCodeProvider {
             system_prompt.as_deref(),
             &user_prompt,
             &noop,
+            false, // is_resuming: always false for one-off send_message
         )
     }
 
@@ -1762,18 +1783,94 @@ impl AiProvider for ClaudeCodeProvider {
         messages: &[ProviderMessage],
         model_id: &str,
         on_chunk: StreamCallback,
+        session_id: Option<&str>,
     ) -> Result<()> {
-        // Generate a new session ID for this standalone request
-        let session_id = uuid::Uuid::new_v4().to_string();
+        // Use provided session ID for conversation continuity, or generate a new one
+        let effective_session_id = session_id
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
         let system_prompt = Self::extract_system_prompt(messages);
         let user_prompt = Self::extract_last_user_text(messages)?;
 
+        // Check if persistent sessions are enabled (default: true)
+        // Set SCRIPT_KIT_CLAUDE_PERSISTENT_SESSION=0 to disable
+        let use_persistent = std::env::var("SCRIPT_KIT_CLAUDE_PERSISTENT_SESSION")
+            .map(|v| v != "0" && v.to_lowercase() != "false")
+            .unwrap_or(true);
+
+        if use_persistent && session_id.is_some() {
+            // Try persistent session manager first
+            tracing::info!(
+                session_id = %effective_session_id,
+                model_id = %model_id,
+                message_count = messages.len(),
+                user_prompt_len = user_prompt.len(),
+                "Using persistent Claude session"
+            );
+
+            let manager = super::session::ClaudeSessionManager::global();
+            let chunk_count = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+            let chunk_count_clone = chunk_count.clone();
+
+            match manager.send_message(
+                &effective_session_id,
+                &user_prompt,
+                model_id,
+                system_prompt.as_deref(),
+                |chunk| {
+                    let count =
+                        chunk_count_clone.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    tracing::trace!(
+                        chunk_num = count,
+                        chunk_len = chunk.len(),
+                        "Persistent session chunk received"
+                    );
+                    on_chunk(chunk.to_string());
+                },
+            ) {
+                Ok(result) => {
+                    tracing::info!(
+                        session_id = %effective_session_id,
+                        total_chunks = chunk_count.load(std::sync::atomic::Ordering::Relaxed),
+                        result_len = result.len(),
+                        "Persistent session message completed"
+                    );
+                    return Ok(());
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        session_id = %effective_session_id,
+                        error = %e,
+                        "Persistent session failed, falling back to spawn-per-message"
+                    );
+                    // Fall through to spawn-per-message
+                }
+            }
+        }
+
+        // Fallback: spawn-per-message approach (original implementation)
+        // Detect if we're resuming an existing session by checking for assistant messages
+        // If there are any assistant messages in history, this is a follow-up message
+        // and we should use --resume instead of --session-id
+        let has_assistant_messages = messages.iter().any(|m| m.role == "assistant");
+        let is_resuming = session_id.is_some() && has_assistant_messages;
+
+        tracing::debug!(
+            session_id = %effective_session_id,
+            has_session_id = session_id.is_some(),
+            has_assistant_messages = has_assistant_messages,
+            is_resuming = is_resuming,
+            message_count = messages.len(),
+            "Claude Code spawn-per-message mode"
+        );
+
         let _ = self.stream_claude_once(
-            &session_id,
+            &effective_session_id,
             model_id,
             system_prompt.as_deref(),
             &user_prompt,
             &on_chunk,
+            is_resuming,
         )?;
 
         Ok(())
@@ -1998,6 +2095,7 @@ mod tests {
                 Box::new(move |chunk| {
                     chunks_clone.lock().unwrap().push(chunk);
                 }),
+                None,
             )
             .unwrap();
 
@@ -2648,6 +2746,7 @@ mod tests {
             Box::new(move |chunk| {
                 chunks_clone.lock().unwrap().push(chunk);
             }),
+            Some("test-session"),
         );
 
         assert!(result.is_ok(), "stream_message failed: {:?}", result.err());

@@ -36,6 +36,7 @@ pub mod config;
 pub mod model;
 pub mod providers;
 pub mod sdk_handlers;
+pub mod session;
 pub mod storage;
 pub mod window;
 
