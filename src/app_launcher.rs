@@ -108,6 +108,8 @@ const APP_DIRECTORIES: &[&str] = &[
     "/System/Applications",
     "/System/Applications/Utilities",
     "/Applications/Utilities",
+    // System utilities (Keychain Access, Screen Sharing, etc.)
+    "/System/Library/CoreServices/Applications",
     // User-specific apps
     "~/Applications",
     // Chrome installed web apps (PWAs)
