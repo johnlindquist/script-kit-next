@@ -490,7 +490,7 @@ pub fn get_apps_db_stats() -> (usize, u64) {
         Err(_) => return (0, 0),
     };
 
-    let count: usize = conn
+    let count: i64 = conn
         .query_row("SELECT COUNT(*) FROM apps", [], |row| row.get(0))
         .unwrap_or(0);
 
@@ -502,7 +502,7 @@ pub fn get_apps_db_stats() -> (usize, u64) {
         )
         .unwrap_or(0);
 
-    (count, total_icon_size as u64)
+    (count as usize, total_icon_size as u64)
 }
 
 // ============================================================================

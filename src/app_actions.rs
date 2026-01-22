@@ -505,8 +505,60 @@ impl ScriptListApp {
                 self.show_hud("Scripts reloaded".to_string(), Some(1500), cx);
             }
             "settings" => {
-                logging::log("UI", "Settings action");
-                self.show_hud("Settings (TODO)".to_string(), Some(2000), cx);
+                logging::log("UI", "Settings action - opening config.ts");
+
+                // Get editor from config
+                let editor = self.config.get_editor();
+                let config_dir = shellexpand::tilde("~/.scriptkit/kit").to_string();
+                let config_file = format!("{}/config.ts", config_dir);
+
+                // Clone editor for HUD message before moving into thread
+                let editor_for_hud = editor.clone();
+
+                // Spawn editor in background thread
+                std::thread::spawn(move || {
+                    use std::process::Command;
+
+                    // Editor-specific arguments for opening folder with file focused
+                    let result = match editor.as_str() {
+                        // VS Code and Cursor: -r (reuse window) + folder + file
+                        "code" | "cursor" => {
+                            Command::new(&editor)
+                                .arg("-r")
+                                .arg(&config_dir)
+                                .arg(&config_file)
+                                .spawn()
+                        }
+                        // Zed: just the file (doesn't support folder context the same way)
+                        "zed" => {
+                            Command::new("zed")
+                                .arg(&config_file)
+                                .spawn()
+                        }
+                        // Sublime: -a (add to current window) + folder + file
+                        "subl" => {
+                            Command::new("subl")
+                                .arg("-a")
+                                .arg(&config_dir)
+                                .arg(&config_file)
+                                .spawn()
+                        }
+                        // Generic fallback: just open the file
+                        _ => {
+                            Command::new(&editor)
+                                .arg(&config_file)
+                                .spawn()
+                        }
+                    };
+
+                    match result {
+                        Ok(_) => logging::log("UI", &format!("Opened config.ts in {}", editor)),
+                        Err(e) => logging::log("ERROR", &format!("Failed to open editor '{}': {}", editor, e)),
+                    }
+                });
+
+                self.show_hud(format!("Opening config.ts in {}", editor_for_hud), Some(1500), cx);
+                self.hide_main_and_reset(cx);
             }
             "quit" => {
                 logging::log("UI", "Quit action");

@@ -26,7 +26,7 @@ test = false
 [dependencies]
 gpui = { git = "https://github.com/zed-industries/zed" }
 global-hotkey = "0.7"
-notify = "6.1"
+notify = "8.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_yaml = "0.9"        # YAML frontmatter parsing for scriptlet bundles
@@ -52,7 +52,7 @@ ropey = "1.6"
 
 # Terminal integration dependencies (Tier 2 - Alacritty)
 # Versions chosen to match Zed's current known-working configuration (Dec 2025)
-portable-pty = "0.8"           # PTY management for process spawning
+portable-pty = "0.9"           # PTY management for process spawning
 alacritty_terminal = "0.25"    # Zed uses 0.25.1-rc1, this gets latest 0.25.x stable
 vte = "0.15"                   # ANSI escape sequence parser, required by alacritty_terminal 0.25
 bitflags = "2.10"              # For cell attribute flags
@@ -66,12 +66,12 @@ macos-accessibility-client = "0.0.1"  # Permission checking for accessibility AP
 
 # System tray / menu bar integration
 tray-icon = "0.21"                    # Cross-platform tray icon (includes muda for menus)
-resvg = "0.45"                        # SVG to PNG conversion for tray icon
-usvg = "0.45"                         # SVG parsing (used by resvg)
+resvg = "0.46"                        # SVG to PNG conversion for tray icon
+usvg = "0.46"                         # SVG parsing (used by resvg)
 tiny-skia = "0.11"                    # 2D graphics library for SVG rendering
 
 # Clipboard history storage
-rusqlite = { version = "0.31", features = ["bundled"] }
+rusqlite = { version = "0.38", features = ["bundled"] }
 uuid = { version = "1.0", features = ["v4"] }
 base64 = "0.22"
 lru = "0.12"  # LRU cache for clipboard image eviction
@@ -97,7 +97,7 @@ age = "0.11"
 hostname = "0.4"  # Get machine hostname for passphrase derivation
 
 # Process monitoring for orphan detection and cleanup
-sysinfo = "0.33"
+sysinfo = "0.37"
 
 # Non-poisoning mutex (doesn't require .unwrap() on lock)
 parking_lot = "0.12"
@@ -131,9 +131,6 @@ english-to-cron = "0.1"        # Convert natural language schedules to cron
 
 # HTTP client for AI provider API calls
 ureq = { version = "3", features = ["json"] }
-
-# Markdown parsing for chat prompt
-pulldown-cmark = "0.10"
 
 # macOS launch-at-login via SMAppService
 smappservice-rs = "0.1"
