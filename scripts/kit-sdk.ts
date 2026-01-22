@@ -20,6 +20,55 @@ bench('imports_complete');
 export const SDK_VERSION = '0.2.0';
 
 // =============================================================================
+// SDK Status & Architecture
+// =============================================================================
+/**
+ * Script Kit GPUI SDK - Message-Passing Architecture
+ *
+ * This SDK communicates with the Rust GPUI application via JSON messages over
+ * stdin/stdout. The app handles all UI rendering, system integration, and
+ * complex operations. The SDK is a thin message-passing layer.
+ *
+ * IMPLEMENTATION STATUS:
+ *
+ * ✅ FULLY IMPLEMENTED (~45 methods):
+ *    - Core prompts: arg, div, editor, term, form, fields, select, confirm,
+ *      path, drop, template, env, chat
+ *    - Window control: show, hide, captureScreenshot, getLayoutInfo, hud
+ *    - Clipboard: read/write text/images, clipboard history with all operations
+ *    - Window management: getWindows, focusWindow, tileWindow, getDisplays (macOS)
+ *    - AI integration: aiIsOpen, aiStartChat, aiSendMessage, aiListChats, etc.
+ *    - File/menu: fileSearch, getMenuBar, executeMenuAction
+ *    - Pure utilities: home, skPath, uuid, compile, memoryMap
+ *
+ * ⚠️  NOT YET IMPLEMENTED (~18 methods):
+ *    These functions send messages but the GPUI app doesn't handle them yet.
+ *    They log warnings and may auto-submit in test mode.
+ *
+ *    - Notifications: beep(), say(), notify(), setStatus()
+ *    - Automation: keyboard.type(), keyboard.tap(), mouse.move(), mouse.click()
+ *    - UI updates: setPanel(), setPreview(), setPrompt()
+ *    - Compact prompts: mini(), micro()
+ *    - Advanced: hotkey(), widget(), menu()
+ *
+ * ❌ NOT FEASIBLE (removed):
+ *    These don't fit the message-passing architecture and throw errors:
+ *
+ *    - webcam(), mic() - Media streaming requires real-time bidirectional
+ *      communication beyond the JSONL protocol
+ *    - eyeDropper() - Could work with screen capture but not yet implemented
+ *
+ * EXTENSION SUPPORT:
+ *    - TypeScript scripts (.ts, .js): Full SDK access with stdin/stdout
+ *    - TypeScript scriptlets (markdown): SDK loaded but NO interactive prompts
+ *      (no stdin pipe - arg(), div(), chat() will hang)
+ *    - Non-TypeScript scriptlets (bash, python): NO SDK access
+ *
+ * See .omegathink/20260120-142315-sdk-audit-methods-payload-scripts-extensions.md
+ * for complete audit findings.
+ */
+
+// =============================================================================
 // Types
 // =============================================================================
 
@@ -4086,10 +4135,12 @@ globalThis.editor = async function editor(
   });
 };
 
+// NOTE: mini() is not yet implemented - use arg() instead
 globalThis.mini = async function mini(
   placeholder: string,
   choices: (string | Choice)[]
 ): Promise<string> {
+  console.warn('[SDK] mini() is not yet implemented in the GPUI app - use arg() instead');
   const id = nextId();
 
   const normalizedChoices: Choice[] = choices.map((c) => {
@@ -4124,10 +4175,12 @@ globalThis.mini = async function mini(
   });
 };
 
+// NOTE: micro() is not yet implemented - use arg() instead
 globalThis.micro = async function micro(
   placeholder: string,
   choices: (string | Choice)[]
 ): Promise<string> {
+  console.warn('[SDK] micro() is not yet implemented in the GPUI app - use arg() instead');
   const id = nextId();
 
   const normalizedChoices: Choice[] = choices.map((c) => {
@@ -4375,9 +4428,11 @@ globalThis.path = async function path(
   });
 };
 
+// NOTE: hotkey() is not yet implemented
 globalThis.hotkey = async function hotkey(
   placeholder?: string
 ): Promise<HotkeyInfo> {
+  console.warn('[SDK] hotkey() is not yet implemented in the GPUI app');
   const id = nextId();
 
   // Auto-submit value: mock hotkey (Escape key)
@@ -4582,17 +4637,21 @@ globalThis.env = async function env(
 // =============================================================================
 
 // Fire-and-forget messages - send and resolve immediately (no response needed)
+// NOTE: These functions send messages to the app but handlers are not yet implemented
 globalThis.beep = async function beep(): Promise<void> {
+  console.warn('[SDK] beep() is not yet implemented in the GPUI app');
   const message: BeepMessage = { type: 'beep' };
   send(message);
 };
 
 globalThis.say = async function say(text: string, voice?: string): Promise<void> {
+  console.warn('[SDK] say() is not yet implemented in the GPUI app');
   const message: SayMessage = { type: 'say', text, voice };
   send(message);
 };
 
 globalThis.notify = async function notify(options: string | NotifyOptions): Promise<void> {
+  console.warn('[SDK] notify() is not yet implemented in the GPUI app (use hud() instead)');
   const message: NotifyMessage = typeof options === 'string'
     ? { type: 'notify', body: options }
     : { type: 'notify', title: options.title, body: options.body };
@@ -4613,6 +4672,7 @@ globalThis.hud = function hud(message: string, options?: { duration?: number }):
 };
 
 globalThis.setStatus = async function setStatus(options: StatusOptions): Promise<void> {
+  console.warn('[SDK] setStatus() is not yet implemented in the GPUI app');
   const message: SetStatusMessage = {
     type: 'setStatus',
     status: options.status,
@@ -4622,6 +4682,7 @@ globalThis.setStatus = async function setStatus(options: StatusOptions): Promise
 };
 
 globalThis.menu = async function menu(icon: string, scripts?: string[]): Promise<void> {
+  console.warn('[SDK] menu() is not yet implemented in the GPUI app');
   const message: MenuMessage = { type: 'menu', icon, scripts };
   send(message);
 };
@@ -4892,8 +4953,10 @@ globalThis.paste = async function paste(): Promise<string> {
 };
 
 // Keyboard API object
+// NOTE: These functions send messages to the app but handlers are not yet implemented
 globalThis.keyboard = {
   async type(text: string): Promise<void> {
+    console.warn('[SDK] keyboard.type() is not yet implemented in the GPUI app');
     const message: KeyboardMessage = {
       type: 'keyboard',
       action: 'type',
@@ -4901,8 +4964,9 @@ globalThis.keyboard = {
     };
     send(message);
   },
-  
+
   async tap(...keys: string[]): Promise<void> {
+    console.warn('[SDK] keyboard.tap() is not yet implemented in the GPUI app');
     const message: KeyboardMessage = {
       type: 'keyboard',
       action: 'tap',
@@ -4913,8 +4977,10 @@ globalThis.keyboard = {
 };
 
 // Mouse API object
+// NOTE: These functions send messages to the app but handlers are not yet implemented
 globalThis.mouse = {
   async move(positions: Position[]): Promise<void> {
+    console.warn('[SDK] mouse.move() is not yet implemented in the GPUI app');
     const message: MouseMessage = {
       type: 'mouse',
       action: 'move',
@@ -4922,8 +4988,9 @@ globalThis.mouse = {
     };
     send(message);
   },
-  
+
   async leftClick(): Promise<void> {
+    console.warn('[SDK] mouse.leftClick() is not yet implemented in the GPUI app');
     const message: MouseMessage = {
       type: 'mouse',
       action: 'click',
@@ -4931,8 +4998,9 @@ globalThis.mouse = {
     };
     send(message);
   },
-  
+
   async rightClick(): Promise<void> {
+    console.warn('[SDK] mouse.rightClick() is not yet implemented in the GPUI app');
     const message: MouseMessage = {
       type: 'mouse',
       action: 'click',
@@ -4940,8 +5008,9 @@ globalThis.mouse = {
     };
     send(message);
   },
-  
+
   async setPosition(position: Position): Promise<void> {
+    console.warn('[SDK] mouse.setPosition() is not yet implemented in the GPUI app');
     const message: MouseMessage = {
       type: 'mouse',
       action: 'setPosition',
@@ -5356,10 +5425,12 @@ function handleWidgetEvent(msg: { id: string; event: string; data?: unknown }) {
 // Register widget event handler with the stdin message handler
 process.on('widgetEvent' as any, handleWidgetEvent);
 
+// NOTE: widget() is not yet implemented
 globalThis.widget = async function widget(
   html: string,
   options?: WidgetOptions
 ): Promise<WidgetController> {
+  console.warn('[SDK] widget() is not yet implemented in the GPUI app');
   const id = nextId();
 
   // Initialize handlers for this widget
@@ -5490,92 +5561,33 @@ globalThis.term = async function term(command?: string, actionsInput?: Action[])
   });
 };
 
+// REMOVED: webcam() is not feasible in the message-passing architecture
+// Media streaming requires complex real-time communication beyond the JSONL protocol
 globalThis.webcam = async function webcam(): Promise<Buffer> {
-  const id = nextId();
-
-  return new Promise((resolve) => {
-    addPending(id, (msg: SubmitMessage) => {
-      // Value comes back as base64-encoded string
-      const base64 = msg.value ?? '';
-      resolve(Buffer.from(base64, 'base64'));
-    }, { value: '' }); // Auto-submit: empty buffer
-
-    const message: WebcamMessage = {
-      type: 'webcam',
-      id,
-    };
-
-    send(message);
-  });
+  throw new Error(
+    'webcam() is not implemented in Script Kit GPUI. ' +
+    'Media streaming is not feasible with the message-passing architecture. ' +
+    'Consider using external tools or the camera via system APIs.'
+  );
 };
 
+// REMOVED: mic() is not feasible in the message-passing architecture
+// Audio streaming requires complex real-time communication beyond the JSONL protocol
 globalThis.mic = async function mic(): Promise<Buffer> {
-  const id = nextId();
-
-  return new Promise((resolve) => {
-    addPending(id, (msg: SubmitMessage) => {
-      // Value comes back as base64-encoded string
-      const base64 = msg.value ?? '';
-      resolve(Buffer.from(base64, 'base64'));
-    }, { value: '' }); // Auto-submit: empty buffer
-
-    const message: MicMessage = {
-      type: 'mic',
-      id,
-    };
-
-    send(message);
-  });
+  throw new Error(
+    'mic() is not implemented in Script Kit GPUI. ' +
+    'Audio streaming is not feasible with the message-passing architecture. ' +
+    'Consider using external tools or audio capture via system APIs.'
+  );
 };
 
+// REMOVED: eyeDropper() is not yet implemented
+// Could potentially be implemented via screen capture + pixel reading
 globalThis.eyeDropper = async function eyeDropper(): Promise<ColorInfo> {
-  const id = nextId();
-
-  // Auto-submit: black color
-  const autoSubmitValue = {
-    value: JSON.stringify({
-      sRGBHex: '#000000',
-      rgb: 'rgb(0, 0, 0)',
-      rgba: 'rgba(0, 0, 0, 1)',
-      hsl: 'hsl(0, 0%, 0%)',
-      hsla: 'hsla(0, 0%, 0%, 1)',
-      cmyk: 'cmyk(0%, 0%, 0%, 100%)',
-    }),
-  };
-
-  return new Promise((resolve) => {
-    addPending(id, (msg: SubmitMessage) => {
-      // Value comes back as JSON with color info
-      const value = msg.value ?? '{}';
-      try {
-        const parsed = JSON.parse(value);
-        resolve({
-          sRGBHex: parsed.sRGBHex ?? '#000000',
-          rgb: parsed.rgb ?? 'rgb(0, 0, 0)',
-          rgba: parsed.rgba ?? 'rgba(0, 0, 0, 1)',
-          hsl: parsed.hsl ?? 'hsl(0, 0%, 0%)',
-          hsla: parsed.hsla ?? 'hsla(0, 0%, 0%, 1)',
-          cmyk: parsed.cmyk ?? 'cmyk(0%, 0%, 0%, 100%)',
-        });
-      } catch {
-        resolve({
-          sRGBHex: '#000000',
-          rgb: 'rgb(0, 0, 0)',
-          rgba: 'rgba(0, 0, 0, 1)',
-          hsl: 'hsl(0, 0%, 0%)',
-          hsla: 'hsla(0, 0%, 0%, 1)',
-          cmyk: 'cmyk(0%, 0%, 0%, 100%)',
-        });
-      }
-    }, autoSubmitValue);
-
-    const message: EyeDropperMessage = {
-      type: 'eyeDropper',
-      id,
-    };
-
-    send(message);
-  });
+  throw new Error(
+    'eyeDropper() is not implemented in Script Kit GPUI. ' +
+    'Consider using macOS system color picker or external color tools.'
+  );
 };
 
 globalThis.find = async function find(
@@ -6407,17 +6419,21 @@ globalThis.exit = function exit(code?: number): void {
 };
 
 // Content Setters
+// NOTE: These functions send messages to the app but handlers are not yet implemented
 globalThis.setPanel = function setPanel(html: string): void {
+  console.warn('[SDK] setPanel() is not yet implemented in the GPUI app');
   const message: SetPanelMessage = { type: 'setPanel', html };
   send(message);
 };
 
 globalThis.setPreview = function setPreview(html: string): void {
+  console.warn('[SDK] setPreview() is not yet implemented in the GPUI app');
   const message: SetPreviewMessage = { type: 'setPreview', html };
   send(message);
 };
 
 globalThis.setPrompt = function setPrompt(html: string): void {
+  console.warn('[SDK] setPrompt() is not yet implemented in the GPUI app');
   const message: SetPromptMessage = { type: 'setPrompt', html };
   send(message);
 };
