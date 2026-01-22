@@ -89,7 +89,7 @@ pub fn get_meta_impl(conn: &Connection, limit: usize, offset: usize) -> Vec<Clip
         }
     };
 
-    stmt.query_map(params![limit, offset], |row| {
+    stmt.query_map(params![limit as i64, offset as i64], |row| {
         Ok(ClipboardEntryMeta {
             id: row.get(0)?,
             content_type: ContentType::from_str(&row.get::<_, String>(1)?),
@@ -118,7 +118,7 @@ pub fn get_page_impl(conn: &Connection, limit: usize, offset: usize) -> Vec<Clip
         }
     };
 
-    stmt.query_map(params![limit, offset], |row| {
+    stmt.query_map(params![limit as i64, offset as i64], |row| {
         Ok(ClipboardEntry {
             id: row.get(0)?,
             content: row.get(1)?,

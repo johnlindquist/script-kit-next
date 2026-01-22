@@ -612,98 +612,120 @@ pub fn start_screen_saver() -> Result<(), String> {
 // System Preferences Navigation
 // ============================================================================
 
-/// Open System Preferences/Settings to a specific pane
+/// Open System Preferences/Settings to a specific pane using URL scheme
+///
+/// Uses the `x-apple.systempreferences:` URL scheme which works reliably on
+/// macOS Ventura and later (where "System Preferences" became "System Settings").
 ///
 /// # Arguments
-/// * `pane` - The pane identifier (e.g., "com.apple.preference.security")
+/// * `url_path` - The URL path (e.g., "com.apple.Displays-Settings.extension")
 ///
-/// # Common Pane IDs
+/// # Common URL Paths (macOS Ventura+)
 /// - `com.apple.preference.security` - Privacy & Security
-/// - `com.apple.preference.displays` - Displays
-/// - `com.apple.preference.sound` - Sound
-/// - `com.apple.preference.network` - Network
-/// - `com.apple.preference.keyboard` - Keyboard
-/// - `com.apple.preference.trackpad` - Trackpad
-/// - `com.apple.preference.bluetooth` - Bluetooth
-/// - `com.apple.preference.notifications` - Notifications
-/// - `com.apple.preference.general` - General
-/// - `com.apple.preference.dock` - Desktop & Dock
+/// - `com.apple.Displays-Settings.extension` - Displays
+/// - `com.apple.Sound-Settings.extension` - Sound
+/// - `com.apple.Network-Settings.extension` - Network
+/// - `com.apple.Keyboard-Settings.extension` - Keyboard
+/// - `com.apple.Trackpad-Settings.extension` - Trackpad
+/// - `com.apple.BluetoothSettings` - Bluetooth
+/// - `com.apple.Notifications-Settings.extension` - Notifications
+/// - `com.apple.systempreferences.GeneralSettings` - General
+/// - `com.apple.Desktop-Settings.extension` - Desktop & Dock
 /// - `com.apple.preferences.AppleIDPrefPane` - Apple ID
-/// - `com.apple.preference.battery` - Battery
-pub fn open_system_preferences(pane: &str) -> Result<(), String> {
-    info!(pane = pane, "Opening System Preferences");
-    run_applescript(&format!(
-        r#"tell application "System Preferences"
-            activate
-            reveal pane id "{}"
-        end tell"#,
-        pane
-    ))
+/// - `com.apple.Battery-Settings.extension` - Battery
+fn open_system_settings_url(url_path: &str) -> Result<(), String> {
+    let url = format!("x-apple.systempreferences:{}", url_path);
+    info!(url = %url, "Opening System Settings via URL scheme");
+
+    let output = Command::new("open")
+        .arg(&url)
+        .output()
+        .map_err(|e| format!("Failed to open System Settings: {}", e))?;
+
+    if output.status.success() {
+        debug!("System Settings opened successfully");
+        Ok(())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        error!(stderr = %stderr, "Failed to open System Settings");
+        Err(format!("Failed to open System Settings: {}", stderr))
+    }
 }
 
-/// Open System Preferences to the Privacy & Security pane
+/// Open System Settings to the Privacy & Security pane
 pub fn open_privacy_settings() -> Result<(), String> {
-    open_system_preferences("com.apple.preference.security")
+    open_system_settings_url("com.apple.preference.security")
 }
 
-/// Open System Preferences to the Displays pane
+/// Open System Settings to the Displays pane
 pub fn open_display_settings() -> Result<(), String> {
-    open_system_preferences("com.apple.preference.displays")
+    open_system_settings_url("com.apple.Displays-Settings.extension")
 }
 
-/// Open System Preferences to the Sound pane
+/// Open System Settings to the Sound pane
 pub fn open_sound_settings() -> Result<(), String> {
-    open_system_preferences("com.apple.preference.sound")
+    open_system_settings_url("com.apple.Sound-Settings.extension")
 }
 
-/// Open System Preferences to the Network pane
+/// Open System Settings to the Network pane
 pub fn open_network_settings() -> Result<(), String> {
-    open_system_preferences("com.apple.preference.network")
+    open_system_settings_url("com.apple.Network-Settings.extension")
 }
 
-/// Open System Preferences to the Keyboard pane
+/// Open System Settings to the Keyboard pane
 pub fn open_keyboard_settings() -> Result<(), String> {
-    open_system_preferences("com.apple.preference.keyboard")
+    open_system_settings_url("com.apple.Keyboard-Settings.extension")
 }
 
-/// Open System Preferences to the Bluetooth pane
+/// Open System Settings to the Bluetooth pane
 pub fn open_bluetooth_settings() -> Result<(), String> {
-    open_system_preferences("com.apple.preference.bluetooth")
+    open_system_settings_url("com.apple.BluetoothSettings")
 }
 
-/// Open System Preferences to the Notifications pane
+/// Open System Settings to the Notifications pane
 pub fn open_notifications_settings() -> Result<(), String> {
-    open_system_preferences("com.apple.preference.notifications")
+    open_system_settings_url("com.apple.Notifications-Settings.extension")
 }
 
-/// Open System Preferences to the General pane
+/// Open System Settings to the General pane
 #[allow(dead_code)]
 pub fn open_general_settings() -> Result<(), String> {
-    open_system_preferences("com.apple.preference.general")
+    open_system_settings_url("com.apple.systempreferences.GeneralSettings")
 }
 
-/// Open System Preferences to the Desktop & Dock pane
+/// Open System Settings to the Desktop & Dock pane
 #[allow(dead_code)]
 pub fn open_dock_settings() -> Result<(), String> {
-    open_system_preferences("com.apple.preference.dock")
+    open_system_settings_url("com.apple.Desktop-Settings.extension")
 }
 
-/// Open System Preferences to the Battery pane
+/// Open System Settings to the Battery pane
 #[allow(dead_code)]
 pub fn open_battery_settings() -> Result<(), String> {
-    open_system_preferences("com.apple.preference.battery")
+    open_system_settings_url("com.apple.Battery-Settings.extension")
 }
 
-/// Open System Preferences to the Trackpad pane
+/// Open System Settings to the Trackpad pane
 #[allow(dead_code)]
 pub fn open_trackpad_settings() -> Result<(), String> {
-    open_system_preferences("com.apple.preference.trackpad")
+    open_system_settings_url("com.apple.Trackpad-Settings.extension")
 }
 
-/// Open System Preferences (main window)
+/// Open System Settings (main window)
 pub fn open_system_preferences_main() -> Result<(), String> {
-    info!("Opening System Preferences");
-    run_applescript(r#"tell application "System Preferences" to activate"#)
+    info!("Opening System Settings");
+    let output = Command::new("open")
+        .arg("-a")
+        .arg("System Settings")
+        .output()
+        .map_err(|e| format!("Failed to open System Settings: {}", e))?;
+
+    if output.status.success() {
+        Ok(())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        Err(format!("Failed to open System Settings: {}", stderr))
+    }
 }
 
 // ============================================================================
@@ -833,7 +855,7 @@ mod tests {
 
     #[test]
     #[ignore]
-    fn test_open_system_preferences_integration() {
+    fn test_open_system_settings_integration() {
         // Integration test - only run manually
         let result = open_sound_settings();
         println!("open_sound_settings result: {:?}", result);

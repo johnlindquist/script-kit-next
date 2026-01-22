@@ -326,14 +326,6 @@ pub struct HotkeyConfig {
 }
 
 impl HotkeyConfig {
-    /// Create a default notes hotkey (Cmd+Shift+N)
-    pub fn default_notes_hotkey() -> Self {
-        HotkeyConfig {
-            modifiers: vec!["meta".to_string(), "shift".to_string()],
-            key: "KeyN".to_string(),
-        }
-    }
-
     /// Create a default AI hotkey (Cmd+Shift+Space)
     pub fn default_ai_hotkey() -> Self {
         HotkeyConfig {
@@ -613,12 +605,11 @@ impl Config {
         self.suggested.clone().unwrap_or_default()
     }
 
-    /// Returns the notes hotkey configuration, or default (Cmd+Shift+N) if not configured
+    /// Returns the notes hotkey configuration, or None if not configured.
+    /// No default shortcut is provided - users must explicitly configure one.
     #[allow(dead_code)]
-    pub fn get_notes_hotkey(&self) -> HotkeyConfig {
-        self.notes_hotkey
-            .clone()
-            .unwrap_or_else(HotkeyConfig::default_notes_hotkey)
+    pub fn get_notes_hotkey(&self) -> Option<HotkeyConfig> {
+        self.notes_hotkey.clone()
     }
 
     /// Returns the AI hotkey configuration, or default (Cmd+Shift+Space) if not configured
