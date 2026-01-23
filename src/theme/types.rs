@@ -1158,7 +1158,38 @@ pub fn load_theme() -> Theme {
             theme
         }
         Ok(contents) => match serde_json::from_str::<Theme>(&contents) {
-            Ok(theme) => {
+            Ok(mut theme) => {
+                // Check if theme.json had an explicit is_dark_mode field
+                // If not, the system appearance detection was used, and we should
+                // override colors to match the detected mode
+                let json_value: serde_json::Value = serde_json::from_str(&contents).unwrap_or_default();
+                let has_explicit_mode = json_value.get("is_dark_mode").is_some();
+
+                if !has_explicit_mode {
+                    // Theme file didn't specify mode - check if colors match system appearance
+                    let system_is_dark = detect_system_appearance();
+
+                    // Check if the loaded colors look dark (main background < mid-gray)
+                    // Mid-gray is ~0x808080 = 8421504
+                    let colors_look_dark = theme.colors.background.main < 0x808080;
+
+                    if system_is_dark != colors_look_dark {
+                        // System appearance differs from what the colors suggest
+                        info!(
+                            system_dark = system_is_dark,
+                            colors_dark = colors_look_dark,
+                            main_bg = format!("#{:06x}", theme.colors.background.main),
+                            "Overriding theme colors to match system appearance"
+                        );
+                        theme.colors = if system_is_dark {
+                            ColorScheme::dark_default()
+                        } else {
+                            ColorScheme::light_default()
+                        };
+                        theme.is_dark_mode = system_is_dark;
+                    }
+                }
+
                 debug!(path = %theme_path.display(), "Successfully loaded theme");
                 log_theme_config(&theme);
                 theme
