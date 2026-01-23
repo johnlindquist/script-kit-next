@@ -114,6 +114,7 @@ pub struct Button {
     disabled: bool,
     focused: bool,
     on_click: Option<Rc<OnClickCallback>>,
+    focus_handle: Option<FocusHandle>,
 }
 
 impl Button {
@@ -127,6 +128,7 @@ impl Button {
             disabled: false,
             focused: false,
             on_click: None,
+            focus_handle: None,
         }
     }
 
@@ -171,6 +173,12 @@ impl Button {
         self.label = label.into();
         self
     }
+
+    /// Set the focus handle for keyboard accessibility
+    pub fn focus_handle(mut self, handle: FocusHandle) -> Self {
+        self.focus_handle = Some(handle);
+        self
+    }
 }
 
 /// Focus ring border width
@@ -182,8 +190,10 @@ impl RenderOnce for Button {
         let variant = self.variant;
         let disabled = self.disabled;
         let focused = self.focused;
-        let on_click_callback = self.on_click;
+        let on_click_callback = self.on_click.clone();
+        let on_click_for_key = self.on_click;
         let label_for_log = self.label.clone();
+        let focus_handle = self.focus_handle;
 
         // Calculate colors based on variant
         // Hover uses white at ~15% alpha - universal "lift" effect that works on any dark bg
@@ -299,6 +309,28 @@ impl RenderOnce for Button {
                     tracing::debug!(button = %label_for_log, "Button clicked");
                     callback(event, window, cx);
                 });
+            }
+        }
+
+        // Add focus tracking and keyboard handler if focus_handle is provided
+        if let Some(handle) = focus_handle {
+            button = button.track_focus(&handle);
+
+            if !disabled {
+                if let Some(callback) = on_click_for_key {
+                    button = button.on_key_down(move |event: &KeyDownEvent, window, cx| {
+                        let key = event.keystroke.key.as_str();
+                        match key {
+                            "enter" | "return" | "Enter" | "Return" | " " | "space" | "Space" => {
+                                tracing::debug!("Button activated via keyboard");
+                                // Create a default click event for keyboard activation
+                                let click_event = ClickEvent::default();
+                                callback(&click_event, window, cx);
+                            }
+                            _ => {}
+                        }
+                    });
+                }
             }
         }
 
