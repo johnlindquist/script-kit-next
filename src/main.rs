@@ -410,9 +410,10 @@ fn show_main_window_helper(
         // GPUI hides this layer which removes the native macOS vibrancy tinting.
         // By swizzling, we get proper native blur appearance like Raycast/Spotlight.
         platform::swizzle_gpui_blurred_view();
-        // Configure vibrancy material to HUD_WINDOW for proper dark appearance
-        // This prevents background colors from bleeding through the blur
-        platform::configure_window_vibrancy_material();
+        // Configure vibrancy material based on system appearance (light/dark mode)
+        // This sets the appropriate NSAppearance and material for the current mode
+        let theme = crate::theme::load_theme();
+        platform::configure_window_vibrancy_for_mode(theme.is_dark_mode);
         PANEL_CONFIGURED.store(true, Ordering::SeqCst);
     }
 
@@ -2905,7 +2906,8 @@ fn main() {
                                 if !PANEL_CONFIGURED.load(std::sync::atomic::Ordering::SeqCst) {
                                     platform::configure_as_floating_panel();
                                     platform::swizzle_gpui_blurred_view();
-                                    platform::configure_window_vibrancy_material();
+                                    let theme = crate::theme::load_theme();
+                                    platform::configure_window_vibrancy_for_mode(theme.is_dark_mode);
                                     PANEL_CONFIGURED.store(true, std::sync::atomic::Ordering::SeqCst);
                                 }
 
@@ -2976,7 +2978,8 @@ fn main() {
                                 if !PANEL_CONFIGURED.load(std::sync::atomic::Ordering::SeqCst) {
                                     platform::configure_as_floating_panel();
                                     platform::swizzle_gpui_blurred_view();
-                                    platform::configure_window_vibrancy_material();
+                                    let theme = crate::theme::load_theme();
+                                    platform::configure_window_vibrancy_for_mode(theme.is_dark_mode);
                                     PANEL_CONFIGURED.store(true, std::sync::atomic::Ordering::SeqCst);
                                 }
 

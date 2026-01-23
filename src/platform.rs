@@ -1018,6 +1018,7 @@ pub fn log_swizzle_diagnostics() {
 ///
 /// Uses Objective-C message sending internally.
 #[cfg(target_os = "macos")]
+#[allow(dead_code)]
 pub fn configure_window_vibrancy_material() {
     debug_assert_main_thread();
     unsafe {
@@ -1177,6 +1178,114 @@ unsafe fn configure_visual_effect_views_recursive(view: id, count: &mut usize) {
 
 #[cfg(not(target_os = "macos"))]
 pub fn configure_window_vibrancy_material() {
+    // No-op on non-macOS platforms
+}
+
+/// Configure window vibrancy with appearance-aware settings
+///
+/// # Arguments
+/// * `is_dark_mode` - Whether to configure for dark mode (VibrantDark + HUD_WINDOW)
+///   or light mode (VibrantLight + POPOVER)
+#[cfg(target_os = "macos")]
+pub fn configure_window_vibrancy_for_mode(is_dark_mode: bool) {
+    debug_assert_main_thread();
+    unsafe {
+        let window = match window_manager::get_main_window() {
+            Some(w) => w,
+            None => {
+                logging::log(
+                    "PANEL",
+                    "WARNING: Main window not registered, cannot configure vibrancy for mode",
+                );
+                return;
+            }
+        };
+
+        // Select appropriate appearance based on mode
+        let appearance: id = if is_dark_mode {
+            msg_send![class!(NSAppearance), appearanceNamed: NSAppearanceNameVibrantDark]
+        } else {
+            msg_send![class!(NSAppearance), appearanceNamed: NSAppearanceNameVibrantLight]
+        };
+
+        if !appearance.is_null() {
+            let _: () = msg_send![window, setAppearance: appearance];
+            logging::log(
+                "PANEL",
+                &format!(
+                    "Set window appearance to {}",
+                    if is_dark_mode { "VibrantDark" } else { "VibrantLight" }
+                ),
+            );
+        }
+
+        // Window background color - use system default for proper border
+        let window_bg_color: id = msg_send![class!(NSColor), windowBackgroundColor];
+        let _: () = msg_send![window, setBackgroundColor: window_bg_color];
+        let _: () = msg_send![window, setHasShadow: true];
+        let _: () = msg_send![window, setOpaque: false];
+
+        // Get the content view
+        let content_view: id = msg_send![window, contentView];
+        if content_view.is_null() {
+            logging::log("PANEL", "WARNING: Window has no content view");
+            return;
+        }
+
+        // Select appropriate material based on mode
+        // Dark mode: HUD_WINDOW (13) - dark, high contrast
+        // Light mode: POPOVER (6) - light, subtle blur
+        let material = if is_dark_mode {
+            ns_visual_effect_material::HUD_WINDOW
+        } else {
+            ns_visual_effect_material::POPOVER
+        };
+
+        // Configure all visual effect views with mode-aware material
+        let mut count = 0;
+        configure_visual_effect_views_for_mode(content_view, material, &mut count);
+
+        logging::log(
+            "PANEL",
+            &format!(
+                "Configured {} NSVisualEffectView(s) for {} mode: material={}, appearance={}",
+                count,
+                if is_dark_mode { "dark" } else { "light" },
+                if is_dark_mode { "HUD_WINDOW" } else { "POPOVER" },
+                if is_dark_mode { "VibrantDark" } else { "VibrantLight" }
+            ),
+        );
+    }
+}
+
+/// Recursively configure all NSVisualEffectViews with specified material
+#[cfg(target_os = "macos")]
+unsafe fn configure_visual_effect_views_for_mode(view: id, material: isize, count: &mut usize) {
+    let is_vev: bool = msg_send![view, isKindOfClass: class!(NSVisualEffectView)];
+    if is_vev {
+        let _: () = msg_send![view, setMaterial: material];
+        // State 1 = active (always vibrant, doesn't dim when window loses focus)
+        let _: () = msg_send![view, setState: 1isize];
+        // BehindWindow blending (0) - blur content behind the window
+        let _: () = msg_send![view, setBlendingMode: 0isize];
+        // Emphasized for more contrast
+        let _: () = msg_send![view, setEmphasized: true];
+        *count += 1;
+    }
+
+    // Recurse into subviews
+    let subviews: id = msg_send![view, subviews];
+    if !subviews.is_null() {
+        let subview_count: usize = msg_send![subviews, count];
+        for i in 0..subview_count {
+            let child: id = msg_send![subviews, objectAtIndex: i];
+            configure_visual_effect_views_for_mode(child, material, count);
+        }
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn configure_window_vibrancy_for_mode(_is_dark_mode: bool) {
     // No-op on non-macOS platforms
 }
 
