@@ -10,6 +10,7 @@
 use gpui::*;
 use std::rc::Rc;
 
+use crate::components::button::{Button, ButtonColors, ButtonVariant};
 use crate::error::ErrorSeverity;
 use crate::transitions::{AppearTransition, Opacity};
 
@@ -384,25 +385,24 @@ impl RenderOnce for Toast {
 
             for action in self.actions {
                 let callback = action.callback.clone();
-                let action_btn = div()
-                    .id(ElementId::Name(action.label.clone()))
-                    .px(rems(0.5)) // 8px at 16px base
-                    .py(rems(0.25)) // 4px at 16px base
-                    .rounded(px(4.)) // Keep border-radius as px
-                    .bg(rgba((colors.action_background << 8) | 0x80))
-                    .text_xs()
-                    .text_color(rgb(colors.action_text))
-                    .font_weight(FontWeight::MEDIUM)
-                    .cursor_pointer()
-                    .hover(|s| s.bg(rgba((colors.action_background << 8) | 0xC0)))
-                    .child(action.label.clone())
-                    .on_click({
-                        let label = action.label.clone();
-                        move |event, window, cx| {
-                            tracing::debug!(action = %label, "Toast action button clicked");
-                            (callback)(event, window, cx);
-                        }
-                    });
+                let label = action.label.clone();
+                // Create button colors for toast action buttons (Ghost style)
+                let button_colors = ButtonColors {
+                    text_color: colors.action_text,
+                    text_hover: colors.action_text,
+                    background: colors.action_background,
+                    background_hover: colors.action_background,
+                    accent: colors.action_text,
+                    border: colors.border,
+                    focus_ring: colors.action_text,
+                    focus_tint: colors.action_background,
+                };
+                let action_btn = Button::new(label.clone(), button_colors)
+                    .variant(ButtonVariant::Ghost)
+                    .on_click(Box::new(move |event, window, cx| {
+                        tracing::debug!(action = %label, "Toast action button clicked");
+                        (callback)(event, window, cx);
+                    }));
 
                 actions_row = actions_row.child(action_btn);
             }
@@ -431,26 +431,26 @@ impl RenderOnce for Toast {
         // Dismiss button (if dismissible)
         let dismiss_btn = if self.dismissible {
             let dismiss_callback = on_dismiss_callback.clone();
+            // Create button colors for dismiss button (Icon style)
+            let button_colors = ButtonColors {
+                text_color: colors.dismiss,
+                text_hover: colors.text,
+                background: 0x00000000, // transparent
+                background_hover: 0xffffff, // white hover overlay applied via variant
+                accent: colors.dismiss,
+                border: 0x00000000, // no border
+                focus_ring: colors.dismiss,
+                focus_tint: 0x00000000,
+            };
             Some(
-                div()
-                    .id("toast-dismiss")
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .w(rems(1.25)) // 20px at 16px base - interactive element scales
-                    .h(rems(1.25)) // 20px at 16px base
-                    .rounded(px(4.)) // Keep border-radius as px
-                    .text_sm()
-                    .text_color(rgb(colors.dismiss))
-                    .cursor_pointer()
-                    .hover(|s| s.bg(rgba(0xffffff10)).text_color(rgb(colors.text)))
-                    .child("×")
-                    .on_click(move |_event, window, cx| {
+                Button::new("×", button_colors)
+                    .variant(ButtonVariant::Icon)
+                    .on_click(Box::new(move |_event, window, cx| {
                         tracing::debug!("Toast dismiss button clicked");
                         if let Some(ref callback) = dismiss_callback {
                             callback(window, cx);
                         }
-                    }),
+                    })),
             )
         } else {
             None

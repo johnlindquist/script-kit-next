@@ -4,11 +4,12 @@
 //! Supports keyboard shortcuts: Enter = confirm, Escape = cancel.
 //! Tab/Arrow keys navigate between buttons with visual focus indication.
 
+use crate::components::button::{Button, ButtonColors, ButtonVariant};
 use crate::logging;
 use crate::theme;
 use gpui::{
-    div, prelude::*, px, rgb, rgba, App, Context, FocusHandle, Focusable, FontWeight, Render,
-    SharedString, Window,
+    div, prelude::*, px, rgb, rgba, App, Context, FocusHandle, Focusable, Render, SharedString,
+    Window,
 };
 use std::sync::Arc;
 
@@ -110,6 +111,8 @@ impl ConfirmDialog {
     }
 
     /// Direct confirm (clicking confirm button)
+    /// Note: Currently unused as Button handles clicks directly, but kept for API completeness
+    #[allow(dead_code)]
     pub fn confirm(&mut self) {
         logging::log("CONFIRM", "User confirmed");
         (self.on_choice)(true);
@@ -123,7 +126,7 @@ impl Focusable for ConfirmDialog {
 }
 
 impl Render for ConfirmDialog {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         // Log render with focus state for debugging
         logging::log(
             "CONFIRM",
@@ -167,91 +170,47 @@ impl Render for ConfirmDialog {
         let is_cancel_focused = self.focused_button == 0;
         let is_confirm_focused = self.focused_button == 1;
 
-        // Button styling with OBVIOUS focus indication
-        // Focused button gets accent background + bright border (like macOS default button)
-        // Unfocused button is subtle/transparent
-        let accent_hex = colors.accent.selected;
-        let accent_color = rgb(accent_hex);
+        // Get button colors from theme
+        let button_colors = ButtonColors::from_theme(&self.theme);
 
-        // Focused: accent background at 40% opacity (very visible), white text
-        let focused_bg = rgba(hex_with_alpha(accent_hex, 0x66)); // 40% accent
-        let focused_text = rgb(0xFFFFFF); // White text on accent
+        // Create cloned callbacks for use in Button on_click handlers
+        let on_cancel = self.on_choice.clone();
+        let on_confirm = self.on_choice.clone();
 
-        // Unfocused: barely visible, accent text
-        let unfocused_bg = rgba(0xffffff10); // 6% white
-        let hover_bg = rgba(0xffffff20); // 12% white on hover
-
-        // Focus ring: bright accent border, unfocused gets subtle border
-        let focus_border = rgba(hex_with_alpha(accent_hex, 0xFF)); // 100% accent
-        let unfocused_border = rgba(0xffffff30); // 19% white
-
-        // Cancel button
+        // Cancel button using Button component with Ghost variant
+        // Wrapped in a flex container for sizing
         let cancel_button = div()
-            .id("cancel-btn")
             .flex_1()
             .h(px(44.0))
             .flex()
             .items_center()
             .justify_center()
-            .rounded(px(8.0))
-            .cursor_pointer()
-            .font_weight(FontWeight::MEDIUM)
-            // Focused: accent bg + white text, Unfocused: transparent + accent text
-            .bg(if is_cancel_focused {
-                focused_bg
-            } else {
-                unfocused_bg
-            })
-            .text_color(if is_cancel_focused {
-                focused_text
-            } else {
-                accent_color
-            })
-            .border_2() // Thick border for visibility
-            .border_color(if is_cancel_focused {
-                focus_border
-            } else {
-                unfocused_border
-            })
-            .hover(|style| style.bg(hover_bg))
-            .on_click(cx.listener(|this, _e, _window, _cx| {
-                this.cancel();
-            }))
-            .child(self.cancel_text.clone());
+            .child(
+                Button::new(self.cancel_text.clone(), button_colors)
+                    .variant(ButtonVariant::Ghost)
+                    .focused(is_cancel_focused)
+                    .on_click(Box::new(move |_event, _window, _cx| {
+                        logging::log("CONFIRM", "User cancelled");
+                        (on_cancel)(false);
+                    })),
+            );
 
-        // Confirm button - same styling pattern
+        // Confirm button using Button component with Primary variant
         let confirm_button = div()
-            .id("confirm-btn")
             .flex_1()
             .h(px(44.0))
             .flex()
             .items_center()
             .justify_center()
-            .rounded(px(8.0))
-            .cursor_pointer()
-            .font_weight(FontWeight::MEDIUM)
-            // Focused: accent bg + white text, Unfocused: transparent + accent text
-            .bg(if is_confirm_focused {
-                focused_bg
-            } else {
-                unfocused_bg
-            })
-            .text_color(if is_confirm_focused {
-                focused_text
-            } else {
-                accent_color
-            })
-            .border_2() // Thick border for visibility
-            .border_color(if is_confirm_focused {
-                focus_border
-            } else {
-                unfocused_border
-            })
-            .hover(|style| style.bg(hover_bg))
-            .on_click(cx.listener(|this, _e, _window, _cx| {
-                this.confirm();
-            }))
-            .child(self.confirm_text.clone());
+            .child(
+                Button::new(self.confirm_text.clone(), button_colors)
+                    .variant(ButtonVariant::Primary)
+                    .focused(is_confirm_focused)
+                    .on_click(Box::new(move |_event, _window, _cx| {
+                        logging::log("CONFIRM", "User confirmed");
+                        (on_confirm)(true);
+                    })),
+            );
 
         // Button row
         let button_row = div()

@@ -9,6 +9,7 @@ use smallvec::SmallVec;
 use super::chrome::ChromeSpec;
 use super::focus::FocusPolicy;
 use super::keymap::KeymapSpec;
+use crate::components::button::ButtonVariant;
 
 /// Specification for what a view needs from the shell
 ///
@@ -268,14 +269,7 @@ pub enum ButtonAction {
     Custom(u32),
 }
 
-/// Button visual variant
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
-pub enum ButtonVariant {
-    #[default]
-    Primary,
-    Ghost,
-    Icon,
-}
+// ButtonVariant is imported from crate::components::button
 
 /// Footer specification for the shell
 #[derive(Clone, Default)]

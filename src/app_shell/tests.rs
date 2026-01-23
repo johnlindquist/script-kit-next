@@ -184,8 +184,9 @@ mod keymap_tests {
 }
 
 mod spec_tests {
-    use super::spec::{ButtonAction, ButtonVariant};
+    use super::spec::ButtonAction;
     use super::*;
+    use crate::components::button::ButtonVariant;
 
     #[test]
     fn shell_spec_builder_pattern() {

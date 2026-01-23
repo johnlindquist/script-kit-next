@@ -9,6 +9,7 @@
 use gpui::*;
 use std::rc::Rc;
 
+use crate::components::button::{Button, ButtonColors, ButtonVariant};
 use crate::theme::Theme;
 
 /// Pre-computed colors for WarningBanner rendering
@@ -140,29 +141,28 @@ impl RenderOnce for WarningBanner {
             .font_weight(FontWeight::MEDIUM)
             .child(self.message.clone());
 
-        // Dismiss button (X)
+        // Dismiss button (X) using Button component
         let dismiss_btn = {
             let callback = on_dismiss_callback.clone();
-            div()
-                .id("warning-banner-dismiss")
-                .flex()
-                .items_center()
-                .justify_center()
-                .w(px(20.))
-                .h(px(20.))
-                .rounded(px(4.))
-                .text_sm()
-                .text_color(rgb(colors.dismiss))
-                .cursor_pointer()
-                .hover(|s| s.bg(rgba(0x00000020)).text_color(rgb(colors.dismiss_hover)))
-                .child("×")
-                .on_click(move |event, window, cx| {
+            // Create custom button colors for warning banner dismiss button
+            let dismiss_colors = ButtonColors {
+                text_color: colors.dismiss,
+                text_hover: colors.dismiss_hover,
+                background: 0x00000000, // Transparent
+                background_hover: 0x000000,
+                accent: colors.dismiss,
+                border: 0x00000000, // No border
+                focus_ring: colors.dismiss_hover,
+                focus_tint: 0x00000000,
+            };
+            Button::new("×", dismiss_colors)
+                .variant(ButtonVariant::Icon)
+                .on_click(Box::new(move |event, window, cx| {
                     tracing::debug!("Warning banner dismiss clicked");
-                    // Stop propagation by handling the click here
                     if let Some(ref cb) = callback {
                         cb(event, window, cx);
                     }
-                })
+                }))
         };
 
         // Main banner container

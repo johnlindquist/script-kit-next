@@ -19,6 +19,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use crate::components::button::{Button, ButtonColors, ButtonVariant};
 use crate::logging;
 use crate::theme;
 
@@ -39,6 +40,7 @@ struct HudColors {
     /// Accent hover color (lighter)
     accent_hover: u32,
     /// Accent active/pressed color (darker)
+    #[allow(dead_code)] // Reserved for future use
     accent_active: u32,
 }
 
@@ -252,7 +254,7 @@ impl HudView {
 }
 
 impl Render for HudView {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         let has_action = self.has_action();
 
         // Extract colors for use in closures (Copy trait)
@@ -286,23 +288,21 @@ impl Render for HudView {
             .when(has_action, |el| {
                 let label = self.action_label.clone().unwrap_or_default();
                 let action = self.action.clone();
+                // Create button colors from HUD colors
+                let button_colors = ButtonColors {
+                    text_color: colors.text_primary,
+                    text_hover: colors.text_primary,
+                    background: colors.accent,
+                    background_hover: colors.accent_hover,
+                    accent: colors.text_primary, // Text on accent background
+                    border: colors.accent,
+                    focus_ring: colors.accent_hover,
+                    focus_tint: colors.accent,
+                };
                 el.child(
-                    div()
-                        .id("hud-action-button")
-                        .px(px(10.))
-                        .py(px(4.))
-                        .bg(rgb(colors.accent))
-                        .rounded(px(4.))
-                        .cursor_pointer()
-                        .hover(|s| s.bg(rgb(colors.accent_hover)))
-                        .active(|s| s.bg(rgb(colors.accent_active)))
-                        .child(
-                            div()
-                                .text_xs()
-                                .text_color(rgb(colors.text_primary))
-                                .child(label),
-                        )
-                        .on_click(cx.listener(move |_this, _event, _window, _cx| {
+                    Button::new(label, button_colors)
+                        .variant(ButtonVariant::Primary)
+                        .on_click(Box::new(move |_event, _window, _cx| {
                             if let Some(ref action) = action {
                                 action.execute(None); // TODO: Get editor from config
                             }
