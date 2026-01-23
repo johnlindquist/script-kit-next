@@ -36,6 +36,7 @@ use gpui_component::{
 };
 #[cfg(target_os = "macos")]
 use objc::{msg_send, sel, sel_impl};
+use regex;
 use tracing::{debug, info};
 
 // Using the unified CommandBar component for AI command bar (Cmd+K)
@@ -2517,6 +2518,154 @@ impl AiApp {
         cx.notify();
     }
 
+    /// Enable Claude Code in config.ts by spawning bun to run config-cli.ts
+    fn enable_claude_code(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        info!("Enabling Claude Code in config.ts");
+
+        // Get the path to config-cli.ts (in the app's scripts directory)
+        let home_dir = std::env::var("HOME").unwrap_or_default();
+        let config_cli_path = format!("{home_dir}/.scriptkit/sdk/config-cli.ts");
+
+        // Also check the dev path for development
+        let dev_config_cli_path =
+            std::env::current_dir().map(|p| p.join("scripts/config-cli.ts").display().to_string());
+
+        // Try the SDK path first, then fall back to dev path
+        let cli_path = if std::path::Path::new(&config_cli_path).exists() {
+            config_cli_path
+        } else if let Ok(ref dev_path) = dev_config_cli_path {
+            if std::path::Path::new(dev_path).exists() {
+                dev_path.clone()
+            } else {
+                // If neither exists, write config directly
+                self.write_claude_code_config_directly(window, cx);
+                return;
+            }
+        } else {
+            self.write_claude_code_config_directly(window, cx);
+            return;
+        };
+
+        // Get bun path from config or use default
+        let config = crate::config::load_config();
+        let bun_path = config
+            .bun_path
+            .as_ref()
+            .and_then(|p| {
+                if std::path::Path::new(p).exists() {
+                    Some(p.clone())
+                } else {
+                    None
+                }
+            })
+            .unwrap_or_else(|| "bun".to_string());
+
+        // Run: bun config-cli.ts set claudeCode.enabled true
+        match std::process::Command::new(&bun_path)
+            .arg(&cli_path)
+            .arg("set")
+            .arg("claudeCode.enabled")
+            .arg("true")
+            .output()
+        {
+            Ok(output) => {
+                if output.status.success() {
+                    info!("Claude Code enabled successfully in config.ts");
+                    self.finish_claude_code_setup(window, cx);
+                } else {
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    tracing::warn!(stderr = %stderr, "config-cli.ts failed, trying direct write");
+                    self.write_claude_code_config_directly(window, cx);
+                }
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "Failed to run config-cli.ts, trying direct write");
+                self.write_claude_code_config_directly(window, cx);
+            }
+        }
+    }
+
+    /// Write Claude Code config directly to config.ts (fallback when config-cli.ts unavailable)
+    ///
+    /// Uses the robust editor module to safely modify the config file.
+    fn write_claude_code_config_directly(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        use crate::config::editor::{self, EditResult};
+
+        // CORRECT PATH: ~/.scriptkit/kit/config.ts (not ~/.scriptkit/config.ts)
+        let config_path =
+            std::path::PathBuf::from(shellexpand::tilde("~/.scriptkit/kit/config.ts").as_ref());
+
+        // Read existing config or create new
+        let content = std::fs::read_to_string(&config_path).unwrap_or_default();
+
+        if content.is_empty() {
+            // Create a new config file with claudeCode enabled
+            let new_config = r#"import type { Config } from "@scriptkit/sdk";
+
+export default {
+  hotkey: { modifiers: ["meta"], key: "Semicolon" },
+  claudeCode: {
+    enabled: true,
+  },
+} satisfies Config;
+"#;
+            if let Err(e) = std::fs::write(&config_path, new_config) {
+                tracing::error!(error = %e, "Failed to create config.ts");
+                return;
+            }
+            info!("Created new config.ts with Claude Code enabled");
+        } else {
+            // Use the robust editor module to modify the config
+            match editor::enable_claude_code(&content) {
+                EditResult::Modified(new_content) => {
+                    if let Err(e) = std::fs::write(&config_path, &new_content) {
+                        tracing::error!(error = %e, "Failed to write config.ts");
+                        return;
+                    }
+                    info!("Claude Code enabled in config.ts");
+                }
+                EditResult::AlreadySet => {
+                    info!("Claude Code already enabled in config.ts");
+                }
+                EditResult::Failed(reason) => {
+                    tracing::error!(reason = %reason, "Failed to modify config.ts");
+                    return;
+                }
+            }
+        }
+
+        self.finish_claude_code_setup(window, cx);
+    }
+
+    /// Finish Claude Code setup - reinitialize providers and update UI
+    fn finish_claude_code_setup(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        // Reload config to pick up the change
+        let config = crate::config::load_config();
+
+        // Reinitialize the provider registry to pick up Claude Code
+        self.provider_registry = ProviderRegistry::from_environment_with_config(Some(&config));
+        self.available_models = self.provider_registry.get_all_models();
+
+        // Select Claude Code model if available, otherwise first available
+        self.selected_model = self
+            .available_models
+            .iter()
+            .find(|m| m.provider.to_lowercase().contains("claude") && m.id.contains("code"))
+            .or_else(|| self.available_models.first())
+            .cloned();
+
+        info!(
+            providers = self.provider_registry.provider_ids().len(),
+            models = self.available_models.len(),
+            "Providers reinitialized after Claude Code setup"
+        );
+
+        // Focus the main input
+        self.focus_input(window, cx);
+
+        cx.notify();
+    }
+
     /// Render the sidebar toggle button using the Sidebar icon from our icon library
     fn render_sidebar_toggle(&self, cx: &mut Context<Self>) -> impl IntoElement {
         // Use opacity to indicate state - dimmed when collapsed
@@ -2964,6 +3113,8 @@ impl AiApp {
     /// Render the setup card when no API keys are configured
     /// Shows a Raycast-style prompt with a Configure Vercel AI Gateway button
     fn render_setup_card(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        debug!("render_setup_card called, showing_api_key_input={}", self.showing_api_key_input);
+
         // If showing API key input mode, render that instead
         if self.showing_api_key_input {
             return self.render_api_key_input(cx).into_any_element();
@@ -3012,7 +3163,7 @@ impl AiApp {
                     .text_color(cx.theme().muted_foreground)
                     .text_center()
                     .max_w(px(380.))
-                    .child("Set up an API key to use the Ask AI feature. The easiest option is Vercel AI Gateway."),
+                    .child("Set up an AI provider to use the Ask AI feature."),
             )
             // Configure Vercel AI Gateway button
             .child(
@@ -3031,6 +3182,7 @@ impl AiApp {
                     .border_color(button_bg.opacity(0.8))
                     .hover(|s| s.bg(button_bg.opacity(0.9)))
                     .on_click(cx.listener(|this, _, window, cx| {
+                        info!("Vercel button clicked in AI window");
                         this.show_api_key_input(window, cx);
                     }))
                     .child(
@@ -3047,6 +3199,47 @@ impl AiApp {
                             .child("Configure Vercel AI Gateway"),
                     ),
             )
+            // "or" separator
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(cx.theme().muted_foreground.opacity(0.6))
+                    .child("or"),
+            )
+            // Connect to Claude Code button
+            .child(
+                div()
+                    .id("connect-claude-code-btn")
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .gap_2()
+                    .px_5()
+                    .py_2()
+                    .rounded_lg()
+                    .bg(cx.theme().muted.opacity(0.3))
+                    .cursor_pointer()
+                    .border_1()
+                    .border_color(cx.theme().border)
+                    .hover(|s| s.bg(cx.theme().muted.opacity(0.5)))
+                    .on_click(cx.listener(|this, _event, window, cx| {
+                        info!("Claude Code button clicked in AI window");
+                        this.enable_claude_code(window, cx);
+                    }))
+                    .child(
+                        svg()
+                            .external_path(LocalIconName::Terminal.external_path())
+                            .size(px(18.))
+                            .text_color(cx.theme().muted_foreground),
+                    )
+                    .child(
+                        div()
+                            .text_sm()
+                            .font_weight(gpui::FontWeight::MEDIUM)
+                            .text_color(cx.theme().muted_foreground)
+                            .child("Connect to Claude Code"),
+                    ),
+            )
             // Info text
             .child(
                 div()
@@ -3057,15 +3250,15 @@ impl AiApp {
                     .mt_2()
                     .child(
                         div()
-                            .text_sm()
-                            .text_color(cx.theme().muted_foreground)
-                            .child("No restart required"),
+                            .text_xs()
+                            .text_color(cx.theme().muted_foreground.opacity(0.7))
+                            .child("Requires Claude Code CLI installed"),
                     )
                     .child(
                         div()
                             .text_sm()
                             .text_color(cx.theme().muted_foreground)
-                            .child("After configuring, press Tab again to try"),
+                            .child("No restart required"),
                     ),
             )
             // Keyboard hints
@@ -3075,30 +3268,6 @@ impl AiApp {
                     .items_center()
                     .gap_4()
                     .mt_4()
-                    // Enter to configure
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_2()
-                            .child(
-                                div()
-                                    .px_2()
-                                    .py(px(2.))
-                                    .rounded(px(4.))
-                                    .bg(cx.theme().muted)
-                                    .text_xs()
-                                    .font_weight(gpui::FontWeight::MEDIUM)
-                                    .text_color(cx.theme().muted_foreground)
-                                    .child("Enter"),
-                            )
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(cx.theme().muted_foreground)
-                                    .child("to configure"),
-                            ),
-                    )
                     // Esc to go back
                     .child(
                         div()

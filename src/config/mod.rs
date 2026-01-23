@@ -12,6 +12,7 @@
 //! - `loader` - File system loading and parsing
 
 mod defaults;
+pub mod editor;
 mod loader;
 mod types;
 
