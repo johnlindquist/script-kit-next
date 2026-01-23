@@ -1174,6 +1174,107 @@ impl ScriptListApp {
         cx.notify();
     }
 
+    /// Enable Claude Code in config.ts and re-show the inline chat.
+    ///
+    /// This modifies the user's config.ts to enable Claude Code provider,
+    /// reloads the config, and then re-opens the inline chat with
+    /// the newly available Claude Code provider.
+    pub fn enable_claude_code_in_config(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        use crate::config::editor::{self, EditResult};
+
+        logging::log("EXEC", "Enabling Claude Code in config.ts");
+
+        let config_path =
+            std::path::PathBuf::from(shellexpand::tilde("~/.scriptkit/kit/config.ts").as_ref());
+
+        // Read existing config
+        let content = std::fs::read_to_string(&config_path).unwrap_or_default();
+
+        // Handle empty or missing config file
+        if content.is_empty() {
+            let new_config = r#"import type { Config } from "@scriptkit/sdk";
+
+export default {
+  hotkey: { modifiers: ["meta"], key: "Semicolon" },
+  claudeCode: {
+    enabled: true
+  }
+} satisfies Config;
+"#;
+            if let Err(e) = std::fs::write(&config_path, new_config) {
+                logging::log("EXEC", &format!("Failed to create config.ts: {}", e));
+                self.toast_manager.push(
+                    components::toast::Toast::error(
+                        format!("Failed to enable Claude Code: {}", e),
+                        &self.theme,
+                    )
+                    .duration_ms(Some(5000)),
+                );
+                cx.notify();
+                return;
+            }
+            logging::log("EXEC", "Created new config.ts with Claude Code enabled");
+        } else {
+            // Use the robust editor module to modify the config
+            match editor::enable_claude_code(&content) {
+                EditResult::Modified(new_content) => {
+                    if let Err(e) = std::fs::write(&config_path, new_content) {
+                        logging::log("EXEC", &format!("Failed to write config.ts: {}", e));
+                        self.toast_manager.push(
+                            components::toast::Toast::error(
+                                format!("Failed to enable Claude Code: {}", e),
+                                &self.theme,
+                            )
+                            .duration_ms(Some(5000)),
+                        );
+                        cx.notify();
+                        return;
+                    }
+                    logging::log("EXEC", "Claude Code enabled in config.ts");
+                }
+                EditResult::AlreadySet => {
+                    logging::log("EXEC", "Claude Code already enabled in config.ts");
+                }
+                EditResult::Failed(reason) => {
+                    logging::log("EXEC", &format!("Failed to modify config: {}", reason));
+                    self.toast_manager.push(
+                        components::toast::Toast::error(
+                            format!("Failed to enable Claude Code: {}", reason),
+                            &self.theme,
+                        )
+                        .duration_ms(Some(5000)),
+                    );
+                    cx.notify();
+                    return;
+                }
+            }
+        }
+
+        // Reload config
+        self.config = crate::config::load_config();
+
+        // Show success toast
+        self.toast_manager.push(
+            components::toast::Toast::success(
+                "Claude Code enabled - requires `claude` CLI installed".to_string(),
+                &self.theme,
+            )
+            .duration_ms(Some(3000)),
+        );
+
+        // First go back to main menu
+        self.go_back_or_close(window, cx);
+
+        // Then re-show inline chat (which should now have Claude Code provider)
+        self.show_inline_ai_chat(None, cx);
+
+        cx.notify();
+    }
+
     /// Get the scratch pad file path
     fn get_scratch_pad_path() -> std::path::PathBuf {
         setup::get_kit_path().join("scratch-pad.md")

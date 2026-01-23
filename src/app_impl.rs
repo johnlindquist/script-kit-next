@@ -257,6 +257,8 @@ impl ScriptListApp {
         let (inline_chat_escape_tx, inline_chat_escape_rx) = mpsc::sync_channel(4);
         // Create channel for inline chat configure signals (when user wants to set up API key)
         let (inline_chat_configure_tx, inline_chat_configure_rx) = mpsc::sync_channel(4);
+        // Create channel for inline chat Claude Code signals (when user wants to enable Claude Code)
+        let (inline_chat_claude_code_tx, inline_chat_claude_code_rx) = mpsc::sync_channel(4);
         let mut app = ScriptListApp {
             scripts,
             scriptlets,
@@ -435,6 +437,9 @@ impl ScriptListApp {
             // Inline chat configure channel - for ChatPrompt configure callback to trigger API key setup
             inline_chat_configure_sender: inline_chat_configure_tx,
             inline_chat_configure_receiver: inline_chat_configure_rx,
+            // Inline chat Claude Code channel - for ChatPrompt Claude Code callback to enable Claude Code
+            inline_chat_claude_code_sender: inline_chat_claude_code_tx,
+            inline_chat_claude_code_receiver: inline_chat_claude_code_rx,
         };
 
         // Build initial alias/shortcut registries (conflicts logged, not shown via HUD on startup)
@@ -6055,6 +6060,17 @@ export default {
                     let _ = configure_sender.try_send(());
                 });
 
+            // Create Claude Code callback that signals via channel
+            let claude_code_sender = self.inline_chat_claude_code_sender.clone();
+            let claude_code_callback: crate::prompts::ChatClaudeCodeCallback =
+                std::sync::Arc::new(move || {
+                    crate::logging::log(
+                        "CHAT",
+                        "Claude Code callback triggered - sending signal",
+                    );
+                    let _ = claude_code_sender.try_send(());
+                });
+
             // Create a no-op submit callback since we're in setup mode
             let noop_callback: ChatSubmitCallback = std::sync::Arc::new(|_id, _text| {
                 crate::logging::log("CHAT", "No providers - submission ignored (setup mode)");
@@ -6074,7 +6090,8 @@ export default {
             .with_save_history(false) // Don't save setup state to history
             .with_escape_callback(escape_callback.clone())
             .with_needs_setup(true)
-            .with_configure_callback(configure_callback);
+            .with_configure_callback(configure_callback)
+            .with_claude_code_callback(claude_code_callback);
 
             let entity = cx.new(|_| chat_prompt);
             self.current_view = AppView::ChatPrompt {

@@ -109,6 +109,9 @@ pub type ChatRetryCallback = Arc<dyn Fn(String, String) + Send + Sync>;
 /// Callback type for "Configure API" action: () -> triggers API key setup
 pub type ChatConfigureCallback = Arc<dyn Fn() + Send + Sync>;
 
+/// Callback type for "Connect to Claude Code" action: () -> enables Claude Code in config
+pub type ChatClaudeCodeCallback = Arc<dyn Fn() + Send + Sync>;
+
 /// Callback type for showing actions menu: (prompt_id) -> triggers ActionsDialog
 pub type ChatShowActionsCallback = Arc<dyn Fn(String) + Send + Sync>;
 
@@ -229,6 +232,8 @@ pub struct ChatPrompt {
     // Setup mode: when true, shows API key configuration card instead of chat
     needs_setup: bool,
     on_configure: Option<ChatConfigureCallback>,
+    // Callback for "Connect to Claude Code" (enables Claude Code in config)
+    on_claude_code: Option<ChatClaudeCodeCallback>,
     // Callback for showing actions dialog (handled by parent)
     on_show_actions: Option<ChatShowActionsCallback>,
 }
@@ -286,6 +291,7 @@ impl ChatPrompt {
             cursor_blink_started: false,
             needs_setup: false,
             on_configure: None,
+            on_claude_code: None,
             on_show_actions: None,
         }
     }
@@ -442,6 +448,12 @@ impl ChatPrompt {
     /// Set the configure callback - called when user clicks "Configure API Key"
     pub fn with_configure_callback(mut self, callback: ChatConfigureCallback) -> Self {
         self.on_configure = Some(callback);
+        self
+    }
+
+    /// Set the Claude Code callback - called when user clicks "Connect to Claude Code"
+    pub fn with_claude_code_callback(mut self, callback: ChatClaudeCodeCallback) -> Self {
+        self.on_claude_code = Some(callback);
         self
     }
 
@@ -1679,8 +1691,9 @@ impl ChatPrompt {
         let accent_bg = (colors.accent_color << 8) | 0x26; // 15% opacity
         let accent_border = (colors.accent_color << 8) | 0x40; // 25% opacity
 
-        // Get the configure callback for the button click
+        // Get the callbacks for button clicks
         let on_configure = self.on_configure.clone();
+        let on_claude_code = self.on_claude_code.clone();
 
         div()
             .flex()
@@ -1688,7 +1701,7 @@ impl ChatPrompt {
             .items_center()
             .justify_center()
             .flex_1()
-            .gap(px(20.))
+            .gap(px(16.))
             .px(px(24.))
             // Icon - settings/key icon
             .child(
@@ -1721,45 +1734,101 @@ impl ChatPrompt {
                     .text_color(rgb(colors.text_secondary))
                     .text_center()
                     .max_w(px(320.))
-                    .child("Set up an API key to use the Ask AI feature. The easiest option is Vercel AI Gateway."),
+                    .child("Set up an AI provider to use the Ask AI feature."),
             )
-            // Configure button
+            // Buttons container - wrap both to ensure proper hit testing
             .child(
                 div()
-                    .id("configure-button")
+                    .id("setup-buttons-container")
                     .flex()
+                    .flex_col()
                     .items_center()
-                    .justify_center()
-                    .gap(px(8.))
-                    .px(px(16.))
-                    .py(px(10.))
-                    .rounded(px(8.))
-                    .bg(rgba(accent_bg))
-                    .border_1()
-                    .border_color(rgba(accent_border))
-                    .cursor_pointer()
-                    .hover(|s| s.bg(rgba((colors.accent_color << 8) | 0x40)))
-                    .when_some(on_configure.clone(), |d, callback| {
-                        d.on_click(cx.listener(move |_this, _event, _window, _cx| {
-                            logging::log("CHAT", "Configure button clicked - triggering API key setup");
-                            callback();
-                        }))
-                    })
-                    .child(
-                        svg()
-                            .path(IconName::Settings.external_path())
-                            .size(px(16.))
-                            .text_color(rgb(colors.accent_color)),
-                    )
+                    .gap(px(12.))
+                    // Configure Vercel button FIRST (primary action)
                     .child(
                         div()
-                            .text_sm()
-                            .font_weight(gpui::FontWeight::MEDIUM)
-                            .text_color(rgb(colors.accent_color))
-                            .child("Configure Vercel AI Gateway"),
+                            .id("configure-button")
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .gap(px(8.))
+                            .px(px(16.))
+                            .py(px(10.))
+                            .rounded(px(8.))
+                            .bg(rgba(accent_bg))
+                            .border_1()
+                            .border_color(rgba(accent_border))
+                            .cursor_pointer()
+                            .hover(|s| s.bg(rgba((colors.accent_color << 8) | 0x40)))
+                            // Always attach on_click, check callback inside
+                            // (fixes GPUI issue where when_some on second sibling doesn't register hits)
+                            .on_click(cx.listener(move |_this, _event, _window, _cx| {
+                                logging::log("CHAT", "Configure button clicked - triggering API key setup");
+                                if let Some(ref cb) = on_configure {
+                                    cb();
+                                }
+                            }))
+                            .child(
+                                svg()
+                                    .path(IconName::Settings.external_path())
+                                    .size(px(16.))
+                                    .text_color(rgb(colors.accent_color)),
+                            )
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .font_weight(gpui::FontWeight::MEDIUM)
+                                    .text_color(rgb(colors.accent_color))
+                                    .child("Configure Vercel AI Gateway"),
+                            ),
+                    )
+                    // "or" separator
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(colors.text_tertiary))
+                            .child("or"),
+                    )
+                    // Connect to Claude Code button SECOND
+                    .child(
+                        div()
+                            .id("configure-claude-code-btn")
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .gap(px(8.))
+                            .px(px(16.))
+                            .py(px(10.))
+                            .rounded(px(8.))
+                            .bg(rgba(accent_bg))
+                            .border_1()
+                            .border_color(rgba(accent_border))
+                            .cursor_pointer()
+                            .hover(|s| s.bg(rgba((colors.accent_color << 8) | 0x40)))
+                            // Always attach on_click, check callback inside
+                            // (fixes GPUI issue where when_some on second sibling doesn't register hits)
+                            .on_click(cx.listener(move |_this, _event, _window, _cx| {
+                                logging::log("CHAT", "Claude Code button clicked - enabling Claude Code");
+                                if let Some(ref cb) = on_claude_code {
+                                    cb();
+                                }
+                            }))
+                            .child(
+                                svg()
+                                    .path(IconName::Terminal.external_path())
+                                    .size(px(16.))
+                                    .text_color(rgb(colors.accent_color)),
+                            )
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .font_weight(gpui::FontWeight::MEDIUM)
+                                    .text_color(rgb(colors.accent_color))
+                                    .child("Connect to Claude Code"),
+                            ),
                     ),
             )
-            // Hint about no restart needed
+            // Hint about requirements
             .child(
                 div()
                     .flex()
@@ -1771,13 +1840,13 @@ impl ChatPrompt {
                         div()
                             .text_xs()
                             .text_color(rgb(colors.text_tertiary))
-                            .child("No restart required"),
+                            .child("Requires Claude Code CLI installed"),
                     )
                     .child(
                         div()
                             .text_xs()
                             .text_color(rgb(colors.text_tertiary))
-                            .child("After configuring, press Tab again to try"),
+                            .child("No restart required"),
                     ),
             )
             // Keyboard hint
@@ -1787,22 +1856,6 @@ impl ChatPrompt {
                     .items_center()
                     .gap(px(6.))
                     .mt(px(12.))
-                    .child(
-                        div()
-                            .px(px(6.))
-                            .py(px(2.))
-                            .rounded(px(4.))
-                            .bg(rgba(card_bg))
-                            .text_xs()
-                            .text_color(rgb(colors.text_tertiary))
-                            .child("Enter"),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(rgb(colors.text_tertiary))
-                            .child("to configure"),
-                    )
                     .child(
                         div()
                             .px(px(6.))

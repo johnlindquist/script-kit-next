@@ -1454,6 +1454,12 @@ struct ScriptListApp {
     /// Receiver for inline chat configure signals
     /// Checked by timer to trigger API key configuration prompt
     inline_chat_configure_receiver: mpsc::Receiver<()>,
+    /// Sender for inline chat Claude Code signals
+    /// The ChatPrompt Claude Code callback uses this to signal when user wants to enable Claude Code
+    inline_chat_claude_code_sender: mpsc::SyncSender<()>,
+    /// Receiver for inline chat Claude Code signals
+    /// Checked by timer to trigger Claude Code enablement
+    inline_chat_claude_code_receiver: mpsc::Receiver<()>,
 }
 
 /// Result of alias matching - either a Script or Scriptlet
@@ -1557,6 +1563,17 @@ impl Render for ScriptListApp {
                 "Vercel AI Gateway",
                 cx,
             );
+        }
+
+        // Check for inline chat Claude Code (user wants to enable Claude Code)
+        // The ChatPrompt Claude Code callback signals via channel
+        if self.inline_chat_claude_code_receiver.try_recv().is_ok() {
+            crate::logging::log(
+                "CHAT",
+                "Inline chat Claude Code received - enabling Claude Code",
+            );
+            // Enable Claude Code in config.ts
+            self.enable_claude_code_in_config(window, cx);
         }
         // Focus-lost auto-dismiss: Close dismissable prompts when the main window loses focus
         // This includes focus loss to other app windows like Notes/AI.
