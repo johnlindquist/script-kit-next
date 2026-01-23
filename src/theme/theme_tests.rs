@@ -4,10 +4,19 @@ use serde::{Deserialize, Serialize};
 #[test]
 fn test_default_theme() {
     let theme = Theme::default();
-    assert_eq!(theme.colors.background.main, 0x1e1e1e);
-    assert_eq!(theme.colors.text.primary, 0xffffff);
-    assert_eq!(theme.colors.accent.selected, 0xfbbf24);
-    assert_eq!(theme.colors.ui.border, 0x464647);
+    // Theme::default() now uses system appearance detection
+    // So we verify the colors match the expected mode
+    if theme.is_dark_mode {
+        assert_eq!(theme.colors.background.main, 0x1e1e1e);
+        assert_eq!(theme.colors.text.primary, 0xffffff);
+        assert_eq!(theme.colors.accent.selected, 0xfbbf24);
+        assert_eq!(theme.colors.ui.border, 0x464647);
+    } else {
+        assert_eq!(theme.colors.background.main, 0xffffff);
+        assert_eq!(theme.colors.text.primary, 0x000000);
+        assert_eq!(theme.colors.accent.selected, 0x0078d4);
+        assert_eq!(theme.colors.ui.border, 0xd0d0d0);
+    }
 }
 
 #[test]
@@ -58,6 +67,7 @@ fn test_theme_serialization() {
 fn test_light_theme_serialization() {
     let theme = Theme {
         colors: ColorScheme::light_default(),
+        is_dark_mode: false,
         focus_aware: None,
         opacity: Some(BackgroundOpacity::default()),
         drop_shadow: Some(DropShadow::default()),
@@ -619,4 +629,110 @@ fn test_theme_deserialize_mixed_formats() {
     assert_eq!(theme.colors.background.title_bar, 2960688);
     assert_eq!(theme.colors.background.search_box, 0x3C3C3C);
     assert_eq!(theme.colors.accent.selected, 0xFBBF24);
+}
+
+// ============================================================================
+// Light Mode Tests
+// ============================================================================
+
+#[test]
+fn test_theme_is_dark_mode_field_exists() {
+    // Verify the is_dark_mode field is accessible
+    let theme = Theme::default();
+    let _is_dark = theme.is_dark_mode;
+    // The value depends on system appearance, so just verify the field exists
+}
+
+#[test]
+fn test_theme_is_dark_mode_from_json() {
+    // Test is_dark_mode serialization/deserialization via round-trip
+    // Create a dark theme
+    let dark_theme = Theme {
+        colors: ColorScheme::dark_default(),
+        is_dark_mode: true,
+        focus_aware: None,
+        opacity: None,
+        drop_shadow: None,
+        vibrancy: None,
+        fonts: None,
+    };
+
+    let dark_json = serde_json::to_string(&dark_theme).unwrap();
+    let parsed_dark: Theme = serde_json::from_str(&dark_json).unwrap();
+    assert!(parsed_dark.is_dark_mode, "Expected is_dark_mode to be true after round-trip");
+
+    // Create a light theme
+    let light_theme = Theme {
+        colors: ColorScheme::light_default(),
+        is_dark_mode: false,
+        focus_aware: None,
+        opacity: None,
+        drop_shadow: None,
+        vibrancy: None,
+        fonts: None,
+    };
+
+    let light_json = serde_json::to_string(&light_theme).unwrap();
+    let parsed_light: Theme = serde_json::from_str(&light_json).unwrap();
+    assert!(!parsed_light.is_dark_mode, "Expected is_dark_mode to be false after round-trip");
+}
+
+#[test]
+fn test_background_opacity_for_mode_dark() {
+    let opacity = BackgroundOpacity::for_mode(true);
+    // Dark mode uses default values
+    assert!((opacity.main - 0.30).abs() < 0.01, "Dark mode main should be ~0.30");
+    assert!((opacity.selected - 0.12).abs() < 0.01, "Dark mode selected should be ~0.12");
+    assert!((opacity.hover - 0.07).abs() < 0.01, "Dark mode hover should be ~0.07");
+}
+
+#[test]
+fn test_background_opacity_for_mode_light() {
+    let opacity = BackgroundOpacity::for_mode(false);
+    // Light mode needs higher opacity values
+    assert!(opacity.main > 0.5, "Light mode main should be higher (got {})", opacity.main);
+    assert!(opacity.selected > 0.1, "Light mode selected should be higher (got {})", opacity.selected);
+    assert!(opacity.hover > 0.07, "Light mode hover should be higher or equal (got {})", opacity.hover);
+}
+
+#[test]
+fn test_light_mode_color_scheme_contrast() {
+    let scheme = ColorScheme::light_default();
+
+    // Light mode should have light backgrounds
+    assert!(scheme.background.main > 0xF00000, "Light mode background should be light");
+
+    // Light mode should have dark text
+    assert!(scheme.text.primary < 0x111111, "Light mode text should be dark");
+
+    // Light mode should have lighter borders than dark mode
+    let dark_scheme = ColorScheme::dark_default();
+    assert!(scheme.ui.border > dark_scheme.ui.border, "Light mode border should be lighter");
+}
+
+#[test]
+fn test_theme_default_uses_system_appearance() {
+    // The default theme should use system appearance detection
+    let theme = Theme::default();
+
+    // Verify theme has proper colors based on mode
+    if theme.is_dark_mode {
+        assert_eq!(theme.colors.background.main, 0x1e1e1e, "Dark mode should use dark background");
+        assert_eq!(theme.colors.text.primary, 0xffffff, "Dark mode should use light text");
+    } else {
+        assert_eq!(theme.colors.background.main, 0xffffff, "Light mode should use light background");
+        assert_eq!(theme.colors.text.primary, 0x000000, "Light mode should use dark text");
+    }
+}
+
+#[test]
+fn test_theme_serialization_includes_is_dark_mode() {
+    let theme = Theme {
+        is_dark_mode: false, // Force light mode
+        ..Theme::default()
+    };
+
+    let json = serde_json::to_string(&theme).unwrap();
+    assert!(json.contains("is_dark_mode"), "Serialized theme should include is_dark_mode");
+    assert!(json.contains("false"), "Serialized theme should have is_dark_mode: false");
 }

@@ -29,9 +29,14 @@ pub fn map_scriptkit_to_gpui_theme(sk_theme: &Theme) -> ThemeColor {
     let colors = &sk_theme.colors;
     let opacity = sk_theme.get_opacity();
     let vibrancy_enabled = sk_theme.is_vibrancy_enabled();
+    let is_dark = sk_theme.is_dark_mode;
 
-    // Get default dark theme as base and override with Script Kit colors
-    let mut theme_color = *ThemeColor::dark();
+    // Start from correct base theme based on appearance mode
+    let mut theme_color = if is_dark {
+        *ThemeColor::dark()
+    } else {
+        *ThemeColor::light()
+    };
 
     // Helper to apply opacity to a color when vibrancy is enabled
     let with_vibrancy = |hex: u32, alpha: f32| -> Hsla {
@@ -44,22 +49,21 @@ pub fn map_scriptkit_to_gpui_theme(sk_theme: &Theme) -> ThemeColor {
     };
 
     // ╔════════════════════════════════════════════════════════════════════════════╗
-    // ║ VIBRANCY BACKGROUND OPACITY - DO NOT CHANGE WITHOUT TESTING               ║
+    // ║ VIBRANCY BACKGROUND OPACITY - MODE AWARE                                   ║
     // ╠════════════════════════════════════════════════════════════════════════════╣
-    // ║ This value (0.37) was carefully tuned to work with:                        ║
-    // ║   - POPOVER material (NSVisualEffectMaterial = 6)                          ║
-    // ║   - windowBackgroundColor (provides native ~1px border)                    ║
-    // ║   - VibrantDark appearance                                                 ║
-    // ║   - setState: 0 (followsWindowActiveState)                                 ║
+    // ║ Dark mode (0.37):                                                          ║
+    // ║   - Tuned for VibrantDark + HUD_WINDOW material                            ║
+    // ║   - Too low (< 0.30): washed out over light backgrounds                    ║
+    // ║   - Too high (> 0.60): blur effect becomes invisible                       ║
     // ║                                                                            ║
-    // ║ This matches Electron's vibrancy:'popover' + visualEffectState:'followWindow' ║
-    // ║ See: /Users/johnlindquist/dev/mac-panel-window/panel-window.mm            ║
-    // ║                                                                            ║
-    // ║ Too low (< 0.30): washed out over light backgrounds                        ║
-    // ║ Too high (> 0.60): blur effect becomes invisible                           ║
+    // ║ Light mode (0.70):                                                         ║
+    // ║   - Higher opacity needed for readability against light backgrounds        ║
+    // ║   - Uses VibrantLight + POPOVER material                                   ║
+    // ║   - Light backgrounds need more tint to show vibrancy effect               ║
     // ╚════════════════════════════════════════════════════════════════════════════╝
     let main_bg = if vibrancy_enabled {
-        let tint_alpha = 0.37;
+        // Vibrancy alpha differs by appearance mode
+        let tint_alpha = if is_dark { 0.37 } else { 0.70 };
         with_vibrancy(colors.background.main, tint_alpha)
     } else {
         hex_to_hsla(colors.background.main) // Fully opaque when vibrancy disabled
@@ -181,10 +185,17 @@ pub fn sync_gpui_component_theme(cx: &mut App) {
     // Apply the custom colors and fonts to the global theme
     let theme = GpuiTheme::global_mut(cx);
     theme.colors = custom_colors;
-    theme.mode = ThemeMode::Dark; // Script Kit uses dark mode by default
+
+    // Set theme mode based on system appearance detection
+    theme.mode = if sk_theme.is_dark_mode {
+        ThemeMode::Dark
+    } else {
+        ThemeMode::Light
+    };
 
     // Debug: Log the background color to verify vibrancy is applied
     tracing_info!(
+        is_dark_mode = sk_theme.is_dark_mode,
         background_h = custom_colors.background.h,
         background_s = custom_colors.background.s,
         background_l = custom_colors.background.l,

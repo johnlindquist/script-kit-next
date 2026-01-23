@@ -118,6 +118,36 @@ impl BackgroundOpacity {
             border_active: self.border_active.clamp(0.0, 1.0),
         }
     }
+
+    /// Get appropriate opacity values for the given appearance mode
+    ///
+    /// Light mode needs higher opacity values because:
+    /// - Light backgrounds need more tint to maintain readability
+    /// - Selection/hover effects need to be more visible against light backgrounds
+    #[allow(dead_code)]
+    pub fn for_mode(is_dark: bool) -> Self {
+        if is_dark {
+            Self::default() // Current dark mode values
+        } else {
+            // Light mode: higher opacity for better visibility against light backgrounds
+            BackgroundOpacity {
+                main: 0.70,              // Higher for light backgrounds
+                title_bar: 0.70,         // Match main for consistency
+                search_box: 0.80,        // Higher for input visibility
+                log_panel: 0.75,         // Slightly less than inputs
+                selected: 0.15,          // Slightly higher for visibility
+                hover: 0.10,             // Slightly higher for visibility
+                preview: 0.0,            // Keep transparent
+                dialog: 0.25,            // Higher for dialog visibility
+                input: 0.70,             // Match main background
+                panel: 0.40,             // Moderate for panels
+                input_inactive: 0.50,    // Higher for light mode
+                input_active: 0.70,      // Higher for light mode
+                border_inactive: 0.20,   // Slightly higher
+                border_active: 0.35,     // Slightly higher
+            }
+        }
+    }
 }
 
 impl Default for BackgroundOpacity {
@@ -628,6 +658,10 @@ impl Default for FontConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Theme {
     pub colors: ColorScheme,
+    /// Whether this theme is for dark mode (derived from system or explicit)
+    /// Default: auto-detected from system appearance
+    #[serde(default = "detect_system_appearance")]
+    pub is_dark_mode: bool,
     /// Optional focus-aware colors (new feature)
     #[serde(default)]
     pub focus_aware: Option<FocusAwareColorScheme>,
@@ -809,8 +843,14 @@ impl Default for ColorScheme {
 
 impl Default for Theme {
     fn default() -> Self {
+        let is_dark = detect_system_appearance();
         Theme {
-            colors: ColorScheme::default(),
+            colors: if is_dark {
+                ColorScheme::dark_default()
+            } else {
+                ColorScheme::light_default()
+            },
+            is_dark_mode: is_dark,
             focus_aware: None,
             opacity: Some(BackgroundOpacity::default()),
             drop_shadow: Some(DropShadow::default()),
@@ -1083,8 +1123,9 @@ pub fn load_theme() -> Theme {
             ColorScheme::light_default()
         };
         let theme = Theme {
-            focus_aware: None,
             colors: color_scheme,
+            is_dark_mode: is_dark,
+            focus_aware: None,
             opacity: Some(BackgroundOpacity::default()),
             drop_shadow: Some(DropShadow::default()),
             vibrancy: Some(VibrancySettings::default()),
@@ -1106,6 +1147,7 @@ pub fn load_theme() -> Theme {
             };
             let theme = Theme {
                 colors: color_scheme,
+                is_dark_mode: is_dark,
                 focus_aware: None,
                 opacity: Some(BackgroundOpacity::default()),
                 drop_shadow: Some(DropShadow::default()),
@@ -1136,6 +1178,7 @@ pub fn load_theme() -> Theme {
                 };
                 let theme = Theme {
                     colors: color_scheme,
+                    is_dark_mode: is_dark,
                     focus_aware: None,
                     opacity: Some(BackgroundOpacity::default()),
                     drop_shadow: Some(DropShadow::default()),
@@ -1157,6 +1200,10 @@ fn log_theme_config(theme: &Theme) {
     let opacity = theme.get_opacity();
     let shadow = theme.get_drop_shadow();
     let vibrancy = theme.get_vibrancy();
+    debug!(
+        is_dark_mode = theme.is_dark_mode,
+        "Theme appearance mode"
+    );
     debug!(
         opacity_main = opacity.main,
         opacity_title_bar = opacity.title_bar,
