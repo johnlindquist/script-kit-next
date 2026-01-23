@@ -12,7 +12,8 @@ fn test_default_theme() {
         assert_eq!(theme.colors.accent.selected, 0xfbbf24);
         assert_eq!(theme.colors.ui.border, 0x464647);
     } else {
-        assert_eq!(theme.colors.background.main, 0xffffff);
+        // Light mode uses subtle off-white for better vibrancy effect
+        assert_eq!(theme.colors.background.main, 0xf8f8f8);
         assert_eq!(theme.colors.text.primary, 0x000000);
         assert_eq!(theme.colors.accent.selected, 0x0078d4);
         assert_eq!(theme.colors.ui.border, 0xd0d0d0);
@@ -39,9 +40,10 @@ fn test_dark_default() {
 #[test]
 fn test_light_default() {
     let scheme = ColorScheme::light_default();
-    assert_eq!(scheme.background.main, 0xffffff);
+    // Light mode uses subtle off-white for better vibrancy effect
+    assert_eq!(scheme.background.main, 0xf8f8f8);
     assert_eq!(scheme.text.primary, 0x000000);
-    assert_eq!(scheme.background.title_bar, 0xf3f3f3);
+    assert_eq!(scheme.background.title_bar, 0xf0f0f0);
     assert_eq!(scheme.ui.border, 0xd0d0d0);
 }
 
@@ -77,7 +79,8 @@ fn test_light_theme_serialization() {
     let json = serde_json::to_string(&theme).unwrap();
     let deserialized: Theme = serde_json::from_str(&json).unwrap();
 
-    assert_eq!(deserialized.colors.background.main, 0xffffff);
+    // Light mode uses subtle off-white for better vibrancy effect
+    assert_eq!(deserialized.colors.background.main, 0xf8f8f8);
     assert_eq!(deserialized.colors.text.primary, 0x000000);
 }
 
@@ -720,7 +723,8 @@ fn test_theme_default_uses_system_appearance() {
         assert_eq!(theme.colors.background.main, 0x1e1e1e, "Dark mode should use dark background");
         assert_eq!(theme.colors.text.primary, 0xffffff, "Dark mode should use light text");
     } else {
-        assert_eq!(theme.colors.background.main, 0xffffff, "Light mode should use light background");
+        // Light mode uses subtle off-white for better vibrancy effect
+        assert_eq!(theme.colors.background.main, 0xf8f8f8, "Light mode should use light background");
         assert_eq!(theme.colors.text.primary, 0x000000, "Light mode should use dark text");
     }
 }

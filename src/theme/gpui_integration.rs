@@ -56,14 +56,15 @@ pub fn map_scriptkit_to_gpui_theme(sk_theme: &Theme) -> ThemeColor {
     // ║   - Too low (< 0.30): washed out over light backgrounds                    ║
     // ║   - Too high (> 0.60): blur effect becomes invisible                       ║
     // ║                                                                            ║
-    // ║ Light mode (0.70):                                                         ║
-    // ║   - Higher opacity needed for readability against light backgrounds        ║
+    // ║ Light mode (0.50):                                                         ║
+    // ║   - Lower opacity to let vibrancy blur show through                        ║
+    // ║   - Pure white at high opacity blocks the blur effect                      ║
     // ║   - Uses VibrantLight + POPOVER material                                   ║
-    // ║   - Light backgrounds need more tint to show vibrancy effect               ║
     // ╚════════════════════════════════════════════════════════════════════════════╝
     let main_bg = if vibrancy_enabled {
         // Vibrancy alpha differs by appearance mode
-        let tint_alpha = if is_dark { 0.37 } else { 0.70 };
+        // Light mode needs lower alpha because white at high opacity blocks blur
+        let tint_alpha = if is_dark { 0.37 } else { 0.50 };
         with_vibrancy(colors.background.main, tint_alpha)
     } else {
         hex_to_hsla(colors.background.main) // Fully opaque when vibrancy disabled

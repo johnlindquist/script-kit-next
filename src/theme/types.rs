@@ -741,10 +741,12 @@ impl ColorScheme {
     pub fn light_default() -> Self {
         ColorScheme {
             background: BackgroundColors {
-                main: 0xffffff,
-                title_bar: 0xf3f3f3,
-                search_box: 0xececec,
-                log_panel: 0xfafafa,
+                // Use subtle off-white for better vibrancy effect
+                // Pure white (0xffffff) blocks blur even at low alpha
+                main: 0xf8f8f8,
+                title_bar: 0xf0f0f0,
+                search_box: 0xe8e8e8,
+                log_panel: 0xf5f5f5,
             },
             text: TextColors {
                 primary: 0x000000,
