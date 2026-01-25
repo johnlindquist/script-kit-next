@@ -16,6 +16,7 @@
 //!
 
 use crate::config::BuiltInConfig;
+#[cfg(target_os = "macos")]
 use crate::menu_bar::MenuBarItem;
 use tracing::debug;
 
@@ -1108,6 +1109,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
 ///
 /// # Returns
 /// A vector of `BuiltInEntry` items that can be added to search results
+#[cfg(target_os = "macos")]
 #[allow(dead_code)] // Will be used when menu bar integration is complete
 pub fn menu_bar_items_to_entries(
     items: &[MenuBarItem],
@@ -1131,6 +1133,7 @@ pub fn menu_bar_items_to_entries(
 }
 
 /// Recursively flatten a menu item and its children into entries
+#[cfg(target_os = "macos")]
 #[allow(dead_code)] // Will be used when menu bar integration is complete
 fn flatten_menu_item(
     item: &MenuBarItem,

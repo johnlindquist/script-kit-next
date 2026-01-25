@@ -31,9 +31,6 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_yaml = "0.9"        # YAML frontmatter parsing for scriptlet bundles
 shellexpand = "2.1"
-core-graphics = "0.24"
-cocoa = "0.26"
-objc = "0.2"
 dirs = "5.0"
 smallvec = "1.15"
 syntect = { version = "5.2", default-features = false, features = ["default-syntaxes", "default-themes", "regex-onig"] }
@@ -61,8 +58,6 @@ async-channel = "2.3"          # Async channel for stdin command listener
 # Selected text functionality (getSelectedText/setSelectedText)
 get-selected-text = "0.1"      # Hybrid AX + clipboard fallback for reading selected text
 arboard = "3.6"                # Clipboard access for setSelectedText fallback
-# Note: We use core-graphics directly for Cmd+V simulation (more reliable than enigo on macOS)
-macos-accessibility-client = "0.0.1"  # Permission checking for accessibility APIs
 
 # System tray / menu bar integration
 tray-icon = "0.21"                    # Cross-platform tray icon (includes muda for menus)
@@ -121,10 +116,6 @@ gpui-component = { git = "https://github.com/johnlindquist/gpui-component", pack
 # i18n support required by gpui-component
 rust-i18n = "3"
 
-# Core Foundation for CFRunLoop (keyboard monitoring)
-core-foundation = "0.10"
-foreign-types = "0.5"
-
 # Cron scheduling support
 croner = "3.0"                 # Parse and validate cron expressions
 english-to-cron = "0.1"        # Convert natural language schedules to cron
@@ -132,10 +123,21 @@ english-to-cron = "0.1"        # Convert natural language schedules to cron
 # HTTP client for AI provider API calls
 ureq = { version = "3", features = ["json"] }
 
-# macOS launch-at-login via SMAppService
-smappservice-rs = "0.1"
+# Markdown parsing for chat prompt
+pulldown-cmark = "0.10"
+
 which = "8.0.0"
 hex = "0.4.3"
+
+# macOS-specific dependencies
+[target.'cfg(target_os = "macos")'.dependencies]
+core-graphics = "0.24"         # Window/display management
+cocoa = "0.26"                 # macOS UI frameworks
+objc = "0.2"                   # Objective-C runtime
+macos-accessibility-client = "0.0.1"  # Permission checking for accessibility APIs
+core-foundation = "0.10"       # CFRunLoop (keyboard monitoring)
+foreign-types = "0.5"          # Foreign type wrappers
+smappservice-rs = "0.1"        # Launch-at-login via SMAppService
 
 [features]
 default = ["ocr"]

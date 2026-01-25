@@ -339,18 +339,21 @@ pub fn is_window_registered(role: WindowRole) -> bool {
 
 /// Non-macOS stub: register_window is a no-op
 #[cfg(not(target_os = "macos"))]
+#[allow(dead_code)]
 pub fn register_window(_role: WindowRole, _window_id: *mut std::ffi::c_void) {
     // No-op on non-macOS platforms
 }
 
 /// Non-macOS stub: get_window always returns None
 #[cfg(not(target_os = "macos"))]
+#[allow(dead_code)]
 pub fn get_window(_role: WindowRole) -> Option<*mut std::ffi::c_void> {
     None
 }
 
 /// Non-macOS stub: get_main_window always returns None
 #[cfg(not(target_os = "macos"))]
+#[allow(dead_code)]
 pub fn get_main_window() -> Option<*mut std::ffi::c_void> {
     None
 }

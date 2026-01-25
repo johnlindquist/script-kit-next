@@ -5,6 +5,9 @@
 //!
 
 // Allow dead code as this module provides utility functions that may not all be used yet
+// This entire module is macOS-only
+#![cfg(target_os = "macos")]
+
 #![allow(dead_code)]
 //!
 //! # Platform Support

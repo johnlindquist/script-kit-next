@@ -10,7 +10,6 @@
 //! - `track_focus` + `on_key_down` for direct key handling
 //! - No actions/key bindings needed
 
-use crate::platform;
 use crate::theme;
 use gpui::{
     div, prelude::*, px, App, Bounds, Context, DisplayId, Entity, FocusHandle, Focusable, Pixels,

@@ -1882,7 +1882,7 @@ impl ScriptListApp {
         };
         #[cfg(not(target_os = "macos"))]
         let (menu_bar_items, menu_bar_bundle_id): (
-            Vec<menu_bar::MenuBarItem>,
+            Vec<scripts::MenuBarItem>,
             Option<String>,
         ) = (Vec::new(), None);
 

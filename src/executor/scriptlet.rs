@@ -8,7 +8,7 @@ use crate::scriptlets::{format_scriptlet, process_conditionals, Scriptlet, SHELL
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::Command;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 use tracing::{debug, error, info, instrument, warn};
 
 use super::runner::find_executable;

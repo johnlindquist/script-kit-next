@@ -30,6 +30,7 @@ fn protocol_tile_to_window_control(pos: &protocol::TilePosition) -> window_contr
 
 /// Standard macOS menu bar height in points (consistent since macOS 10.0)
 /// Note: This is an approximation - the actual height can vary with accessibility settings
+#[allow(dead_code)]
 const MACOS_MENU_BAR_HEIGHT: i32 = 24;
 
 /// Get information about all displays/monitors
@@ -192,10 +193,15 @@ impl ScriptListApp {
                 // Writer thread - handles sending responses to script
                 std::thread::spawn(move || {
                     use std::io::Write;
+                    #[cfg(unix)]
                     use std::os::unix::io::AsRawFd;
 
                     // Log the stdin file descriptor for debugging
+                    #[cfg(unix)]
                     let fd = stdin.as_raw_fd();
+                    #[cfg(not(unix))]
+                    let fd = 0; // Placeholder for Windows
+
                     logging::log("EXEC", &format!("Writer thread started, stdin fd={}", fd));
 
                     // Check if fd is a valid pipe
@@ -237,15 +243,18 @@ impl ScriptListApp {
                                 let bytes = format!("{}\n", json);
                                 let bytes_len = bytes.len();
 
-                                // Check fd validity before write
-                                let fcntl_result = unsafe { libc::fcntl(fd, libc::F_GETFD) };
-                                logging::log(
-                                    "EXEC",
-                                    &format!(
-                                        "Pre-write fcntl(F_GETFD) on fd={}: {}",
-                                        fd, fcntl_result
-                                    ),
-                                );
+                                // Check fd validity before write (Unix-only)
+                                #[cfg(unix)]
+                                {
+                                    let fcntl_result = unsafe { libc::fcntl(fd, libc::F_GETFD) };
+                                    logging::log(
+                                        "EXEC",
+                                        &format!(
+                                            "Pre-write fcntl(F_GETFD) on fd={}: {}",
+                                            fd, fcntl_result
+                                        ),
+                                    );
+                                }
 
                                 match stdin.write_all(bytes.as_bytes()) {
                                     Ok(()) => {
