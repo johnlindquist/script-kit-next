@@ -537,6 +537,7 @@ pub fn activate_main_window() {
 }
 
 #[cfg(not(target_os = "macos"))]
+#[allow(dead_code)] // Used conditionally from actions/window.rs on macOS
 pub fn activate_main_window() {
     logging::log(
         "PANEL",

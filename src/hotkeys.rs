@@ -401,11 +401,12 @@ pub fn update_hotkeys(cfg: &config::Config) {
         MAIN_HOTKEY_REGISTERED.store(success, Ordering::Relaxed);
     }
 
-    // Update notes hotkey
-    let notes_config = cfg.get_notes_hotkey();
-    if let Some((mods, code)) = parse_hotkey_config(&notes_config) {
-        let display = hotkey_config_to_display(&notes_config);
-        rebind_hotkey_transactional(manager, HotkeyAction::Notes, mods, code, &display);
+    // Update notes hotkey (only if configured)
+    if let Some(notes_config) = cfg.get_notes_hotkey() {
+        if let Some((mods, code)) = parse_hotkey_config(&notes_config) {
+            let display = hotkey_config_to_display(&notes_config);
+            rebind_hotkey_transactional(manager, HotkeyAction::Notes, mods, code, &display);
+        }
     }
 
     // Update AI hotkey
@@ -1159,8 +1160,11 @@ pub(crate) fn start_hotkey_listener(config: config::Config) {
             MAIN_HOTKEY_REGISTERED.store(true, Ordering::Relaxed);
         }
 
-        // Register notes, AI, and logs hotkeys
-        register_builtin_hotkey(manager, HotkeyAction::Notes, &config.get_notes_hotkey());
+        // Register notes hotkey (only if configured)
+        if let Some(notes_config) = config.get_notes_hotkey() {
+            register_builtin_hotkey(manager, HotkeyAction::Notes, &notes_config);
+        }
+        // Register AI and logs hotkeys
         register_builtin_hotkey(manager, HotkeyAction::Ai, &config.get_ai_hotkey());
         register_builtin_hotkey(manager, HotkeyAction::ToggleLogs, &config.get_logs_hotkey());
 
