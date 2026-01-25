@@ -401,11 +401,12 @@ pub fn update_hotkeys(cfg: &config::Config) {
         MAIN_HOTKEY_REGISTERED.store(success, Ordering::Relaxed);
     }
 
-    // Update notes hotkey
-    let notes_config = cfg.get_notes_hotkey();
-    if let Some((mods, code)) = parse_hotkey_config(&notes_config) {
-        let display = hotkey_config_to_display(&notes_config);
-        rebind_hotkey_transactional(manager, HotkeyAction::Notes, mods, code, &display);
+    // Update notes hotkey (only if configured)
+    if let Some(notes_config) = cfg.get_notes_hotkey() {
+        if let Some((mods, code)) = parse_hotkey_config(&notes_config) {
+            let display = hotkey_config_to_display(&notes_config);
+            rebind_hotkey_transactional(manager, HotkeyAction::Notes, mods, code, &display);
+        }
     }
 
     // Update AI hotkey
