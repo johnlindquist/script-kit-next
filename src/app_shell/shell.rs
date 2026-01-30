@@ -3,7 +3,7 @@
 //! The shell is a presentational component that renders the frame, header,
 //! footer, and content based on a ShellSpec. It does not own state.
 
-use gpui::{div, prelude::*, px, rgba, AnyElement, App, Window};
+use gpui::{div, prelude::*, px, AnyElement, App, Window};
 
 use super::chrome::DividerSpec;
 use super::focus::ShellFocus;
@@ -262,7 +262,7 @@ impl AppShell {
             .justify_between()
             .border_t_1()
             .border_color(colors.border_hex.rgba8(0x30))
-            .bg(rgba(0x00000080)); // 50% opacity for vibrancy balance
+            .bg(colors.overlay_bg); // Theme-aware overlay: black for dark, white for light
 
         // Left side: Logo + helper text
         let mut left_side = hstack().gap(px(8.0)).items_center();

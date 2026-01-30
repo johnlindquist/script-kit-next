@@ -298,6 +298,7 @@ impl Render for HudView {
                     border: colors.accent,
                     focus_ring: colors.accent_hover,
                     focus_tint: colors.accent,
+                    hover_overlay: 0xffffff26, // White at ~15% alpha (HUD default)
                 };
                 el.child(
                     Button::new(label, button_colors)

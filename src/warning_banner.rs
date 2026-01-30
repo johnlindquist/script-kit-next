@@ -154,6 +154,7 @@ impl RenderOnce for WarningBanner {
                 border: 0x00000000, // No border
                 focus_ring: colors.dismiss_hover,
                 focus_tint: 0x00000000,
+                hover_overlay: 0x00000026, // Black at ~15% alpha (warning banner on accent bg)
             };
             Button::new("×", dismiss_colors)
                 .variant(ButtonVariant::Icon)

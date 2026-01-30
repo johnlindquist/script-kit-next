@@ -3,10 +3,10 @@
 //! Caches computed styles to avoid recomputation every render.
 //! Invalidated when theme changes.
 
-use gpui::{px, Hsla, Pixels};
+use gpui::{px, Hsla, Pixels, Rgba};
 
 use crate::theme::Theme;
-use crate::ui_foundation::HexColorExt;
+use crate::ui_foundation::{hex_to_rgba_with_opacity, HexColorExt};
 
 /// Cached styles for the shell
 ///
@@ -17,8 +17,8 @@ pub struct ShellStyleCache {
     /// Theme revision for invalidation
     pub theme_revision: u64,
 
-    /// Main frame background with vibrancy opacity
-    pub frame_bg: Hsla,
+    /// Main frame background with vibrancy opacity (direct RGBA like POC)
+    pub frame_bg: Rgba,
     /// Frame shadow (Vec for GPUI compatibility)
     pub shadows: Vec<gpui::BoxShadow>,
     /// Border radius
@@ -37,14 +37,28 @@ impl ShellStyleCache {
     pub fn from_theme(theme: &Theme, revision: u64) -> Self {
         let colors = &theme.colors;
 
-        // Frame background with vibrancy opacity (70-85% per CLAUDE.md vibrancy gotcha)
-        let bg_alpha = theme
-            .opacity
-            .as_ref()
-            .map(|o| o.main)
-            .unwrap_or(0.85)
-            .clamp(0.70, 0.85);
-        let frame_bg = hex_to_hsla_with_alpha(colors.background.main, bg_alpha);
+        // Frame background with vibrancy opacity - use direct RGBA like POC
+        // This avoids HSLA conversion issues and matches the proven POC approach
+        // Dark mode: lower opacity (0.37) for better blur effect
+        // Light mode: higher opacity (0.85) for visibility like POC's rgba(0xFAFAFAD9)
+        let bg_alpha = if theme.has_dark_colors() {
+            // Dark mode: use theme opacity or dark default (0.30-0.37)
+            theme
+                .opacity
+                .as_ref()
+                .map(|o| o.main)
+                .unwrap_or(0.37)
+                .clamp(0.30, 0.50)
+        } else {
+            // Light mode: higher opacity like POC (0.85)
+            theme
+                .opacity
+                .as_ref()
+                .map(|o| o.main)
+                .unwrap_or(0.85)
+                .clamp(0.70, 0.90)
+        };
+        let frame_bg = gpui::rgba(hex_to_rgba_with_opacity(colors.background.main, bg_alpha));
 
         // Standard drop shadow
         let shadow = gpui::BoxShadow {
@@ -135,6 +149,9 @@ pub struct FooterColors {
     /// Color for icons/text displayed on accent background (logo icon)
     pub logo_icon: Hsla,
     pub logo_icon_hex: u32,
+    /// Semi-transparent overlay background (theme-aware: black for dark, white for light)
+    /// Used for footer background with vibrancy
+    pub overlay_bg: Hsla,
 }
 
 impl FooterColors {
@@ -143,6 +160,15 @@ impl FooterColors {
         // Logo icon color: For Script Kit, we use black (0x000000) on gold/yellow
         // accent background for brand consistency and maximum contrast.
         let logo_icon_hex = 0x000000u32; // Black for contrast on yellow/gold
+
+        // Theme-aware overlay: black for dark mode (darkens), white for light mode (lightens)
+        // 50% opacity (0x80) for vibrancy balance
+        let overlay_bg = if theme.has_dark_colors() {
+            0x000000u32.rgba8(0x80) // black at 50% for dark mode
+        } else {
+            0xffffffu32.rgba8(0x80) // white at 50% for light mode
+        };
+
         Self {
             accent: colors.accent.selected.to_rgb(),
             accent_hex: colors.accent.selected,
@@ -152,6 +178,7 @@ impl FooterColors {
             background: colors.background.main.to_rgb(),
             logo_icon: logo_icon_hex.to_rgb(),
             logo_icon_hex,
+            overlay_bg,
         }
     }
 }
@@ -172,45 +199,5 @@ impl DividerColors {
     }
 }
 
-/// Convert hex color to HSLA with specified alpha
-fn hex_to_hsla_with_alpha(hex: u32, alpha: f32) -> Hsla {
-    let r = ((hex >> 16) & 0xFF) as f32 / 255.0;
-    let g = ((hex >> 8) & 0xFF) as f32 / 255.0;
-    let b = (hex & 0xFF) as f32 / 255.0;
-
-    let max = r.max(g).max(b);
-    let min = r.min(g).min(b);
-    let l = (max + min) / 2.0;
-
-    if (max - min).abs() < f32::EPSILON {
-        // Achromatic (gray)
-        return Hsla {
-            h: 0.0,
-            s: 0.0,
-            l,
-            a: alpha,
-        };
-    }
-
-    let d = max - min;
-    let s = if l > 0.5 {
-        d / (2.0 - max - min)
-    } else {
-        d / (max + min)
-    };
-
-    let h = if (max - r).abs() < f32::EPSILON {
-        (g - b) / d + if g < b { 6.0 } else { 0.0 }
-    } else if (max - g).abs() < f32::EPSILON {
-        (b - r) / d + 2.0
-    } else {
-        (r - g) / d + 4.0
-    };
-
-    Hsla {
-        h: h / 6.0,
-        s,
-        l,
-        a: alpha,
-    }
-}
+// Note: hex_to_hsla_with_alpha removed - now using direct RGBA via hex_to_rgba_with_opacity
+// This matches the POC approach and avoids potential HSLA conversion issues

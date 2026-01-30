@@ -21,17 +21,25 @@ pub fn hex_to_hsla(hex: u32) -> Hsla {
 /// gpui-component ThemeColor system, enabling consistent styling across
 /// all gpui-component widgets (buttons, inputs, lists, etc.)
 ///
+/// # Arguments
+/// * `sk_theme` - The Script Kit theme to map
+/// * `is_dark` - Whether we're rendering in dark mode (affects base theme and tint alpha)
+///
 /// NOTE: We intentionally do NOT apply opacity.* values to theme colors here.
 /// The opacity values are for window-level transparency (vibrancy effect),
 /// not for making UI elements semi-transparent. UI elements should remain solid
 /// so that text and icons are readable regardless of the vibrancy setting.
-pub fn map_scriptkit_to_gpui_theme(sk_theme: &Theme) -> ThemeColor {
+pub fn map_scriptkit_to_gpui_theme(sk_theme: &Theme, is_dark: bool) -> ThemeColor {
     let colors = &sk_theme.colors;
     let opacity = sk_theme.get_opacity();
     let vibrancy_enabled = sk_theme.is_vibrancy_enabled();
 
-    // Get default dark theme as base and override with Script Kit colors
-    let mut theme_color = *ThemeColor::dark();
+    // Get appropriate base theme based on appearance mode
+    let mut theme_color = if is_dark {
+        *ThemeColor::dark()
+    } else {
+        *ThemeColor::light()
+    };
 
     // Helper to apply opacity to a color when vibrancy is enabled
     let with_vibrancy = |hex: u32, alpha: f32| -> Hsla {
@@ -44,23 +52,20 @@ pub fn map_scriptkit_to_gpui_theme(sk_theme: &Theme) -> ThemeColor {
     };
 
     // ╔════════════════════════════════════════════════════════════════════════════╗
-    // ║ VIBRANCY BACKGROUND OPACITY - DO NOT CHANGE WITHOUT TESTING               ║
+    // ║ VIBRANCY BACKGROUND - TRANSPARENT FOR gpui_component::Root                 ║
     // ╠════════════════════════════════════════════════════════════════════════════╣
-    // ║ This value (0.37) was carefully tuned to work with:                        ║
-    // ║   - POPOVER material (NSVisualEffectMaterial = 6)                          ║
-    // ║   - windowBackgroundColor (provides native ~1px border)                    ║
-    // ║   - VibrantDark appearance                                                 ║
-    // ║   - setState: 0 (followsWindowActiveState)                                 ║
+    // ║ CRITICAL: gpui_component::Root applies .bg(theme.background) on ALL        ║
+    // ║ content. If this is semi-transparent, it STACKS with our shell background, ║
+    // ║ causing a gray tint instead of clean white vibrancy.                       ║
     // ║                                                                            ║
-    // ║ This matches Electron's vibrancy:'popover' + visualEffectState:'followWindow' ║
-    // ║ See: /Users/johnlindquist/dev/mac-panel-window/panel-window.mm            ║
-    // ║                                                                            ║
-    // ║ Too low (< 0.30): washed out over light backgrounds                        ║
-    // ║ Too high (> 0.60): blur effect becomes invisible                           ║
+    // ║ Solution: Set Root's background to TRANSPARENT when vibrancy is enabled.   ║
+    // ║ The actual background comes from ShellStyleCache::frame_bg which uses      ║
+    // ║ direct RGBA like the POC (rgba(0xFAFAFAD9) for light mode).               ║
     // ╚════════════════════════════════════════════════════════════════════════════╝
     let main_bg = if vibrancy_enabled {
-        let tint_alpha = 0.37;
-        with_vibrancy(colors.background.main, tint_alpha)
+        // TRANSPARENT - let shell's frame_bg handle the background
+        // This prevents double-layering that causes gray tint
+        hsla(0.0, 0.0, 0.0, 0.0)
     } else {
         hex_to_hsla(colors.background.main) // Fully opaque when vibrancy disabled
     };
@@ -76,15 +81,15 @@ pub fn map_scriptkit_to_gpui_theme(sk_theme: &Theme) -> ThemeColor {
     theme_color.border = hex_to_hsla(colors.ui.border);
     theme_color.input = with_vibrancy(colors.ui.border, opacity.search_box);
 
-    // List/sidebar colors - same high opacity as main background
-    theme_color.list = main_bg;
+    // List/sidebar colors - TRANSPARENT when vibrancy enabled to prevent stacking
+    theme_color.list = main_bg; // transparent when vibrancy enabled
     theme_color.list_active = hex_to_hsla(colors.accent.selected_subtle); // Keep selection visible
     theme_color.list_active_border = hex_to_hsla(colors.accent.selected);
     theme_color.list_hover = hex_to_hsla(colors.accent.selected_subtle); // Keep hover visible
-    theme_color.list_even = main_bg;
-    theme_color.list_head = main_bg;
+    theme_color.list_even = main_bg; // transparent when vibrancy enabled
+    theme_color.list_head = main_bg; // transparent when vibrancy enabled
 
-    // Sidebar - same high opacity
+    // Sidebar - transparent when vibrancy enabled
     theme_color.sidebar = main_bg;
     theme_color.sidebar_foreground = hex_to_hsla(colors.text.primary);
     theme_color.sidebar_border = hex_to_hsla(colors.ui.border);
@@ -99,21 +104,38 @@ pub fn map_scriptkit_to_gpui_theme(sk_theme: &Theme) -> ThemeColor {
     theme_color.primary_hover = hex_to_hsla(colors.accent.selected);
     theme_color.primary_active = hex_to_hsla(colors.accent.selected);
 
-    // Secondary (muted buttons) - keep some visibility but less opaque
-    theme_color.secondary = with_vibrancy(colors.background.search_box, 0.15);
+    // Secondary (muted buttons) - TRANSPARENT when vibrancy enabled
+    theme_color.secondary = if vibrancy_enabled {
+        hsla(0.0, 0.0, 0.0, 0.0)
+    } else {
+        with_vibrancy(colors.background.search_box, 0.15)
+    };
     theme_color.secondary_foreground = hex_to_hsla(colors.text.primary);
-    theme_color.secondary_hover = with_vibrancy(colors.background.title_bar, 0.2);
-    theme_color.secondary_active = with_vibrancy(colors.background.title_bar, 0.25);
+    theme_color.secondary_hover = if vibrancy_enabled {
+        // Very subtle hover effect
+        hsla(0.0, 0.0, if is_dark { 1.0 } else { 0.0 }, 0.05)
+    } else {
+        with_vibrancy(colors.background.title_bar, 0.2)
+    };
+    theme_color.secondary_active = if vibrancy_enabled {
+        hsla(0.0, 0.0, if is_dark { 1.0 } else { 0.0 }, 0.1)
+    } else {
+        with_vibrancy(colors.background.title_bar, 0.25)
+    };
 
-    // Muted (disabled states, subtle elements) - very subtle
-    theme_color.muted = with_vibrancy(colors.background.search_box, 0.1);
+    // Muted (disabled states, subtle elements) - transparent when vibrancy
+    theme_color.muted = if vibrancy_enabled {
+        hsla(0.0, 0.0, 0.0, 0.0)
+    } else {
+        with_vibrancy(colors.background.search_box, 0.1)
+    };
     theme_color.muted_foreground = hex_to_hsla(colors.text.muted);
 
-    // Title bar - same high opacity
+    // Title bar - transparent when vibrancy enabled
     theme_color.title_bar = main_bg;
     theme_color.title_bar_border = hex_to_hsla(colors.ui.border);
 
-    // Popover - same high opacity
+    // Popover - transparent when vibrancy enabled
     theme_color.popover = main_bg;
     theme_color.popover_foreground = hex_to_hsla(colors.text.primary);
 
@@ -172,8 +194,12 @@ pub fn sync_gpui_component_theme(cx: &mut App) {
     // Load Script Kit's theme
     let sk_theme = load_theme();
 
-    // Map Script Kit colors to gpui-component ThemeColor
-    let custom_colors = map_scriptkit_to_gpui_theme(&sk_theme);
+    // Determine if theme has dark colors (based on actual color luminance)
+    // This ensures tint_alpha and ThemeMode match the actual colors being displayed
+    let is_dark = sk_theme.has_dark_colors();
+
+    // Map Script Kit colors to gpui-component ThemeColor with appearance awareness
+    let custom_colors = map_scriptkit_to_gpui_theme(&sk_theme, is_dark);
 
     // Get font configuration
     let fonts = sk_theme.get_fonts();
@@ -181,7 +207,12 @@ pub fn sync_gpui_component_theme(cx: &mut App) {
     // Apply the custom colors and fonts to the global theme
     let theme = GpuiTheme::global_mut(cx);
     theme.colors = custom_colors;
-    theme.mode = ThemeMode::Dark; // Script Kit uses dark mode by default
+    // Set ThemeMode based on actual theme colors
+    theme.mode = if is_dark {
+        ThemeMode::Dark
+    } else {
+        ThemeMode::Light
+    };
 
     // Debug: Log the background color to verify vibrancy is applied
     tracing_info!(
@@ -191,6 +222,7 @@ pub fn sync_gpui_component_theme(cx: &mut App) {
         background_alpha = custom_colors.background.a,
         vibrancy_enabled = sk_theme.is_vibrancy_enabled(),
         opacity_main = sk_theme.get_opacity().main,
+        is_dark = is_dark,
         "Theme background HSLA set"
     );
 

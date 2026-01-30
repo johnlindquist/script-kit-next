@@ -14,6 +14,24 @@ use tracing::{debug, error, info, warn};
 
 use super::hex_color::{hex_color_serde, HexColor};
 
+/// Theme appearance mode for determining light/dark rendering
+///
+/// This controls how the theme system renders colors and vibrancy effects.
+/// - `Auto`: Detect from system preferences (macOS AppleInterfaceStyle)
+/// - `Light`: Force light mode appearance
+/// - `Dark`: Force dark mode appearance
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum AppearanceMode {
+    /// Automatically detect from system preferences
+    #[default]
+    Auto,
+    /// Force light mode appearance
+    Light,
+    /// Force dark mode appearance
+    Dark,
+}
+
 /// Background opacity settings for window transparency
 /// Values range from 0.0 (fully transparent) to 1.0 (fully opaque)
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -122,6 +140,13 @@ impl BackgroundOpacity {
 
 impl Default for BackgroundOpacity {
     fn default() -> Self {
+        Self::dark_default()
+    }
+}
+
+impl BackgroundOpacity {
+    /// Dark mode opacity defaults - lower opacity for dark vibrancy
+    pub fn dark_default() -> Self {
         BackgroundOpacity {
             // Lower opacity values to allow vibrancy blur to show through
             main: 0.30,             // Root wrapper background
@@ -138,6 +163,33 @@ impl Default for BackgroundOpacity {
             input_active: 0.50, // Input fields when has text/active
             border_inactive: 0.125, // Borders when inactive
             border_active: 0.25, // Borders when active
+        }
+    }
+
+    /// Light mode opacity defaults - higher opacity for light vibrancy
+    ///
+    /// Light themes need higher opacity values because:
+    /// - White/light backgrounds need more coverage to be visible
+    /// - Selection uses black base color which is more visible at lower opacity
+    ///
+    /// Values derived from POC testing with Raycast-like light theme.
+    pub fn light_default() -> Self {
+        BackgroundOpacity {
+            // Higher opacity for light mode - prevents washed out appearance
+            main: 0.85,            // rgba(0xFAFAFAD9) from POC = ~85%
+            title_bar: 0.90,       // rgba(0xFFFFFFE6) from POC = ~90%
+            search_box: 0.90,      // Same as title_bar for consistency
+            log_panel: 0.70,       // Slightly less for terminal areas
+            selected: 0.08,        // Lower than dark (black more visible than white)
+            hover: 0.05,           // Lower than dark (black more visible)
+            preview: 0.0,          // Preview panel (0 = fully transparent)
+            dialog: 0.40,          // Higher for light mode dialogs
+            input: 0.60,           // Higher for input visibility
+            panel: 0.50,           // Higher for panel visibility
+            input_inactive: 0.30,  // Input fields when empty/inactive
+            input_active: 0.60,    // Input fields when has text/active
+            border_inactive: 0.15, // Borders when inactive
+            border_active: 0.30,   // Borders when active
         }
     }
 }
@@ -643,6 +695,12 @@ pub struct Theme {
     /// Font configuration for editor and terminal
     #[serde(default)]
     pub fonts: Option<FontConfig>,
+    /// Appearance mode: Auto (detect from system), Light, or Dark
+    ///
+    /// Controls how the theme renders colors and vibrancy effects.
+    /// When set to Auto (default), the system appearance is detected.
+    #[serde(default)]
+    pub appearance: AppearanceMode,
 }
 
 #[allow(dead_code)]
@@ -704,29 +762,38 @@ impl ColorScheme {
     }
 
     /// Create a light mode color scheme
+    ///
+    /// Colors derived from POC testing with Raycast-like light theme.
+    /// Key differences from dark mode:
+    /// - `selected_subtle` is BLACK (0x000000) instead of white for visible selection
+    /// - Higher contrast text colors
+    /// - Darker UI colors for visibility on light backgrounds
     pub fn light_default() -> Self {
         ColorScheme {
             background: BackgroundColors {
-                main: 0xffffff,
-                title_bar: 0xf3f3f3,
-                search_box: 0xececec,
-                log_panel: 0xfafafa,
+                main: 0xfafafa,       // Light gray from POC (0xFAFAFA)
+                title_bar: 0xffffff,  // Pure white for input area
+                search_box: 0xffffff, // Pure white for search
+                log_panel: 0xf5f5f5,  // Slightly darker for terminal
             },
             text: TextColors {
-                primary: 0x000000,
-                secondary: 0x333333,
-                tertiary: 0x666666,
-                muted: 0x999999,
-                dimmed: 0xcccccc,
-                on_accent: 0xffffff, // White text on accent backgrounds (works on blue accent)
+                primary: 0x1a1a1a,   // Near black from POC (0x1A1A1A)
+                secondary: 0x6b6b6b, // Medium gray from POC (0x6B6B6B)
+                tertiary: 0x9b9b9b,  // Light gray/hint from POC (0x9B9B9B)
+                muted: 0x808080,     // Mid gray for placeholders
+                dimmed: 0xcccccc,    // Very light for subtle elements
+                on_accent: 0xffffff, // White text on accent backgrounds
             },
             accent: AccentColors {
-                selected: 0x0078d4,
-                selected_subtle: 0xffffff, // White - near-invisible brightening like Raycast
+                selected: 0x0078d4, // Blue accent for light mode
+                // CRITICAL: Black for light mode selection visibility
+                // White at low opacity is INVISIBLE on white backgrounds
+                // Black at low opacity creates visible darkening effect
+                selected_subtle: 0x000000,
             },
             ui: UIColors {
-                border: 0xd0d0d0,
-                success: 0x00a000,
+                border: 0xe0e0e0,  // Light border from POC (0xE0E0E0)
+                success: 0x22c55e, // green-500
                 error: 0xdc2626,   // red-600 (darker for light mode)
                 warning: 0xd97706, // amber-600 (darker for light mode)
                 info: 0x2563eb,    // blue-600 (darker for light mode)
@@ -816,6 +883,88 @@ impl Default for Theme {
             drop_shadow: Some(DropShadow::default()),
             vibrancy: Some(VibrancySettings::default()),
             fonts: Some(FontConfig::default()),
+            appearance: AppearanceMode::default(),
+        }
+    }
+}
+
+impl Theme {
+    /// Determine if the theme should render in dark mode
+    ///
+    /// This is the canonical method for checking theme appearance throughout the app.
+    /// It handles the AppearanceMode enum and system detection.
+    ///
+    /// Returns:
+    /// - `true` for dark mode rendering
+    /// - `false` for light mode rendering
+    pub fn is_dark_mode(&self) -> bool {
+        match self.appearance {
+            AppearanceMode::Dark => true,
+            AppearanceMode::Light => false,
+            AppearanceMode::Auto => detect_system_appearance(),
+        }
+    }
+
+    /// Check if the theme's actual colors are dark (based on background luminance)
+    ///
+    /// This is used to determine vibrancy appearance (VibrantDark vs VibrantLight)
+    /// regardless of system appearance setting. This ensures the blur effect matches
+    /// the actual color scheme being used.
+    ///
+    /// Returns:
+    /// - `true` if background color luminance < 0.5 (dark colors)
+    /// - `false` if background color luminance >= 0.5 (light colors)
+    pub fn has_dark_colors(&self) -> bool {
+        // Extract RGB from main background color
+        let bg = self.colors.background.main;
+        let r = ((bg >> 16) & 0xFF) as f32 / 255.0;
+        let g = ((bg >> 8) & 0xFF) as f32 / 255.0;
+        let b = (bg & 0xFF) as f32 / 255.0;
+
+        // Calculate relative luminance (ITU-R BT.709)
+        let luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+
+        // Dark if luminance < 0.5
+        luminance < 0.5
+    }
+
+    /// Determine if vibrancy should use dark appearance
+    ///
+    /// This checks the actual theme colors to determine whether to use
+    /// VibrantDark or VibrantLight NSAppearance. This is separate from
+    /// is_dark_mode() because we want vibrancy to match the colors being
+    /// displayed, not the system preference.
+    pub fn should_use_dark_vibrancy(&self) -> bool {
+        self.has_dark_colors()
+    }
+
+    /// Create a light theme with appropriate defaults
+    pub fn light_default() -> Self {
+        Theme {
+            colors: ColorScheme::light_default(),
+            focus_aware: None,
+            opacity: Some(BackgroundOpacity::light_default()),
+            drop_shadow: Some(DropShadow {
+                // Lighter shadow for light theme
+                opacity: 0.12,
+                ..DropShadow::default()
+            }),
+            vibrancy: Some(VibrancySettings::default()),
+            fonts: Some(FontConfig::default()),
+            appearance: AppearanceMode::Light,
+        }
+    }
+
+    /// Create a dark theme with appropriate defaults
+    pub fn dark_default() -> Self {
+        Theme {
+            colors: ColorScheme::dark_default(),
+            focus_aware: None,
+            opacity: Some(BackgroundOpacity::dark_default()),
+            drop_shadow: Some(DropShadow::default()),
+            vibrancy: Some(VibrancySettings::default()),
+            fonts: Some(FontConfig::default()),
+            appearance: AppearanceMode::Dark,
         }
     }
 }
@@ -1077,18 +1226,10 @@ pub fn load_theme() -> Theme {
         warn!(path = %theme_path.display(), "Theme file not found, using defaults based on system appearance");
         // Auto-select based on system appearance
         let is_dark = detect_system_appearance();
-        let color_scheme = if is_dark {
-            ColorScheme::dark_default()
+        let theme = if is_dark {
+            Theme::dark_default()
         } else {
-            ColorScheme::light_default()
-        };
-        let theme = Theme {
-            focus_aware: None,
-            colors: color_scheme,
-            opacity: Some(BackgroundOpacity::default()),
-            drop_shadow: Some(DropShadow::default()),
-            vibrancy: Some(VibrancySettings::default()),
-            fonts: Some(FontConfig::default()),
+            Theme::light_default()
         };
         log_theme_config(&theme);
         return theme;
@@ -1099,25 +1240,52 @@ pub fn load_theme() -> Theme {
         Err(e) => {
             error!(path = %theme_path.display(), error = %e, "Failed to read theme file, using defaults");
             let is_dark = detect_system_appearance();
-            let color_scheme = if is_dark {
-                ColorScheme::dark_default()
+            let theme = if is_dark {
+                Theme::dark_default()
             } else {
-                ColorScheme::light_default()
-            };
-            let theme = Theme {
-                colors: color_scheme,
-                focus_aware: None,
-                opacity: Some(BackgroundOpacity::default()),
-                drop_shadow: Some(DropShadow::default()),
-                vibrancy: Some(VibrancySettings::default()),
-                fonts: Some(FontConfig::default()),
+                Theme::light_default()
             };
             log_theme_config(&theme);
             theme
         }
         Ok(contents) => match serde_json::from_str::<Theme>(&contents) {
-            Ok(theme) => {
+            Ok(mut theme) => {
                 debug!(path = %theme_path.display(), "Successfully loaded theme");
+
+                // Key behavior: When appearance is Auto, use system appearance to
+                // determine which color scheme to use (light or dark).
+                // This allows the app to follow macOS light/dark mode automatically.
+                let is_system_dark = detect_system_appearance();
+                let should_use_light = match theme.appearance {
+                    AppearanceMode::Light => true,
+                    AppearanceMode::Dark => false,
+                    AppearanceMode::Auto => !is_system_dark, // Follow system
+                };
+
+                if should_use_light {
+                    // System is in light mode (or explicitly set to light)
+                    // Use light color scheme, but preserve any non-color settings from theme.json
+                    let light_colors = ColorScheme::light_default();
+                    theme.colors = light_colors;
+                    theme.appearance = AppearanceMode::Light; // Mark as light for consistency
+
+                    // Use light opacity defaults
+                    if theme.opacity.is_none() {
+                        theme.opacity = Some(BackgroundOpacity::light_default());
+                    }
+
+                    info!(
+                        system_appearance = if is_system_dark { "dark" } else { "light" },
+                        "Using light theme colors (system is in light mode)"
+                    );
+                } else {
+                    // System is in dark mode (or explicitly set to dark)
+                    // Use the colors from theme.json (which are dark)
+                    if theme.opacity.is_none() {
+                        theme.opacity = Some(BackgroundOpacity::dark_default());
+                    }
+                }
+
                 log_theme_config(&theme);
                 theme
             }
@@ -1129,18 +1297,10 @@ pub fn load_theme() -> Theme {
                 );
                 debug!(content = %contents, "Malformed theme file content");
                 let is_dark = detect_system_appearance();
-                let color_scheme = if is_dark {
-                    ColorScheme::dark_default()
+                let theme = if is_dark {
+                    Theme::dark_default()
                 } else {
-                    ColorScheme::light_default()
-                };
-                let theme = Theme {
-                    colors: color_scheme,
-                    focus_aware: None,
-                    opacity: Some(BackgroundOpacity::default()),
-                    drop_shadow: Some(DropShadow::default()),
-                    vibrancy: Some(VibrancySettings::default()),
-                    fonts: Some(FontConfig::default()),
+                    Theme::light_default()
                 };
                 log_theme_config(&theme);
                 theme

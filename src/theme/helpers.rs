@@ -7,7 +7,7 @@ use gpui::{rgb, rgba, Hsla, Rgba};
 use tracing::debug;
 
 use super::hex_color::TRANSPARENT;
-use super::types::ColorScheme;
+use super::types::{ColorScheme, Theme};
 
 /// Lightweight struct for list item rendering - Copy to avoid clone in closures
 ///
@@ -44,9 +44,12 @@ impl ListItemColors {
     /// Create ListItemColors from a ColorScheme
     ///
     /// This extracts only the colors needed for list item rendering.
+    /// Note: The ColorScheme's `selected_subtle` is already theme-aware
+    /// (white for dark mode, black for light mode).
     pub fn from_color_scheme(colors: &ColorScheme) -> Self {
         // Pre-compute rgba colors with appropriate alpha values
         // Background is transparent, hover/selected use subtle colors
+        // selected_subtle is theme-aware: white (0xffffff) for dark, black (0x000000) for light
         let selected_subtle = colors.accent.selected_subtle;
 
         #[cfg(debug_assertions)]
@@ -69,6 +72,14 @@ impl ListItemColors {
             // Theme default is 0xffffff (white) which works well on yellow/orange backgrounds
             text_on_accent: rgb(colors.text.primary),
         }
+    }
+
+    /// Create ListItemColors from a Theme (preferred method)
+    ///
+    /// This gives full access to theme settings including `is_dark_mode()`.
+    /// The resulting colors are already theme-aware through selected_subtle.
+    pub fn from_theme(theme: &Theme) -> Self {
+        Self::from_color_scheme(&theme.colors)
     }
 
     /// Convert a specific color to Hsla for advanced styling
@@ -140,6 +151,11 @@ impl InputFieldColors {
             cursor: rgb(colors.accent.selected),
         }
     }
+
+    /// Create InputFieldColors from a Theme (preferred method)
+    pub fn from_theme(theme: &Theme) -> Self {
+        Self::from_color_scheme(&theme.colors)
+    }
 }
 
 #[allow(dead_code)]
@@ -197,4 +213,55 @@ impl PromptColors {
             hr_color: colors.ui.border,
         }
     }
+
+    /// Create PromptColors from a Theme (preferred method)
+    pub fn from_theme(theme: &Theme) -> Self {
+        Self::from_color_scheme(&theme.colors)
+    }
+}
+
+// =============================================================================
+// Theme-aware overlay utilities
+// =============================================================================
+
+/// Get a modal overlay background color that works in both light and dark modes
+///
+/// For dark mode: black overlay (darkens content behind)
+/// For light mode: white overlay (keeps content readable on light backgrounds)
+///
+/// # Arguments
+/// * `theme` - The theme to use for dark/light detection
+/// * `opacity` - Alpha value (0-255), e.g., 0x80 for 50%
+///
+/// # Returns
+/// A Rgba color suitable for use with `.bg()`
+#[allow(dead_code)]
+pub fn modal_overlay_bg(theme: &Theme, opacity: u8) -> Rgba {
+    let base_color = if theme.has_dark_colors() {
+        0x000000u32 // black for dark mode
+    } else {
+        0xffffffu32 // white for light mode
+    };
+    rgba((base_color << 8) | (opacity as u32))
+}
+
+/// Get a hover overlay color that works in both light and dark modes
+///
+/// For dark mode: white overlay (brightens/lifts the element)
+/// For light mode: black overlay (darkens/highlights the element)
+///
+/// # Arguments
+/// * `theme` - The theme to use for dark/light detection
+/// * `opacity` - Alpha value (0-255), e.g., 0x26 for ~15%
+///
+/// # Returns
+/// A Rgba color suitable for use with `.bg()` on hover
+#[allow(dead_code)]
+pub fn hover_overlay_bg(theme: &Theme, opacity: u8) -> Rgba {
+    let base_color = if theme.has_dark_colors() {
+        0xffffffu32 // white for dark mode (brightens)
+    } else {
+        0x000000u32 // black for light mode (darkens)
+    };
+    rgba((base_color << 8) | (opacity as u32))
 }

@@ -1576,7 +1576,7 @@ impl NotesApp {
             .id("actions-panel-overlay")
             .absolute()
             .inset_0()
-            .bg(gpui::rgba(0x00000080))
+            .bg(Self::get_modal_overlay_background()) // Theme-aware overlay
             .flex()
             .flex_col()
             .items_center() // Horizontally centered
@@ -1620,7 +1620,7 @@ impl NotesApp {
                 .id("browse-panel-overlay")
                 .absolute()
                 .inset_0()
-                .bg(gpui::rgba(0x00000080))
+                .bg(Self::get_modal_overlay_background()) // Theme-aware overlay
                 .flex()
                 .items_center()
                 .justify_center()
@@ -1705,6 +1705,20 @@ impl NotesApp {
             bg_hex,
             opacity.title_bar,
         ))
+    }
+
+    /// Get modal overlay background (theme-aware)
+    ///
+    /// For dark mode: black overlay (darkens content behind)
+    /// For light mode: white overlay (keeps content readable on light backgrounds)
+    /// 50% opacity (0x80) for good contrast without being too heavy
+    fn get_modal_overlay_background() -> gpui::Rgba {
+        let sk_theme = crate::theme::load_theme();
+        if sk_theme.has_dark_colors() {
+            gpui::rgba(0x00000080) // black at 50% for dark mode
+        } else {
+            gpui::rgba(0xffffff80) // white at 50% for light mode
+        }
     }
 
     /// Compute box shadows from theme configuration (called once at construction)
