@@ -43,12 +43,23 @@ pub struct ButtonColors {
     pub focus_ring: u32,
     /// Subtle background tint when focused
     pub focus_tint: u32,
+    /// Hover overlay color with alpha (theme-aware: white for dark, black for light)
+    /// Format: 0xRRGGBBAA
+    pub hover_overlay: u32,
 }
 
 impl ButtonColors {
     /// Create ButtonColors from theme reference
     /// Uses accent.selected (yellow/gold) to match logo and selected item highlights
     pub fn from_theme(theme: &crate::theme::Theme) -> Self {
+        // Theme-aware hover overlay: white for dark mode, black for light mode
+        // ~15% alpha (0x26 = 38/255)
+        let hover_overlay = if theme.has_dark_colors() {
+            0xffffff26 // white at ~15% alpha for dark backgrounds
+        } else {
+            0x00000026 // black at ~15% alpha for light backgrounds
+        };
+
         Self {
             text_color: theme.colors.accent.selected, // Yellow/gold - matches logo & highlights
             text_hover: theme.colors.text.primary,
@@ -58,6 +69,7 @@ impl ButtonColors {
             border: theme.colors.ui.border,
             focus_ring: theme.colors.accent.selected, // Accent color for focus ring
             focus_tint: theme.colors.accent.selected_subtle, // Subtle tint when focused
+            hover_overlay,
         }
     }
 
@@ -73,6 +85,9 @@ impl ButtonColors {
             border: colors.border,
             focus_ring: colors.accent, // Accent color for focus ring
             focus_tint: colors.background_selected, // Subtle tint when focused
+            // Default to dark mode hover overlay for design colors
+            // (design system typically assumes dark theme)
+            hover_overlay: 0xffffff26,
         }
     }
 }
@@ -88,6 +103,7 @@ impl Default for ButtonColors {
             border: 0x464647,           // Border color
             focus_ring: 0xfbbf24,       // Yellow/gold for focus ring
             focus_tint: 0x2a2a2a,       // Subtle tint when focused
+            hover_overlay: 0xffffff26,  // White at ~15% alpha (dark mode default)
         }
     }
 }
@@ -196,8 +212,8 @@ impl RenderOnce for Button {
         let focus_handle = self.focus_handle;
 
         // Calculate colors based on variant
-        // Hover uses white at ~15% alpha - universal "lift" effect that works on any dark bg
-        let hover_overlay = rgba(0xffffff26); // white at ~15% alpha (0x26 = 38/255 ≈ 15%)
+        // Hover uses theme-aware overlay color (white for dark, black for light)
+        let hover_overlay = rgba(colors.hover_overlay);
 
         // Focus styling colors
         // 0xA0 = 62.5% opacity for visible focus ring

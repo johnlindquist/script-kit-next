@@ -70,6 +70,9 @@ pub struct ToastColors {
     pub action_background: u32,
     /// Dismiss button color
     pub dismiss: u32,
+    /// Details section background (theme-aware: black for dark, white for light at low opacity)
+    /// Format: 0xRRGGBBAA
+    pub details_bg: u32,
 }
 
 impl ToastColors {
@@ -92,6 +95,7 @@ impl ToastColors {
             action_text: colors.accent.selected,
             action_background: colors.accent.selected_subtle,
             dismiss: colors.text.muted,
+            details_bg: 0x00000020, // Black at ~12.5% opacity for subtle darkening
         }
     }
 
@@ -115,6 +119,7 @@ impl ToastColors {
             action_text: design_colors.accent,
             action_background: design_colors.background_selected,
             dismiss: design_colors.text_muted,
+            details_bg: 0x00000020, // Black at ~12.5% opacity for subtle darkening
         }
     }
 
@@ -136,6 +141,7 @@ impl Default for ToastColors {
             action_text: 0xfbbf24,
             action_background: 0x2a2a2a,
             dismiss: 0x808080,
+            details_bg: 0x00000020, // Black at ~12.5% opacity
         }
     }
 }
@@ -396,6 +402,7 @@ impl RenderOnce for Toast {
                     border: colors.border,
                     focus_ring: colors.action_text,
                     focus_tint: colors.action_background,
+                    hover_overlay: 0xffffff26, // White at ~15% alpha (dark mode default for toasts)
                 };
                 let action_btn = Button::new(label.clone(), button_colors)
                     .variant(ButtonVariant::Ghost)
@@ -435,12 +442,13 @@ impl RenderOnce for Toast {
             let button_colors = ButtonColors {
                 text_color: colors.dismiss,
                 text_hover: colors.text,
-                background: 0x00000000, // transparent
+                background: 0x00000000,     // transparent
                 background_hover: 0xffffff, // white hover overlay applied via variant
                 accent: colors.dismiss,
                 border: 0x00000000, // no border
                 focus_ring: colors.dismiss,
                 focus_tint: 0x00000000,
+                hover_overlay: 0xffffff26, // White at ~15% alpha (dark mode default for toasts)
             };
             Some(
                 Button::new("×", button_colors)
@@ -472,7 +480,7 @@ impl RenderOnce for Toast {
                     .w_full()
                     .px(rems(1.0)) // 16px at 16px base
                     .py(rems(0.75)) // 12px at 16px base
-                    .bg(rgba(0x00000020))
+                    .bg(rgba(colors.details_bg)) // Theme-aware details background
                     .border_t_1()
                     .border_color(rgba((colors.border << 8) | 0x40))
                     .child(

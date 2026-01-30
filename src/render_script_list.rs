@@ -782,25 +782,7 @@ impl ScriptListApp {
         );
 
         // Main container with system font and transparency
-        // Use theme opacity settings for background transparency
-        let opacity = self.theme.get_opacity();
-
-        // Use design tokens for background color (or theme for Default design)
-        let bg_hex = if is_default_design {
-            theme.colors.background.main
-        } else {
-            design_colors.background
-        };
-
-        // Create box shadows from theme
-        let box_shadows = self.create_box_shadows();
-
-        // Use design tokens for border radius
-        let border_radius = if is_default_design {
-            12.0 // Default radius
-        } else {
-            design_visual.radius_lg
-        };
+        // NOTE: Shadow disabled for vibrancy - shadows on transparent elements cause gray fill
 
         // Use design tokens for text color
         let text_primary = if is_default_design {
@@ -838,19 +820,12 @@ impl ScriptListApp {
             design_colors.background_selected
         };
 
-        // VIBRANCY: Remove background from content div - let gpui-component Root's
-        // semi-transparent background handle vibrancy effect. Content areas should NOT
-        // have their own backgrounds to allow blur to show through.
-        let _bg_with_alpha = crate::ui_foundation::hex_to_rgba_with_opacity(bg_hex, opacity.main);
-
         let mut main_div = div()
             .flex()
             .flex_col()
-            // Removed: .bg(rgba(bg_with_alpha)) - let vibrancy show through from Root
-            .shadow(box_shadows)
+            // NOTE: No shadow - shadows on transparent elements cause gray fill with vibrancy
             .w_full()
             .h_full()
-            .rounded(px(border_radius))
             .text_color(rgb(text_primary))
             .font_family(font_family)
             .key_context("script_list")

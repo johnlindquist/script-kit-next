@@ -998,27 +998,24 @@ pub fn log_swizzle_diagnostics() {
     );
 }
 
-/// Configure the vibrancy blur for the main window to look good on ANY background.
+/// Configure the vibrancy blur for the main window based on appearance mode.
 ///
-/// The key insight from Raycast/Spotlight/Alfred: they force the window's appearance
-/// to `NSAppearanceNameVibrantDark`, which makes NSVisualEffectView always use its
-/// dark rendering path regardless of system appearance or what's behind the window.
+/// This is the appearance-aware version that should be called after loading the theme.
+/// Uses VibrantLight for light mode, VibrantDark for dark mode.
 ///
-/// This function:
-/// 1. Forces window appearance to VibrantDark (CRITICAL - this is the main fix)
-/// 2. Sets the blur material to HUD_WINDOW for a dark, high-contrast effect
-/// 3. Ensures the effect is always active and uses behind-window blending
+/// # Arguments
+/// * `is_dark` - true for dark mode (VibrantDark), false for light mode (VibrantLight)
 ///
 /// # macOS Behavior
 ///
-/// Sets the window's NSAppearance to VibrantDark, then configures the
+/// Sets the window's NSAppearance based on the is_dark parameter, then configures the
 /// NSVisualEffectView with appropriate material and state.
 ///
 /// # Safety
 ///
 /// Uses Objective-C message sending internally.
 #[cfg(target_os = "macos")]
-pub fn configure_window_vibrancy_material() {
+pub fn configure_window_vibrancy_material_for_appearance(is_dark: bool) {
     debug_assert_main_thread();
     unsafe {
         let window = match window_manager::get_main_window() {
@@ -1032,16 +1029,33 @@ pub fn configure_window_vibrancy_material() {
             }
         };
 
-        // Set window appearance to VibrantDark for consistent blur rendering
-        // VibrantDark provides better vibrancy effects than DarkAqua - this is what
-        // Raycast/Spotlight use for their blur effect
-        let vibrant_dark: id = msg_send![
-            class!(NSAppearance),
-            appearanceNamed: NSAppearanceNameVibrantDark
-        ];
-        if !vibrant_dark.is_null() {
-            let _: () = msg_send![window, setAppearance: vibrant_dark];
-            logging::log("PANEL", "Set window appearance to VibrantDark");
+        // Set window appearance based on mode:
+        // - VibrantDark for dark mode (what Raycast/Spotlight use)
+        // - VibrantLight for light mode
+        let appearance: id = if is_dark {
+            msg_send![
+                class!(NSAppearance),
+                appearanceNamed: NSAppearanceNameVibrantDark
+            ]
+        } else {
+            msg_send![
+                class!(NSAppearance),
+                appearanceNamed: NSAppearanceNameVibrantLight
+            ]
+        };
+        if !appearance.is_null() {
+            let _: () = msg_send![window, setAppearance: appearance];
+            logging::log(
+                "PANEL",
+                &format!(
+                    "Set window appearance to {}",
+                    if is_dark {
+                        "VibrantDark"
+                    } else {
+                        "VibrantLight"
+                    }
+                ),
+            );
         }
 
         // ╔════════════════════════════════════════════════════════════════════════════╗
@@ -1087,12 +1101,41 @@ pub fn configure_window_vibrancy_material() {
             logging::log(
                 "PANEL",
                 &format!(
-                    "Configured {} NSVisualEffectView(s): VibrantDark + HUD_WINDOW + emphasized",
-                    count
+                    "Configured {} NSVisualEffectView(s): {} + POPOVER + emphasized",
+                    count,
+                    if is_dark {
+                        "VibrantDark"
+                    } else {
+                        "VibrantLight"
+                    }
                 ),
             );
         }
     }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn configure_window_vibrancy_material_for_appearance(_is_dark: bool) {
+    // No-op on non-macOS platforms
+}
+
+/// Configure the vibrancy blur for the main window (backward compatible).
+///
+/// This function defaults to dark mode (VibrantDark) for backward compatibility.
+/// For appearance-aware vibrancy, use `configure_window_vibrancy_material_for_appearance()`.
+///
+/// # macOS Behavior
+///
+/// Sets the window's NSAppearance to VibrantDark, then configures the
+/// NSVisualEffectView with appropriate material and state.
+///
+/// # Safety
+///
+/// Uses Objective-C message sending internally.
+#[cfg(target_os = "macos")]
+pub fn configure_window_vibrancy_material() {
+    // Backward compatible: default to dark mode
+    configure_window_vibrancy_material_for_appearance(true);
 }
 
 /// Recursively walk view hierarchy and configure all NSVisualEffectViews

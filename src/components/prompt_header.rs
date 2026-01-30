@@ -349,6 +349,7 @@ impl PromptHeader {
             border: colors.border,
             focus_ring: colors.accent,
             focus_tint: colors.background,
+            hover_overlay: 0xffffff26, // White at ~15% alpha (dark mode default)
         };
 
         let on_primary = self.on_primary_click.clone();

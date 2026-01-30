@@ -385,6 +385,19 @@ impl BrowsePanel {
         ))
     }
 
+    /// Get modal overlay background (theme-aware)
+    ///
+    /// For dark mode: black overlay (darkens content behind)
+    /// For light mode: white overlay (keeps content readable on light backgrounds)
+    fn get_modal_overlay_background() -> gpui::Rgba {
+        let sk_theme = crate::theme::load_theme();
+        if sk_theme.has_dark_colors() {
+            rgba(0x00000080) // black at 50% for dark mode
+        } else {
+            rgba(0xffffff80) // white at 50% for light mode
+        }
+    }
+
     /// Render the notes list
     fn render_list(&self, cx: &mut Context<Self>) -> impl IntoElement {
         if self.notes.is_empty() {
@@ -418,12 +431,12 @@ impl Focusable for BrowsePanel {
 
 impl Render for BrowsePanel {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        // Modal backdrop (semi-transparent overlay)
+        // Modal backdrop (semi-transparent overlay - theme-aware)
         div()
             .id("browse-panel-backdrop")
             .absolute()
             .inset_0()
-            .bg(gpui::rgba(0x00000080)) // 50% opacity black
+            .bg(Self::get_modal_overlay_background()) // Theme-aware: black for dark, white for light
             .flex()
             .items_center()
             .justify_center()

@@ -410,9 +410,11 @@ fn show_main_window_helper(
         // GPUI hides this layer which removes the native macOS vibrancy tinting.
         // By swizzling, we get proper native blur appearance like Raycast/Spotlight.
         platform::swizzle_gpui_blurred_view();
-        // Configure vibrancy material to HUD_WINDOW for proper dark appearance
-        // This prevents background colors from bleeding through the blur
-        platform::configure_window_vibrancy_material();
+        // Configure vibrancy material based on theme's actual colors
+        // Uses VibrantDark for dark-colored themes, VibrantLight for light-colored themes
+        let theme = theme::load_theme();
+        let is_dark = theme.should_use_dark_vibrancy();
+        platform::configure_window_vibrancy_material_for_appearance(is_dark);
         PANEL_CONFIGURED.store(true, Ordering::SeqCst);
     }
 
@@ -2198,6 +2200,7 @@ fn main() {
         // Capture bun_available for use in window creation
         let bun_available = setup_result.bun_available;
 
+        // Root is required for gpui_component's InputState focus tracking
         let window: WindowHandle<Root> = cx.open_window(
             WindowOptions {
                 window_bounds: Some(WindowBounds::Windowed(bounds)),
@@ -2525,6 +2528,13 @@ fn main() {
                 while let Ok(_event) = appearance_rx.recv().await {
                     logging::log("APP", "System appearance changed, updating theme");
                     let _ = cx.update(|cx| {
+                        // Reload theme to get new appearance mode
+                        let theme = theme::load_theme();
+                        let is_dark = theme.should_use_dark_vibrancy();
+
+                        // Reconfigure vibrancy based on actual theme colors
+                        platform::configure_window_vibrancy_material_for_appearance(is_dark);
+
                         // Sync gpui-component theme with new system appearance
                         theme::sync_gpui_component_theme(cx);
 
@@ -2905,7 +2915,10 @@ fn main() {
                                 if !PANEL_CONFIGURED.load(std::sync::atomic::Ordering::SeqCst) {
                                     platform::configure_as_floating_panel();
                                     platform::swizzle_gpui_blurred_view();
-                                    platform::configure_window_vibrancy_material();
+                                    // Configure vibrancy based on actual theme colors
+                                    let theme = theme::load_theme();
+                                    let is_dark = theme.should_use_dark_vibrancy();
+                                    platform::configure_window_vibrancy_material_for_appearance(is_dark);
                                     PANEL_CONFIGURED.store(true, std::sync::atomic::Ordering::SeqCst);
                                 }
 
@@ -2976,7 +2989,10 @@ fn main() {
                                 if !PANEL_CONFIGURED.load(std::sync::atomic::Ordering::SeqCst) {
                                     platform::configure_as_floating_panel();
                                     platform::swizzle_gpui_blurred_view();
-                                    platform::configure_window_vibrancy_material();
+                                    // Configure vibrancy based on actual theme colors
+                                    let theme = theme::load_theme();
+                                    let is_dark = theme.should_use_dark_vibrancy();
+                                    platform::configure_window_vibrancy_material_for_appearance(is_dark);
                                     PANEL_CONFIGURED.store(true, std::sync::atomic::Ordering::SeqCst);
                                 }
 
