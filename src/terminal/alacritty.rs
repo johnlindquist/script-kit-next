@@ -44,6 +44,7 @@ use vte::ansi::{Color, NamedColor, Processor, Rgb};
 use crate::terminal::pty::PtyManager;
 use crate::terminal::theme_adapter::ThemeAdapter;
 use crate::terminal::TerminalEvent;
+use crate::theme::Theme;
 
 /// Default scrollback buffer size in lines.
 const DEFAULT_SCROLLBACK_LINES: usize = 10_000;
@@ -931,6 +932,15 @@ impl TerminalHandle {
     /// Gets a reference to the theme adapter.
     pub fn theme(&self) -> &ThemeAdapter {
         &self.theme
+    }
+
+    /// Updates the terminal theme from a new Theme.
+    ///
+    /// This allows updating terminal colors when the application theme changes.
+    /// Preserves the current focus state.
+    pub fn update_theme(&mut self, theme: &Theme) {
+        self.theme.update_from_theme(theme);
+        debug!("Terminal theme updated");
     }
 }
 

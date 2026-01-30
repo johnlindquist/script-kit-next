@@ -22,8 +22,9 @@ impl ScriptListApp {
         let _design_spacing = tokens.spacing();
         let design_visual = tokens.visual();
 
-        // Use design tokens for global theming
-        let box_shadows = self.create_box_shadows();
+        // NOTE: No shadow - shadows on transparent elements cause gray fill with vibrancy
+        // Shadows are handled by app_shell
+        let _box_shadows = self.create_box_shadows();
 
         // VIBRANCY: Use foundation helper - returns None when vibrancy enabled (let Root handle bg)
         let vibrancy_bg = get_vibrancy_background(&self.theme);
@@ -172,7 +173,7 @@ impl ScriptListApp {
             .flex()
             .flex_col()
             .when_some(vibrancy_bg, |d, bg| d.bg(bg)) // VIBRANCY: Only apply bg when vibrancy disabled
-            .shadow(box_shadows)
+            // NOTE: No shadow - shadows on transparent elements cause gray fill with vibrancy
             .w_full()
             .h(content_height) // Explicit 700px height (window height for editor view)
             .overflow_hidden() // Clip content to rounded corners
@@ -199,6 +200,7 @@ impl ScriptListApp {
                     text_muted: design_colors.text_muted,
                     border: design_colors.border,
                     background: design_colors.background_selected, // Match selected item bg
+                    is_light_mode: !self.theme.is_dark_mode(),
                 };
 
                 // Build footer config with optional helper text and language

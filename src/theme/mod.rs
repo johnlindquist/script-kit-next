@@ -33,7 +33,7 @@ pub use types::{ColorScheme, Theme};
 
 // Re-export helper types for lightweight color extraction (allow unused - designed for incremental adoption)
 #[allow(unused_imports)]
-pub use helpers::{InputFieldColors, ListItemColors, PromptColors};
+pub use helpers::{hover_overlay_bg, modal_overlay_bg, InputFieldColors, ListItemColors, PromptColors};
 
 // Re-export semantic types (allow unused - designed for incremental adoption)
 #[allow(unused_imports)]
@@ -56,8 +56,8 @@ pub use hex_color::{hex_color_serde, HexColor};
 #[cfg(test)]
 #[allow(unused_imports)]
 pub use types::{
-    detect_system_appearance, BackgroundOpacity, BackgroundRole, DropShadow, FontConfig,
-    VibrancyMaterial, VibrancySettings,
+    detect_system_appearance, AppearanceMode, BackgroundOpacity, BackgroundRole, DropShadow,
+    FontConfig, VibrancyMaterial, VibrancySettings,
 };
 
 #[cfg(test)]

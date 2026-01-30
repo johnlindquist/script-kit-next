@@ -48,6 +48,8 @@ pub struct PromptFooterColors {
     pub border: u32,
     /// Background color for footer (matches selected item background)
     pub background: u32,
+    /// Whether we're in light mode (affects opacity)
+    pub is_light_mode: bool,
 }
 
 impl PromptFooterColors {
@@ -58,6 +60,7 @@ impl PromptFooterColors {
             text_muted: theme.colors.text.muted,
             border: theme.colors.ui.border,
             background: theme.colors.accent.selected_subtle, // Match selected item bg
+            is_light_mode: !theme.is_dark_mode(),
         }
     }
 
@@ -68,6 +71,7 @@ impl PromptFooterColors {
             text_muted: colors.text_muted,
             border: colors.border,
             background: colors.background_selected, // Match selected item bg
+            is_light_mode: false,                   // Default to dark mode for design colors
         }
     }
 }
@@ -79,6 +83,7 @@ impl Default for PromptFooterColors {
             text_muted: 0x808080,
             border: 0x464647,
             background: 0xffffff, // White - subtle brightening like Raycast
+            is_light_mode: false,
         }
     }
 }
@@ -323,7 +328,15 @@ impl RenderOnce for PromptFooter {
         right_side = right_side.child(buttons);
 
         // Main footer container (uses FOOTER_HEIGHT constant for single source of truth)
-        // Use semi-transparent background for vibrancy support
+        // Light mode: Raycast-style off-white (#ECEAEC) for clean look
+        // Dark mode: semi-transparent for vibrancy support
+        let footer_bg = if colors.is_light_mode {
+            0xeceaecu32.to_rgb() // Raycast-style off-white in light mode
+        } else {
+            colors.background.rgba8(0x1f) // ~12% opacity in dark mode
+        };
+        let border_opacity = if colors.is_light_mode { 0x60 } else { 0x30 };
+
         let mut footer = div()
             .w_full()
             .h(px(FOOTER_HEIGHT))
@@ -339,8 +352,8 @@ impl RenderOnce for PromptFooter {
             .items_center()
             .justify_between()
             .border_t_1()
-            .border_color(colors.border.rgba8(0x30)) // Top border with 19% opacity
-            .bg(colors.background.rgba8(0x1f)); // ~12% opacity - subtle like Raycast selection
+            .border_color(colors.border.rgba8(border_opacity))
+            .bg(footer_bg);
 
         // Left side: Logo + helper text
         let mut left_side = hstack().gap(px(8.)).items_center();
