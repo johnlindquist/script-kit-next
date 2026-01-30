@@ -1510,9 +1510,10 @@ impl ChatPrompt {
     ) -> impl IntoElement {
         let colors = &self.prompt_colors;
 
-        // VIBRANCY: Use white at low opacity for subtle brightening that lets blur show through
-        let container_bg = rgba((0xFFFFFF << 8) | 0x15); // White at ~8% opacity
-        let copy_hover_bg = rgba((0xFFFFFF << 8) | 0x28); // White at ~16% for hover
+        // VIBRANCY: Use theme-aware overlay for subtle lift that lets blur show through
+        // Dark mode: white overlay brightens; Light mode: black overlay darkens
+        let container_bg = theme::hover_overlay_bg(&self.theme, 0x15); // ~8% opacity
+        let copy_hover_bg = theme::hover_overlay_bg(&self.theme, 0x28); // ~16% for hover
         let error_color = self.theme.colors.ui.error;
         let error_bg = rgba((error_color << 8) | 0x40); // Theme error with transparency
         let retry_hover_bg = rgba((colors.accent_color << 8) | 0x40);
@@ -1763,7 +1764,10 @@ impl ChatPrompt {
                             // Always attach on_click, check callback inside
                             // (fixes GPUI issue where when_some on second sibling doesn't register hits)
                             .on_click(cx.listener(move |_this, _event, _window, _cx| {
-                                logging::log("CHAT", "Configure button clicked - triggering API key setup");
+                                logging::log(
+                                    "CHAT",
+                                    "Configure button clicked - triggering API key setup",
+                                );
                                 if let Some(ref cb) = on_configure {
                                     cb();
                                 }
@@ -1808,7 +1812,10 @@ impl ChatPrompt {
                             // Always attach on_click, check callback inside
                             // (fixes GPUI issue where when_some on second sibling doesn't register hits)
                             .on_click(cx.listener(move |_this, _event, _window, _cx| {
-                                logging::log("CHAT", "Claude Code button clicked - enabling Claude Code");
+                                logging::log(
+                                    "CHAT",
+                                    "Claude Code button clicked - enabling Claude Code",
+                                );
                                 if let Some(ref cb) = on_claude_code {
                                     cb();
                                 }

@@ -826,7 +826,7 @@ impl AiApp {
                         .size(px(16.))
                         .rounded_full()
                         .cursor_pointer()
-                        .hover(|s| s.bg(hsla(0.0, 0.7, 0.5, 0.2))) // Red hover
+                        .hover(|s| s.bg(cx.theme().danger.opacity(0.3))) // Theme-aware destructive hover
                         .on_mouse_down(
                             gpui::MouseButton::Left,
                             cx.listener(|this, _, _, cx| {
@@ -3113,16 +3113,19 @@ export default {
     /// Render the setup card when no API keys are configured
     /// Shows a Raycast-style prompt with a Configure Vercel AI Gateway button
     fn render_setup_card(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        debug!("render_setup_card called, showing_api_key_input={}", self.showing_api_key_input);
+        debug!(
+            "render_setup_card called, showing_api_key_input={}",
+            self.showing_api_key_input
+        );
 
         // If showing API key input mode, render that instead
         if self.showing_api_key_input {
             return self.render_api_key_input(cx).into_any_element();
         }
 
-        // Yellow/gold accent color for the button (Raycast style)
-        let button_bg = hsla(45.0 / 360.0, 0.9, 0.55, 1.0); // Gold/yellow
-        let button_text = hsla(0.0, 0.0, 0.1, 1.0); // Dark text
+        // Theme-aware accent color for the button (Raycast style)
+        let button_bg = cx.theme().accent;
+        let button_text = cx.theme().primary_foreground;
 
         div()
             .flex()
@@ -3907,6 +3910,20 @@ export default {
             opacity.title_bar,
         ))
     }
+
+    /// Get modal overlay background (theme-aware)
+    ///
+    /// For dark mode: black overlay (darkens content behind)
+    /// For light mode: white overlay (keeps content readable on light backgrounds)
+    /// 50% opacity (0x80) for good contrast without being too heavy
+    fn get_modal_overlay_background() -> gpui::Rgba {
+        let sk_theme = crate::theme::load_theme();
+        if sk_theme.has_dark_colors() {
+            gpui::rgba(0x00000080) // black at 50% for dark mode
+        } else {
+            gpui::rgba(0xffffff80) // white at 50% for light mode
+        }
+    }
 }
 
 impl Focusable for AiApp {
@@ -4032,7 +4049,8 @@ impl Render for AiApp {
             }
         }
 
-        let box_shadows = self.create_box_shadows();
+        // NOTE: Shadow disabled for vibrancy - shadows on transparent elements cause gray fill
+        // The vibrancy effect requires no shadow on transparent elements
 
         div()
             .relative() // Required for absolutely positioned sidebar toggle
@@ -4040,7 +4058,7 @@ impl Render for AiApp {
             .flex_row()
             .size_full()
             // NO .bg() - gpui-component Root provides vibrancy background
-            .shadow(box_shadows)
+            // NOTE: No shadow - shadows on transparent elements cause gray fill with vibrancy
             .text_color(cx.theme().foreground)
             .track_focus(&self.focus_handle)
             // CRITICAL: Use capture_key_down to intercept keys BEFORE Input component handles them
@@ -4454,10 +4472,13 @@ impl AiApp {
             .collect();
 
         // Overlay positioned near the new chat button
+        // Theme-aware modal overlay: black for dark mode, white for light mode
+        let overlay_bg = Self::get_modal_overlay_background();
         div()
             .id("presets-dropdown-overlay")
             .absolute()
             .inset_0()
+            .bg(overlay_bg)
             .flex()
             .items_start()
             .justify_start()
@@ -4684,10 +4705,13 @@ impl AiApp {
             .collect();
 
         // Build the dropdown overlay - positioned near the header + button
+        // Theme-aware modal overlay: black for dark mode, white for light mode
+        let overlay_bg = Self::get_modal_overlay_background();
         div()
             .id("new-chat-dropdown-overlay")
             .absolute()
             .inset_0()
+            .bg(overlay_bg)
             .flex()
             .items_start()
             .justify_end() // Align to right (near the + button)
@@ -4938,10 +4962,13 @@ impl AiApp {
             .collect();
 
         // Overlay
+        // Theme-aware modal overlay: black for dark mode, white for light mode
+        let overlay_bg = Self::get_modal_overlay_background();
         div()
             .id("attachments-picker-overlay")
             .absolute()
             .inset_0()
+            .bg(overlay_bg)
             .flex()
             .items_end()
             .justify_start()

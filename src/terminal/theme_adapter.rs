@@ -95,6 +95,32 @@ impl Default for AnsiColors {
 }
 
 impl AnsiColors {
+    /// Light mode ANSI colors matching VS Code light theme.
+    ///
+    /// These colors are designed for readability on light backgrounds.
+    pub fn light_default() -> Self {
+        Self {
+            // Normal colors (0-7) - darker/more saturated for light backgrounds
+            black: hex_to_rgb(0x000000),
+            red: hex_to_rgb(0xcd3131),
+            green: hex_to_rgb(0x00bc00),
+            yellow: hex_to_rgb(0x949800),
+            blue: hex_to_rgb(0x0451a5),
+            magenta: hex_to_rgb(0xbc05bc),
+            cyan: hex_to_rgb(0x0598bc),
+            white: hex_to_rgb(0x555555), // Darker for visibility on light
+            // Bright colors (8-15)
+            bright_black: hex_to_rgb(0x666666),
+            bright_red: hex_to_rgb(0xcd3131),
+            bright_green: hex_to_rgb(0x14ce14),
+            bright_yellow: hex_to_rgb(0xb5ba00),
+            bright_blue: hex_to_rgb(0x0451a5),
+            bright_magenta: hex_to_rgb(0xbc05bc),
+            bright_cyan: hex_to_rgb(0x0598bc),
+            bright_white: hex_to_rgb(0xa5a5a5),
+        }
+    }
+
     /// Get an ANSI color by index (0-15).
     ///
     /// # Arguments
@@ -285,6 +311,37 @@ impl ThemeAdapter {
         }
     }
 
+    /// Creates a theme adapter with sensible light defaults.
+    ///
+    /// Uses colors that work well with light themes:
+    /// - Background: #f5f5f5 (Light gray for terminal panel)
+    /// - Foreground: #000000 (Black text for maximum contrast)
+    /// - Cursor: #000000 (Black cursor visible on light background)
+    pub fn light_default() -> Self {
+        let foreground = hex_to_rgb(0x000000); // Black text - readable on white
+        let background = hex_to_rgb(0xf5f5f5); // Light gray (matches theme.colors.background.log_panel)
+        let cursor = hex_to_rgb(0x000000); // Black cursor
+        let selection_background = hex_to_rgb(0x0078d4); // Blue selection
+        let selection_foreground = hex_to_rgb(0xffffff); // White text on selection
+        let ansi = AnsiColors::light_default();
+
+        Self {
+            foreground,
+            background,
+            cursor,
+            selection_background,
+            selection_foreground,
+            ansi,
+            is_focused: true,
+            original_foreground: foreground,
+            original_background: background,
+            original_cursor: cursor,
+            original_selection_background: selection_background,
+            original_selection_foreground: selection_foreground,
+            original_ansi: ansi,
+        }
+    }
+
     /// Returns the foreground text color.
     #[inline]
     pub fn foreground(&self) -> Rgb {
@@ -363,6 +420,44 @@ impl ThemeAdapter {
             // Dim colors by blending toward gray (30% blend factor)
             const DIM_FACTOR: f32 = 0.7;
 
+            self.foreground = dim_color(self.original_foreground, DIM_FACTOR);
+            self.background = dim_color(self.original_background, DIM_FACTOR);
+            self.cursor = dim_color(self.original_cursor, DIM_FACTOR);
+            self.selection_background = dim_color(self.original_selection_background, DIM_FACTOR);
+            self.selection_foreground = dim_color(self.original_selection_foreground, DIM_FACTOR);
+            self.ansi = self.original_ansi.dimmed(DIM_FACTOR);
+        }
+    }
+
+    /// Updates the theme adapter from a new Theme.
+    ///
+    /// This allows updating terminal colors when the theme changes at runtime.
+    /// Preserves the current focus state (if unfocused, colors will be dimmed).
+    pub fn update_from_theme(&mut self, theme: &Theme) {
+        let new_adapter = Self::from_theme(theme);
+
+        // Preserve focus state
+        let was_focused = self.is_focused;
+
+        // Update all original color values
+        self.original_foreground = new_adapter.original_foreground;
+        self.original_background = new_adapter.original_background;
+        self.original_cursor = new_adapter.original_cursor;
+        self.original_selection_background = new_adapter.original_selection_background;
+        self.original_selection_foreground = new_adapter.original_selection_foreground;
+        self.original_ansi = new_adapter.original_ansi;
+
+        // Apply the new colors (respecting focus state)
+        if was_focused {
+            self.foreground = new_adapter.foreground;
+            self.background = new_adapter.background;
+            self.cursor = new_adapter.cursor;
+            self.selection_background = new_adapter.selection_background;
+            self.selection_foreground = new_adapter.selection_foreground;
+            self.ansi = new_adapter.ansi;
+        } else {
+            // Re-apply dimming with new colors
+            const DIM_FACTOR: f32 = 0.7;
             self.foreground = dim_color(self.original_foreground, DIM_FACTOR);
             self.background = dim_color(self.original_background, DIM_FACTOR);
             self.cursor = dim_color(self.original_cursor, DIM_FACTOR);
@@ -764,5 +859,44 @@ mod tests {
 
         adapter.update_for_focus(true);
         assert!(adapter.is_focused());
+    }
+
+    // ========================================================================
+    // Light Mode Tests
+    // ========================================================================
+
+    #[test]
+    fn test_light_default_colors() {
+        let adapter = ThemeAdapter::light_default();
+        // Light theme should have dark foreground (black) for readability
+        assert_eq!(adapter.foreground(), hex_to_rgb(0x000000));
+        // Light theme should have light background
+        assert_eq!(adapter.background(), hex_to_rgb(0xf5f5f5));
+        // Cursor should be visible (black)
+        assert_eq!(adapter.cursor(), hex_to_rgb(0x000000));
+    }
+
+    #[test]
+    fn test_light_default_is_focused() {
+        let adapter = ThemeAdapter::light_default();
+        assert!(adapter.is_focused());
+    }
+
+    #[test]
+    fn test_ansi_colors_light_default() {
+        let ansi = AnsiColors::light_default();
+        // Black should still be black
+        assert_eq!(ansi.black, hex_to_rgb(0x000000));
+        // White should be darker for visibility on light backgrounds
+        assert_eq!(ansi.white, hex_to_rgb(0x555555));
+    }
+
+    #[test]
+    fn test_light_default_selection_contrast() {
+        let adapter = ThemeAdapter::light_default();
+        // Selection should provide good contrast
+        // Blue selection background with white text
+        assert_eq!(adapter.selection_background(), hex_to_rgb(0x0078d4));
+        assert_eq!(adapter.selection_foreground(), hex_to_rgb(0xffffff));
     }
 }

@@ -134,8 +134,9 @@ impl ScriptListApp {
             },
         );
 
-        // Use design tokens for global theming
-        let box_shadows = self.create_box_shadows();
+        // NOTE: No shadow - shadows on transparent elements cause gray fill with vibrancy
+        // Shadows are handled by app_shell
+        let _box_shadows = self.create_box_shadows();
 
         // VIBRANCY: Use foundation helper - returns None when vibrancy enabled (let Root handle bg)
         let vibrancy_bg = get_vibrancy_background(&self.theme);
@@ -157,7 +158,7 @@ impl ScriptListApp {
             .flex()
             .flex_col()
             .when_some(vibrancy_bg, |d, bg| d.bg(bg)) // VIBRANCY: Only apply bg when vibrancy disabled
-            .shadow(box_shadows)
+            // NOTE: No shadow - shadows on transparent elements cause gray fill with vibrancy
             .w_full()
             .h(content_height)
             .overflow_hidden()

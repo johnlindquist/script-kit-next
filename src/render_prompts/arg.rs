@@ -356,7 +356,9 @@ impl ScriptListApp {
         let opacity = self.theme.get_opacity();
         let bg_hex = design_colors.background;
         let _bg_with_alpha = crate::ui_foundation::hex_to_rgba_with_opacity(bg_hex, opacity.main);
-        let box_shadows = self.create_box_shadows();
+        // NOTE: No shadow - shadows on transparent elements cause gray fill with vibrancy
+        // Shadows are handled by app_shell
+        let _box_shadows = self.create_box_shadows();
 
         // P4: Pre-compute more theme values for the main container using design tokens
         let ui_border = design_colors.border;
@@ -366,7 +368,7 @@ impl ScriptListApp {
             .flex()
             .flex_col()
             // Removed: .bg(rgba(bg_with_alpha)) - let vibrancy show through from Root
-            .shadow(box_shadows)
+            // NOTE: No shadow - shadows on transparent elements cause gray fill with vibrancy
             .w_full()
             .h_full()
             .rounded(px(design_visual.radius_lg))

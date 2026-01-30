@@ -146,7 +146,8 @@ impl ScriptListApp {
         let opacity = self.theme.get_opacity();
         let bg_hex = self.theme.colors.background.main;
         let _bg_with_alpha = crate::ui_foundation::hex_to_rgba_with_opacity(bg_hex, opacity.main);
-        let box_shadows = self.create_box_shadows();
+        // Removed: box_shadows - shadows on transparent elements block vibrancy
+        let _box_shadows = self.create_box_shadows();
 
         // P0 FIX: Reference data from self instead of taking ownership
         // P1 FIX: NEVER do synchronous SQLite queries or image decoding in render loop!
@@ -410,7 +411,7 @@ impl ScriptListApp {
             .flex()
             .flex_col()
             // Removed: .bg(rgba(bg_with_alpha)) - let vibrancy show through from Root
-            .shadow(box_shadows)
+            // Removed: .shadow(box_shadows) - shadows on transparent elements block vibrancy
             .w_full()
             .h_full()
             .rounded(px(design_visual.radius_lg))
@@ -767,7 +768,8 @@ impl ScriptListApp {
         let opacity = self.theme.get_opacity();
         let bg_hex = self.theme.colors.background.main;
         let _bg_with_alpha = crate::ui_foundation::hex_to_rgba_with_opacity(bg_hex, opacity.main);
-        let box_shadows = self.create_box_shadows();
+        // Removed: box_shadows - shadows on transparent elements block vibrancy
+        let _box_shadows = self.create_box_shadows();
 
         // P0 FIX: Filter apps from self.apps instead of taking ownership
         let filtered_apps: Vec<_> = if filter.is_empty() {
@@ -969,7 +971,7 @@ impl ScriptListApp {
             .flex()
             .flex_col()
             // Removed: .bg(rgba(bg_with_alpha)) - let vibrancy show through from Root
-            .shadow(box_shadows)
+            // Removed: .shadow(box_shadows) - shadows on transparent elements block vibrancy
             .w_full()
             .h_full()
             .rounded(px(design_visual.radius_lg))
@@ -1093,7 +1095,8 @@ impl ScriptListApp {
         let opacity = self.theme.get_opacity();
         let bg_hex = self.theme.colors.background.main;
         let _bg_with_alpha = crate::ui_foundation::hex_to_rgba_with_opacity(bg_hex, opacity.main);
-        let box_shadows = self.create_box_shadows();
+        // Removed: box_shadows - shadows on transparent elements block vibrancy
+        let _box_shadows = self.create_box_shadows();
 
         // P0 FIX: Filter windows from self.cached_windows instead of taking ownership
         let filtered_windows: Vec<_> = if filter.is_empty() {
@@ -1311,7 +1314,7 @@ impl ScriptListApp {
             .flex()
             .flex_col()
             // Removed: .bg(rgba(bg_with_alpha)) - let vibrancy show through from Root
-            .shadow(box_shadows)
+            // Removed: .shadow(box_shadows) - shadows on transparent elements block vibrancy
             .w_full()
             .h_full()
             .rounded(px(design_visual.radius_lg))
@@ -1598,7 +1601,8 @@ impl ScriptListApp {
         let opacity = self.theme.get_opacity();
         let bg_hex = self.theme.colors.background.main;
         let _bg_with_alpha = crate::ui_foundation::hex_to_rgba_with_opacity(bg_hex, opacity.main);
-        let box_shadows = self.create_box_shadows();
+        // Removed: box_shadows - shadows on transparent elements block vibrancy
+        let _box_shadows = self.create_box_shadows();
 
         // Build gallery items: group headers grouped by category, then icons grouped by category
         #[derive(Clone)]
@@ -1962,7 +1966,7 @@ impl ScriptListApp {
             .flex()
             .flex_col()
             // Removed: .bg(rgba(bg_with_alpha)) - let vibrancy show through from Root
-            .shadow(box_shadows)
+            // Removed: .shadow(box_shadows) - shadows on transparent elements block vibrancy
             .w_full()
             .h_full()
             .rounded(px(design_visual.radius_lg))
@@ -2079,7 +2083,8 @@ impl ScriptListApp {
 
         let _opacity = self.theme.get_opacity();
         // bg_with_alpha removed - let vibrancy show through from Root (matches main menu)
-        let box_shadows = self.create_box_shadows();
+        // Removed: box_shadows - shadows on transparent elements block vibrancy
+        let _box_shadows = self.create_box_shadows();
 
         // Color values for use in closures
         let text_primary = self.theme.colors.text.primary;
@@ -2570,7 +2575,7 @@ impl ScriptListApp {
             .flex()
             .flex_col()
             // Removed: .bg(rgba(bg_with_alpha)) - let vibrancy show through from Root
-            .shadow(box_shadows)
+            // Removed: .shadow(box_shadows) - shadows on transparent elements block vibrancy
             .rounded(px(design_visual.radius_lg))
             // Header with search input - styled to match main menu exactly
             // Uses shared header constants (HEADER_PADDING_X/Y, CURSOR_HEIGHT_LG) for visual consistency.

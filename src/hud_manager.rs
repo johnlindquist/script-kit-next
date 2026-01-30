@@ -77,6 +77,18 @@ impl HudColors {
             accent_active: 0x2563eb, // blue-600
         }
     }
+
+    /// Create default light theme colors (fallback)
+    #[cfg(test)]
+    fn light_default() -> Self {
+        Self {
+            background: 0xfafafa,
+            text_primary: 0x000000,
+            accent: 0x2563eb,        // blue-600 (darker for light mode)
+            accent_hover: 0x3b82f6,  // blue-500
+            accent_active: 0x1d4ed8, // blue-700
+        }
+    }
 }
 
 /// Lighten a color by a percentage (0.0 - 1.0)
@@ -288,6 +300,20 @@ impl Render for HudView {
             .when(has_action, |el| {
                 let label = self.action_label.clone().unwrap_or_default();
                 let action = self.action.clone();
+                // Theme-aware hover overlay: white for dark mode, black for light mode
+                // Determined by checking if background color is dark (luminance < 0.5)
+                let hover_overlay = {
+                    let bg = colors.background;
+                    let r = ((bg >> 16) & 0xFF) as f32 / 255.0;
+                    let g = ((bg >> 8) & 0xFF) as f32 / 255.0;
+                    let b = (bg & 0xFF) as f32 / 255.0;
+                    let luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+                    if luminance < 0.5 {
+                        0xffffff26 // White at ~15% alpha for dark backgrounds
+                    } else {
+                        0x00000026 // Black at ~15% alpha for light backgrounds
+                    }
+                };
                 // Create button colors from HUD colors
                 let button_colors = ButtonColors {
                     text_color: colors.text_primary,
@@ -298,7 +324,7 @@ impl Render for HudView {
                     border: colors.accent,
                     focus_ring: colors.accent_hover,
                     focus_tint: colors.accent,
-                    hover_overlay: 0xffffff26, // White at ~15% alpha (HUD default)
+                    hover_overlay,
                 };
                 el.child(
                     Button::new(label, button_colors)
@@ -1157,6 +1183,41 @@ mod tests {
         assert_ne!(colors.accent, 0);
         assert_ne!(colors.accent_hover, 0);
         assert_ne!(colors.accent_active, 0);
+    }
+
+    #[test]
+    fn test_hud_colors_light_default() {
+        // Test that light mode colors are valid
+        let colors = HudColors::light_default();
+        // Light mode should have light background
+        assert_eq!(colors.background, 0xfafafa);
+        // Light mode should have dark text
+        assert_eq!(colors.text_primary, 0x000000);
+        // Accent colors should be non-zero
+        assert_ne!(colors.accent, 0);
+        assert_ne!(colors.accent_hover, 0);
+        assert_ne!(colors.accent_active, 0);
+    }
+
+    #[test]
+    fn test_hud_colors_light_vs_dark_contrast() {
+        // Test that light and dark themes have appropriate contrast
+        let dark = HudColors::dark_default();
+        let light = HudColors::light_default();
+
+        // Dark mode: dark background, light text
+        let dark_bg_brightness =
+            ((dark.background >> 16) & 0xff) + ((dark.background >> 8) & 0xff) + (dark.background & 0xff);
+        let dark_text_brightness =
+            ((dark.text_primary >> 16) & 0xff) + ((dark.text_primary >> 8) & 0xff) + (dark.text_primary & 0xff);
+        assert!(dark_bg_brightness < dark_text_brightness, "Dark mode: background should be darker than text");
+
+        // Light mode: light background, dark text
+        let light_bg_brightness =
+            ((light.background >> 16) & 0xff) + ((light.background >> 8) & 0xff) + (light.background & 0xff);
+        let light_text_brightness =
+            ((light.text_primary >> 16) & 0xff) + ((light.text_primary >> 8) & 0xff) + (light.text_primary & 0xff);
+        assert!(light_bg_brightness > light_text_brightness, "Light mode: background should be lighter than text");
     }
 
     #[test]

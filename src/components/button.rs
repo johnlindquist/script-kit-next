@@ -75,7 +75,31 @@ impl ButtonColors {
 
     /// Create ButtonColors from design colors for design system support
     /// Uses the primary accent color to match the design's brand
+    ///
+    /// NOTE: This defaults to dark mode hover overlay (white at 15%).
+    /// For light mode support, use `from_design_with_theme()` instead.
     pub fn from_design(colors: &crate::designs::DesignColors) -> Self {
+        // Default to dark mode (white hover overlay)
+        Self::from_design_with_dark_mode(colors, true)
+    }
+
+    /// Create ButtonColors from design colors with explicit dark/light mode
+    ///
+    /// # Arguments
+    /// * `colors` - Design color tokens
+    /// * `is_dark` - True for dark mode (white hover), false for light mode (black hover)
+    pub fn from_design_with_dark_mode(
+        colors: &crate::designs::DesignColors,
+        is_dark: bool,
+    ) -> Self {
+        // Theme-aware hover overlay: white for dark mode, black for light mode
+        // ~15% alpha (0x26 = 38/255)
+        let hover_overlay = if is_dark {
+            0xffffff26 // white at ~15% alpha for dark backgrounds
+        } else {
+            0x00000026 // black at ~15% alpha for light backgrounds
+        };
+
         Self {
             text_color: colors.accent, // Primary accent (yellow/gold for default)
             text_hover: colors.text_primary,
@@ -85,9 +109,7 @@ impl ButtonColors {
             border: colors.border,
             focus_ring: colors.accent, // Accent color for focus ring
             focus_tint: colors.background_selected, // Subtle tint when focused
-            // Default to dark mode hover overlay for design colors
-            // (design system typically assumes dark theme)
-            hover_overlay: 0xffffff26,
+            hover_overlay,
         }
     }
 }

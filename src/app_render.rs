@@ -100,11 +100,25 @@ impl ScriptListApp {
         let visual = tokens.visual();
 
         // Map design tokens to local variables (all designs use tokens now)
+        // In light mode, override text colors for readability on light backgrounds
+        let is_light_mode = !self.theme.is_dark_mode();
         let bg_main = colors.background;
         let ui_border = colors.border;
-        let text_primary = colors.text_primary;
-        let text_muted = colors.text_muted;
-        let text_secondary = colors.text_secondary;
+        let text_primary = if is_light_mode {
+            self.theme.colors.text.primary // Pure black or dark gray
+        } else {
+            colors.text_primary
+        };
+        let text_muted = if is_light_mode {
+            self.theme.colors.text.muted // Dark gray for light mode
+        } else {
+            colors.text_muted
+        };
+        let text_secondary = if is_light_mode {
+            self.theme.colors.text.secondary // Medium gray for light mode
+        } else {
+            colors.text_secondary
+        };
         let bg_search_box = colors.background_tertiary;
         let border_radius = visual.radius_md;
         let font_family = typography.font_family;
@@ -1402,7 +1416,8 @@ impl ScriptListApp {
         let opacity = self.theme.get_opacity();
         let bg_hex = design_colors.background;
         let _bg_with_alpha = crate::ui_foundation::hex_to_rgba_with_opacity(bg_hex, opacity.main);
-        let box_shadows = self.create_box_shadows();
+        // Removed: box_shadows - shadows on transparent elements block vibrancy
+        let _box_shadows = self.create_box_shadows();
 
         // Key handler for actions dialog
         let handle_key = cx.listener(
@@ -1423,7 +1438,7 @@ impl ScriptListApp {
             .w_full()
             .h_full()
             // Removed: .bg(rgba(bg_with_alpha)) - let vibrancy show through from Root
-            .shadow(box_shadows)
+            // Removed: .shadow(box_shadows) - shadows on transparent elements block vibrancy
             .rounded(px(design_visual.radius_lg))
             .p(px(design_spacing.padding_xl))
             .text_color(rgb(design_colors.text_primary))

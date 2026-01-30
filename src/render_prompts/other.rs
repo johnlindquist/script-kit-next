@@ -17,7 +17,9 @@ impl ScriptListApp {
         let opacity = self.theme.get_opacity();
         let bg_hex = design_colors.background;
         let _bg_with_alpha = crate::ui_foundation::hex_to_rgba_with_opacity(bg_hex, opacity.main);
-        let box_shadows = self.create_box_shadows();
+        // NOTE: No shadow - shadows on transparent elements cause gray fill with vibrancy
+        // Shadows are handled by app_shell
+        let _box_shadows = self.create_box_shadows();
 
         // Key handler for global shortcuts (Cmd+W, ESC)
         let handle_key = cx.listener(
@@ -37,7 +39,6 @@ impl ScriptListApp {
             .flex()
             .flex_col()
             // Removed: .bg(rgba(bg_with_alpha)) - let vibrancy show through from Root
-            .shadow(box_shadows)
             .w_full()
             .h_full()
             .overflow_hidden()
@@ -61,7 +62,9 @@ impl ScriptListApp {
         let opacity = self.theme.get_opacity();
         let bg_hex = design_colors.background;
         let _bg_with_alpha = crate::ui_foundation::hex_to_rgba_with_opacity(bg_hex, opacity.main);
-        let box_shadows = self.create_box_shadows();
+        // NOTE: No shadow - shadows on transparent elements cause gray fill with vibrancy
+        // Shadows are handled by app_shell
+        let _box_shadows = self.create_box_shadows();
 
         // Key handler for global shortcuts (Cmd+W, ESC)
         let handle_key = cx.listener(
@@ -81,7 +84,7 @@ impl ScriptListApp {
             .flex()
             .flex_col()
             // Removed: .bg(rgba(bg_with_alpha)) - let vibrancy show through from Root
-            .shadow(box_shadows)
+            // NOTE: No shadow - shadows on transparent elements cause gray fill with vibrancy
             .w_full()
             .h_full()
             .overflow_hidden()
@@ -105,7 +108,9 @@ impl ScriptListApp {
         let opacity = self.theme.get_opacity();
         let bg_hex = design_colors.background;
         let _bg_with_alpha = crate::ui_foundation::hex_to_rgba_with_opacity(bg_hex, opacity.main);
-        let box_shadows = self.create_box_shadows();
+        // NOTE: No shadow - shadows on transparent elements cause gray fill with vibrancy
+        // Shadows are handled by app_shell
+        let _box_shadows = self.create_box_shadows();
 
         // Key handler for global shortcuts (Cmd+W, ESC)
         let handle_key = cx.listener(
@@ -125,7 +130,7 @@ impl ScriptListApp {
             .flex()
             .flex_col()
             // Removed: .bg(rgba(bg_with_alpha)) - let vibrancy show through from Root
-            .shadow(box_shadows)
+            // NOTE: No shadow - shadows on transparent elements cause gray fill with vibrancy
             .w_full()
             .h_full()
             .overflow_hidden()
@@ -149,7 +154,9 @@ impl ScriptListApp {
         let opacity = self.theme.get_opacity();
         let bg_hex = design_colors.background;
         let _bg_with_alpha = crate::ui_foundation::hex_to_rgba_with_opacity(bg_hex, opacity.main);
-        let box_shadows = self.create_box_shadows();
+        // NOTE: No shadow - shadows on transparent elements cause gray fill with vibrancy
+        // Shadows are handled by app_shell
+        let _box_shadows = self.create_box_shadows();
 
         // Key handler for global shortcuts (Cmd+W, ESC)
         let handle_key = cx.listener(
@@ -169,7 +176,7 @@ impl ScriptListApp {
             .flex()
             .flex_col()
             // Removed: .bg(rgba(bg_with_alpha)) - let vibrancy show through from Root
-            .shadow(box_shadows)
+            // NOTE: No shadow - shadows on transparent elements cause gray fill with vibrancy
             .w_full()
             .h_full()
             .overflow_hidden()
@@ -193,7 +200,9 @@ impl ScriptListApp {
         let opacity = self.theme.get_opacity();
         let bg_hex = design_colors.background;
         let _bg_with_alpha = crate::ui_foundation::hex_to_rgba_with_opacity(bg_hex, opacity.main);
-        let box_shadows = self.create_box_shadows();
+        // NOTE: No shadow - shadows on transparent elements cause gray fill with vibrancy
+        // Shadows are handled by app_shell
+        let _box_shadows = self.create_box_shadows();
 
         // Key handler for global shortcuts and ⌘K to open actions
         let handle_key = cx.listener(
@@ -248,7 +257,7 @@ impl ScriptListApp {
             .flex()
             .flex_col()
             // Removed: .bg(rgba(bg_with_alpha)) - let vibrancy show through from Root
-            .shadow(box_shadows)
+            // NOTE: No shadow - shadows on transparent elements cause gray fill with vibrancy
             .w_full()
             .h_full()
             .overflow_hidden()
