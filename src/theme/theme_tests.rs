@@ -30,10 +30,11 @@ fn test_dark_default() {
 #[test]
 fn test_light_default() {
     let scheme = ColorScheme::light_default();
-    assert_eq!(scheme.background.main, 0xffffff);
+    // POC light theme uses 0xfafafa for main background (not pure white)
+    assert_eq!(scheme.background.main, 0xfafafa);
     assert_eq!(scheme.text.primary, 0x000000);
-    assert_eq!(scheme.background.title_bar, 0xf3f3f3);
-    assert_eq!(scheme.ui.border, 0xd0d0d0);
+    assert_eq!(scheme.background.title_bar, 0xffffff); // Input areas are pure white
+    assert_eq!(scheme.ui.border, 0xe0e0e0); // POC border color
 }
 
 #[test]
@@ -63,11 +64,13 @@ fn test_light_theme_serialization() {
         drop_shadow: Some(DropShadow::default()),
         vibrancy: Some(VibrancySettings::default()),
         fonts: Some(FontConfig::default()),
+        appearance: AppearanceMode::Light,
     };
     let json = serde_json::to_string(&theme).unwrap();
     let deserialized: Theme = serde_json::from_str(&json).unwrap();
 
-    assert_eq!(deserialized.colors.background.main, 0xffffff);
+    // POC light theme uses 0xfafafa for main background (not pure white)
+    assert_eq!(deserialized.colors.background.main, 0xfafafa);
     assert_eq!(deserialized.colors.text.primary, 0x000000);
 }
 
@@ -138,6 +141,7 @@ fn test_opacity_clamping_valid_values() {
         input_active: 0.50,
         border_inactive: 0.125,
         border_active: 0.25,
+        vibrancy_background: None,
     };
     let clamped = opacity.clamped();
     assert_eq!(clamped.main, 0.5);
@@ -163,12 +167,14 @@ fn test_opacity_clamping_overflow() {
         input_active: 0.50,
         border_inactive: 0.125,
         border_active: 0.25,
+        vibrancy_background: Some(2.0), // Should clamp to 1.0
     };
     let clamped = opacity.clamped();
     assert_eq!(clamped.main, 1.0);
     assert_eq!(clamped.title_bar, 1.0);
     assert_eq!(clamped.search_box, 0.0);
     assert_eq!(clamped.log_panel, 1.0);
+    assert_eq!(clamped.vibrancy_background, Some(1.0));
 }
 
 #[test]

@@ -983,6 +983,7 @@ impl AiApp {
     // These delegate to the CommandBar component which handles all window/state management.
 
     /// Show the command bar as a separate vibrancy window (Cmd+K)
+    #[tracing::instrument(skip(self, window, cx))]
     fn show_command_bar(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         // Open the command bar (CommandBar handles window creation internally)
         self.command_bar.open(window, cx);
@@ -1016,6 +1017,7 @@ impl AiApp {
     }
 
     /// Hide the command bar (closes the vibrancy window) and refocus the input
+    #[tracing::instrument(skip(self, cx))]
     fn hide_command_bar(&mut self, cx: &mut Context<Self>) {
         self.command_bar.close(cx);
         // Refocus the chat input after closing the command bar
@@ -1271,11 +1273,11 @@ impl AiApp {
                     crate::logging::log("AI", "SimulateKey: Down in command bar");
                     self.command_bar_select_next(cx);
                 }
-                "enter" => {
+                "enter" | "return" => {
                     crate::logging::log("AI", "SimulateKey: Enter in command bar");
                     self.execute_command_bar_action(window, cx);
                 }
-                "escape" => {
+                "escape" | "esc" => {
                     crate::logging::log("AI", "SimulateKey: Escape - closing command bar");
                     self.hide_command_bar(cx);
                 }
@@ -1304,8 +1306,8 @@ impl AiApp {
             match key_lower.as_str() {
                 "up" | "arrowup" => self.presets_select_prev(cx),
                 "down" | "arrowdown" => self.presets_select_next(cx),
-                "enter" => self.create_chat_with_preset(window, cx),
-                "escape" => self.hide_presets_dropdown(cx),
+                "enter" | "return" => self.create_chat_with_preset(window, cx),
+                "escape" | "esc" => self.hide_presets_dropdown(cx),
                 _ => {}
             }
             return;
@@ -1313,7 +1315,7 @@ impl AiApp {
 
         // Default key handling (when no overlays are open)
         match key_lower.as_str() {
-            "escape" => {
+            "escape" | "esc" => {
                 if self.showing_attachments_picker {
                     self.hide_attachments_picker(cx);
                 }
@@ -4496,7 +4498,7 @@ impl AiApp {
                     .border_1()
                     .border_color(border_color)
                     .rounded_lg()
-                    .shadow_lg()
+                    // Shadow disabled for vibrancy - shadows on transparent elements cause gray fill
                     .overflow_hidden()
                     .flex()
                     .flex_col()
@@ -4729,7 +4731,7 @@ impl AiApp {
                     .border_1()
                     .border_color(border_color)
                     .rounded_lg()
-                    .shadow_lg()
+                    // Shadow disabled for vibrancy - shadows on transparent elements cause gray fill
                     .overflow_hidden()
                     .flex()
                     .flex_col()
@@ -4985,7 +4987,7 @@ impl AiApp {
                     .border_1()
                     .border_color(border_color)
                     .rounded_lg()
-                    .shadow_lg()
+                    // Shadow disabled for vibrancy - shadows on transparent elements cause gray fill
                     .overflow_hidden()
                     .flex()
                     .flex_col()
@@ -5156,7 +5158,9 @@ pub fn open_ai_window(cx: &mut App) -> Result<()> {
     let handle = cx.open_window(window_options, |window, cx| {
         let view = cx.new(|cx| AiApp::new(window, cx));
         // Store the AiApp entity temporarily for immediate focus after window creation
-        *ai_app_holder_clone.lock().unwrap() = Some(view.clone());
+        *ai_app_holder_clone
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = Some(view.clone());
         cx.new(|cx| Root::new(view, window, cx))
     })?;
 
@@ -5297,7 +5301,7 @@ pub fn close_ai_window(cx: &mut App) {
 /// without affecting it.
 pub fn is_ai_window_open() -> bool {
     let window_handle = AI_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
-    let guard = window_handle.lock().unwrap();
+    let guard = window_handle.lock().unwrap_or_else(|e| e.into_inner());
     guard.is_some()
 }
 
@@ -5491,7 +5495,9 @@ fn configure_ai_window_vibrancy() {
 
                     if title_str == "Script Kit AI" {
                         // Found the AI window - configure vibrancy
-                        crate::platform::configure_secondary_window_vibrancy(window, "AI");
+                        let theme = crate::theme::load_theme();
+                        let is_dark = theme.should_use_dark_vibrancy();
+                        crate::platform::configure_secondary_window_vibrancy(window, "AI", is_dark);
 
                         // Configure as a regular window that participates in Cmd+Tab:
                         // - Keep default window level (0) so it doesn't float
@@ -5585,7 +5591,9 @@ fn configure_ai_as_floating_panel() {
                         // ═══════════════════════════════════════════════════════════════════════════
                         // VIBRANCY CONFIGURATION - Match main window for consistent blur
                         // ═══════════════════════════════════════════════════════════════════════════
-                        crate::platform::configure_secondary_window_vibrancy(window, "AI");
+                        let theme = crate::theme::load_theme();
+                        let is_dark = theme.should_use_dark_vibrancy();
+                        crate::platform::configure_secondary_window_vibrancy(window, "AI", is_dark);
 
                         logging::log(
                             "PANEL",

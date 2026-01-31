@@ -440,6 +440,8 @@ impl ScriptListApp {
             // Inline chat Claude Code channel - for ChatPrompt Claude Code callback to enable Claude Code
             inline_chat_claude_code_sender: inline_chat_claude_code_tx,
             inline_chat_claude_code_receiver: inline_chat_claude_code_rx,
+            // Light theme opacity adjustment offset (Cmd+Shift+[/])
+            light_opacity_offset: 0.0,
         };
 
         // Build initial alias/shortcut registries (conflicts logged, not shown via HUD on startup)
@@ -1015,6 +1017,55 @@ impl ScriptListApp {
                             return;
                         }
 
+                        // Window tweaker shortcuts (only enabled with SCRIPT_KIT_WINDOW_TWEAKER=1)
+                        let window_tweaker_enabled = std::env::var("SCRIPT_KIT_WINDOW_TWEAKER")
+                            .map(|v| v == "1")
+                            .unwrap_or(false);
+
+                        if window_tweaker_enabled {
+                            // Handle Cmd+- to decrease light theme opacity
+                            if has_cmd && !has_shift && (key == "-" || key == "minus") {
+                                logging::log("KEY", &format!("Interceptor: Cmd+- (key={}) -> decrease light opacity", key));
+                                this.adjust_light_opacity(-0.05, cx);
+                                cx.stop_propagation();
+                                return;
+                            }
+
+                            // Handle Cmd+= (or Cmd+Shift+=) to increase light theme opacity
+                            if has_cmd && (key == "=" || key == "equal" || key == "plus") {
+                                logging::log("KEY", &format!("Interceptor: Cmd+= (key={}) -> increase light opacity", key));
+                                this.adjust_light_opacity(0.05, cx);
+                                cx.stop_propagation();
+                                return;
+                            }
+
+                            // Handle Cmd+M to cycle vibrancy material (blur effect)
+                            if has_cmd && !has_shift && key == "m" {
+                                logging::log("KEY", "Interceptor: Cmd+M -> cycle vibrancy material");
+                                let description = platform::cycle_vibrancy_material();
+                                this.toast_manager.push(components::toast::Toast::info(
+                                    description,
+                                    &this.theme,
+                                ));
+                                cx.notify();
+                                cx.stop_propagation();
+                                return;
+                            }
+
+                            // Handle Cmd+Shift+A to cycle vibrancy appearance (VibrantLight, VibrantDark, etc.)
+                            if has_cmd && has_shift && key == "a" {
+                                logging::log("KEY", "Interceptor: Cmd+Shift+A -> cycle vibrancy appearance");
+                                let description = platform::cycle_appearance();
+                                this.toast_manager.push(components::toast::Toast::info(
+                                    description,
+                                    &this.theme,
+                                ));
+                                cx.notify();
+                                cx.stop_propagation();
+                                return;
+                            }
+                        }
+
                         // Only handle remaining keys if in FileSearchView with actions popup open
                         if !matches!(this.current_view, AppView::FileSearchView { .. }) {
                             // For ScriptList with actions open, handle Escape/Enter/typing
@@ -1217,7 +1268,19 @@ impl ScriptListApp {
     }
 
     fn update_theme(&mut self, cx: &mut Context<Self>) {
-        self.theme = std::sync::Arc::new(theme::load_theme());
+        let base_theme = theme::load_theme();
+
+        // Preserve opacity offset in light mode, reset in dark mode
+        if base_theme.is_dark_mode() {
+            self.light_opacity_offset = 0.0;
+            self.theme = std::sync::Arc::new(base_theme);
+        } else if self.light_opacity_offset != 0.0 {
+            // Apply the opacity offset if set
+            self.theme = std::sync::Arc::new(base_theme.with_opacity_offset(self.light_opacity_offset));
+        } else {
+            self.theme = std::sync::Arc::new(base_theme);
+        }
+
         logging::log("APP", "Theme reloaded based on system appearance");
 
         // Propagate theme to open ActionsDialog (if any) for hot-reload support
@@ -1243,6 +1306,44 @@ impl ScriptListApp {
             "APP",
             &format!("Config reloaded: padding={:?}", self.config.get_padding()),
         );
+        cx.notify();
+    }
+
+    /// Adjust the light theme opacity by a delta amount
+    ///
+    /// Use Cmd+Shift+[ to decrease and Cmd+Shift+] to increase.
+    /// The offset is clamped to the range -0.5 to +0.5.
+    fn adjust_light_opacity(&mut self, delta: f32, cx: &mut Context<Self>) {
+        // Only adjust if we're in light mode
+        let base_theme = theme::load_theme();
+        if base_theme.is_dark_mode() {
+            logging::log("APP", "Opacity adjustment only works in light mode");
+            return;
+        }
+
+        // Adjust the offset
+        self.light_opacity_offset = (self.light_opacity_offset + delta).clamp(-0.5, 0.5);
+
+        // Create new theme with adjusted opacity
+        let adjusted_theme = base_theme.with_opacity_offset(self.light_opacity_offset);
+        self.theme = std::sync::Arc::new(adjusted_theme);
+
+        let new_opacity = self.theme.get_opacity().main;
+        logging::log(
+            "APP",
+            &format!(
+                "Light opacity adjusted: offset={:.2}, main={:.2}",
+                self.light_opacity_offset, new_opacity
+            ),
+        );
+
+        // Show toast with current opacity level
+        let percent = (new_opacity * 100.0).round() as i32;
+        self.toast_manager.push(components::toast::Toast::info(
+            format!("Opacity: {}%", percent),
+            &self.theme,
+        ));
+
         cx.notify();
     }
 
@@ -5431,6 +5532,7 @@ export default {
     /// - Cmd+W: Always closes window and resets to default state
     /// - Escape: Only closes window if `is_dismissable` is true AND actions popup is not showing
     /// - Cmd+Shift+M: Cycle vibrancy material (for debugging)
+    #[tracing::instrument(skip(self, event, cx), fields(key = %event.keystroke.key, modifiers = ?event.keystroke.modifiers, is_dismissable))]
     fn handle_global_shortcut_with_options(
         &mut self,
         event: &gpui::KeyDownEvent,

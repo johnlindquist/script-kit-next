@@ -52,14 +52,17 @@ impl ScriptListApp {
 
         // Get design tokens for current design variant
         let tokens = get_tokens(self.current_design);
-        let design_colors = tokens.colors();
-        let design_spacing = tokens.spacing();
         let design_visual = tokens.visual();
-        let design_typography = tokens.typography();
 
-        // For Default design, use theme.colors for backward compatibility
-        // For other designs, use design tokens
+        // Unified color, typography, and spacing resolution
+        let color_resolver = crate::theme::ColorResolver::new(&self.theme, self.current_design);
+        let typography_resolver =
+            crate::theme::TypographyResolver::new(&self.theme, self.current_design);
+        let spacing_resolver = crate::theme::SpacingResolver::new(self.current_design);
+
+        // For Default design, use header constants; for others, use spacing resolver
         let is_default_design = self.current_design == DesignVariant::Default;
+        let design_spacing = tokens.spacing();
 
         let item_count = grouped_items.len();
         let _total_len = self.scripts.len() + self.scriptlets.len();
@@ -95,22 +98,12 @@ impl ScriptListApp {
         // Pre-compute list item colors for closure (Copy type)
         let theme_colors = ListItemColors::from_theme(&self.theme);
 
-        let theme = &self.theme;
-
         // NOTE: Removed P4 perf log - called every render frame, causing log spam
 
         // Build script list using uniform_list for proper virtualized scrolling
-        // Use design tokens for empty state styling
-        let empty_text_color = if is_default_design {
-            theme.colors.text.muted
-        } else {
-            design_colors.text_muted
-        };
-        let empty_font_family = if is_default_design {
-            ".AppleSystemUIFont"
-        } else {
-            design_typography.font_family
-        };
+        // Use unified color resolver for consistent empty state styling
+        let empty_text_color = color_resolver.empty_text_color();
+        let empty_font_family = typography_resolver.primary_font();
 
         let list_element: AnyElement = if item_count == 0 {
             // When there's no filter text, show "No scripts or snippets found"
@@ -594,7 +587,7 @@ impl ScriptListApp {
                                 .detach();
                                 return;
                             }
-                            "enter" => {
+                            "enter" | "return" => {
                                 // Get the selected action and execute it
                                 let action_id = dialog.read(cx).get_selected_action_id();
                                 let should_close = dialog.read(cx).selected_action_should_close();
@@ -616,7 +609,7 @@ impl ScriptListApp {
                                 cx.notify();
                                 return;
                             }
-                            "escape" => {
+                            "escape" | "esc" => {
                                 this.close_actions_popup(ActionsDialogHost::MainList, window, cx);
                                 cx.notify();
                                 return;
@@ -784,41 +777,15 @@ impl ScriptListApp {
         // Main container with system font and transparency
         // NOTE: Shadow disabled for vibrancy - shadows on transparent elements cause gray fill
 
-        // Use design tokens for text color
-        let text_primary = if is_default_design {
-            theme.colors.text.primary
-        } else {
-            design_colors.text_primary
-        };
-
-        // Use design tokens for font family
-        let font_family = if is_default_design {
-            ".AppleSystemUIFont"
-        } else {
-            design_typography.font_family
-        };
+        // Use unified color resolver for text and fonts
+        let text_primary = color_resolver.text_primary;
+        let font_family = typography_resolver.font_family;
 
         // Extract footer colors BEFORE render_preview_panel (borrow checker)
-        let footer_accent = if is_default_design {
-            theme.colors.accent.selected
-        } else {
-            design_colors.accent
-        };
-        let footer_text_muted = if is_default_design {
-            theme.colors.text.muted
-        } else {
-            design_colors.text_muted
-        };
-        let footer_border = if is_default_design {
-            theme.colors.ui.border
-        } else {
-            design_colors.border
-        };
-        let footer_background = if is_default_design {
-            theme.colors.accent.selected_subtle // Match selected item bg
-        } else {
-            design_colors.background_selected
-        };
+        let footer_accent = color_resolver.accent;
+        let footer_text_muted = color_resolver.text_muted;
+        let footer_border = color_resolver.border;
+        let footer_background = color_resolver.background_selected;
 
         // NOTE: No .bg() here - Root provides vibrancy background for ALL content
         // This ensures main menu, AI chat, and all prompts have consistent styling
@@ -853,26 +820,10 @@ impl ScriptListApp {
                 } else {
                     design_spacing.gap_md
                 };
-                let text_muted = if is_default_design {
-                    theme.colors.text.muted
-                } else {
-                    design_colors.text_muted
-                };
-                let _text_dimmed = if is_default_design {
-                    theme.colors.text.dimmed
-                } else {
-                    design_colors.text_dimmed
-                };
-                let accent_color = if is_default_design {
-                    theme.colors.accent.selected
-                } else {
-                    design_colors.accent
-                };
-                let search_box_bg = if is_default_design {
-                    theme.colors.background.search_box
-                } else {
-                    design_colors.background_secondary
-                };
+                let text_muted = color_resolver.text_muted;
+                let _text_dimmed = color_resolver.text_dimmed;
+                let accent_color = color_resolver.accent;
+                let search_box_bg = color_resolver.background_secondary;
                 let input_height = CURSOR_HEIGHT_LG + (CURSOR_MARGIN_Y * 2.0);
 
                 div()
@@ -891,7 +842,7 @@ impl ScriptListApp {
                                 .h(px(input_height))
                                 .px(px(0.))
                                 .py(px(0.))
-                                .with_size(Size::Size(px(design_typography.font_size_xl)))
+                                .with_size(Size::Size(px(typography_resolver.font_size_xl)))
                                 .appearance(false)
                                 .bordered(false)
                                 .focus_bordered(false),
@@ -934,18 +885,14 @@ impl ScriptListApp {
                     })
             })
             // Subtle divider - semi-transparent
-            // Use design tokens for border color and spacing
+            // Use unified resolver for border color and spacing
             .child({
                 let divider_margin = if is_default_design {
                     16.0
                 } else {
-                    design_spacing.margin_lg
+                    spacing_resolver.margin_lg
                 };
-                let border_color = if is_default_design {
-                    theme.colors.ui.border
-                } else {
-                    design_colors.border
-                };
+                let border_color = color_resolver.border;
                 let border_width = if is_default_design {
                     1.0
                 } else {

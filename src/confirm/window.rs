@@ -85,7 +85,7 @@ impl Render for ConfirmWindow {
                     this.dialog.update(cx, |d, _cx| d.submit());
                 }
                 // Escape = cancel
-                "escape" => {
+                "escape" | "esc" => {
                     crate::logging::log("CONFIRM", "Escape pressed - cancelling");
                     this.dialog.update(cx, |d, _cx| d.cancel());
                 }
@@ -261,7 +261,9 @@ pub fn open_confirm_window(
                         // Get the last window (most recently created)
                         let ns_window: cocoa::base::id = msg_send![windows, lastObject];
                         if ns_window != nil {
-                            platform::configure_actions_popup_window(ns_window);
+                            let theme = crate::theme::load_theme();
+                            let is_dark = theme.should_use_dark_vibrancy();
+                            platform::configure_actions_popup_window(ns_window, is_dark);
                         }
                     }
                 }

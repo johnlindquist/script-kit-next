@@ -237,8 +237,8 @@ impl Render for TemplatePrompt {
                             this.next_input(cx);
                         }
                     }
-                    "enter" => this.submit(),
-                    "escape" => this.submit_cancel(),
+                    "enter" | "return" => this.submit(),
+                    "escape" | "esc" => this.submit_cancel(),
                     "backspace" => this.handle_backspace(cx),
                     _ => {
                         if let Some(ref key_char) = event.keystroke.key_char {

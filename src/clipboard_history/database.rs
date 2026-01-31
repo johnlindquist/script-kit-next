@@ -262,6 +262,7 @@ fn extract_metadata(
 /// Add a new entry to clipboard history
 ///
 /// Returns the ID of the entry (either existing or newly created).
+#[tracing::instrument(skip(content), fields(content_type = ?content_type, content_len = content.len()))]
 pub fn add_entry(content: &str, content_type: ContentType) -> Result<String> {
     if content_type == ContentType::Text && is_text_over_limit(content) {
         anyhow::bail!(

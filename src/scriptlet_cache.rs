@@ -505,7 +505,10 @@ pub fn diff_scriptlets(old: &[CachedScriptlet], new: &[CachedScriptlet]) -> Scri
 pub fn get_log_file_path() -> PathBuf {
     std::env::var("HOME")
         .map(|home| PathBuf::from(home).join(".scriptkit/logs/script-kit-gpui.jsonl"))
-        .unwrap_or_else(|_| PathBuf::from("/tmp/script-kit-gpui.jsonl"))
+        .unwrap_or_else(|_| {
+            // Use system temp directory instead of hardcoded /tmp for better security
+            std::env::temp_dir().join("script-kit-gpui.jsonl")
+        })
 }
 
 /// Format a HUD message for scriptlet validation errors

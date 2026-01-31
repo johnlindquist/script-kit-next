@@ -736,10 +736,10 @@ impl Render for ShortcutRecorder {
 
             // Handle special keys
             match key.to_lowercase().as_str() {
-                "escape" => {
+                "escape" | "esc" => {
                     this.handle_escape(cx);
                 }
-                "enter" if this.shortcut.is_complete() && this.conflict.is_none() => {
+                "enter" | "return" if this.shortcut.is_complete() && this.conflict.is_none() => {
                     this.save();
                     cx.notify();
                 }

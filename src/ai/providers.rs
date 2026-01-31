@@ -2093,13 +2093,16 @@ mod tests {
                 &messages,
                 "gpt-4o-mini",
                 Box::new(move |chunk| {
-                    chunks_clone.lock().unwrap().push(chunk);
+                    chunks_clone
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .push(chunk);
                 }),
                 None,
             )
             .unwrap();
 
-        let collected = chunks.lock().unwrap();
+        let collected = chunks.lock().unwrap_or_else(|e| e.into_inner());
         assert!(!collected.is_empty());
     }
 
@@ -2744,14 +2747,17 @@ mod tests {
             &messages,
             "default",
             Box::new(move |chunk| {
-                chunks_clone.lock().unwrap().push(chunk);
+                chunks_clone
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .push(chunk);
             }),
             Some("test-session"),
         );
 
         assert!(result.is_ok(), "stream_message failed: {:?}", result.err());
 
-        let collected = chunks.lock().unwrap();
+        let collected = chunks.lock().unwrap_or_else(|e| e.into_inner());
         let full_response: String = collected.iter().cloned().collect();
         assert!(!full_response.is_empty(), "No response received");
         println!("Claude Code response: {}", full_response);

@@ -45,6 +45,7 @@ pub fn log_preview(raw: &str) -> (&str, usize) {
 /// # Security
 /// Raw JSON is truncated to 200 chars in error logs to prevent leaking sensitive data
 /// (base64 screenshots, clipboard content, etc.)
+#[tracing::instrument(skip_all, fields(line_len = line.len()))]
 pub fn parse_message(line: &str) -> Result<Message, serde_json::Error> {
     serde_json::from_str(line).map_err(|e| {
         // SECURITY: Use truncated preview to avoid logging sensitive data
@@ -153,6 +154,7 @@ impl ParseIssue {
 /// # Security
 /// Raw JSON is truncated to 200 chars in logs to prevent leaking sensitive data
 /// (base64 screenshots, clipboard content, etc.)
+#[tracing::instrument(skip_all, fields(line_len = line.len()))]
 pub fn parse_message_graceful(line: &str) -> ParseResult {
     let (preview, _raw_len) = log_preview(line);
 
@@ -311,6 +313,15 @@ impl<R: Read> JsonlReader<R> {
 
                     match parse_message_graceful(trimmed) {
                         ParseResult::Ok(msg) => {
+                            // Set correlation ID for this protocol message
+                            // Use message ID or generate a unique one
+                            let msg_id = msg
+                                .id()
+                                .map(|s| s.to_string())
+                                .unwrap_or_else(|| format!("msg:{}", Uuid::new_v4()));
+                            let _guard =
+                                crate::logging::set_correlation_id(format!("protocol:{}", msg_id));
+
                             debug!(message_id = ?msg.id(), "Successfully parsed message");
                             return Ok(Some(msg));
                         }
@@ -322,6 +333,10 @@ impl<R: Read> JsonlReader<R> {
                                 preview.to_string(),
                                 raw_len,
                             );
+                            // Set correlation ID for this parse error
+                            let _guard =
+                                crate::logging::set_correlation_id(issue.correlation_id.clone());
+
                             warn!(
                                 correlation_id = %issue.correlation_id,
                                 raw_preview = %issue.raw_preview,
@@ -339,6 +354,10 @@ impl<R: Read> JsonlReader<R> {
                                 preview.to_string(),
                                 raw_len,
                             );
+                            // Set correlation ID for this parse error
+                            let _guard =
+                                crate::logging::set_correlation_id(issue.correlation_id.clone());
+
                             warn!(
                                 correlation_id = %issue.correlation_id,
                                 message_type = %message_type,
@@ -361,6 +380,10 @@ impl<R: Read> JsonlReader<R> {
                                 preview.to_string(),
                                 raw_len,
                             );
+                            // Set correlation ID for this parse error
+                            let _guard =
+                                crate::logging::set_correlation_id(issue.correlation_id.clone());
+
                             warn!(
                                 correlation_id = %issue.correlation_id,
                                 message_type = %message_type,
@@ -380,6 +403,10 @@ impl<R: Read> JsonlReader<R> {
                                 preview.to_string(),
                                 raw_len,
                             );
+                            // Set correlation ID for this parse error
+                            let _guard =
+                                crate::logging::set_correlation_id(issue.correlation_id.clone());
+
                             // Log but continue - graceful degradation
                             warn!(
                                 correlation_id = %issue.correlation_id,

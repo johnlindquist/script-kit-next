@@ -2040,8 +2040,8 @@ impl Render for ChatPrompt {
             // In setup mode, only handle Escape and Enter
             if needs_setup {
                 match key.as_str() {
-                    "escape" => this.handle_escape(cx),
-                    "enter" => {
+                    "escape" | "esc" => this.handle_escape(cx),
+                    "enter" | "return" => {
                         // Trigger configure callback on Enter
                         if let Some(ref callback) = on_configure {
                             logging::log(
@@ -2061,13 +2061,13 @@ impl Render for ChatPrompt {
 
             match key.as_str() {
                 // Escape - close chat
-                "escape" => this.handle_escape(cx),
+                "escape" | "esc" => this.handle_escape(cx),
                 // ⌘+K - Toggle actions menu
                 "k" if has_cmd => this.toggle_actions_menu(cx),
                 // ⌘+Enter - Continue in Chat
-                "enter" if has_cmd => this.handle_continue_in_chat(cx),
+                "enter" | "return" if has_cmd => this.handle_continue_in_chat(cx),
                 // Enter - Submit message
-                "enter" if !event.keystroke.modifiers.shift => this.handle_submit(cx),
+                "enter" | "return" if !event.keystroke.modifiers.shift => this.handle_submit(cx),
                 // ⌘+C - Copy last response
                 "c" if has_cmd => this.handle_copy_last_response(cx),
                 // ⌘+Backspace - Clear conversation

@@ -403,7 +403,9 @@ pub fn open_actions_window(
                         // Get the last window (most recently created)
                         let ns_window: cocoa::base::id = msg_send![windows, lastObject];
                         if ns_window != nil {
-                            platform::configure_actions_popup_window(ns_window);
+                            let theme = crate::theme::load_theme();
+                            let is_dark = theme.should_use_dark_vibrancy();
+                            platform::configure_actions_popup_window(ns_window, is_dark);
                         }
                     }
                 }

@@ -436,12 +436,12 @@ impl Render for AliasInput {
 
             // Handle special keys first
             match key.to_lowercase().as_str() {
-                "escape" => {
+                "escape" | "esc" => {
                     this.cancel();
                     cx.notify();
                     return;
                 }
-                "enter" if !this.input.text().trim().is_empty() => {
+                "enter" | "return" if !this.input.text().trim().is_empty() => {
                     this.save();
                     cx.notify();
                     return;

@@ -3,6 +3,7 @@
 
 impl ScriptListApp {
     /// Handle a prompt message from the script
+    #[tracing::instrument(skip(self, cx), fields(msg_type = ?msg))]
     fn handle_prompt_message(&mut self, msg: PromptMessage, cx: &mut Context<Self>) {
         match msg {
             PromptMessage::ShowArg {

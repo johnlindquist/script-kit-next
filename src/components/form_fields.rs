@@ -160,12 +160,12 @@ impl FormFieldState {
 
     /// Get the current value
     pub fn get_value(&self) -> String {
-        self.value.lock().unwrap().clone()
+        self.value.lock().unwrap_or_else(|e| e.into_inner()).clone()
     }
 
     /// Set the value
     pub fn set_value(&self, value: String) {
-        *self.value.lock().unwrap() = value;
+        *self.value.lock().unwrap_or_else(|e| e.into_inner()) = value;
     }
 }
 

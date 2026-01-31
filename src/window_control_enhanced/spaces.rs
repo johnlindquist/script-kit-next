@@ -137,24 +137,31 @@ static SPACE_MANAGER: RwLock<Option<Arc<dyn SpaceManager>>> = RwLock::new(None);
 
 /// Get the current space manager, or create the default unsupported backend
 pub fn get_space_manager() -> Arc<dyn SpaceManager> {
-    let read_guard = SPACE_MANAGER.read().unwrap();
-    if let Some(ref manager) = *read_guard {
-        return Arc::clone(manager);
+    if let Ok(read_guard) = SPACE_MANAGER.read() {
+        if let Some(ref manager) = *read_guard {
+            return Arc::clone(manager);
+        }
     }
-    drop(read_guard);
 
     // Create default backend
-    let mut write_guard = SPACE_MANAGER.write().unwrap();
-    if write_guard.is_none() {
-        *write_guard = Some(Arc::new(UnsupportedSpaceBackend));
+    if let Ok(mut write_guard) = SPACE_MANAGER.write() {
+        if write_guard.is_none() {
+            *write_guard = Some(Arc::new(UnsupportedSpaceBackend));
+        }
+        if let Some(ref manager) = *write_guard {
+            return Arc::clone(manager);
+        }
     }
-    Arc::clone(write_guard.as_ref().unwrap())
+
+    // Fallback if locks fail
+    Arc::new(UnsupportedSpaceBackend)
 }
 
 /// Set a custom space manager backend
 pub fn set_space_manager(manager: Arc<dyn SpaceManager>) {
-    let mut write_guard = SPACE_MANAGER.write().unwrap();
-    *write_guard = Some(manager);
+    if let Ok(mut write_guard) = SPACE_MANAGER.write() {
+        *write_guard = Some(manager);
+    }
 }
 
 #[cfg(test)]

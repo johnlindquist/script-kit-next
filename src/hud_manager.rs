@@ -433,12 +433,12 @@ fn get_hud_manager() -> &'static Arc<Mutex<HudManagerState>> {
 /// Internal helper to show a HUD notification from a HudNotification struct.
 /// This preserves all fields including action_label and action.
 fn show_notification(notif: HudNotification, cx: &mut App) {
-    if notif.has_action() {
+    if let (Some(action_label), Some(action)) = (notif.action_label, notif.action) {
         show_hud_with_action(
             notif.text,
             Some(notif.duration_ms),
-            notif.action_label.unwrap(),
-            notif.action.unwrap(),
+            action_label,
+            action,
             cx,
         );
     } else {
@@ -1206,18 +1206,28 @@ mod tests {
         let light = HudColors::light_default();
 
         // Dark mode: dark background, light text
-        let dark_bg_brightness =
-            ((dark.background >> 16) & 0xff) + ((dark.background >> 8) & 0xff) + (dark.background & 0xff);
-        let dark_text_brightness =
-            ((dark.text_primary >> 16) & 0xff) + ((dark.text_primary >> 8) & 0xff) + (dark.text_primary & 0xff);
-        assert!(dark_bg_brightness < dark_text_brightness, "Dark mode: background should be darker than text");
+        let dark_bg_brightness = ((dark.background >> 16) & 0xff)
+            + ((dark.background >> 8) & 0xff)
+            + (dark.background & 0xff);
+        let dark_text_brightness = ((dark.text_primary >> 16) & 0xff)
+            + ((dark.text_primary >> 8) & 0xff)
+            + (dark.text_primary & 0xff);
+        assert!(
+            dark_bg_brightness < dark_text_brightness,
+            "Dark mode: background should be darker than text"
+        );
 
         // Light mode: light background, dark text
-        let light_bg_brightness =
-            ((light.background >> 16) & 0xff) + ((light.background >> 8) & 0xff) + (light.background & 0xff);
-        let light_text_brightness =
-            ((light.text_primary >> 16) & 0xff) + ((light.text_primary >> 8) & 0xff) + (light.text_primary & 0xff);
-        assert!(light_bg_brightness > light_text_brightness, "Light mode: background should be lighter than text");
+        let light_bg_brightness = ((light.background >> 16) & 0xff)
+            + ((light.background >> 8) & 0xff)
+            + (light.background & 0xff);
+        let light_text_brightness = ((light.text_primary >> 16) & 0xff)
+            + ((light.text_primary >> 8) & 0xff)
+            + (light.text_primary & 0xff);
+        assert!(
+            light_bg_brightness > light_text_brightness,
+            "Light mode: background should be lighter than text"
+        );
     }
 
     #[test]

@@ -193,6 +193,7 @@ const KNOWN_OPACITY_KEYS: &[&str] = &[
     "input_active",
     "border_inactive",
     "border_active",
+    "vibrancy_background",
 ];
 const KNOWN_VIBRANCY_KEYS: &[&str] = &["enabled", "material"];
 const KNOWN_DROP_SHADOW_KEYS: &[&str] = &[

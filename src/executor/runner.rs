@@ -861,6 +861,7 @@ pub fn execute_script(path: &Path) -> Result<String, String> {
 
 /// Run a command and capture its output
 #[allow(dead_code)]
+#[tracing::instrument(skip_all, fields(cmd = %cmd, args = ?args))]
 pub fn run_command(cmd: &str, args: &[&str]) -> Result<String, String> {
     // Try to find the executable in common locations
     let executable = find_executable(cmd)

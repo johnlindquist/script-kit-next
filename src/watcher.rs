@@ -1196,10 +1196,10 @@ impl Drop for ScriptWatcher {
 
 /// Watches system appearance (light/dark mode) for changes and emits events
 ///
-/// This watcher polls the system appearance setting every 2 seconds by running
-/// the `defaults read -g AppleInterfaceStyle` command on macOS.
+/// On macOS, this uses NSDistributedNotificationCenter to listen for
+/// `AppleInterfaceThemeChangedNotification` - no polling required.
 ///
-/// Properly shuts down via stop flag.
+/// On other platforms, falls back to polling.
 pub struct AppearanceWatcher {
     tx: Option<async_channel::Sender<AppearanceChangeEvent>>,
     stop_flag: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
@@ -1223,8 +1223,8 @@ impl AppearanceWatcher {
 
     /// Start watching the system appearance for changes
     ///
-    /// This spawns a background thread that polls the system appearance every 2 seconds
-    /// and sends appearance change events through the receiver when changes are detected.
+    /// On macOS, this uses event-driven notifications via NSDistributedNotificationCenter.
+    /// On other platforms, falls back to polling.
     pub fn start(&mut self) -> Result<(), String> {
         let tx = self
             .tx
@@ -1236,8 +1236,17 @@ impl AppearanceWatcher {
         self.stop_flag = Some(stop_flag);
 
         let thread_handle = thread::spawn(move || {
-            if let Err(e) = Self::watch_loop(tx, thread_stop_flag) {
-                warn!(error = %e, watcher = "appearance", "Appearance watcher error");
+            #[cfg(target_os = "macos")]
+            {
+                if let Err(e) = Self::watch_loop_macos(tx, thread_stop_flag) {
+                    warn!(error = %e, watcher = "appearance", "Appearance watcher error");
+                }
+            }
+            #[cfg(not(target_os = "macos"))]
+            {
+                if let Err(e) = Self::watch_loop_polling(tx, thread_stop_flag) {
+                    warn!(error = %e, watcher = "appearance", "Appearance watcher error");
+                }
             }
         });
 
@@ -1245,17 +1254,131 @@ impl AppearanceWatcher {
         Ok(())
     }
 
-    /// Internal watch loop running in background thread
-    fn watch_loop(
+    /// macOS event-driven watch loop using NSDistributedNotificationCenter
+    #[cfg(target_os = "macos")]
+    fn watch_loop_macos(
+        tx: async_channel::Sender<AppearanceChangeEvent>,
+        stop_flag: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    ) -> Result<(), String> {
+        use core_foundation::base::TCFType;
+        use core_foundation::runloop::{kCFRunLoopDefaultMode, CFRunLoopRunInMode};
+        use core_foundation::string::CFString;
+        use std::sync::atomic::{AtomicBool, Ordering};
+
+        // Flag to signal when notification is received
+        static APPEARANCE_CHANGED: AtomicBool = AtomicBool::new(false);
+
+        // Callback for distributed notification
+        extern "C" fn notification_callback(
+            _center: *mut std::ffi::c_void,
+            _observer: *mut std::ffi::c_void,
+            _name: *const std::ffi::c_void,
+            _object: *const std::ffi::c_void,
+            _user_info: *const std::ffi::c_void,
+        ) {
+            APPEARANCE_CHANGED.store(true, Ordering::SeqCst);
+        }
+
+        info!(
+            watcher = "appearance",
+            "Appearance watcher started (event-driven)"
+        );
+
+        // Send initial appearance
+        let current = Self::detect_appearance();
+        let mode = match &current {
+            AppearanceChangeEvent::Dark => "dark",
+            AppearanceChangeEvent::Light => "light",
+        };
+        info!(mode = mode, "Initial system appearance");
+        let _ = tx.send_blocking(current.clone());
+        let mut last_appearance = current;
+
+        unsafe {
+            // Get the distributed notification center
+            let center = CFNotificationCenterGetDistributedCenter();
+            if center.is_null() {
+                return Err("Failed to get distributed notification center".to_string());
+            }
+
+            // Create the notification name
+            let notification_name = CFString::new("AppleInterfaceThemeChangedNotification");
+
+            // Add observer
+            CFNotificationCenterAddObserver(
+                center,
+                std::ptr::null(), // observer (not used)
+                notification_callback,
+                notification_name.as_concrete_TypeRef(),
+                std::ptr::null(), // object (observe all)
+                CFNotificationSuspensionBehaviorDeliverImmediately,
+            );
+
+            // Run loop with periodic stop flag checks
+            let run_loop_mode = kCFRunLoopDefaultMode;
+
+            loop {
+                // Check stop flag
+                if stop_flag.load(Ordering::Relaxed) {
+                    info!(
+                        watcher = "appearance",
+                        "Appearance watcher received stop signal"
+                    );
+                    break;
+                }
+
+                // Run the run loop for a short time to receive notifications
+                // This returns after timeout or if a source is processed
+                CFRunLoopRunInMode(run_loop_mode, 0.5, 0); // 500ms timeout
+
+                // Check if appearance changed notification was received
+                if APPEARANCE_CHANGED.swap(false, Ordering::SeqCst) {
+                    let current = Self::detect_appearance();
+                    if current != last_appearance {
+                        let mode = match &current {
+                            AppearanceChangeEvent::Dark => "dark",
+                            AppearanceChangeEvent::Light => "light",
+                        };
+                        info!(mode = mode, "System appearance changed");
+                        if tx.send_blocking(current.clone()).is_err() {
+                            info!(
+                                watcher = "appearance",
+                                "Appearance watcher receiver dropped, shutting down"
+                            );
+                            break;
+                        }
+                        last_appearance = current;
+                    }
+                }
+            }
+
+            // Remove observer
+            CFNotificationCenterRemoveObserver(
+                center,
+                std::ptr::null(),
+                notification_name.as_concrete_TypeRef(),
+                std::ptr::null(),
+            );
+        }
+
+        info!(watcher = "appearance", "Appearance watcher shutting down");
+        Ok(())
+    }
+
+    /// Fallback polling-based watch loop for non-macOS platforms
+    #[cfg(not(target_os = "macos"))]
+    fn watch_loop_polling(
         tx: async_channel::Sender<AppearanceChangeEvent>,
         stop_flag: std::sync::Arc<std::sync::atomic::AtomicBool>,
     ) -> Result<(), String> {
         let mut last_appearance: Option<AppearanceChangeEvent> = None;
 
-        info!(poll_interval_secs = 2, "Appearance watcher started");
+        info!(
+            poll_interval_secs = 2,
+            "Appearance watcher started (polling fallback)"
+        );
 
         loop {
-            // Check stop flag first
             if stop_flag.load(std::sync::atomic::Ordering::Relaxed) {
                 info!(
                     watcher = "appearance",
@@ -1264,10 +1387,8 @@ impl AppearanceWatcher {
                 break;
             }
 
-            // Detect current system appearance
             let current_appearance = Self::detect_appearance();
 
-            // Send event if appearance changed
             if last_appearance != Some(current_appearance.clone()) {
                 let mode = match current_appearance {
                     AppearanceChangeEvent::Dark => "dark",
@@ -1284,14 +1405,9 @@ impl AppearanceWatcher {
                 last_appearance = Some(current_appearance);
             }
 
-            // Poll with interruptible sleep (check stop flag more frequently)
+            // Poll with interruptible sleep
             for _ in 0..20 {
-                // 20 * 100ms = 2s
                 if stop_flag.load(std::sync::atomic::Ordering::Relaxed) {
-                    info!(
-                        watcher = "appearance",
-                        "Appearance watcher received stop signal during sleep"
-                    );
                     return Ok(());
                 }
                 thread::sleep(Duration::from_millis(100));
@@ -1304,24 +1420,68 @@ impl AppearanceWatcher {
 
     /// Detect the current system appearance
     fn detect_appearance() -> AppearanceChangeEvent {
-        match Command::new("defaults")
-            .args(["read", "-g", "AppleInterfaceStyle"])
-            .output()
+        #[cfg(target_os = "macos")]
         {
-            Ok(output) => {
-                let stdout = String::from_utf8_lossy(&output.stdout);
-                if stdout.to_lowercase().contains("dark") {
-                    AppearanceChangeEvent::Dark
-                } else {
-                    AppearanceChangeEvent::Light
+            match Command::new("defaults")
+                .args(["read", "-g", "AppleInterfaceStyle"])
+                .output()
+            {
+                Ok(output) => {
+                    // In light mode, the key doesn't exist (command exits with non-zero)
+                    if !output.status.success() {
+                        return AppearanceChangeEvent::Light;
+                    }
+                    let stdout = String::from_utf8_lossy(&output.stdout);
+                    if stdout.to_lowercase().contains("dark") {
+                        AppearanceChangeEvent::Dark
+                    } else {
+                        AppearanceChangeEvent::Light
+                    }
                 }
-            }
-            Err(_) => {
-                // Command failed, likely in light mode on macOS
-                AppearanceChangeEvent::Light
+                Err(_) => AppearanceChangeEvent::Light,
             }
         }
+        #[cfg(not(target_os = "macos"))]
+        {
+            // Default to dark on non-macOS
+            AppearanceChangeEvent::Dark
+        }
     }
+}
+
+// CoreFoundation notification bindings for macOS
+#[cfg(target_os = "macos")]
+type CFNotificationCenterRef = *mut std::ffi::c_void;
+#[cfg(target_os = "macos")]
+type CFNotificationCallback = extern "C" fn(
+    center: *mut std::ffi::c_void,
+    observer: *mut std::ffi::c_void,
+    name: *const std::ffi::c_void,
+    object: *const std::ffi::c_void,
+    user_info: *const std::ffi::c_void,
+);
+#[cfg(target_os = "macos")]
+#[allow(non_upper_case_globals)]
+const CFNotificationSuspensionBehaviorDeliverImmediately: isize = 4;
+
+#[cfg(target_os = "macos")]
+#[link(name = "CoreFoundation", kind = "framework")]
+extern "C" {
+    fn CFNotificationCenterGetDistributedCenter() -> CFNotificationCenterRef;
+    fn CFNotificationCenterAddObserver(
+        center: CFNotificationCenterRef,
+        observer: *const std::ffi::c_void,
+        callback: CFNotificationCallback,
+        name: core_foundation::string::CFStringRef,
+        object: *const std::ffi::c_void,
+        suspension_behavior: isize,
+    );
+    fn CFNotificationCenterRemoveObserver(
+        center: CFNotificationCenterRef,
+        observer: *const std::ffi::c_void,
+        name: core_foundation::string::CFStringRef,
+        object: *const std::ffi::c_void,
+    );
 }
 
 impl Drop for AppearanceWatcher {

@@ -189,6 +189,7 @@ fn get_manager() -> &'static Mutex<WindowManager> {
 /// * `window_id` - The native macOS window ID (NSWindow pointer)
 ///
 #[cfg(target_os = "macos")]
+#[tracing::instrument(skip(window_id), fields(role = ?role))]
 pub fn register_window(role: WindowRole, window_id: id) {
     if let Ok(mut manager) = get_manager().lock() {
         manager.register(role, window_id);
@@ -237,6 +238,7 @@ pub fn get_main_window() -> Option<id> {
 /// # Returns
 /// `true` if the main window was found and registered, `false` otherwise
 #[cfg(target_os = "macos")]
+#[tracing::instrument(skip_all)]
 pub fn find_and_register_main_window() -> bool {
     // Expected main window dimensions (with tolerance)
     const EXPECTED_WIDTH: f64 = 750.0;

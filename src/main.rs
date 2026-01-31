@@ -1462,6 +1462,10 @@ struct ScriptListApp {
     /// Receiver for inline chat Claude Code signals
     /// Checked by timer to trigger Claude Code enablement
     inline_chat_claude_code_receiver: mpsc::Receiver<()>,
+    /// Opacity offset for light theme adjustment
+    /// Use Cmd+Shift+[ to decrease and Cmd+Shift+] to increase
+    /// Range: -0.5 to +0.5 (added to base opacity values)
+    light_opacity_offset: f32,
 }
 
 /// Result of alias matching - either a Script or Scriptlet
@@ -2219,14 +2223,14 @@ fn main() {
                 logging::log("APP", "Window opened, creating ScriptListApp wrapped in Root");
                 let view = cx.new(|cx| ScriptListApp::new(config_for_app, bun_available, window, cx));
                 // Store the entity for external access
-                *app_entity_for_closure.lock().unwrap() = Some(view.clone());
+                *app_entity_for_closure.lock().unwrap_or_else(|e| e.into_inner()) = Some(view.clone());
                 cx.new(|cx| Root::new(view, window, cx))
             },
         )
         .unwrap();
 
         // Extract the app entity for use in callbacks
-        let app_entity = app_entity_holder.lock().unwrap().clone().expect("App entity should be set");
+        let app_entity = app_entity_holder.lock().unwrap_or_else(|e| e.into_inner()).clone().expect("App entity should be set");
 
         // Set initial focus via the Root window
         // We access the app entity within the window context to properly focus it
@@ -2528,12 +2532,19 @@ fn main() {
                 while let Ok(_event) = appearance_rx.recv().await {
                     logging::log("APP", "System appearance changed, updating theme");
                     let _ = cx.update(|cx| {
+                        // Invalidate the cached appearance detection FIRST
+                        // This ensures load_theme() gets the fresh system appearance
+                        theme::invalidate_appearance_cache();
+
                         // Reload theme to get new appearance mode
                         let theme = theme::load_theme();
                         let is_dark = theme.should_use_dark_vibrancy();
 
                         // Reconfigure vibrancy based on actual theme colors
                         platform::configure_window_vibrancy_material_for_appearance(is_dark);
+
+                        // Update all secondary windows (Notes, AI, Actions)
+                        platform::update_all_secondary_windows_appearance(is_dark);
 
                         // Sync gpui-component theme with new system appearance
                         theme::sync_gpui_component_theme(cx);

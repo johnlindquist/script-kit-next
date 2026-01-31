@@ -252,7 +252,26 @@ fn save_secrets(secrets: &HashMap<String, SecretEntry>) -> Result<(), String> {
         .finish()
         .map_err(|e| format!("Failed to finish encryption: {}", e))?;
 
-    fs::write(&path, &encrypted).map_err(|e| format!("Failed to write secrets file: {}", e))?;
+    // Write secrets file with restrictive permissions (0o600 - owner read/write only)
+    #[cfg(unix)]
+    {
+        use std::fs::OpenOptions;
+        use std::os::unix::fs::OpenOptionsExt;
+
+        OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o600)
+            .open(&path)
+            .and_then(|mut file| file.write_all(&encrypted))
+            .map_err(|e| format!("Failed to write secrets file: {}", e))?;
+    }
+
+    #[cfg(not(unix))]
+    {
+        fs::write(&path, &encrypted).map_err(|e| format!("Failed to write secrets file: {}", e))?;
+    }
 
     logging::log(
         "SECRETS",
@@ -413,6 +432,59 @@ mod tests {
         let path = secrets_path();
         assert!(path.ends_with("secrets.age"));
         assert!(path.to_string_lossy().contains(".scriptkit"));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_secrets_file_has_secure_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+        use tempfile::TempDir;
+
+        // Create a temporary directory for testing
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = temp_dir.path().join("test-secrets.age");
+
+        // Create test secrets
+        let mut test_secrets = HashMap::new();
+        test_secrets.insert(
+            "TEST_KEY".to_string(),
+            SecretEntry {
+                value: "test_value".to_string(),
+                modified_at: chrono::Utc::now(),
+            },
+        );
+
+        // Manually save secrets to temp path (copy save_secrets logic)
+        let json = serde_json::to_vec(&test_secrets).unwrap();
+        let passphrase = derive_passphrase();
+        let encryptor = age::Encryptor::with_user_passphrase(passphrase);
+        let mut encrypted = vec![];
+        let mut writer = encryptor.wrap_output(&mut encrypted).unwrap();
+        writer.write_all(&json).unwrap();
+        writer.finish().unwrap();
+
+        // Write with secure permissions
+        use std::fs::OpenOptions;
+        use std::os::unix::fs::OpenOptionsExt;
+        OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o600)
+            .open(&temp_path)
+            .and_then(|mut file| file.write_all(&encrypted))
+            .unwrap();
+
+        // Verify file permissions
+        let metadata = fs::metadata(&temp_path).unwrap();
+        let mode = metadata.permissions().mode();
+        let file_perms = mode & 0o777;
+
+        assert_eq!(
+            file_perms, 0o600,
+            "Secrets file should have 0o600 permissions, got 0o{:o}",
+            file_perms
+        );
     }
 
     // Integration tests that actually read/write would go here

@@ -137,6 +137,9 @@ smappservice-rs = "0.1"
 which = "8.0.0"
 hex = "0.4.3"
 
+# Secure temporary file creation (moved from dev-dependencies for production use)
+tempfile = "3"
+
 [features]
 default = ["ocr"]
 # Enable tests that interact with system APIs (clipboard, accessibility, hotkeys)
