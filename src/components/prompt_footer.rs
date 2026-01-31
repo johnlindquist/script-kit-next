@@ -353,7 +353,15 @@ impl RenderOnce for PromptFooter {
             .justify_between()
             .border_t_1()
             .border_color(colors.border.rgba8(border_opacity))
-            .bg(footer_bg);
+            .bg(footer_bg)
+            // Inner shadow above the footer for visual separation from content
+            // Footers are the ONE scenario where blocking vibrancy is OK
+            .shadow(vec![BoxShadow {
+                color: hsla(0., 0., 0., 0.05),  // Black at 5% opacity - subtle
+                offset: point(px(0.), px(-1.)), // Negative Y = shadow above element
+                blur_radius: px(4.),
+                spread_radius: px(0.),
+            }]);
 
         // Left side: Logo + helper text
         let mut left_side = hstack().gap(px(8.)).items_center();

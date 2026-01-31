@@ -831,10 +831,15 @@ impl ActionsDialog {
     /// - Results are sorted by score (descending)
     fn refilter(&mut self) {
         // Preserve selection if possible (track which action was selected)
-        let previously_selected = self
-            .filtered_actions
-            .get(self.selected_index)
-            .and_then(|&idx| self.actions.get(idx).map(|a| a.id.clone()));
+        // NOTE: selected_index is an index into grouped_items, not filtered_actions.
+        // We must extract the filter_idx from the GroupedActionItem first.
+        let previously_selected = match self.grouped_items.get(self.selected_index) {
+            Some(GroupedActionItem::Item(filter_idx)) => self
+                .filtered_actions
+                .get(*filter_idx)
+                .and_then(|&idx| self.actions.get(idx).map(|a| a.id.clone())),
+            _ => None,
+        };
 
         if self.search_text.is_empty() {
             self.filtered_actions = (0..self.actions.len()).collect();
@@ -863,28 +868,39 @@ impl ActionsDialog {
             self.filtered_actions = scored.into_iter().map(|(idx, _)| idx).collect();
         }
 
+        // Rebuild grouped items after filter change
+        self.rebuild_grouped_items();
+
         // Preserve selection if the same action is still in results
+        // NOTE: We must find the position in grouped_items, not filtered_actions,
+        // because grouped_items may include section headers that offset the indices.
         if let Some(prev_id) = previously_selected {
-            if let Some(new_idx) = self.filtered_actions.iter().position(|&idx| {
+            // First find the filter_idx in filtered_actions
+            if let Some(filter_idx) = self.filtered_actions.iter().position(|&idx| {
                 self.actions
                     .get(idx)
                     .map(|a| a.id == prev_id)
                     .unwrap_or(false)
             }) {
-                self.selected_index = new_idx;
+                // Now find the position in grouped_items that contains Item(filter_idx)
+                if let Some(grouped_idx) = self
+                    .grouped_items
+                    .iter()
+                    .position(|item| matches!(item, GroupedActionItem::Item(i) if *i == filter_idx))
+                {
+                    self.selected_index = grouped_idx;
+                } else {
+                    // Fallback: coerce to first valid item
+                    self.selected_index =
+                        coerce_action_selection(&self.grouped_items, 0).unwrap_or(0);
+                }
             } else {
-                self.selected_index = 0;
+                // Action no longer in results, select first valid item
+                self.selected_index = coerce_action_selection(&self.grouped_items, 0).unwrap_or(0);
             }
         } else {
-            self.selected_index = 0;
-        }
-
-        // Rebuild grouped items after filter change
-        self.rebuild_grouped_items();
-
-        // Coerce selection to skip section headers
-        if let Some(valid_idx) = coerce_action_selection(&self.grouped_items, self.selected_index) {
-            self.selected_index = valid_idx;
+            // No previous selection, select first valid item
+            self.selected_index = coerce_action_selection(&self.grouped_items, 0).unwrap_or(0);
         }
 
         // Only scroll if we have results
@@ -1235,8 +1251,29 @@ impl Render for ActionsDialog {
         let focus_border_alpha = ((opacity.border_active * 1.5).min(1.0) * 255.0) as u8;
         let focus_border_color = rgba(hex_with_alpha(accent_color_hex, focus_border_alpha));
 
-        // Input container with fixed height and width to prevent any layout shifts
-        // The entire row is constrained to prevent resizing when text is entered
+        // Raycast-style footer search input: minimal styling, full-width, top separator line
+        // No boxed input field - just text on a clean background with a thin top border
+        let is_dark = self.theme.has_dark_colors();
+
+        // POC colors for light mode, theme colors for dark mode
+        let separator_color = if is_dark {
+            border_color
+        } else {
+            rgba(0xE0E0E0FF) // POC separator color
+        };
+
+        let hint_text_color = if is_dark {
+            dimmed_text
+        } else {
+            rgba(0x9B9B9BFF) // POC hint_text color
+        };
+
+        let input_text_color = if is_dark {
+            primary_text
+        } else {
+            rgba(0x1A1A1AFF) // POC primary_text for dark input text
+        };
+
         let input_container = div()
             .w(px(POPUP_WIDTH)) // Match parent width exactly
             .min_w(px(POPUP_WIDTH))
@@ -1247,93 +1284,46 @@ impl Render for ActionsDialog {
             .overflow_hidden() // Prevent any content from causing shifts
             .px(px(spacing.item_padding_x))
             .py(px(spacing.item_padding_y + 2.0)) // Slightly more vertical padding
-            .bg(search_box_bg)
-            .border_t_1() // Border on top since input is now at bottom
-            .border_color(border_color)
+            // No background - clean/transparent to match Raycast
+            .border_t_1() // Top separator line only
+            .border_color(separator_color)
             .flex()
             .flex_row()
             .items_center()
-            .gap(px(spacing.gap_md))
             .child(
-                // Search icon or indicator - fixed width to prevent shifts
+                // Full-width search input - no box styling, just text
                 div()
-                    .w(px(24.0)) // Fixed width for the icon container
-                    .min_w(px(24.0))
-                    .text_color(dimmed_text)
-                    .text_xs()
-                    .child("⌘K"),
-            )
-            .child(
-                // Search input field with focus indicator
-                // CRITICAL: Use flex_shrink_0 to prevent flexbox from shrinking this container
-                // The border/bg MUST stay at fixed width regardless of content
-                div()
-                    .flex_shrink_0() // PREVENT flexbox from shrinking this!
-                    .w(px(240.0))
-                    .min_w(px(240.0))
-                    .max_w(px(240.0))
-                    .h(px(28.0)) // Fixed height too
-                    .min_h(px(28.0))
-                    .max_h(px(28.0))
-                    .overflow_hidden()
-                    .px(px(spacing.padding_sm))
-                    .py(px(spacing.padding_xs))
-                    // ALWAYS show background - use theme-aware opacity
-                    // In light mode: uses white (search_box) at ~85-90% opacity
-                    // In dark mode: uses dark color (search_box) at ~25-50% opacity
-                    .bg({
-                        let opacity = self.theme.get_opacity();
-                        let alpha = if self.search_text.is_empty() {
-                            (opacity.input_inactive * 255.0) as u8
-                        } else {
-                            (opacity.input_active * 255.0) as u8
-                        };
-                        if self.design_variant == DesignVariant::Default {
-                            rgba(hex_with_alpha(
-                                self.theme.colors.background.search_box,
-                                alpha,
-                            ))
-                        } else {
-                            rgba(hex_with_alpha(colors.background_secondary, alpha))
-                        }
-                    })
-                    .rounded(px(visual.radius_sm))
-                    .border_1()
-                    // ALWAYS show border - just vary intensity
-                    .border_color(if !self.search_text.is_empty() {
-                        focus_border_color
-                    } else {
-                        border_color
-                    })
+                    .flex_1() // Take full width
+                    .h(px(28.0))
                     .flex()
                     .flex_row()
                     .items_center()
                     .text_sm()
+                    // Placeholder or input text color
                     .text_color(if self.search_text.is_empty() {
-                        dimmed_text
+                        hint_text_color
                     } else {
-                        primary_text
+                        input_text_color
                     })
-                    // ALWAYS render cursor div with consistent margin to prevent layout shift
-                    // When empty, cursor is at the start before placeholder text
+                    // Cursor at start when empty
                     .when(self.search_text.is_empty(), |d| {
                         d.child(
                             div()
                                 .w(px(2.))
                                 .h(px(16.))
-                                .mr(px(2.)) // Use consistent 2px margin
+                                .mr(px(2.))
                                 .rounded(px(1.))
                                 .when(self.cursor_visible, |d| d.bg(accent_color)),
                         )
                     })
                     .child(search_display.clone())
-                    // When has text, cursor is at the end after the text
+                    // Cursor at end when has text
                     .when(!self.search_text.is_empty(), |d| {
                         d.child(
                             div()
                                 .w(px(2.))
                                 .h(px(16.))
-                                .ml(px(2.)) // Consistent 2px margin
+                                .ml(px(2.))
                                 .rounded(px(1.))
                                 .when(self.cursor_visible, |d| d.bg(accent_color)),
                         )
@@ -1530,47 +1520,40 @@ impl Render for ActionsDialog {
                                         } else {
                                             secondary_text
                                         };
-                                        let shortcut_color = dimmed_text;
-
-                                        // Keycap colors - use theme-aware colors for proper contrast
-                                        // Dark mode: semi-transparent dark background
-                                        // Light mode: light background with subtle border for Raycast-like appearance
-                                        // Note: is_dark_mode already defined above for selection colors
-                                        let keycap_bg = if design_variant == DesignVariant::Default
-                                        {
-                                            if is_dark_mode {
-                                                rgba(hex_with_alpha(
-                                                    this.theme.colors.ui.border,
-                                                    0x80,
-                                                ))
-                                            } else {
-                                                // Light mode: use ui.border (0xe0e0e0) with higher opacity
-                                                // for a light gray badge background that's visible but subtle
-                                                rgba(hex_with_alpha(
-                                                    this.theme.colors.ui.border,
-                                                    0xCC, // ~80% opacity for visible light background
-                                                ))
-                                            }
-                                        } else {
-                                            rgba(hex_with_alpha(item_colors.border, 0x80))
-                                        };
-                                        let keycap_border =
+                                        // Keycap colors matching POC:
+                                        // Dark mode: semi-transparent dark background with theme colors
+                                        // Light mode: POC values - 0xE8E8E8FF bg, 0x6B6B6BFF text
+                                        let (keycap_bg, keycap_border, shortcut_color) =
                                             if design_variant == DesignVariant::Default {
                                                 if is_dark_mode {
-                                                    rgba(hex_with_alpha(
-                                                        this.theme.colors.ui.border,
-                                                        0xA0,
-                                                    ))
+                                                    (
+                                                        rgba(hex_with_alpha(
+                                                            this.theme.colors.ui.border,
+                                                            0x80,
+                                                        )),
+                                                        rgba(hex_with_alpha(
+                                                            this.theme.colors.ui.border,
+                                                            0xA0,
+                                                        )),
+                                                        dimmed_text,
+                                                    )
                                                 } else {
-                                                    // Light mode: use a medium gray for subtle but visible border
-                                                    // text.tertiary (0x6b6b6b) provides good definition
-                                                    rgba(hex_with_alpha(
-                                                        this.theme.colors.text.tertiary,
-                                                        0x60, // ~38% opacity for subtle border
-                                                    ))
+                                                    // Light mode: exact POC values for keycaps
+                                                    // bg: 0xE8E8E8FF (232,232,232) solid gray
+                                                    // border: match bg for no visible border
+                                                    // text: 0x6B6B6BFF (107,107,107) medium gray
+                                                    (
+                                                        rgba(0xE8E8E8FF),
+                                                        rgba(0xE8E8E8FF), // no border effect
+                                                        rgba(0x6B6B6BFF), // POC secondary_text
+                                                    )
                                                 }
                                             } else {
-                                                rgba(hex_with_alpha(item_colors.border, 0xA0))
+                                                (
+                                                    rgba(hex_with_alpha(item_colors.border, 0x80)),
+                                                    rgba(hex_with_alpha(item_colors.border, 0xA0)),
+                                                    dimmed_text,
+                                                )
                                             };
 
                                         // Inner row with pill-style selection
@@ -1697,13 +1680,15 @@ impl Render for ActionsDialog {
             .w_full();
 
             // Wrap list in a relative container with scrollbar overlay
+            // Note: Using flex_1() to fill remaining space in flex column.
+            // Do NOT use h_full() here as it can conflict with flex layout
+            // and cause the search bar to be pushed off-screen.
             div()
                 .relative()
                 .flex()
                 .flex_col()
                 .flex_1()
                 .w_full()
-                .h_full()
                 .overflow_hidden()
                 .child(variable_height_list)
                 .child(scrollbar)
@@ -1713,13 +1698,10 @@ impl Render for ActionsDialog {
         // Use helper method for container colors
         let (main_bg, container_border, container_text) = self.get_container_colors(&colors);
 
-        // Calculate dynamic height based on number of items
-        // Each item is ACTION_ITEM_HEIGHT, plus search box height (SEARCH_INPUT_HEIGHT), plus padding
-        // When hide_search is true, we don't include the search box height
-        // Now also includes HEADER_HEIGHT when context_title is set
-        // NOTE: Add border_thin * 2 for border (top + bottom from .border_1()) to prevent
-        // content from being clipped and causing unnecessary scrolling
-        let num_items = self.filtered_actions.len();
+        // Calculate dynamic height based on number of items AND section headers
+        // Items are ACTION_ITEM_HEIGHT (44px), section headers are SECTION_HEADER_HEIGHT (24px)
+        // Plus search box height (SEARCH_INPUT_HEIGHT), header height, and border
+        // NOTE: Must count from grouped_items which includes section headers, not just filtered_actions
         let search_box_height = if self.hide_search {
             0.0
         } else {
@@ -1731,13 +1713,28 @@ impl Render for ActionsDialog {
             0.0
         };
         let border_height = visual.border_thin * 2.0; // top + bottom border
-                                                      // When no actions, still need space for "No actions match" message
-        let min_items_height = if num_items == 0 {
+
+        // Count items and section headers separately for accurate height calculation
+        let mut section_header_count = 0_usize;
+        let mut action_item_count = 0_usize;
+        for item in &self.grouped_items {
+            match item {
+                GroupedActionItem::SectionHeader(_) => section_header_count += 1,
+                GroupedActionItem::Item(_) => action_item_count += 1,
+            }
+        }
+
+        // When no actions, still need space for "No actions match" message
+        let min_items_height = if action_item_count == 0 {
             ACTION_ITEM_HEIGHT
         } else {
             0.0
         };
-        let items_height = (num_items as f32 * ACTION_ITEM_HEIGHT)
+
+        // Calculate content height including both items and section headers
+        let content_height = (action_item_count as f32 * ACTION_ITEM_HEIGHT)
+            + (section_header_count as f32 * SECTION_HEADER_HEIGHT);
+        let items_height = content_height
             .max(min_items_height)
             .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
         let total_height = items_height + search_box_height + header_height + border_height;
