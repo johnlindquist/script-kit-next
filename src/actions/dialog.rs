@@ -1122,6 +1122,9 @@ impl ActionsDialog {
         // Use theme opacity for input background to support vibrancy
         let opacity = self.theme.get_opacity();
         let input_alpha = (opacity.input * 255.0) as u8;
+        // Use theme-aware border opacity for proper light/dark mode support
+        // Light mode: ~30% opacity, Dark mode: ~50% opacity (via border_inactive)
+        let border_alpha = ((opacity.border_inactive * 2.0).min(1.0) * 255.0) as u8;
 
         if self.design_variant == DesignVariant::Default {
             (
@@ -1129,7 +1132,7 @@ impl ActionsDialog {
                     self.theme.colors.background.search_box,
                     input_alpha,
                 )),
-                rgba(hex_with_alpha(self.theme.colors.ui.border, 0x80)),
+                rgba(hex_with_alpha(self.theme.colors.ui.border, border_alpha)),
                 rgb(self.theme.colors.text.muted),
                 rgb(self.theme.colors.text.dimmed),
                 rgb(self.theme.colors.text.secondary),
@@ -1137,7 +1140,7 @@ impl ActionsDialog {
         } else {
             (
                 rgba(hex_with_alpha(colors.background_secondary, input_alpha)),
-                rgba(hex_with_alpha(colors.border, 0x80)),
+                rgba(hex_with_alpha(colors.border, border_alpha)),
                 rgb(colors.text_muted),
                 rgb(colors.text_dimmed),
                 rgb(colors.text_secondary),
@@ -1226,8 +1229,11 @@ impl Render for ActionsDialog {
         };
         let accent_color = rgb(accent_color_hex);
 
-        // Focus border color (accent with transparency)
-        let focus_border_color = rgba(hex_with_alpha(accent_color_hex, 0x60));
+        // Focus border color (accent with theme-aware transparency)
+        // Use border_active opacity for focused state, scaled for visibility
+        let opacity = self.theme.get_opacity();
+        let focus_border_alpha = ((opacity.border_active * 1.5).min(1.0) * 255.0) as u8;
+        let focus_border_color = rgba(hex_with_alpha(accent_color_hex, focus_border_alpha));
 
         // Input container with fixed height and width to prevent any layout shifts
         // The entire row is constrained to prevent resizing when text is entered
@@ -1272,25 +1278,24 @@ impl Render for ActionsDialog {
                     .overflow_hidden()
                     .px(px(spacing.padding_sm))
                     .py(px(spacing.padding_xs))
-                    // ALWAYS show background - just vary intensity
-                    .bg(if self.design_variant == DesignVariant::Default {
-                        rgba(hex_with_alpha(
-                            self.theme.colors.background.main,
-                            if self.search_text.is_empty() {
-                                0x20
-                            } else {
-                                0x40
-                            },
-                        ))
-                    } else {
-                        rgba(hex_with_alpha(
-                            colors.background,
-                            if self.search_text.is_empty() {
-                                0x20
-                            } else {
-                                0x40
-                            },
-                        ))
+                    // ALWAYS show background - use theme-aware opacity
+                    // In light mode: uses white (search_box) at ~85-90% opacity
+                    // In dark mode: uses dark color (search_box) at ~25-50% opacity
+                    .bg({
+                        let opacity = self.theme.get_opacity();
+                        let alpha = if self.search_text.is_empty() {
+                            (opacity.input_inactive * 255.0) as u8
+                        } else {
+                            (opacity.input_active * 255.0) as u8
+                        };
+                        if self.design_variant == DesignVariant::Default {
+                            rgba(hex_with_alpha(
+                                self.theme.colors.background.search_box,
+                                alpha,
+                            ))
+                        } else {
+                            rgba(hex_with_alpha(colors.background_secondary, alpha))
+                        }
                     })
                     .rounded(px(visual.radius_sm))
                     .border_1()
@@ -1452,11 +1457,10 @@ impl Render for ActionsDialog {
                                         let item_colors = item_tokens.colors();
                                         let item_spacing = item_tokens.spacing();
 
-                                        // Extract colors for list items - use theme opacity for vibrancy
-                                        let theme_opacity = this.theme.get_opacity();
-                                        let selected_alpha =
-                                            (theme_opacity.selected * 255.0) as u32;
-                                        let hover_alpha = (theme_opacity.hover * 255.0) as u32;
+                                        // Extract colors for list items - theme-aware selection
+                                        // Light mode: Use light gray (like POC: 0xE8E8E8 at 80%)
+                                        // Dark mode: Use white at low opacity for subtle brightening
+                                        let is_dark_mode = this.theme.should_use_dark_vibrancy();
 
                                         let (
                                             selected_bg,
@@ -1465,20 +1469,46 @@ impl Render for ActionsDialog {
                                             secondary_text,
                                             dimmed_text,
                                         ) = if design_variant == DesignVariant::Default {
-                                            (
-                                                rgba(
-                                                    (this.theme.colors.accent.selected_subtle << 8)
-                                                        | selected_alpha,
-                                                ),
-                                                rgba(
-                                                    (this.theme.colors.accent.selected_subtle << 8)
-                                                        | hover_alpha,
-                                                ),
-                                                rgb(this.theme.colors.text.primary),
-                                                rgb(this.theme.colors.text.secondary),
-                                                rgb(this.theme.colors.text.dimmed),
-                                            )
+                                            if is_dark_mode {
+                                                // Dark mode: white at low opacity for subtle brightening
+                                                let theme_opacity = this.theme.get_opacity();
+                                                let selected_alpha =
+                                                    (theme_opacity.selected * 255.0) as u32;
+                                                let hover_alpha =
+                                                    (theme_opacity.hover * 255.0) as u32;
+                                                (
+                                                    rgba(
+                                                        (this.theme.colors.accent.selected_subtle
+                                                            << 8)
+                                                            | selected_alpha,
+                                                    ),
+                                                    rgba(
+                                                        (this.theme.colors.accent.selected_subtle
+                                                            << 8)
+                                                            | hover_alpha,
+                                                    ),
+                                                    rgb(this.theme.colors.text.primary),
+                                                    rgb(this.theme.colors.text.secondary),
+                                                    rgb(this.theme.colors.text.dimmed),
+                                                )
+                                            } else {
+                                                // Light mode: light gray at 80% opacity (POC style)
+                                                // 0xE8E8E8 = 232,232,232 - soft gray that provides
+                                                // good contrast without being too dark
+                                                // 0xCC = 204 = 80% opacity
+                                                (
+                                                    rgba(0xE8E8E8CC), // selected: gray @ 80%
+                                                    rgba(0xE8E8E866), // hover: gray @ 40%
+                                                    rgb(this.theme.colors.text.primary),
+                                                    rgb(this.theme.colors.text.secondary),
+                                                    rgb(this.theme.colors.text.dimmed),
+                                                )
+                                            }
                                         } else {
+                                            let theme_opacity = this.theme.get_opacity();
+                                            let selected_alpha =
+                                                (theme_opacity.selected * 255.0) as u32;
+                                            let hover_alpha = (theme_opacity.hover * 255.0) as u32;
                                             (
                                                 rgba(
                                                     (item_colors.background_selected << 8)
@@ -1503,9 +1533,9 @@ impl Render for ActionsDialog {
                                         let shortcut_color = dimmed_text;
 
                                         // Keycap colors - use theme-aware colors for proper contrast
-                                        // In light mode, ui.border is too light (0xe0e0e0), so use
-                                        // text.secondary as base for better visibility
-                                        let is_dark_mode = this.theme.should_use_dark_vibrancy();
+                                        // Dark mode: semi-transparent dark background
+                                        // Light mode: light background with subtle border for Raycast-like appearance
+                                        // Note: is_dark_mode already defined above for selection colors
                                         let keycap_bg = if design_variant == DesignVariant::Default
                                         {
                                             if is_dark_mode {
@@ -1514,10 +1544,11 @@ impl Render for ActionsDialog {
                                                     0x80,
                                                 ))
                                             } else {
-                                                // Light mode: use darker color with lower opacity
+                                                // Light mode: use ui.border (0xe0e0e0) with higher opacity
+                                                // for a light gray badge background that's visible but subtle
                                                 rgba(hex_with_alpha(
-                                                    this.theme.colors.text.secondary,
-                                                    0x30,
+                                                    this.theme.colors.ui.border,
+                                                    0xCC, // ~80% opacity for visible light background
                                                 ))
                                             }
                                         } else {
@@ -1531,10 +1562,11 @@ impl Render for ActionsDialog {
                                                         0xA0,
                                                     ))
                                                 } else {
-                                                    // Light mode: use darker border for visibility
+                                                    // Light mode: use a medium gray for subtle but visible border
+                                                    // text.tertiary (0x6b6b6b) provides good definition
                                                     rgba(hex_with_alpha(
-                                                        this.theme.colors.text.secondary,
-                                                        0x50,
+                                                        this.theme.colors.text.tertiary,
+                                                        0x60, // ~38% opacity for subtle border
                                                     ))
                                                 }
                                             } else {
@@ -1857,24 +1889,22 @@ impl Render for ActionsDialog {
                             .overflow_hidden()
                             .px(px(spacing.padding_sm))
                             .py(px(spacing.padding_xs))
-                            .bg(if self.design_variant == DesignVariant::Default {
-                                rgba(hex_with_alpha(
-                                    self.theme.colors.background.main,
-                                    if self.search_text.is_empty() {
-                                        0x20
-                                    } else {
-                                        0x40
-                                    },
-                                ))
-                            } else {
-                                rgba(hex_with_alpha(
-                                    colors.background,
-                                    if self.search_text.is_empty() {
-                                        0x20
-                                    } else {
-                                        0x40
-                                    },
-                                ))
+                            // Use theme-aware opacity for input background
+                            .bg({
+                                let opacity = self.theme.get_opacity();
+                                let alpha = if self.search_text.is_empty() {
+                                    (opacity.input_inactive * 255.0) as u8
+                                } else {
+                                    (opacity.input_active * 255.0) as u8
+                                };
+                                if self.design_variant == DesignVariant::Default {
+                                    rgba(hex_with_alpha(
+                                        self.theme.colors.background.search_box,
+                                        alpha,
+                                    ))
+                                } else {
+                                    rgba(hex_with_alpha(colors.background_secondary, alpha))
+                                }
                             })
                             .rounded(px(visual.radius_sm))
                             .border_1()
