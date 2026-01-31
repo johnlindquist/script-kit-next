@@ -1267,6 +1267,8 @@ impl ChatPrompt {
         let colors = &self.prompt_colors;
         let model_count = self.models.len();
         let current_model = self.model.clone().unwrap_or_default();
+        // Check vibrancy to conditionally apply shadow
+        let vibrancy_enabled = crate::theme::load_theme().is_vibrancy_enabled();
 
         let menu_bg = rgba((colors.code_bg << 8) | 0xF0);
         let hover_bg = rgba((colors.accent_color << 8) | 0x20);
@@ -1282,7 +1284,8 @@ impl ChatPrompt {
             .border_1()
             .border_color(border_color)
             .rounded(px(8.0))
-            .shadow_lg()
+            // Only apply shadow when vibrancy is disabled - shadows block blur
+            .when(!vibrancy_enabled, |d| d.shadow_lg())
             .flex()
             .flex_col()
             .overflow_hidden();

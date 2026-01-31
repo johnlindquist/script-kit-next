@@ -1623,7 +1623,7 @@ impl NotesApp {
                     div()
                         .w(px(500.))
                         .max_h(px(400.))
-                        .bg(Self::get_vibrancy_background(cx)) // Semi-transparent for vibrancy
+                        // NO .bg() - overlay already provides backdrop, avoid double-layering opacity
                         .border_1()
                         .border_color(cx.theme().border)
                         .rounded_lg()

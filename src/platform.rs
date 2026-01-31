@@ -1176,14 +1176,17 @@ unsafe fn configure_visual_effect_views_recursive(view: id, count: &mut usize, i
             ns_visual_effect_material::POPOVER
         };
         let _: () = msg_send![view, setMaterial: material];
-        // State 1 = active (always vibrant, doesn't dim when window loses key focus)
-        // This prevents the main window from dimming when Actions popup opens
+        // State: 1=active for dark (prevents dimming), 0=followsWindow for light (cleaner look)
         // NSVisualEffectState: 0=followsWindowActiveState, 1=active, 2=inactive
-        let _: () = msg_send![view, setState: 1isize];
+        // Dark mode: active state prevents dimming when Actions popup opens
+        // Light mode: followsWindow gives cleaner appearance like the POC
+        let state = if is_dark { 1isize } else { 0isize };
+        let _: () = msg_send![view, setState: state];
         // BehindWindow blending (0) - blur content behind the window
         let _: () = msg_send![view, setBlendingMode: 0isize];
-        // Emphasized for more contrast
-        let _: () = msg_send![view, setEmphasized: true];
+        // Emphasized adds more contrast/tint - use only in dark mode
+        // Light mode without emphasis matches POC's cleaner look
+        let _: () = msg_send![view, setEmphasized: is_dark];
 
         // Log state AFTER configuration
         let new_material: isize = msg_send![view, material];

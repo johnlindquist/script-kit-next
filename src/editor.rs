@@ -994,7 +994,8 @@ impl EditorPrompt {
                 .border_1()
                 .border_color(rgb(colors.ui.border))
                 .rounded_md()
-                .shadow_lg()
+                // Only apply shadow when vibrancy is disabled - shadows block blur
+                .when(!self.theme.is_vibrancy_enabled(), |d| d.shadow_lg())
                 .py(px(4.))
                 .children(popup.choices.iter().enumerate().map(|(idx, choice)| {
                     let is_selected = idx == popup.selected_index;
