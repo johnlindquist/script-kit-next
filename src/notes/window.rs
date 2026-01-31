@@ -5,9 +5,8 @@
 
 use anyhow::Result;
 use gpui::{
-    div, hsla, point, prelude::*, px, rgba, size, App, BoxShadow, Context, Entity, FocusHandle,
-    Focusable, IntoElement, KeyDownEvent, ParentElement, Render, Styled, Subscription, Window,
-    WindowBounds, WindowOptions,
+    div, prelude::*, px, rgba, size, App, Context, Entity, FocusHandle, Focusable, IntoElement,
+    KeyDownEvent, ParentElement, Render, Styled, Subscription, Window, WindowBounds, WindowOptions,
 };
 
 #[cfg(target_os = "macos")]
@@ -150,9 +149,6 @@ pub struct NotesApp {
     /// Previous height before showing the actions panel
     actions_panel_prev_height: Option<f32>,
 
-    /// Cached box shadows from theme (avoid reloading theme on every render)
-    cached_box_shadows: Vec<BoxShadow>,
-
     /// Pending note selection from browse panel
     pending_browse_select: Arc<Mutex<Option<NoteId>>>,
 
@@ -242,9 +238,6 @@ impl NotesApp {
             "Notes app initialized"
         );
 
-        // Pre-compute box shadows from theme (avoid reloading on every render)
-        let cached_box_shadows = Self::compute_box_shadows();
-
         // Pre-compute note switcher actions before moving notes into struct
         let note_switcher_actions = get_note_switcher_actions(
             &notes
@@ -303,7 +296,6 @@ impl NotesApp {
             browse_panel: None,
             pending_action: Arc::new(Mutex::new(None)),
             actions_panel_prev_height: None,
-            cached_box_shadows,
             pending_browse_select: Arc::new(Mutex::new(None)),
             pending_browse_close: Arc::new(Mutex::new(false)),
             pending_browse_action: Arc::new(Mutex::new(None)),
@@ -323,13 +315,13 @@ impl NotesApp {
 
     /// Update cached theme-derived values if theme revision has changed.
     ///
-    /// This is called during render to detect theme hot-reloads and recompute
-    /// values like box shadows that are derived from the theme.
+    /// This is called during render to detect theme hot-reloads.
+    /// NOTE: Box shadows were removed for vibrancy compatibility.
     fn maybe_update_theme_cache(&mut self) {
         let current_rev = crate::theme::service::theme_revision();
         if self.theme_rev_seen != current_rev {
             self.theme_rev_seen = current_rev;
-            self.cached_box_shadows = Self::compute_box_shadows();
+            // Box shadows disabled for vibrancy - no cached values to update
         }
     }
 
@@ -1635,7 +1627,7 @@ impl NotesApp {
                         .border_1()
                         .border_color(cx.theme().border)
                         .rounded_lg()
-                        .shadow_lg()
+                        // Shadow disabled for vibrancy - shadows on transparent elements cause gray fill
                         .p_4()
                         .on_mouse_down(gpui::MouseButton::Left, |_, _, _| {
                             // Stop propagation
@@ -1655,11 +1647,6 @@ impl NotesApp {
                         ),
                 )
         }
-    }
-
-    /// Get cached box shadows (computed once at construction)
-    fn create_box_shadows(&self) -> Vec<BoxShadow> {
-        self.cached_box_shadows.clone()
     }
 
     // =====================================================
@@ -1719,57 +1706,6 @@ impl NotesApp {
         } else {
             gpui::rgba(0xffffff80) // white at 50% for light mode
         }
-    }
-
-    /// Compute box shadows from theme configuration (called once at construction)
-    fn compute_box_shadows() -> Vec<BoxShadow> {
-        let theme = crate::theme::load_theme();
-        let shadow_config = theme.get_drop_shadow();
-
-        if !shadow_config.enabled {
-            return vec![];
-        }
-
-        // Convert hex color to HSLA
-        let r = ((shadow_config.color >> 16) & 0xFF) as f32 / 255.0;
-        let g = ((shadow_config.color >> 8) & 0xFF) as f32 / 255.0;
-        let b = (shadow_config.color & 0xFF) as f32 / 255.0;
-
-        // Simple RGB to HSL conversion
-        let max = r.max(g).max(b);
-        let min = r.min(g).min(b);
-        let l = (max + min) / 2.0;
-
-        let (h, s) = if max == min {
-            (0.0, 0.0)
-        } else {
-            let d = max - min;
-            let s = if l > 0.5 {
-                d / (2.0 - max - min)
-            } else {
-                d / (max + min)
-            };
-            let h = if max == r {
-                (g - b) / d + if g < b { 6.0 } else { 0.0 }
-            } else if max == g {
-                (b - r) / d + 2.0
-            } else {
-                (r - g) / d + 4.0
-            };
-            (h / 6.0, s)
-        };
-
-        vec![BoxShadow {
-            color: hsla(h, s, l, shadow_config.opacity),
-            offset: point(px(shadow_config.offset_x), px(shadow_config.offset_y)),
-            blur_radius: px(shadow_config.blur_radius),
-            spread_radius: px(shadow_config.spread_radius),
-        }]
-    }
-
-    /// Update cached box shadows when theme changes
-    pub fn update_theme(&mut self, _cx: &mut Context<Self>) {
-        self.cached_box_shadows = Self::compute_box_shadows();
     }
 }
 
@@ -1832,7 +1768,6 @@ impl Render for NotesApp {
 
         // Raycast-style single-note view: no sidebar, editor fills full width
         // Track window hover for traffic lights visibility
-        let box_shadows = self.create_box_shadows();
 
         // NOTE: Do NOT add .bg() here - gpui-component Root already provides
         // .bg(cx.theme().background) with vibrancy alpha. Adding another semi-transparent
@@ -1844,7 +1779,7 @@ impl Render for NotesApp {
             .size_full()
             .relative()
             // NO .bg() - gpui-component Root provides vibrancy background
-            .shadow(box_shadows)
+            // Shadow disabled for vibrancy - shadows on transparent elements cause gray fill
             .text_color(cx.theme().foreground)
             .track_focus(&self.focus_handle)
             // Close any open CommandBar when clicking anywhere on the notes window
@@ -1895,7 +1830,7 @@ impl Render for NotesApp {
                             cx.stop_propagation();
                             return;
                         }
-                        "enter" => {
+                        "enter" | "return" => {
                             if let Some(action_id) = this.command_bar.execute_selected_action(cx) {
                                 this.execute_action(&action_id, window, cx);
                             }
@@ -1949,7 +1884,7 @@ impl Render for NotesApp {
                             "down" | "arrowdown" => {
                                 panel.update(cx, |panel, cx| panel.move_down(cx));
                             }
-                            "enter" => {
+                            "enter" | "return" => {
                                 if let Some(action) = panel.read(cx).get_selected_action() {
                                     this.handle_action(action, window, cx);
                                 }
@@ -1992,7 +1927,7 @@ impl Render for NotesApp {
                             cx.stop_propagation();
                             return;
                         }
-                        "enter" => {
+                        "enter" | "return" => {
                             if let Some(action_id) = this.note_switcher.execute_selected_action(cx)
                             {
                                 this.execute_note_switcher_action(&action_id, window, cx);
@@ -2274,7 +2209,9 @@ pub fn open_notes_window(cx: &mut App) -> Result<()> {
 
     let handle = cx.open_window(window_options, |window, cx| {
         let view = cx.new(|cx| NotesApp::new(window, cx));
-        *notes_app_for_closure.lock().unwrap() = Some(view.clone());
+        *notes_app_for_closure
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = Some(view.clone());
         cx.new(|cx| Root::new(view, window, cx))
     })?;
 
@@ -2383,7 +2320,7 @@ pub fn close_notes_window(cx: &mut App) {
 /// without affecting it.
 pub fn is_notes_window_open() -> bool {
     let window_handle = NOTES_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
-    let guard = window_handle.lock().unwrap();
+    let guard = window_handle.lock().unwrap_or_else(|e| e.into_inner());
     guard.is_some()
 }
 
@@ -2466,7 +2403,11 @@ fn configure_notes_as_floating_panel() {
                         // ═══════════════════════════════════════════════════════════════════════════
                         // VIBRANCY CONFIGURATION - Match main window for consistent blur
                         // ═══════════════════════════════════════════════════════════════════════════
-                        crate::platform::configure_secondary_window_vibrancy(window, "Notes");
+                        let theme = crate::theme::load_theme();
+                        let is_dark = theme.should_use_dark_vibrancy();
+                        crate::platform::configure_secondary_window_vibrancy(
+                            window, "Notes", is_dark,
+                        );
 
                         // Log detailed breakdown of collection behavior bits
                         let has_can_join = (desired & 1) != 0;

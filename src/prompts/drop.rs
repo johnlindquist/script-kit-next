@@ -129,8 +129,8 @@ impl Render for DropPrompt {
                 let key_str = event.keystroke.key.to_lowercase();
 
                 match key_str.as_str() {
-                    "enter" => this.submit(),
-                    "escape" => this.submit_cancel(),
+                    "enter" | "return" => this.submit(),
+                    "escape" | "esc" => this.submit_cancel(),
                     _ => {}
                 }
             },

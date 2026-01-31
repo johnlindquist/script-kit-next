@@ -806,7 +806,19 @@ impl ActionsDialog {
     /// Update the theme when hot-reloading
     /// Call this from the parent when theme changes to ensure dialog reflects new colors
     pub fn update_theme(&mut self, theme: Arc<theme::Theme>) {
-        logging::log("ACTIONS_THEME", "Theme updated in ActionsDialog");
+        let is_dark = theme.should_use_dark_vibrancy();
+        logging::log(
+            "ACTIONS_THEME",
+            &format!(
+                "Theme updated in ActionsDialog (mode={}, keycap_base=#{:06x})",
+                if is_dark { "dark" } else { "light" },
+                if is_dark {
+                    theme.colors.ui.border
+                } else {
+                    theme.colors.text.secondary
+                }
+            ),
+        );
         self.theme = theme;
     }
 
@@ -1490,20 +1502,44 @@ impl Render for ActionsDialog {
                                         };
                                         let shortcut_color = dimmed_text;
 
-                                        // Keycap colors
+                                        // Keycap colors - use theme-aware colors for proper contrast
+                                        // In light mode, ui.border is too light (0xe0e0e0), so use
+                                        // text.secondary as base for better visibility
+                                        let is_dark_mode = this.theme.should_use_dark_vibrancy();
                                         let keycap_bg = if design_variant == DesignVariant::Default
                                         {
-                                            rgba(hex_with_alpha(this.theme.colors.ui.border, 0x80))
+                                            if is_dark_mode {
+                                                rgba(hex_with_alpha(
+                                                    this.theme.colors.ui.border,
+                                                    0x80,
+                                                ))
+                                            } else {
+                                                // Light mode: use darker color with lower opacity
+                                                rgba(hex_with_alpha(
+                                                    this.theme.colors.text.secondary,
+                                                    0x30,
+                                                ))
+                                            }
                                         } else {
                                             rgba(hex_with_alpha(item_colors.border, 0x80))
                                         };
-                                        let keycap_border = if design_variant
-                                            == DesignVariant::Default
-                                        {
-                                            rgba(hex_with_alpha(this.theme.colors.ui.border, 0xA0))
-                                        } else {
-                                            rgba(hex_with_alpha(item_colors.border, 0xA0))
-                                        };
+                                        let keycap_border =
+                                            if design_variant == DesignVariant::Default {
+                                                if is_dark_mode {
+                                                    rgba(hex_with_alpha(
+                                                        this.theme.colors.ui.border,
+                                                        0xA0,
+                                                    ))
+                                                } else {
+                                                    // Light mode: use darker border for visibility
+                                                    rgba(hex_with_alpha(
+                                                        this.theme.colors.text.secondary,
+                                                        0x50,
+                                                    ))
+                                                }
+                                            } else {
+                                                rgba(hex_with_alpha(item_colors.border, 0xA0))
+                                            };
 
                                         // Inner row with pill-style selection
                                         let inner_row = div()

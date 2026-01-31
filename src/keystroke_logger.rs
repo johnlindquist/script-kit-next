@@ -68,7 +68,7 @@ impl KeystrokeLogger {
 
     /// Record a keystroke event
     pub fn record_keystroke(&self, c: char) {
-        let mut stats = self.stats.lock().unwrap();
+        let mut stats = self.stats.lock().unwrap_or_else(|e| e.into_inner());
         stats.keystroke_count += 1;
 
         // Keep only last 10 chars for context
@@ -86,7 +86,7 @@ impl KeystrokeLogger {
 
     /// Record a skipped keystroke (due to modifier key)
     pub fn record_skipped(&self) {
-        let mut stats = self.stats.lock().unwrap();
+        let mut stats = self.stats.lock().unwrap_or_else(|e| e.into_inner());
         stats.skipped_count += 1;
         drop(stats);
         self.maybe_flush();
@@ -94,7 +94,7 @@ impl KeystrokeLogger {
 
     /// Record a buffer-clearing character
     pub fn record_buffer_clear(&self) {
-        let mut stats = self.stats.lock().unwrap();
+        let mut stats = self.stats.lock().unwrap_or_else(|e| e.into_inner());
         stats.clear_count += 1;
         drop(stats);
         self.maybe_flush();
@@ -102,7 +102,7 @@ impl KeystrokeLogger {
 
     /// Update current buffer state
     pub fn update_buffer_state(&self, buffer_len: usize, trigger_count: usize) {
-        let mut stats = self.stats.lock().unwrap();
+        let mut stats = self.stats.lock().unwrap_or_else(|e| e.into_inner());
         stats.buffer_len = buffer_len;
         stats.trigger_count = trigger_count;
         stats.trigger_checks += 1;
@@ -124,7 +124,7 @@ impl KeystrokeLogger {
     /// Check if it's time to flush and do so if needed
     fn maybe_flush(&self) {
         let should_flush = {
-            let last_flush = self.last_flush.lock().unwrap();
+            let last_flush = self.last_flush.lock().unwrap_or_else(|e| e.into_inner());
             last_flush.elapsed() >= Duration::from_secs(FLUSH_INTERVAL_SECS)
         };
 
@@ -135,7 +135,7 @@ impl KeystrokeLogger {
 
     /// Force flush accumulated stats to log
     pub fn flush(&self) {
-        let mut stats = self.stats.lock().unwrap();
+        let mut stats = self.stats.lock().unwrap_or_else(|e| e.into_inner());
 
         if stats.is_empty() {
             return;
@@ -157,7 +157,7 @@ impl KeystrokeLogger {
         stats.reset();
 
         // Update last flush time
-        let mut last_flush = self.last_flush.lock().unwrap();
+        let mut last_flush = self.last_flush.lock().unwrap_or_else(|e| e.into_inner());
         *last_flush = Instant::now();
     }
 }
@@ -179,7 +179,7 @@ mod tests {
     #[test]
     fn test_new_logger() {
         let logger = KeystrokeLogger::new();
-        let stats = logger.stats.lock().unwrap();
+        let stats = logger.stats.lock().unwrap_or_else(|e| e.into_inner());
         assert!(stats.is_empty());
     }
 
@@ -190,7 +190,7 @@ mod tests {
         logger.record_keystroke('b');
         logger.record_keystroke('c');
 
-        let stats = logger.stats.lock().unwrap();
+        let stats = logger.stats.lock().unwrap_or_else(|e| e.into_inner());
         assert_eq!(stats.keystroke_count, 3);
         assert_eq!(stats.recent_chars, "abc");
     }
@@ -201,7 +201,7 @@ mod tests {
         logger.record_skipped();
         logger.record_skipped();
 
-        let stats = logger.stats.lock().unwrap();
+        let stats = logger.stats.lock().unwrap_or_else(|e| e.into_inner());
         assert_eq!(stats.skipped_count, 2);
     }
 
@@ -210,7 +210,7 @@ mod tests {
         let logger = KeystrokeLogger::new();
         logger.record_buffer_clear();
 
-        let stats = logger.stats.lock().unwrap();
+        let stats = logger.stats.lock().unwrap_or_else(|e| e.into_inner());
         assert_eq!(stats.clear_count, 1);
     }
 
@@ -221,7 +221,7 @@ mod tests {
             logger.record_keystroke(c);
         }
 
-        let stats = logger.stats.lock().unwrap();
+        let stats = logger.stats.lock().unwrap_or_else(|e| e.into_inner());
         assert_eq!(stats.recent_chars.len(), 10);
         // Should keep last 10
         assert_eq!(stats.recent_chars, "ghijklmnop");
@@ -236,7 +236,7 @@ mod tests {
 
         logger.flush();
 
-        let stats = logger.stats.lock().unwrap();
+        let stats = logger.stats.lock().unwrap_or_else(|e| e.into_inner());
         assert!(stats.is_empty());
     }
 
@@ -245,7 +245,7 @@ mod tests {
         let logger = KeystrokeLogger::new();
         logger.update_buffer_state(5, 10);
 
-        let stats = logger.stats.lock().unwrap();
+        let stats = logger.stats.lock().unwrap_or_else(|e| e.into_inner());
         assert_eq!(stats.buffer_len, 5);
         assert_eq!(stats.trigger_count, 10);
         assert_eq!(stats.trigger_checks, 1);

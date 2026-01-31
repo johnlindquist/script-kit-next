@@ -118,7 +118,29 @@ impl McpServer {
         // Ensure kit directory exists
         fs::create_dir_all(kit_path).context("Failed to create .kit directory")?;
 
-        fs::write(&token_path, &token).context("Failed to write agent-token file")?;
+        // Write token file with restrictive permissions (0o600 - owner read/write only)
+        #[cfg(unix)]
+        {
+            use std::fs::OpenOptions;
+            use std::os::unix::fs::OpenOptionsExt;
+
+            OpenOptions::new()
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .mode(0o600)
+                .open(&token_path)
+                .and_then(|mut file| {
+                    use std::io::Write;
+                    file.write_all(token.as_bytes())
+                })
+                .context("Failed to write agent-token file")?;
+        }
+
+        #[cfg(not(unix))]
+        {
+            fs::write(&token_path, &token).context("Failed to write agent-token file")?;
+        }
 
         info!("Generated new agent token at {:?}", token_path);
         Ok(token)
@@ -152,7 +174,29 @@ impl McpServer {
         let json = serde_json::to_string_pretty(&discovery)
             .context("Failed to serialize discovery info")?;
 
-        fs::write(&discovery_path, json).context("Failed to write server.json")?;
+        // Write discovery file with restrictive permissions (0o600 - contains token)
+        #[cfg(unix)]
+        {
+            use std::fs::OpenOptions;
+            use std::os::unix::fs::OpenOptionsExt;
+
+            OpenOptions::new()
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .mode(0o600)
+                .open(&discovery_path)
+                .and_then(|mut file| {
+                    use std::io::Write;
+                    file.write_all(json.as_bytes())
+                })
+                .context("Failed to write server.json")?;
+        }
+
+        #[cfg(not(unix))]
+        {
+            fs::write(&discovery_path, json).context("Failed to write server.json")?;
+        }
 
         info!("Wrote discovery file to {:?}", discovery_path);
         Ok(())
@@ -765,5 +809,58 @@ mod tests {
         assert_eq!(response["jsonrpc"], "2.0");
         assert_eq!(response["id"], 2);
         assert!(response["result"]["resources"].is_array());
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_token_file_has_secure_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let temp_dir = TempDir::new().unwrap();
+        let token_path = temp_dir.path().join("agent-token");
+
+        // Create server - should generate token with secure permissions
+        let _server = McpServer::new(43225, temp_dir.path().to_path_buf()).unwrap();
+
+        // Token file should exist
+        assert!(token_path.exists());
+
+        // Check file permissions (should be 0o600 - owner read/write only)
+        let metadata = fs::metadata(&token_path).unwrap();
+        let mode = metadata.permissions().mode();
+        let file_perms = mode & 0o777;
+
+        assert_eq!(
+            file_perms, 0o600,
+            "Token file should have 0o600 permissions, got 0o{:o}",
+            file_perms
+        );
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_discovery_file_has_secure_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let (server, temp_dir) = create_test_server(43226);
+        let discovery_path = temp_dir.path().join("server.json");
+
+        // Start server - should create discovery file with secure permissions
+        let _handle = server.start().unwrap();
+        thread::sleep(std::time::Duration::from_millis(100));
+
+        // Discovery file should exist
+        assert!(discovery_path.exists());
+
+        // Check file permissions (should be 0o600 - contains token)
+        let metadata = fs::metadata(&discovery_path).unwrap();
+        let mode = metadata.permissions().mode();
+        let file_perms = mode & 0o777;
+
+        assert_eq!(
+            file_perms, 0o600,
+            "Discovery file should have 0o600 permissions, got 0o{:o}",
+            file_perms
+        );
     }
 }

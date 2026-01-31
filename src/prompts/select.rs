@@ -230,8 +230,8 @@ impl Render for SelectPrompt {
                     "up" | "arrowup" => this.move_up(cx),
                     "down" | "arrowdown" => this.move_down(cx),
                     "space" | " " => this.toggle_selection(cx),
-                    "enter" => this.submit(),
-                    "escape" => this.submit_cancel(),
+                    "enter" | "return" => this.submit(),
+                    "escape" | "esc" => this.submit_cancel(),
                     "backspace" => this.handle_backspace(cx),
                     _ => {
                         if let Some(ref key_char) = event.keystroke.key_char {

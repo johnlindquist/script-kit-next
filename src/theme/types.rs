@@ -10,7 +10,30 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::process::Command;
+use std::sync::{Mutex, OnceLock};
+use std::time::{Duration, Instant};
 use tracing::{debug, error, info, warn};
+
+/// Cache for system appearance detection to avoid spawning subprocesses on every render
+static APPEARANCE_CACHE: OnceLock<Mutex<AppearanceCache>> = OnceLock::new();
+
+/// How long to cache the system appearance before re-detecting
+const APPEARANCE_CACHE_TTL: Duration = Duration::from_secs(5);
+
+#[derive(Debug)]
+struct AppearanceCache {
+    is_dark: bool,
+    last_check: Instant,
+}
+
+impl Default for AppearanceCache {
+    fn default() -> Self {
+        Self {
+            is_dark: true,                                     // Default to dark mode
+            last_check: Instant::now() - APPEARANCE_CACHE_TTL, // Force immediate check
+        }
+    }
+}
 
 use super::hex_color::{hex_color_serde, HexColor};
 
@@ -74,6 +97,11 @@ pub struct BackgroundOpacity {
     /// Border active/filled state opacity (default: 0.25)
     #[serde(default = "default_border_active_opacity")]
     pub border_active: f32,
+    /// Opacity for main window vibrancy background (0.0-1.0)
+    /// Lower = more blur visible, Higher = more solid color
+    /// Default: 0.85 for dark, 0.92 for light
+    #[serde(default)]
+    pub vibrancy_background: Option<f32>,
 }
 
 fn default_selected_opacity() -> f32 {
@@ -134,6 +162,7 @@ impl BackgroundOpacity {
             input_active: self.input_active.clamp(0.0, 1.0),
             border_inactive: self.border_inactive.clamp(0.0, 1.0),
             border_active: self.border_active.clamp(0.0, 1.0),
+            vibrancy_background: self.vibrancy_background.map(|v| v.clamp(0.0, 1.0)),
         }
     }
 }
@@ -149,13 +178,13 @@ impl BackgroundOpacity {
     pub fn dark_default() -> Self {
         BackgroundOpacity {
             // Lower opacity values to allow vibrancy blur to show through
-            main: 0.30,             // Root wrapper background
-            title_bar: 0.30,        // Title bar areas
-            search_box: 0.40,       // Search input backgrounds
-            log_panel: 0.40,        // Log/terminal panels
-            selected: 0.12,         // Selected list item highlight - subtle with vibrancy
-            hover: 0.07,            // Hovered list item highlight - very subtle
-            preview: 0.0,           // Preview panel (0 = fully transparent)
+            main: 0.30,                      // Root wrapper background
+            title_bar: 0.30,                 // Title bar areas
+            search_box: 0.40,                // Search input backgrounds
+            log_panel: 0.40,                 // Log/terminal panels
+            selected: 0.12,                  // Selected list item highlight - subtle with vibrancy
+            hover: 0.07,                     // Hovered list item highlight - very subtle
+            preview: 0.0,                    // Preview panel (0 = fully transparent)
             dialog: 0.15, // Dialogs/popups - very low opacity, let vibrancy blur show through
             input: 0.30,  // Input fields
             panel: 0.20,  // Panels/containers
@@ -163,33 +192,37 @@ impl BackgroundOpacity {
             input_active: 0.50, // Input fields when has text/active
             border_inactive: 0.125, // Borders when inactive
             border_active: 0.25, // Borders when active
+            vibrancy_background: Some(0.85), // Main window vibrancy background
         }
     }
 
-    /// Light mode opacity defaults - higher opacity for light vibrancy
+    /// Light mode opacity defaults - tuned for vibrancy blur visibility
     ///
-    /// Light themes need higher opacity values because:
-    /// - White/light backgrounds need more coverage to be visible
-    /// - Selection uses black base color which is more visible at lower opacity
+    /// Lower opacity allows more blur to show through while keeping text readable.
+    /// Use Cmd+Shift+[ and Cmd+Shift+] to adjust opacity in real-time.
     ///
-    /// Values derived from POC testing with Raycast-like light theme.
+    /// These values are aligned with the vibrancy POC (src/bin/vibrancy-poc.rs):
+    /// - POC uses rgba(0xFAFAFAD9) = #FAFAFA at 85% opacity (0xD9/255 = 0.851)
+    /// - POC uses rgba(0xFFFFFFE6) = white at 90% opacity for input area
     pub fn light_default() -> Self {
         BackgroundOpacity {
-            // Higher opacity for light mode - prevents washed out appearance
-            main: 0.85,            // rgba(0xFAFAFAD9) from POC = ~85%
-            title_bar: 0.90,       // rgba(0xFFFFFFE6) from POC = ~90%
-            search_box: 0.90,      // Same as title_bar for consistency
-            log_panel: 0.70,       // Slightly less for terminal areas
-            selected: 0.08,        // Lower than dark (black more visible than white)
-            hover: 0.05,           // Lower than dark (black more visible)
-            preview: 0.0,          // Preview panel (0 = fully transparent)
-            dialog: 0.40,          // Higher for light mode dialogs
-            input: 0.60,           // Higher for input visibility
-            panel: 0.50,           // Higher for panel visibility
-            input_inactive: 0.30,  // Input fields when empty/inactive
-            input_active: 0.60,    // Input fields when has text/active
-            border_inactive: 0.15, // Borders when inactive
-            border_active: 0.30,   // Borders when active
+            // 85% opacity matches the POC and provides good blur visibility
+            // while maintaining text readability. Adjustable via Cmd+-/+
+            main: 0.85,                      // 85% - matches POC container_bg
+            title_bar: 0.85,                 // Match main for consistency
+            search_box: 0.90,                // 90% - matches POC input_area_bg
+            log_panel: 0.90,                 // Slightly more opaque for terminal readability
+            selected: 0.12,                  // Visible selection on light
+            hover: 0.08,                     // Subtle hover on light
+            preview: 0.0,                    // Preview panel (0 = fully transparent)
+            dialog: 0.85,                    // Dialogs match main
+            input: 0.90,                     // Input fields - 90% like POC input_area_bg
+            panel: 0.85,                     // Panels match main
+            input_inactive: 0.85,            // Input fields when empty/inactive
+            input_active: 0.90,              // Input fields when has text/active
+            border_inactive: 0.30,           // Borders when inactive
+            border_active: 0.45,             // Borders when active
+            vibrancy_background: Some(0.85), // Match POC: 85% opacity (0xD9/255)
         }
     }
 }
@@ -777,11 +810,11 @@ impl ColorScheme {
                 log_panel: 0xf5f5f5,  // Slightly darker for terminal
             },
             text: TextColors {
-                primary: 0x1a1a1a,   // Near black from POC (0x1A1A1A)
-                secondary: 0x6b6b6b, // Medium gray from POC (0x6B6B6B)
-                tertiary: 0x9b9b9b,  // Light gray/hint from POC (0x9B9B9B)
+                primary: 0x000000,   // Pure black for maximum contrast
+                secondary: 0x4a4a4a, // Darker gray for better readability
+                tertiary: 0x6b6b6b,  // Medium gray for hints
                 muted: 0x808080,     // Mid gray for placeholders
-                dimmed: 0xcccccc,    // Very light for subtle elements
+                dimmed: 0xaaaaaa,    // Lighter for subtle elements
                 on_accent: 0xffffff, // White text on accent backgrounds
             },
             accent: AccentColors {
@@ -1046,6 +1079,39 @@ impl Theme {
         self.opacity.clone().unwrap_or_default()
     }
 
+    /// Create a new theme with opacity adjusted by an offset
+    ///
+    /// Use Cmd+Shift+[ to decrease and Cmd+Shift+] to increase opacity.
+    /// The offset is added to all opacity values (clamped to 0.0-1.0).
+    ///
+    /// # Arguments
+    /// * `offset` - The amount to add to opacity values (can be negative)
+    ///
+    /// # Returns
+    /// A new Theme with adjusted opacity values
+    pub fn with_opacity_offset(&self, offset: f32) -> Theme {
+        let mut theme = self.clone();
+        let base = theme.get_opacity();
+        theme.opacity = Some(BackgroundOpacity {
+            main: (base.main + offset).clamp(0.0, 1.0),
+            title_bar: (base.title_bar + offset).clamp(0.0, 1.0),
+            search_box: (base.search_box + offset).clamp(0.0, 1.0),
+            log_panel: (base.log_panel + offset).clamp(0.0, 1.0),
+            selected: base.selected, // Keep selection/hover unchanged
+            hover: base.hover,
+            preview: base.preview,
+            dialog: (base.dialog + offset).clamp(0.0, 1.0),
+            input: (base.input + offset).clamp(0.0, 1.0),
+            panel: (base.panel + offset).clamp(0.0, 1.0),
+            input_inactive: (base.input_inactive + offset).clamp(0.0, 1.0),
+            input_active: (base.input_active + offset).clamp(0.0, 1.0),
+            border_inactive: base.border_inactive,
+            border_active: base.border_active,
+            vibrancy_background: base.vibrancy_background,
+        });
+        theme
+    }
+
     /// Get opacity adjusted for focus state
     /// Unfocused windows are slightly more transparent
     pub fn get_opacity_for_focus(&self, is_focused: bool) -> BackgroundOpacity {
@@ -1069,6 +1135,7 @@ impl Theme {
                 input_active: (base.input_active * 0.9).clamp(0.0, 1.0),
                 border_inactive: (base.border_inactive * 0.9).clamp(0.0, 1.0),
                 border_active: (base.border_active * 0.9).clamp(0.0, 1.0),
+                vibrancy_background: base.vibrancy_background.map(|v| (v * 0.9).clamp(0.0, 1.0)),
             }
         }
     }
@@ -1133,15 +1200,57 @@ impl Theme {
     }
 }
 
-/// Detect system appearance preference on macOS
+/// Detect system appearance preference on macOS (cached)
 ///
 /// Returns true if dark mode is enabled, false if light mode is enabled.
 /// On non-macOS systems or if detection fails, defaults to true (dark mode).
+///
+/// This function caches the result for 5 seconds to avoid spawning subprocesses
+/// on every render call. The system appearance doesn't change frequently, so
+/// a small TTL is acceptable.
 ///
 /// Uses the `defaults read -g AppleInterfaceStyle` command to detect the system appearance.
 /// Note: On macOS in light mode, the command exits with non-zero status because the
 /// AppleInterfaceStyle key doesn't exist, so we check exit status explicitly.
 pub fn detect_system_appearance() -> bool {
+    let cache = APPEARANCE_CACHE.get_or_init(|| Mutex::new(AppearanceCache::default()));
+
+    let mut cache_guard = match cache.lock() {
+        Ok(guard) => guard,
+        Err(_) => {
+            // Mutex poisoned, return default
+            return true;
+        }
+    };
+
+    // Check if cache is still valid
+    if cache_guard.last_check.elapsed() < APPEARANCE_CACHE_TTL {
+        return cache_guard.is_dark;
+    }
+
+    // Cache expired, re-detect
+    let is_dark = detect_system_appearance_uncached();
+    cache_guard.is_dark = is_dark;
+    cache_guard.last_check = Instant::now();
+    is_dark
+}
+
+/// Invalidate the appearance cache
+///
+/// Call this when the system appearance changes (e.g., from AppearanceWatcher)
+/// to force immediate re-detection on the next call to `detect_system_appearance()`.
+pub fn invalidate_appearance_cache() {
+    if let Some(cache) = APPEARANCE_CACHE.get() {
+        if let Ok(mut guard) = cache.lock() {
+            // Set last_check to past the TTL so next call will re-detect
+            guard.last_check = Instant::now() - APPEARANCE_CACHE_TTL - Duration::from_secs(1);
+            debug!("Appearance cache invalidated");
+        }
+    }
+}
+
+/// Uncached system appearance detection (internal use)
+fn detect_system_appearance_uncached() -> bool {
     // Default to dark mode if detection fails or we're not on macOS
     const DEFAULT_DARK: bool = true;
 
@@ -1154,7 +1263,7 @@ pub fn detect_system_appearance() -> bool {
             // In light mode, the AppleInterfaceStyle key typically doesn't exist,
             // causing the command to exit with non-zero status
             if !output.status.success() {
-                info!(
+                debug!(
                     appearance = "light",
                     "System appearance detected (key not present)"
                 );
@@ -1164,7 +1273,7 @@ pub fn detect_system_appearance() -> bool {
             // If the command succeeds and returns "Dark", we're in dark mode
             let stdout = String::from_utf8_lossy(&output.stdout);
             let is_dark = stdout.to_lowercase().contains("dark");
-            info!(
+            debug!(
                 appearance = if is_dark { "dark" } else { "light" },
                 "System appearance detected"
             );

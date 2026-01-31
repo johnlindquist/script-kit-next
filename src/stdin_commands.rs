@@ -163,6 +163,7 @@ pub enum ExternalCommand {
 ///
 /// Spawns a background thread that reads stdin line-by-line. When the channel
 /// is closed (receiver dropped), the thread will exit gracefully.
+#[tracing::instrument(skip_all)]
 pub fn start_stdin_listener() -> async_channel::Receiver<ExternalCommand> {
     use std::io::BufRead;
 

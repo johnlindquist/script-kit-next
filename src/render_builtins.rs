@@ -254,7 +254,7 @@ impl ScriptListApp {
                                 cx.notify();
                             }
                         }
-                        "enter" => {
+                        "enter" | "return" => {
                             // Copy selected entry to clipboard, hide window, then paste
                             if let Some((_, entry)) = filtered_entries.get(*selected_index) {
                                 logging::log(
@@ -850,7 +850,7 @@ impl ScriptListApp {
                                 cx.notify();
                             }
                         }
-                        "enter" => {
+                        "enter" | "return" => {
                             // Launch selected app and hide window
                             if let Some((_, app)) = filtered_apps.get(*selected_index) {
                                 logging::log("EXEC", &format!("Launching app: {}", app.name));
@@ -1187,7 +1187,7 @@ impl ScriptListApp {
                                 cx.notify();
                             }
                         }
-                        "enter" => {
+                        "enter" | "return" => {
                             // Focus selected window and hide Script Kit
                             if let Some((_, window_info)) = filtered_windows.get(*selected_index) {
                                 logging::log(
@@ -2226,7 +2226,7 @@ impl ScriptListApp {
                         }
                         // Tab/Shift+Tab handled by intercept_keystrokes in app_impl.rs
                         // (interceptor fires BEFORE input component can capture Tab)
-                        "enter" => {
+                        "enter" | "return" => {
                             // Check for Cmd+Enter (reveal in finder) first
                             if has_cmd {
                                 if let Some(file) = get_selected_file() {

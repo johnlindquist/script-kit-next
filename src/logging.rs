@@ -580,7 +580,7 @@ pub fn start_capture() -> anyhow::Result<PathBuf> {
     };
 
     {
-        let mut guard = capture_session().lock().unwrap();
+        let mut guard = capture_session().lock().unwrap_or_else(|e| e.into_inner());
         *guard = Some(session);
     }
 
@@ -602,7 +602,7 @@ pub fn stop_capture() -> Option<(PathBuf, u64)> {
     CAPTURE_ENABLED.store(false, Ordering::Relaxed);
 
     let session = {
-        let mut guard = capture_session().lock().unwrap();
+        let mut guard = capture_session().lock().unwrap_or_else(|e| e.into_inner());
         guard.take()
     };
 
@@ -1680,7 +1680,7 @@ mod tests {
 
     impl<'a> IoWrite for BufferGuard<'a> {
         fn write(&mut self, data: &[u8]) -> std::io::Result<usize> {
-            let mut buf = self.buf.lock().unwrap();
+            let mut buf = self.buf.lock().unwrap_or_else(|e| e.into_inner());
             buf.extend_from_slice(data);
             Ok(data.len())
         }
@@ -1712,7 +1712,8 @@ mod tests {
             tracing::info!("hello-json-correlation");
         });
 
-        let output = String::from_utf8(buffer.lock().unwrap().clone()).unwrap();
+        let output =
+            String::from_utf8(buffer.lock().unwrap_or_else(|e| e.into_inner()).clone()).unwrap();
         let line = output.lines().next().unwrap();
         let value: serde_json::Value = serde_json::from_str(line).unwrap();
 
@@ -1740,7 +1741,8 @@ mod tests {
             tracing::info!("hello-compact-correlation");
         });
 
-        let output = String::from_utf8(buffer.lock().unwrap().clone()).unwrap();
+        let output =
+            String::from_utf8(buffer.lock().unwrap_or_else(|e| e.into_inner()).clone()).unwrap();
         let line = output.lines().next().unwrap_or("");
         assert!(
             line.contains("cid="),

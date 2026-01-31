@@ -4,6 +4,7 @@
 
 use std::path::PathBuf;
 use std::process::Command;
+use tempfile::NamedTempFile;
 use tracing::{info, instrument, warn};
 
 use super::types::Config;
@@ -28,12 +29,21 @@ pub fn load_config() -> Config {
     }
 
     // Step 1: Transpile TypeScript to JavaScript using bun build
-    let tmp_js_path = "/tmp/kit-config.js";
+    // Use secure temporary file creation to avoid predictable paths and TOCTOU attacks
+    let tmp_js = match NamedTempFile::new() {
+        Ok(file) => file,
+        Err(e) => {
+            warn!(error = %e, "Failed to create temporary file, using defaults");
+            return Config::default();
+        }
+    };
+    let tmp_js_path = tmp_js.path();
+
     let build_output = Command::new("bun")
         .arg("build")
         .arg("--target=bun")
         .arg(config_path.to_string_lossy().to_string())
-        .arg(format!("--outfile={}", tmp_js_path))
+        .arg(format!("--outfile={}", tmp_js_path.display()))
         .output();
 
     match build_output {
@@ -57,7 +67,7 @@ pub fn load_config() -> Config {
         .arg("-e")
         .arg(format!(
             "console.log(JSON.stringify(require('{}').default))",
-            tmp_js_path
+            tmp_js_path.display()
         ))
         .output();
 

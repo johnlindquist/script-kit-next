@@ -74,7 +74,7 @@ impl EventProxy {
 
     /// Takes all pending events, leaving an empty queue.
     pub fn take_events(&self) -> Vec<TerminalEvent> {
-        let mut events = self.events.lock().unwrap();
+        let mut events = self.events.lock().unwrap_or_else(|e| e.into_inner());
         std::mem::take(&mut *events)
     }
 }
@@ -145,7 +145,7 @@ impl EventListener for EventProxy {
         };
 
         if let Some(event) = terminal_event {
-            let mut events = self.events.lock().unwrap();
+            let mut events = self.events.lock().unwrap_or_else(|e| e.into_inner());
             events.push(event);
         }
     }
@@ -579,7 +579,7 @@ impl TerminalHandle {
         // Process all available data from the background reader thread (non-blocking)
         while let Ok(data) = self.pty_output_rx.try_recv() {
             trace!(bytes = data.len(), "Processing PTY data from channel");
-            let mut state = self.state.lock().unwrap();
+            let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
             state.process_bytes(&data);
             had_output = true; // Grid content may have changed
         }
@@ -633,7 +633,7 @@ impl TerminalHandle {
         // Resize terminal grid
         let size = TerminalSize::new(cols, rows);
         {
-            let mut state = self.state.lock().unwrap();
+            let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
             state.term.resize(size);
         }
 
@@ -670,7 +670,7 @@ impl TerminalHandle {
     /// A `TerminalContent` struct containing lines, styled cells, and cursor info.
     #[instrument(level = "trace", skip(self))]
     pub fn content(&self) -> TerminalContent {
-        let state = self.state.lock().unwrap();
+        let state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         let grid = state.term.grid();
 
         let mut lines = Vec::with_capacity(state.term.screen_lines());
@@ -738,7 +738,7 @@ impl TerminalHandle {
     /// Gets the configured scrollback buffer size.
     #[inline]
     pub fn scrollback_lines(&self) -> usize {
-        let state = self.state.lock().unwrap();
+        let state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         state.term.history_size()
     }
 
@@ -748,7 +748,7 @@ impl TerminalHandle {
     ///
     /// * `delta` - Number of lines to scroll (positive = up, negative = down)
     pub fn scroll(&mut self, delta: i32) {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         let scroll = alacritty_terminal::grid::Scroll::Delta(delta);
         state.term.scroll_display(scroll);
         debug!(delta, "Scrolled terminal display");
@@ -756,7 +756,7 @@ impl TerminalHandle {
 
     /// Scrolls the terminal display by one page up.
     pub fn scroll_page_up(&mut self) {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         state
             .term
             .scroll_display(alacritty_terminal::grid::Scroll::PageUp);
@@ -765,7 +765,7 @@ impl TerminalHandle {
 
     /// Scrolls the terminal display by one page down.
     pub fn scroll_page_down(&mut self) {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         state
             .term
             .scroll_display(alacritty_terminal::grid::Scroll::PageDown);
@@ -774,7 +774,7 @@ impl TerminalHandle {
 
     /// Scrolls the terminal display to the top of scrollback.
     pub fn scroll_to_top(&mut self) {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         state
             .term
             .scroll_display(alacritty_terminal::grid::Scroll::Top);
@@ -783,7 +783,7 @@ impl TerminalHandle {
 
     /// Scrolls the terminal display to the bottom (latest output).
     pub fn scroll_to_bottom(&mut self) {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         state
             .term
             .scroll_display(alacritty_terminal::grid::Scroll::Bottom);
@@ -792,7 +792,7 @@ impl TerminalHandle {
 
     /// Gets the current scroll offset (0 = at bottom).
     pub fn display_offset(&self) -> usize {
-        let state = self.state.lock().unwrap();
+        let state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         state.term.grid().display_offset()
     }
 
@@ -802,13 +802,13 @@ impl TerminalHandle {
     ///
     /// The selected text, or `None` if there is no selection.
     pub fn selection_to_string(&self) -> Option<String> {
-        let state = self.state.lock().unwrap();
+        let state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         state.term.selection_to_string()
     }
 
     /// Clears the current selection.
     pub fn clear_selection(&mut self) {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         state.term.selection = None;
         debug!("Selection cleared");
     }
@@ -820,7 +820,7 @@ impl TerminalHandle {
     /// * `col` - Column index (0-indexed from left)
     /// * `row` - Row index (0-indexed from top of visible area)
     pub fn start_selection(&mut self, col: usize, row: usize) {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         let point = AlacPoint::new(Line(row as i32), Column(col));
         state.term.selection = Some(Selection::new(
             SelectionType::Simple,
@@ -839,7 +839,7 @@ impl TerminalHandle {
     /// * `col` - Column index (0-indexed from left)
     /// * `row` - Row index (0-indexed from top of visible area)
     pub fn start_semantic_selection(&mut self, col: usize, row: usize) {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         let point = AlacPoint::new(Line(row as i32), Column(col));
         state.term.selection = Some(Selection::new(
             SelectionType::Semantic,
@@ -858,7 +858,7 @@ impl TerminalHandle {
     /// * `col` - Column index (0-indexed from left)
     /// * `row` - Row index (0-indexed from top of visible area)
     pub fn start_line_selection(&mut self, col: usize, row: usize) {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         let point = AlacPoint::new(Line(row as i32), Column(col));
         state.term.selection = Some(Selection::new(SelectionType::Lines, point, Direction::Left));
         debug!(col, row, "Line selection started");
@@ -871,7 +871,7 @@ impl TerminalHandle {
     /// * `col` - Column index (0-indexed from left)
     /// * `row` - Row index (0-indexed from top of visible area)
     pub fn update_selection(&mut self, col: usize, row: usize) {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(ref mut selection) = state.term.selection {
             let point = AlacPoint::new(Line(row as i32), Column(col));
             selection.update(point, Direction::Right);
@@ -881,7 +881,7 @@ impl TerminalHandle {
 
     /// Check if there is an active selection.
     pub fn has_selection(&self) -> bool {
-        let state = self.state.lock().unwrap();
+        let state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         state.term.selection.is_some()
     }
 
@@ -895,7 +895,7 @@ impl TerminalHandle {
     ///
     /// `true` if the terminal is in bracketed paste mode.
     pub fn is_bracketed_paste_mode(&self) -> bool {
-        let state = self.state.lock().unwrap();
+        let state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         state.term.mode().contains(TermMode::BRACKETED_PASTE)
     }
 
@@ -913,7 +913,7 @@ impl TerminalHandle {
     ///
     /// `true` if the terminal is in application cursor mode.
     pub fn is_application_cursor_mode(&self) -> bool {
-        let state = self.state.lock().unwrap();
+        let state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         state.term.mode().contains(TermMode::APP_CURSOR)
     }
 
@@ -924,7 +924,7 @@ impl TerminalHandle {
     /// * `is_focused` - Whether the terminal window is focused.
     pub fn update_focus(&mut self, is_focused: bool) {
         self.theme.update_for_focus(is_focused);
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         state.term.is_focused = is_focused;
         debug!(is_focused, "Terminal focus updated");
     }

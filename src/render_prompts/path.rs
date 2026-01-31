@@ -150,7 +150,7 @@ impl ScriptListApp {
                             "down" | "arrowdown" => {
                                 dialog.update(cx, |d, cx| d.move_down(cx));
                             }
-                            "enter" => {
+                            "enter" | "return" => {
                                 // Get the selected action and execute it
                                 let action_id = dialog.read(cx).get_selected_action_id();
                                 let should_close = dialog.read(cx).selected_action_should_close();
@@ -193,7 +193,7 @@ impl ScriptListApp {
                                     }
                                 }
                             }
-                            "escape" => {
+                            "escape" | "esc" => {
                                 this.show_actions_popup = false;
                                 this.actions_dialog = None;
                                 if let Ok(mut guard) = this.path_actions_showing.lock() {

@@ -1091,11 +1091,11 @@ impl Render for EditorPrompt {
                         this.choice_popup_down(cx);
                         return; // Don't propagate
                     }
-                    "enter" if !cmd => {
+                    "enter" | "return" if !cmd => {
                         this.choice_popup_confirm(window, cx);
                         return; // Don't propagate
                     }
-                    "escape" => {
+                    "escape" | "esc" => {
                         this.choice_popup_cancel(cx);
                         return; // Don't propagate
                     }
@@ -1115,7 +1115,7 @@ impl Render for EditorPrompt {
 
             match (key.as_str(), cmd, shift) {
                 // Cmd+Enter submits
-                ("enter", true, _) => {
+                ("enter" | "return", true, _) => {
                     this.submit(cx);
                     // Don't propagate - we handled it
                 }
@@ -1139,7 +1139,7 @@ impl Render for EditorPrompt {
                     // Don't propagate - prevents tab character insertion
                 }
                 // Escape - exit snippet mode or let parent handle
-                ("escape", false, _) => {
+                ("escape" | "esc", false, _) => {
                     if this.in_snippet_mode() {
                         this.exit_snippet_mode(window, cx);
                         cx.notify();

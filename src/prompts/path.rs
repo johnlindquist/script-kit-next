@@ -522,8 +522,8 @@ impl Render for PathPrompt {
                             this.navigate_into_selected(cx);
                         }
                     }
-                    "enter" => this.handle_enter(cx),
-                    "escape" => {
+                    "enter" | "return" => this.handle_enter(cx),
+                    "escape" | "esc" => {
                         logging::log(
                             "PROMPTS",
                             "PathPrompt: Escape key pressed - calling submit_cancel()",

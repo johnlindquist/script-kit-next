@@ -260,14 +260,13 @@ pub fn enable_claude_code(content: &str) -> EditResult {
 /// Read, modify, and write a config file
 #[allow(dead_code)]
 pub fn modify_config_file(path: &Path, property: &ConfigProperty) -> Result<EditResult, String> {
-    let content = std::fs::read_to_string(path)
-        .map_err(|e| format!("Failed to read config: {}", e))?;
+    let content =
+        std::fs::read_to_string(path).map_err(|e| format!("Failed to read config: {}", e))?;
 
     let result = add_property(&content, property);
 
     if let EditResult::Modified(ref new_content) = result {
-        std::fs::write(path, new_content)
-            .map_err(|e| format!("Failed to write config: {}", e))?;
+        std::fs::write(path, new_content).map_err(|e| format!("Failed to write config: {}", e))?;
     }
 
     Ok(result)
@@ -756,17 +755,23 @@ export default {
     #[cfg(feature = "system-tests")]
     #[test]
     fn test_full_user_config() {
-        let config_path = std::path::PathBuf::from(
-            shellexpand::tilde("~/.scriptkit/kit/config.ts").as_ref(),
-        );
+        let config_path =
+            std::path::PathBuf::from(shellexpand::tilde("~/.scriptkit/kit/config.ts").as_ref());
 
         if !config_path.exists() {
-            println!("Skipping test: config file does not exist at {:?}", config_path);
+            println!(
+                "Skipping test: config file does not exist at {:?}",
+                config_path
+            );
             return;
         }
 
         let content = std::fs::read_to_string(&config_path).expect("Failed to read config");
-        println!("Config file: {} bytes, {} lines", content.len(), content.lines().count());
+        println!(
+            "Config file: {} bytes, {} lines",
+            content.len(),
+            content.lines().count()
+        );
 
         // Skip if claudeCode already exists
         if contains_property(&content, "claudeCode") {
@@ -789,17 +794,34 @@ export default {
                 }
 
                 // Verify structure
-                assert!(new_content.contains("claudeCode:"), "Should contain claudeCode");
-                assert!(new_content.contains("enabled: true"), "Should contain enabled: true");
-                assert!(!new_content.contains("}{"), "Should not have adjacent braces");
                 assert!(
-                    new_content.contains("} satisfies Config;") || new_content.contains("} as Config;"),
+                    new_content.contains("claudeCode:"),
+                    "Should contain claudeCode"
+                );
+                assert!(
+                    new_content.contains("enabled: true"),
+                    "Should contain enabled: true"
+                );
+                assert!(
+                    !new_content.contains("}{"),
+                    "Should not have adjacent braces"
+                );
+                assert!(
+                    new_content.contains("} satisfies Config;")
+                        || new_content.contains("} as Config;"),
                     "Should end with valid Config type assertion"
                 );
 
                 // Print last 20 lines for verification
                 println!("\n=== Last 20 lines of modified config ===");
-                for line in new_content.lines().rev().take(20).collect::<Vec<_>>().into_iter().rev() {
+                for line in new_content
+                    .lines()
+                    .rev()
+                    .take(20)
+                    .collect::<Vec<_>>()
+                    .into_iter()
+                    .rev()
+                {
                     println!("{}", line);
                 }
             }

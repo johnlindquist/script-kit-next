@@ -226,6 +226,7 @@ pub fn build_final_content(
 }
 
 /// Execute a shell scriptlet (bash, zsh, sh, fish, etc.)
+#[tracing::instrument(skip(content, options), fields(shell = %shell, content_len = content.len()))]
 pub fn execute_shell_scriptlet(
     shell: &str,
     content: &str,
@@ -258,7 +259,10 @@ pub fn execute_shell_scriptlet(
         .unwrap_or_else(|| shell.to_string());
 
     let mut cmd = Command::new(&shell_path);
-    cmd.arg(temp_file.to_str().unwrap());
+    let temp_file_str = temp_file
+        .to_str()
+        .ok_or_else(|| "Temporary file path contains invalid UTF-8".to_string())?;
+    cmd.arg(temp_file_str);
 
     if let Some(ref cwd) = options.cwd {
         cmd.current_dir(cwd);
@@ -354,6 +358,7 @@ pub fn shell_not_found_suggestions(shell: &str) -> String {
 }
 
 /// Execute a script with a specific interpreter
+#[tracing::instrument(skip(content, options), fields(interpreter = %interpreter, extension = %extension, content_len = content.len()))]
 pub fn execute_with_interpreter(
     interpreter: &str,
     content: &str,
@@ -378,7 +383,10 @@ pub fn execute_with_interpreter(
         .unwrap_or_else(|| interpreter.to_string());
 
     let mut cmd = Command::new(&interp_path);
-    cmd.arg(temp_file.to_str().unwrap());
+    let temp_file_str = temp_file
+        .to_str()
+        .ok_or_else(|| "Temporary file path contains invalid UTF-8".to_string())?;
+    cmd.arg(temp_file_str);
 
     if let Some(ref cwd) = options.cwd {
         cmd.current_dir(cwd);
@@ -426,6 +434,7 @@ pub fn execute_applescript(
 }
 
 /// Execute TypeScript via bun
+#[tracing::instrument(skip(content, options), fields(content_len = content.len()))]
 pub fn execute_typescript(
     content: &str,
     options: &ScriptletExecOptions,
@@ -457,7 +466,10 @@ pub fn execute_typescript(
         }
     }
 
-    cmd.arg(temp_file.to_str().unwrap());
+    let temp_file_str = temp_file
+        .to_str()
+        .ok_or_else(|| "Temporary file path contains invalid UTF-8".to_string())?;
+    cmd.arg(temp_file_str);
 
     if let Some(ref cwd) = options.cwd {
         cmd.current_dir(cwd);

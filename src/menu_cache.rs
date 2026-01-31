@@ -333,7 +333,7 @@ mod tests {
 
         // Insert
         {
-            let conn = db.lock().unwrap();
+            let conn = db.lock().unwrap_or_else(|e| e.into_inner());
             let menu_json = serde_json::to_string(&items).unwrap();
             let timestamp = current_timestamp();
             conn.execute(
@@ -348,7 +348,7 @@ mod tests {
 
         // Retrieve
         {
-            let conn = db.lock().unwrap();
+            let conn = db.lock().unwrap_or_else(|e| e.into_inner());
             let result: Option<String> = conn
                 .query_row(
                     "SELECT menu_json FROM menu_cache WHERE bundle_id = ?1",
@@ -380,7 +380,7 @@ mod tests {
         // Insert with a timestamp in the past (5 seconds ago)
         let old_timestamp = current_timestamp() - 5;
         {
-            let conn = db.lock().unwrap();
+            let conn = db.lock().unwrap_or_else(|e| e.into_inner());
             let menu_json = serde_json::to_string(&items).unwrap();
             conn.execute(
                 r#"
@@ -394,7 +394,7 @@ mod tests {
 
         // Check with 10 second max age - should be valid
         {
-            let conn = db.lock().unwrap();
+            let conn = db.lock().unwrap_or_else(|e| e.into_inner());
             let result: Option<i64> = conn
                 .query_row(
                     "SELECT last_scanned FROM menu_cache WHERE bundle_id = ?1",
@@ -415,7 +415,7 @@ mod tests {
 
         // Check with 2 second max age - should be expired
         {
-            let conn = db.lock().unwrap();
+            let conn = db.lock().unwrap_or_else(|e| e.into_inner());
             let result: Option<i64> = conn
                 .query_row(
                     "SELECT last_scanned FROM menu_cache WHERE bundle_id = ?1",
@@ -450,7 +450,7 @@ mod tests {
         }];
 
         {
-            let conn = db.lock().unwrap();
+            let conn = db.lock().unwrap_or_else(|e| e.into_inner());
             let menu_json = serde_json::to_string(&initial_items).unwrap();
             let timestamp = current_timestamp();
             conn.execute(
@@ -465,7 +465,7 @@ mod tests {
 
         // Verify initial state
         {
-            let conn = db.lock().unwrap();
+            let conn = db.lock().unwrap_or_else(|e| e.into_inner());
             let (version, count): (Option<String>, i64) = conn
                 .query_row(
                     "SELECT app_version, (SELECT COUNT(*) FROM menu_cache) FROM menu_cache WHERE bundle_id = ?1",
@@ -500,7 +500,7 @@ mod tests {
         ];
 
         {
-            let conn = db.lock().unwrap();
+            let conn = db.lock().unwrap_or_else(|e| e.into_inner());
             let menu_json = serde_json::to_string(&updated_items).unwrap();
             let timestamp = current_timestamp();
             conn.execute(
@@ -519,7 +519,7 @@ mod tests {
 
         // Verify update
         {
-            let conn = db.lock().unwrap();
+            let conn = db.lock().unwrap_or_else(|e| e.into_inner());
             let (version, json, count): (Option<String>, String, i64) = conn
                 .query_row(
                     "SELECT app_version, menu_json, (SELECT COUNT(*) FROM menu_cache) FROM menu_cache WHERE bundle_id = ?1",
@@ -546,7 +546,7 @@ mod tests {
         let (_temp_dir, db) = setup_test_db().expect("Failed to setup test db");
         let bundle_id = "com.nonexistent.App";
 
-        let conn = db.lock().unwrap();
+        let conn = db.lock().unwrap_or_else(|e| e.into_inner());
         let result: Option<String> = conn
             .query_row(
                 "SELECT menu_json FROM menu_cache WHERE bundle_id = ?1",

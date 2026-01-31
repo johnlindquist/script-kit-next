@@ -52,7 +52,10 @@ impl ProcessManager {
     pub fn new() -> Self {
         let kit_dir = dirs::home_dir()
             .map(|h| h.join(".scriptkit"))
-            .unwrap_or_else(|| PathBuf::from("/tmp/.scriptkit"));
+            .unwrap_or_else(|| {
+                // Use system temp directory instead of hardcoded /tmp for better security
+                std::env::temp_dir().join(".scriptkit")
+            });
 
         Self {
             active_processes: RwLock::new(HashMap::new()),

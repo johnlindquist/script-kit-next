@@ -135,7 +135,7 @@ impl Scheduler {
         };
 
         // Add to the list
-        let mut scripts = self.scripts.lock().unwrap();
+        let mut scripts = self.scripts.lock().unwrap_or_else(|e| e.into_inner());
 
         // Check if script already exists and update it
         if let Some(existing) = scripts.iter_mut().find(|s| s.path == path) {
@@ -164,7 +164,7 @@ impl Scheduler {
     /// Remove a script from the scheduler.
     #[allow(dead_code)]
     pub fn remove_script(&self, path: &PathBuf) -> bool {
-        let mut scripts = self.scripts.lock().unwrap();
+        let mut scripts = self.scripts.lock().unwrap_or_else(|e| e.into_inner());
         let initial_len = scripts.len();
         scripts.retain(|s| &s.path != path);
         let removed = scripts.len() < initial_len;
@@ -177,7 +177,10 @@ impl Scheduler {
     /// Get a list of all scheduled scripts (for debugging/display).
     #[allow(dead_code)]
     pub fn list_scripts(&self) -> Vec<ScheduledScript> {
-        self.scripts.lock().unwrap().clone()
+        self.scripts
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
     }
 
     /// Start the background scheduler loop.
@@ -190,7 +193,7 @@ impl Scheduler {
     pub fn start(&mut self) -> Result<()> {
         // Check if already running
         {
-            let mut running = self.running.lock().unwrap();
+            let mut running = self.running.lock().unwrap_or_else(|e| e.into_inner());
             if *running {
                 anyhow::bail!("Scheduler already running");
             }
@@ -213,7 +216,7 @@ impl Scheduler {
     /// Stop the scheduler.
     pub fn stop(&mut self) {
         {
-            let mut running = self.running.lock().unwrap();
+            let mut running = self.running.lock().unwrap_or_else(|e| e.into_inner());
             *running = false;
         }
 
@@ -237,7 +240,7 @@ impl Scheduler {
         loop {
             // Check if we should stop
             {
-                let running = running.lock().unwrap();
+                let running = running.lock().unwrap_or_else(|e| e.into_inner());
                 if !*running {
                     info!("Scheduler loop stopping");
                     break;
@@ -250,7 +253,7 @@ impl Scheduler {
             let mut updates: Vec<(PathBuf, DateTime<Utc>)> = Vec::new();
 
             {
-                let scripts = scripts.lock().unwrap();
+                let scripts = scripts.lock().unwrap_or_else(|e| e.into_inner());
                 for script in scripts.iter() {
                     if now >= script.next_run {
                         scripts_to_run.push(script.path.clone());
@@ -276,7 +279,7 @@ impl Scheduler {
 
             // Update next_run times
             if !updates.is_empty() {
-                let mut scripts = scripts.lock().unwrap();
+                let mut scripts = scripts.lock().unwrap_or_else(|e| e.into_inner());
                 for (path, next_run) in updates {
                     if let Some(script) = scripts.iter_mut().find(|s| s.path == path) {
                         script.next_run = next_run;

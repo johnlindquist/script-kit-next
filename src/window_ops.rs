@@ -74,7 +74,7 @@ static FLUSH_SCHEDULED: AtomicBool = AtomicBool::new(false);
 /// ```
 pub fn queue_resize(target_height: f32, window: &mut Window, cx: &mut gpui::App) {
     // Store the pending height (overwrites any previous pending value)
-    *PENDING_RESIZE.lock().unwrap() = Some(target_height);
+    *PENDING_RESIZE.lock().unwrap_or_else(|e| e.into_inner()) = Some(target_height);
 
     logging::log(
         "WINDOW_OPS",
@@ -107,7 +107,7 @@ pub fn queue_resize(target_height: f32, window: &mut Window, cx: &mut gpui::App)
 /// ```
 pub fn queue_move(bounds: Bounds<Pixels>, window: &mut Window, cx: &mut gpui::App) {
     // Store the pending bounds (overwrites any previous pending value)
-    *PENDING_BOUNDS.lock().unwrap() = Some(bounds);
+    *PENDING_BOUNDS.lock().unwrap_or_else(|e| e.into_inner()) = Some(bounds);
 
     logging::log(
         "WINDOW_OPS",
@@ -129,7 +129,14 @@ pub fn queue_move(bounds: Bounds<Pixels>, window: &mut Window, cx: &mut gpui::Ap
 /// Useful for debugging or testing.
 #[allow(dead_code)]
 pub fn has_pending_ops() -> bool {
-    PENDING_RESIZE.lock().unwrap().is_some() || PENDING_BOUNDS.lock().unwrap().is_some()
+    PENDING_RESIZE
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .is_some()
+        || PENDING_BOUNDS
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .is_some()
 }
 
 /// Clear all pending operations without executing them.
@@ -137,8 +144,8 @@ pub fn has_pending_ops() -> bool {
 /// Use this when the window is being hidden/closed to avoid stale operations.
 #[allow(dead_code)]
 pub fn clear_pending_ops() {
-    *PENDING_RESIZE.lock().unwrap() = None;
-    *PENDING_BOUNDS.lock().unwrap() = None;
+    *PENDING_RESIZE.lock().unwrap_or_else(|e| e.into_inner()) = None;
+    *PENDING_BOUNDS.lock().unwrap_or_else(|e| e.into_inner()) = None;
     FLUSH_SCHEDULED.store(false, Ordering::SeqCst);
     logging::log("WINDOW_OPS", "Cleared all pending operations");
 }
@@ -169,7 +176,11 @@ fn flush_pending_ops() {
     FLUSH_SCHEDULED.store(false, Ordering::SeqCst);
 
     // Execute pending resize if any
-    if let Some(height) = PENDING_RESIZE.lock().unwrap().take() {
+    if let Some(height) = PENDING_RESIZE
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .take()
+    {
         logging::log(
             "WINDOW_OPS",
             &format!("Flushing resize to height: {:.0}px", height),
@@ -178,7 +189,11 @@ fn flush_pending_ops() {
     }
 
     // Execute pending move if any
-    if let Some(bounds) = PENDING_BOUNDS.lock().unwrap().take() {
+    if let Some(bounds) = PENDING_BOUNDS
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .take()
+    {
         logging::log(
             "WINDOW_OPS",
             &format!(
@@ -210,7 +225,7 @@ mod tests {
         assert!(!has_pending_ops());
 
         // Manually set pending resize (simulating what queue_resize does internally)
-        *PENDING_RESIZE.lock().unwrap() = Some(500.0);
+        *PENDING_RESIZE.lock().unwrap_or_else(|e| e.into_inner()) = Some(500.0);
         assert!(has_pending_ops());
 
         // Clear clears it
@@ -230,7 +245,7 @@ mod tests {
             origin: point(px(100.0), px(200.0)),
             size: size(px(750.0), px(500.0)),
         };
-        *PENDING_BOUNDS.lock().unwrap() = Some(bounds);
+        *PENDING_BOUNDS.lock().unwrap_or_else(|e| e.into_inner()) = Some(bounds);
         assert!(has_pending_ops());
 
         clear_pending_ops();
@@ -242,7 +257,7 @@ mod tests {
         clear_pending_ops();
 
         // Set some pending state
-        *PENDING_RESIZE.lock().unwrap() = Some(700.0);
+        *PENDING_RESIZE.lock().unwrap_or_else(|e| e.into_inner()) = Some(700.0);
         FLUSH_SCHEDULED.store(true, Ordering::SeqCst);
 
         // Note: We can't test the actual flush_pending_ops() without mocking platform functions,
@@ -261,12 +276,15 @@ mod tests {
         clear_pending_ops();
 
         // Simulate multiple resize requests (what happens in practice)
-        *PENDING_RESIZE.lock().unwrap() = Some(400.0);
-        *PENDING_RESIZE.lock().unwrap() = Some(500.0);
-        *PENDING_RESIZE.lock().unwrap() = Some(600.0);
+        *PENDING_RESIZE.lock().unwrap_or_else(|e| e.into_inner()) = Some(400.0);
+        *PENDING_RESIZE.lock().unwrap_or_else(|e| e.into_inner()) = Some(500.0);
+        *PENDING_RESIZE.lock().unwrap_or_else(|e| e.into_inner()) = Some(600.0);
 
         // Only the last value should be stored
-        assert_eq!(*PENDING_RESIZE.lock().unwrap(), Some(600.0));
+        assert_eq!(
+            *PENDING_RESIZE.lock().unwrap_or_else(|e| e.into_inner()),
+            Some(600.0)
+        );
 
         clear_pending_ops();
     }
@@ -291,12 +309,12 @@ mod tests {
             size: size(px(750.0), px(500.0)),
         };
 
-        *PENDING_BOUNDS.lock().unwrap() = Some(bounds1);
-        *PENDING_BOUNDS.lock().unwrap() = Some(bounds2);
-        *PENDING_BOUNDS.lock().unwrap() = Some(bounds3);
+        *PENDING_BOUNDS.lock().unwrap_or_else(|e| e.into_inner()) = Some(bounds1);
+        *PENDING_BOUNDS.lock().unwrap_or_else(|e| e.into_inner()) = Some(bounds2);
+        *PENDING_BOUNDS.lock().unwrap_or_else(|e| e.into_inner()) = Some(bounds3);
 
         // Only the last value should be stored
-        let pending = PENDING_BOUNDS.lock().unwrap();
+        let pending = PENDING_BOUNDS.lock().unwrap_or_else(|e| e.into_inner());
         assert!(pending.is_some());
         let bounds = pending.unwrap();
         assert_eq!(f32::from(bounds.origin.x), 200.0);

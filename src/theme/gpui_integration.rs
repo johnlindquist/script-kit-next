@@ -58,13 +58,26 @@ pub fn map_scriptkit_to_gpui_theme(sk_theme: &Theme, is_dark: bool) -> ThemeColo
     // ║ This is the SINGLE SOURCE OF TRUTH for window background color.            ║
     // ║                                                                            ║
     // ║ For vibrancy: Use semi-transparent background that works with blur.        ║
-    // ║ - Light mode: Higher opacity (0.85) for clean white appearance             ║
-    // ║ - Dark mode: Lower opacity (0.37) for visible blur effect                  ║
+    // ║ Opacity is now controlled via theme.opacity.vibrancy_background.           ║
+    // ║ - Lower opacity = more blur visible                                        ║
+    // ║ - Higher opacity = more solid color                                        ║
     // ╚════════════════════════════════════════════════════════════════════════════╝
     let main_bg = if vibrancy_enabled {
-        // Semi-transparent vibrancy background
-        // Light mode needs higher opacity to appear white/solid, dark needs lower for blur
-        let bg_alpha = if is_dark { 0.37 } else { 0.92 };
+        // Get opacity from theme, with fallbacks for different modes
+        // This controls how much blur shows through the window background
+        // Fallback value (0.85) matches the vibrancy POC (src/bin/vibrancy-poc.rs):
+        // - POC uses rgba(0xFAFAFAD9) = #FAFAFA at 85% opacity (0xD9/255 = 0.851)
+        // - Same value works well for both dark and light modes
+        let bg_alpha = opacity.vibrancy_background.unwrap_or(0.85);
+
+        crate::logging::log(
+            "THEME",
+            &format!(
+                "Root background alpha: {} (vibrancy_enabled={}, is_dark={})",
+                bg_alpha, vibrancy_enabled, is_dark
+            ),
+        );
+
         let base = hex_to_hsla(colors.background.main);
         hsla(base.h, base.s, base.l, bg_alpha)
     } else {

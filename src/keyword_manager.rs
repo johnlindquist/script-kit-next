@@ -165,12 +165,13 @@ impl KeywordManager {
 
                 // Register with matcher and scriptlets store
                 {
-                    let mut scriptlets_guard = self.scriptlets.lock().unwrap();
+                    let mut scriptlets_guard =
+                        self.scriptlets.lock().unwrap_or_else(|e| e.into_inner());
                     scriptlets_guard.insert(keyword_trigger.clone(), keyword_scriptlet);
                 }
 
                 {
-                    let mut matcher_guard = self.matcher.lock().unwrap();
+                    let mut matcher_guard = self.matcher.lock().unwrap_or_else(|e| e.into_inner());
                     // Use a dummy path since we store scriptlet data separately
                     let dummy_path = PathBuf::from(format!("scriptlet:{}", scriptlet.name));
                     matcher_guard.register_trigger(keyword_trigger, dummy_path);
@@ -185,7 +186,8 @@ impl KeywordManager {
                     } else {
                         PathBuf::from(file_path)
                     };
-                    let mut file_triggers_guard = self.file_triggers.lock().unwrap();
+                    let mut file_triggers_guard =
+                        self.file_triggers.lock().unwrap_or_else(|e| e.into_inner());
                     file_triggers_guard
                         .entry(base_path)
                         .or_default()
@@ -228,12 +230,12 @@ impl KeywordManager {
         };
 
         {
-            let mut scriptlets_guard = self.scriptlets.lock().unwrap();
+            let mut scriptlets_guard = self.scriptlets.lock().unwrap_or_else(|e| e.into_inner());
             scriptlets_guard.insert(trigger.to_string(), keyword_scriptlet);
         }
 
         {
-            let mut matcher_guard = self.matcher.lock().unwrap();
+            let mut matcher_guard = self.matcher.lock().unwrap_or_else(|e| e.into_inner());
             let dummy_path = PathBuf::from(format!("manual:{}", name));
             matcher_guard.register_trigger(trigger, dummy_path);
         }
@@ -255,7 +257,7 @@ impl KeywordManager {
 
         // Check trigger count
         let trigger_count = {
-            let matcher_guard = self.matcher.lock().unwrap();
+            let matcher_guard = self.matcher.lock().unwrap_or_else(|e| e.into_inner());
             matcher_guard.trigger_count()
         };
 
@@ -266,8 +268,9 @@ impl KeywordManager {
         // Clone Arc references for the closure
         let matcher = Arc::clone(&self.matcher);
         let scriptlets = Arc::clone(&self.scriptlets);
-        let config = self.config.clone();
-        let injector_config = self.config.injector_config.clone();
+        // Wrap configs in Arc to avoid cloning on every keystroke
+        let config = Arc::new(self.config.clone());
+        let injector_config = Arc::new(self.config.injector_config.clone());
 
         // Create keyboard monitor with callback
         let mut monitor = KeyboardMonitor::new(move |event: KeyEvent| {
@@ -286,7 +289,7 @@ impl KeywordManager {
 
                     // Feed to matcher
                     let match_result = {
-                        let mut matcher_guard = matcher.lock().unwrap();
+                        let mut matcher_guard = matcher.lock().unwrap_or_else(|e| e.into_inner());
                         matcher_guard.process_keystroke(c)
                     };
 
@@ -297,7 +300,8 @@ impl KeywordManager {
 
                         // Get the scriptlet content
                         let scriptlet_opt = {
-                            let scriptlets_guard = scriptlets.lock().unwrap();
+                            let scriptlets_guard =
+                                scriptlets.lock().unwrap_or_else(|e| e.into_inner());
                             scriptlets_guard.get(&result.trigger).cloned()
                         };
 
@@ -307,8 +311,9 @@ impl KeywordManager {
                             let content = scriptlet.content.clone();
                             let tool = scriptlet.tool.clone();
                             let name = scriptlet.name.clone();
-                            let config_clone = config.clone();
-                            let injector_config_clone = injector_config.clone();
+                            // Arc clone is cheap - just increments reference count
+                            let config_clone = Arc::clone(&config);
+                            let injector_config_clone = Arc::clone(&injector_config);
 
                             thread::spawn(move || {
                                 // Small delay to let the keyboard event complete
@@ -341,7 +346,9 @@ impl KeywordManager {
                                 );
 
                                 // Create injector and perform expansion
-                                let injector = TextInjector::with_config(injector_config_clone);
+                                // Dereference Arc to get the config
+                                let injector =
+                                    TextInjector::with_config((*injector_config_clone).clone());
 
                                 // Delete trigger characters
                                 if let Err(e) = injector.delete_chars(chars_to_delete) {
@@ -373,7 +380,8 @@ impl KeywordManager {
                             });
 
                             // Clear the buffer after a match to prevent re-triggering
-                            let mut matcher_guard = matcher.lock().unwrap();
+                            let mut matcher_guard =
+                                matcher.lock().unwrap_or_else(|e| e.into_inner());
                             matcher_guard.clear_buffer();
                         } else {
                             warn!(
@@ -424,7 +432,7 @@ impl KeywordManager {
     /// Get the number of registered triggers
     #[allow(dead_code)]
     pub fn trigger_count(&self) -> usize {
-        let matcher_guard = self.matcher.lock().unwrap();
+        let matcher_guard = self.matcher.lock().unwrap_or_else(|e| e.into_inner());
         matcher_guard.trigger_count()
     }
 
@@ -448,15 +456,16 @@ impl KeywordManager {
     #[allow(dead_code)]
     pub fn clear_triggers(&mut self) {
         {
-            let mut scriptlets_guard = self.scriptlets.lock().unwrap();
+            let mut scriptlets_guard = self.scriptlets.lock().unwrap_or_else(|e| e.into_inner());
             scriptlets_guard.clear();
         }
         {
-            let mut matcher_guard = self.matcher.lock().unwrap();
+            let mut matcher_guard = self.matcher.lock().unwrap_or_else(|e| e.into_inner());
             matcher_guard.clear_triggers();
         }
         {
-            let mut file_triggers_guard = self.file_triggers.lock().unwrap();
+            let mut file_triggers_guard =
+                self.file_triggers.lock().unwrap_or_else(|e| e.into_inner());
             file_triggers_guard.clear();
         }
 
@@ -475,7 +484,7 @@ impl KeywordManager {
 
     /// Get list of all registered triggers (for debugging/UI)
     pub fn list_triggers(&self) -> Vec<(String, String)> {
-        let scriptlets_guard = self.scriptlets.lock().unwrap();
+        let scriptlets_guard = self.scriptlets.lock().unwrap_or_else(|e| e.into_inner());
         scriptlets_guard
             .iter()
             .map(|(trigger, scriptlet)| (trigger.clone(), scriptlet.name.clone()))
@@ -494,18 +503,19 @@ impl KeywordManager {
     #[allow(dead_code)]
     pub fn unregister_trigger(&mut self, trigger: &str) -> bool {
         let scriptlet_removed = {
-            let mut scriptlets_guard = self.scriptlets.lock().unwrap();
+            let mut scriptlets_guard = self.scriptlets.lock().unwrap_or_else(|e| e.into_inner());
             scriptlets_guard.remove(trigger).is_some()
         };
 
         let matcher_removed = {
-            let mut matcher_guard = self.matcher.lock().unwrap();
+            let mut matcher_guard = self.matcher.lock().unwrap_or_else(|e| e.into_inner());
             matcher_guard.unregister_trigger(trigger)
         };
 
         // Also remove from file_triggers tracking
         {
-            let mut file_triggers_guard = self.file_triggers.lock().unwrap();
+            let mut file_triggers_guard =
+                self.file_triggers.lock().unwrap_or_else(|e| e.into_inner());
             for triggers_set in file_triggers_guard.values_mut() {
                 triggers_set.remove(trigger);
             }
@@ -535,7 +545,7 @@ impl KeywordManager {
     pub fn clear_triggers_for_file(&mut self, path: &Path) -> usize {
         // Get the triggers registered from this file
         let triggers_to_remove: Vec<String> = {
-            let file_triggers_guard = self.file_triggers.lock().unwrap();
+            let file_triggers_guard = self.file_triggers.lock().unwrap_or_else(|e| e.into_inner());
             file_triggers_guard
                 .get(path)
                 .map(|set| set.iter().cloned().collect())
@@ -552,18 +562,20 @@ impl KeywordManager {
         // Remove each trigger
         for trigger in &triggers_to_remove {
             {
-                let mut scriptlets_guard = self.scriptlets.lock().unwrap();
+                let mut scriptlets_guard =
+                    self.scriptlets.lock().unwrap_or_else(|e| e.into_inner());
                 scriptlets_guard.remove(trigger);
             }
             {
-                let mut matcher_guard = self.matcher.lock().unwrap();
+                let mut matcher_guard = self.matcher.lock().unwrap_or_else(|e| e.into_inner());
                 matcher_guard.unregister_trigger(trigger);
             }
         }
 
         // Remove the file entry from tracking
         {
-            let mut file_triggers_guard = self.file_triggers.lock().unwrap();
+            let mut file_triggers_guard =
+                self.file_triggers.lock().unwrap_or_else(|e| e.into_inner());
             file_triggers_guard.remove(path);
         }
 
@@ -579,7 +591,7 @@ impl KeywordManager {
     /// Get triggers registered for a specific file (for debugging/testing)
     #[allow(dead_code)]
     pub fn get_triggers_for_file(&self, path: &Path) -> Vec<String> {
-        let file_triggers_guard = self.file_triggers.lock().unwrap();
+        let file_triggers_guard = self.file_triggers.lock().unwrap_or_else(|e| e.into_inner());
         file_triggers_guard
             .get(path)
             .map(|set| set.iter().cloned().collect())
@@ -627,19 +639,20 @@ impl KeywordManager {
         };
 
         {
-            let mut scriptlets_guard = self.scriptlets.lock().unwrap();
+            let mut scriptlets_guard = self.scriptlets.lock().unwrap_or_else(|e| e.into_inner());
             scriptlets_guard.insert(trigger.to_string(), keyword_scriptlet);
         }
 
         {
-            let mut matcher_guard = self.matcher.lock().unwrap();
+            let mut matcher_guard = self.matcher.lock().unwrap_or_else(|e| e.into_inner());
             let dummy_path = PathBuf::from(format!("manual:{}", name));
             matcher_guard.register_trigger(trigger, dummy_path);
         }
 
         // Track the file -> trigger mapping
         {
-            let mut file_triggers_guard = self.file_triggers.lock().unwrap();
+            let mut file_triggers_guard =
+                self.file_triggers.lock().unwrap_or_else(|e| e.into_inner());
             file_triggers_guard
                 .entry(source_path.to_path_buf())
                 .or_default()
@@ -668,7 +681,7 @@ impl KeywordManager {
     ) -> (usize, usize, usize) {
         // Get existing triggers for this file
         let existing_triggers: HashSet<String> = {
-            let file_triggers_guard = self.file_triggers.lock().unwrap();
+            let file_triggers_guard = self.file_triggers.lock().unwrap_or_else(|e| e.into_inner());
             let result = file_triggers_guard.get(path).cloned().unwrap_or_default();
             info!(
                 path = %path.display(),
@@ -701,7 +714,8 @@ impl KeywordManager {
             if existing_triggers.contains(trigger) {
                 // Check if content changed
                 let content_changed = {
-                    let scriptlets_guard = self.scriptlets.lock().unwrap();
+                    let scriptlets_guard =
+                        self.scriptlets.lock().unwrap_or_else(|e| e.into_inner());
                     if let Some(existing) = scriptlets_guard.get(trigger) {
                         existing.content != *content
                             || existing.name != *name
@@ -722,7 +736,8 @@ impl KeywordManager {
                     };
 
                     {
-                        let mut scriptlets_guard = self.scriptlets.lock().unwrap();
+                        let mut scriptlets_guard =
+                            self.scriptlets.lock().unwrap_or_else(|e| e.into_inner());
                         scriptlets_guard.insert(trigger.clone(), keyword_scriptlet);
                     }
 
@@ -739,11 +754,12 @@ impl KeywordManager {
         // Remove old triggers
         for trigger in &to_remove {
             {
-                let mut scriptlets_guard = self.scriptlets.lock().unwrap();
+                let mut scriptlets_guard =
+                    self.scriptlets.lock().unwrap_or_else(|e| e.into_inner());
                 scriptlets_guard.remove(trigger);
             }
             {
-                let mut matcher_guard = self.matcher.lock().unwrap();
+                let mut matcher_guard = self.matcher.lock().unwrap_or_else(|e| e.into_inner());
                 matcher_guard.unregister_trigger(trigger);
             }
             debug!(trigger = %trigger, path = %path.display(), "Removed trigger");
@@ -760,12 +776,13 @@ impl KeywordManager {
             };
 
             {
-                let mut scriptlets_guard = self.scriptlets.lock().unwrap();
+                let mut scriptlets_guard =
+                    self.scriptlets.lock().unwrap_or_else(|e| e.into_inner());
                 scriptlets_guard.insert(trigger.clone(), keyword_scriptlet);
             }
 
             {
-                let mut matcher_guard = self.matcher.lock().unwrap();
+                let mut matcher_guard = self.matcher.lock().unwrap_or_else(|e| e.into_inner());
                 let dummy_path = PathBuf::from(format!("scriptlet:{}", name));
                 matcher_guard.register_trigger(trigger, dummy_path);
             }
@@ -775,7 +792,8 @@ impl KeywordManager {
 
         // Update file_triggers tracking
         {
-            let mut file_triggers_guard = self.file_triggers.lock().unwrap();
+            let mut file_triggers_guard =
+                self.file_triggers.lock().unwrap_or_else(|e| e.into_inner());
             if new_trigger_keys.is_empty() {
                 file_triggers_guard.remove(path);
             } else {
@@ -900,7 +918,10 @@ pub fn update_keyword_triggers_for_file(
 
     // Log existing file_triggers for debugging
     {
-        let file_triggers_guard = guard.file_triggers.lock().unwrap();
+        let file_triggers_guard = guard
+            .file_triggers
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let existing_keys: Vec<_> = file_triggers_guard.keys().collect();
         info!(
             path = %path.display(),

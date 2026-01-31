@@ -2,9 +2,11 @@ use global_hotkey::{
     hotkey::{Code, HotKey, Modifiers},
     Error as HotkeyError, GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState,
 };
+use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Mutex, OnceLock, RwLock};
+use std::sync::{Mutex, OnceLock};
+use uuid::Uuid;
 
 use crate::{config, logging, scripts, shortcuts};
 
@@ -237,6 +239,7 @@ fn hotkey_config_to_display(hk: &config::HotkeyConfig) -> String {
 
 /// Transactional hotkey rebind: register new BEFORE unregistering old
 /// This prevents losing a working hotkey if the new registration fails
+#[tracing::instrument(skip(manager, display), fields(action = ?action))]
 fn rebind_hotkey_transactional(
     manager: &GlobalHotKeyManager,
     action: HotkeyAction,
@@ -249,7 +252,7 @@ fn rebind_hotkey_transactional(
 
     // Check if already registered with same ID (no change needed)
     let current_id = {
-        let routes_guard = routes().read().unwrap();
+        let routes_guard = routes().read();
         match &action {
             HotkeyAction::Main => routes_guard.main_id,
             HotkeyAction::Notes => routes_guard.notes_id,
@@ -275,7 +278,7 @@ fn rebind_hotkey_transactional(
 
     // New registration succeeded - now safe to update routing and unregister old
     let old_entry = {
-        let mut routes_guard = routes().write().unwrap();
+        let mut routes_guard = routes().write();
 
         // Get old entry before adding new (they might have same action type)
         let old_id = match &action {
@@ -326,6 +329,7 @@ fn rebind_hotkey_transactional(
 
 /// Update hotkeys from config - call this when config changes
 /// Uses transactional updates: register new before unregistering old
+#[tracing::instrument(skip_all)]
 pub fn update_hotkeys(cfg: &config::Config) {
     let manager_guard = match MAIN_MANAGER.get() {
         Some(m) => match m.lock() {
@@ -654,7 +658,7 @@ pub fn register_dynamic_shortcut(
 
     // Check if already registered
     {
-        let routes_guard = routes().read().unwrap();
+        let routes_guard = routes().read();
         if routes_guard.get_action(id).is_some() {
             return Err(anyhow::anyhow!(
                 "Shortcut '{}' is already registered",
@@ -670,7 +674,7 @@ pub fn register_dynamic_shortcut(
 
     // Add to routing table
     {
-        let mut routes_guard = routes().write().unwrap();
+        let mut routes_guard = routes().write();
         routes_guard.add_route(
             id,
             RegisteredHotkey {
@@ -706,7 +710,7 @@ pub fn unregister_dynamic_shortcut(command_id: &str) -> anyhow::Result<()> {
 
     // Find the hotkey ID for this command
     let (id, hotkey) = {
-        let routes_guard = routes().read().unwrap();
+        let routes_guard = routes().read();
         routes_guard
             .get_script_id(command_id)
             .and_then(|id| routes_guard.routes.get(&id).map(|entry| (id, entry.hotkey)))
@@ -726,7 +730,7 @@ pub fn unregister_dynamic_shortcut(command_id: &str) -> anyhow::Result<()> {
 
     // Remove from routing table
     {
-        let mut routes_guard = routes().write().unwrap();
+        let mut routes_guard = routes().write();
         routes_guard.remove_route(id);
     }
 
@@ -760,7 +764,7 @@ static AI_HANDLER: OnceLock<std::sync::Mutex<Option<HotkeyHandler>>> = OnceLock:
 #[allow(dead_code)]
 pub fn set_notes_hotkey_handler<F: Fn() + Send + Sync + 'static>(handler: F) {
     let storage = NOTES_HANDLER.get_or_init(|| std::sync::Mutex::new(None));
-    *storage.lock().unwrap() = Some(Arc::new(handler));
+    *storage.lock().unwrap_or_else(|e| e.into_inner()) = Some(Arc::new(handler));
 }
 
 /// Register a handler to be invoked when the AI hotkey is pressed.
@@ -769,7 +773,7 @@ pub fn set_notes_hotkey_handler<F: Fn() + Send + Sync + 'static>(handler: F) {
 #[allow(dead_code)]
 pub fn set_ai_hotkey_handler<F: Fn() + Send + Sync + 'static>(handler: F) {
     let storage = AI_HANDLER.get_or_init(|| std::sync::Mutex::new(None));
-    *storage.lock().unwrap() = Some(Arc::new(handler));
+    *storage.lock().unwrap_or_else(|e| e.into_inner()) = Some(Arc::new(handler));
 }
 
 #[cfg(target_os = "macos")]
@@ -845,6 +849,7 @@ mod gcd {
 ///
 /// This works even before the main window is activated because GCD dispatch
 /// directly integrates with the NSApplication run loop that GPUI uses.
+#[tracing::instrument(skip_all)]
 fn dispatch_notes_hotkey() {
     // Check if a direct handler is registered (takes priority over channel)
     let handler = NOTES_HANDLER
@@ -876,6 +881,7 @@ fn dispatch_notes_hotkey() {
 /// Strategy (mutually exclusive to prevent double-fire):
 /// - If a handler is registered: use it directly via GCD dispatch
 /// - Otherwise: send to channel for async polling
+#[tracing::instrument(skip_all)]
 fn dispatch_ai_hotkey() {
     // Check if a direct handler is registered (takes priority over channel)
     let handler = AI_HANDLER
@@ -1020,7 +1026,7 @@ fn register_builtin_hotkey(
 
     match manager.register(hotkey) {
         Ok(()) => {
-            let mut routes_guard = routes().write().unwrap();
+            let mut routes_guard = routes().write();
             routes_guard.add_route(
                 id,
                 RegisteredHotkey {
@@ -1055,7 +1061,7 @@ fn register_script_hotkey_internal(
 
     match manager.register(hotkey) {
         Ok(()) => {
-            let mut routes_guard = routes().write().unwrap();
+            let mut routes_guard = routes().write();
             routes_guard.add_route(
                 id,
                 RegisteredHotkey {
@@ -1240,7 +1246,7 @@ pub(crate) fn start_hotkey_listener(config: config::Config) {
 
         // Log routing table summary
         {
-            let routes_guard = routes().read().unwrap();
+            let routes_guard = routes().read();
             logging::log(
                 "HOTKEY",
                 &format!(
@@ -1265,12 +1271,16 @@ pub(crate) fn start_hotkey_listener(config: config::Config) {
 
                 // Look up action in unified routing table (fast read lock)
                 let action = {
-                    let routes_guard = routes().read().unwrap();
+                    let routes_guard = routes().read();
                     routes_guard.get_action(event.id)
                 };
 
                 match action {
                     Some(HotkeyAction::Main) => {
+                        // Set correlation ID for this hotkey event
+                        let _guard =
+                            logging::set_correlation_id(format!("hotkey:main:{}", Uuid::new_v4()));
+
                         let count = HOTKEY_TRIGGER_COUNT.fetch_add(1, Ordering::Relaxed);
                         // NON-BLOCKING: Use try_send to prevent hotkey thread from blocking
                         if hotkey_channel().0.try_send(()).is_err() {
@@ -1282,6 +1292,10 @@ pub(crate) fn start_hotkey_listener(config: config::Config) {
                         );
                     }
                     Some(HotkeyAction::Notes) => {
+                        // Set correlation ID for this hotkey event
+                        let _guard =
+                            logging::set_correlation_id(format!("hotkey:notes:{}", Uuid::new_v4()));
+
                         logging::log(
                             "HOTKEY",
                             "Notes hotkey pressed - dispatching to main thread",
@@ -1289,10 +1303,18 @@ pub(crate) fn start_hotkey_listener(config: config::Config) {
                         dispatch_notes_hotkey();
                     }
                     Some(HotkeyAction::Ai) => {
+                        // Set correlation ID for this hotkey event
+                        let _guard =
+                            logging::set_correlation_id(format!("hotkey:ai:{}", Uuid::new_v4()));
+
                         logging::log("HOTKEY", "AI hotkey pressed - dispatching to main thread");
                         dispatch_ai_hotkey();
                     }
                     Some(HotkeyAction::ToggleLogs) => {
+                        // Set correlation ID for this hotkey event
+                        let _guard =
+                            logging::set_correlation_id(format!("hotkey:logs:{}", Uuid::new_v4()));
+
                         logging::log("HOTKEY", "Logs hotkey pressed - toggling log capture");
                         // Toggle capture immediately (no need for main thread dispatch)
                         let (is_capturing, path) = logging::toggle_capture();
@@ -1315,6 +1337,13 @@ pub(crate) fn start_hotkey_listener(config: config::Config) {
                         }
                     }
                     Some(HotkeyAction::Script(path)) => {
+                        // Set correlation ID for this hotkey event
+                        let _guard = logging::set_correlation_id(format!(
+                            "hotkey:script:{}:{}",
+                            path,
+                            Uuid::new_v4()
+                        ));
+
                         // Start benchmark timing for hotkey → chat latency analysis
                         logging::bench_start(&format!("hotkey:{}", path));
                         logging::log("HOTKEY", &format!("Script shortcut triggered: {}", path));
@@ -1327,6 +1356,12 @@ pub(crate) fn start_hotkey_listener(config: config::Config) {
                         }
                     }
                     None => {
+                        // Set correlation ID even for unknown hotkey events
+                        let _guard = logging::set_correlation_id(format!(
+                            "hotkey:unknown:{}",
+                            Uuid::new_v4()
+                        ));
+
                         // Unknown hotkey ID - can happen during hot-reload transitions
                         logging::log("HOTKEY", &format!("Unknown hotkey event id={}", event.id));
                     }

@@ -466,8 +466,8 @@ impl Render for BrowsePanel {
                         match key {
                             "up" | "arrowup" => this.move_up(cx),
                             "down" | "arrowdown" => this.move_down(cx),
-                            "enter" => this.select_current(cx),
-                            "escape" => this.close(),
+                            "enter" | "return" => this.select_current(cx),
+                            "escape" | "esc" => this.close(),
                             _ => {}
                         }
                     }))

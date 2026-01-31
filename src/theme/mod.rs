@@ -16,6 +16,7 @@
 //! - `gpui_integration` - gpui-component theme mapping
 //! - `service` - Global theme watcher service
 
+mod color_resolver;
 mod gpui_integration;
 mod helpers;
 pub mod hex_color;
@@ -33,11 +34,17 @@ pub use types::{ColorScheme, Theme};
 
 // Re-export helper types for lightweight color extraction (allow unused - designed for incremental adoption)
 #[allow(unused_imports)]
-pub use helpers::{hover_overlay_bg, modal_overlay_bg, InputFieldColors, ListItemColors, PromptColors};
+pub use helpers::{
+    hover_overlay_bg, modal_overlay_bg, InputFieldColors, ListItemColors, PromptColors,
+};
 
 // Re-export semantic types (allow unused - designed for incremental adoption)
 #[allow(unused_imports)]
 pub use semantic::{FocusAware, SemanticColors, Surface, SurfaceStyle};
+
+// Re-export color resolver for unified color access
+#[allow(unused_imports)]
+pub use color_resolver::{ColorResolver, SpacingResolver, TypographyResolver};
 
 // Re-export validation types
 #[allow(unused_imports)]
@@ -45,6 +52,9 @@ pub use validation::{validate_theme_json, Diagnostic, DiagnosticSeverity, ThemeD
 
 // Re-export loader functions
 pub use types::load_theme;
+
+// Re-export appearance cache invalidation (called when system appearance changes)
+pub use types::invalidate_appearance_cache;
 
 // Re-export gpui integration
 pub use gpui_integration::sync_gpui_component_theme;

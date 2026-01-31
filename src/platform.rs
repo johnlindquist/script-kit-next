@@ -720,9 +720,10 @@ pub mod ns_visual_effect_material {
 }
 
 /// Current material index for cycling
+/// Default: 11 = HudWindow (best for light mode vibrancy)
 #[cfg(target_os = "macos")]
 static CURRENT_MATERIAL_INDEX: std::sync::atomic::AtomicUsize =
-    std::sync::atomic::AtomicUsize::new(0);
+    std::sync::atomic::AtomicUsize::new(11); // HudWindow
 
 /// Current blending mode (0 = behindWindow, 1 = withinWindow)
 #[cfg(target_os = "macos")]
@@ -730,9 +731,10 @@ static CURRENT_BLENDING_MODE: std::sync::atomic::AtomicUsize =
     std::sync::atomic::AtomicUsize::new(0);
 
 /// Current appearance index for cycling
+/// Default: 3 = VibrantLight (for light mode), will be set to 1 (VibrantDark) for dark mode
 #[cfg(target_os = "macos")]
 static CURRENT_APPEARANCE_INDEX: std::sync::atomic::AtomicUsize =
-    std::sync::atomic::AtomicUsize::new(0);
+    std::sync::atomic::AtomicUsize::new(3); // VibrantLight
 
 /// All appearance options to try
 #[cfg(target_os = "macos")]
@@ -1090,8 +1092,9 @@ pub fn configure_window_vibrancy_material_for_appearance(is_dark: bool) {
         // Recursively find and configure ALL NSVisualEffectViews
         // Expert feedback: GPUI may nest effect views, so we need to walk the whole tree
         let mut count = 0;
-        configure_visual_effect_views_recursive(content_view, &mut count);
+        configure_visual_effect_views_recursive(content_view, &mut count, is_dark);
 
+        let material_name = if is_dark { "HUD_WINDOW" } else { "POPOVER" };
         if count == 0 {
             logging::log(
                 "PANEL",
@@ -1101,13 +1104,14 @@ pub fn configure_window_vibrancy_material_for_appearance(is_dark: bool) {
             logging::log(
                 "PANEL",
                 &format!(
-                    "Configured {} NSVisualEffectView(s): {} + POPOVER + emphasized",
+                    "Configured {} NSVisualEffectView(s): {} + {} + emphasized",
                     count,
                     if is_dark {
                         "VibrantDark"
                     } else {
                         "VibrantLight"
-                    }
+                    },
+                    material_name
                 ),
             );
         }
@@ -1133,14 +1137,20 @@ pub fn configure_window_vibrancy_material_for_appearance(_is_dark: bool) {
 ///
 /// Uses Objective-C message sending internally.
 #[cfg(target_os = "macos")]
+#[allow(dead_code)]
 pub fn configure_window_vibrancy_material() {
     // Backward compatible: default to dark mode
     configure_window_vibrancy_material_for_appearance(true);
 }
 
 /// Recursively walk view hierarchy and configure all NSVisualEffectViews
+///
+/// # Arguments
+/// * `view` - The view to configure
+/// * `count` - Counter for configured views
+/// * `is_dark` - Whether to use dark mode material (HUD_WINDOW) or light mode material (POPOVER)
 #[cfg(target_os = "macos")]
-unsafe fn configure_visual_effect_views_recursive(view: id, count: &mut usize) {
+unsafe fn configure_visual_effect_views_recursive(view: id, count: &mut usize, is_dark: bool) {
     // Check if this view is an NSVisualEffectView
     let is_vev: bool = msg_send![view, isKindOfClass: class!(NSVisualEffectView)];
     if is_vev {
@@ -1157,8 +1167,15 @@ unsafe fn configure_visual_effect_views_recursive(view: id, count: &mut usize) {
         // ║ (like Actions popup) take focus. Combined with tint alpha in              ║
         // ║ gpui_integration.rs. See: /Users/johnlindquist/dev/mac-panel-window/      ║
         // ╚════════════════════════════════════════════════════════════════════════════╝
-        // POPOVER (6) - matches Electron's vibrancy: 'popover'
-        let _: () = msg_send![view, setMaterial: ns_visual_effect_material::POPOVER];
+        // Material selection based on appearance mode:
+        // - Dark mode: HUD_WINDOW (13) - designed for dark UIs, high contrast
+        // - Light mode: POPOVER (6) - cleaner light appearance with frosted glass effect
+        let material = if is_dark {
+            ns_visual_effect_material::HUD_WINDOW
+        } else {
+            ns_visual_effect_material::POPOVER
+        };
+        let _: () = msg_send![view, setMaterial: material];
         // State 1 = active (always vibrant, doesn't dim when window loses key focus)
         // This prevents the main window from dimming when Actions popup opens
         // NSVisualEffectState: 0=followsWindowActiveState, 1=active, 2=inactive
@@ -1192,14 +1209,16 @@ unsafe fn configure_visual_effect_views_recursive(view: id, count: &mut usize) {
             "nil".to_string()
         };
 
+        let material_name = if is_dark { "HUD_WINDOW" } else { "POPOVER" };
         logging::log(
             "VIBRANCY",
             &format!(
-                "NSVisualEffectView config: mat {} -> {}, state {} -> {}, blend {} -> {}, emph {} -> {}, appearance={}",
-                old_material, new_material,
+                "NSVisualEffectView config: mat {} -> {} ({}), state {} -> {}, blend {} -> {}, emph {} -> {}, mode={}, appearance={}",
+                old_material, new_material, material_name,
                 old_state, new_state,
                 old_blending, new_blending,
                 old_emphasized, new_emphasized,
+                if is_dark { "dark" } else { "light" },
                 appearance_str
             ),
         );
@@ -1213,7 +1232,7 @@ unsafe fn configure_visual_effect_views_recursive(view: id, count: &mut usize) {
         let subview_count: usize = msg_send![subviews, count];
         for i in 0..subview_count {
             let child: id = msg_send![subviews, objectAtIndex: i];
-            configure_visual_effect_views_recursive(child, count);
+            configure_visual_effect_views_recursive(child, count, is_dark);
         }
     }
 }
@@ -1406,6 +1425,110 @@ pub fn toggle_blending_mode() -> String {
     "Blending mode toggle not supported on this platform".to_string()
 }
 
+/// Get the current material name for display in the UI
+#[cfg(target_os = "macos")]
+pub fn get_current_material_name() -> String {
+    use std::sync::atomic::Ordering;
+
+    let materials = ns_visual_effect_material::ALL_MATERIALS;
+    let mat_idx = CURRENT_MATERIAL_INDEX.load(Ordering::SeqCst);
+
+    if mat_idx < materials.len() {
+        // Extract just the material name without the number
+        let full_name = materials[mat_idx].1;
+        // Format: "Popover (6)" -> "Popover"
+        full_name
+            .split(" (")
+            .next()
+            .unwrap_or(full_name)
+            .to_string()
+    } else {
+        "Unknown".to_string()
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn get_current_material_name() -> String {
+    "N/A".to_string()
+}
+
+/// Get the current appearance name for display in the UI
+#[cfg(target_os = "macos")]
+pub fn get_current_appearance_name() -> String {
+    use std::sync::atomic::Ordering;
+
+    let app_idx = CURRENT_APPEARANCE_INDEX.load(Ordering::SeqCst);
+    if app_idx < APPEARANCE_OPTIONS.len() {
+        APPEARANCE_OPTIONS[app_idx].to_string()
+    } else {
+        "Unknown".to_string()
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn get_current_appearance_name() -> String {
+    "N/A".to_string()
+}
+
+/// Cycle through appearance options only (VibrantLight, VibrantDark, Aqua, DarkAqua, None)
+/// Press Cmd+L to cycle through appearances without changing the material.
+/// Returns a description of the current appearance.
+#[cfg(target_os = "macos")]
+pub fn cycle_appearance() -> String {
+    use std::sync::atomic::Ordering;
+
+    debug_assert_main_thread();
+
+    let appearances = APPEARANCE_OPTIONS;
+
+    // Get current index and increment
+    let app_idx = CURRENT_APPEARANCE_INDEX.load(Ordering::SeqCst);
+    let new_app_idx = (app_idx + 1) % appearances.len();
+    CURRENT_APPEARANCE_INDEX.store(new_app_idx, Ordering::SeqCst);
+
+    let appearance_name = appearances[new_app_idx];
+
+    unsafe {
+        let window = match window_manager::get_main_window() {
+            Some(w) => w,
+            None => return "ERROR: No main window".to_string(),
+        };
+
+        // Set window appearance
+        if appearance_name != "None" {
+            let appearance_id: id = match appearance_name {
+                "DarkAqua" => NSAppearanceNameDarkAqua,
+                "VibrantDark" => NSAppearanceNameVibrantDark,
+                "Aqua" => NSAppearanceNameAqua,
+                "VibrantLight" => NSAppearanceNameVibrantLight,
+                _ => nil,
+            };
+            if !appearance_id.is_null() {
+                let appearance: id =
+                    msg_send![class!(NSAppearance), appearanceNamed: appearance_id];
+                if !appearance.is_null() {
+                    let _: () = msg_send![window, setAppearance: appearance];
+                }
+            }
+        } else {
+            // Clear appearance - use system default
+            let _: () = msg_send![window, setAppearance: nil];
+        }
+
+        // Force window refresh
+        let _: () = msg_send![window, display];
+
+        let msg = format!("Appearance: {}", appearance_name);
+        logging::log("VIBRANCY", &msg);
+        msg
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn cycle_appearance() -> String {
+    "Appearance cycling not supported on this platform".to_string()
+}
+
 // ============================================================================
 // Actions Popup Window Configuration
 // ============================================================================
@@ -1420,16 +1543,17 @@ pub fn toggle_blending_mode() -> String {
 /// - hasShadow = true - shadow for depth perception
 /// - Disabled restoration - no position caching
 /// - animationBehavior = NSWindowAnimationBehaviorNone - no animation on close
-/// - VibrantDark appearance + POPOVER material for frosted glass effect
+/// - Appearance-aware vibrancy (VibrantDark/VibrantLight) + POPOVER material for frosted glass effect
 ///
 /// # Arguments
 /// * `window` - The NSWindow pointer to configure
+/// * `is_dark` - Whether to use dark vibrancy (true) or light vibrancy (false)
 ///
 /// # Safety
 /// - `window` must be a valid NSWindow pointer
 /// - Must be called on the main thread
 #[cfg(target_os = "macos")]
-pub unsafe fn configure_actions_popup_window(window: id) {
+pub unsafe fn configure_actions_popup_window(window: id, is_dark: bool) {
     if window.is_null() {
         logging::log(
             "ACTIONS",
@@ -1469,18 +1593,33 @@ pub unsafe fn configure_actions_popup_window(window: id) {
     // VIBRANCY CONFIGURATION - Match main window settings for consistent blur
     // ═══════════════════════════════════════════════════════════════════════════
 
-    // Set window appearance to VibrantDark for consistent blur rendering
-    let vibrant_dark: id = msg_send![
-        class!(NSAppearance),
-        appearanceNamed: NSAppearanceNameVibrantDark
-    ];
-    if !vibrant_dark.is_null() {
-        let _: () = msg_send![window, setAppearance: vibrant_dark];
+    // Set window appearance based on system appearance for consistent blur rendering
+    let appearance: id = if is_dark {
+        msg_send![class!(NSAppearance), appearanceNamed: NSAppearanceNameVibrantDark]
+    } else {
+        msg_send![class!(NSAppearance), appearanceNamed: NSAppearanceNameVibrantLight]
+    };
+    if !appearance.is_null() {
+        let _: () = msg_send![window, setAppearance: appearance];
+        let appearance_name = if is_dark {
+            "VibrantDark"
+        } else {
+            "VibrantLight"
+        };
+        logging::log(
+            "ACTIONS",
+            &format!("Actions popup: Set appearance to {}", appearance_name),
+        );
     }
 
-    // Use clearColor for window background to allow maximum blur transparency
-    let clear_color: id = msg_send![class!(NSColor), clearColor];
-    let _: () = msg_send![window, setBackgroundColor: clear_color];
+    // Use windowBackgroundColor for semi-opaque background (reduces excessive transparency)
+    // This matches the main window pattern and provides the native ~1px border
+    let window_bg_color: id = msg_send![class!(NSColor), windowBackgroundColor];
+    let _: () = msg_send![window, setBackgroundColor: window_bg_color];
+    logging::log(
+        "ACTIONS",
+        "Actions popup: Set backgroundColor to windowBackgroundColor (semi-opaque)",
+    );
 
     // Mark window as non-opaque to allow transparency/vibrancy
     let _: () = msg_send![window, setOpaque: false];
@@ -1489,24 +1628,34 @@ pub unsafe fn configure_actions_popup_window(window: id) {
     let content_view: id = msg_send![window, contentView];
     if !content_view.is_null() {
         let mut count = 0;
-        configure_visual_effect_views_recursive(content_view, &mut count);
+        configure_visual_effect_views_recursive(content_view, &mut count, is_dark);
+        let material_name = if is_dark { "HUD_WINDOW" } else { "POPOVER" };
         logging::log(
             "ACTIONS",
             &format!(
-                "Configured {} NSVisualEffectView(s) in actions popup",
-                count
+                "Configured {} NSVisualEffectView(s) in actions popup with {} material",
+                count, material_name
             ),
         );
     }
 
+    let appearance_name = if is_dark {
+        "VibrantDark"
+    } else {
+        "VibrantLight"
+    };
+    let material_name = if is_dark { "HUD_WINDOW" } else { "POPOVER" };
     logging::log(
         "ACTIONS",
-        "Configured actions popup window (non-movable, vibrancy, VibrantDark)",
+        &format!(
+            "Configured actions popup window (non-movable, vibrancy, {}, {})",
+            appearance_name, material_name
+        ),
     );
 }
 
 #[cfg(not(target_os = "macos"))]
-pub fn configure_actions_popup_window(_window: *mut std::ffi::c_void) {
+pub fn configure_actions_popup_window(_window: *mut std::ffi::c_void, _is_dark: bool) {
     // No-op on non-macOS platforms
 }
 
@@ -1523,12 +1672,13 @@ pub fn configure_actions_popup_window(_window: *mut std::ffi::c_void) {
 /// # Arguments
 /// * `window` - The NSWindow pointer to configure
 /// * `window_name` - Name for logging (e.g., "Notes", "AI")
+/// * `is_dark` - Whether to use dark vibrancy (true) or light vibrancy (false)
 ///
 /// # Safety
 /// - `window` must be a valid NSWindow pointer
 /// - Must be called on the main thread
 #[cfg(target_os = "macos")]
-pub unsafe fn configure_secondary_window_vibrancy(window: id, window_name: &str) {
+pub unsafe fn configure_secondary_window_vibrancy(window: id, window_name: &str, is_dark: bool) {
     if window.is_null() {
         logging::log(
             "PANEL",
@@ -1544,24 +1694,41 @@ pub unsafe fn configure_secondary_window_vibrancy(window: id, window_name: &str)
     // VIBRANCY CONFIGURATION - Match main window settings for consistent blur
     // ═══════════════════════════════════════════════════════════════════════════
 
-    // Set window appearance to VibrantDark for consistent blur rendering
-    // VibrantDark provides better vibrancy effects than DarkAqua - this is what
-    // Raycast/Spotlight use for their blur effect
-    let vibrant_dark: id = msg_send![
-        class!(NSAppearance),
-        appearanceNamed: NSAppearanceNameVibrantDark
-    ];
-    if !vibrant_dark.is_null() {
-        let _: () = msg_send![window, setAppearance: vibrant_dark];
+    // Set window appearance based on system appearance for consistent blur rendering
+    // VibrantDark/VibrantLight provide better vibrancy effects than DarkAqua/Aqua
+    // This is what Raycast/Spotlight use for their blur effect
+    let appearance: id = if is_dark {
+        msg_send![class!(NSAppearance), appearanceNamed: NSAppearanceNameVibrantDark]
+    } else {
+        msg_send![class!(NSAppearance), appearanceNamed: NSAppearanceNameVibrantLight]
+    };
+    if !appearance.is_null() {
+        let _: () = msg_send![window, setAppearance: appearance];
+        let appearance_name = if is_dark {
+            "VibrantDark"
+        } else {
+            "VibrantLight"
+        };
         logging::log(
             "PANEL",
-            &format!("{} window: Set appearance to VibrantDark", window_name),
+            &format!(
+                "{} window: Set appearance to {}",
+                window_name, appearance_name
+            ),
         );
     }
 
-    // Use clearColor for window background to allow maximum blur transparency
-    let clear_color: id = msg_send![class!(NSColor), clearColor];
-    let _: () = msg_send![window, setBackgroundColor: clear_color];
+    // Use windowBackgroundColor for semi-opaque background (reduces excessive transparency)
+    // This matches the main window pattern and provides the native ~1px border
+    let window_bg_color: id = msg_send![class!(NSColor), windowBackgroundColor];
+    let _: () = msg_send![window, setBackgroundColor: window_bg_color];
+    logging::log(
+        "PANEL",
+        &format!(
+            "{} window: Set backgroundColor to windowBackgroundColor (semi-opaque)",
+            window_name
+        ),
+    );
 
     // Mark window as non-opaque to allow transparency/vibrancy
     let _: () = msg_send![window, setOpaque: false];
@@ -1573,27 +1740,126 @@ pub unsafe fn configure_secondary_window_vibrancy(window: id, window_name: &str)
     let content_view: id = msg_send![window, contentView];
     if !content_view.is_null() {
         let mut count = 0;
-        configure_visual_effect_views_recursive(content_view, &mut count);
+        configure_visual_effect_views_recursive(content_view, &mut count, is_dark);
+        let material_name = if is_dark { "HUD_WINDOW" } else { "POPOVER" };
         logging::log(
             "PANEL",
             &format!(
-                "{} window: Configured {} NSVisualEffectView(s)",
-                window_name, count
+                "{} window: Configured {} NSVisualEffectView(s) with {} material",
+                window_name, count, material_name
             ),
         );
     }
 
+    let appearance_name = if is_dark {
+        "VibrantDark"
+    } else {
+        "VibrantLight"
+    };
+    let material_name = if is_dark { "HUD_WINDOW" } else { "POPOVER" };
     logging::log(
         "PANEL",
         &format!(
-            "{} window vibrancy configured (VibrantDark + blur)",
-            window_name
+            "{} window vibrancy configured ({} + {} + blur)",
+            window_name, appearance_name, material_name
         ),
     );
 }
 
 #[cfg(not(target_os = "macos"))]
-pub fn configure_secondary_window_vibrancy(_window: *mut std::ffi::c_void, _window_name: &str) {
+pub fn configure_secondary_window_vibrancy(
+    _window: *mut std::ffi::c_void,
+    _window_name: &str,
+    _is_dark: bool,
+) {
+    // No-op on non-macOS platforms
+}
+
+/// Update appearance for all secondary windows (Notes, AI, Actions) when system appearance changes.
+/// This ensures consistency across all windows when user toggles light/dark mode.
+///
+/// # Arguments
+/// * `is_dark` - true for dark mode (VibrantDark), false for light mode (VibrantLight)
+///
+/// # Safety
+/// - Must be called on the main thread
+/// - Uses Objective-C runtime to enumerate and update windows
+#[cfg(target_os = "macos")]
+#[allow(dead_code)] // TODO: Will be used in appearance change handler (Fix 2)
+pub fn update_all_secondary_windows_appearance(is_dark: bool) {
+    use cocoa::base::{id, nil};
+    use objc::{class, msg_send, sel, sel_impl};
+
+    unsafe {
+        let app: id = msg_send![class!(NSApplication), sharedApplication];
+        let windows: id = msg_send![app, windows];
+        let count: usize = msg_send![windows, count];
+
+        logging::log(
+            "APPEARANCE",
+            &format!("Updating {} windows to is_dark={}", count, is_dark),
+        );
+
+        for i in 0..count {
+            let window: id = msg_send![windows, objectAtIndex: i];
+            if window == nil {
+                continue;
+            }
+
+            // Get window title to identify secondary windows
+            let title: id = msg_send![window, title];
+            if title == nil {
+                continue;
+            }
+
+            let title_str: *const std::os::raw::c_char = msg_send![title, UTF8String];
+            if title_str.is_null() {
+                continue;
+            }
+
+            let title_string = std::ffi::CStr::from_ptr(title_str)
+                .to_string_lossy()
+                .to_string();
+
+            // Match secondary window titles
+            if title_string.contains("Script Kit AI")
+                || title_string.contains("Script Kit Notes")
+                || title_string.contains("Actions")
+            {
+                // Set appearance based on is_dark
+                let appearance_name = if is_dark {
+                    NSAppearanceNameVibrantDark
+                } else {
+                    NSAppearanceNameVibrantLight
+                };
+
+                let appearance: id = msg_send![
+                    class!(NSAppearance),
+                    appearanceNamed: appearance_name
+                ];
+
+                if appearance != nil {
+                    let _: () = msg_send![window, setAppearance: appearance];
+                    logging::log(
+                        "APPEARANCE",
+                        &format!(
+                            "Updated window '{}' to {}",
+                            title_string,
+                            if is_dark {
+                                "VibrantDark"
+                            } else {
+                                "VibrantLight"
+                            }
+                        ),
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn update_all_secondary_windows_appearance(_is_dark: bool) {
     // No-op on non-macOS platforms
 }
 

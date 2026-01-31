@@ -65,8 +65,8 @@ impl StderrBuffer {
     pub fn push_line(&self, line: String) {
         let line_bytes = line.len();
 
-        let mut lines = self.lines.lock().unwrap();
-        let mut current = self.current_bytes.lock().unwrap();
+        let mut lines = self.lines.lock().unwrap_or_else(|e| e.into_inner());
+        let mut current = self.current_bytes.lock().unwrap_or_else(|e| e.into_inner());
 
         // Evict old lines if we're over the byte limit
         while *current + line_bytes > self.max_bytes && !lines.is_empty() {
@@ -89,38 +89,41 @@ impl StderrBuffer {
 
     /// Get all buffered lines as a single string
     pub fn get_contents(&self) -> String {
-        let lines = self.lines.lock().unwrap();
+        let lines = self.lines.lock().unwrap_or_else(|e| e.into_inner());
         lines.iter().cloned().collect::<Vec<_>>().join("\n")
     }
 
     /// Get the last N lines (or all if fewer exist)
     pub fn get_last_n_lines(&self, n: usize) -> Vec<String> {
-        let lines = self.lines.lock().unwrap();
+        let lines = self.lines.lock().unwrap_or_else(|e| e.into_inner());
         let skip = lines.len().saturating_sub(n);
         lines.iter().skip(skip).cloned().collect()
     }
 
     /// Get the number of buffered lines
     pub fn len(&self) -> usize {
-        self.lines.lock().unwrap().len()
+        self.lines.lock().unwrap_or_else(|e| e.into_inner()).len()
     }
 
     /// Check if buffer is empty
     pub fn is_empty(&self) -> bool {
-        self.lines.lock().unwrap().is_empty()
+        self.lines
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .is_empty()
     }
 
     /// Clear the buffer
     pub fn clear(&self) {
-        let mut lines = self.lines.lock().unwrap();
-        let mut current = self.current_bytes.lock().unwrap();
+        let mut lines = self.lines.lock().unwrap_or_else(|e| e.into_inner());
+        let mut current = self.current_bytes.lock().unwrap_or_else(|e| e.into_inner());
         lines.clear();
         *current = 0;
     }
 
     /// Get approximate byte count
     pub fn byte_count(&self) -> usize {
-        *self.current_bytes.lock().unwrap()
+        *self.current_bytes.lock().unwrap_or_else(|e| e.into_inner())
     }
 }
 
