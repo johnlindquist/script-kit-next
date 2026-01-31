@@ -1808,20 +1808,8 @@ impl Render for ScriptListApp {
             self.filter_perf_start = None;
         }
 
-        // Get vibrancy background color matching POC approach
-        // POC uses rgba(0xFAFAFAD9) = #FAFAFA at 85% opacity
-        let vibrancy_bg = {
-            let opacity_val = if self.theme.has_dark_colors() {
-                0.37
-            } else {
-                0.85
-            };
-            let bg_hex = self.theme.colors.background.main;
-            rgba(crate::ui_foundation::hex_to_rgba_with_opacity(
-                bg_hex,
-                opacity_val,
-            ))
-        };
+        // Get vibrancy background - tints the blur effect with theme color
+        let vibrancy_bg = crate::ui_foundation::get_window_vibrancy_background();
 
         div()
             .w_full()

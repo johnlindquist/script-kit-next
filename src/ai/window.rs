@@ -4054,12 +4054,16 @@ impl Render for AiApp {
         // NOTE: Shadow disabled for vibrancy - shadows on transparent elements cause gray fill
         // The vibrancy effect requires no shadow on transparent elements
 
+        // Get vibrancy background - tints the blur effect with theme color
+        let vibrancy_bg = crate::ui_foundation::get_window_vibrancy_background();
+
         div()
             .relative() // Required for absolutely positioned sidebar toggle
             .flex()
             .flex_row()
             .size_full()
-            // NO .bg() - gpui-component Root provides vibrancy background
+            // Apply vibrancy background like POC does - Root no longer provides this
+            .bg(vibrancy_bg)
             // NOTE: No shadow - shadows on transparent elements cause gray fill with vibrancy
             .text_color(cx.theme().foreground)
             .track_focus(&self.focus_handle)
