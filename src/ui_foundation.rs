@@ -88,6 +88,47 @@ pub fn hex_to_hsla_with_alpha(hex: u32, alpha: f32) -> Hsla {
     }
 }
 
+/// Opacity for vibrancy window backgrounds in dark mode.
+/// Lower value (37%) allows more blur to show through while maintaining readability.
+pub const VIBRANCY_DARK_OPACITY: f32 = 0.37;
+
+/// Opacity for vibrancy window backgrounds in light mode.
+/// Higher value (85%) needed for visibility - matches POC's rgba(0xFAFAFAD9).
+pub const VIBRANCY_LIGHT_OPACITY: f32 = 0.85;
+
+/// Get the vibrancy background for window root containers.
+///
+/// This is used by the main window outer div to tint the macOS blur effect with the
+/// theme's background color. Each window (main, AI, Notes) must call this to apply
+/// the semi-transparent background that filters the vibrancy blur.
+///
+/// **NOTE:** Root no longer provides this background (was removed for vibrancy support).
+/// Windows must explicitly apply this to their outermost container div.
+///
+/// # Returns
+/// An Rgba color with appropriate opacity for the current theme mode:
+/// - Light mode: 85% opacity (matches POC's proven appearance)
+/// - Dark mode: 37% opacity (more blur visibility)
+///
+/// # Example
+/// ```ignore
+/// let vibrancy_bg = get_window_vibrancy_background();
+/// div()
+///     .size_full()
+///     .bg(vibrancy_bg)  // Tints the blur effect with theme color
+///     .child(content)
+/// ```
+pub fn get_window_vibrancy_background() -> Rgba {
+    let theme = crate::theme::load_theme();
+    let opacity = if theme.has_dark_colors() {
+        VIBRANCY_DARK_OPACITY
+    } else {
+        VIBRANCY_LIGHT_OPACITY
+    };
+    let bg_hex = theme.colors.background.main;
+    gpui::rgba(hex_to_rgba_with_opacity(bg_hex, opacity))
+}
+
 /// Get the background color for vibrancy-aware containers.
 ///
 /// **CRITICAL VIBRANCY PATTERN:** When vibrancy is enabled, content divs should NOT

@@ -1769,16 +1769,17 @@ impl Render for NotesApp {
         // Raycast-style single-note view: no sidebar, editor fills full width
         // Track window hover for traffic lights visibility
 
-        // NOTE: Do NOT add .bg() here - gpui-component Root already provides
-        // .bg(cx.theme().background) with vibrancy alpha. Adding another semi-transparent
-        // background would compound opacity and hide the blur effect.
+        // Get vibrancy background - tints the blur effect with theme color
+        let vibrancy_bg = crate::ui_foundation::get_window_vibrancy_background();
+
         div()
             .id("notes-window-root")
             .flex()
             .flex_col()
             .size_full()
             .relative()
-            // NO .bg() - gpui-component Root provides vibrancy background
+            // Apply vibrancy background like POC does - Root no longer provides this
+            .bg(vibrancy_bg)
             // Shadow disabled for vibrancy - shadows on transparent elements cause gray fill
             .text_color(cx.theme().foreground)
             .track_focus(&self.focus_handle)
