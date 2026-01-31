@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! Keyword trigger matching module
 //!
 //! This module provides a trigger detection system that buffers typed characters

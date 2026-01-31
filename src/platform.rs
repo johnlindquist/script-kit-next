@@ -537,6 +537,7 @@ pub fn activate_main_window() {
 }
 
 #[cfg(not(target_os = "macos"))]
+#[allow(dead_code)] // Used conditionally from actions/window.rs on macOS
 pub fn activate_main_window() {
     logging::log(
         "PANEL",
@@ -1505,7 +1506,9 @@ pub unsafe fn configure_actions_popup_window(window: id) {
     );
 }
 
+/// Configure Actions popup window with macOS native panel vibrancy
 #[cfg(not(target_os = "macos"))]
+#[allow(dead_code)]
 pub fn configure_actions_popup_window(_window: *mut std::ffi::c_void) {
     // No-op on non-macOS platforms
 }
@@ -1593,6 +1596,7 @@ pub unsafe fn configure_secondary_window_vibrancy(window: id, window_name: &str)
 }
 
 #[cfg(not(target_os = "macos"))]
+#[allow(dead_code)]
 pub fn configure_secondary_window_vibrancy(_window: *mut std::ffi::c_void, _window_name: &str) {
     // No-op on non-macOS platforms
 }
@@ -1679,6 +1683,7 @@ pub fn primary_screen_height() -> Option<f64> {
 }
 
 #[cfg(not(target_os = "macos"))]
+#[allow(dead_code)]
 pub fn primary_screen_height() -> Option<f64> {
     // Fallback for non-macOS
     Some(1080.0)

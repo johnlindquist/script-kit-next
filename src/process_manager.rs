@@ -18,7 +18,6 @@ use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::PathBuf;
-use std::process::Command;
 use std::sync::{LazyLock, RwLock};
 use sysinfo::{Pid, System};
 

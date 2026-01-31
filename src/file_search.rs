@@ -877,8 +877,6 @@ pub fn reveal_in_finder(path: &str) -> Result<(), String> {
 /// Preview a file using Quick Look (macOS)
 #[allow(dead_code)]
 pub fn quick_look(path: &str) -> Result<(), String> {
-    use std::process::Command;
-
     #[cfg(target_os = "macos")]
     {
         Command::new("qlmanage")
@@ -898,8 +896,6 @@ pub fn quick_look(path: &str) -> Result<(), String> {
 /// Show the "Open With" dialog for a file (macOS)
 #[allow(dead_code)]
 pub fn open_with(path: &str) -> Result<(), String> {
-    use std::process::Command;
-
     #[cfg(target_os = "macos")]
     {
         // Use AppleScript to trigger the "Open With" menu
@@ -928,8 +924,6 @@ pub fn open_with(path: &str) -> Result<(), String> {
 /// Show the Get Info window for a file in Finder (macOS)
 #[allow(dead_code)]
 pub fn show_info(path: &str) -> Result<(), String> {
-    use std::process::Command;
-
     #[cfg(target_os = "macos")]
     {
         // Use AppleScript to open the Get Info window

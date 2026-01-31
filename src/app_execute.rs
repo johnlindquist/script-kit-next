@@ -612,6 +612,7 @@ impl ScriptListApp {
 
                     AiCommandType::SendSelectedTextToAi => {
                         // Get selected text and send to AI
+                        #[cfg(target_os = "macos")]
                         match crate::selected_text::get_selected_text() {
                             Ok(text) if !text.is_empty() => {
                                 let message = format!(
@@ -653,6 +654,19 @@ impl ScriptListApp {
                                 );
                                 cx.notify();
                             }
+                        }
+
+                        #[cfg(not(target_os = "macos"))]
+                        {
+                            // Windows: selected text not implemented yet
+                            self.toast_manager.push(
+                                components::toast::Toast::info(
+                                    "Selected text feature not available on Windows yet.",
+                                    &self.theme,
+                                )
+                                .duration_ms(Some(3000)),
+                            );
+                            cx.notify();
                         }
                     }
 
@@ -790,7 +804,9 @@ impl ScriptListApp {
 
                 match cmd_type {
                     PermissionCommandType::CheckPermissions => {
+                        #[cfg(target_os = "macos")]
                         let status = permissions_wizard::check_all_permissions();
+                        #[cfg(target_os = "macos")]
                         if status.all_granted() {
                             self.toast_manager.push(
                                 components::toast::Toast::success(
@@ -816,42 +832,69 @@ impl ScriptListApp {
                         cx.notify();
                     }
                     PermissionCommandType::RequestAccessibility => {
-                        let granted = permissions_wizard::request_accessibility_permission();
-                        if granted {
+                        #[cfg(target_os = "macos")]
+                        {
+                            let granted = permissions_wizard::request_accessibility_permission();
+                            if granted {
+                                self.toast_manager.push(
+                                    components::toast::Toast::success(
+                                        "Accessibility permission granted!",
+                                        &self.theme,
+                                    )
+                                    .duration_ms(Some(3000)),
+                                );
+                            } else {
+                                self.toast_manager.push(
+                                    components::toast::Toast::warning(
+                                        "Accessibility permission not granted. Some features may not work.",
+                                        &self.theme,
+                                    )
+                                    .duration_ms(Some(5000)),
+                                );
+                            }
+                        }
+                        #[cfg(not(target_os = "macos"))]
+                        {
                             self.toast_manager.push(
-                                components::toast::Toast::success(
-                                    "Accessibility permission granted!",
+                                components::toast::Toast::info(
+                                    "Permission management not available on Windows",
                                     &self.theme,
                                 )
                                 .duration_ms(Some(3000)),
-                            );
-                        } else {
-                            self.toast_manager.push(
-                                components::toast::Toast::warning(
-                                    "Accessibility permission not granted. Some features may not work.",
-                                    &self.theme,
-                                )
-                                .duration_ms(Some(5000)),
                             );
                         }
                         cx.notify();
                     }
                     PermissionCommandType::OpenAccessibilitySettings => {
-                        if let Err(e) = permissions_wizard::open_accessibility_settings() {
-                            logging::log(
-                                "ERROR",
-                                &format!("Failed to open accessibility settings: {}", e),
-                            );
+                        #[cfg(target_os = "macos")]
+                        {
+                            if let Err(e) = permissions_wizard::open_accessibility_settings() {
+                                logging::log(
+                                    "ERROR",
+                                    &format!("Failed to open accessibility settings: {}", e),
+                                );
+                                self.toast_manager.push(
+                                    components::toast::Toast::error(
+                                        format!("Failed to open settings: {}", e),
+                                        &self.theme,
+                                    )
+                                    .duration_ms(Some(5000)),
+                                );
+                                cx.notify();
+                            } else {
+                                self.close_and_reset_window(cx);
+                            }
+                        }
+                        #[cfg(not(target_os = "macos"))]
+                        {
                             self.toast_manager.push(
-                                components::toast::Toast::error(
-                                    format!("Failed to open settings: {}", e),
+                                components::toast::Toast::info(
+                                    "Accessibility settings not available on Windows",
                                     &self.theme,
                                 )
-                                .duration_ms(Some(5000)),
+                                .duration_ms(Some(3000)),
                             );
                             cx.notify();
-                        } else {
-                            self.close_and_reset_window(cx);
                         }
                     }
                 }

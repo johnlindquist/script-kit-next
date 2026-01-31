@@ -35,6 +35,9 @@
 //! let menu_items = get_cached_menu_items();
 //! ```
 
+n// This entire module is macOS-only
+#![cfg(target_os = "macos")]
+
 use crate::logging;
 use crate::menu_bar::{get_menu_bar_for_pid, MenuBarItem};
 use parking_lot::RwLock;

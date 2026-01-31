@@ -7,7 +7,6 @@
 //! - Auto-closes when app loses focus
 //! - Shares the ActionsDialog entity with the main app for keyboard routing
 
-use crate::platform;
 use crate::theme;
 use crate::window_resize::layout::FOOTER_HEIGHT;
 use gpui::{
@@ -163,7 +162,8 @@ impl Render for ActionsWindow {
                             callback(cx);
                         }
                         // Activate the main window so it can receive focus
-                        platform::activate_main_window();
+                        #[cfg(target_os = "macos")]
+                        crate::platform::activate_main_window();
                         // Defer window removal to give the main window time to become key
                         window.defer(cx, |window, _cx| {
                             window.remove_window();
@@ -177,7 +177,8 @@ impl Render for ActionsWindow {
                         callback(cx);
                     }
                     // Activate the main window so it can receive focus
-                    platform::activate_main_window();
+                    #[cfg(target_os = "macos")]
+                    crate::platform::activate_main_window();
                     // Defer window removal to give the main window time to become key
                     // and process the pending focus. This matches how close_actions_popup
                     // uses cx.spawn() to close the window asynchronously.

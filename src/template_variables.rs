@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! Centralized Template Variable Substitution Module
 //!
 //! Provides a consistent, well-tested system for variable substitution in templates

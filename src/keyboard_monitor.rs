@@ -21,6 +21,9 @@
 //! monitor.stop();
 //! ```
 
+n// This entire module is macOS-only
+#![cfg(target_os = "macos")]
+
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};

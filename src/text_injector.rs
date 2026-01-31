@@ -22,6 +22,9 @@
 //!
 //! Requires Accessibility permission in System Preferences > Privacy & Security > Accessibility
 
+// This entire module is macOS-only
+#![cfg(target_os = "macos")]
+
 use anyhow::{Context, Result};
 use arboard::Clipboard;
 use std::thread;
