@@ -820,8 +820,8 @@ impl ScriptListApp {
             design_colors.background_selected
         };
 
-        // NOTE: No .bg() - gpui-component Root provides vibrancy background
-        // Adding a background here causes double-layering and gray tint in light mode
+        // NOTE: No .bg() here - Root provides vibrancy background for ALL content
+        // This ensures main menu, AI chat, and all prompts have consistent styling
 
         let mut main_div = div()
             .flex()
@@ -829,7 +829,6 @@ impl ScriptListApp {
             // NOTE: No shadow - shadows on transparent elements cause gray fill with vibrancy
             .w_full()
             .h_full()
-            // NO .bg() - Root handles vibrancy background (same as AI window)
             .text_color(rgb(text_primary))
             .font_family(font_family)
             .key_context("script_list")

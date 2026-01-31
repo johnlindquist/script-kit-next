@@ -52,20 +52,21 @@ pub fn map_scriptkit_to_gpui_theme(sk_theme: &Theme, is_dark: bool) -> ThemeColo
     };
 
     // ╔════════════════════════════════════════════════════════════════════════════╗
-    // ║ VIBRANCY BACKGROUND - TRANSPARENT FOR gpui_component::Root                 ║
+    // ║ VIBRANCY BACKGROUND - CONSISTENT FOR ALL CONTENT IN WINDOW                 ║
     // ╠════════════════════════════════════════════════════════════════════════════╣
-    // ║ CRITICAL: gpui_component::Root applies .bg(theme.background) on ALL        ║
-    // ║ content. If this is semi-transparent, it STACKS with our shell background, ║
-    // ║ causing a gray tint instead of clean white vibrancy.                       ║
+    // ║ gpui_component::Root applies .bg(theme.background) on ALL content.         ║
+    // ║ This is the SINGLE SOURCE OF TRUTH for window background color.            ║
     // ║                                                                            ║
-    // ║ Solution: Set Root's background to TRANSPARENT when vibrancy is enabled.   ║
-    // ║ The actual background comes from ShellStyleCache::frame_bg which uses      ║
-    // ║ direct RGBA like the POC (rgba(0xFAFAFAD9) for light mode).               ║
+    // ║ For vibrancy: Use semi-transparent background that works with blur.        ║
+    // ║ - Light mode: Higher opacity (0.85) for clean white appearance             ║
+    // ║ - Dark mode: Lower opacity (0.37) for visible blur effect                  ║
     // ╚════════════════════════════════════════════════════════════════════════════╝
     let main_bg = if vibrancy_enabled {
-        // TRANSPARENT - let shell's frame_bg handle the background
-        // This prevents double-layering that causes gray tint
-        hsla(0.0, 0.0, 0.0, 0.0)
+        // Semi-transparent vibrancy background
+        // Light mode needs higher opacity to appear white/solid, dark needs lower for blur
+        let bg_alpha = if is_dark { 0.37 } else { 0.92 };
+        let base = hex_to_hsla(colors.background.main);
+        hsla(base.h, base.s, base.l, bg_alpha)
     } else {
         hex_to_hsla(colors.background.main) // Fully opaque when vibrancy disabled
     };
