@@ -60,20 +60,25 @@ impl ShellStyleCache {
         };
         let frame_bg = gpui::rgba(hex_to_rgba_with_opacity(colors.background.main, bg_alpha));
 
-        // Standard drop shadow
-        let shadow = gpui::BoxShadow {
-            color: Hsla {
-                h: 0.0,
-                s: 0.0,
-                l: 0.0,
-                a: 0.4,
-            },
-            offset: gpui::point(px(0.0), px(4.0)),
-            blur_radius: px(20.0),
-            spread_radius: px(0.0),
+        // Shadows: DISABLED when vibrancy is enabled
+        // Shadows on transparent elements block the vibrancy blur effect,
+        // causing a gray fill appearance. The POC doesn't use any shadows.
+        let shadows = if theme.is_vibrancy_enabled() {
+            vec![] // No shadows for vibrancy - matches POC behavior
+        } else {
+            // Standard drop shadow for non-vibrancy mode
+            vec![gpui::BoxShadow {
+                color: Hsla {
+                    h: 0.0,
+                    s: 0.0,
+                    l: 0.0,
+                    a: 0.4,
+                },
+                offset: gpui::point(px(0.0), px(4.0)),
+                blur_radius: px(20.0),
+                spread_radius: px(0.0),
+            }]
         };
-
-        let shadows = vec![shadow];
 
         Self {
             theme_revision: revision,

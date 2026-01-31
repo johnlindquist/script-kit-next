@@ -331,12 +331,12 @@ impl RenderOnce for Toast {
         let details_expanded = self.details_expanded;
         let transition = self.transition;
 
+        // Check vibrancy to conditionally apply shadow
+        let vibrancy_enabled = crate::theme::load_theme().is_vibrancy_enabled();
+
         // Main toast container with transition support
-        let mut toast = div()
-            .id(ElementId::Name(SharedString::from(format!(
-                "toast-{}",
-                self.message
-            ))))
+        // Apply shadow conditionally BEFORE .id() to avoid Stateful<Div> type issues
+        let base_toast = div()
             .flex()
             .flex_col()
             .w_full()
@@ -344,8 +344,20 @@ impl RenderOnce for Toast {
             .bg(rgba((colors.background << 8) | 0xF0)) // 94% opacity
             .border_l(px(4.)) // Keep borders as px
             .border_color(rgb(colors.border))
-            .rounded(px(8.)) // Keep border-radius as px
-            .shadow_md()
+            .rounded(px(8.)); // Keep border-radius as px
+
+        // Only apply shadow when vibrancy is disabled - shadows block blur
+        let styled_toast = if vibrancy_enabled {
+            base_toast
+        } else {
+            base_toast.shadow_md()
+        };
+
+        let mut toast = styled_toast
+            .id(ElementId::Name(SharedString::from(format!(
+                "toast-{}",
+                self.message
+            ))))
             .overflow_hidden()
             // Apply transition opacity
             .opacity(transition.opacity.value())

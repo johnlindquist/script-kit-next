@@ -499,7 +499,13 @@ impl NotesActionsPanel {
     }
 
     /// Create box shadow for the overlay
+    /// Returns empty vec when vibrancy is enabled - shadows block vibrancy blur
     fn create_shadow() -> Vec<BoxShadow> {
+        let sk_theme = crate::theme::load_theme();
+        if sk_theme.is_vibrancy_enabled() {
+            return vec![]; // No shadows for vibrancy - matches POC behavior
+        }
+
         vec![
             BoxShadow {
                 color: Hsla {

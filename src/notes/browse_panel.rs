@@ -447,16 +447,23 @@ impl Render for BrowsePanel {
                 }),
             )
             // Panel container
-            .child(
+            .child({
+                // Check vibrancy to conditionally apply shadow
+                // Shadows on transparent elements block vibrancy blur
+                let sk_theme = crate::theme::load_theme();
+                let vibrancy_enabled = sk_theme.is_vibrancy_enabled();
+
                 div()
                     .id("browse-panel")
                     .w(px(500.))
                     .max_h(px(400.))
-                    .bg(Self::get_vibrancy_background(cx)) // Vibrancy-aware background
+                    // NO .bg() here - backdrop overlay already provides visual separation
+                    // Double-layering causes opacity to compound and makes things darker
                     .border_1()
                     .border_color(cx.theme().border)
                     .rounded_lg()
-                    .shadow_lg()
+                    // Only apply shadow when vibrancy is disabled - matches POC behavior
+                    .when(!vibrancy_enabled, |d| d.shadow_lg())
                     .flex()
                     .flex_col()
                     .overflow_hidden()
@@ -492,8 +499,8 @@ impl Render for BrowsePanel {
                                 let _ = cx;
                             }))
                             .child(self.render_list(cx)),
-                    ),
-            )
+                    )
+            })
     }
 }
 

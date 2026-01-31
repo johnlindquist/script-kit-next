@@ -67,8 +67,22 @@ pub fn map_scriptkit_to_gpui_theme(sk_theme: &Theme, is_dark: bool) -> ThemeColo
         // This controls how much blur shows through the window background
         // Fallback value (0.85) matches the vibrancy POC (src/bin/vibrancy-poc.rs):
         // - POC uses rgba(0xFAFAFAD9) = #FAFAFA at 85% opacity (0xD9/255 = 0.851)
-        // - Same value works well for both dark and light modes
-        let bg_alpha = opacity.vibrancy_background.unwrap_or(0.85);
+        //
+        // IMPORTANT: Light mode requires higher opacity for readability.
+        // User theme.json may have low dark mode values (e.g., 0.3) that would
+        // make light mode backgrounds too transparent. We enforce a minimum
+        // of 0.85 for light mode to ensure text remains readable.
+        let bg_alpha = if is_dark {
+            // Dark mode: use user's value or default
+            opacity.vibrancy_background.unwrap_or(0.85)
+        } else {
+            // Light mode: ensure minimum 0.85 opacity for visibility
+            // User's value is clamped to at least 0.85 for light mode
+            opacity
+                .vibrancy_background
+                .map(|v| v.max(0.85))
+                .unwrap_or(0.85)
+        };
 
         crate::logging::log(
             "THEME",
@@ -208,9 +222,9 @@ pub fn sync_gpui_component_theme(cx: &mut App) {
     // Load Script Kit's theme
     let sk_theme = load_theme();
 
-    // Determine if theme has dark colors (based on actual color luminance)
-    // This ensures tint_alpha and ThemeMode match the actual colors being displayed
-    let is_dark = sk_theme.has_dark_colors();
+    // Determine if we're in dark mode based on SYSTEM appearance (not theme colors)
+    // This ensures correct rendering when user switches between light/dark mode in macOS
+    let is_dark = sk_theme.is_dark_mode();
 
     // Map Script Kit colors to gpui-component ThemeColor with appearance awareness
     let custom_colors = map_scriptkit_to_gpui_theme(&sk_theme, is_dark);
@@ -221,7 +235,7 @@ pub fn sync_gpui_component_theme(cx: &mut App) {
     // Apply the custom colors and fonts to the global theme
     let theme = GpuiTheme::global_mut(cx);
     theme.colors = custom_colors;
-    // Set ThemeMode based on actual theme colors
+    // Set ThemeMode based on system appearance
     theme.mode = if is_dark {
         ThemeMode::Dark
     } else {
