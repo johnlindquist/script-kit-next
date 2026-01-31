@@ -820,12 +820,16 @@ impl ScriptListApp {
             design_colors.background_selected
         };
 
+        // NOTE: No .bg() - gpui-component Root provides vibrancy background
+        // Adding a background here causes double-layering and gray tint in light mode
+
         let mut main_div = div()
             .flex()
             .flex_col()
             // NOTE: No shadow - shadows on transparent elements cause gray fill with vibrancy
             .w_full()
             .h_full()
+            // NO .bg() - Root handles vibrancy background (same as AI window)
             .text_color(rgb(text_primary))
             .font_family(font_family)
             .key_context("script_list")
@@ -1016,6 +1020,7 @@ impl ScriptListApp {
                 text_muted: footer_text_muted,
                 border: footer_border,
                 background: footer_background,
+                is_light_mode: !self.theme.is_dark_mode(),
             };
 
             // Get the primary action label from the selected item
@@ -1029,10 +1034,24 @@ impl ScriptListApp {
                 .map(|result| result.get_default_action_text())
                 .unwrap_or("Run");
 
-            PromptFooter::new(
-                PromptFooterConfig::default().primary_label(primary_label),
-                footer_colors,
-            )
+            // Build footer config with optional opacity indicator for light mode
+            let mut footer_config = PromptFooterConfig::default().primary_label(primary_label);
+
+            // Show opacity and vibrancy info in light mode (only when SCRIPT_KIT_WINDOW_TWEAKER=1)
+            let window_tweaker_enabled = std::env::var("SCRIPT_KIT_WINDOW_TWEAKER")
+                .map(|v| v == "1")
+                .unwrap_or(false);
+            if window_tweaker_enabled && !self.theme.is_dark_mode() {
+                let opacity_percent = (self.theme.get_opacity().main * 100.0).round() as i32;
+                let material = platform::get_current_material_name();
+                let appearance = platform::get_current_appearance_name();
+                footer_config = footer_config.info_label(format!(
+                    "{}% | {} | {} | ⌘-/+ ⌘M ⌘⇧A",
+                    opacity_percent, material, appearance
+                ));
+            }
+
+            PromptFooter::new(footer_config, footer_colors)
             .on_primary_click(Box::new(move |_, _window, cx| {
                 if let Some(app) = handle_run.upgrade() {
                     app.update(cx, |this, cx| {
