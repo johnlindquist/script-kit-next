@@ -2575,19 +2575,34 @@ fn main() {
 
         // Config reload watcher - watches ~/.scriptkit/kit/config.ts for changes
         // Only spawn if watcher started successfully
+        // Uses adaptive polling: starts at 200ms, increases to 2s when idle
         if config_watcher_ok {
             let app_entity_for_config = app_entity.clone();
             cx.spawn(async move |cx: &mut gpui::AsyncApp| {
+                let mut idle_count = 0u32;
                 loop {
-                    Timer::after(std::time::Duration::from_millis(200)).await;
+                    // Adaptive polling: 200ms when active, up to 2000ms when idle
+                    // After 5 idle checks (1s), increase to 500ms
+                    // After 10 idle checks (3.5s), increase to 2000ms
+                    let poll_interval = if idle_count < 5 {
+                        200
+                    } else if idle_count < 10 {
+                        500
+                    } else {
+                        2000
+                    };
+                    Timer::after(std::time::Duration::from_millis(poll_interval)).await;
 
                     if config_rx.try_recv().is_ok() {
+                        idle_count = 0; // Reset on activity
                         logging::log("APP", "Config file changed, reloading");
                         let _ = cx.update(|cx| {
                             app_entity_for_config.update(cx, |view, ctx| {
                                 view.update_config(ctx);
                             });
                         });
+                    } else {
+                        idle_count = idle_count.saturating_add(1);
                     }
                 }
             }).detach();
@@ -2597,17 +2612,29 @@ fn main() {
         // Uses incremental updates for scriptlet files, full reload for scripts
         // Also re-scans for scheduled scripts to pick up new/modified schedules
         // Only spawn if watcher started successfully
+        // Uses adaptive polling: starts at 200ms, increases to 2s when idle
         if script_watcher_ok {
             let app_entity_for_scripts = app_entity.clone();
             let scheduler_for_scripts = scheduler.clone();
             cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                 use watcher::ScriptReloadEvent;
+                let mut idle_count = 0u32;
 
                 loop {
-                    Timer::after(std::time::Duration::from_millis(200)).await;
+                    // Adaptive polling: 200ms when active, up to 2000ms when idle
+                    let poll_interval = if idle_count < 5 {
+                        200
+                    } else if idle_count < 10 {
+                        500
+                    } else {
+                        2000
+                    };
+                    Timer::after(std::time::Duration::from_millis(poll_interval)).await;
 
                     // Drain all pending events
+                    let mut had_events = false;
                     while let Ok(event) = script_rx.try_recv() {
+                        had_events = true;
                         match event {
                             ScriptReloadEvent::FileChanged(path) | ScriptReloadEvent::FileCreated(path) => {
                                 // Check if it's a scriptlet file (markdown in scriptlets directory)
@@ -2673,6 +2700,13 @@ fn main() {
                                 });
                             }
                         }
+                    }
+
+                    // Update idle count for adaptive polling
+                    if had_events {
+                        idle_count = 0;
+                    } else {
+                        idle_count = idle_count.saturating_add(1);
                     }
                 }
             }).detach();
