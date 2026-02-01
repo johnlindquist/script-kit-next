@@ -3542,8 +3542,9 @@ fn main() {
                 logging::log("TRAY", "Tray menu event handler started");
 
                 loop {
-                    // Poll for tray menu events every 100ms
-                    Timer::after(std::time::Duration::from_millis(100)).await;
+                    // Poll for tray menu events every 250ms
+                    // 250ms is responsive enough for menu clicks while reducing CPU wakeups
+                    Timer::after(std::time::Duration::from_millis(250)).await;
 
                     // Check for menu events
                     if let Ok(event) = tray_mgr.menu_event_receiver().try_recv() {
@@ -3665,8 +3666,9 @@ fn main() {
         // mutexes, and other non-async-signal-safe functions.
         cx.spawn(async move |cx: &mut gpui::AsyncApp| {
             loop {
-                // Check every 100ms for shutdown signal
-                Timer::after(std::time::Duration::from_millis(100)).await;
+                // Check every 500ms for shutdown signal
+                // 500ms is acceptable latency for graceful shutdown while reducing CPU wakeups
+                Timer::after(std::time::Duration::from_millis(500)).await;
 
                 if SHUTDOWN_REQUESTED.load(Ordering::SeqCst) {
                     logging::log("SHUTDOWN", "Shutdown signal detected, performing graceful cleanup");

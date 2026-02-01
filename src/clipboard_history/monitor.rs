@@ -140,14 +140,15 @@ fn clipboard_monitor_loop(stop_flag: Arc<AtomicBool>) -> Result<()> {
     let poll_interval = Duration::from_millis(POLL_INTERVAL_MS);
 
     // Reduced poll interval when using change count (cheap operation)
-    let fast_poll_interval = Duration::from_millis(50);
+    // 200ms is responsive enough for clipboard while reducing CPU from 20 to 5 wakeups/sec
+    let fast_poll_interval = Duration::from_millis(200);
 
     // Check if we have efficient change detection available
     let has_change_detection = change_detector.has_changed().is_some();
 
     info!(
         poll_interval_ms = if has_change_detection {
-            50
+            200
         } else {
             POLL_INTERVAL_MS
         },
