@@ -12,8 +12,54 @@
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
+use std::sync::{Mutex, OnceLock};
 
 use anyhow::{Context, Result};
+use tracing::debug;
+
+// ============================================================================
+// Alias overrides cache (avoids file I/O in render paths)
+// ============================================================================
+
+/// Cache for loaded alias overrides to avoid file I/O on every render
+static ALIAS_OVERRIDES_CACHE: OnceLock<Mutex<Option<HashMap<String, String>>>> = OnceLock::new();
+
+/// Get cached alias overrides (for use in render code)
+///
+/// This avoids file I/O on every render call. The cache is invalidated
+/// when aliases are saved via `save_alias_override()` or
+/// `remove_alias_override()`, or manually via `invalidate_alias_cache()`.
+pub fn get_cached_alias_overrides() -> HashMap<String, String> {
+    let cache = ALIAS_OVERRIDES_CACHE.get_or_init(|| Mutex::new(None));
+
+    let mut guard = match cache.lock() {
+        Ok(g) => g,
+        Err(_) => return HashMap::new(),
+    };
+
+    // If cache is populated, return it
+    if let Some(ref cached) = *guard {
+        return cached.clone();
+    }
+
+    // Cache miss - load from disk and cache
+    let overrides = load_alias_overrides().unwrap_or_default();
+    *guard = Some(overrides.clone());
+    debug!("Alias overrides cache populated");
+    overrides
+}
+
+/// Invalidate the alias overrides cache
+///
+/// Call this when the aliases file changes externally.
+pub fn invalidate_alias_cache() {
+    if let Some(cache) = ALIAS_OVERRIDES_CACHE.get() {
+        if let Ok(mut guard) = cache.lock() {
+            *guard = None;
+            debug!("Alias overrides cache invalidated");
+        }
+    }
+}
 
 /// Get the default path for alias overrides.
 ///
@@ -83,6 +129,9 @@ pub fn save_alias_override(command_id: &str, alias: &str) -> Result<()> {
     fs::write(&path, content)
         .with_context(|| format!("Failed to write aliases file: {}", path.display()))?;
 
+    // Invalidate cache so next render picks up changes
+    invalidate_alias_cache();
+
     Ok(())
 }
 
@@ -116,6 +165,9 @@ pub fn remove_alias_override(command_id: &str) -> Result<()> {
 
     fs::write(&path, content)
         .with_context(|| format!("Failed to write aliases file: {}", path.display()))?;
+
+    // Invalidate cache so next render picks up changes
+    invalidate_alias_cache();
 
     Ok(())
 }

@@ -132,10 +132,10 @@ impl ScriptListApp {
                     return Some(hotkey.to_display_string());
                 }
                 // Then check shortcut overrides file (where ShortcutRecorder saves)
-                if let Ok(overrides) = crate::shortcuts::load_shortcut_overrides() {
-                    if let Some(shortcut) = overrides.get(&command_id) {
-                        return Some(shortcut.to_string());
-                    }
+                // Uses cached version to avoid file I/O on every render
+                let overrides = crate::shortcuts::get_cached_shortcut_overrides();
+                if let Some(shortcut) = overrides.get(&command_id) {
+                    return Some(shortcut.to_string());
                 }
                 None
             })
@@ -1275,13 +1275,12 @@ impl ScriptListApp {
                         // Built-ins use their id as identifier
                         // is_script=false: no editable file, hide "Edit Script" etc.
                         // Look up shortcut and alias from overrides for dynamic action menu
+                        // Uses cached versions to avoid file I/O on every render
                         let command_id = format!("builtin/{}", &m.entry.id);
-                        let shortcut = crate::shortcuts::load_shortcut_overrides()
-                            .ok()
-                            .and_then(|o| o.get(&command_id).map(|s| s.to_string()));
-                        let alias = crate::aliases::load_alias_overrides()
-                            .ok()
-                            .and_then(|o| o.get(&command_id).cloned());
+                        let shortcut_overrides = crate::shortcuts::get_cached_shortcut_overrides();
+                        let alias_overrides = crate::aliases::get_cached_alias_overrides();
+                        let shortcut = shortcut_overrides.get(&command_id).map(|s| s.to_string());
+                        let alias = alias_overrides.get(&command_id).cloned();
                         Some(
                             ScriptInfo::with_all(
                                 &m.entry.name,
@@ -1298,17 +1297,16 @@ impl ScriptListApp {
                         // Apps use their path as identifier
                         // is_script=false: apps aren't editable scripts
                         // Look up shortcut and alias from overrides for dynamic action menu
+                        // Uses cached versions to avoid file I/O on every render
                         let command_id = if let Some(ref bundle_id) = m.app.bundle_id {
                             format!("app/{}", bundle_id)
                         } else {
                             format!("app/{}", m.app.name.to_lowercase().replace(' ', "-"))
                         };
-                        let shortcut = crate::shortcuts::load_shortcut_overrides()
-                            .ok()
-                            .and_then(|o| o.get(&command_id).map(|s| s.to_string()));
-                        let alias = crate::aliases::load_alias_overrides()
-                            .ok()
-                            .and_then(|o| o.get(&command_id).cloned());
+                        let shortcut_overrides = crate::shortcuts::get_cached_shortcut_overrides();
+                        let alias_overrides = crate::aliases::get_cached_alias_overrides();
+                        let shortcut = shortcut_overrides.get(&command_id).map(|s| s.to_string());
+                        let alias = alias_overrides.get(&command_id).cloned();
                         Some(
                             ScriptInfo::with_all(
                                 &m.app.name,
