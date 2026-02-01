@@ -2160,6 +2160,10 @@ fn main() {
         // Initialize confirm dialog key bindings (Escape, Enter, Space)
         confirm::init_confirm_bindings(cx);
 
+        // Initialize the theme cache FIRST (before any render calls)
+        // This ensures get_cached_theme() returns correct data from first render
+        theme::init_theme_cache();
+
         // Sync Script Kit theme with gpui-component's ThemeColor system
         // This ensures all gpui-component widgets use our colors
         theme::sync_gpui_component_theme(cx);

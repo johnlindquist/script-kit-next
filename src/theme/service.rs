@@ -104,6 +104,10 @@ pub fn ensure_theme_service(cx: &mut App) {
                 info!("Theme changed, syncing to all windows");
                 crate::logging::log("THEME", "Theme file changed, broadcasting to all windows");
 
+                // Reload the theme cache FIRST (before syncing)
+                // This ensures get_cached_theme() returns fresh data
+                crate::theme::reload_theme_cache();
+
                 let update_result = cx.update(|cx| {
                     // Re-sync gpui-component theme with updated Script Kit theme
                     crate::theme::sync_gpui_component_theme(cx);

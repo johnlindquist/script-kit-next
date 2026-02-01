@@ -53,6 +53,10 @@ pub use validation::{validate_theme_json, Diagnostic, DiagnosticSeverity, ThemeD
 // Re-export loader functions
 pub use types::load_theme;
 
+// Re-export cached theme access (use in render code instead of load_theme)
+#[allow(unused_imports)]
+pub use types::{get_cached_theme, init_theme_cache, invalidate_theme_cache, reload_theme_cache};
+
 // Re-export appearance cache invalidation (called when system appearance changes)
 pub use types::invalidate_appearance_cache;
 

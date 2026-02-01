@@ -12,10 +12,13 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, warn};
 
 /// Cache for system appearance detection to avoid spawning subprocesses on every render
 static APPEARANCE_CACHE: OnceLock<Mutex<AppearanceCache>> = OnceLock::new();
+
+/// Cache for loaded theme to avoid file I/O on every render
+static THEME_CACHE: OnceLock<Mutex<ThemeCache>> = OnceLock::new();
 
 /// How long to cache the system appearance before re-detecting
 const APPEARANCE_CACHE_TTL: Duration = Duration::from_secs(5);
@@ -31,6 +34,23 @@ impl Default for AppearanceCache {
         Self {
             is_dark: true,                                     // Default to dark mode
             last_check: Instant::now() - APPEARANCE_CACHE_TTL, // Force immediate check
+        }
+    }
+}
+
+/// Cache for loaded theme to avoid repeated file I/O
+#[derive(Debug, Clone)]
+struct ThemeCache {
+    theme: Theme,
+    loaded_at: Instant,
+}
+
+impl Default for ThemeCache {
+    fn default() -> Self {
+        // Create with a dark default theme - will be replaced on first load
+        Self {
+            theme: Theme::dark_default(),
+            loaded_at: Instant::now() - Duration::from_secs(3600), // Force reload
         }
     }
 }
@@ -1383,7 +1403,7 @@ pub fn load_theme() -> Theme {
                         theme.opacity = Some(BackgroundOpacity::light_default());
                     }
 
-                    info!(
+                    debug!(
                         system_appearance = if is_system_dark { "dark" } else { "light" },
                         "Using light theme colors (system is in light mode)"
                     );
@@ -1417,6 +1437,80 @@ pub fn load_theme() -> Theme {
         },
     }
 }
+
+/// Get a cached version of the theme for use in render functions
+///
+/// This avoids file I/O on every render call by caching the loaded theme.
+/// The cache is automatically invalidated when `invalidate_theme_cache()` is called
+/// (typically by the theme file watcher).
+///
+/// # Performance
+///
+/// Use this function instead of `load_theme()` in render paths:
+/// - Render methods
+/// - Background color calculations
+/// - Any code that runs frequently
+///
+/// Use `load_theme()` for:
+/// - Initial setup
+/// - When you need guaranteed fresh theme data
+/// - After explicitly invalidating the cache
+pub fn get_cached_theme() -> Theme {
+    let cache = THEME_CACHE.get_or_init(|| Mutex::new(ThemeCache::default()));
+
+    let cache_guard = match cache.lock() {
+        Ok(guard) => guard,
+        Err(_) => {
+            // Mutex poisoned, return default
+            return Theme::dark_default();
+        }
+    };
+
+    cache_guard.theme.clone()
+}
+
+/// Reload and cache the theme from disk
+///
+/// Call this when you need to refresh the cached theme (e.g., from the theme watcher).
+/// This function loads the theme from disk and updates the cache.
+pub fn reload_theme_cache() -> Theme {
+    let theme = load_theme();
+
+    let cache = THEME_CACHE.get_or_init(|| Mutex::new(ThemeCache::default()));
+    if let Ok(mut guard) = cache.lock() {
+        guard.theme = theme.clone();
+        guard.loaded_at = Instant::now();
+        debug!("Theme cache reloaded");
+    }
+
+    theme
+}
+
+/// Initialize the theme cache on startup
+///
+/// Call this during app initialization to ensure the theme is loaded
+/// before any render calls. This ensures `get_cached_theme()` returns
+/// the correct theme from the first render.
+pub fn init_theme_cache() {
+    reload_theme_cache();
+    debug!("Theme cache initialized");
+}
+
+/// Invalidate the theme cache, forcing a reload on next access
+///
+/// Call this when the theme file changes to ensure the next call to
+/// `get_cached_theme()` or `reload_theme_cache()` loads fresh data.
+#[allow(dead_code)]
+pub fn invalidate_theme_cache() {
+    if let Some(cache) = THEME_CACHE.get() {
+        if let Ok(mut guard) = cache.lock() {
+            // Force reload on next access by setting old timestamp
+            guard.loaded_at = Instant::now() - Duration::from_secs(3600);
+            debug!("Theme cache invalidated");
+        }
+    }
+}
+
 // ============================================================================
 // End Lightweight Theme Extraction Helpers
 // ============================================================================

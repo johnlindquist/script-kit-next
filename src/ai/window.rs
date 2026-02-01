@@ -3730,7 +3730,7 @@ export default {
 
     /// Compute box shadows from theme configuration (called once at construction)
     fn compute_box_shadows() -> Vec<BoxShadow> {
-        let theme = crate::theme::load_theme();
+        let theme = crate::theme::get_cached_theme();
         let shadow_config = theme.get_drop_shadow();
 
         if !shadow_config.enabled {
@@ -3880,7 +3880,7 @@ export default {
     /// Get main background color with vibrancy opacity
     /// Uses Script Kit theme hex colors directly (like main window)
     fn get_vibrancy_background() -> gpui::Rgba {
-        let sk_theme = crate::theme::load_theme();
+        let sk_theme = crate::theme::get_cached_theme();
         let opacity = sk_theme.get_opacity();
         let bg_hex = sk_theme.colors.background.main;
         rgba(crate::ui_foundation::hex_to_rgba_with_opacity(
@@ -3891,7 +3891,7 @@ export default {
 
     /// Get sidebar background color with vibrancy opacity
     fn get_vibrancy_sidebar_background() -> gpui::Rgba {
-        let sk_theme = crate::theme::load_theme();
+        let sk_theme = crate::theme::get_cached_theme();
         let opacity = sk_theme.get_opacity();
         // Use title_bar background for sidebar (slightly different visual hierarchy)
         let bg_hex = sk_theme.colors.background.title_bar;
@@ -3904,7 +3904,7 @@ export default {
 
     /// Get title bar background color with vibrancy opacity
     fn get_vibrancy_title_bar_background() -> gpui::Rgba {
-        let sk_theme = crate::theme::load_theme();
+        let sk_theme = crate::theme::get_cached_theme();
         let opacity = sk_theme.get_opacity();
         let bg_hex = sk_theme.colors.background.main;
         rgba(crate::ui_foundation::hex_to_rgba_with_opacity(
@@ -3919,7 +3919,7 @@ export default {
     /// For light mode: white overlay (keeps content readable on light backgrounds)
     /// 50% opacity (0x80) for good contrast without being too heavy
     fn get_modal_overlay_background() -> gpui::Rgba {
-        let sk_theme = crate::theme::load_theme();
+        let sk_theme = crate::theme::get_cached_theme();
         if sk_theme.has_dark_colors() {
             gpui::rgba(0x00000080) // black at 50% for dark mode
         } else {
