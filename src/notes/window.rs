@@ -21,6 +21,7 @@ use gpui_component::{
 };
 #[cfg(target_os = "macos")]
 use objc::{msg_send, sel, sel_impl};
+use std::ops::Range;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tracing::{debug, info};
@@ -44,6 +45,10 @@ use super::storage;
 
 /// Global handle to the notes window
 static NOTES_WINDOW: std::sync::OnceLock<std::sync::Mutex<Option<gpui::WindowHandle<Root>>>> =
+    std::sync::OnceLock::new();
+
+/// Global handle to the NotesApp entity for quick_capture access
+static NOTES_APP_ENTITY: std::sync::OnceLock<std::sync::Mutex<Option<Entity<NotesApp>>>> =
     std::sync::OnceLock::new();
 
 // NOTE: Theme watching is now centralized in crate::theme::service
@@ -99,6 +104,9 @@ pub struct NotesApp {
 
     /// Whether the formatting toolbar is pinned open
     show_format_toolbar: bool,
+
+    /// Whether the search bar is shown (Cmd+F)
+    show_search: bool,
 
     /// Last known content line count for auto-resize
     last_line_count: usize,
@@ -268,6 +276,7 @@ impl NotesApp {
             window_hovered: false,
             force_hovered: false,
             show_format_toolbar: false,
+            show_search: false,
             last_line_count: initial_line_count,
             initial_height,
             auto_sizing_enabled: true,          // Auto-sizing ON by default
@@ -713,14 +722,64 @@ impl NotesApp {
         }
     }
 
+    /// Compute replacement text and resulting selection for formatting insertion.
+    fn formatting_replacement(
+        value: &str,
+        selection: Range<usize>,
+        prefix: &str,
+        suffix: &str,
+    ) -> (String, Range<usize>) {
+        let mut start = selection.start.min(value.len());
+        let mut end = selection.end.min(value.len());
+        if start > end {
+            std::mem::swap(&mut start, &mut end);
+        }
+
+        debug_assert!(value.is_char_boundary(start));
+        debug_assert!(value.is_char_boundary(end));
+
+        let selected_text = if start == end { "" } else { &value[start..end] };
+
+        let replacement = format!("{}{}{}", prefix, selected_text, suffix);
+        let selection_start = start + prefix.len();
+        let selection_end = if selected_text.is_empty() {
+            selection_start
+        } else {
+            selection_start + selected_text.len()
+        };
+
+        (replacement, selection_start..selection_end)
+    }
+
     /// Insert markdown formatting at cursor position
-    fn insert_formatting(&mut self, prefix: &str, suffix: &str, cx: &mut Context<Self>) {
-        let current = self.editor_state.read(cx).value().to_string();
-        // For simplicity, append to end. A real implementation would insert at cursor.
-        let formatted = format!("{}{}{}", current, prefix, suffix);
-        // Note: We can't directly update with cursor position, so this is simplified
+    ///
+    /// Inserts prefix+suffix at cursor. If text is selected, it gets replaced
+    /// with prefix+suffix via the replace() method.
+    fn insert_formatting(
+        &mut self,
+        prefix: &str,
+        suffix: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        // Get current cursor position before modification
+        let current_value = self.editor_state.read(cx).value().to_string();
+
+        self.editor_state.update(cx, |state, cx| {
+            let value = state.value().to_string();
+            let selection = state.selection();
+            let (replacement, new_selection) =
+                Self::formatting_replacement(&value, selection, prefix, suffix);
+
+            state.replace(&replacement, window, cx);
+            state.set_selection(new_selection.start, new_selection.end, window, cx);
+        });
+
+        // Trigger change detection for autosave
+        self.has_unsaved_changes = true;
+        let _ = current_value; // Prevent unused variable warning
+
         info!(prefix = prefix, "Formatting inserted");
-        let _ = formatted; // Would update editor in full implementation
         cx.notify();
     }
 
@@ -1212,13 +1271,75 @@ impl NotesApp {
         cx.notify();
     }
 
-    /// Render the search input
-    fn render_search(&self, _cx: &mut Context<Self>) -> impl IntoElement {
+    /// Toggle the search bar visibility
+    fn toggle_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.show_search = !self.show_search;
+
+        if self.show_search {
+            // Focus the search input
+            self.search_state.update(cx, |state, cx| {
+                state.focus(window, cx);
+            });
+        } else {
+            // Clear search and refocus editor
+            self.search_state.update(cx, |state, cx| {
+                state.set_value("", window, cx);
+            });
+            self.search_query.clear();
+            self.editor_state.update(cx, |state, cx| {
+                state.focus(window, cx);
+            });
+        }
+
+        cx.notify();
+    }
+
+    /// Render the search input bar (shown when Cmd+F is pressed)
+    fn render_search(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = cx.theme();
+        let has_query = !self.search_query.is_empty();
+        let result_count = if has_query {
+            self.notes
+                .iter()
+                .filter(|n| {
+                    n.content
+                        .to_lowercase()
+                        .contains(&self.search_query.to_lowercase())
+                })
+                .count()
+        } else {
+            self.notes.len()
+        };
+
         div()
             .w_full()
-            .px_2()
-            .py_1()
-            .child(Input::new(&self.search_state).w_full().small())
+            .px_3()
+            .py_2()
+            .flex()
+            .items_center()
+            .gap_2()
+            .border_b_1()
+            .border_color(theme.border)
+            .child(
+                div()
+                    .text_sm()
+                    .text_color(theme.muted_foreground)
+                    .child("🔍"),
+            )
+            .child(
+                div().flex_1().child(
+                    Input::new(&self.search_state)
+                        .w_full()
+                        .small()
+                        .appearance(false),
+                ),
+            )
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(theme.muted_foreground)
+                    .child(format!("{} notes", result_count)),
+            )
     }
 
     /// Render the formatting toolbar
@@ -1233,8 +1354,8 @@ impl NotesApp {
                     .ghost()
                     .xsmall()
                     .label("B")
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.insert_formatting("**", "**", cx);
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.insert_formatting("**", "**", window, cx);
                     })),
             )
             .child(
@@ -1242,8 +1363,8 @@ impl NotesApp {
                     .ghost()
                     .xsmall()
                     .label("I")
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.insert_formatting("_", "_", cx);
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.insert_formatting("_", "_", window, cx);
                     })),
             )
             .child(
@@ -1251,8 +1372,8 @@ impl NotesApp {
                     .ghost()
                     .xsmall()
                     .label("H")
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.insert_formatting("\n## ", "", cx);
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.insert_formatting("\n## ", "", window, cx);
                     })),
             )
             .child(
@@ -1260,8 +1381,8 @@ impl NotesApp {
                     .ghost()
                     .xsmall()
                     .label("•")
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.insert_formatting("\n- ", "", cx);
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.insert_formatting("\n- ", "", window, cx);
                     })),
             )
             .child(
@@ -1269,8 +1390,8 @@ impl NotesApp {
                     .ghost()
                     .xsmall()
                     .label("</>")
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.insert_formatting("`", "`", cx);
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.insert_formatting("`", "`", window, cx);
                     })),
             )
             .child(
@@ -1278,8 +1399,8 @@ impl NotesApp {
                     .ghost()
                     .xsmall()
                     .label("```")
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.insert_formatting("\n```\n", "\n```", cx);
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.insert_formatting("\n```\n", "\n```", window, cx);
                     })),
             )
             .child(
@@ -1287,8 +1408,8 @@ impl NotesApp {
                     .ghost()
                     .xsmall()
                     .label("🔗")
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.insert_formatting("[", "](url)", cx);
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.insert_formatting("[", "](url)", window, cx);
                     })),
             )
     }
@@ -1532,6 +1653,8 @@ impl NotesApp {
             .h_full()
             // NO .bg() - let vibrancy show through from root
             .child(titlebar)
+            // Search bar (Cmd+F to toggle)
+            .when(self.show_search, |d| d.child(self.render_search(cx)))
             // Toolbar hidden by default - only show when pinned
             .when(!is_trash && has_selection && show_toolbar, |d| {
                 d.child(self.render_toolbar(cx))
@@ -1663,7 +1786,7 @@ impl NotesApp {
     /// to show the blur effect behind them. This helper returns the
     /// theme background color with the appropriate opacity from config.
     fn get_vibrancy_background(_cx: &Context<Self>) -> gpui::Rgba {
-        let sk_theme = crate::theme::load_theme();
+        let sk_theme = crate::theme::get_cached_theme();
         let opacity = sk_theme.get_opacity();
         let bg_hex = sk_theme.colors.background.main;
         rgba(crate::ui_foundation::hex_to_rgba_with_opacity(
@@ -1674,7 +1797,7 @@ impl NotesApp {
 
     /// Get title bar background with vibrancy opacity
     fn get_vibrancy_title_bar_background(_cx: &Context<Self>) -> gpui::Rgba {
-        let sk_theme = crate::theme::load_theme();
+        let sk_theme = crate::theme::get_cached_theme();
         let opacity = sk_theme.get_opacity();
         let bg_hex = sk_theme.colors.background.title_bar;
         rgba(crate::ui_foundation::hex_to_rgba_with_opacity(
@@ -1685,7 +1808,7 @@ impl NotesApp {
 
     /// Get sidebar/panel background with vibrancy opacity
     fn get_vibrancy_sidebar_background() -> gpui::Rgba {
-        let sk_theme = crate::theme::load_theme();
+        let sk_theme = crate::theme::get_cached_theme();
         let opacity = sk_theme.get_opacity();
         let bg_hex = sk_theme.colors.background.title_bar;
         rgba(crate::ui_foundation::hex_to_rgba_with_opacity(
@@ -1700,7 +1823,7 @@ impl NotesApp {
     /// For light mode: white overlay (keeps content readable on light backgrounds)
     /// 50% opacity (0x80) for good contrast without being too heavy
     fn get_modal_overlay_background() -> gpui::Rgba {
-        let sk_theme = crate::theme::load_theme();
+        let sk_theme = crate::theme::get_cached_theme();
         if sk_theme.has_dark_colors() {
             gpui::rgba(0x00000080) // black at 50% for dark mode
         } else {
@@ -1737,6 +1860,14 @@ impl Drop for NotesApp {
             if let Ok(mut guard) = window_handle.lock() {
                 *guard = None;
                 debug!("NotesApp dropped - cleared global window handle");
+            }
+        }
+
+        // Clear the global app entity handle
+        if let Some(app_entity) = NOTES_APP_ENTITY.get() {
+            if let Ok(mut guard) = app_entity.lock() {
+                *guard = None;
+                debug!("NotesApp dropped - cleared global app entity handle");
             }
         }
     }
@@ -1978,6 +2109,10 @@ impl Render for NotesApp {
                         this.close_browse_panel(window, cx);
                         return;
                     }
+                    if this.show_search {
+                        this.toggle_search(window, cx);
+                        return;
+                    }
                     // No panels open - close the window (same as Cmd+W)
                     let wb = window.window_bounds();
                     crate::window_state::save_window_from_gpui(
@@ -2008,6 +2143,10 @@ impl Render for NotesApp {
                                 this.open_browse_panel(window, cx);
                             }
                         }
+                        "f" => {
+                            // Toggle search bar
+                            this.toggle_search(window, cx);
+                        }
                         "n" => this.create_note(window, cx),
                         "w" => {
                             // Close the notes window (standard macOS pattern)
@@ -2023,8 +2162,8 @@ impl Render for NotesApp {
                             window.remove_window();
                         }
                         "d" => this.duplicate_selected_note(window, cx),
-                        "b" => this.insert_formatting("**", "**", cx),
-                        "i" => this.insert_formatting("_", "_", cx),
+                        "b" => this.insert_formatting("**", "**", window, cx),
+                        "i" => this.insert_formatting("_", "_", window, cx),
                         _ => {}
                     }
                 }
@@ -2230,6 +2369,14 @@ pub fn open_notes_window(cx: &mut App) -> Result<()> {
     // Release lock before calling update
     let notes_app_entity = notes_app_holder.lock().ok().and_then(|mut g| g.take());
     if let Some(notes_app) = notes_app_entity {
+        // Store the entity globally for quick_capture access
+        {
+            let slot = NOTES_APP_ENTITY.get_or_init(|| std::sync::Mutex::new(None));
+            if let Ok(mut g) = slot.lock() {
+                *g = Some(notes_app.clone());
+            }
+        }
+
         let _ = handle.update(cx, |_root, window, cx| {
             window.activate_window();
 
@@ -2285,11 +2432,64 @@ pub fn open_notes_window(cx: &mut App) -> Result<()> {
 }
 
 /// Quick capture - open notes with a new note ready for input
+///
+/// Creates a new empty note and focuses the editor immediately,
+/// providing a frictionless capture experience like Apple Quick Note (Fn+Q)
+/// or Raycast's Option-click menu bar.
 pub fn quick_capture(cx: &mut App) -> Result<()> {
+    use crate::logging;
+
+    // Get existing window and app entity
+    let existing_handle = {
+        let slot = NOTES_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
+        slot.lock().ok().and_then(|g| *g)
+    };
+
+    let existing_app = {
+        let slot = NOTES_APP_ENTITY.get_or_init(|| std::sync::Mutex::new(None));
+        slot.lock().ok().and_then(|g| g.clone())
+    };
+
+    // If window exists with valid app entity, create new note in existing window
+    if let (Some(handle), Some(notes_app)) = (existing_handle, existing_app) {
+        let result = handle.update(cx, |_root, window, cx| {
+            notes_app.update(cx, |app, cx| {
+                app.create_note(window, cx);
+            });
+        });
+
+        if result.is_ok() {
+            logging::log(
+                "PANEL",
+                "Quick capture: created new note in existing window",
+            );
+            return Ok(());
+        }
+        // Handle was invalid, fall through to create new window
+    }
+
+    // Window doesn't exist - create new window with a new note
     open_notes_window(cx)?;
 
-    // TODO: Focus the editor and optionally create a new note
-    // This requires accessing the NotesApp through the Root wrapper
+    // After window is created, create a new note using the stored entity
+    let handle = {
+        let slot = NOTES_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
+        slot.lock().ok().and_then(|g| *g)
+    };
+
+    let notes_app = {
+        let slot = NOTES_APP_ENTITY.get_or_init(|| std::sync::Mutex::new(None));
+        slot.lock().ok().and_then(|g| g.clone())
+    };
+
+    if let (Some(handle), Some(notes_app)) = (handle, notes_app) {
+        let _ = handle.update(cx, |_root, window, cx| {
+            notes_app.update(cx, |app, cx| {
+                app.create_note(window, cx);
+            });
+        });
+        logging::log("PANEL", "Quick capture: created new window with new note");
+    }
 
     Ok(())
 }
@@ -2442,4 +2642,47 @@ fn configure_notes_as_floating_panel() {
 #[cfg(not(target_os = "macos"))]
 fn configure_notes_as_floating_panel() {
     // No-op on non-macOS platforms
+}
+
+#[cfg(test)]
+mod tests {
+    use super::NotesApp;
+
+    #[test]
+    fn formatting_replacement_wraps_selected_text() {
+        let value = "hello world";
+        let selection = 6..11;
+
+        let (replacement, new_selection) =
+            NotesApp::formatting_replacement(value, selection.clone(), "**", "**");
+
+        let new_value = format!(
+            "{}{}{}",
+            &value[..selection.start],
+            replacement,
+            &value[selection.end..]
+        );
+
+        assert_eq!(new_value, "hello **world**");
+        assert_eq!(new_selection, 8..13);
+    }
+
+    #[test]
+    fn formatting_replacement_inserts_and_positions_cursor() {
+        let value = "hello";
+        let selection = 2..2;
+
+        let (replacement, new_selection) =
+            NotesApp::formatting_replacement(value, selection.clone(), "**", "**");
+
+        let new_value = format!(
+            "{}{}{}",
+            &value[..selection.start],
+            replacement,
+            &value[selection.end..]
+        );
+
+        assert_eq!(new_value, "he****llo");
+        assert_eq!(new_selection, 4..4);
+    }
 }
