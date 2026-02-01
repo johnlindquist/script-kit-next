@@ -10,6 +10,54 @@
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
+use std::sync::{Mutex, OnceLock};
+
+use tracing::debug;
+
+// ============================================================================
+// Shortcut overrides cache (avoids file I/O in render paths)
+// ============================================================================
+
+/// Cache for loaded shortcut overrides to avoid file I/O on every render
+static SHORTCUT_OVERRIDES_CACHE: OnceLock<Mutex<Option<HashMap<String, Shortcut>>>> =
+    OnceLock::new();
+
+/// Get cached shortcut overrides (for use in render code)
+///
+/// This avoids file I/O on every render call. The cache is invalidated
+/// when shortcuts are saved via `save_shortcut_override()` or
+/// `remove_shortcut_override()`, or manually via `invalidate_shortcut_cache()`.
+pub fn get_cached_shortcut_overrides() -> HashMap<String, Shortcut> {
+    let cache = SHORTCUT_OVERRIDES_CACHE.get_or_init(|| Mutex::new(None));
+
+    let mut guard = match cache.lock() {
+        Ok(g) => g,
+        Err(_) => return HashMap::new(),
+    };
+
+    // If cache is populated, return it
+    if let Some(ref cached) = *guard {
+        return cached.clone();
+    }
+
+    // Cache miss - load from disk and cache
+    let overrides = load_shortcut_overrides().unwrap_or_default();
+    *guard = Some(overrides.clone());
+    debug!("Shortcut overrides cache populated");
+    overrides
+}
+
+/// Invalidate the shortcut overrides cache
+///
+/// Call this when the shortcuts file changes externally.
+pub fn invalidate_shortcut_cache() {
+    if let Some(cache) = SHORTCUT_OVERRIDES_CACHE.get() {
+        if let Ok(mut guard) = cache.lock() {
+            *guard = None;
+            debug!("Shortcut overrides cache invalidated");
+        }
+    }
+}
 
 use serde::{Deserialize, Serialize};
 
@@ -261,6 +309,9 @@ pub fn save_shortcut_override(command_id: &str, shortcut: &Shortcut) -> Result<(
     fs::write(&path, content)
         .with_context(|| format!("Failed to write shortcuts file: {}", path.display()))?;
 
+    // Invalidate cache so next render picks up changes
+    invalidate_shortcut_cache();
+
     Ok(())
 }
 
@@ -294,6 +345,9 @@ pub fn remove_shortcut_override(command_id: &str) -> Result<()> {
 
     fs::write(&path, content)
         .with_context(|| format!("Failed to write shortcuts file: {}", path.display()))?;
+
+    // Invalidate cache so next render picks up changes
+    invalidate_shortcut_cache();
 
     Ok(())
 }
