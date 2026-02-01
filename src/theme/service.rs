@@ -97,10 +97,21 @@ pub fn ensure_theme_service(cx: &mut App) {
 
         crate::logging::log("THEME", "Theme file watcher started successfully");
 
+        // Adaptive polling: starts at 200ms, increases to 2s when idle
+        let mut idle_count = 0u32;
         loop {
-            Timer::after(std::time::Duration::from_millis(200)).await;
+            // Adaptive polling: 200ms when active, up to 2000ms when idle
+            let poll_interval = if idle_count < 5 {
+                200
+            } else if idle_count < 10 {
+                500
+            } else {
+                2000
+            };
+            Timer::after(std::time::Duration::from_millis(poll_interval)).await;
 
             if rx.try_recv().is_ok() {
+                idle_count = 0; // Reset on activity
                 info!("Theme changed, syncing to all windows");
                 crate::logging::log("THEME", "Theme file changed, broadcasting to all windows");
 
@@ -124,6 +135,8 @@ pub fn ensure_theme_service(cx: &mut App) {
                     crate::logging::log("THEME", "App context gone, stopping theme service");
                     break;
                 }
+            } else {
+                idle_count = idle_count.saturating_add(1);
             }
         }
 
