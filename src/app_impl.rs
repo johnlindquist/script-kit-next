@@ -139,19 +139,22 @@ impl ScriptListApp {
         cx.spawn(async move |this, cx| {
             loop {
                 Timer::after(std::time::Duration::from_millis(530)).await;
+
+                // CRITICAL: Check window visibility BEFORE cx.update() to avoid
+                // unnecessary GPUI context access when window is hidden.
+                // This reduces CPU usage at idle significantly.
+                if !script_kit_gpui::is_main_window_visible() {
+                    continue;
+                }
+
                 let _ = cx.update(|cx| {
                     this.update(cx, |app, cx| {
-                        // Skip cursor blink when:
-                        // 1. Window is hidden (no visual feedback needed)
-                        // 2. No window is focused (main window OR actions popup)
-                        // 3. No input is focused (no cursor to blink)
+                        // Additional checks for focused state
+                        // (window visibility already checked above)
                         let actions_popup_open = is_actions_window_open();
                         let any_window_focused =
                             platform::is_main_window_focused() || actions_popup_open;
-                        if !script_kit_gpui::is_main_window_visible()
-                            || !any_window_focused
-                            || app.focused_input == FocusedInput::None
-                        {
+                        if !any_window_focused || app.focused_input == FocusedInput::None {
                             return;
                         }
 

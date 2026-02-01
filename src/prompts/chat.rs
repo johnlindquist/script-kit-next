@@ -21,6 +21,8 @@ use std::time::Duration;
 use crate::ai::providers::{ProviderMessage, ProviderRegistry};
 use crate::ai::{self, Chat, ChatSource, Message, MessageRole, ModelInfo};
 use crate::logging;
+use crate::prompts::commands::transform_with_command;
+use crate::prompts::context::expand_context;
 use crate::prompts::markdown::render_markdown;
 use crate::protocol::{ChatMessagePosition, ChatMessageRole, ChatPromptMessage};
 use crate::theme;
@@ -124,6 +126,34 @@ pub struct ConversationTurn {
     pub streaming: bool,
     pub error: Option<String>,
     pub message_id: Option<String>,
+}
+
+/// Conversation starter suggestion
+#[derive(Clone, Debug)]
+pub struct ConversationStarter {
+    pub id: String,
+    pub label: String,
+    pub prompt: String,
+}
+
+impl ConversationStarter {
+    pub fn new(id: impl Into<String>, label: impl Into<String>, prompt: impl Into<String>) -> Self {
+        Self {
+            id: id.into(),
+            label: label.into(),
+            prompt: prompt.into(),
+        }
+    }
+}
+
+/// Default conversation starters
+fn default_conversation_starters() -> Vec<ConversationStarter> {
+    vec![
+        ConversationStarter::new("explain", "Explain this code", "Explain this code: "),
+        ConversationStarter::new("debug", "Debug an error", "Help me debug this error: "),
+        ConversationStarter::new("tests", "Write tests", "Write tests for: "),
+        ConversationStarter::new("improve", "Improve code", "Improve this code: "),
+    ]
 }
 
 /// Error types for chat operations
@@ -306,6 +336,13 @@ impl ChatPrompt {
         cx.spawn(async move |this, cx| {
             loop {
                 Timer::after(Duration::from_millis(530)).await;
+
+                // Skip cx.update() entirely when main window is hidden
+                // to avoid unnecessary GPUI context access at idle
+                if !crate::is_main_window_visible() {
+                    continue;
+                }
+
                 let result = cx.update(|cx| {
                     this.update(cx, |chat, cx| {
                         chat.cursor_visible = !chat.cursor_visible;
@@ -537,6 +574,134 @@ impl ChatPrompt {
         cx.notify();
     }
 
+    /// Check if currently streaming a response
+    pub fn is_streaming(&self) -> bool {
+        self.builtin_is_streaming || self.streaming_message_id.is_some()
+    }
+
+    /// Stop streaming the current response (preserves partial content)
+    /// Triggered by Cmd+. or Escape
+    pub fn stop_streaming(&mut self, cx: &mut Context<Self>) {
+        logging::log("CHAT", "Stop streaming requested (Cmd+. or Escape)");
+
+        // Mark streaming as complete but keep the partial content
+        if let Some(msg_id) = self.streaming_message_id.take() {
+            if let Some(msg) = self
+                .messages
+                .iter_mut()
+                .find(|m| m.id.as_deref() == Some(&msg_id))
+            {
+                msg.streaming = false;
+                // Don't clear content - keep partial response
+            }
+        }
+
+        self.builtin_is_streaming = false;
+        self.builtin_streaming_content.clear();
+
+        cx.notify();
+    }
+
+    /// Get context-aware conversation starters
+    /// Shows different suggestions based on clipboard content
+    fn get_conversation_starters(&self, cx: &Context<Self>) -> Vec<ConversationStarter> {
+        let mut starters = default_conversation_starters();
+
+        // Check if clipboard has content - add "Summarize clipboard" if so
+        if let Some(clipboard) = cx.read_from_clipboard() {
+            if let Some(text) = clipboard.text() {
+                if !text.is_empty() && text.len() < 50000 {
+                    // Insert clipboard-aware suggestion at position 1
+                    starters.insert(
+                        1,
+                        ConversationStarter::new(
+                            "clipboard",
+                            "Summarize clipboard",
+                            format!("Summarize the following:\n\n{}", text),
+                        ),
+                    );
+                }
+            }
+        }
+
+        // Limit to 5 suggestions max
+        starters.truncate(5);
+        starters
+    }
+
+    /// Handle clicking a conversation starter
+    fn select_conversation_starter(
+        &mut self,
+        starter: &ConversationStarter,
+        cx: &mut Context<Self>,
+    ) {
+        logging::log("CHAT", &format!("Selected starter: {}", starter.id));
+
+        // Insert the prompt into the input
+        self.input.clear();
+        for ch in starter.prompt.chars() {
+            self.input.insert_char(ch);
+        }
+        self.reset_cursor_blink();
+        cx.notify();
+    }
+
+    /// Render conversation starters for empty state
+    fn render_conversation_starters(&self, cx: &Context<Self>) -> impl IntoElement {
+        let colors = &self.prompt_colors;
+        let starters = self.get_conversation_starters(cx);
+
+        // Chip styling - use theme-aware overlays
+        let chip_bg = theme::hover_overlay_bg(&self.theme, 0x20);
+        let chip_hover_bg = theme::hover_overlay_bg(&self.theme, 0x35);
+
+        div()
+            .flex()
+            .flex_col()
+            .items_center()
+            .justify_center()
+            .flex_1()
+            .gap(px(16.))
+            .child(
+                div()
+                    .text_color(rgb(colors.text_secondary))
+                    .text_sm()
+                    .child("What can I help you with?"),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .justify_center()
+                    .gap(px(8.))
+                    .max_w(px(400.))
+                    .children(starters.into_iter().enumerate().map(|(i, starter)| {
+                        let starter_clone = starter.clone();
+                        div()
+                            .id(format!("starter-{}", i))
+                            .px(px(12.))
+                            .py(px(8.))
+                            .bg(chip_bg)
+                            .rounded(px(6.))
+                            .cursor_pointer()
+                            .hover(|s| s.bg(chip_hover_bg))
+                            .text_sm()
+                            .text_color(rgb(colors.text_primary))
+                            .child(starter.label.clone())
+                            .on_click(cx.listener(move |this, _, _window, cx| {
+                                this.select_conversation_starter(&starter_clone, cx);
+                            }))
+                    })),
+            )
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(rgb(colors.text_tertiary))
+                    .mt(px(8.))
+                    .child("or type your own question..."),
+            )
+    }
+
     /// Set an error on a message (typically on streaming failure)
     pub fn set_message_error(&mut self, message_id: &str, error: String, cx: &mut Context<Self>) {
         if let Some(msg) = self
@@ -591,6 +756,23 @@ impl ChatPrompt {
             return;
         }
 
+        // Step 1: Expand @context mentions (e.g., @clipboard, @file:path)
+        let expanded_text = expand_context(&text, cx);
+
+        // Step 2: Process slash commands (e.g., /explain, /fix, /test)
+        let (system_context, user_message_text) = transform_with_command(&expanded_text);
+
+        // Log if slash command was detected
+        if let Some(ref ctx) = system_context {
+            logging::log(
+                "CHAT",
+                &format!(
+                    "Slash command detected, system context: {}...",
+                    &ctx[..ctx.len().min(50)]
+                ),
+            );
+        }
+
         // Add user message to UI (ChatPromptMessage::user auto-generates UUID)
         let user_message = ChatPromptMessage::user(text.clone());
         self.messages.push(user_message);
@@ -634,17 +816,28 @@ impl ChatPrompt {
         };
 
         // Build messages for the API call (convert our messages to provider format)
-        let api_messages: Vec<ProviderMessage> = self
-            .messages
-            .iter()
-            .map(|m| {
-                if m.is_user() {
-                    ProviderMessage::user(m.get_content())
-                } else {
-                    ProviderMessage::assistant(m.get_content())
-                }
-            })
-            .collect();
+        let mut api_messages: Vec<ProviderMessage> = Vec::new();
+
+        // If slash command detected, prepend system context
+        if let Some(ref ctx) = system_context {
+            api_messages.push(ProviderMessage::system(ctx.clone()));
+        }
+
+        // Add conversation history (all messages except the last user message)
+        for (i, m) in self.messages.iter().enumerate() {
+            // Skip the last message (current user input) - we'll add the transformed version
+            if i == self.messages.len() - 1 && m.is_user() {
+                continue;
+            }
+            if m.is_user() {
+                api_messages.push(ProviderMessage::user(m.get_content()));
+            } else {
+                api_messages.push(ProviderMessage::assistant(m.get_content()));
+            }
+        }
+
+        // Add the current user message (with expanded context and slash command processing)
+        api_messages.push(ProviderMessage::user(user_message_text.clone()));
 
         // Set streaming state
         self.builtin_is_streaming = true;
@@ -1268,7 +1461,8 @@ impl ChatPrompt {
         let model_count = self.models.len();
         let current_model = self.model.clone().unwrap_or_default();
         // Check vibrancy to conditionally apply shadow
-        let vibrancy_enabled = crate::theme::load_theme().is_vibrancy_enabled();
+        // Uses cached theme to avoid file I/O on every render
+        let vibrancy_enabled = crate::theme::get_cached_theme().is_vibrancy_enabled();
 
         let menu_bg = rgba((colors.code_bg << 8) | 0xF0);
         let hover_bg = rgba((colors.accent_color << 8) | 0x20);
@@ -2063,8 +2257,20 @@ impl Render for ChatPrompt {
             // We just need to handle ⌘K to open it via callback
 
             match key.as_str() {
-                // Escape - close chat
-                "escape" | "esc" => this.handle_escape(cx),
+                // Escape - stop streaming if active, otherwise close chat
+                "escape" | "esc" => {
+                    if this.is_streaming() {
+                        this.stop_streaming(cx);
+                    } else {
+                        this.handle_escape(cx);
+                    }
+                }
+                // ⌘+. - Stop streaming (universal stop shortcut)
+                "." if has_cmd => {
+                    if this.is_streaming() {
+                        this.stop_streaming(cx);
+                    }
+                }
                 // ⌘+K - Toggle actions menu
                 "k" if has_cmd => this.toggle_actions_menu(cx),
                 // ⌘+Enter - Continue in Chat
@@ -2143,18 +2349,9 @@ impl Render for ChatPrompt {
             message_list = message_list.child(self.render_turn(turn, i, cx));
         }
 
-        // Empty state
+        // Empty state - show conversation starters
         if turns.is_empty() {
-            message_list = message_list.child(
-                div()
-                    .flex_1()
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .text_color(rgb(colors.text_tertiary))
-                    .text_sm()
-                    .child("Type a question to start..."),
-            );
+            message_list = message_list.child(self.render_conversation_starters(cx));
         }
 
         div()
