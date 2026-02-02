@@ -1317,6 +1317,13 @@ impl AppearanceWatcher {
             // Run loop with periodic stop flag checks
             let run_loop_mode = kCFRunLoopDefaultMode;
 
+            // CFRunLoopRunInMode return values:
+            // kCFRunLoopRunFinished = 1 (no sources, returns immediately - causes CPU spin if ignored!)
+            // kCFRunLoopRunStopped = 2 (stopped by CFRunLoopStop)
+            // kCFRunLoopRunTimedOut = 3 (timed out - normal case)
+            // kCFRunLoopRunHandledSource = 4 (handled source)
+            const KCFRUNLOOP_RUN_FINISHED: i32 = 1;
+
             loop {
                 // Check stop flag
                 if stop_flag.load(Ordering::Relaxed) {
@@ -1329,7 +1336,14 @@ impl AppearanceWatcher {
 
                 // Run the run loop for a short time to receive notifications
                 // This returns after timeout or if a source is processed
-                CFRunLoopRunInMode(run_loop_mode, 0.5, 0); // 500ms timeout
+                let result = CFRunLoopRunInMode(run_loop_mode, 0.5, 0); // 500ms timeout
+
+                // CRITICAL: If run loop has no sources, it returns immediately with kCFRunLoopRunFinished.
+                // Without this check, the loop would spin at 100% CPU!
+                // Sleep 500ms to match the intended polling interval.
+                if result == KCFRUNLOOP_RUN_FINISHED {
+                    std::thread::sleep(std::time::Duration::from_millis(500));
+                }
 
                 // Check if appearance changed notification was received
                 if APPEARANCE_CHANGED.swap(false, Ordering::SeqCst) {
