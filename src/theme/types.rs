@@ -500,19 +500,19 @@ fn default_terminal_red() -> HexColor {
     0xcd3131
 }
 fn default_terminal_green() -> HexColor {
-    0x0dbc79
+    0x50fa7b // Dracula green - vibrant for executables
 }
 fn default_terminal_yellow() -> HexColor {
     0xe5e510
 }
 fn default_terminal_blue() -> HexColor {
-    0x2472c8
+    0x5c9ceb // Brighter blue for directories
 }
 fn default_terminal_magenta() -> HexColor {
     0xbc3fbc
 }
 fn default_terminal_cyan() -> HexColor {
-    0x11a8cd
+    0x56d4e2 // Brighter cyan for symlinks
 }
 fn default_terminal_white() -> HexColor {
     0xe5e5e5
@@ -524,19 +524,19 @@ fn default_terminal_bright_red() -> HexColor {
     0xf14c4c
 }
 fn default_terminal_bright_green() -> HexColor {
-    0x23d18b
+    0x69ff94 // Very bright green
 }
 fn default_terminal_bright_yellow() -> HexColor {
     0xf5f543
 }
 fn default_terminal_bright_blue() -> HexColor {
-    0x3b8eea
+    0x6eb4ff // Vibrant blue for directories
 }
 fn default_terminal_bright_magenta() -> HexColor {
     0xd670d6
 }
 fn default_terminal_bright_cyan() -> HexColor {
-    0x29b8db
+    0x8be9fd // Dracula cyan - very visible
 }
 fn default_terminal_bright_white() -> HexColor {
     0xffffff
@@ -549,24 +549,24 @@ impl Default for TerminalColors {
 }
 
 impl TerminalColors {
-    /// Dark mode terminal colors (VS Code dark inspired)
+    /// Dark mode terminal colors (Dracula/One Dark inspired for better visibility)
     pub fn dark_default() -> Self {
         TerminalColors {
             black: 0x000000,
             red: 0xcd3131,
-            green: 0x0dbc79,
+            green: 0x50fa7b, // Dracula green - vibrant for executables
             yellow: 0xe5e510,
-            blue: 0x2472c8,
+            blue: 0x5c9ceb, // Brighter blue for directories
             magenta: 0xbc3fbc,
-            cyan: 0x11a8cd,
+            cyan: 0x56d4e2, // Brighter cyan for symlinks
             white: 0xe5e5e5,
             bright_black: 0x666666,
             bright_red: 0xf14c4c,
-            bright_green: 0x23d18b,
+            bright_green: 0x69ff94, // Very bright green
             bright_yellow: 0xf5f543,
-            bright_blue: 0x3b8eea,
+            bright_blue: 0x6eb4ff, // Vibrant blue for directories
             bright_magenta: 0xd670d6,
-            bright_cyan: 0x29b8db,
+            bright_cyan: 0x8be9fd, // Dracula cyan - very visible
             bright_white: 0xffffff,
         }
     }

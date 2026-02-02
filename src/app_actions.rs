@@ -299,6 +299,35 @@ impl ScriptListApp {
                 }
                 return;
             }
+            // Paste to active app and close window (Enter)
+            "clipboard_paste" => {
+                let Some(entry) = selected_clipboard_entry else {
+                    self.show_hud("No clipboard entry selected".to_string(), Some(2000), cx);
+                    return;
+                };
+
+                logging::log("CLIPBOARD", &format!("Paste entry: {}", entry.id));
+                match clipboard_history::copy_entry_to_clipboard(&entry.id) {
+                    Ok(()) => {
+                        logging::log("CLIPBOARD", "Entry copied, simulating paste");
+                        std::thread::spawn(|| {
+                            std::thread::sleep(std::time::Duration::from_millis(50));
+                            if let Err(e) = selected_text::simulate_paste_with_cg() {
+                                logging::log("ERROR", &format!("Failed to simulate paste: {}", e));
+                            } else {
+                                logging::log("CLIPBOARD", "Simulated Cmd+V paste");
+                            }
+                        });
+                        self.show_hud("Pasted".to_string(), Some(1000), cx);
+                        self.hide_main_and_reset(cx);
+                    }
+                    Err(e) => {
+                        logging::log("ERROR", &format!("Failed to paste entry: {}", e));
+                        self.show_hud(format!("Failed to paste: {}", e), Some(2500), cx);
+                    }
+                }
+                return;
+            }
             "clipboard_attach_to_ai" => {
                 let Some(entry) = selected_clipboard_entry else {
                     self.show_hud("No clipboard entry selected".to_string(), Some(2000), cx);
@@ -1270,6 +1299,73 @@ impl ScriptListApp {
                 }
             }
             // Clipboard delete actions
+            "clipboard_delete_multiple" => {
+                let filter_text = match &self.current_view {
+                    AppView::ClipboardHistoryView { filter, .. } => filter.trim().to_string(),
+                    _ => String::new(),
+                };
+
+                if filter_text.is_empty() {
+                    self.show_hud(
+                        "Type in search first, then use Delete Entries...".to_string(),
+                        Some(2500),
+                        cx,
+                    );
+                    return;
+                }
+
+                let filter_lower = filter_text.to_lowercase();
+                let ids_to_delete: Vec<String> = self
+                    .cached_clipboard_entries
+                    .iter()
+                    .filter(|entry| entry.text_preview.to_lowercase().contains(&filter_lower))
+                    .map(|entry| entry.id.clone())
+                    .collect();
+
+                if ids_to_delete.is_empty() {
+                    self.show_hud("No matching entries to delete".to_string(), Some(2000), cx);
+                    return;
+                }
+
+                let mut deleted = 0usize;
+                let mut failed = 0usize;
+                for id in ids_to_delete {
+                    match clipboard_history::remove_entry(&id) {
+                        Ok(()) => deleted += 1,
+                        Err(e) => {
+                            failed += 1;
+                            logging::log(
+                                "ERROR",
+                                &format!("Failed to delete clipboard entry {}: {}", id, e),
+                            );
+                        }
+                    }
+                }
+
+                self.cached_clipboard_entries = clipboard_history::get_cached_entries(100);
+                if let AppView::ClipboardHistoryView { selected_index, .. } = &mut self.current_view
+                {
+                    *selected_index = 0;
+                    if let Some(first) = self.cached_clipboard_entries.first() {
+                        self.focused_clipboard_entry_id = Some(first.id.clone());
+                        self.clipboard_list_scroll_handle.scroll_to_item(0, ScrollStrategy::Top);
+                    } else {
+                        self.focused_clipboard_entry_id = None;
+                    }
+                }
+                cx.notify();
+
+                if failed == 0 {
+                    self.show_hud(format!("Deleted {} entries", deleted), Some(2500), cx);
+                } else {
+                    self.show_hud(
+                        format!("Deleted {}, failed {}", deleted, failed),
+                        Some(3000),
+                        cx,
+                    );
+                }
+                return;
+            }
             "clipboard_delete" => {
                 let Some(entry) = selected_clipboard_entry else {
                     self.show_hud("No clipboard entry selected".to_string(), Some(2000), cx);

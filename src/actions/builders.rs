@@ -1009,7 +1009,7 @@ pub fn get_clipboard_history_context_actions(entry: &ClipboardEntryInfo) -> Vec<
         Action::new(
             "clipboard_delete_multiple",
             "Delete Entries...",
-            Some("Select and delete multiple entries".to_string()),
+            Some("Delete entries matching current search filter".to_string()),
             ActionCategory::ScriptContext,
         )
         .with_shortcut("⇧⌘X"),

@@ -736,6 +736,21 @@ impl ScriptListApp {
                                     selected_index,
                                     filter,
                                 } => {
+                                    // CRITICAL: If actions popup is open, route to actions dialog instead
+                                    if this.show_actions_popup {
+                                        if let Some(ref dialog) = this.actions_dialog {
+                                            if key == "up" || key == "arrowup" {
+                                                dialog.update(cx, |d, cx| d.move_up(cx));
+                                            } else if key == "down" || key == "arrowdown" {
+                                                dialog.update(cx, |d, cx| d.move_down(cx));
+                                            }
+                                            // Notify the actions window to re-render
+                                            crate::actions::notify_actions_window(cx);
+                                        }
+                                        cx.stop_propagation();
+                                        return;
+                                    }
+
                                     let filtered_entries: Vec<_> = if filter.is_empty() {
                                         this.cached_clipboard_entries.iter().enumerate().collect()
                                     } else {
@@ -1026,6 +1041,18 @@ impl ScriptListApp {
                                     cx.stop_propagation();
                                     return;
                                 }
+                                AppView::ClipboardHistoryView { .. } => {
+                                    // Toggle actions for selected clipboard entry
+                                    if let Some(entry) = this.selected_clipboard_entry() {
+                                        logging::log(
+                                            "KEY",
+                                            "Interceptor: Cmd+K -> toggle_clipboard_actions (ClipboardHistoryView)",
+                                        );
+                                        this.toggle_clipboard_actions(entry, window, cx);
+                                        cx.stop_propagation();
+                                        return;
+                                    }
+                                }
                                 _ => {
                                     // Other views don't support Cmd+K actions
                                 }
@@ -1093,67 +1120,43 @@ impl ScriptListApp {
 
                         // Only handle remaining keys if in FileSearchView with actions popup open
                         if !matches!(this.current_view, AppView::FileSearchView { .. }) {
-                            // For ScriptList with actions open, handle Escape/Enter/typing
-                            if matches!(this.current_view, AppView::ScriptList) && this.show_actions_popup {
-                                // Handle Escape to close actions popup
-                                if key == "escape" {
-                                    this.close_actions_popup(ActionsDialogHost::MainList, window, cx);
-                                    cx.stop_propagation();
-                                    return;
-                                }
+                            // Arrow keys are handled by arrow_interceptor to avoid double-processing
+                            // (which can skip 2 items per keypress when both interceptors handle arrows).
+                            if key == "up"
+                                || key == "arrowup"
+                                || key == "down"
+                                || key == "arrowdown"
+                            {
+                                return;
+                            }
 
-                                // Handle Enter to submit selected action
-                                if key == "enter" {
-                                    if let Some(ref dialog) = this.actions_dialog {
-                                        let action_id = dialog.read(cx).get_selected_action_id();
-                                        let should_close = dialog.read(cx).selected_action_should_close();
+                            // Route modal actions keys for ScriptList and ClipboardHistoryView.
+                            let host = if matches!(this.current_view, AppView::ScriptList) {
+                                Some(ActionsDialogHost::MainList)
+                            } else if matches!(this.current_view, AppView::ClipboardHistoryView { .. }) {
+                                Some(ActionsDialogHost::ClipboardHistory)
+                            } else {
+                                None
+                            };
 
-                                        if let Some(action_id) = action_id {
-                                            crate::logging::log(
-                                                "ACTIONS",
-                                                &format!(
-                                                    "ScriptList actions executing action: {} (close={})",
-                                                    action_id, should_close
-                                                ),
-                                            );
-
-                                            if should_close {
-                                                this.close_actions_popup(
-                                                    ActionsDialogHost::MainList,
-                                                    window,
-                                                    cx,
-                                                );
-                                            }
-
-                                            this.handle_action(action_id, cx);
-                                        }
+                            if let Some(host) = host {
+                                match this.route_key_to_actions_dialog(
+                                    &key,
+                                    key_char,
+                                    &event.keystroke.modifiers,
+                                    host,
+                                    window,
+                                    cx,
+                                ) {
+                                    ActionsRoute::NotHandled => {}
+                                    ActionsRoute::Handled => {
+                                        cx.stop_propagation();
+                                        return;
                                     }
-                                    cx.stop_propagation();
-                                    return;
-                                }
-
-                                // Handle Backspace for actions search
-                                if key == "backspace" {
-                                    if let Some(ref dialog) = this.actions_dialog {
-                                        dialog.update(cx, |d, cx| d.handle_backspace(cx));
-                                        crate::actions::notify_actions_window(cx);
-                                        crate::actions::resize_actions_window(cx, dialog);
-                                    }
-                                    cx.stop_propagation();
-                                    return;
-                                }
-
-                                // Handle printable character input for actions search
-                                if let Some(chars) = key_char {
-                                    if let Some(ch) = chars.chars().next() {
-                                        if ch.is_ascii_graphic() || ch == ' ' {
-                                            if let Some(ref dialog) = this.actions_dialog {
-                                                dialog.update(cx, |d, cx| d.handle_char(ch, cx));
-                                                crate::actions::notify_actions_window(cx);
-                                                crate::actions::resize_actions_window(cx, dialog);
-                                            }
-                                            cx.stop_propagation();
-                                        }
+                                    ActionsRoute::Execute { action_id } => {
+                                        this.handle_action(action_id, cx);
+                                        cx.stop_propagation();
+                                        return;
                                     }
                                 }
                             }
@@ -3564,6 +3567,78 @@ impl ScriptListApp {
             }
         }
     }
+    /// Toggle terminal command bar for built-in terminal
+    /// Shows common terminal actions (Clear, Copy, Paste, Scroll, etc.)
+    #[allow(dead_code)]
+    pub fn toggle_terminal_commands(&mut self, cx: &mut Context<Self>, window: &mut Window) {
+        use crate::actions::{Action, ActionCategory, ActionsDialog, ActionsDialogConfig, SearchPosition, SectionStyle, AnchorPosition};
+        use crate::terminal::get_terminal_commands;
+
+        logging::log(
+            "KEY",
+            &format!(
+                "toggle_terminal_commands called: show_actions_popup={}, actions_dialog.is_some={}",
+                self.show_actions_popup,
+                self.actions_dialog.is_some()
+            ),
+        );
+
+        if self.show_actions_popup {
+            // Close - use coordinator to restore focus
+            self.show_actions_popup = false;
+            self.actions_dialog = None;
+            self.pop_focus_overlay(cx);
+            window.focus(&self.focus_handle, cx);
+            logging::log("FOCUS", "Terminal commands closed, focus restored");
+        } else {
+            // Open - create actions from terminal commands
+            self.show_actions_popup = true;
+            self.push_focus_overlay(focus_coordinator::FocusRequest::actions_dialog(), cx);
+
+            let theme_arc = std::sync::Arc::clone(&self.theme);
+            let terminal_commands = get_terminal_commands();
+
+            // Convert terminal commands to Actions
+            let actions: Vec<Action> = terminal_commands
+                .into_iter()
+                .map(|cmd| {
+                    Action::new(
+                        cmd.action.id(),
+                        cmd.name.clone(),
+                        Some(cmd.description.clone()),
+                        ActionCategory::Terminal,
+                    )
+                    .with_shortcut_opt(cmd.shortcut.clone())
+                })
+                .collect();
+
+            // Create dialog with terminal-style config
+            let config = ActionsDialogConfig {
+                search_position: SearchPosition::Bottom,
+                section_style: SectionStyle::None,
+                anchor: AnchorPosition::Top,
+                show_icons: false,
+                show_footer: false,
+            };
+
+            let dialog = cx.new(|cx| {
+                let focus_handle = cx.focus_handle();
+                ActionsDialog::with_config(
+                    focus_handle,
+                    std::sync::Arc::new(|_action_id| {}),
+                    actions,
+                    theme_arc,
+                    config,
+                )
+            });
+
+            self.actions_dialog = Some(dialog.clone());
+            let dialog_focus_handle = dialog.read(cx).focus_handle.clone();
+            window.focus(&dialog_focus_handle, cx);
+            logging::log("FOCUS", "Terminal commands opened");
+        }
+    }
+
 
     /// Toggle actions dialog for chat prompts
     /// Opens ActionsDialog with model selection and chat-specific actions
