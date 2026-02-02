@@ -291,7 +291,7 @@ pub fn add_entry(content: &str, content_type: ContentType) -> Result<String> {
 
     // Extract metadata for efficient list queries (done before lock for update case)
     let (text_preview, image_width, image_height, byte_size) =
-        extract_metadata(content, content_type.clone());
+        extract_metadata(content, content_type);
 
     if let Some((existing_id, existing_pinned)) = existing {
         conn.execute(
@@ -306,7 +306,7 @@ pub fn add_entry(content: &str, content_type: ContentType) -> Result<String> {
         // Preserve the existing pinned status from the database
         upsert_entry_in_cache(ClipboardEntryMeta {
             id: existing_id.clone(),
-            content_type: content_type.clone(),
+            content_type,
             timestamp,
             pinned: existing_pinned,
             text_preview: text_preview.unwrap_or_default(),
@@ -712,6 +712,55 @@ pub fn clear_history() -> Result<()> {
         debug!(
             count = blob_contents.len(),
             "Deleted blob files during history clear"
+        );
+    }
+
+    clear_all_caches();
+
+    Ok(())
+}
+
+/// Clear all unpinned clipboard history entries
+/// Keeps pinned entries intact
+#[allow(dead_code)]
+pub fn clear_unpinned_history() -> Result<()> {
+    use super::blob_store::{delete_blob, is_blob_content};
+
+    let conn = get_connection()?;
+    let conn = conn
+        .lock()
+        .map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
+
+    // Collect blob references from unpinned entries before deleting
+    let blob_contents: Vec<String> = {
+        let mut stmt =
+            conn.prepare("SELECT content FROM history WHERE pinned = 0 AND content LIKE 'blob:%'")?;
+        let rows = stmt.query_map([], |row| row.get(0))?;
+        rows.filter_map(|r| r.ok()).collect()
+    };
+
+    let deleted = conn
+        .execute("DELETE FROM history WHERE pinned = 0", [])
+        .context("Failed to clear unpinned history")?;
+
+    info!(
+        deleted_count = deleted,
+        "Cleared unpinned clipboard history"
+    );
+
+    drop(conn);
+
+    // Delete blob files for deleted entries
+    for content in &blob_contents {
+        if is_blob_content(content) {
+            delete_blob(content);
+        }
+    }
+
+    if !blob_contents.is_empty() {
+        debug!(
+            count = blob_contents.len(),
+            "Deleted blob files during unpinned history clear"
         );
     }
 

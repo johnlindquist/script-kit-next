@@ -92,6 +92,30 @@ pub fn decode_base64_image(content: &str) -> Option<arboard::ImageData<'static>>
     }
 }
 
+/// Convert clipboard content into PNG bytes.
+///
+/// Supports:
+/// - blob:{hash} -> load PNG bytes from blob store
+/// - png:{base64} -> decode base64 PNG bytes directly
+/// - rgba:{width}:{height}:{base64} -> decode raw RGBA, then encode to PNG
+pub fn content_to_png_bytes(content: &str) -> Option<Vec<u8>> {
+    if is_blob_content(content) {
+        return load_blob(content);
+    }
+
+    if let Some(base64_data) = content.strip_prefix("png:") {
+        return BASE64.decode(base64_data).ok();
+    }
+
+    if content.starts_with("rgba:") {
+        let image = decode_legacy_rgba(content)?;
+        return encode_image_to_png_bytes(&image).ok();
+    }
+
+    warn!("Unknown clipboard image format prefix for PNG conversion");
+    None
+}
+
 /// Decode PNG format: "png:{base64_encoded_png_data}"
 fn decode_png_to_image_data(content: &str) -> Option<arboard::ImageData<'static>> {
     let base64_data = content.strip_prefix("png:")?;
@@ -471,6 +495,38 @@ mod tests {
     }
 
     #[test]
+    fn test_content_to_png_bytes_from_png() {
+        let original = arboard::ImageData {
+            width: 2,
+            height: 2,
+            bytes: vec![
+                255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 255, 255,
+            ]
+            .into(),
+        };
+
+        let encoded = encode_image_as_png(&original).expect("Should encode as PNG");
+        let bytes = content_to_png_bytes(&encoded).expect("Should decode PNG bytes");
+
+        // PNG signature: 89 50 4E 47 0D 0A 1A 0A
+        assert!(bytes.starts_with(&[137, 80, 78, 71, 13, 10, 26, 10]));
+    }
+
+    #[test]
+    fn test_content_to_png_bytes_from_rgba() {
+        let original = arboard::ImageData {
+            width: 1,
+            height: 1,
+            bytes: vec![255, 0, 0, 255].into(),
+        };
+
+        let encoded = encode_image_as_base64(&original).expect("Should encode as RGBA");
+        let bytes = content_to_png_bytes(&encoded).expect("Should convert RGBA to PNG bytes");
+
+        assert!(bytes.starts_with(&[137, 80, 78, 71, 13, 10, 26, 10]));
+    }
+
+    #[test]
     fn test_get_image_dimensions_both_formats() {
         let original = arboard::ImageData {
             width: 100,
@@ -571,5 +627,154 @@ mod tests {
         bad_header.extend_from_slice(&[0, 0, 0, 100]); // height
         let bad_png = BASE64.encode(&bad_header);
         assert!(get_png_dimensions_fast(&bad_png).is_none());
+    }
+}
+
+/// Decode clipboard image content to raw RGBA bytes for OCR processing
+///
+/// Returns (width, height, rgba_bytes) suitable for passing to ocr::extract_text_from_rgba().
+///
+/// Supports:
+/// - blob:{hash} -> load PNG, decode to RGBA
+/// - png:{base64} -> decode base64, decode PNG to RGBA
+/// - rgba:{width}:{height}:{base64} -> decode base64 directly
+///
+/// Note: Unlike decode_to_render_image which converts to BGRA for Metal/GPUI,
+/// this function returns true RGBA bytes as expected by the Vision OCR framework.
+#[allow(dead_code)]
+pub fn decode_to_rgba_bytes(content: &str) -> Option<(u32, u32, Vec<u8>)> {
+    if is_blob_content(content) {
+        decode_blob_to_rgba_bytes(content)
+    } else if content.starts_with("png:") {
+        decode_png_to_rgba_bytes(content)
+    } else if content.starts_with("rgba:") {
+        decode_legacy_rgba_to_bytes(content)
+    } else {
+        warn!("Unknown clipboard image format for RGBA decode");
+        None
+    }
+}
+
+/// Decode blob format to raw RGBA bytes
+#[allow(dead_code)]
+fn decode_blob_to_rgba_bytes(content: &str) -> Option<(u32, u32, Vec<u8>)> {
+    let png_bytes = load_blob(content)?;
+
+    let img = image::load_from_memory_with_format(&png_bytes, image::ImageFormat::Png).ok()?;
+    let rgba = img.to_rgba8();
+    let width = rgba.width();
+    let height = rgba.height();
+
+    debug!(
+        width = width,
+        height = height,
+        format = "blob",
+        "Decoded blob to RGBA bytes for OCR"
+    );
+
+    Some((width, height, rgba.into_raw()))
+}
+
+/// Decode PNG format to raw RGBA bytes
+#[allow(dead_code)]
+fn decode_png_to_rgba_bytes(content: &str) -> Option<(u32, u32, Vec<u8>)> {
+    let base64_data = content.strip_prefix("png:")?;
+    let png_bytes = BASE64.decode(base64_data).ok()?;
+
+    let img = image::load_from_memory_with_format(&png_bytes, image::ImageFormat::Png).ok()?;
+    let rgba = img.to_rgba8();
+    let width = rgba.width();
+    let height = rgba.height();
+
+    debug!(
+        width = width,
+        height = height,
+        format = "png",
+        "Decoded PNG to RGBA bytes for OCR"
+    );
+
+    Some((width, height, rgba.into_raw()))
+}
+
+/// Decode legacy RGBA format to raw bytes (already in correct format)
+#[allow(dead_code)]
+fn decode_legacy_rgba_to_bytes(content: &str) -> Option<(u32, u32, Vec<u8>)> {
+    let parts: Vec<&str> = content.splitn(4, ':').collect();
+    if parts.len() != 4 || parts[0] != "rgba" {
+        return None;
+    }
+
+    let width: u32 = parts[1].parse().ok()?;
+    let height: u32 = parts[2].parse().ok()?;
+    let bytes = BASE64.decode(parts[3]).ok()?;
+
+    // Validate byte length
+    let expected = (width as u64).checked_mul(height as u64)?.checked_mul(4)?;
+    if bytes.len() != expected as usize {
+        warn!(
+            width,
+            height,
+            expected,
+            actual = bytes.len(),
+            "Legacy RGBA byte length mismatch for OCR"
+        );
+        return None;
+    }
+
+    debug!(
+        width = width,
+        height = height,
+        format = "rgba",
+        "Decoded legacy RGBA bytes for OCR"
+    );
+
+    Some((width, height, bytes))
+}
+
+#[cfg(test)]
+mod ocr_decode_tests {
+    use super::*;
+
+    #[test]
+    fn test_decode_to_rgba_bytes_png() {
+        let original = arboard::ImageData {
+            width: 2,
+            height: 2,
+            bytes: vec![
+                255, 0, 0, 255, // red pixel
+                0, 255, 0, 255, // green pixel
+                0, 0, 255, 255, // blue pixel
+                255, 255, 255, 255, // white pixel
+            ]
+            .into(),
+        };
+
+        let encoded = encode_image_as_png(&original).expect("Should encode as PNG");
+        let (width, height, rgba) = decode_to_rgba_bytes(&encoded).expect("Should decode");
+
+        assert_eq!(width, 2);
+        assert_eq!(height, 2);
+        assert_eq!(rgba.len(), 16); // 2x2x4 bytes
+                                    // First pixel should be red (255, 0, 0, 255)
+        assert_eq!(rgba[0], 255);
+        assert_eq!(rgba[1], 0);
+        assert_eq!(rgba[2], 0);
+        assert_eq!(rgba[3], 255);
+    }
+
+    #[test]
+    fn test_decode_to_rgba_bytes_legacy() {
+        let original = arboard::ImageData {
+            width: 1,
+            height: 1,
+            bytes: vec![128, 64, 32, 255].into(),
+        };
+
+        let encoded = encode_image_as_base64(&original).expect("Should encode");
+        let (width, height, rgba) = decode_to_rgba_bytes(&encoded).expect("Should decode");
+
+        assert_eq!(width, 1);
+        assert_eq!(height, 1);
+        assert_eq!(rgba, vec![128, 64, 32, 255]);
     }
 }

@@ -334,6 +334,7 @@ pub struct Action {
     pub title: String,
 
     /// Optional description shown below the title
+    #[allow(dead_code)]
     pub description: Option<String>,
 
     /// Category for grouping actions in the menu
@@ -358,6 +359,18 @@ pub struct Action {
 
     /// Section/group name for display (used with SectionStyle::Headers)
     pub section: Option<String>,
+
+    // === Cached lowercase fields for fast filtering (performance optimization) ===
+    // These are pre-computed on Action creation to avoid repeated to_lowercase() calls
+    // during search/filter operations which happen on every keystroke.
+    /// Cached lowercase title for fast filtering
+    pub title_lower: String,
+
+    /// Cached lowercase description for fast filtering
+    pub description_lower: Option<String>,
+
+    /// Cached lowercase shortcut for fast filtering
+    pub shortcut_lower: Option<String>,
 }
 
 /// Configuration for how the search input is positioned
@@ -446,9 +459,13 @@ impl Action {
         description: Option<String>,
         category: ActionCategory,
     ) -> Self {
+        let title_str = title.into();
+        let title_lower = title_str.to_lowercase();
+        let description_lower = description.as_ref().map(|d| d.to_lowercase());
+
         Action {
             id: id.into(),
-            title: title.into(),
+            title: title_str,
             description,
             category,
             shortcut: None,
@@ -456,11 +473,17 @@ impl Action {
             value: None,
             icon: None,
             section: None,
+            // Pre-compute lowercase for fast filtering
+            title_lower,
+            description_lower,
+            shortcut_lower: None,
         }
     }
 
     pub fn with_shortcut(mut self, shortcut: impl Into<String>) -> Self {
-        self.shortcut = Some(shortcut.into());
+        let shortcut_str = shortcut.into();
+        self.shortcut_lower = Some(shortcut_str.to_lowercase());
+        self.shortcut = Some(shortcut_str);
         self
     }
 

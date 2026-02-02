@@ -43,13 +43,17 @@ impl ScriptListApp {
                     self.sdk_actions = Some(action_list.clone());
 
                     // Register keyboard shortcuts for SDK actions
+                    // IMPORTANT: Only register shortcuts for visible actions
+                    // Hidden actions should not be triggerable via keyboard shortcuts
                     self.action_shortcuts.clear();
                     for action in action_list {
-                        if let Some(shortcut) = &action.shortcut {
-                            self.action_shortcuts.insert(
-                                shortcuts::normalize_shortcut(shortcut),
-                                action.name.clone(),
-                            );
+                        if action.is_visible() {
+                            if let Some(shortcut) = &action.shortcut {
+                                self.action_shortcuts.insert(
+                                    shortcuts::normalize_shortcut(shortcut),
+                                    action.name.clone(),
+                                );
+                            }
                         }
                     }
                 } else {
@@ -1701,7 +1705,33 @@ impl ScriptListApp {
                         }
                     } else {
                         logging::log("CHAT", "Built-in AI requested but no providers configured");
-                        chat_prompt = chat_prompt.with_needs_setup(true);
+
+                        // Create configure callback that signals via channel
+                        let configure_sender = self.inline_chat_configure_sender.clone();
+                        let configure_callback: crate::prompts::ChatConfigureCallback =
+                            std::sync::Arc::new(move || {
+                                crate::logging::log(
+                                    "CHAT",
+                                    "Configure callback triggered - sending signal",
+                                );
+                                let _ = configure_sender.try_send(());
+                            });
+
+                        // Create Claude Code callback that signals via channel
+                        let claude_code_sender = self.inline_chat_claude_code_sender.clone();
+                        let claude_code_callback: crate::prompts::ChatClaudeCodeCallback =
+                            std::sync::Arc::new(move || {
+                                crate::logging::log(
+                                    "CHAT",
+                                    "Claude Code callback triggered - sending signal",
+                                );
+                                let _ = claude_code_sender.try_send(());
+                            });
+
+                        chat_prompt = chat_prompt
+                            .with_needs_setup(true)
+                            .with_configure_callback(configure_callback)
+                            .with_claude_code_callback(claude_code_callback);
                     }
                 }
 
@@ -1857,19 +1887,23 @@ impl ScriptListApp {
                 self.sdk_actions = Some(actions.clone());
 
                 // Build action shortcuts map for keyboard handling
+                // IMPORTANT: Only register shortcuts for visible actions
+                // Hidden actions should not be triggerable via keyboard shortcuts
                 self.action_shortcuts.clear();
                 for action in &actions {
-                    if let Some(ref shortcut) = action.shortcut {
-                        let normalized = shortcuts::normalize_shortcut(shortcut);
-                        logging::log(
-                            "ACTIONS",
-                            &format!(
-                                "Registering action shortcut: '{}' -> '{}' (normalized: '{}')",
-                                shortcut, action.name, normalized
-                            ),
-                        );
-                        self.action_shortcuts
-                            .insert(normalized, action.name.clone());
+                    if action.is_visible() {
+                        if let Some(ref shortcut) = action.shortcut {
+                            let normalized = shortcuts::normalize_shortcut(shortcut);
+                            logging::log(
+                                "ACTIONS",
+                                &format!(
+                                    "Registering action shortcut: '{}' -> '{}' (normalized: '{}')",
+                                    shortcut, action.name, normalized
+                                ),
+                            );
+                            self.action_shortcuts
+                                .insert(normalized, action.name.clone());
+                        }
                     }
                 }
 

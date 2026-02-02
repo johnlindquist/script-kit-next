@@ -128,6 +128,129 @@ impl ScriptListApp {
         cx.notify();
     }
 
+    /// Toggle the actions dialog for a clipboard history entry
+    fn toggle_clipboard_actions(
+        &mut self,
+        entry: clipboard_history::ClipboardEntryMeta,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        logging::log("KEY", "Toggling clipboard actions popup");
+
+        if self.show_actions_popup || is_actions_window_open() {
+            // Close the actions popup
+            self.show_actions_popup = false;
+            self.actions_dialog = None;
+
+            // Restore focus state - clipboard history uses the main filter input
+            self.focused_input = FocusedInput::MainFilter;
+            self.gpui_input_focused = true;
+
+            // Close the actions window via spawn
+            cx.spawn(async move |_this, cx| {
+                cx.update(|cx| {
+                    close_actions_window(cx);
+                })
+                .ok();
+            })
+            .detach();
+
+            // Refocus the clipboard history input
+            self.focus_main_filter(window, cx);
+            logging::log(
+                "FOCUS",
+                "Clipboard actions closed, focus returned to clipboard input",
+            );
+        } else {
+            // Open actions popup for the selected clipboard entry
+            self.show_actions_popup = true;
+            self.focused_clipboard_entry_id = Some(entry.id.clone());
+
+            // Transfer focus from Input to main focus_handle for actions routing
+            self.focus_handle.focus(window, cx);
+            self.gpui_input_focused = false;
+            self.focused_input = FocusedInput::ActionsSearch;
+
+            let entry_content_type = entry.content_type;
+            let entry_info = crate::actions::ClipboardEntryInfo {
+                id: entry.id.clone(),
+                content_type: entry.content_type,
+                pinned: entry.pinned,
+                preview: entry.display_preview(),
+                image_dimensions: entry.image_width.zip(entry.image_height),
+                frontmost_app_name: None,
+            };
+
+            // Create the dialog entity
+            let theme_arc = std::sync::Arc::clone(&self.theme);
+            let dialog = cx.new(|cx| {
+                let focus_handle = cx.focus_handle();
+                ActionsDialog::with_clipboard_entry(
+                    focus_handle,
+                    std::sync::Arc::new(|_action_id| {}), // Callback handled via main app
+                    &entry_info,
+                    theme_arc,
+                )
+            });
+
+            // Store the dialog entity for keyboard routing
+            self.actions_dialog = Some(dialog.clone());
+
+            // Set up the on_close callback to restore focus when escape is pressed
+            let app_entity = cx.entity().clone();
+            dialog.update(cx, |d, _cx| {
+                d.set_on_close(std::sync::Arc::new(move |cx| {
+                    app_entity.update(cx, |app, cx| {
+                        app.show_actions_popup = false;
+                        app.actions_dialog = None;
+                        app.focused_input = FocusedInput::MainFilter;
+                        app.pending_focus = Some(FocusTarget::AppRoot);
+                        logging::log(
+                            "FOCUS",
+                            "Clipboard actions closed via escape, pending_focus=AppRoot",
+                        );
+                        cx.notify();
+                    });
+                }));
+            });
+
+            // Get main window bounds and display_id for positioning
+            let main_bounds = window.bounds();
+            let display_id = window.display(cx).map(|d| d.id());
+
+            logging::log(
+                "ACTIONS",
+                &format!(
+                    "Opening clipboard actions for entry: {} (type={:?}, pinned={})",
+                    entry.id, entry_content_type, entry.pinned
+                ),
+            );
+
+            // Open the actions window
+            cx.spawn(async move |_this, cx| {
+                cx.update(|cx| {
+                    match open_actions_window(
+                        cx,
+                        main_bounds,
+                        display_id,
+                        dialog,
+                        crate::actions::WindowPosition::BottomRight,
+                    ) {
+                        Ok(_handle) => {
+                            logging::log("ACTIONS", "Clipboard actions popup window opened");
+                        }
+                        Err(e) => {
+                            logging::log("ERROR", &format!("Failed to open actions window: {}", e));
+                        }
+                    }
+                })
+                .ok();
+            })
+            .detach();
+        }
+        cx.notify();
+    }
+
     /// Render clipboard history view
     /// P0 FIX: Data comes from self.cached_clipboard_entries, view passes only state
     fn render_clipboard_history(
@@ -195,7 +318,28 @@ impl ScriptListApp {
                 }
 
                 let key_str = event.keystroke.key.to_lowercase();
+                let key_char = event.keystroke.key_char.as_deref();
                 let has_cmd = event.keystroke.modifiers.platform;
+                let modifiers = &event.keystroke.modifiers;
+
+                // Route keys to actions dialog first if it's open
+                match this.route_key_to_actions_dialog(
+                    &key_str,
+                    key_char,
+                    modifiers,
+                    ActionsDialogHost::ClipboardHistory,
+                    window,
+                    cx,
+                ) {
+                    ActionsRoute::NotHandled => {}
+                    ActionsRoute::Handled => {
+                        return;
+                    }
+                    ActionsRoute::Execute { action_id } => {
+                        this.handle_action(action_id, cx);
+                        return;
+                    }
+                }
 
                 // ESC: Use go_back_or_close for consistent navigation behavior
                 // If opened from main menu → return to main menu
@@ -234,6 +378,64 @@ impl ScriptListApp {
                             .collect()
                     };
                     let filtered_len = filtered_entries.len();
+                    let selected_entry = filtered_entries
+                        .get(*selected_index)
+                        .map(|(_, entry)| (*entry).clone());
+                    this.focused_clipboard_entry_id =
+                        selected_entry.as_ref().map(|entry| entry.id.clone());
+
+                    // Cmd+P toggles pin state for selected entry
+                    if has_cmd && key_str == "p" {
+                        if let Some(entry) = selected_entry {
+                            drop(filtered_entries);
+                            let action_id = if entry.pinned {
+                                "clipboard_unpin"
+                            } else {
+                                "clipboard_pin"
+                            };
+                            this.handle_action(action_id.to_string(), cx);
+                        }
+                        return;
+                    }
+
+                    // Cmd+K opens clipboard actions dialog
+                    if has_cmd && key_str == "k" {
+                        if let Some(entry) = selected_entry {
+                            drop(filtered_entries);
+                            this.toggle_clipboard_actions(entry, window, cx);
+                        }
+                        return;
+                    }
+
+                    // Ctrl+Cmd+A attaches selected entry to AI chat
+                    if modifiers.control && has_cmd && key_str == "a" {
+                        if let Some(_entry) = selected_entry {
+                            drop(filtered_entries);
+                            this.handle_action("clipboard_attach_to_ai".to_string(), cx);
+                        }
+                        return;
+                    }
+
+                    // Space opens Quick Look (macOS Finder behavior)
+                    if key_str == "space"
+                        && filter.is_empty()
+                        && !modifiers.platform
+                        && !modifiers.control
+                        && !modifiers.alt
+                        && !modifiers.shift
+                    {
+                        if let Some(entry) = selected_entry {
+                            if let Err(e) = clipboard_history::quick_look_entry(&entry) {
+                                logging::log("ERROR", &format!("Quick Look failed: {}", e));
+                                this.show_hud(
+                                    format!("Quick Look failed: {}", e),
+                                    Some(2500),
+                                    cx,
+                                );
+                            }
+                        }
+                        return;
+                    }
 
                     match key_str.as_str() {
                         "up" | "arrowup" => {
@@ -242,6 +444,9 @@ impl ScriptListApp {
                                 // Scroll to keep selection visible
                                 this.clipboard_list_scroll_handle
                                     .scroll_to_item(*selected_index, ScrollStrategy::Nearest);
+                                this.focused_clipboard_entry_id = filtered_entries
+                                    .get(*selected_index)
+                                    .map(|(_, entry)| entry.id.clone());
                                 cx.notify();
                             }
                         }
@@ -251,6 +456,9 @@ impl ScriptListApp {
                                 // Scroll to keep selection visible
                                 this.clipboard_list_scroll_handle
                                     .scroll_to_item(*selected_index, ScrollStrategy::Nearest);
+                                this.focused_clipboard_entry_id = filtered_entries
+                                    .get(*selected_index)
+                                    .map(|(_, entry)| entry.id.clone());
                                 cx.notify();
                             }
                         }
@@ -399,6 +607,8 @@ impl ScriptListApp {
         let selected_entry = filtered_entries
             .get(selected_index)
             .map(|(_, e)| (*e).clone());
+        let has_entry = selected_entry.is_some();
+        let selected_entry_for_footer = selected_entry.clone();
         let preview_panel = self.render_clipboard_preview_panel(
             &selected_entry,
             &image_cache,
@@ -487,13 +697,25 @@ impl ScriptListApp {
                     ),
             )
             // Footer
-            .child(PromptFooter::new(
-                PromptFooterConfig::new()
+            .child({
+                let handle_actions = cx.entity().downgrade();
+
+                let footer_config = PromptFooterConfig::new()
                     .primary_label("Paste")
                     .primary_shortcut("↵")
-                    .show_secondary(false),
-                PromptFooterColors::from_theme(&self.theme),
-            ))
+                    .show_secondary(has_entry);
+
+                PromptFooter::new(footer_config, PromptFooterColors::from_theme(&self.theme))
+                    .on_secondary_click(Box::new(move |_, window, cx| {
+                        if let Some(app) = handle_actions.upgrade() {
+                            if let Some(entry) = selected_entry_for_footer.clone() {
+                                app.update(cx, |this, cx| {
+                                    this.toggle_clipboard_actions(entry, window, cx);
+                                });
+                            }
+                        }
+                    }))
+            })
             .into_any_element()
     }
 

@@ -375,8 +375,10 @@ impl BrowsePanel {
     // NOTE: hex_to_rgba_with_opacity moved to crate::ui_foundation (centralized)
 
     /// Get background color with vibrancy opacity applied
+    ///
+    /// Uses cached theme to avoid file I/O on every render.
     fn get_vibrancy_background(_cx: &Context<Self>) -> gpui::Rgba {
-        let sk_theme = crate::theme::load_theme();
+        let sk_theme = crate::theme::get_cached_theme();
         let opacity = sk_theme.get_opacity();
         let bg_hex = sk_theme.colors.background.main;
         rgba(crate::ui_foundation::hex_to_rgba_with_opacity(
@@ -389,8 +391,10 @@ impl BrowsePanel {
     ///
     /// For dark mode: black overlay (darkens content behind)
     /// For light mode: white overlay (keeps content readable on light backgrounds)
+    ///
+    /// Uses cached theme to avoid file I/O on every render.
     fn get_modal_overlay_background() -> gpui::Rgba {
-        let sk_theme = crate::theme::load_theme();
+        let sk_theme = crate::theme::get_cached_theme();
         if sk_theme.has_dark_colors() {
             rgba(0x00000080) // black at 50% for dark mode
         } else {
@@ -450,7 +454,8 @@ impl Render for BrowsePanel {
             .child({
                 // Check vibrancy to conditionally apply shadow
                 // Shadows on transparent elements block vibrancy blur
-                let sk_theme = crate::theme::load_theme();
+                // Uses cached theme to avoid file I/O on every render
+                let sk_theme = crate::theme::get_cached_theme();
                 let vibrancy_enabled = sk_theme.is_vibrancy_enabled();
 
                 div()

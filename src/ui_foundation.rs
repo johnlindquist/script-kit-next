@@ -118,8 +118,10 @@ pub const VIBRANCY_LIGHT_OPACITY: f32 = 0.85;
 ///     .bg(vibrancy_bg)  // Tints the blur effect with theme color
 ///     .child(content)
 /// ```
+///
+/// Uses cached theme to avoid file I/O on every render.
 pub fn get_window_vibrancy_background() -> Rgba {
-    let theme = crate::theme::load_theme();
+    let theme = crate::theme::get_cached_theme();
     let opacity = if theme.has_dark_colors() {
         VIBRANCY_DARK_OPACITY
     } else {

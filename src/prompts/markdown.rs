@@ -1,126 +1,372 @@
 //! Markdown rendering for chat messages
 //!
-//! Simple markdown parser that renders to GPUI elements.
-//! Supports: bold, italic, code, code blocks, links, lists, blockquotes.
+//! Uses pulldown-cmark for parsing and syntect for fenced code highlighting.
+//! Supports: headings, lists, blockquotes, bold/italic, inline code, code blocks, links.
 
-use gpui::{div, prelude::*, px, rgb, rgba, IntoElement};
+use gpui::{div, prelude::*, px, rgb, rgba, AnyElement, FontWeight, IntoElement};
+use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 
+use crate::notes::code_highlight::{highlight_code_lines, CodeLine, CodeSpan};
 use crate::theme::PromptColors;
 
-/// Render markdown text to GPUI elements
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct InlineStyle {
+    bold: bool,
+    italic: bool,
+    code: bool,
+    link: bool,
+}
+
+#[derive(Clone, Debug)]
+struct InlineSpan {
+    text: String,
+    style: InlineStyle,
+}
+
+#[derive(Debug)]
+struct ListState {
+    ordered: bool,
+    start: usize,
+    items: Vec<Vec<InlineSpan>>,
+}
+
+#[derive(Debug)]
+struct CodeBlockState {
+    language: Option<String>,
+    code: String,
+}
+
+/// Render markdown text to GPUI elements.
 pub fn render_markdown(text: &str, colors: &PromptColors) -> impl IntoElement {
-    let mut container = div().flex().flex_col().gap(px(6.0)).w_full().min_w_0();
-    let lines: Vec<&str> = text.lines().collect();
-    let mut i = 0;
+    let mut options = Options::empty();
+    options.insert(Options::ENABLE_STRIKETHROUGH);
+    options.insert(Options::ENABLE_TABLES);
+    options.insert(Options::ENABLE_TASKLISTS);
+    options.insert(Options::ENABLE_FOOTNOTES);
+    options.insert(Options::ENABLE_SMART_PUNCTUATION);
 
-    while i < lines.len() {
-        let line = lines[i];
+    let parser = Parser::new_ext(text, options);
 
-        // Code block
-        if line.starts_with("```") {
-            let lang = line.trim_start_matches('`').trim();
-            let mut code_lines = Vec::new();
-            i += 1;
-            while i < lines.len() && !lines[i].starts_with("```") {
-                code_lines.push(lines[i]);
-                i += 1;
+    let mut blocks: Vec<AnyElement> = Vec::new();
+    let mut spans: Vec<InlineSpan> = Vec::new();
+    let mut style_stack: Vec<InlineStyle> = vec![InlineStyle::default()];
+    let mut heading_level: Option<u32> = None;
+    let mut list_state: Option<ListState> = None;
+    let mut current_item: Option<Vec<InlineSpan>> = None;
+    let mut quote_depth: usize = 0;
+    let mut code_block: Option<CodeBlockState> = None;
+
+    for event in parser {
+        match event {
+            Event::Start(tag) => match tag {
+                Tag::Paragraph => spans.clear(),
+                Tag::Heading { level, .. } => {
+                    heading_level = Some(heading_level_to_u32(level));
+                    spans.clear();
+                }
+                Tag::List(start) => {
+                    list_state = Some(ListState {
+                        ordered: start.is_some(),
+                        start: start.unwrap_or(1) as usize,
+                        items: Vec::new(),
+                    });
+                }
+                Tag::Item => {
+                    current_item = Some(Vec::new());
+                    spans.clear();
+                }
+                Tag::BlockQuote(_) => {
+                    quote_depth += 1;
+                }
+                Tag::Emphasis => push_style(&mut style_stack, |style| style.italic = true),
+                Tag::Strong => push_style(&mut style_stack, |style| style.bold = true),
+                Tag::Link { .. } => push_style(&mut style_stack, |style| style.link = true),
+                Tag::CodeBlock(kind) => {
+                    code_block = Some(CodeBlockState {
+                        language: code_block_language(&kind),
+                        code: String::new(),
+                    });
+                }
+                _ => {}
+            },
+            Event::End(tag) => match tag {
+                TagEnd::Paragraph => {
+                    flush_paragraph(
+                        &mut blocks,
+                        &mut spans,
+                        &mut current_item,
+                        quote_depth,
+                        colors,
+                    );
+                }
+                TagEnd::Heading(_) => {
+                    flush_heading(
+                        &mut blocks,
+                        &mut spans,
+                        heading_level.take(),
+                        quote_depth,
+                        colors,
+                    );
+                }
+                TagEnd::Item => {
+                    if let Some(mut item_spans) = current_item.take() {
+                        if !spans.is_empty() {
+                            item_spans.append(&mut spans);
+                        }
+                        if let Some(list) = list_state.as_mut() {
+                            list.items.push(item_spans);
+                        }
+                    }
+                }
+                TagEnd::List(_) => {
+                    if let Some(list) = list_state.take() {
+                        let list_element = render_list(list, colors);
+                        push_block(&mut blocks, list_element, quote_depth, colors);
+                    }
+                }
+                TagEnd::BlockQuote(_) => {
+                    quote_depth = quote_depth.saturating_sub(1);
+                }
+                TagEnd::Emphasis | TagEnd::Strong | TagEnd::Link => {
+                    pop_style(&mut style_stack);
+                }
+                TagEnd::CodeBlock => {
+                    if let Some(block) = code_block.take() {
+                        let element =
+                            render_code_block(&block.code, block.language.as_deref(), colors);
+                        push_block(&mut blocks, element, quote_depth, colors);
+                    }
+                }
+                _ => {}
+            },
+            Event::Text(text) => {
+                if let Some(block) = code_block.as_mut() {
+                    block.code.push_str(&text);
+                } else {
+                    let style = *style_stack.last().unwrap_or(&InlineStyle::default());
+                    push_text_span(&mut spans, &text, style);
+                }
             }
-            let code = code_lines.join("\n");
-            container = container.child(render_code_block(&code, lang, colors));
+            Event::Code(code) => {
+                let mut style = *style_stack.last().unwrap_or(&InlineStyle::default());
+                style.code = true;
+                push_text_span(&mut spans, &code, style);
+            }
+            Event::SoftBreak | Event::HardBreak => {
+                let style = *style_stack.last().unwrap_or(&InlineStyle::default());
+                push_text_span(&mut spans, " ", style);
+            }
+            Event::Rule => {
+                push_block(&mut blocks, render_hr(colors), quote_depth, colors);
+            }
+            Event::Html(html) => {
+                let style = *style_stack.last().unwrap_or(&InlineStyle::default());
+                push_text_span(&mut spans, &html, style);
+            }
+            _ => {}
         }
-        // Blockquote
-        else if line.starts_with("> ") {
-            let quote_text = line.trim_start_matches("> ");
-            container = container.child(
-                div()
-                    .w_full()
-                    .pl(px(12.0))
-                    .border_l_2()
-                    .border_color(rgb(colors.quote_border))
-                    .text_color(rgb(colors.text_secondary))
-                    .italic()
-                    .child(quote_text.to_string()),
-            );
-        }
-        // Headings (check from most specific to least specific)
-        else if let Some(heading) = line.strip_prefix("### ") {
-            container = container.child(
-                div()
-                    .text_sm()
-                    .font_weight(gpui::FontWeight::SEMIBOLD)
-                    .text_color(rgb(colors.text_primary))
-                    .child(heading.to_string()),
-            );
-        } else if let Some(heading) = line.strip_prefix("## ") {
-            container = container.child(
-                div()
-                    .text_base()
-                    .font_weight(gpui::FontWeight::SEMIBOLD)
-                    .text_color(rgb(colors.text_primary))
-                    .child(heading.to_string()),
-            );
-        } else if let Some(heading) = line.strip_prefix("# ") {
-            container = container.child(
-                div()
-                    .text_lg()
-                    .font_weight(gpui::FontWeight::BOLD)
-                    .text_color(rgb(colors.text_primary))
-                    .child(heading.to_string()),
-            );
-        }
-        // Bullet list
-        else if line.starts_with("- ") || line.starts_with("* ") {
-            container = container.child(
-                div()
-                    .flex()
-                    .flex_row()
-                    .gap(px(6.0))
-                    .child(div().text_color(rgb(colors.text_tertiary)).child("•"))
-                    .child(render_inline(line[2..].trim(), colors)),
-            );
-        }
-        // Numbered list (1. item)
-        else if let Some(rest) = parse_numbered(line) {
-            let num = line
-                .chars()
-                .take_while(|c| c.is_ascii_digit())
-                .collect::<String>();
-            container = container.child(
-                div()
-                    .flex()
-                    .flex_row()
-                    .gap(px(6.0))
-                    .child(
-                        div()
-                            .text_color(rgb(colors.text_tertiary))
-                            .child(format!("{}.", num)),
-                    )
-                    .child(render_inline(rest, colors)),
-            );
-        }
-        // Regular paragraph
-        else if !line.trim().is_empty() {
-            container = container.child(render_inline(line, colors));
-        }
-
-        i += 1;
     }
 
+    div()
+        .flex()
+        .flex_col()
+        .gap(px(6.0))
+        .w_full()
+        .min_w_0()
+        .children(blocks)
+}
+
+fn heading_level_to_u32(level: HeadingLevel) -> u32 {
+    match level {
+        HeadingLevel::H1 => 1,
+        HeadingLevel::H2 => 2,
+        HeadingLevel::H3 => 3,
+        HeadingLevel::H4 => 4,
+        HeadingLevel::H5 => 5,
+        HeadingLevel::H6 => 6,
+    }
+}
+
+fn code_block_language(kind: &CodeBlockKind) -> Option<String> {
+    match kind {
+        CodeBlockKind::Fenced(lang) => {
+            let trimmed = lang.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        }
+        CodeBlockKind::Indented => None,
+    }
+}
+
+fn push_style(stack: &mut Vec<InlineStyle>, update: impl FnOnce(&mut InlineStyle)) {
+    let mut next = *stack.last().unwrap_or(&InlineStyle::default());
+    update(&mut next);
+    stack.push(next);
+}
+
+fn pop_style(stack: &mut Vec<InlineStyle>) {
+    if stack.len() > 1 {
+        stack.pop();
+    }
+}
+
+fn push_text_span(spans: &mut Vec<InlineSpan>, text: &str, style: InlineStyle) {
+    if text.is_empty() {
+        return;
+    }
+    if let Some(last) = spans.last_mut() {
+        if last.style == style {
+            last.text.push_str(text);
+            return;
+        }
+    }
+    spans.push(InlineSpan {
+        text: text.to_string(),
+        style,
+    });
+}
+
+fn flush_paragraph(
+    blocks: &mut Vec<AnyElement>,
+    spans: &mut Vec<InlineSpan>,
+    current_item: &mut Option<Vec<InlineSpan>>,
+    quote_depth: usize,
+    colors: &PromptColors,
+) {
+    if spans.is_empty() {
+        return;
+    }
+
+    if let Some(item_spans) = current_item.as_mut() {
+        item_spans.append(spans);
+        return;
+    }
+
+    let element = render_inline_spans(spans, colors);
+    spans.clear();
+    push_block(blocks, element, quote_depth, colors);
+}
+
+fn flush_heading(
+    blocks: &mut Vec<AnyElement>,
+    spans: &mut Vec<InlineSpan>,
+    level: Option<u32>,
+    quote_depth: usize,
+    colors: &PromptColors,
+) {
+    if spans.is_empty() {
+        return;
+    }
+
+    let level = level.unwrap_or(3);
+    let mut heading = render_inline_spans(spans, colors).text_color(rgb(colors.text_primary));
+    heading = match level {
+        1 => heading.text_lg().font_weight(FontWeight::BOLD),
+        2 => heading.text_base().font_weight(FontWeight::SEMIBOLD),
+        3 => heading.text_sm().font_weight(FontWeight::SEMIBOLD),
+        _ => heading.text_sm().font_weight(FontWeight::MEDIUM),
+    };
+
+    spans.clear();
+    push_block(blocks, heading, quote_depth, colors);
+}
+
+fn push_block(
+    blocks: &mut Vec<AnyElement>,
+    element: impl IntoElement,
+    quote_depth: usize,
+    colors: &PromptColors,
+) {
+    let mut element = element.into_any_element();
+    if quote_depth > 0 {
+        element = div()
+            .w_full()
+            .pl(px(12.0))
+            .border_l_2()
+            .border_color(rgb(colors.quote_border))
+            .child(element)
+            .into_any_element();
+    }
+    blocks.push(element);
+}
+
+fn render_inline_spans(spans: &[InlineSpan], colors: &PromptColors) -> gpui::Div {
+    let mut row = div()
+        .flex()
+        .flex_row()
+        .flex_wrap()
+        .w_full()
+        .min_w_0()
+        .text_sm();
+
+    for span in spans {
+        let InlineSpan { text, style } = span;
+        let mut piece = div()
+            .text_color(rgb(colors.text_primary))
+            .child(text.clone());
+
+        if style.bold {
+            piece = piece.font_weight(FontWeight::BOLD);
+        }
+        if style.italic {
+            piece = piece.italic();
+        }
+        if style.link {
+            piece = piece.text_color(rgb(colors.accent_color));
+        }
+        if style.code {
+            piece = div()
+                .px(px(4.0))
+                .py(px(1.0))
+                .bg(rgba((colors.code_bg << 8) | 0x80))
+                .rounded(px(3.0))
+                .font_family("Menlo")
+                .text_color(rgb(colors.text_primary))
+                .child(text.clone());
+        }
+
+        row = row.child(piece);
+    }
+
+    row
+}
+
+fn render_list(list: ListState, colors: &PromptColors) -> gpui::Div {
+    let mut container = div().flex().flex_col().gap(px(4.0)).w_full();
+    for (index, item) in list.items.iter().enumerate() {
+        let marker = if list.ordered {
+            format!("{}.", list.start + index)
+        } else {
+            "•".to_string()
+        };
+        container = container.child(
+            div()
+                .flex()
+                .flex_row()
+                .gap(px(6.0))
+                .child(div().text_color(rgb(colors.text_tertiary)).child(marker))
+                .child(render_inline_spans(item, colors).flex_1()),
+        );
+    }
     container
 }
 
-fn parse_numbered(line: &str) -> Option<&str> {
-    let trimmed = line.trim_start();
-    let num_end = trimmed.chars().take_while(|c| c.is_ascii_digit()).count();
-    if num_end > 0 && trimmed[num_end..].starts_with(". ") {
-        Some(&trimmed[num_end + 2..])
-    } else {
-        None
-    }
+fn render_hr(colors: &PromptColors) -> gpui::Div {
+    div()
+        .w_full()
+        .h(px(1.0))
+        .my(px(8.0))
+        .bg(rgb(colors.hr_color))
 }
 
-fn render_code_block(code: &str, lang: &str, colors: &PromptColors) -> impl IntoElement {
-    div()
+fn render_code_block(code: &str, lang: Option<&str>, colors: &PromptColors) -> gpui::Div {
+    let lang_label = lang.unwrap_or("").trim();
+    let lines: Vec<CodeLine> = highlight_code_lines(code, lang);
+
+    let mut code_container = div()
         .w_full()
         .mt(px(4.0))
         .mb(px(4.0))
@@ -130,145 +376,49 @@ fn render_code_block(code: &str, lang: &str, colors: &PromptColors) -> impl Into
         .border_color(rgba((colors.quote_border << 8) | 0x40))
         .flex()
         .flex_col()
-        .overflow_hidden()
-        .when(!lang.is_empty(), |d| {
-            d.child(
-                div()
-                    .w_full()
-                    .px(px(10.0))
-                    .py(px(4.0))
-                    .border_b_1()
-                    .border_color(rgba((colors.quote_border << 8) | 0x30))
-                    .text_xs()
-                    .text_color(rgb(colors.text_tertiary))
-                    .child(lang.to_string()),
-            )
-        })
-        .child(
+        .overflow_hidden();
+
+    if !lang_label.is_empty() {
+        code_container = code_container.child(
             div()
                 .w_full()
                 .px(px(10.0))
-                .py(px(8.0))
-                .text_sm()
-                .text_color(rgb(colors.text_primary))
-                .child(code.trim().to_string()),
-        )
-}
-
-/// Render inline text with bold, italic, code, and links
-fn render_inline(text: &str, colors: &PromptColors) -> impl IntoElement {
-    // For simple text without inline formatting, render as a simple text element
-    // The parent container constrains width, allowing natural text wrapping
-    if !text.contains('*') && !text.contains('_') && !text.contains('`') && !text.contains('[') {
-        return div()
-            .w_full()
-            .min_w_0()
-            .overflow_hidden()
-            .text_sm()
-            .text_color(rgb(colors.text_primary))
-            .child(text.to_string())
-            .into_any_element();
+                .py(px(4.0))
+                .border_b_1()
+                .border_color(rgba((colors.quote_border << 8) | 0x30))
+                .text_xs()
+                .text_color(rgb(colors.text_tertiary))
+                .child(lang_label.to_string()),
+        );
     }
 
-    // For text with inline formatting, use flex_wrap for word-level wrapping
-    let mut row = div()
-        .flex()
-        .flex_row()
-        .flex_wrap()
+    let mut body = div()
         .w_full()
-        .min_w_0()
-        .text_sm();
-    let mut chars = text.chars().peekable();
-    let mut current = String::new();
+        .px(px(10.0))
+        .py(px(8.0))
+        .flex()
+        .flex_col()
+        .gap(px(2.0));
 
-    while let Some(c) = chars.next() {
-        match c {
-            // Bold: **text**
-            '*' if chars.peek() == Some(&'*') => {
-                row = flush_text(row, &mut current, colors);
-                chars.next();
-                let bold = collect_until(&mut chars, |c, next| c == '*' && next == Some(&'*'));
-                if chars.peek() == Some(&'*') {
-                    chars.next();
-                }
-                row = row.child(
-                    div()
-                        .font_weight(gpui::FontWeight::BOLD)
-                        .text_color(rgb(colors.text_primary))
-                        .child(bold),
-                );
+    for line in lines {
+        let mut line_div = div()
+            .flex()
+            .flex_row()
+            .w_full()
+            .font_family("Menlo")
+            .text_sm()
+            .min_h(px(16.0));
+
+        if line.spans.is_empty() {
+            line_div = line_div.child(" ");
+        } else {
+            for CodeSpan { text, color } in line.spans {
+                line_div = line_div.child(div().text_color(rgb(color)).child(text));
             }
-            // Italic: *text* or _text_
-            '*' | '_' => {
-                let delim = c;
-                row = flush_text(row, &mut current, colors);
-                let italic = collect_until(&mut chars, |c, _| c == delim);
-                row = row.child(
-                    div()
-                        .italic()
-                        .text_color(rgb(colors.text_primary))
-                        .child(italic),
-                );
-            }
-            // Inline code: `code`
-            '`' => {
-                row = flush_text(row, &mut current, colors);
-                let code = collect_until(&mut chars, |c, _| c == '`');
-                row = row.child(
-                    div()
-                        .px(px(4.0))
-                        .py(px(1.0))
-                        .bg(rgba((colors.code_bg << 8) | 0x80))
-                        .rounded(px(3.0))
-                        .text_color(rgb(colors.text_primary))
-                        .child(code),
-                );
-            }
-            // Link: [text](url)
-            '[' => {
-                row = flush_text(row, &mut current, colors);
-                let link_text = collect_until(&mut chars, |c, _| c == ']');
-                if chars.peek() == Some(&'(') {
-                    chars.next();
-                    let _url = collect_until(&mut chars, |c, _| c == ')');
-                    row = row.child(
-                        div()
-                            .text_color(rgb(colors.accent_color))
-                            .cursor_pointer()
-                            .child(link_text),
-                    );
-                } else {
-                    current.push('[');
-                    current.push_str(&link_text);
-                    current.push(']');
-                }
-            }
-            _ => current.push(c),
         }
+
+        body = body.child(line_div);
     }
 
-    flush_text(row, &mut current, colors).into_any_element()
-}
-
-fn flush_text(row: gpui::Div, current: &mut String, colors: &PromptColors) -> gpui::Div {
-    if current.is_empty() {
-        return row;
-    }
-    let text = std::mem::take(current);
-    row.child(div().text_color(rgb(colors.text_primary)).child(text))
-}
-
-fn collect_until<F>(chars: &mut std::iter::Peekable<std::str::Chars>, end: F) -> String
-where
-    F: Fn(char, Option<&char>) -> bool,
-{
-    let mut result = String::new();
-    while let Some(&c) = chars.peek() {
-        if end(c, chars.clone().nth(1).as_ref()) {
-            chars.next();
-            break;
-        }
-        result.push(chars.next().unwrap());
-    }
-    result
+    code_container.child(body)
 }

@@ -2,6 +2,64 @@
 // This file is included via include!() macro in main.rs
 // Contains: handle_action, trigger_action_by_name
 
+fn select_clipboard_entry_meta<'a>(
+    entries: &'a [clipboard_history::ClipboardEntryMeta],
+    filter: &str,
+    selected_index: usize,
+) -> Option<&'a clipboard_history::ClipboardEntryMeta> {
+    if filter.is_empty() {
+        if entries.is_empty() {
+            return None;
+        }
+        let clamped_index = selected_index.min(entries.len().saturating_sub(1));
+        return entries.get(clamped_index);
+    }
+
+    let filter_lower = filter.to_lowercase();
+    let filtered_entries: Vec<_> = entries
+        .iter()
+        .filter(|entry| entry.text_preview.to_lowercase().contains(&filter_lower))
+        .collect();
+
+    if filtered_entries.is_empty() {
+        return None;
+    }
+
+    let clamped_index = selected_index.min(filtered_entries.len().saturating_sub(1));
+    filtered_entries.get(clamped_index).copied()
+}
+
+#[cfg(test)]
+mod app_actions_tests {
+    use super::select_clipboard_entry_meta;
+    use crate::clipboard_history::{ClipboardEntryMeta, ContentType};
+
+    fn entry(id: &str, preview: &str) -> ClipboardEntryMeta {
+        ClipboardEntryMeta {
+            id: id.to_string(),
+            content_type: ContentType::Text,
+            timestamp: 0,
+            pinned: false,
+            text_preview: preview.to_string(),
+            image_width: None,
+            image_height: None,
+            byte_size: 0,
+            ocr_text: None,
+        }
+    }
+
+    #[test]
+    fn test_select_clipboard_entry_meta_filters_and_clamps() {
+        let entries = vec![entry("1", "Alpha"), entry("2", "Beta"), entry("3", "Gamma")];
+
+        let filtered = select_clipboard_entry_meta(&entries, "et", 0).unwrap();
+        assert_eq!(filtered.id, "2");
+
+        let clamped = select_clipboard_entry_meta(&entries, "", 99).unwrap();
+        assert_eq!(clamped.id, "3");
+    }
+}
+
 impl ScriptListApp {
     /// Helper to hide main window and set reset flag.
     /// Uses platform::hide_main_window() to hide ONLY the main window,
@@ -46,9 +104,325 @@ impl ScriptListApp {
         Ok(())
     }
 
+    /// Return the currently selected clipboard entry metadata when in ClipboardHistoryView.
+    fn selected_clipboard_entry(&self) -> Option<clipboard_history::ClipboardEntryMeta> {
+        if let Some(ref entry_id) = self.focused_clipboard_entry_id {
+            if let Some(entry) = self
+                .cached_clipboard_entries
+                .iter()
+                .find(|entry| &entry.id == entry_id)
+            {
+                return Some(entry.clone());
+            }
+        }
+
+        let AppView::ClipboardHistoryView {
+            filter,
+            selected_index,
+        } = &self.current_view
+        else {
+            return None;
+        };
+
+        select_clipboard_entry_meta(&self.cached_clipboard_entries, filter, *selected_index)
+            .cloned()
+    }
+
+    /// Return true when the current view has any available actions.
+    fn has_actions(&mut self) -> bool {
+        match &self.current_view {
+            AppView::ClipboardHistoryView { .. } => self.selected_clipboard_entry().is_some(),
+            _ => {
+                let script_info = self.get_focused_script_info();
+                let mut actions = Vec::new();
+
+                if let Some(ref script) = script_info {
+                    if script.is_scriptlet {
+                        actions.extend(crate::actions::get_scriptlet_context_actions_with_custom(
+                            script, None,
+                        ));
+                    } else {
+                        actions.extend(crate::actions::get_script_context_actions(script));
+                    }
+                }
+
+                actions.extend(crate::actions::get_global_actions());
+                !actions.is_empty()
+            }
+        }
+    }
+
+    /// Simple percent-encoding for URL query strings.
+    fn percent_encode_for_url(&self, input: &str) -> String {
+        let mut encoded = String::with_capacity(input.len() * 3);
+        for byte in input.bytes() {
+            match byte {
+                b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => {
+                    encoded.push(byte as char);
+                }
+                b' ' => encoded.push_str("%20"),
+                _ => {
+                    encoded.push('%');
+                    encoded.push_str(&format!("{:02X}", byte));
+                }
+            }
+        }
+        encoded
+    }
+
     /// Handle action selection from the actions dialog
     fn handle_action(&mut self, action_id: String, cx: &mut Context<Self>) {
         logging::log("UI", &format!("Action selected: {}", action_id));
+
+        let selected_clipboard_entry = if action_id.starts_with("clipboard_") {
+            self.selected_clipboard_entry()
+        } else {
+            None
+        };
+
+        match action_id.as_str() {
+            "clipboard_pin" | "clipboard_unpin" => {
+                let Some(entry) = selected_clipboard_entry else {
+                    self.show_hud("No clipboard entry selected".to_string(), Some(2000), cx);
+                    return;
+                };
+
+                let result = if action_id == "clipboard_pin" {
+                    clipboard_history::pin_entry(&entry.id)
+                } else {
+                    clipboard_history::unpin_entry(&entry.id)
+                };
+
+                match result {
+                    Ok(()) => {
+                        // Refresh cached entries (pin/unpin updates cache ordering)
+                        self.cached_clipboard_entries = clipboard_history::get_cached_entries(100);
+
+                        // Keep selection on the same entry when possible
+                        if let AppView::ClipboardHistoryView {
+                            filter,
+                            selected_index,
+                        } = &mut self.current_view
+                        {
+                            let filtered_entries: Vec<_> = if filter.is_empty() {
+                                self.cached_clipboard_entries.iter().enumerate().collect()
+                            } else {
+                                let filter_lower = filter.to_lowercase();
+                                self.cached_clipboard_entries
+                                    .iter()
+                                    .enumerate()
+                                    .filter(|(_, e)| {
+                                        e.text_preview.to_lowercase().contains(&filter_lower)
+                                    })
+                                    .collect()
+                            };
+
+                            if let Some(new_index) =
+                                filtered_entries.iter().position(|(_, e)| e.id == entry.id)
+                            {
+                                *selected_index = new_index;
+                            } else if !filtered_entries.is_empty() {
+                                *selected_index =
+                                    (*selected_index).min(filtered_entries.len().saturating_sub(1));
+                            } else {
+                                *selected_index = 0;
+                            }
+
+                            if !filtered_entries.is_empty() {
+                                self.clipboard_list_scroll_handle
+                                    .scroll_to_item(*selected_index, ScrollStrategy::Nearest);
+                            }
+                            self.focused_clipboard_entry_id = filtered_entries
+                                .get(*selected_index)
+                                .map(|(_, entry)| entry.id.clone());
+                        }
+
+                        cx.notify();
+                    }
+                    Err(e) => {
+                        logging::log(
+                            "ERROR",
+                            &format!("Failed to toggle clipboard pin: {}", e),
+                        );
+                        self.show_hud(
+                            format!("Failed to update pin: {}", e),
+                            Some(3000),
+                            cx,
+                        );
+                    }
+                }
+                return;
+            }
+            "clipboard_share" => {
+                let Some(entry) = selected_clipboard_entry else {
+                    self.show_hud("No clipboard entry selected".to_string(), Some(2000), cx);
+                    return;
+                };
+
+                let Some(content) = clipboard_history::get_entry_content(&entry.id) else {
+                    self.show_hud(
+                        "Clipboard entry content unavailable".to_string(),
+                        Some(2000),
+                        cx,
+                    );
+                    return;
+                };
+
+                logging::log(
+                    "UI",
+                    &format!(
+                        "Opening share sheet for clipboard entry {} ({:?})",
+                        entry.id, entry.content_type
+                    ),
+                );
+
+                match entry.content_type {
+                    clipboard_history::ContentType::Text => {
+                        crate::platform::show_share_sheet(
+                            crate::platform::ShareSheetItem::Text(content),
+                        );
+                    }
+                    clipboard_history::ContentType::Image => {
+                        if let Some(png_bytes) = clipboard_history::content_to_png_bytes(&content)
+                        {
+                            crate::platform::show_share_sheet(
+                                crate::platform::ShareSheetItem::ImagePng(png_bytes),
+                            );
+                        } else {
+                            self.show_hud(
+                                "Failed to decode clipboard image".to_string(),
+                                Some(2000),
+                                cx,
+                            );
+                        }
+                    }
+                }
+                return;
+            }
+            "clipboard_attach_to_ai" => {
+                let Some(entry) = selected_clipboard_entry else {
+                    self.show_hud("No clipboard entry selected".to_string(), Some(2000), cx);
+                    return;
+                };
+
+                let Some(content) = clipboard_history::get_entry_content(&entry.id) else {
+                    self.show_hud(
+                        "Clipboard entry content unavailable".to_string(),
+                        Some(2000),
+                        cx,
+                    );
+                    return;
+                };
+
+                logging::log(
+                    "AI",
+                    &format!(
+                        "Attaching clipboard entry {} ({:?}) to AI chat",
+                        entry.id, entry.content_type
+                    ),
+                );
+
+                match entry.content_type {
+                    clipboard_history::ContentType::Text => {
+                        if let Err(e) = ai::open_ai_window(cx) {
+                            logging::log("ERROR", &format!("Failed to open AI window: {}", e));
+                            self.show_hud("Failed to open AI window".to_string(), Some(2000), cx);
+                            return;
+                        }
+                        ai::set_ai_input(cx, &content, false);
+                    }
+                    clipboard_history::ContentType::Image => {
+                        let Some(png_bytes) = clipboard_history::content_to_png_bytes(&content)
+                        else {
+                            self.show_hud(
+                                "Failed to decode clipboard image".to_string(),
+                                Some(2000),
+                                cx,
+                            );
+                            return;
+                        };
+
+                        use base64::Engine;
+                        let base64_data =
+                            base64::engine::general_purpose::STANDARD.encode(&png_bytes);
+
+                        if let Err(e) = ai::open_ai_window(cx) {
+                            logging::log("ERROR", &format!("Failed to open AI window: {}", e));
+                            self.show_hud("Failed to open AI window".to_string(), Some(2000), cx);
+                            return;
+                        }
+                        ai::set_ai_input_with_image(cx, "", &base64_data, false);
+                    }
+                }
+
+                self.hide_main_and_reset(cx);
+                return;
+            }
+            // Copy to clipboard without pasting (Cmd+Enter)
+            "clipboard_copy" => {
+                let Some(entry) = selected_clipboard_entry else {
+                    self.show_hud("No clipboard entry selected".to_string(), Some(2000), cx);
+                    return;
+                };
+
+                logging::log("CLIPBOARD", &format!("Copying entry to clipboard: {}", entry.id));
+                match clipboard_history::copy_entry_to_clipboard(&entry.id) {
+                    Ok(()) => {
+                        logging::log("CLIPBOARD", "Entry copied to clipboard");
+                        self.show_hud("Copied to clipboard".to_string(), Some(1500), cx);
+                        // Keep the window open - do NOT call hide_main_and_reset
+                    }
+                    Err(e) => {
+                        logging::log("ERROR", &format!("Failed to copy entry: {}", e));
+                        self.show_hud(format!("Failed to copy: {}", e), Some(2500), cx);
+                    }
+                }
+                return;
+            }
+            // Paste and keep window open (Opt+Enter)
+            "clipboard_paste_keep_open" => {
+                let Some(entry) = selected_clipboard_entry else {
+                    self.show_hud("No clipboard entry selected".to_string(), Some(2000), cx);
+                    return;
+                };
+
+                logging::log("CLIPBOARD", &format!("Paste and keep open: {}", entry.id));
+                match clipboard_history::copy_entry_to_clipboard(&entry.id) {
+                    Ok(()) => {
+                        logging::log("CLIPBOARD", "Entry copied, simulating paste");
+                        // Simulate Cmd+V paste after a brief delay
+                        std::thread::spawn(|| {
+                            std::thread::sleep(std::time::Duration::from_millis(50));
+                            if let Err(e) = selected_text::simulate_paste_with_cg() {
+                                logging::log("ERROR", &format!("Failed to simulate paste: {}", e));
+                            } else {
+                                logging::log("CLIPBOARD", "Simulated Cmd+V paste");
+                            }
+                        });
+                        self.show_hud("Pasted".to_string(), Some(1000), cx);
+                        // Keep the window open - do NOT call hide_main_and_reset
+                    }
+                    Err(e) => {
+                        logging::log("ERROR", &format!("Failed to copy entry: {}", e));
+                        self.show_hud(format!("Failed to paste: {}", e), Some(2500), cx);
+                    }
+                }
+                return;
+            }
+            "clipboard_quick_look" => {
+                let Some(entry) = selected_clipboard_entry else {
+                    self.show_hud("No clipboard entry selected".to_string(), Some(2000), cx);
+                    return;
+                };
+
+                if let Err(e) = clipboard_history::quick_look_entry(&entry) {
+                    logging::log("ERROR", &format!("Quick Look failed: {}", e));
+                    self.show_hud(format!("Quick Look failed: {}", e), Some(2500), cx);
+                }
+                return;
+            }
+            _ => {}
+        }
 
         // Close the dialog and return to script list
         self.current_view = AppView::ScriptList;
@@ -624,6 +998,507 @@ impl ScriptListApp {
                     self.hide_main_and_reset(cx);
                 }
             }
+            "clipboard_open_with" => {
+                let Some(entry) = selected_clipboard_entry else {
+                    self.show_hud("No clipboard entry selected".to_string(), Some(2000), cx);
+                    return;
+                };
+
+                let Some(content) = clipboard_history::get_entry_content(&entry.id) else {
+                    self.show_hud("Failed to load clipboard content".to_string(), Some(2000), cx);
+                    return;
+                };
+
+                let full_entry = clipboard_history::ClipboardEntry {
+                    id: entry.id.clone(),
+                    content,
+                    content_type: entry.content_type,
+                    timestamp: entry.timestamp,
+                    pinned: entry.pinned,
+                    ocr_text: entry.ocr_text.clone(),
+                };
+
+                let temp_path = match clipboard_history::save_entry_to_temp_file(&full_entry) {
+                    Ok(path) => path,
+                    Err(e) => {
+                        logging::log("ERROR", &format!("Failed to save temp file: {}", e));
+                        self.show_hud("Failed to save temp file".to_string(), Some(2000), cx);
+                        return;
+                    }
+                };
+
+                #[cfg(target_os = "macos")]
+                {
+                    let path_str = temp_path.to_string_lossy().to_string();
+                    if let Err(e) = crate::file_search::open_with(&path_str) {
+                        logging::log("ERROR", &format!("Open With failed: {}", e));
+                        self.show_hud("Failed to open \"Open With\"".to_string(), Some(2000), cx);
+                    }
+                }
+
+                #[cfg(not(target_os = "macos"))]
+                {
+                    let _ = temp_path;
+                    self.show_hud(
+                        "\"Open With\" is only supported on macOS".to_string(),
+                        Some(2000),
+                        cx,
+                    );
+                }
+            }
+            "clipboard_annotate_cleanshot" => {
+                let Some(entry) = selected_clipboard_entry else {
+                    self.show_hud("No clipboard entry selected".to_string(), Some(2000), cx);
+                    return;
+                };
+
+                if entry.content_type != clipboard_history::ContentType::Image {
+                    self.show_hud(
+                        "CleanShot actions are only available for images".to_string(),
+                        Some(2000),
+                        cx,
+                    );
+                    return;
+                }
+
+                #[cfg(target_os = "macos")]
+                {
+                    if let Err(e) = clipboard_history::copy_entry_to_clipboard(&entry.id) {
+                        logging::log("ERROR", &format!("Failed to copy image: {}", e));
+                        self.show_hud("Failed to copy image".to_string(), Some(2000), cx);
+                        return;
+                    }
+
+                    let url = "cleanshot://open-from-clipboard";
+                    match std::process::Command::new("open").arg(url).spawn() {
+                        Ok(_) => {
+                            self.show_hud(
+                                "Opening CleanShot X…".to_string(),
+                                Some(1500),
+                                cx,
+                            );
+                            self.hide_main_and_reset(cx);
+                        }
+                        Err(e) => {
+                            logging::log("ERROR", &format!("Failed to open CleanShot X: {}", e));
+                            self.show_hud(
+                                "Failed to open CleanShot X".to_string(),
+                                Some(2000),
+                                cx,
+                            );
+                        }
+                    }
+                }
+
+                #[cfg(not(target_os = "macos"))]
+                {
+                    self.show_hud(
+                        "CleanShot actions are only supported on macOS".to_string(),
+                        Some(2000),
+                        cx,
+                    );
+                }
+            }
+            "clipboard_upload_cleanshot" => {
+                let Some(entry) = selected_clipboard_entry else {
+                    self.show_hud("No clipboard entry selected".to_string(), Some(2000), cx);
+                    return;
+                };
+
+                if entry.content_type != clipboard_history::ContentType::Image {
+                    self.show_hud(
+                        "CleanShot actions are only available for images".to_string(),
+                        Some(2000),
+                        cx,
+                    );
+                    return;
+                }
+
+                #[cfg(target_os = "macos")]
+                {
+                    let Some(content) = clipboard_history::get_entry_content(&entry.id) else {
+                        self.show_hud("Failed to load image content".to_string(), Some(2000), cx);
+                        return;
+                    };
+
+                    let Some(png_bytes) = clipboard_history::content_to_png_bytes(&content) else {
+                        self.show_hud("Failed to decode image".to_string(), Some(2000), cx);
+                        return;
+                    };
+
+                    let temp_path = std::env::temp_dir().join(format!(
+                        "script-kit-clipboard-{}.png",
+                        uuid::Uuid::new_v4()
+                    ));
+
+                    if let Err(e) = std::fs::write(&temp_path, png_bytes) {
+                        logging::log("ERROR", &format!("Failed to write temp image: {}", e));
+                        self.show_hud("Failed to save image".to_string(), Some(2000), cx);
+                        return;
+                    }
+
+                    let path_str = temp_path.to_string_lossy();
+                    let encoded_path = self.percent_encode_for_url(&path_str);
+                    let url = format!(
+                        "cleanshot://open-annotate?filepath={}&action=upload",
+                        encoded_path
+                    );
+
+                    match std::process::Command::new("open").arg(&url).spawn() {
+                        Ok(_) => {
+                            self.show_hud(
+                                "Opening CleanShot X upload…".to_string(),
+                                Some(1500),
+                                cx,
+                            );
+                            self.hide_main_and_reset(cx);
+                        }
+                        Err(e) => {
+                            logging::log("ERROR", &format!("Failed to open CleanShot X: {}", e));
+                            self.show_hud(
+                                "Failed to open CleanShot X".to_string(),
+                                Some(2000),
+                                cx,
+                            );
+                        }
+                    }
+                }
+
+                #[cfg(not(target_os = "macos"))]
+                {
+                    self.show_hud(
+                        "CleanShot actions are only supported on macOS".to_string(),
+                        Some(2000),
+                        cx,
+                    );
+                }
+            }
+            "clipboard_ocr" => {
+                let Some(entry) = selected_clipboard_entry else {
+                    self.show_hud("No clipboard entry selected".to_string(), Some(2000), cx);
+                    return;
+                };
+
+                if entry.content_type != clipboard_history::ContentType::Image {
+                    self.show_hud(
+                        "OCR is only available for images".to_string(),
+                        Some(2000),
+                        cx,
+                    );
+                    return;
+                }
+
+                // Check if we already have cached OCR text
+                if let Some(ref cached_text) = entry.ocr_text {
+                    if !cached_text.trim().is_empty() {
+                        logging::log("OCR", "Using cached OCR text");
+                        #[cfg(target_os = "macos")]
+                        {
+                            let _ = self.pbcopy(cached_text);
+                        }
+                        #[cfg(not(target_os = "macos"))]
+                        {
+                            use arboard::Clipboard;
+                            let _ = Clipboard::new().and_then(|mut c| c.set_text(cached_text.clone()));
+                        }
+                        self.show_hud("Copied text from image".to_string(), Some(1500), cx);
+                        self.hide_main_and_reset(cx);
+                        return;
+                    }
+                }
+
+                #[cfg(all(target_os = "macos", feature = "ocr"))]
+                {
+                    // Get image content
+                    let Some(content) = clipboard_history::get_entry_content(&entry.id) else {
+                        self.show_hud("Failed to load image content".to_string(), Some(2000), cx);
+                        return;
+                    };
+
+                    // Decode to RGBA bytes for OCR
+                    let Some((width, height, rgba_bytes)) = clipboard_history::decode_to_rgba_bytes(&content) else {
+                        self.show_hud("Failed to decode image".to_string(), Some(2000), cx);
+                        return;
+                    };
+
+                    logging::log("OCR", &format!("Starting OCR on {}x{} image", width, height));
+                    self.show_hud("Extracting text...".to_string(), Some(1500), cx);
+
+                    // Perform OCR synchronously (it runs on a background thread internally)
+                    // For a truly async approach, we'd need to integrate with GPUI's async system
+                    let entry_id = entry.id.clone();
+                    match script_kit_gpui::ocr::extract_text_from_rgba(width, height, &rgba_bytes) {
+                        Ok(text) => {
+                            if text.trim().is_empty() {
+                                logging::log("OCR", "No text found in image");
+                                self.show_hud("No text found in image".to_string(), Some(2000), cx);
+                            } else {
+                                logging::log("OCR", &format!("Extracted {} characters", text.len()));
+                                
+                                // Cache the OCR result
+                                let _ = clipboard_history::update_ocr_text(&entry_id, &text);
+                                
+                                // Copy to clipboard
+                                #[cfg(target_os = "macos")]
+                                {
+                                    let _ = self.pbcopy(&text);
+                                }
+                                #[cfg(not(target_os = "macos"))]
+                                {
+                                    use arboard::Clipboard;
+                                    let _ = Clipboard::new().and_then(|mut c| c.set_text(text.clone()));
+                                }
+                                
+                                self.show_hud("Copied text from image".to_string(), Some(1500), cx);
+                                self.hide_main_and_reset(cx);
+                            }
+                        }
+                        Err(e) => {
+                            logging::log("ERROR", &format!("OCR failed: {}", e));
+                            self.show_hud(format!("OCR failed: {}", e), Some(3000), cx);
+                        }
+                    }
+                }
+
+                #[cfg(not(all(target_os = "macos", feature = "ocr")))]
+                {
+                    self.show_hud(
+                        "OCR is only supported on macOS".to_string(),
+                        Some(2000),
+                        cx,
+                    );
+                }
+            }
+            // Clipboard delete actions
+            "clipboard_delete" => {
+                let Some(entry) = selected_clipboard_entry else {
+                    self.show_hud("No clipboard entry selected".to_string(), Some(2000), cx);
+                    return;
+                };
+
+                match clipboard_history::remove_entry(&entry.id) {
+                    Ok(()) => {
+                        logging::log("UI", &format!("Deleted clipboard entry: {}", entry.id));
+                        // Refresh cached entries
+                        self.cached_clipboard_entries = clipboard_history::get_cached_entries(100);
+
+                        // Update selection in ClipboardHistoryView
+                        if let AppView::ClipboardHistoryView {
+                            filter,
+                            selected_index,
+                        } = &mut self.current_view
+                        {
+                            let filtered_entries: Vec<_> = if filter.is_empty() {
+                                self.cached_clipboard_entries.iter().enumerate().collect()
+                            } else {
+                                let filter_lower = filter.to_lowercase();
+                                self.cached_clipboard_entries
+                                    .iter()
+                                    .enumerate()
+                                    .filter(|(_, e)| {
+                                        e.text_preview.to_lowercase().contains(&filter_lower)
+                                    })
+                                    .collect()
+                            };
+
+                            // Keep selection in bounds after deletion
+                            if !filtered_entries.is_empty() {
+                                *selected_index = (*selected_index).min(filtered_entries.len().saturating_sub(1));
+                                self.clipboard_list_scroll_handle
+                                    .scroll_to_item(*selected_index, ScrollStrategy::Nearest);
+                                self.focused_clipboard_entry_id = filtered_entries
+                                    .get(*selected_index)
+                                    .map(|(_, entry)| entry.id.clone());
+                            } else {
+                                *selected_index = 0;
+                                self.focused_clipboard_entry_id = None;
+                            }
+                        }
+
+                        self.show_hud("Entry deleted".to_string(), Some(1500), cx);
+                        cx.notify();
+                    }
+                    Err(e) => {
+                        logging::log("ERROR", &format!("Failed to delete clipboard entry: {}", e));
+                        self.show_hud(format!("Delete failed: {}", e), Some(3000), cx);
+                    }
+                }
+                return;
+            }
+            "clipboard_delete_all" => {
+                // Delete all unpinned entries
+                let unpinned_count = self.cached_clipboard_entries.iter().filter(|e| !e.pinned).count();
+                
+                if unpinned_count == 0 {
+                    self.show_hud("No unpinned entries to delete".to_string(), Some(2000), cx);
+                    return;
+                }
+
+                match clipboard_history::clear_unpinned_history() {
+                    Ok(()) => {
+                        logging::log("UI", &format!("Deleted {} unpinned clipboard entries", unpinned_count));
+                        self.cached_clipboard_entries = clipboard_history::get_cached_entries(100);
+
+                        // Reset selection
+                        if let AppView::ClipboardHistoryView {
+                            selected_index,
+                            ..
+                        } = &mut self.current_view
+                        {
+                            *selected_index = 0;
+                            if let Some(first) = self.cached_clipboard_entries.first() {
+                                self.focused_clipboard_entry_id = Some(first.id.clone());
+                            } else {
+                                self.focused_clipboard_entry_id = None;
+                            }
+                        }
+
+                        self.show_hud(format!("Deleted {} entries (pinned preserved)", unpinned_count), Some(2500), cx);
+                        cx.notify();
+                    }
+                    Err(e) => {
+                        logging::log("ERROR", &format!("Failed to clear unpinned history: {}", e));
+                        self.show_hud(format!("Delete failed: {}", e), Some(3000), cx);
+                    }
+                }
+                return;
+            }
+            "clipboard_save_file" => {
+                let Some(entry) = selected_clipboard_entry.clone() else {
+                    self.show_hud("No clipboard entry selected".to_string(), Some(2000), cx);
+                    return;
+                };
+
+                let Some(content) = clipboard_history::get_entry_content(&entry.id) else {
+                    self.show_hud("Clipboard content unavailable".to_string(), Some(2000), cx);
+                    return;
+                };
+
+                // Determine filename and content based on type
+                let (file_content, extension) = match entry.content_type {
+                    clipboard_history::ContentType::Text => (content.into_bytes(), "txt"),
+                    clipboard_history::ContentType::Image => {
+                        let Some(png_bytes) = clipboard_history::content_to_png_bytes(&content) else {
+                            self.show_hud("Failed to decode image".to_string(), Some(2000), cx);
+                            return;
+                        };
+                        (png_bytes, "png")
+                    }
+                };
+
+                // Get save location (Desktop or home)
+                let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("/"));
+                let desktop = home.join("Desktop");
+                let save_dir = if desktop.exists() { desktop } else { home };
+
+                // Generate unique filename with timestamp
+                let timestamp = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_secs())
+                    .unwrap_or(0);
+                let filename = format!("clipboard-{}.{}", timestamp, extension);
+                let save_path = save_dir.join(&filename);
+
+                match std::fs::write(&save_path, &file_content) {
+                    Ok(()) => {
+                        logging::log("UI", &format!("Saved clipboard to: {:?}", save_path));
+                        self.show_hud(format!("Saved: {}", filename), Some(2500), cx);
+                    }
+                    Err(e) => {
+                        logging::log("ERROR", &format!("Failed to save file: {}", e));
+                        self.show_hud(format!("Save failed: {}", e), Some(3000), cx);
+                    }
+                }
+                return;
+            }
+            "clipboard_save_snippet" => {
+                let Some(entry) = selected_clipboard_entry else {
+                    self.show_hud("No clipboard entry selected".to_string(), Some(2000), cx);
+                    return;
+                };
+
+                if entry.content_type != clipboard_history::ContentType::Text {
+                    self.show_hud("Only text can be saved as snippet".to_string(), Some(2000), cx);
+                    return;
+                }
+
+                let Some(content) = clipboard_history::get_entry_content(&entry.id) else {
+                    self.show_hud("Clipboard content unavailable".to_string(), Some(2000), cx);
+                    return;
+                };
+
+                // Generate a default keyword from the first few words
+                let default_keyword: String = content
+                    .chars()
+                    .take(20)
+                    .filter(|c| c.is_alphanumeric() || *c == '-' || *c == '_')
+                    .collect::<String>()
+                    .to_lowercase();
+                let default_keyword = if default_keyword.is_empty() {
+                    "snippet".to_string()
+                } else {
+                    default_keyword
+                };
+
+                // Create snippet file in extensions directory
+                let kenv = dirs::home_dir()
+                    .map(|h| h.join(".kenv"))
+                    .unwrap_or_else(|| std::path::PathBuf::from("/"));
+                let extensions_dir = kenv.join("extensions");
+                let snippets_file = extensions_dir.join("clipboard-snippets.md");
+
+                // Ensure extensions directory exists
+                if !extensions_dir.exists() {
+                    if let Err(e) = std::fs::create_dir_all(&extensions_dir) {
+                        logging::log("ERROR", &format!("Failed to create extensions dir: {}", e));
+                        self.show_hud(format!("Failed to create snippets: {}", e), Some(3000), cx);
+                        return;
+                    }
+                }
+
+                // Generate unique keyword with timestamp suffix
+                let timestamp = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_secs() % 10000)
+                    .unwrap_or(0);
+                let keyword = format!("{}-{}", default_keyword, timestamp);
+
+                // Create snippet entry with proper fence handling
+                let fence = if content.contains("```") { "~~~~" } else { "```" };
+                let snippet_entry = format!(
+                    "\n## {}\n\n{}\nname: {}\ntool: paste\nkeyword: {}\n{}\n\n{}paste\n{}\n{}\n",
+                    keyword, fence, keyword, keyword, fence, fence, content, fence
+                );
+
+                // Append to snippets file
+                let result = if snippets_file.exists() {
+                    std::fs::OpenOptions::new()
+                        .append(true)
+                        .open(&snippets_file)
+                        .and_then(|mut f| {
+                            use std::io::Write;
+                            f.write_all(snippet_entry.as_bytes())
+                        })
+                } else {
+                    let header = "# Clipboard Snippets\n\nSnippets created from clipboard history.\n";
+                    std::fs::write(&snippets_file, format!("{}{}", header, snippet_entry))
+                };
+
+                match result {
+                    Ok(()) => {
+                        logging::log("UI", &format!("Created snippet with keyword: {}", keyword));
+                        self.show_hud(format!("Snippet created: type '{}' to paste", keyword), Some(3000), cx);
+                        // Refresh scripts to pick up new snippet
+                        self.refresh_scripts(cx);
+                    }
+                    Err(e) => {
+                        logging::log("ERROR", &format!("Failed to save snippet: {}", e));
+                        self.show_hud(format!("Save failed: {}", e), Some(3000), cx);
+                    }
+                }
+                return;
+            }
+
             // Scriptlet-specific actions
             "edit_scriptlet" => {
                 logging::log("UI", "Edit scriptlet action");

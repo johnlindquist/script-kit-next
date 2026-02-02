@@ -28,6 +28,7 @@
 
 pub mod alias_input;
 pub mod button;
+pub mod footer_button;
 pub mod form_fields;
 #[cfg(test)]
 mod form_fields_tests;
@@ -47,6 +48,8 @@ mod unified_list_item_tests;
 #[allow(unused_imports)]
 pub use alias_input::{AliasInput, AliasInputAction, AliasInputColors};
 pub use button::{Button, ButtonColors, ButtonVariant};
+#[allow(unused_imports)]
+pub use footer_button::FooterButton;
 #[allow(unused_imports)]
 pub use form_fields::{FormCheckbox, FormFieldColors, FormFieldState, FormTextArea, FormTextField};
 #[allow(unused_imports)]

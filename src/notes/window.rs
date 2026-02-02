@@ -5,8 +5,9 @@
 
 use anyhow::Result;
 use gpui::{
-    div, prelude::*, px, rgba, size, App, Context, Entity, FocusHandle, Focusable, IntoElement,
-    KeyDownEvent, ParentElement, Render, Styled, Subscription, Window, WindowBounds, WindowOptions,
+    div, prelude::*, px, rgba, size, AnyElement, App, Context, Entity, FocusHandle, Focusable,
+    IntoElement, KeyDownEvent, ParentElement, Render, Styled, Subscription, Window, WindowBounds,
+    WindowOptions,
 };
 
 #[cfg(target_os = "macos")]
@@ -40,6 +41,8 @@ use super::actions_panel::{
 // Note: BrowsePanel is no longer used - note switcher now uses CommandBar
 // Keeping NoteAction and NoteListItem for backwards compatibility during transition
 use super::browse_panel::{NoteAction, NoteListItem};
+use super::markdown;
+use super::markdown_highlighting::register_markdown_highlighter;
 use super::model::{ExportFormat, Note, NoteId};
 use super::storage;
 
@@ -107,6 +110,9 @@ pub struct NotesApp {
 
     /// Whether the search bar is shown (Cmd+F)
     show_search: bool,
+
+    /// Whether markdown preview is enabled (Cmd+Shift+P)
+    preview_enabled: bool,
 
     /// Last known content line count for auto-resize
     last_line_count: usize,
@@ -205,10 +211,14 @@ impl NotesApp {
         // Calculate initial line count for auto-resize (before moving content)
         let initial_line_count = initial_content.lines().count().max(1);
 
-        // Create input states - use multi_line for the editor
+        // Ensure markdown language is registered before editor initialization
+        register_markdown_highlighter();
+
+        // Create input states - use code_editor for markdown highlighting
         let editor_state = cx.new(|cx| {
             InputState::new(window, cx)
-                .multi_line(true)
+                .code_editor("markdown")
+                .line_number(false)
                 .searchable(true)
                 .rows(20)
                 .placeholder("Start typing your note...")
@@ -277,6 +287,7 @@ impl NotesApp {
             force_hovered: false,
             show_format_toolbar: false,
             show_search: false,
+            preview_enabled: false,
             last_line_count: initial_line_count,
             initial_height,
             auto_sizing_enabled: true,          // Auto-sizing ON by default
@@ -1294,6 +1305,23 @@ impl NotesApp {
         cx.notify();
     }
 
+    /// Toggle markdown preview mode (Cmd+Shift+P)
+    fn toggle_preview(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.preview_enabled = !self.preview_enabled;
+
+        if self.preview_enabled {
+            // Keep focus on the NotesApp so shortcuts still work while previewing.
+            self.focus_handle.focus(window, cx);
+        } else {
+            // Return focus to editor for editing.
+            self.editor_state.update(cx, |state, cx| {
+                state.focus(window, cx);
+            });
+        }
+
+        cx.notify();
+    }
+
     /// Render the search input bar (shown when Cmd+F is pressed)
     fn render_search(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.theme();
@@ -1456,6 +1484,7 @@ impl NotesApp {
         let is_trash = self.view_mode == NotesViewMode::Trash;
         let has_selection = self.selected_note_id.is_some();
         let show_toolbar = self.show_format_toolbar;
+        let is_preview = self.preview_enabled;
         let char_count = self.get_character_count(cx);
 
         // Get note title - This reads from self.notes which is updated by on_editor_change
@@ -1483,6 +1512,13 @@ impl NotesApp {
 
         // Get muted foreground color for subtle icons/text
         let muted_color = cx.theme().muted_foreground;
+        let accent_color = cx.theme().accent;
+        let preview_label = if is_preview { "MD" } else { "TXT" };
+        let preview_color = if is_preview {
+            accent_color
+        } else {
+            muted_color.opacity(0.7)
+        };
 
         let titlebar = div()
             .id("notes-titlebar")
@@ -1566,7 +1602,20 @@ impl NotesApp {
                                 }))
                                 .child("≡"),
                         )
-                        // Icon 3: Plus icon - for new note (always visible when hovered)
+                        // Icon 3: Markdown preview toggle (always visible when hovered)
+                        .child(
+                            div()
+                                .id("titlebar-preview-icon")
+                                .text_sm()
+                                .text_color(preview_color)
+                                .cursor_pointer()
+                                .hover(|s| s.text_color(accent_color))
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    this.toggle_preview(window, cx);
+                                }))
+                                .child(preview_label),
+                        )
+                        // Icon 4: Plus icon - for new note (always visible when hovered)
                         .child(
                             div()
                                 .id("titlebar-new-icon")
@@ -1639,8 +1688,26 @@ impl NotesApp {
                     .right_3()
                     .text_xs()
                     .text_color(cx.theme().muted_foreground)
-                    .child("T"),
+                    .child(if is_preview { "MD" } else { "T" }),
             );
+
+        let editor_body: AnyElement = if is_preview {
+            let content = self.editor_state.read(cx).value().to_string();
+            div()
+                .id("notes-markdown-preview")
+                .flex_1()
+                .min_h(px(0.))
+                .overflow_y_scroll()
+                .child(markdown::render_markdown_preview(&content, cx.theme()))
+                .into_any_element()
+        } else {
+            Input::new(&self.editor_state)
+                .h_full()
+                .appearance(false)
+                .font_family(cx.theme().mono_font_family.clone())
+                .text_size(cx.theme().mono_font_size)
+                .into_any_element()
+        };
 
         // Build main editor layout - Raycast style: clean, no visible input borders
         // NOTE: Do NOT add .bg() here - the notes-window-root and gpui-component Root
@@ -1665,9 +1732,7 @@ impl NotesApp {
                     .p_3()
                     // NO .bg() - let vibrancy show through from root
                     // Use a styled input that blends with background
-                    .child(
-                        Input::new(&self.editor_state).h_full().appearance(false), // No input styling - blends with background
-                    ),
+                    .child(editor_body),
             )
             .when(has_selection && !is_trash, |d| d.child(footer))
     }
@@ -2135,12 +2200,17 @@ impl Render for NotesApp {
                             }
                         }
                         "p" => {
-                            // Toggle note switcher (browse panel)
-                            this.close_actions_panel(window, cx);
-                            if this.note_switcher.is_open() {
-                                this.close_browse_panel(window, cx);
+                            if modifiers.shift {
+                                // Toggle markdown preview
+                                this.toggle_preview(window, cx);
                             } else {
-                                this.open_browse_panel(window, cx);
+                                // Toggle note switcher (browse panel)
+                                this.close_actions_panel(window, cx);
+                                if this.note_switcher.is_open() {
+                                    this.close_browse_panel(window, cx);
+                                } else {
+                                    this.open_browse_panel(window, cx);
+                                }
                             }
                         }
                         "f" => {

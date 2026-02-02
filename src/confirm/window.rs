@@ -117,7 +117,12 @@ impl Render for ConfirmWindow {
         });
 
         // Render with focus tracking and key handler (same pattern as ActionsWindow)
+        // Use size_full() and flex centering to center the dialog within the window
         div()
+            .size_full()
+            .flex()
+            .items_center()
+            .justify_center()
             .track_focus(&self.focus_handle)
             .on_key_down(handle_key)
             .child(self.dialog.clone())

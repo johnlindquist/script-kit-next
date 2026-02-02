@@ -494,8 +494,10 @@ impl ScriptListApp {
                         }
                         "k" => {
                             // Cmd+K - Toggle actions menu
-                            logging::log("KEY", "Shortcut Cmd+K -> toggle_actions");
-                            this.toggle_actions(cx, window);
+                            if this.has_actions() {
+                                logging::log("KEY", "Shortcut Cmd+K -> toggle_actions");
+                                this.toggle_actions(cx, window);
+                            }
                             return;
                         }
                         "e" => {
@@ -996,6 +998,7 @@ impl ScriptListApp {
                     opacity_percent, material, appearance
                 ));
             }
+            footer_config = footer_config.show_secondary(self.has_actions());
 
             PromptFooter::new(footer_config, footer_colors)
             .on_primary_click(Box::new(move |_, _window, cx| {

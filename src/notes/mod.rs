@@ -26,6 +26,9 @@
 
 mod actions_panel;
 mod browse_panel;
+pub mod code_highlight;
+mod markdown;
+mod markdown_highlighting;
 mod model;
 mod storage;
 mod window;

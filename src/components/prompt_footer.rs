@@ -28,6 +28,7 @@
 use gpui::*;
 use std::rc::Rc;
 
+use crate::components::footer_button::FooterButton;
 use crate::designs::DesignColors;
 use crate::theme::Theme;
 use crate::ui_foundation::{hstack, HexColorExt};
@@ -237,40 +238,18 @@ impl PromptFooter {
         id: &'static str,
         label: String,
         shortcut: String,
-        hover_bg: u32,
         on_click: Option<Rc<FooterClickCallback>>,
     ) -> impl IntoElement {
-        let colors = self.colors;
-        let mut btn = div()
-            .id(id)
-            .flex()
-            .flex_row()
-            .items_center()
-            .gap(px(6.))
-            .px(px(8.))
-            .py(px(2.))
-            .rounded(px(4.))
-            .cursor_pointer()
-            .hover(move |s| s.bg(rgba(hover_bg)));
+        let mut button = FooterButton::new(label).shortcut(shortcut).id(id);
 
         if let Some(callback) = on_click {
-            btn = btn.on_click(move |event, window, cx| {
-                callback(event, window, cx);
-            });
+            let handler = callback.clone();
+            button = button.on_click(Box::new(move |event, window, cx| {
+                handler(event, window, cx);
+            }));
         }
 
-        btn.child(
-            div()
-                .text_sm()
-                .text_color(colors.accent.to_rgb())
-                .child(label),
-        )
-        .child(
-            div()
-                .text_sm()
-                .text_color(colors.text_muted.to_rgb())
-                .child(shortcut),
-        )
+        button
     }
 
     /// Render the vertical divider between buttons
@@ -286,7 +265,6 @@ impl PromptFooter {
 impl RenderOnce for PromptFooter {
     fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
         let colors = self.colors;
-        let hover_bg = (colors.accent << 8) | 0x26; // 15% opacity for hover
 
         // Build the right-side container (info label + buttons)
         let mut right_side = hstack().gap(px(8.)).items_center();
@@ -309,7 +287,6 @@ impl RenderOnce for PromptFooter {
             "footer-primary-button",
             self.config.primary_label.clone(),
             self.config.primary_shortcut.clone(),
-            hover_bg,
             self.on_primary_click.clone(),
         ));
 
@@ -320,7 +297,6 @@ impl RenderOnce for PromptFooter {
                 "footer-secondary-button",
                 self.config.secondary_label.clone(),
                 self.config.secondary_shortcut.clone(),
-                hover_bg,
                 self.on_secondary_click.clone(),
             ));
         }

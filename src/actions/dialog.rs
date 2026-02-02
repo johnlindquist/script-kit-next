@@ -610,16 +610,23 @@ impl ActionsDialog {
 
         let converted: Vec<Action> = visible_actions
             .iter()
-            .map(|pa| Action {
-                id: pa.name.clone(),
-                title: pa.name.clone(),
-                description: pa.description.clone(),
-                category: ActionCategory::ScriptContext,
-                shortcut: pa.shortcut.as_ref().map(|s| Self::format_shortcut_hint(s)),
-                has_action: pa.has_action,
-                value: pa.value.clone(),
-                icon: None,    // SDK actions don't currently have icons
-                section: None, // SDK actions don't currently have sections
+            .map(|pa| {
+                let shortcut = pa.shortcut.as_ref().map(|s| Self::format_shortcut_hint(s));
+                Action {
+                    id: pa.name.clone(),
+                    title: pa.name.clone(),
+                    description: pa.description.clone(),
+                    category: ActionCategory::ScriptContext,
+                    shortcut: shortcut.clone(),
+                    has_action: pa.has_action,
+                    value: pa.value.clone(),
+                    icon: None,    // SDK actions don't currently have icons
+                    section: None, // SDK actions don't currently have sections
+                    // Pre-compute lowercase for fast filtering (performance optimization)
+                    title_lower: pa.name.to_lowercase(),
+                    description_lower: pa.description.as_ref().map(|d| d.to_lowercase()),
+                    shortcut_lower: shortcut.as_ref().map(|s| s.to_lowercase()),
+                }
             })
             .collect();
 
@@ -942,34 +949,35 @@ impl ActionsDialog {
 
     /// Score an action against a search query.
     /// Returns 0 if no match, higher scores for better matches.
+    ///
+    /// PERFORMANCE: Uses pre-computed lowercase fields (title_lower, description_lower,
+    /// shortcut_lower) to avoid repeated to_lowercase() calls on every keystroke.
     fn score_action(action: &Action, search_lower: &str) -> i32 {
-        let title_lower = action.title.to_lowercase();
         let mut score = 0;
 
-        // Prefix match on title (strongest)
-        if title_lower.starts_with(search_lower) {
+        // Prefix match on title (strongest) - use cached lowercase
+        if action.title_lower.starts_with(search_lower) {
             score += 100;
         }
         // Contains match on title
-        else if title_lower.contains(search_lower) {
+        else if action.title_lower.contains(search_lower) {
             score += 50;
         }
         // Fuzzy match on title (character-by-character subsequence)
-        else if Self::fuzzy_match(&title_lower, search_lower) {
+        else if Self::fuzzy_match(&action.title_lower, search_lower) {
             score += 25;
         }
 
-        // Description match (bonus)
-        if let Some(ref desc) = action.description {
-            let desc_lower = desc.to_lowercase();
+        // Description match (bonus) - use cached lowercase
+        if let Some(ref desc_lower) = action.description_lower {
             if desc_lower.contains(search_lower) {
                 score += 15;
             }
         }
 
-        // Shortcut match (bonus)
-        if let Some(ref shortcut) = action.shortcut {
-            if shortcut.to_lowercase().contains(search_lower) {
+        // Shortcut match (bonus) - use cached lowercase
+        if let Some(ref shortcut_lower) = action.shortcut_lower {
+            if shortcut_lower.contains(search_lower) {
                 score += 10;
             }
         }
@@ -1227,7 +1235,7 @@ impl Render for ActionsDialog {
         };
 
         // Use helper method for design/theme color extraction
-        let (search_box_bg, border_color, _muted_text, dimmed_text, _secondary_text) =
+        let (_search_box_bg, border_color, _muted_text, dimmed_text, _secondary_text) =
             self.get_search_colors(&colors);
 
         // Get primary text color for cursor (matches main list styling)
@@ -1249,7 +1257,7 @@ impl Render for ActionsDialog {
         // Use border_active opacity for focused state, scaled for visibility
         let opacity = self.theme.get_opacity();
         let focus_border_alpha = ((opacity.border_active * 1.5).min(1.0) * 255.0) as u8;
-        let focus_border_color = rgba(hex_with_alpha(accent_color_hex, focus_border_alpha));
+        let _focus_border_color = rgba(hex_with_alpha(accent_color_hex, focus_border_alpha));
 
         // Raycast-style footer search input: minimal styling, full-width, top separator line
         // No boxed input field - just text on a clean background with a thin top border
@@ -1846,79 +1854,42 @@ impl Render for ActionsDialog {
         let show_search =
             !matches!(self.config.search_position, SearchPosition::Hidden) && !self.hide_search;
 
-        // Modify input_container for top position (border at bottom instead of top)
+        // Top-positioned search input - clean Raycast-style matching the bottom search
+        // No boxed input field, no ⌘K prefix - just text on a clean background with bottom separator
         let input_container_top = if search_at_top && show_search {
             Some(
                 div()
-                    .w(px(POPUP_WIDTH))
+                    .w(px(POPUP_WIDTH)) // Match parent width exactly
                     .min_w(px(POPUP_WIDTH))
                     .max_w(px(POPUP_WIDTH))
-                    .h(px(SEARCH_INPUT_HEIGHT))
+                    .h(px(SEARCH_INPUT_HEIGHT)) // Fixed height for the input row
                     .min_h(px(SEARCH_INPUT_HEIGHT))
                     .max_h(px(SEARCH_INPUT_HEIGHT))
-                    .overflow_hidden()
+                    .overflow_hidden() // Prevent any content from causing shifts
                     .px(px(spacing.item_padding_x))
-                    .py(px(spacing.item_padding_y + 2.0))
-                    .bg(search_box_bg)
-                    .border_b_1() // Border at bottom for top-positioned search
-                    .border_color(border_color)
+                    .py(px(spacing.item_padding_y + 2.0)) // Slightly more vertical padding
+                    // No background - clean/transparent to match Raycast
+                    .border_b_1() // Bottom separator line
+                    .border_color(separator_color)
                     .flex()
                     .flex_row()
                     .items_center()
-                    .gap(px(spacing.gap_md))
                     .child(
+                        // Full-width search input - no box styling, just text
                         div()
-                            .w(px(24.0))
-                            .min_w(px(24.0))
-                            .text_color(dimmed_text)
-                            .text_xs()
-                            .child("⌘K"),
-                    )
-                    .child(
-                        div()
-                            .flex_shrink_0()
-                            .w(px(240.0))
-                            .min_w(px(240.0))
-                            .max_w(px(240.0))
+                            .flex_1() // Take full width
                             .h(px(28.0))
-                            .min_h(px(28.0))
-                            .max_h(px(28.0))
-                            .overflow_hidden()
-                            .px(px(spacing.padding_sm))
-                            .py(px(spacing.padding_xs))
-                            // Use theme-aware opacity for input background
-                            .bg({
-                                let opacity = self.theme.get_opacity();
-                                let alpha = if self.search_text.is_empty() {
-                                    (opacity.input_inactive * 255.0) as u8
-                                } else {
-                                    (opacity.input_active * 255.0) as u8
-                                };
-                                if self.design_variant == DesignVariant::Default {
-                                    rgba(hex_with_alpha(
-                                        self.theme.colors.background.search_box,
-                                        alpha,
-                                    ))
-                                } else {
-                                    rgba(hex_with_alpha(colors.background_secondary, alpha))
-                                }
-                            })
-                            .rounded(px(visual.radius_sm))
-                            .border_1()
-                            .border_color(if !self.search_text.is_empty() {
-                                focus_border_color
-                            } else {
-                                border_color
-                            })
                             .flex()
                             .flex_row()
                             .items_center()
                             .text_sm()
+                            // Placeholder or input text color
                             .text_color(if self.search_text.is_empty() {
-                                dimmed_text
+                                hint_text_color
                             } else {
-                                primary_text
+                                input_text_color
                             })
+                            // Cursor at start when empty
                             .when(self.search_text.is_empty(), |d| {
                                 d.child(
                                     div()
@@ -1930,6 +1901,7 @@ impl Render for ActionsDialog {
                                 )
                             })
                             .child(search_display.clone())
+                            // Cursor at end when has text
                             .when(!self.search_text.is_empty(), |d| {
                                 d.child(
                                     div()

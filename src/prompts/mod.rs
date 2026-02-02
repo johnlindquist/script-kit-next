@@ -17,6 +17,8 @@
 
 pub mod base;
 pub mod chat;
+pub mod commands;
+pub mod context;
 pub mod div;
 mod drop;
 pub mod env;
