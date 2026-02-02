@@ -325,6 +325,7 @@ use gpui::{AnyElement, IntoElement};
 /// * `is_selected` - Whether this item is currently selected (full focus styling)
 /// * `is_hovered` - Whether this item is currently hovered (subtle visual feedback)
 /// * `list_colors` - Pre-computed theme colors for the default design
+/// * `enable_hover_effect` - Whether to enable instant hover effects (false during keyboard navigation)
 ///
 /// # Returns
 /// An `AnyElement` containing the rendered item
@@ -335,6 +336,7 @@ pub fn render_design_item(
     is_selected: bool,
     is_hovered: bool,
     list_colors: ListItemColors,
+    enable_hover_effect: bool,
 ) -> AnyElement {
     // NOTE: Removed per-item DEBUG log that was causing log spam.
     // This function is called for every visible list item on every render frame.
@@ -479,6 +481,7 @@ pub fn render_design_item(
                 .selected(is_selected)
                 .hovered(is_hovered)
                 .with_accent_bar(true)
+                .with_hover_effect(enable_hover_effect)
                 .into_any_element()
         }
     }

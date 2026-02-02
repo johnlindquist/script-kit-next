@@ -346,6 +346,8 @@ impl ScriptListApp {
             frecency_store,
             // Mouse hover tracking - starts as None (no item hovered)
             hovered_index: None,
+            // Input mode: starts as Mouse (default), switches to Keyboard on arrow keys
+            input_mode: InputMode::Mouse,
             // Fallback mode state - starts as false (showing scripts, not fallbacks)
             fallback_mode: false,
             fallback_selected_index: 0,
@@ -446,6 +448,8 @@ impl ScriptListApp {
             inline_chat_claude_code_receiver: inline_chat_claude_code_rx,
             // Light theme opacity adjustment offset (Cmd+Shift+[/])
             light_opacity_offset: 0.0,
+            // Mouse cursor hidden state - hidden while typing, shown on mouse move
+            mouse_cursor_hidden: false,
         };
 
         // Build initial alias/shortcut registries (conflicts logged, not shown via HUD on startup)
@@ -3132,6 +3136,28 @@ impl ScriptListApp {
     fn toggle_logs(&mut self, cx: &mut Context<Self>) {
         self.show_logs = !self.show_logs;
         cx.notify();
+    }
+
+    /// Hide the mouse cursor while typing.
+    /// The cursor will be shown again when the mouse moves.
+    fn hide_mouse_cursor(&mut self, cx: &mut Context<Self>) {
+        if !self.mouse_cursor_hidden {
+            self.mouse_cursor_hidden = true;
+            crate::platform::hide_cursor_until_mouse_moves();
+            cx.notify();
+        }
+    }
+
+    /// Show the mouse cursor (called when mouse moves).
+    /// Also switches to Mouse input mode to re-enable hover effects.
+    fn show_mouse_cursor(&mut self, cx: &mut Context<Self>) {
+        // Switch to mouse mode to re-enable hover effects
+        self.input_mode = InputMode::Mouse;
+
+        if self.mouse_cursor_hidden {
+            self.mouse_cursor_hidden = false;
+            cx.notify();
+        }
     }
 
     /// Calculate view type and item count for window sizing.

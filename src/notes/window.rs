@@ -5,9 +5,9 @@
 
 use anyhow::Result;
 use gpui::{
-    div, prelude::*, px, rgba, size, AnyElement, App, Context, Entity, FocusHandle, Focusable,
-    IntoElement, KeyDownEvent, ParentElement, Render, Styled, Subscription, Window, WindowBounds,
-    WindowOptions,
+    div, prelude::*, px, rgba, size, AnyElement, App, Context, CursorStyle, Entity, FocusHandle,
+    Focusable, IntoElement, KeyDownEvent, MouseMoveEvent, ParentElement, Render, Styled,
+    Subscription, Window, WindowBounds, WindowOptions,
 };
 
 #[cfg(target_os = "macos")]
@@ -101,6 +101,9 @@ pub struct NotesApp {
 
     /// Whether the entire window is being hovered (for traffic lights)
     window_hovered: bool,
+
+    /// Whether the mouse cursor is currently hidden
+    mouse_cursor_hidden: bool,
 
     /// Forces hover chrome for visual tests
     force_hovered: bool,
@@ -284,6 +287,7 @@ impl NotesApp {
             search_query: String::new(),
             titlebar_hovered: false,
             window_hovered: false,
+            mouse_cursor_hidden: false,
             force_hovered: false,
             show_format_toolbar: false,
             show_search: false,
@@ -1895,6 +1899,27 @@ impl NotesApp {
             gpui::rgba(0xffffff80) // white at 50% for light mode
         }
     }
+
+    fn set_mouse_cursor_hidden_state(mouse_cursor_hidden: &mut bool, hidden: bool) -> bool {
+        if *mouse_cursor_hidden == hidden {
+            return false;
+        }
+        *mouse_cursor_hidden = hidden;
+        true
+    }
+
+    fn hide_mouse_cursor(&mut self, cx: &mut Context<Self>) {
+        if Self::set_mouse_cursor_hidden_state(&mut self.mouse_cursor_hidden, true) {
+            crate::platform::hide_cursor_until_mouse_moves();
+            cx.notify();
+        }
+    }
+
+    fn show_mouse_cursor(&mut self, cx: &mut Context<Self>) {
+        if Self::set_mouse_cursor_hidden_state(&mut self.mouse_cursor_hidden, false) {
+            cx.notify();
+        }
+    }
 }
 
 impl Focusable for NotesApp {
@@ -1940,6 +1965,9 @@ impl Drop for NotesApp {
 
 impl Render for NotesApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        // Capture for use in div builder (cursor style applied via .cursor() modifier)
+        let mouse_cursor_hidden = self.mouse_cursor_hidden;
+
         // Detect if user manually resized the window (disables auto-sizing)
         self.detect_manual_resize(window);
         self.drain_pending_action(window, cx);
@@ -1979,6 +2007,8 @@ impl Render for NotesApp {
             // Shadow disabled for vibrancy - shadows on transparent elements cause gray fill
             .text_color(cx.theme().foreground)
             .track_focus(&self.focus_handle)
+            // Hide mouse cursor while typing
+            .when(mouse_cursor_hidden, |d| d.cursor(CursorStyle::None))
             // Close any open CommandBar when clicking anywhere on the notes window
             .on_mouse_down(
                 gpui::MouseButton::Left,
@@ -2000,9 +2030,14 @@ impl Render for NotesApp {
                 this.window_hovered = *hovered;
                 cx.notify();
             }))
+            .on_mouse_move(cx.listener(|this, _: &MouseMoveEvent, _, cx| {
+                this.show_mouse_cursor(cx);
+            }))
             // CRITICAL: Use capture_key_down to intercept keys BEFORE Input component handles them
             // This ensures arrow keys go to CommandBar navigation instead of Input cursor movement
             .capture_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
+                this.hide_mouse_cursor(cx);
+
                 // Handle keyboard shortcuts
                 let key = event.keystroke.key.to_lowercase();
                 let modifiers = &event.keystroke.modifiers;
