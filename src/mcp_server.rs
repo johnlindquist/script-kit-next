@@ -255,8 +255,10 @@ impl McpServer {
                         });
                     }
                     Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                        // No connection available, sleep briefly
-                        thread::sleep(std::time::Duration::from_millis(10));
+                        // No connection available, sleep before next poll.
+                        // 100ms is responsive enough for new connections while reducing
+                        // CPU wakeups from 100/sec to 10/sec (was 10ms = 100% CPU spin risk)
+                        thread::sleep(std::time::Duration::from_millis(100));
                     }
                     Err(e) => {
                         error!("Accept error: {}", e);
