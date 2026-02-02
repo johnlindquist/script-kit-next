@@ -13,9 +13,10 @@
 use anyhow::Result;
 use chrono::{Datelike, NaiveDate, Utc};
 use gpui::{
-    div, hsla, point, prelude::*, px, rgba, size, svg, App, BoxShadow, Context, Entity,
-    ExternalPaths, FocusHandle, Focusable, IntoElement, KeyDownEvent, ParentElement, Render,
-    ScrollHandle, SharedString, Styled, Subscription, Window, WindowBounds, WindowOptions,
+    div, hsla, point, prelude::*, px, rgba, size, svg, App, BoxShadow, Context, CursorStyle,
+    Entity, ExternalPaths, FocusHandle, Focusable, IntoElement, KeyDownEvent, MouseMoveEvent,
+    ParentElement, Render, ScrollHandle, SharedString, Styled, Subscription, Window, WindowBounds,
+    WindowOptions,
 };
 
 // Import local IconName for SVG icons (has external_path() method)
@@ -415,6 +416,9 @@ pub struct AiApp {
     /// Whether we're showing the API key input field (configure mode)
     showing_api_key_input: bool,
 
+    /// Focused setup button index (0=Configure Vercel AI Gateway, 1=Connect to Claude Code)
+    setup_button_focus_index: usize,
+
     /// API key input state (for configure flow)
     api_key_input_state: Entity<InputState>,
 
@@ -461,6 +465,9 @@ pub struct AiApp {
 
     /// List of pending attachments (file paths)
     pending_attachments: Vec<String>,
+
+    /// Whether the mouse cursor is currently hidden (hidden on keyboard, shown on mouse move)
+    mouse_cursor_hidden: bool,
 }
 
 impl AiApp {
@@ -620,6 +627,7 @@ impl AiApp {
             pending_image: None,
             setup_copied_at: None,
             showing_api_key_input: false,
+            setup_button_focus_index: 0,
             api_key_input_state,
             // Command bar state (uses the unified CommandBar component)
             command_bar: CommandBar::new(
@@ -647,11 +655,30 @@ impl AiApp {
             // Attachments state
             showing_attachments_picker: false,
             pending_attachments: Vec::new(),
+            // Mouse cursor state
+            mouse_cursor_hidden: false,
         }
     }
 
     /// Debounce interval for bounds persistence (in milliseconds)
     const BOUNDS_DEBOUNCE_MS: u64 = 250;
+
+    /// Hide the mouse cursor on keyboard interaction.
+    fn hide_mouse_cursor(&mut self, cx: &mut Context<Self>) {
+        if !self.mouse_cursor_hidden {
+            self.mouse_cursor_hidden = true;
+            crate::platform::hide_cursor_until_mouse_moves();
+            cx.notify();
+        }
+    }
+
+    /// Show the mouse cursor when mouse moves.
+    fn show_mouse_cursor(&mut self, cx: &mut Context<Self>) {
+        if self.mouse_cursor_hidden {
+            self.mouse_cursor_hidden = false;
+            cx.notify();
+        }
+    }
 
     /// Update cached theme-derived values if theme revision has changed.
     ///
@@ -2450,6 +2477,28 @@ impl AiApp {
             .unwrap_or(false)
     }
 
+    const SETUP_BUTTON_COUNT: usize = 2;
+
+    fn next_setup_button_focus_index(current: usize, delta: isize) -> usize {
+        let count = Self::SETUP_BUTTON_COUNT as isize;
+        ((current % Self::SETUP_BUTTON_COUNT) as isize + delta).rem_euclid(count) as usize
+    }
+
+    fn move_setup_button_focus(&mut self, delta: isize, cx: &mut Context<Self>) {
+        let next_index = Self::next_setup_button_focus_index(self.setup_button_focus_index, delta);
+        crate::logging::log(
+            "AI",
+            &format!(
+                "move_setup_button_focus: delta={} current={} next={}",
+                delta, self.setup_button_focus_index, next_index
+            ),
+        );
+        if next_index != self.setup_button_focus_index {
+            self.setup_button_focus_index = next_index;
+            cx.notify();
+        }
+    }
+
     /// Show the API key configuration input
     fn show_api_key_input(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.showing_api_key_input = true;
@@ -3120,6 +3169,15 @@ export default {
             self.showing_api_key_input
         );
 
+        // Debug: Log icon paths
+        crate::logging::log(
+            "AI",
+            &format!(
+                "Settings icon path: {}",
+                LocalIconName::Settings.external_path()
+            ),
+        );
+
         // If showing API key input mode, render that instead
         if self.showing_api_key_input {
             return self.render_api_key_input(cx).into_any_element();
@@ -3128,8 +3186,12 @@ export default {
         // Theme-aware accent color for the button (Raycast style)
         let button_bg = cx.theme().accent;
         let button_text = cx.theme().primary_foreground;
+        let configure_button_focused = self.setup_button_focus_index == 0;
+        let claude_button_focused = self.setup_button_focus_index == 1;
+        let focus_color = cx.theme().ring;
 
         div()
+            .id("setup-card-container")
             .flex()
             .flex_col()
             .items_center()
@@ -3137,6 +3199,8 @@ export default {
             .flex_1()
             .gap_5()
             .px_8()
+            // Default cursor for the container (buttons will override with pointer)
+            .cursor_default()
             // Icon - muted settings icon at top
             .child(
                 div()
@@ -3185,6 +3249,9 @@ export default {
                     .cursor_pointer()
                     .border_1()
                     .border_color(button_bg.opacity(0.8))
+                    .when(configure_button_focused, |s| {
+                        s.border_2().border_color(focus_color)
+                    })
                     .hover(|s| s.bg(button_bg.opacity(0.9)))
                     .on_click(cx.listener(|this, _, window, cx| {
                         info!("Vercel button clicked in AI window");
@@ -3226,6 +3293,9 @@ export default {
                     .cursor_pointer()
                     .border_1()
                     .border_color(cx.theme().border)
+                    .when(claude_button_focused, |s| {
+                        s.border_2().border_color(focus_color)
+                    })
                     .hover(|s| s.bg(cx.theme().muted.opacity(0.5)))
                     .on_click(cx.listener(|this, _event, window, cx| {
                         info!("Claude Code button clicked in AI window");
@@ -4057,6 +4127,9 @@ impl Render for AiApp {
         // Get vibrancy background - tints the blur effect with theme color
         let vibrancy_bg = crate::ui_foundation::get_window_vibrancy_background();
 
+        // Capture mouse_cursor_hidden for use in div builder
+        let mouse_cursor_hidden = self.mouse_cursor_hidden;
+
         div()
             .relative() // Required for absolutely positioned sidebar toggle
             .flex()
@@ -4067,10 +4140,19 @@ impl Render for AiApp {
             // NOTE: No shadow - shadows on transparent elements cause gray fill with vibrancy
             .text_color(cx.theme().foreground)
             .track_focus(&self.focus_handle)
+            // Hide mouse cursor on keyboard interaction
+            .when(mouse_cursor_hidden, |d| d.cursor(CursorStyle::None))
+            // Show cursor when mouse moves
+            .on_mouse_move(cx.listener(|this, _: &MouseMoveEvent, _window, cx| {
+                this.show_mouse_cursor(cx);
+            }))
             // CRITICAL: Use capture_key_down to intercept keys BEFORE Input component handles them
             // This fires during the Capture phase (root->focused), before the Bubble phase (focused->root)
             // Without this, the Input component would consume arrow keys and command bar navigation fails
             .capture_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
+                // Hide mouse cursor on any keyboard interaction
+                this.hide_mouse_cursor(cx);
+
                 // Handle keyboard shortcuts
                 let key = event.keystroke.key.as_str();
                 let modifiers = &event.keystroke.modifiers;
@@ -4085,18 +4167,63 @@ impl Render for AiApp {
                     ),
                 );
 
-                // Handle Enter key for setup mode (no modifiers needed)
-                if !modifiers.platform
-                    && !modifiers.alt
-                    && !modifiers.control
-                    && matches!(key, "enter" | "return")
-                    && this.available_models.is_empty()
-                {
-                    // In setup mode - Enter copies the setup command
-                    this.copy_setup_command(cx);
-                    window.activate_window();
-                    cx.stop_propagation(); // Prevent further handling
-                    return;
+                let no_system_modifiers =
+                    !modifiers.platform && !modifiers.alt && !modifiers.control;
+
+                // Setup-card keyboard navigation when no providers are configured.
+                // Skip while API key input is visible so Enter/typing route to the input.
+                let in_setup_mode = this.available_models.is_empty() && !this.showing_api_key_input;
+
+                // Log setup mode for debugging
+                if matches!(key, "tab" | "Tab" | "up" | "down" | "arrowup" | "arrowdown") {
+                    crate::logging::log(
+                        "AI",
+                        &format!(
+                            "Setup nav key: '{}' in_setup_mode={} models_empty={} api_input={}",
+                            key,
+                            in_setup_mode,
+                            this.available_models.is_empty(),
+                            this.showing_api_key_input
+                        ),
+                    );
+                }
+
+                if no_system_modifiers && in_setup_mode {
+                    match key {
+                        "tab" | "Tab" => {
+                            if modifiers.shift {
+                                this.move_setup_button_focus(-1, cx);
+                            } else {
+                                this.move_setup_button_focus(1, cx);
+                            }
+                            window.activate_window();
+                            cx.stop_propagation();
+                            return;
+                        }
+                        "up" | "arrowup" => {
+                            this.move_setup_button_focus(-1, cx);
+                            window.activate_window();
+                            cx.stop_propagation();
+                            return;
+                        }
+                        "down" | "arrowdown" => {
+                            this.move_setup_button_focus(1, cx);
+                            window.activate_window();
+                            cx.stop_propagation();
+                            return;
+                        }
+                        "enter" | "return" | "Enter" => {
+                            match this.setup_button_focus_index {
+                                0 => this.show_api_key_input(window, cx),
+                                1 => this.enable_claude_code(window, cx),
+                                _ => {}
+                            }
+                            window.activate_window();
+                            cx.stop_propagation();
+                            return;
+                        }
+                        _ => {}
+                    }
                 }
 
                 // Handle command bar navigation when it's open
@@ -5499,6 +5626,9 @@ fn configure_ai_window_vibrancy() {
 
                     if title_str == "Script Kit AI" {
                         // Found the AI window - configure vibrancy
+                        // Disable dragging by window background to prevent titlebar interference
+                        // with mouse clicks on content (e.g., setup card buttons)
+                        let _: () = msg_send![window, setMovableByWindowBackground: false];
                         let theme = crate::theme::load_theme();
                         let is_dark = theme.should_use_dark_vibrancy();
                         crate::platform::configure_secondary_window_vibrancy(window, "AI", is_dark);
@@ -5713,5 +5843,13 @@ mod tests {
         assert_eq!(Some(id1), Some(id1_copy), "Option<ChatId> equality works");
         assert_ne!(Some(id1), Some(id2), "Option<ChatId> inequality works");
         assert_ne!(Some(id1), None, "Some vs None inequality works");
+    }
+
+    #[test]
+    fn test_setup_button_focus_index_wraps() {
+        assert_eq!(AiApp::next_setup_button_focus_index(0, 1), 1);
+        assert_eq!(AiApp::next_setup_button_focus_index(1, 1), 0);
+        assert_eq!(AiApp::next_setup_button_focus_index(0, -1), 1);
+        assert_eq!(AiApp::next_setup_button_focus_index(1, -1), 0);
     }
 }

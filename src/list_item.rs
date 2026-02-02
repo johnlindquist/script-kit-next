@@ -312,6 +312,10 @@ pub struct ListItem {
     semantic_id: Option<String>,
     /// Show left accent bar when selected (3px colored bar on left edge)
     show_accent_bar: bool,
+    /// Whether to enable instant hover effects (via GPUI .hover() pseudo-class)
+    /// When false, the .hover() modifier is not applied, preventing visual feedback
+    /// Used to disable hover when user is navigating with keyboard
+    enable_hover_effect: bool,
 }
 
 /// Width of the left accent bar for selected items
@@ -332,12 +336,21 @@ impl ListItem {
             on_hover: None,
             semantic_id: None,
             show_accent_bar: false,
+            enable_hover_effect: true, // Default to enabled
         }
     }
 
     /// Enable the left accent bar (3px colored bar shown when selected)
     pub fn with_accent_bar(mut self, show: bool) -> Self {
         self.show_accent_bar = show;
+        self
+    }
+
+    /// Enable or disable instant hover effects (GPUI .hover() pseudo-class)
+    /// When disabled, no visual feedback is shown on mouse hover
+    /// Used to prevent hover effects during keyboard navigation
+    pub fn with_hover_effect(mut self, enable: bool) -> Self {
+        self.enable_hover_effect = enable;
         self
     }
 
@@ -636,9 +649,10 @@ impl RenderOnce for ListItem {
                     .child(shortcut_element),
             );
 
-        // Apply instant hover effect for non-selected items
+        // Apply instant hover effect for non-selected items when hover effects are enabled
         // This provides immediate visual feedback without state updates
-        if !self.selected {
+        // Hover effects are disabled during keyboard navigation to prevent dual-highlight
+        if !self.selected && self.enable_hover_effect {
             inner_content = inner_content.hover(move |s| s.bg(hover_bg));
         }
 

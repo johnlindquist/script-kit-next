@@ -4,6 +4,11 @@
 
 impl ScriptListApp {
     fn move_selection_up(&mut self, cx: &mut Context<Self>) {
+        // Switch to keyboard mode and clear hover to prevent dual-highlight
+        self.input_mode = InputMode::Keyboard;
+        self.hovered_index = None;
+        self.hide_mouse_cursor(cx);
+
         // Get grouped results to check for section headers (cached)
         let (grouped_items, _) = self.get_grouped_results_cached();
         // Clone to avoid borrow issues with self mutation below
@@ -48,6 +53,11 @@ impl ScriptListApp {
     }
 
     fn move_selection_down(&mut self, cx: &mut Context<Self>) {
+        // Switch to keyboard mode and clear hover to prevent dual-highlight
+        self.input_mode = InputMode::Keyboard;
+        self.hovered_index = None;
+        self.hide_mouse_cursor(cx);
+
         // Get grouped results to check for section headers (cached)
         let (grouped_items, _) = self.get_grouped_results_cached();
         // Clone to avoid borrow issues with self mutation below
@@ -162,6 +172,11 @@ impl ScriptListApp {
     /// just like move_selection_up/down. Otherwise, holding arrow keys
     /// can land on headers causing navigation to feel "stuck".
     fn move_selection_by(&mut self, delta: i32, cx: &mut Context<Self>) {
+        // Switch to keyboard mode and clear hover to prevent dual-highlight
+        self.input_mode = InputMode::Keyboard;
+        self.hovered_index = None;
+        self.hide_mouse_cursor(cx);
+
         // Get grouped results to check for section headers (cached)
         let (grouped_items, _) = self.get_grouped_results_cached();
         // Clone to avoid borrow issues with self mutation below

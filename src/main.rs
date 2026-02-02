@@ -2,10 +2,10 @@
 
 use gpui::{
     div, hsla, list, point, prelude::*, px, rgb, rgba, size, svg, uniform_list, AnyElement, App,
-    Application, BoxShadow, Context, ElementId, Entity, FocusHandle, Focusable, ListAlignment,
-    ListOffset, ListSizingBehavior, ListState, Render, ScrollStrategy, SharedString, Subscription,
-    Timer, UniformListScrollHandle, Window, WindowBackgroundAppearance, WindowBounds, WindowHandle,
-    WindowKind, WindowOptions,
+    Application, BoxShadow, Context, CursorStyle, ElementId, Entity, FocusHandle, Focusable,
+    KeyDownEvent, ListAlignment, ListOffset, ListSizingBehavior, ListState, MouseMoveEvent, Render,
+    ScrollStrategy, SharedString, Subscription, Timer, UniformListScrollHandle, Window,
+    WindowBackgroundAppearance, WindowBounds, WindowHandle, WindowKind, WindowOptions,
 };
 
 // gpui-component Root wrapper for theme and context provision
@@ -958,6 +958,16 @@ enum ActionsDialogHost {
     ClipboardHistory,
 }
 
+/// Input mode for list navigation - tracks whether user is using keyboard or mouse.
+/// When in Keyboard mode, hover effects are disabled to prevent dual-highlight.
+/// Mouse movement switches back to Mouse mode, re-enabling hover.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum InputMode {
+    #[default]
+    Mouse,
+    Keyboard,
+}
+
 /// Result of routing a key event to the actions dialog.
 ///
 /// Returned by `route_key_to_actions_dialog` to indicate how the caller
@@ -1345,6 +1355,9 @@ struct ScriptListApp {
     // Mouse hover tracking - independent from selected_index (keyboard focus)
     // hovered_index shows subtle visual feedback, selected_index shows full focus styling
     hovered_index: Option<usize>,
+    // Input mode: Mouse vs Keyboard - when Keyboard, hover effects are disabled
+    // to prevent dual-highlight. Mouse movement switches back to Mouse mode.
+    input_mode: InputMode,
     // Fallback mode: when true, we're showing fallback commands instead of scripts
     // This happens when filter_text doesn't match any scripts
     fallback_mode: bool,
@@ -1475,6 +1488,8 @@ struct ScriptListApp {
     /// Use Cmd+Shift+[ to decrease and Cmd+Shift+] to increase
     /// Range: -0.5 to +0.5 (added to base opacity values)
     light_opacity_offset: f32,
+    /// Whether the mouse cursor is currently hidden (hidden while typing, shown on mouse move)
+    mouse_cursor_hidden: bool,
 }
 
 /// Result of alias matching - either a Script or Scriptlet
@@ -1820,12 +1835,27 @@ impl Render for ScriptListApp {
         // Get vibrancy background - tints the blur effect with theme color
         let vibrancy_bg = crate::ui_foundation::get_window_vibrancy_background();
 
+        // Capture mouse_cursor_hidden for use in div builder
+        let mouse_cursor_hidden = self.mouse_cursor_hidden;
+
         div()
             .w_full()
             .h_full()
             .relative()
             .flex()
             .flex_col()
+            // Hide mouse cursor while typing - use cursor() modifier instead of window method
+            .when(mouse_cursor_hidden, |d| d.cursor(CursorStyle::None))
+            // Hide cursor and clear hover on any keyboard interaction
+            .capture_key_down(cx.listener(|this, _: &KeyDownEvent, _window, cx| {
+                this.input_mode = InputMode::Keyboard;
+                this.hovered_index = None;
+                this.hide_mouse_cursor(cx);
+            }))
+            // Show cursor when mouse moves
+            .on_mouse_move(cx.listener(|this, _: &MouseMoveEvent, _window, cx| {
+                this.show_mouse_cursor(cx);
+            }))
             // CRITICAL: Apply vibrancy background like POC does
             // This tints the blur effect with the theme color
             .bg(vibrancy_bg)

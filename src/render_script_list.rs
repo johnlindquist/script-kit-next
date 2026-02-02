@@ -204,6 +204,7 @@ impl ScriptListApp {
                     entity.update(cx, |this, cx| {
                         let current_selected = this.selected_index;
                         let current_hovered = this.hovered_index;
+                        let current_input_mode = this.input_mode;
 
                         if let Some(grouped_item) = grouped_items_clone.get(ix) {
                             match grouped_item {
@@ -222,7 +223,8 @@ impl ScriptListApp {
                                     // Regular item at 48px height (LIST_ITEM_HEIGHT)
                                     if let Some(result) = flat_results_clone.get(*result_idx) {
                                         let is_selected = ix == current_selected;
-                                        let is_hovered = current_hovered == Some(ix);
+                                        // Only show hover effect when in Mouse mode to prevent dual-highlight
+                                        let is_hovered = current_hovered == Some(ix) && current_input_mode == InputMode::Mouse;
 
                                         // Create hover handler
                                         let hover_handler = cx.listener(
@@ -234,7 +236,10 @@ impl ScriptListApp {
                                                 const HOVER_DEBOUNCE_MS: u64 = 16;
 
                                                 if *hovered {
-                                                    // Mouse entered - set hovered_index with debounce
+                                                    // Mouse entered - switch to Mouse mode and set hovered_index
+                                                    // This re-enables hover effects after keyboard navigation
+                                                    this.input_mode = InputMode::Mouse;
+
                                                     if this.hovered_index != Some(ix)
                                                         && now
                                                             .duration_since(this.last_hover_notify)
@@ -287,6 +292,8 @@ impl ScriptListApp {
                                         // Note: Confirmation for dangerous builtins is now handled
                                         // via modal dialog, not inline overlay
                                         let design_render_start = std::time::Instant::now();
+                                        // Enable hover effects only when in Mouse mode
+                                        let enable_hover = current_input_mode == InputMode::Mouse;
                                         let item_element = render_design_item(
                                             current_design,
                                             result,
@@ -294,6 +301,7 @@ impl ScriptListApp {
                                             is_selected,
                                             is_hovered,
                                             theme_colors,
+                                            enable_hover,
                                         );
                                         let design_elapsed = design_render_start.elapsed();
                                         
@@ -436,6 +444,9 @@ impl ScriptListApp {
                   event: &gpui::KeyDownEvent,
                   window: &mut Window,
                   cx: &mut Context<Self>| {
+                // Hide cursor while typing - automatically shows when mouse moves
+                this.hide_mouse_cursor(cx);
+
                 // If the shortcut recorder is active, don't process any key events.
                 // The recorder has its own key handlers and should receive all key events.
                 if this.shortcut_recorder_state.is_some() {
