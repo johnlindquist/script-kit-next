@@ -108,20 +108,134 @@ impl Note {
         self.updated_at = Utc::now();
     }
 
+    /// Strip common markdown syntax from text for display purposes.
+    ///
+    /// Removes:
+    /// - **bold** and __bold__ -> bold
+    /// - *italic* and _italic_ -> italic
+    /// - `code` -> code
+    /// - # headers -> headers (leading # markers)
+    /// - [links](url) -> links
+    /// - ~~strikethrough~~ -> strikethrough
+    fn strip_markdown_syntax(text: &str) -> String {
+        let mut result = text.to_string();
+
+        // Strip markdown heading markers (# at start of line)
+        if result.starts_with('#') {
+            result = result.trim_start_matches('#').trim_start().to_string();
+        }
+
+        // Strip bold: **text** or __text__
+        while let Some(start) = result.find("**") {
+            if let Some(end) = result[start + 2..].find("**") {
+                let before = &result[..start];
+                let inner = &result[start + 2..start + 2 + end];
+                let after = &result[start + 2 + end + 2..];
+                result = format!("{}{}{}", before, inner, after);
+            } else {
+                break;
+            }
+        }
+        while let Some(start) = result.find("__") {
+            if let Some(end) = result[start + 2..].find("__") {
+                let before = &result[..start];
+                let inner = &result[start + 2..start + 2 + end];
+                let after = &result[start + 2 + end + 2..];
+                result = format!("{}{}{}", before, inner, after);
+            } else {
+                break;
+            }
+        }
+
+        // Strip strikethrough: ~~text~~
+        while let Some(start) = result.find("~~") {
+            if let Some(end) = result[start + 2..].find("~~") {
+                let before = &result[..start];
+                let inner = &result[start + 2..start + 2 + end];
+                let after = &result[start + 2 + end + 2..];
+                result = format!("{}{}{}", before, inner, after);
+            } else {
+                break;
+            }
+        }
+
+        // Strip inline code: `text`
+        while let Some(start) = result.find('`') {
+            if let Some(end) = result[start + 1..].find('`') {
+                let before = &result[..start];
+                let inner = &result[start + 1..start + 1 + end];
+                let after = &result[start + 1 + end + 1..];
+                result = format!("{}{}{}", before, inner, after);
+            } else {
+                break;
+            }
+        }
+
+        // Strip links: [text](url) -> text
+        // Find [...](...)
+        while let Some(bracket_start) = result.find('[') {
+            if let Some(bracket_end) = result[bracket_start..].find(']') {
+                let absolute_bracket_end = bracket_start + bracket_end;
+                // Check if followed by (url)
+                if result.len() > absolute_bracket_end + 1
+                    && result.chars().nth(absolute_bracket_end + 1) == Some('(')
+                {
+                    if let Some(paren_end) = result[absolute_bracket_end + 1..].find(')') {
+                        let before = &result[..bracket_start];
+                        let link_text = &result[bracket_start + 1..absolute_bracket_end];
+                        let after = &result[absolute_bracket_end + 1 + paren_end + 1..];
+                        result = format!("{}{}{}", before, link_text, after);
+                        continue;
+                    }
+                }
+            }
+            // If we couldn't process a link, break to avoid infinite loop
+            break;
+        }
+
+        // Strip italic: *text* or _text_ (after bold is removed to avoid conflicts)
+        // Handle *italic*
+        while let Some(start) = result.find('*') {
+            if let Some(end) = result[start + 1..].find('*') {
+                let before = &result[..start];
+                let inner = &result[start + 1..start + 1 + end];
+                let after = &result[start + 1 + end + 1..];
+                result = format!("{}{}{}", before, inner, after);
+            } else {
+                break;
+            }
+        }
+        // Handle _italic_ (but not in the middle of words like snake_case)
+        // Only strip if underscore is at word boundary
+        while let Some(start) = result.find('_') {
+            // Check if this is a word boundary underscore
+            let at_start = start == 0
+                || !result
+                    .chars()
+                    .nth(start - 1)
+                    .unwrap_or(' ')
+                    .is_alphanumeric();
+            if at_start {
+                if let Some(end) = result[start + 1..].find('_') {
+                    let before = &result[..start];
+                    let inner = &result[start + 1..start + 1 + end];
+                    let after = &result[start + 1 + end + 1..];
+                    result = format!("{}{}{}", before, inner, after);
+                    continue;
+                }
+            }
+            break;
+        }
+
+        result.trim().to_string()
+    }
+
     /// Extract title from content (first non-empty line, stripped of markdown)
     fn extract_title(content: &str) -> String {
         content
             .lines()
             .find(|line| !line.trim().is_empty())
-            .map(|line| {
-                // Strip markdown heading markers
-                let trimmed = line.trim();
-                if trimmed.starts_with('#') {
-                    trimmed.trim_start_matches('#').trim().to_string()
-                } else {
-                    trimmed.to_string()
-                }
-            })
+            .map(|line| Self::strip_markdown_syntax(line.trim()))
             .unwrap_or_else(|| "Untitled Note".to_string())
     }
 
@@ -240,6 +354,92 @@ mod tests {
 
         note.set_content("");
         assert_eq!(note.title, "Untitled Note");
+    }
+
+    #[test]
+    fn test_markdown_stripping_bold() {
+        let mut note = Note::new();
+
+        note.set_content("**bold text**");
+        assert_eq!(note.title, "bold text");
+
+        note.set_content("__also bold__");
+        assert_eq!(note.title, "also bold");
+
+        note.set_content("Some **bold** words");
+        assert_eq!(note.title, "Some bold words");
+    }
+
+    #[test]
+    fn test_markdown_stripping_italic() {
+        let mut note = Note::new();
+
+        note.set_content("*italic text*");
+        assert_eq!(note.title, "italic text");
+
+        note.set_content("_also italic_");
+        assert_eq!(note.title, "also italic");
+
+        note.set_content("Some *italic* words");
+        assert_eq!(note.title, "Some italic words");
+    }
+
+    #[test]
+    fn test_markdown_stripping_code() {
+        let mut note = Note::new();
+
+        note.set_content("`code block`");
+        assert_eq!(note.title, "code block");
+
+        note.set_content("Some `inline code` here");
+        assert_eq!(note.title, "Some inline code here");
+    }
+
+    #[test]
+    fn test_markdown_stripping_links() {
+        let mut note = Note::new();
+
+        note.set_content("[link text](https://example.com)");
+        assert_eq!(note.title, "link text");
+
+        note.set_content("Check out [this link](url) here");
+        assert_eq!(note.title, "Check out this link here");
+    }
+
+    #[test]
+    fn test_markdown_stripping_headers() {
+        let mut note = Note::new();
+
+        note.set_content("# Header");
+        assert_eq!(note.title, "Header");
+
+        note.set_content("## Second Level");
+        assert_eq!(note.title, "Second Level");
+
+        note.set_content("### Third Level");
+        assert_eq!(note.title, "Third Level");
+    }
+
+    #[test]
+    fn test_markdown_stripping_strikethrough() {
+        let mut note = Note::new();
+
+        note.set_content("~~strikethrough~~");
+        assert_eq!(note.title, "strikethrough");
+
+        note.set_content("Some ~~deleted~~ text");
+        assert_eq!(note.title, "Some deleted text");
+    }
+
+    #[test]
+    fn test_markdown_stripping_combined() {
+        let mut note = Note::new();
+
+        note.set_content("# **Bold Header**");
+        assert_eq!(note.title, "Bold Header");
+
+        note.set_content("# [Link Title](url)");
+        assert_eq!(note.title, "Link Title");
     }
 
     #[test]
