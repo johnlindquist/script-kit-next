@@ -5,6 +5,7 @@
 //! Tab/Arrow keys navigate between buttons with visual focus indication.
 
 use crate::components::button::{Button, ButtonColors, ButtonVariant};
+use crate::confirm::window::close_confirm_window;
 use crate::logging;
 use crate::theme;
 use gpui::{
@@ -140,19 +141,18 @@ impl Render for ConfirmDialog {
         let colors = &self.theme.colors;
 
         // Background with vibrancy support
-        // Use the theme's opacity setting to match the main window's vibrancy look
+        // Dialog needs higher opacity than main window to stand out visually
         let use_vibrancy = self.theme.is_vibrancy_enabled();
+        let is_dark = self.theme.should_use_dark_vibrancy();
         let dialog_alpha = if use_vibrancy {
-            // Use theme's opacity setting (typically 0.30-0.37) for consistent vibrancy
-            // This allows the blur to show through the dialog
-            let opacity = self
-                .theme
-                .opacity
-                .as_ref()
-                .map(|o| o.main)
-                .unwrap_or(0.37)
-                .clamp(0.25, 0.50);
-            (opacity * 255.0) as u8
+            if is_dark {
+                // Dark mode with vibrancy: ~60% opacity to show blur but remain readable
+                (0.60 * 255.0) as u8
+            } else {
+                // Light mode with vibrancy: ~90% opacity for better contrast
+                // Light backgrounds need higher opacity to prevent washed-out appearance
+                (0.90 * 255.0) as u8
+            }
         } else {
             // Near-opaque when vibrancy disabled
             (0.95 * 255.0) as u8
@@ -189,9 +189,11 @@ impl Render for ConfirmDialog {
                 Button::new(self.cancel_text.clone(), button_colors)
                     .variant(ButtonVariant::Ghost)
                     .focused(is_cancel_focused)
-                    .on_click(Box::new(move |_event, _window, _cx| {
-                        logging::log("CONFIRM", "User cancelled");
+                    .on_click(Box::new(move |_event, _window, cx| {
+                        logging::log("CONFIRM", "User cancelled (button click)");
                         (on_cancel)(false);
+                        // Close the confirm window after calling the callback
+                        close_confirm_window(cx);
                     })),
             );
 
@@ -206,9 +208,11 @@ impl Render for ConfirmDialog {
                 Button::new(self.confirm_text.clone(), button_colors)
                     .variant(ButtonVariant::Primary)
                     .focused(is_confirm_focused)
-                    .on_click(Box::new(move |_event, _window, _cx| {
-                        logging::log("CONFIRM", "User confirmed");
+                    .on_click(Box::new(move |_event, _window, cx| {
+                        logging::log("CONFIRM", "User confirmed (button click)");
                         (on_confirm)(true);
+                        // Close the confirm window after calling the callback
+                        close_confirm_window(cx);
                     })),
             );
 
@@ -221,16 +225,15 @@ impl Render for ConfirmDialog {
             .child(cancel_button)
             .child(confirm_button);
 
-        // Main dialog container
-        // NOTE: No background - let window vibrancy show through
-        let _ = main_bg; // Suppress unused warning
+        // Main dialog container with semi-transparent background
+        // Background provides contrast while allowing vibrancy blur to show through
         div()
             .w(px(CONFIRM_WIDTH))
             .flex()
             .flex_col()
             .p(px(CONFIRM_PADDING))
             .gap(px(CONFIRM_PADDING))
-            // No .bg() - vibrancy comes from the window
+            .bg(main_bg)
             .rounded(px(DIALOG_RADIUS))
             .border_1()
             .border_color(border_color)

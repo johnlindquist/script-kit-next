@@ -489,6 +489,44 @@ fn test_input_field_cursor_color() {
     );
 }
 
+#[test]
+fn test_markdown_highlight_theme_styles() {
+    let sk_theme = Theme::dark_default();
+    let highlight_theme = super::gpui_integration::build_markdown_highlight_theme(&sk_theme, true);
+    let syntax = &highlight_theme.style.syntax;
+
+    let title = syntax
+        .style("title")
+        .expect("title highlight should be configured");
+    assert_eq!(title.font_weight, Some(gpui::FontWeight::BOLD));
+    assert!(title.color.is_some());
+
+    let emphasis = syntax
+        .style("emphasis")
+        .expect("emphasis highlight should be configured");
+    assert_eq!(emphasis.font_style, Some(gpui::FontStyle::Italic));
+
+    let strong = syntax
+        .style("emphasis.strong")
+        .expect("strong emphasis highlight should be configured");
+    assert_eq!(strong.font_weight, Some(gpui::FontWeight::BOLD));
+
+    let literal = syntax
+        .style("text.literal")
+        .expect("text literal highlight should be configured");
+    assert!(literal.color.is_some());
+
+    let link = syntax
+        .style("link_text")
+        .expect("link highlight should be configured");
+    assert!(link.color.is_some());
+
+    let list_marker = syntax
+        .style("punctuation.list_marker")
+        .expect("list marker highlight should be configured");
+    assert!(list_marker.color.is_some());
+}
+
 // ========================================================================
 // Hex Color Parsing Tests
 // ========================================================================

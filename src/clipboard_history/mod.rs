@@ -29,6 +29,9 @@ mod database;
 mod db_worker;
 mod image;
 mod monitor;
+mod open_with;
+mod quick_look;
+mod temp_file;
 mod types;
 
 // Re-export public API
@@ -59,14 +62,26 @@ pub use cache::{cache_image, get_cached_entries, get_cached_image};
 // Database operations
 #[allow(unused_imports)]
 pub use database::{
-    clear_history, get_clipboard_history, get_clipboard_history_meta, get_clipboard_history_page,
-    get_entry_by_id, get_entry_content, get_total_entry_count, pin_entry, remove_entry,
-    trim_oversize_text_entries, unpin_entry, update_ocr_text,
+    clear_history, clear_unpinned_history, get_clipboard_history, get_clipboard_history_meta,
+    get_clipboard_history_page, get_entry_by_id, get_entry_content, get_total_entry_count,
+    pin_entry, remove_entry, trim_oversize_text_entries, unpin_entry, update_ocr_text,
 };
 
 // Image operations
 #[allow(unused_imports)]
-pub use image::{decode_to_render_image, encode_image_as_png};
+pub use image::{
+    content_to_png_bytes, decode_to_render_image, decode_to_rgba_bytes, encode_image_as_png,
+};
+#[allow(unused_imports)]
+pub use quick_look::quick_look_entry;
+
+// Temp file helpers
+#[allow(unused_imports)]
+pub use temp_file::save_entry_to_temp_file;
+
+// Open With helpers (macOS Launch Services)
+#[allow(unused_imports)]
+pub use open_with::{get_apps_for_file, open_file_with_app, AppInfo};
 
 // Monitor/Init
 #[allow(unused_imports)]

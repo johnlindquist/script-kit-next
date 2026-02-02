@@ -25,8 +25,16 @@ impl ScriptListApp {
         let handle_key = cx.listener(
             move |this: &mut Self,
                   event: &gpui::KeyDownEvent,
-                  _window: &mut Window,
+                  window: &mut Window,
                   cx: &mut Context<Self>| {
+                let key = event.keystroke.key.as_str();
+                let has_cmd = event.keystroke.modifiers.platform;
+
+                if has_cmd && crate::ui_foundation::is_key_k(key) && this.sdk_actions.is_some() {
+                    this.toggle_arg_actions(cx, window);
+                    return;
+                }
+
                 // Global shortcuts (Cmd+W, ESC for dismissable prompts)
                 // Other keys are handled by the SelectPrompt entity's own key handler
                 let _ = this.handle_global_shortcut_with_options(event, true, cx);
@@ -70,8 +78,16 @@ impl ScriptListApp {
         let handle_key = cx.listener(
             move |this: &mut Self,
                   event: &gpui::KeyDownEvent,
-                  _window: &mut Window,
+                  window: &mut Window,
                   cx: &mut Context<Self>| {
+                let key = event.keystroke.key.as_str();
+                let has_cmd = event.keystroke.modifiers.platform;
+
+                if has_cmd && crate::ui_foundation::is_key_k(key) && this.sdk_actions.is_some() {
+                    this.toggle_arg_actions(cx, window);
+                    return;
+                }
+
                 // Global shortcuts (Cmd+W, ESC for dismissable prompts)
                 // Other keys are handled by the EnvPrompt entity's own key handler
                 let _ = this.handle_global_shortcut_with_options(event, true, cx);
@@ -116,8 +132,16 @@ impl ScriptListApp {
         let handle_key = cx.listener(
             move |this: &mut Self,
                   event: &gpui::KeyDownEvent,
-                  _window: &mut Window,
+                  window: &mut Window,
                   cx: &mut Context<Self>| {
+                let key = event.keystroke.key.as_str();
+                let has_cmd = event.keystroke.modifiers.platform;
+
+                if has_cmd && crate::ui_foundation::is_key_k(key) && this.sdk_actions.is_some() {
+                    this.toggle_arg_actions(cx, window);
+                    return;
+                }
+
                 // Global shortcuts (Cmd+W, ESC for dismissable prompts)
                 // Other keys are handled by the DropPrompt entity's own key handler
                 let _ = this.handle_global_shortcut_with_options(event, true, cx);
@@ -162,8 +186,16 @@ impl ScriptListApp {
         let handle_key = cx.listener(
             move |this: &mut Self,
                   event: &gpui::KeyDownEvent,
-                  _window: &mut Window,
+                  window: &mut Window,
                   cx: &mut Context<Self>| {
+                let key = event.keystroke.key.as_str();
+                let has_cmd = event.keystroke.modifiers.platform;
+
+                if has_cmd && crate::ui_foundation::is_key_k(key) && this.sdk_actions.is_some() {
+                    this.toggle_arg_actions(cx, window);
+                    return;
+                }
+
                 // Global shortcuts (Cmd+W, ESC for dismissable prompts)
                 // Other keys are handled by the TemplatePrompt entity's own key handler
                 let _ = this.handle_global_shortcut_with_options(event, true, cx);

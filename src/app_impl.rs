@@ -269,6 +269,7 @@ impl ScriptListApp {
             apps,
             // P0 FIX: Cached data for builtin views (avoids cloning per frame)
             cached_clipboard_entries: Vec::new(),
+            focused_clipboard_entry_id: None,
             cached_windows: Vec::new(),
             cached_file_results: Vec::new(),
             selected_index: 0,
@@ -733,16 +734,29 @@ impl ScriptListApp {
                                 }
                                 AppView::ClipboardHistoryView {
                                     selected_index,
-                                    filter: _,
+                                    filter,
                                 } => {
-                                    let filtered_len = this.cached_clipboard_entries.len();
+                                    let filtered_entries: Vec<_> = if filter.is_empty() {
+                                        this.cached_clipboard_entries.iter().enumerate().collect()
+                                    } else {
+                                        let filter_lower = filter.to_lowercase();
+                                        this.cached_clipboard_entries
+                                            .iter()
+                                            .enumerate()
+                                            .filter(|(_, e)| {
+                                                e.text_preview
+                                                    .to_lowercase()
+                                                    .contains(&filter_lower)
+                                            })
+                                            .collect()
+                                    };
+                                    let filtered_len = filtered_entries.len();
                                     if (key == "up" || key == "arrowup") && *selected_index > 0 {
                                         *selected_index -= 1;
                                         this.clipboard_list_scroll_handle.scroll_to_item(
                                             *selected_index,
                                             gpui::ScrollStrategy::Nearest,
                                         );
-                                        cx.notify();
                                     } else if (key == "down" || key == "arrowdown")
                                         && *selected_index + 1 < filtered_len
                                     {
@@ -751,8 +765,11 @@ impl ScriptListApp {
                                             *selected_index,
                                             gpui::ScrollStrategy::Nearest,
                                         );
-                                        cx.notify();
                                     }
+                                    this.focused_clipboard_entry_id = filtered_entries
+                                        .get(*selected_index)
+                                        .map(|(_, entry)| entry.id.clone());
+                                    cx.notify();
                                     cx.stop_propagation();
                                 }
                                 AppView::AppLauncherView {
@@ -947,8 +964,13 @@ impl ScriptListApp {
                             match &mut this.current_view {
                                 AppView::ScriptList => {
                                     // Toggle actions for the main script list
-                                    logging::log("KEY", "Interceptor: Cmd+K -> toggle_actions (ScriptList)");
-                                    this.toggle_actions(cx, window);
+                                    if this.has_actions() {
+                                        logging::log(
+                                            "KEY",
+                                            "Interceptor: Cmd+K -> toggle_actions (ScriptList)",
+                                        );
+                                        this.toggle_actions(cx, window);
+                                    }
                                     cx.stop_propagation();
                                     return;
                                 }
@@ -2546,8 +2568,21 @@ impl ScriptListApp {
                     *selected_index = 0;
                     self.clipboard_list_scroll_handle
                         .scroll_to_item(0, ScrollStrategy::Top);
-                    cx.notify();
                 }
+                let filtered_entries: Vec<_> = if filter.is_empty() {
+                    self.cached_clipboard_entries.iter().enumerate().collect()
+                } else {
+                    let filter_lower = filter.to_lowercase();
+                    self.cached_clipboard_entries
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, e)| e.text_preview.to_lowercase().contains(&filter_lower))
+                        .collect()
+                };
+                self.focused_clipboard_entry_id = filtered_entries
+                    .get(*selected_index)
+                    .map(|(_, entry)| entry.id.clone());
+                cx.notify();
                 return; // Don't run main menu filter logic
             }
             AppView::AppLauncherView {
@@ -3348,6 +3383,9 @@ impl ScriptListApp {
                 "Actions closed via toggle, focus restored via coordinator",
             );
         } else {
+            if !self.has_actions() {
+                return;
+            }
             // Open actions as a separate window with vibrancy blur
             self.show_actions_popup = true;
 

@@ -105,6 +105,10 @@ impl ScriptListApp {
                 logging::log("EXEC", "Opening Clipboard History");
                 // P0 FIX: Store data in self, view holds only state
                 self.cached_clipboard_entries = clipboard_history::get_cached_entries(100);
+                self.focused_clipboard_entry_id = self
+                    .cached_clipboard_entries
+                    .first()
+                    .map(|entry| entry.id.clone());
                 logging::log(
                     "EXEC",
                     &format!(

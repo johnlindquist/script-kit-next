@@ -59,6 +59,8 @@ pub struct ClipboardEntryInfo {
     /// Image dimensions (for image entries)
     #[allow(dead_code)] // Used for context in action dialog, may be used by future actions
     pub image_dimensions: Option<(u32, u32)>,
+    /// Name of the frontmost app (for "Paste to [AppName]" action title)
+    pub frontmost_app_name: Option<String>,
 }
 
 /// Get actions specific to a file search result
@@ -821,10 +823,15 @@ pub fn get_clipboard_history_context_actions(entry: &ClipboardEntryInfo) -> Vec<
     );
 
     // Primary action - Paste to focused app (simulates Cmd+V after copying)
+    // Title dynamically shows the frontmost app name if available
+    let paste_title = match &entry.frontmost_app_name {
+        Some(name) => format!("Paste to {}", name),
+        None => "Paste to Active App".to_string(),
+    };
     actions.push(
         Action::new(
             "clipboard_paste",
-            "Paste to WezTerm",
+            paste_title,
             Some("Copy to clipboard and paste to focused app".to_string()),
             ActionCategory::ScriptContext,
         )
@@ -875,6 +882,18 @@ pub fn get_clipboard_history_context_actions(entry: &ClipboardEntryInfo) -> Vec<
         .with_shortcut("⌃⌘A"),
     );
 
+    // Quick Look (Space) - macOS only
+    #[cfg(target_os = "macos")]
+    actions.push(
+        Action::new(
+            "clipboard_quick_look",
+            "Quick Look",
+            Some("Preview with Quick Look".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("␣"),
+    );
+
     // Image-specific actions
     if entry.content_type == ContentType::Image {
         // Open With...
@@ -887,18 +906,6 @@ pub fn get_clipboard_history_context_actions(entry: &ClipboardEntryInfo) -> Vec<
                 ActionCategory::ScriptContext,
             )
             .with_shortcut("⌘O"),
-        );
-
-        // Quick Look
-        #[cfg(target_os = "macos")]
-        actions.push(
-            Action::new(
-                "clipboard_quick_look",
-                "Quick Look",
-                Some("Preview image with Quick Look".to_string()),
-                ActionCategory::ScriptContext,
-            )
-            .with_shortcut("⌘Y"),
         );
 
         // Annotate in CleanShot X (external app integration)
@@ -2124,6 +2131,7 @@ mod tests {
             pinned: false,
             preview: "Hello world".to_string(),
             image_dimensions: None,
+            frontmost_app_name: None,
         };
 
         let actions = get_clipboard_history_context_actions(&entry);
@@ -2150,6 +2158,10 @@ mod tests {
 
         // Should NOT have image-only actions for text entry
         assert!(!actions.iter().any(|a| a.id == "clipboard_ocr"));
+
+        // macOS-only quick look
+        #[cfg(target_os = "macos")]
+        assert!(actions.iter().any(|a| a.id == "clipboard_quick_look"));
     }
 
     #[test]
@@ -2160,6 +2172,7 @@ mod tests {
             pinned: false,
             preview: "Image (800x600)".to_string(),
             image_dimensions: Some((800, 600)),
+            frontmost_app_name: None,
         };
 
         let actions = get_clipboard_history_context_actions(&entry);
@@ -2191,6 +2204,7 @@ mod tests {
             pinned: true,
             preview: "Pinned text".to_string(),
             image_dimensions: None,
+            frontmost_app_name: None,
         };
 
         let actions = get_clipboard_history_context_actions(&entry);
@@ -2208,6 +2222,7 @@ mod tests {
             pinned: false,
             preview: "Test".to_string(),
             image_dimensions: None,
+            frontmost_app_name: None,
         };
 
         let actions = get_clipboard_history_context_actions(&entry);
@@ -2233,5 +2248,68 @@ mod tests {
             .find(|a| a.id == "clipboard_delete_all")
             .unwrap();
         assert_eq!(delete_all.shortcut.as_ref().unwrap(), "⌃⇧X");
+
+        #[cfg(target_os = "macos")]
+        {
+            let quick_look = actions
+                .iter()
+                .find(|a| a.id == "clipboard_quick_look")
+                .unwrap();
+            assert_eq!(quick_look.shortcut.as_ref().unwrap(), "␣");
+        }
+    }
+
+    #[test]
+    fn test_clipboard_history_paste_to_dynamic_app_name() {
+        // Test with no frontmost app name (default)
+        let entry_no_app = ClipboardEntryInfo {
+            id: "test-id".to_string(),
+            content_type: ContentType::Text,
+            pinned: false,
+            preview: "Test content".to_string(),
+            image_dimensions: None,
+            frontmost_app_name: None,
+        };
+
+        let actions_no_app = get_clipboard_history_context_actions(&entry_no_app);
+        let paste_action_no_app = actions_no_app
+            .iter()
+            .find(|a| a.id == "clipboard_paste")
+            .unwrap();
+        assert_eq!(paste_action_no_app.title, "Paste to Active App");
+
+        // Test with a specific frontmost app name
+        let entry_with_app = ClipboardEntryInfo {
+            id: "test-id".to_string(),
+            content_type: ContentType::Text,
+            pinned: false,
+            preview: "Test content".to_string(),
+            image_dimensions: None,
+            frontmost_app_name: Some("Visual Studio Code".to_string()),
+        };
+
+        let actions_with_app = get_clipboard_history_context_actions(&entry_with_app);
+        let paste_action_with_app = actions_with_app
+            .iter()
+            .find(|a| a.id == "clipboard_paste")
+            .unwrap();
+        assert_eq!(paste_action_with_app.title, "Paste to Visual Studio Code");
+
+        // Test with another app name to ensure dynamic behavior
+        let entry_chrome = ClipboardEntryInfo {
+            id: "test-id".to_string(),
+            content_type: ContentType::Text,
+            pinned: false,
+            preview: "Test content".to_string(),
+            image_dimensions: None,
+            frontmost_app_name: Some("Google Chrome".to_string()),
+        };
+
+        let actions_chrome = get_clipboard_history_context_actions(&entry_chrome);
+        let paste_action_chrome = actions_chrome
+            .iter()
+            .find(|a| a.id == "clipboard_paste")
+            .unwrap();
+        assert_eq!(paste_action_chrome.title, "Paste to Google Chrome");
     }
 }

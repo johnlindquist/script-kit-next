@@ -41,8 +41,9 @@ anyhow = "1.0"
 thiserror = "2.0"
 regex = "1.12"
 nucleo-matcher = "0.3"         # High-performance fuzzy matching (10-100x faster than bespoke)
+pulldown-cmark = { version = "0.12", default-features = false }
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["json", "env-filter", "time"] }
+tracing-subscriber = { version = "0.3", features = ["json", "env-filter", "time", "tracing-log"] }
 time = { version = "0.3", features = ["formatting", "macros"] }
 tracing-appender = "0.2"
 chrono = { version = "0.4", features = ["serde"] }
@@ -118,6 +119,9 @@ clap = { version = "4", features = ["derive"] }  # CLI argument parsing
 # Fork: https://github.com/johnlindquist/gpui-component
 gpui-component = { git = "https://github.com/johnlindquist/gpui-component", package = "gpui-component" }
 
+# Tree-sitter markdown grammar for Notes editor highlighting
+tree-sitter-md = "0.5.2"
+
 # i18n support required by gpui-component
 rust-i18n = "3"
 
@@ -159,6 +163,7 @@ perf = []
 
 [dev-dependencies]
 tempfile = "3"
+tree-sitter-highlight = "0.25.4"
 
 [build-dependencies]
 dirs = "5.0"  # For build.rs to copy SDK to ~/.kit/lib/

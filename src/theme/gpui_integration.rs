@@ -4,8 +4,13 @@
 //! Used by both main.rs and notes/window.rs for consistent theming.
 
 use gpui::{hsla, rgb, App, Hsla};
+use gpui_component::highlighter::{
+    FontStyle as HighlightFontStyle, FontWeightContent, HighlightTheme, ThemeStyle,
+};
 use gpui_component::theme::{Theme as GpuiTheme, ThemeColor, ThemeMode};
-use tracing::{debug, info as tracing_info};
+use serde_json::json;
+use std::sync::Arc;
+use tracing::debug;
 
 use super::types::{load_theme, Theme};
 
@@ -241,9 +246,10 @@ pub fn sync_gpui_component_theme(cx: &mut App) {
     } else {
         ThemeMode::Light
     };
+    theme.highlight_theme = Arc::new(build_markdown_highlight_theme(&sk_theme, is_dark));
 
     // Debug: Log the background color to verify vibrancy is applied
-    tracing_info!(
+    debug!(
         background_h = custom_colors.background.h,
         background_s = custom_colors.background.s,
         background_l = custom_colors.background.l,
@@ -270,5 +276,71 @@ pub fn sync_gpui_component_theme(cx: &mut App) {
         "Font configuration applied to gpui-component"
     );
 
-    tracing_info!("gpui-component theme synchronized with Script Kit");
+    debug!("gpui-component theme synchronized with Script Kit");
+}
+
+fn theme_style(
+    color: Option<u32>,
+    weight: Option<FontWeightContent>,
+    style: Option<HighlightFontStyle>,
+) -> ThemeStyle {
+    let mut map = serde_json::Map::new();
+    if let Some(hex) = color {
+        map.insert("color".to_string(), json!(format!("#{:06x}", hex)));
+    }
+    if let Some(weight) = weight {
+        map.insert("font_weight".to_string(), json!(weight));
+    }
+    if let Some(style) = style {
+        map.insert("font_style".to_string(), json!(style));
+    }
+    serde_json::from_value(serde_json::Value::Object(map))
+        .expect("ThemeStyle should deserialize from json map")
+}
+
+pub(crate) fn build_markdown_highlight_theme(sk_theme: &Theme, is_dark: bool) -> HighlightTheme {
+    let mut highlight_theme = if is_dark {
+        (*HighlightTheme::default_dark()).clone()
+    } else {
+        (*HighlightTheme::default_light()).clone()
+    };
+
+    let colors = &sk_theme.colors;
+    let accent = colors.accent.selected;
+    let secondary = colors.text.secondary;
+    let muted = colors.text.muted;
+
+    highlight_theme.appearance = if is_dark {
+        ThemeMode::Dark
+    } else {
+        ThemeMode::Light
+    };
+
+    highlight_theme.style.syntax.title = Some(theme_style(
+        Some(accent),
+        Some(FontWeightContent::Bold),
+        None,
+    ));
+    highlight_theme.style.syntax.emphasis =
+        Some(theme_style(None, None, Some(HighlightFontStyle::Italic)));
+    highlight_theme.style.syntax.emphasis_strong =
+        Some(theme_style(None, Some(FontWeightContent::Bold), None));
+    highlight_theme.style.syntax.text_literal = Some(theme_style(Some(secondary), None, None));
+    highlight_theme.style.syntax.link_text = Some(theme_style(
+        Some(accent),
+        Some(FontWeightContent::Medium),
+        None,
+    ));
+    highlight_theme.style.syntax.link_uri = Some(theme_style(
+        Some(accent),
+        None,
+        Some(HighlightFontStyle::Italic),
+    ));
+    highlight_theme.style.syntax.punctuation_list_marker = Some(theme_style(
+        Some(accent),
+        Some(FontWeightContent::Bold),
+        None,
+    ));
+    highlight_theme.style.syntax.punctuation_special = Some(theme_style(Some(muted), None, None));
+    highlight_theme
 }

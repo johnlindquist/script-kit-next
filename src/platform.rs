@@ -22,6 +22,8 @@ use cocoa::appkit::NSApp;
 #[cfg(target_os = "macos")]
 use cocoa::base::{id, nil};
 #[cfg(target_os = "macos")]
+use cocoa::foundation::NSString as CocoaNSString;
+#[cfg(target_os = "macos")]
 use objc::{class, msg_send, sel, sel_impl};
 
 #[cfg(target_os = "macos")]
@@ -541,6 +543,102 @@ pub fn activate_main_window() {
     logging::log(
         "PANEL",
         "activate_main_window: Not implemented on this platform",
+    );
+}
+
+// ============================================================================
+// Share Sheet (macOS)
+// ============================================================================
+
+/// Content for the macOS share sheet.
+#[derive(Debug)]
+pub enum ShareSheetItem {
+    Text(String),
+    ImagePng(Vec<u8>),
+}
+
+/// Show the macOS share sheet anchored to the main window contentView.
+#[cfg(target_os = "macos")]
+pub fn show_share_sheet(item: ShareSheetItem) {
+    debug_assert_main_thread();
+    unsafe {
+        let window = match window_manager::get_main_window() {
+            Some(w) => w,
+            None => {
+                logging::log("PANEL", "show_share_sheet: Main window not registered");
+                return;
+            }
+        };
+
+        let content_view: id = msg_send![window, contentView];
+        if content_view == nil {
+            logging::log("PANEL", "show_share_sheet: contentView is nil");
+            return;
+        }
+
+        let share_item: id = match item {
+            ShareSheetItem::Text(text) => {
+                let ns_string = CocoaNSString::alloc(nil).init_str(&text);
+                if ns_string == nil {
+                    logging::log("PANEL", "show_share_sheet: Failed to create NSString");
+                    return;
+                }
+                ns_string
+            }
+            ShareSheetItem::ImagePng(png_bytes) => {
+                if png_bytes.is_empty() {
+                    logging::log("PANEL", "show_share_sheet: Empty PNG data");
+                    return;
+                }
+
+                let data: id = msg_send![class!(NSData), dataWithBytes: png_bytes.as_ptr() length: png_bytes.len()];
+                if data == nil {
+                    logging::log("PANEL", "show_share_sheet: Failed to create NSData");
+                    return;
+                }
+
+                let image: id = msg_send![class!(NSImage), alloc];
+                let image: id = msg_send![image, initWithData: data];
+                if image == nil {
+                    logging::log("PANEL", "show_share_sheet: Failed to create NSImage");
+                    return;
+                }
+                image
+            }
+        };
+
+        let items: id = msg_send![class!(NSArray), arrayWithObject: share_item];
+        if items == nil {
+            logging::log("PANEL", "show_share_sheet: Failed to create NSArray");
+            return;
+        }
+
+        let picker: id = msg_send![class!(NSSharingServicePicker), alloc];
+        let picker: id = msg_send![picker, initWithItems: items];
+        if picker == nil {
+            logging::log(
+                "PANEL",
+                "show_share_sheet: Failed to create NSSharingServicePicker",
+            );
+            return;
+        }
+
+        let bounds: NSRect = msg_send![content_view, bounds];
+        let preferred_edge: i64 = 1; // NSMinYEdge
+        let _: () = msg_send![
+            picker,
+            showRelativeToRect: bounds
+            ofView: content_view
+            preferredEdge: preferred_edge
+        ];
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn show_share_sheet(_item: ShareSheetItem) {
+    logging::log(
+        "PANEL",
+        "show_share_sheet: Not implemented on this platform",
     );
 }
 

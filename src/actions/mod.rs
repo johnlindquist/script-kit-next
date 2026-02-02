@@ -29,6 +29,10 @@ mod window;
 pub use builders::to_deeplink_name;
 #[allow(unused_imports)]
 pub use builders::ClipboardEntryInfo;
+#[allow(unused_imports)]
+pub(crate) use builders::{
+    get_global_actions, get_script_context_actions, get_scriptlet_context_actions_with_custom,
+};
 // Chat prompt info types for ActionsDialog::with_chat
 pub use builders::{ChatModelInfo, ChatPromptInfo};
 pub use dialog::ActionsDialog;

@@ -477,8 +477,10 @@ impl NotesActionsPanel {
     // NOTE: hex_to_rgba_with_opacity moved to crate::ui_foundation (centralized)
 
     /// Get background color with vibrancy opacity applied
+    ///
+    /// Uses cached theme to avoid file I/O on every render.
     fn get_vibrancy_background() -> gpui::Rgba {
-        let sk_theme = crate::theme::load_theme();
+        let sk_theme = crate::theme::get_cached_theme();
         let opacity = sk_theme.get_opacity();
         let bg_hex = sk_theme.colors.background.main;
         rgba(crate::ui_foundation::hex_to_rgba_with_opacity(
@@ -488,8 +490,10 @@ impl NotesActionsPanel {
     }
 
     /// Get search box background with vibrancy opacity
+    ///
+    /// Uses cached theme to avoid file I/O on every render.
     fn get_vibrancy_search_background() -> gpui::Rgba {
-        let sk_theme = crate::theme::load_theme();
+        let sk_theme = crate::theme::get_cached_theme();
         let opacity = sk_theme.get_opacity();
         let bg_hex = sk_theme.colors.background.search_box;
         rgba(crate::ui_foundation::hex_to_rgba_with_opacity(
@@ -500,8 +504,10 @@ impl NotesActionsPanel {
 
     /// Create box shadow for the overlay
     /// Returns empty vec when vibrancy is enabled - shadows block vibrancy blur
+    ///
+    /// Uses cached theme to avoid file I/O on every render.
     fn create_shadow() -> Vec<BoxShadow> {
-        let sk_theme = crate::theme::load_theme();
+        let sk_theme = crate::theme::get_cached_theme();
         if sk_theme.is_vibrancy_enabled() {
             return vec![]; // No shadows for vibrancy - matches POC behavior
         }

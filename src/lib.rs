@@ -247,6 +247,8 @@ pub mod watcher;
 #[cfg(test)]
 mod window_state_tests;
 
+#[cfg(test)]
+mod actions_button_visibility_tests;
 // Shared window visibility state
 // Used to track main window visibility across the app
 // Notes/AI windows use this to decide whether to hide the app after closing

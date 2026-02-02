@@ -5,7 +5,7 @@
 use chrono::{Datelike, Local, NaiveDate, TimeZone};
 
 /// Content types for clipboard entries
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ContentType {
     Text,
     Image,

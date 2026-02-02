@@ -747,8 +747,14 @@ fn init_internal() -> LoggingGuard {
     let (non_blocking_file, file_guard) = tracing_appender::non_blocking(file);
 
     // Environment filter - default to info, allow override via RUST_LOG
-    let env_filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("info,gpui=warn,hyper=warn,reqwest=warn"));
+    // - gpui::window=off: Silences "window not found" errors from GPUI's internal callbacks
+    //   that fire when windows are closed but platform callbacks are still registered.
+    //   These are benign and spam the logs during normal operation.
+    // - gpui=warn: Other GPUI modules at WARN level to catch real issues
+    // - hyper, reqwest: HTTP libraries at WARN to reduce noise
+    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+        EnvFilter::new("info,gpui::window=off,gpui=warn,hyper=warn,reqwest=warn")
+    });
 
     // JSONL layer for file output (AI agents)
     let json_layer = fmt::layer()

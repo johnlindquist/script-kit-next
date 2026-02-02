@@ -28,9 +28,13 @@ use platform::{
 extern crate objc;
 
 mod actions;
+#[cfg(test)]
+mod actions_button_visibility_tests;
 mod agents;
 mod ai;
 mod aliases;
+#[cfg(test)]
+mod clipboard_actions_tests;
 mod components;
 mod config;
 mod confirm;
@@ -950,6 +954,8 @@ enum ActionsDialogHost {
     MainList,
     /// Actions in file search (restore focus to file search input)
     FileSearch,
+    /// Actions in clipboard history (restore focus to clipboard search input)
+    ClipboardHistory,
 }
 
 /// Result of routing a key event to the actions dialog.
@@ -1211,6 +1217,9 @@ struct ScriptListApp {
     apps: Vec<app_launcher::AppInfo>,
     /// P0 FIX: Cached clipboard entries for ClipboardHistoryView (avoids cloning per frame)
     cached_clipboard_entries: Vec<clipboard_history::ClipboardEntryMeta>,
+    /// Focused clipboard entry ID for action handling in ClipboardHistoryView
+    #[allow(dead_code)]
+    focused_clipboard_entry_id: Option<String>,
     /// P0 FIX: Cached windows for WindowSwitcherView (avoids cloning per frame)
     cached_windows: Vec<window_control::WindowInfo>,
     /// Cached file results for FileSearchView (avoids cloning per frame)
@@ -3126,6 +3135,10 @@ fn main() {
                                     "clipboard" | "clipboard-history" | "clipboardhistory" => {
                                         view.cached_clipboard_entries =
                                             clipboard_history::get_cached_entries(100);
+                                        view.focused_clipboard_entry_id = view
+                                            .cached_clipboard_entries
+                                            .first()
+                                            .map(|entry| entry.id.clone());
                                         view.current_view = AppView::ClipboardHistoryView {
                                             filter: String::new(),
                                             selected_index: 0,
