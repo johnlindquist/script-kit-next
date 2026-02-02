@@ -19,6 +19,12 @@
 //! - **Theme Adapter** ([`ThemeAdapter`]): Converts Script Kit's theme system to
 //!   Alacritty's color configuration for seamless visual integration.
 //!
+//! - **Command Bar** ([`command_bar`]): Data structures for Cmd+K terminal actions
+//!   including action types, command items, and default command list.
+//!
+//! - **Command Bar UI** ([`TerminalCommandBar`]): Cmd+K command bar component for quick
+//!   access to terminal actions (clear, scroll, copy, paste, etc.)
+//!
 //!
 //! # Features
 //!
@@ -26,13 +32,22 @@
 //! - Cross-platform PTY support (macOS, Linux, Windows)
 //! - Theme integration with Script Kit's color system
 //! - Event-driven architecture for GPUI integration
+//! - Cmd+K command bar for quick actions
 
 pub mod alacritty;
+pub mod command_bar;
+pub mod command_bar_ui;
 pub mod pty;
 pub mod theme_adapter;
 
 // Re-export main types for convenient access
 pub use alacritty::{CellAttributes, TerminalContent, TerminalHandle};
+
+// Re-export command bar data types
+#[allow(unused_imports)]
+pub use command_bar::{get_terminal_commands, TerminalAction};
+
+// Re-export command bar UI types
 
 /// Events emitted by the terminal for GPUI integration.
 ///

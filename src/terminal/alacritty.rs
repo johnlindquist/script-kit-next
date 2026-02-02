@@ -696,8 +696,12 @@ impl TerminalHandle {
                 let cell = &row[alacritty_terminal::index::Column(col_idx)];
                 line_str.push(cell.c);
 
+                // Check if cell is bold for "bold as bright" color treatment
+                let is_bold = cell.flags.contains(AlacrittyFlags::BOLD);
+
                 // Resolve colors using theme adapter
-                let fg = resolve_color(&cell.fg, &self.theme);
+                // For foreground: apply "bold as bright" behavior (brighten ANSI 0-7 when bold)
+                let fg = resolve_fg_color_with_bold(&cell.fg, is_bold, &self.theme);
                 let bg = resolve_color(&cell.bg, &self.theme);
                 let attrs = CellAttributes::from_alacritty_flags(cell.flags);
 
@@ -967,6 +971,55 @@ pub fn resolve_color(color: &Color, theme: &ThemeAdapter) -> Rgb {
         Color::Named(named) => resolve_named_color(*named, theme),
         Color::Indexed(index) => resolve_indexed_color(*index, theme),
         Color::Spec(rgb) => *rgb,
+    }
+}
+
+/// Resolve foreground color, applying "bold as bright" behavior.
+///
+/// Many traditional terminals brighten normal ANSI colors (0-7) to their bright
+/// variants (8-15) when the BOLD attribute is set. This improves visibility and
+/// is the expected behavior for tools like `ls --color`, `git diff`, etc.
+///
+/// Only applies to:
+/// - Named colors (Black, Red, Green, Yellow, Blue, Magenta, Cyan, White)
+/// - Indexed colors 0-7
+///
+/// Does NOT apply to:
+/// - Already-bright colors (indices 8-15)
+/// - 216 color cube (indices 16-231)
+/// - Grayscale (indices 232-255)
+/// - Direct RGB (Spec colors)
+/// - Background colors (use resolve_color for those)
+pub fn resolve_fg_color_with_bold(color: &Color, is_bold: bool, theme: &ThemeAdapter) -> Rgb {
+    if !is_bold {
+        return resolve_color(color, theme);
+    }
+
+    match color {
+        Color::Named(named) => resolve_named_color_brightened(*named, theme),
+        Color::Indexed(index) if *index < 8 => {
+            // Brighten normal ANSI indexed colors (0-7) to bright variants (8-15)
+            theme.ansi_color(index + 8)
+        }
+        // All other indexed colors and Spec colors are unchanged
+        _ => resolve_color(color, theme),
+    }
+}
+
+/// Resolve a named color to Rgb, using bright variant for normal ANSI colors.
+fn resolve_named_color_brightened(named: NamedColor, theme: &ThemeAdapter) -> Rgb {
+    match named {
+        // Normal ANSI colors (0-7) → Bright variants (8-15)
+        NamedColor::Black => theme.ansi_color(8), // → BrightBlack
+        NamedColor::Red => theme.ansi_color(9),   // → BrightRed
+        NamedColor::Green => theme.ansi_color(10), // → BrightGreen
+        NamedColor::Yellow => theme.ansi_color(11), // → BrightYellow
+        NamedColor::Blue => theme.ansi_color(12), // → BrightBlue
+        NamedColor::Magenta => theme.ansi_color(13), // → BrightMagenta
+        NamedColor::Cyan => theme.ansi_color(14), // → BrightCyan
+        NamedColor::White => theme.ansi_color(15), // → BrightWhite
+        // All other named colors use standard resolution
+        other => resolve_named_color(other, theme),
     }
 }
 

@@ -450,6 +450,10 @@ pub enum ActionCategory {
     /// Intended for: Open Settings, Quit App, Check for Updates
     #[allow(dead_code)]
     GlobalOps,
+
+    /// Terminal actions (Clear, Copy, Paste, Scroll, etc.)
+    #[allow(dead_code)]
+    Terminal,
 }
 
 impl Action {
@@ -488,6 +492,14 @@ impl Action {
     }
 
     #[allow(dead_code)] // Public API - used by get_ai_command_bar_actions
+    /// Add an optional shortcut to the action
+    pub fn with_shortcut_opt(mut self, shortcut: Option<String>) -> Self {
+        if let Some(s) = shortcut {
+            self.shortcut_lower = Some(s.to_lowercase());
+            self.shortcut = Some(s);
+        }
+        self
+    }
     pub fn with_icon(mut self, icon: IconName) -> Self {
         self.icon = Some(icon);
         self

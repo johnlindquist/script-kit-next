@@ -19,10 +19,6 @@ impl ScriptListApp {
             self.actions_dialog = None;
             self.file_search_actions_path = None;
 
-            // Restore focus state - file search uses the main filter input
-            self.focused_input = FocusedInput::MainFilter;
-            self.gpui_input_focused = true;
-
             // Close the actions window via spawn
             cx.spawn(async move |_this, cx| {
                 cx.update(|cx| {
@@ -32,15 +28,21 @@ impl ScriptListApp {
             })
             .detach();
 
-            // Refocus the file search input
+            // Use coordinator to restore focus (will pop the overlay and set pending_focus)
+            self.pop_focus_overlay(cx);
+
+            // Also directly focus main filter for immediate feedback
             self.focus_main_filter(window, cx);
             logging::log(
                 "FOCUS",
-                "File search actions closed, focus returned to file search input",
+                "File search actions closed, focus restored via coordinator",
             );
         } else {
             // Open actions popup for the selected file
             self.show_actions_popup = true;
+
+            // Use coordinator to push overlay - saves current focus state for restore
+            self.push_focus_overlay(focus_coordinator::FocusRequest::actions_dialog(), cx);
 
             // CRITICAL: Transfer focus from Input to main focus_handle
             // This prevents the Input from receiving text (which would go to file search filter)
@@ -79,14 +81,12 @@ impl ScriptListApp {
                         app.show_actions_popup = false;
                         app.actions_dialog = None;
                         app.file_search_actions_path = None;
-                        // File search uses MainFilter input - restore focus to it
-                        app.focused_input = FocusedInput::MainFilter;
-                        app.pending_focus = Some(FocusTarget::AppRoot);
+                        // Use coordinator to pop overlay and restore previous focus
+                        app.pop_focus_overlay(cx);
                         logging::log(
                             "FOCUS",
-                            "File search actions closed via escape, pending_focus=AppRoot",
+                            "File search actions closed via escape, focus restored via coordinator",
                         );
-                        cx.notify();
                     });
                 }));
             });
@@ -142,10 +142,6 @@ impl ScriptListApp {
             self.show_actions_popup = false;
             self.actions_dialog = None;
 
-            // Restore focus state - clipboard history uses the main filter input
-            self.focused_input = FocusedInput::MainFilter;
-            self.gpui_input_focused = true;
-
             // Close the actions window via spawn
             cx.spawn(async move |_this, cx| {
                 cx.update(|cx| {
@@ -155,16 +151,22 @@ impl ScriptListApp {
             })
             .detach();
 
-            // Refocus the clipboard history input
+            // Use coordinator to restore focus (will pop the overlay and set pending_focus)
+            self.pop_focus_overlay(cx);
+
+            // Also directly focus main filter for immediate feedback
             self.focus_main_filter(window, cx);
             logging::log(
                 "FOCUS",
-                "Clipboard actions closed, focus returned to clipboard input",
+                "Clipboard actions closed, focus restored via coordinator",
             );
         } else {
             // Open actions popup for the selected clipboard entry
             self.show_actions_popup = true;
             self.focused_clipboard_entry_id = Some(entry.id.clone());
+
+            // Use coordinator to push overlay - saves current focus state for restore
+            self.push_focus_overlay(focus_coordinator::FocusRequest::actions_dialog(), cx);
 
             // Transfer focus from Input to main focus_handle for actions routing
             self.focus_handle.focus(window, cx);
@@ -203,13 +205,12 @@ impl ScriptListApp {
                     app_entity.update(cx, |app, cx| {
                         app.show_actions_popup = false;
                         app.actions_dialog = None;
-                        app.focused_input = FocusedInput::MainFilter;
-                        app.pending_focus = Some(FocusTarget::AppRoot);
+                        // Use coordinator to pop overlay and restore previous focus
+                        app.pop_focus_overlay(cx);
                         logging::log(
                             "FOCUS",
-                            "Clipboard actions closed via escape, pending_focus=AppRoot",
+                            "Clipboard actions closed via escape, focus restored via coordinator",
                         );
-                        cx.notify();
                     });
                 }));
             });
