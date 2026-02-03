@@ -82,11 +82,11 @@ mod tests {
     fn test_prompt_colors_struct_size() {
         use std::mem::size_of;
 
-        // PromptColors should be very small - just 7 u32 values
+        // PromptColors should be very small - 7 u32 values + 1 bool
         let size = size_of::<PromptColors>();
 
-        // 7 u32 fields * 4 bytes each = 28 bytes
-        assert_eq!(size, 28, "PromptColors should be exactly 28 bytes");
+        // 7 u32 fields * 4 bytes each = 28 bytes + bool with alignment = 32 bytes
+        assert_eq!(size, 32, "PromptColors should be exactly 32 bytes");
 
         // Much smaller than Arc<Theme> pointing to large heap allocation
         assert!(size > size_of::<std::sync::Arc<()>>());

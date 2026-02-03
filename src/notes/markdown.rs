@@ -6,7 +6,7 @@ use gpui::{
     div, px, AnyElement, FontStyle, FontWeight, HighlightStyle, Hsla, IntoElement, ParentElement,
     Styled, StyledText, UnderlineStyle,
 };
-use gpui_component::theme::Theme;
+use gpui_component::theme::{Theme, ThemeMode};
 use pulldown_cmark::{CodeBlockKind, Event, Options, Parser, Tag, TagEnd};
 use std::ops::Range;
 
@@ -357,12 +357,14 @@ struct RenderStyles {
     code_block_bg: Hsla,
     border: Hsla,
     mono_font: String,
+    is_dark: bool,
 }
 
 impl RenderStyles {
     fn from_theme(theme: &Theme) -> Self {
         let code_bg = with_alpha(theme.muted, 0.28);
         let code_block_bg = with_alpha(theme.muted, 0.2);
+        let is_dark = matches!(theme.mode, ThemeMode::Dark);
         Self {
             text: theme.foreground,
             muted: theme.muted_foreground,
@@ -371,6 +373,7 @@ impl RenderStyles {
             code_block_bg,
             border: with_alpha(theme.border, 0.4),
             mono_font: theme.mono_font_family.to_string(),
+            is_dark,
         }
     }
 }
@@ -443,7 +446,7 @@ fn render_block(block: &MarkdownBlock, styles: &RenderStyles) -> AnyElement {
                 .into_any_element()
         }
         MarkdownBlock::CodeBlock { language, text } => {
-            let styled_code = styled_code_block(text, language.as_deref());
+            let styled_code = styled_code_block(text, language.as_deref(), styles.is_dark);
             div()
                 .rounded(px(6.0))
                 .bg(styles.code_block_bg)
@@ -458,13 +461,13 @@ fn render_block(block: &MarkdownBlock, styles: &RenderStyles) -> AnyElement {
     }
 }
 
-fn styled_code_block(code: &str, language: Option<&str>) -> StyledText {
+fn styled_code_block(code: &str, language: Option<&str>, is_dark: bool) -> StyledText {
     let trimmed = code.trim_end_matches('\n');
     if trimmed.is_empty() {
         return StyledText::new(String::new());
     }
 
-    let lines = highlight_code_lines(trimmed, language);
+    let lines = highlight_code_lines(trimmed, language, is_dark);
     if lines.is_empty() {
         return StyledText::new(trimmed.to_string());
     }

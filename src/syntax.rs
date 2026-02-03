@@ -20,21 +20,57 @@ use syntect::util::LinesWithEndings;
 /// Cached SyntaxSet - loading takes ~50ms, so we cache it globally
 static SYNTAX_SET: OnceLock<SyntaxSet> = OnceLock::new();
 
-/// Cached Theme - loading takes ~50ms, so we cache it globally  
-static THEME: OnceLock<Theme> = OnceLock::new();
+/// Cached dark theme - loading takes ~50ms, so we cache it globally
+static DARK_THEME: OnceLock<Theme> = OnceLock::new();
+
+/// Cached light theme - loading takes ~50ms, so we cache it globally
+static LIGHT_THEME: OnceLock<Theme> = OnceLock::new();
+
+/// Default foreground color for dark mode (light gray text on dark background)
+const DEFAULT_COLOR_DARK: u32 = 0xcccccc;
+
+/// Default foreground color for light mode (dark gray text on light background)
+const DEFAULT_COLOR_LIGHT: u32 = 0x333333;
 
 /// Get the cached SyntaxSet, loading it if necessary
 fn get_syntax_set() -> &'static SyntaxSet {
     SYNTAX_SET.get_or_init(SyntaxSet::load_defaults_newlines)
 }
 
-/// Get the cached Theme, loading it if necessary
-fn get_theme() -> &'static Theme {
-    THEME.get_or_init(|| {
+/// Get the cached dark theme, loading it if necessary
+fn get_dark_theme() -> &'static Theme {
+    DARK_THEME.get_or_init(|| {
         let ts = ThemeSet::load_defaults();
         // Clone the theme so we can move it into the static
         ts.themes["base16-eighties.dark"].clone()
     })
+}
+
+/// Get the cached light theme, loading it if necessary
+fn get_light_theme() -> &'static Theme {
+    LIGHT_THEME.get_or_init(|| {
+        let ts = ThemeSet::load_defaults();
+        // base16-ocean.light is a good light theme from syntect defaults
+        ts.themes["base16-ocean.light"].clone()
+    })
+}
+
+/// Get the appropriate theme based on dark/light mode
+fn get_theme(is_dark: bool) -> &'static Theme {
+    if is_dark {
+        get_dark_theme()
+    } else {
+        get_light_theme()
+    }
+}
+
+/// Get the default text color for the given theme mode
+fn get_default_color(is_dark: bool) -> u32 {
+    if is_dark {
+        DEFAULT_COLOR_DARK
+    } else {
+        DEFAULT_COLOR_LIGHT
+    }
 }
 
 /// A highlighted span of text with its associated color
@@ -99,16 +135,17 @@ fn map_language_to_syntax(language: &str) -> &str {
 /// # Arguments
 /// * `code` - The source code to highlight
 /// * `language` - The language identifier (e.g., "typescript", "javascript", "markdown", "ts", "js", "md")
+/// * `is_dark` - Whether to use dark theme (true) or light theme (false)
 ///
 /// # Returns
 /// A vector of `HighlightedLine` structs, each containing spans for one line.
 /// This preserves line structure for proper rendering.
-pub fn highlight_code_lines(code: &str, language: &str) -> Vec<HighlightedLine> {
+pub fn highlight_code_lines(code: &str, language: &str, is_dark: bool) -> Vec<HighlightedLine> {
     let ps = get_syntax_set();
-    let theme = get_theme();
+    let theme = get_theme(is_dark);
 
-    // Default foreground color for plain text (light gray)
-    let default_color = 0xcccccc_u32;
+    // Default foreground color for plain text based on theme
+    let default_color = get_default_color(is_dark);
 
     let syntax_name = map_language_to_syntax(language);
 
@@ -169,16 +206,17 @@ pub fn highlight_code_lines(code: &str, language: &str) -> Vec<HighlightedLine> 
 /// # Arguments
 /// * `code` - The source code to highlight
 /// * `language` - The language identifier (e.g., "typescript", "javascript", "markdown", "ts", "js", "md")
+/// * `is_dark` - Whether to use dark theme (true) or light theme (false)
 ///
 /// # Returns
 /// A vector of `HighlightedSpan` structs, each containing a text segment and its color.
 /// If the language is not recognized, returns the code as plain text with default color.
-pub fn highlight_code(code: &str, language: &str) -> Vec<HighlightedSpan> {
+pub fn highlight_code(code: &str, language: &str, is_dark: bool) -> Vec<HighlightedSpan> {
     let ps = get_syntax_set();
-    let theme = get_theme();
+    let theme = get_theme(is_dark);
 
-    // Default foreground color for plain text (light gray)
-    let default_color = 0xcccccc_u32;
+    // Default foreground color for plain text based on theme
+    let default_color = get_default_color(is_dark);
 
     let syntax_name = map_language_to_syntax(language);
 
@@ -257,7 +295,7 @@ mod tests {
     #[test]
     fn test_highlight_typescript() {
         let code = "const x: number = 42;";
-        let spans = highlight_code(code, "typescript");
+        let spans = highlight_code(code, "typescript", true);
 
         // Should produce multiple spans with different colors
         assert!(!spans.is_empty());
@@ -270,7 +308,7 @@ mod tests {
     #[test]
     fn test_highlight_javascript() {
         let code = "function hello() { return 'world'; }";
-        let spans = highlight_code(code, "javascript");
+        let spans = highlight_code(code, "javascript", true);
 
         assert!(!spans.is_empty());
         let reconstructed: String = spans.iter().map(|s| s.text.as_str()).collect();
@@ -280,7 +318,7 @@ mod tests {
     #[test]
     fn test_highlight_markdown() {
         let code = "# Hello World\n\nThis is **bold** text.";
-        let spans = highlight_code(code, "markdown");
+        let spans = highlight_code(code, "markdown", true);
 
         assert!(!spans.is_empty());
         let reconstructed: String = spans.iter().map(|s| s.text.as_str()).collect();
@@ -290,8 +328,8 @@ mod tests {
     #[test]
     fn test_highlight_with_extension() {
         let code = "let x = 1;";
-        let spans_ts = highlight_code(code, "ts");
-        let spans_js = highlight_code(code, "js");
+        let spans_ts = highlight_code(code, "ts", true);
+        let spans_js = highlight_code(code, "js", true);
 
         assert!(!spans_ts.is_empty());
         assert!(!spans_js.is_empty());
@@ -300,7 +338,7 @@ mod tests {
     #[test]
     fn test_unknown_language_returns_plain_text() {
         let code = "some random text";
-        let spans = highlight_code(code, "unknownlang123");
+        let spans = highlight_code(code, "unknownlang123", true);
 
         // Should return at least one span with the full text
         assert!(!spans.is_empty());
@@ -310,14 +348,14 @@ mod tests {
 
     #[test]
     fn test_empty_code() {
-        let spans = highlight_code("", "typescript");
+        let spans = highlight_code("", "typescript", true);
         assert!(spans.is_empty());
     }
 
     #[test]
     fn test_multiline_code() {
         let code = "const a = 1;\nconst b = 2;\nconst c = a + b;";
-        let spans = highlight_code(code, "javascript");
+        let spans = highlight_code(code, "javascript", true);
 
         assert!(!spans.is_empty());
         let reconstructed: String = spans.iter().map(|s| s.text.as_str()).collect();
@@ -326,7 +364,7 @@ mod tests {
 
     #[test]
     fn test_color_format() {
-        let spans = highlight_code("let x = 42;", "typescript");
+        let spans = highlight_code("let x = 42;", "typescript", true);
 
         for span in &spans {
             // Colors should be in valid hex range (0x000000 to 0xFFFFFF)
@@ -359,7 +397,7 @@ mod tests {
     #[test]
     fn test_highlight_lines_preserves_structure() {
         let code = "const a = 1;\nconst b = 2;";
-        let lines = highlight_code_lines(code, "js");
+        let lines = highlight_code_lines(code, "js", true);
 
         // Should have 2 lines
         assert_eq!(lines.len(), 2);
@@ -373,7 +411,7 @@ mod tests {
     fn test_highlight_produces_colors() {
         // Use JavaScript which IS in syntect defaults
         let code = "function test() { return 42; }";
-        let spans = highlight_code(code, "javascript");
+        let spans = highlight_code(code, "javascript", true);
 
         // Check we have different colors (real syntax highlighting)
         let unique_colors: std::collections::HashSet<u32> = spans.iter().map(|s| s.color).collect();
@@ -392,7 +430,7 @@ const y = "hello";
 function test() {
     return x + y;
 }"#;
-        let lines = highlight_code_lines(code, "javascript");
+        let lines = highlight_code_lines(code, "javascript", true);
 
         let total_spans: usize = lines.iter().map(|l| l.spans.len()).sum();
         let line_count = lines.len();
@@ -421,5 +459,40 @@ function test() {
             total_spans,
             line_count
         );
+    }
+
+    #[test]
+    fn test_light_theme_produces_different_colors() {
+        // Verify that light theme produces different colors than dark theme
+        let code = "const x = 42;";
+        let dark_spans = highlight_code(code, "javascript", true);
+        let light_spans = highlight_code(code, "javascript", false);
+
+        // Both should produce valid spans
+        assert!(!dark_spans.is_empty());
+        assert!(!light_spans.is_empty());
+
+        // The colors should be different between themes
+        let dark_colors: std::collections::HashSet<u32> =
+            dark_spans.iter().map(|s| s.color).collect();
+        let light_colors: std::collections::HashSet<u32> =
+            light_spans.iter().map(|s| s.color).collect();
+
+        // At least some colors should differ
+        assert_ne!(
+            dark_colors, light_colors,
+            "Light and dark themes should produce different colors"
+        );
+    }
+
+    #[test]
+    fn test_default_colors_differ_by_theme() {
+        // Test that default colors are appropriate for each theme
+        assert_eq!(get_default_color(true), DEFAULT_COLOR_DARK);
+        assert_eq!(get_default_color(false), DEFAULT_COLOR_LIGHT);
+
+        // Compile-time checks: dark theme has light text, light theme has dark text
+        const _: () = assert!(DEFAULT_COLOR_DARK > 0x888888); // Light text for dark bg
+        const _: () = assert!(DEFAULT_COLOR_LIGHT < 0x888888); // Dark text for light bg
     }
 }

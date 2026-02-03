@@ -119,7 +119,13 @@ impl ScriptListApp {
         } else {
             colors.text_secondary
         };
-        let bg_search_box = colors.background_tertiary;
+        let bg_search_box = if is_light_mode {
+            // Use a subtle gray for code blocks in light mode
+            // 0xf0f0f0 provides good contrast without being too dark
+            0xf0f0f0
+        } else {
+            colors.background_tertiary
+        };
         let border_radius = visual.radius_md;
         let font_family = typography.font_family;
 
@@ -308,9 +314,10 @@ impl ScriptListApp {
                         // Use cached syntax-highlighted lines (avoids file I/O and highlighting on every render)
                         let script_path = script.path.to_string_lossy().to_string();
                         let lang = script.extension.clone();
+                        let is_dark = self.theme.is_dark_mode();
                         let cache_start = std::time::Instant::now();
                         let lines = self
-                            .get_or_update_preview_cache(&script_path, &lang)
+                            .get_or_update_preview_cache(&script_path, &lang, is_dark)
                             .to_vec();
                         let cache_elapsed = cache_start.elapsed();
                         if cache_elapsed.as_micros() > 500 {
@@ -526,7 +533,8 @@ impl ScriptListApp {
                                 "node" | "bun" => "js",
                                 _ => &scriptlet.tool,
                             };
-                            let highlighted = highlight_code_lines(&code_preview, lang);
+                            let is_dark = self.theme.is_dark_mode();
+                            let highlighted = highlight_code_lines(&code_preview, lang, is_dark);
                             self.scriptlet_preview_cache_key = Some(cache_key);
                             self.scriptlet_preview_cache_lines = highlighted.clone();
                             highlighted
@@ -1423,6 +1431,9 @@ impl ScriptListApp {
                   event: &gpui::KeyDownEvent,
                   _window: &mut Window,
                   cx: &mut Context<Self>| {
+                // Hide cursor while typing - automatically shows when mouse moves
+                this.hide_mouse_cursor(cx);
+
                 // Global shortcuts (Cmd+W, ESC closes window from ActionsDialog too)
                 // ActionsDialog has no other key handling, so we just call the global handler
                 let _ = this.handle_global_shortcut_with_options(event, true, cx);
