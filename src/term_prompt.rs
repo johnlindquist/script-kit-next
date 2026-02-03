@@ -847,6 +847,9 @@ impl Render for TermPrompt {
                   event: &gpui::KeyDownEvent,
                   _window: &mut Window,
                   _cx: &mut Context<Self>| {
+                // Hide cursor while typing - automatically shows when mouse moves
+                crate::platform::hide_cursor_until_mouse_moves();
+
                 // When actions panel is open, ignore all key events
                 if this.suppress_keys {
                     return;
