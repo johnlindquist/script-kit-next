@@ -2024,7 +2024,9 @@ impl ChatPrompt {
                             .border_color(rgba(accent_border))
                             .when(is_configure_focused, |s| {
                                 s.border_2()
-                                    .border_color(rgba((colors.accent_color << 8) | 0xCC))
+                                    .border_color(rgba((colors.accent_color << 8) | 0xFF))
+                                    .bg(rgba((colors.accent_color << 8) | 0x40))
+                                    .shadow_md()
                             })
                             .cursor_pointer()
                             .hover(|s| s.bg(rgba((colors.accent_color << 8) | 0x40)))
@@ -2076,32 +2078,18 @@ impl ChatPrompt {
                             .border_color(rgba(accent_border))
                             .when(is_claude_focused, |s| {
                                 s.border_2()
-                                    .border_color(rgba((colors.accent_color << 8) | 0xCC))
+                                    .border_color(rgba((colors.accent_color << 8) | 0xFF))
+                                    .bg(rgba((colors.accent_color << 8) | 0x40))
+                                    .shadow_md()
                             })
                             .cursor_pointer()
                             .hover(|s| s.bg(rgba((colors.accent_color << 8) | 0x40)))
                             // Always attach on_click, check callback inside
                             // (fixes GPUI issue where when_some on second sibling doesn't register hits)
                             .on_click(cx.listener(move |_this, _event, _window, _cx| {
-                                logging::log(
-                                    "CHAT",
-                                    &format!(
-                                        "Claude Code button clicked - callback present: {}",
-                                        on_claude_code.is_some()
-                                    ),
-                                );
+                                logging::log("CHAT", "Claude Code button clicked");
                                 if let Some(ref cb) = on_claude_code {
-                                    logging::log("CHAT", "Invoking Claude Code callback...");
                                     cb();
-                                    logging::log(
-                                        "CHAT",
-                                        "Claude Code callback invoked successfully",
-                                    );
-                                } else {
-                                    logging::log(
-                                        "CHAT",
-                                        "ERROR: No Claude Code callback set! Button click ignored.",
-                                    );
                                 }
                             }))
                             .child(
