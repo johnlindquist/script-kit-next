@@ -2113,6 +2113,7 @@ impl ScriptListApp {
         &mut self,
         script_path: &str,
         lang: &str,
+        is_dark: bool,
     ) -> &[syntax::HighlightedLine] {
         // Check if cache is valid for this path
         if self.preview_cache_path.as_deref() == Some(script_path)
@@ -2139,7 +2140,7 @@ impl ScriptListApp {
                 // Only take first 15 lines for preview
                 let highlight_start = std::time::Instant::now();
                 let preview: String = content.lines().take(15).collect::<Vec<_>>().join("\n");
-                let lines = syntax::highlight_code_lines(&preview, lang);
+                let lines = syntax::highlight_code_lines(&preview, lang, is_dark);
                 let highlight_elapsed = highlight_start.elapsed();
 
                 logging::log(

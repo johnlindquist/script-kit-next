@@ -192,6 +192,8 @@ pub struct PromptColors {
     pub quote_border: u32,
     /// Horizontal rule color
     pub hr_color: u32,
+    /// Whether dark mode is active (for syntax highlighting)
+    pub is_dark: bool,
 }
 
 #[allow(dead_code)]
@@ -199,6 +201,7 @@ impl PromptColors {
     /// Create PromptColors from a ColorScheme
     ///
     /// This extracts only the colors needed for rendering HTML prompts.
+    /// Note: `is_dark` defaults to true. Use `from_theme` for proper dark mode detection.
     pub fn from_color_scheme(colors: &ColorScheme) -> Self {
         #[cfg(debug_assertions)]
         debug!("Extracting prompt colors");
@@ -211,12 +214,15 @@ impl PromptColors {
             code_bg: colors.background.search_box,
             quote_border: colors.ui.border,
             hr_color: colors.ui.border,
+            is_dark: true, // Default to dark mode; use from_theme for proper detection
         }
     }
 
     /// Create PromptColors from a Theme (preferred method)
     pub fn from_theme(theme: &Theme) -> Self {
-        Self::from_color_scheme(&theme.colors)
+        let mut colors = Self::from_color_scheme(&theme.colors);
+        colors.is_dark = theme.is_dark_mode();
+        colors
     }
 }
 

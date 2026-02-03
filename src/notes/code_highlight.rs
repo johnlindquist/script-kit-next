@@ -39,14 +39,15 @@ pub struct HighlightedCodeBlock {
 }
 
 static SYNTAX_SET: OnceLock<SyntaxSet> = OnceLock::new();
-static THEME: OnceLock<Theme> = OnceLock::new();
+static DARK_THEME: OnceLock<Theme> = OnceLock::new();
+static LIGHT_THEME: OnceLock<Theme> = OnceLock::new();
 
 fn syntax_set() -> &'static SyntaxSet {
     SYNTAX_SET.get_or_init(SyntaxSet::load_defaults_newlines)
 }
 
-fn theme() -> &'static Theme {
-    THEME.get_or_init(|| {
+fn dark_theme() -> &'static Theme {
+    DARK_THEME.get_or_init(|| {
         let themes = ThemeSet::load_defaults();
         themes
             .themes
@@ -61,6 +62,32 @@ fn theme() -> &'static Theme {
                     .expect("syntect ThemeSet should contain at least one theme")
             })
     })
+}
+
+fn light_theme() -> &'static Theme {
+    LIGHT_THEME.get_or_init(|| {
+        let themes = ThemeSet::load_defaults();
+        themes
+            .themes
+            .get("base16-ocean.light")
+            .cloned()
+            .unwrap_or_else(|| {
+                themes
+                    .themes
+                    .values()
+                    .next()
+                    .cloned()
+                    .expect("syntect ThemeSet should contain at least one theme")
+            })
+    })
+}
+
+fn theme_for_mode(is_dark: bool) -> &'static Theme {
+    if is_dark {
+        dark_theme()
+    } else {
+        light_theme()
+    }
 }
 
 fn style_to_hex_color(style: &Style) -> u32 {
@@ -142,14 +169,19 @@ pub fn detect_fenced_code_blocks(markdown: &str) -> Vec<CodeBlock> {
 }
 
 /// Highlight a code string into line-based spans.
-pub fn highlight_code_lines(code: &str, language: Option<&str>) -> Vec<CodeLine> {
+///
+/// # Arguments
+/// * `code` - The source code to highlight
+/// * `language` - Optional language identifier for syntax highlighting
+/// * `is_dark` - Whether to use dark theme (true) or light theme (false)
+pub fn highlight_code_lines(code: &str, language: Option<&str>, is_dark: bool) -> Vec<CodeLine> {
     if code.is_empty() {
         return Vec::new();
     }
 
     let ps = syntax_set();
-    let theme = theme();
-    let default_color = 0xCCCCCC_u32;
+    let theme = theme_for_mode(is_dark);
+    let default_color = if is_dark { 0xCCCCCC_u32 } else { 0x333333_u32 };
 
     let language = language
         .and_then(normalize_language)
@@ -208,12 +240,16 @@ pub fn highlight_code_lines(code: &str, language: Option<&str>) -> Vec<CodeLine>
 }
 
 /// Detect and highlight fenced code blocks in markdown.
-pub fn highlight_fenced_code_blocks(markdown: &str) -> Vec<HighlightedCodeBlock> {
+///
+/// # Arguments
+/// * `markdown` - The markdown string containing fenced code blocks
+/// * `is_dark` - Whether to use dark theme (true) or light theme (false)
+pub fn highlight_fenced_code_blocks(markdown: &str, is_dark: bool) -> Vec<HighlightedCodeBlock> {
     detect_fenced_code_blocks(markdown)
         .into_iter()
         .map(|block| HighlightedCodeBlock {
             language: block.language.clone(),
-            lines: highlight_code_lines(&block.code, block.language.as_deref()),
+            lines: highlight_code_lines(&block.code, block.language.as_deref(), is_dark),
         })
         .collect()
 }
@@ -255,7 +291,7 @@ console.log("ok");
     #[test]
     fn test_highlight_code_lines_preserves_text() {
         let code = "const x = 1;\nconst y = 2;";
-        let lines = highlight_code_lines(code, Some("javascript"));
+        let lines = highlight_code_lines(code, Some("javascript"), true);
         assert_eq!(lines.len(), 2);
         let reconstructed: String = lines
             .iter()
@@ -273,7 +309,7 @@ console.log("ok");
     #[test]
     fn test_highlight_fenced_code_blocks_returns_lines() {
         let md = "```python\nprint('hi')\n```";
-        let blocks = highlight_fenced_code_blocks(md);
+        let blocks = highlight_fenced_code_blocks(md, true);
         assert_eq!(blocks.len(), 1);
         assert!(!blocks[0].lines.is_empty());
     }
@@ -299,9 +335,24 @@ console.log("ok");
             "css",
         ];
         for lang in langs {
-            let lines = highlight_code_lines(code, Some(lang));
+            let lines = highlight_code_lines(code, Some(lang), true);
             assert!(!lines.is_empty(), "Expected lines for {}", lang);
         }
+    }
+
+    #[test]
+    fn test_highlight_code_lines_light_theme() {
+        let code = "const x = 1;";
+        let lines = highlight_code_lines(code, Some("javascript"), false);
+        assert!(!lines.is_empty());
+    }
+
+    #[test]
+    fn test_highlight_fenced_code_blocks_light_theme() {
+        let md = "```rust\nfn main() {}\n```";
+        let blocks = highlight_fenced_code_blocks(md, false);
+        assert_eq!(blocks.len(), 1);
+        assert!(!blocks[0].lines.is_empty());
     }
 
     #[test]

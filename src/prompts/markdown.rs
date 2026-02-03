@@ -364,7 +364,7 @@ fn render_hr(colors: &PromptColors) -> gpui::Div {
 
 fn render_code_block(code: &str, lang: Option<&str>, colors: &PromptColors) -> gpui::Div {
     let lang_label = lang.unwrap_or("").trim();
-    let lines: Vec<CodeLine> = highlight_code_lines(code, lang);
+    let lines: Vec<CodeLine> = highlight_code_lines(code, lang, colors.is_dark);
 
     let mut code_container = div()
         .w_full()
