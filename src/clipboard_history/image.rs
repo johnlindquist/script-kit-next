@@ -75,14 +75,17 @@ pub fn encode_image_as_base64(image: &arboard::ImageData) -> Result<String> {
     ))
 }
 
-/// Decode a base64 image string back to ImageData
+/// Decode a clipboard image content string back to ImageData
 ///
-/// Supports both formats:
-/// - New PNG format: "png:{base64_encoded_png_data}"
+/// Supports three formats:
+/// - Blob format: "blob:{hash}" (file-based, most efficient)
+/// - PNG format: "png:{base64_encoded_png_data}"
 /// - Legacy RGBA format: "rgba:{width}:{height}:{base64_data}"
 #[allow(dead_code)]
 pub fn decode_base64_image(content: &str) -> Option<arboard::ImageData<'static>> {
-    if content.starts_with("png:") {
+    if is_blob_content(content) {
+        decode_blob_to_image_data(content)
+    } else if content.starts_with("png:") {
         decode_png_to_image_data(content)
     } else if content.starts_with("rgba:") {
         decode_legacy_rgba(content)
@@ -90,6 +93,20 @@ pub fn decode_base64_image(content: &str) -> Option<arboard::ImageData<'static>>
         warn!("Unknown clipboard image format prefix");
         None
     }
+}
+
+/// Decode blob format: "blob:{hash}" -> ImageData for clipboard
+fn decode_blob_to_image_data(content: &str) -> Option<arboard::ImageData<'static>> {
+    let png_bytes = load_blob(content)?;
+
+    let img = image::load_from_memory_with_format(&png_bytes, image::ImageFormat::Png).ok()?;
+    let rgba = img.to_rgba8();
+
+    Some(arboard::ImageData {
+        width: rgba.width() as usize,
+        height: rgba.height() as usize,
+        bytes: rgba.into_raw().into(),
+    })
 }
 
 /// Convert clipboard content into PNG bytes.
@@ -465,6 +482,30 @@ mod tests {
         );
 
         let decoded = decode_base64_image(&encoded).expect("Should decode");
+
+        assert_eq!(original.width, decoded.width);
+        assert_eq!(original.height, decoded.height);
+        assert_eq!(original.bytes.as_ref(), decoded.bytes.as_ref());
+    }
+
+    #[test]
+    fn test_blob_image_roundtrip() {
+        let original = arboard::ImageData {
+            width: 2,
+            height: 2,
+            bytes: vec![
+                255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 255, 255,
+            ]
+            .into(),
+        };
+
+        let encoded = encode_image_as_blob(&original).expect("Should encode as blob");
+        assert!(
+            encoded.starts_with("blob:"),
+            "Blob format should have blob: prefix"
+        );
+
+        let decoded = decode_base64_image(&encoded).expect("Should decode blob");
 
         assert_eq!(original.width, decoded.width);
         assert_eq!(original.height, decoded.height);
