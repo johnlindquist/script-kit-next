@@ -1060,6 +1060,9 @@ impl Render for EditorPrompt {
         // IMPORTANT: We intercept Tab here BEFORE gpui-component's Input processes it,
         // so we don't get tab characters inserted when navigating snippets.
         let handle_key = cx.listener(move |this, event: &gpui::KeyDownEvent, window, cx| {
+            // Hide cursor while typing - automatically shows when mouse moves
+            crate::platform::hide_cursor_until_mouse_moves();
+
             if this.suppress_keys {
                 return;
             }

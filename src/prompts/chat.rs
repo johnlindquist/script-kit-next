@@ -117,6 +117,64 @@ pub type ChatClaudeCodeCallback = Arc<dyn Fn() + Send + Sync>;
 /// Callback type for showing actions menu: (prompt_id) -> triggers ActionsDialog
 pub type ChatShowActionsCallback = Arc<dyn Fn(String) + Send + Sync>;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum SetupCardAction {
+    None,
+    ActivateConfigure,
+    ActivateClaudeCode,
+    Escape,
+}
+
+fn resolve_setup_card_key(
+    key: &str,
+    shift: bool,
+    current_index: usize,
+) -> (usize, SetupCardAction, bool) {
+    let current_index = current_index % 2;
+
+    if key.eq_ignore_ascii_case("tab") {
+        let next_index = if shift {
+            if current_index == 0 {
+                1
+            } else {
+                current_index - 1
+            }
+        } else {
+            (current_index + 1) % 2
+        };
+        return (next_index, SetupCardAction::None, true);
+    }
+
+    if key.eq_ignore_ascii_case("up") || key.eq_ignore_ascii_case("arrowup") {
+        let next_index = if current_index == 0 {
+            1
+        } else {
+            current_index - 1
+        };
+        return (next_index, SetupCardAction::None, true);
+    }
+
+    if key.eq_ignore_ascii_case("down") || key.eq_ignore_ascii_case("arrowdown") {
+        let next_index = (current_index + 1) % 2;
+        return (next_index, SetupCardAction::None, true);
+    }
+
+    if key.eq_ignore_ascii_case("enter") || key.eq_ignore_ascii_case("return") || key == " " {
+        let action = if current_index == 0 {
+            SetupCardAction::ActivateConfigure
+        } else {
+            SetupCardAction::ActivateClaudeCode
+        };
+        return (current_index, action, false);
+    }
+
+    if key.eq_ignore_ascii_case("escape") {
+        return (current_index, SetupCardAction::Escape, false);
+    }
+
+    (current_index, SetupCardAction::None, false)
+}
+
 /// A conversation turn: user prompt + optional AI response
 #[derive(Clone, Debug)]
 pub struct ConversationTurn {
@@ -261,6 +319,8 @@ pub struct ChatPrompt {
     cursor_blink_started: bool,
     // Setup mode: when true, shows API key configuration card instead of chat
     needs_setup: bool,
+    // Setup card keyboard focus (0 = Configure Vercel, 1 = Claude Code)
+    setup_focus_index: usize,
     on_configure: Option<ChatConfigureCallback>,
     // Callback for "Connect to Claude Code" (enables Claude Code in config)
     on_claude_code: Option<ChatClaudeCodeCallback>,
@@ -320,6 +380,7 @@ impl ChatPrompt {
             cursor_visible: true,
             cursor_blink_started: false,
             needs_setup: false,
+            setup_focus_index: 0,
             on_configure: None,
             on_claude_code: None,
             on_show_actions: None,
@@ -479,6 +540,9 @@ impl ChatPrompt {
     /// Used when no AI providers are configured
     pub fn with_needs_setup(mut self, needs_setup: bool) -> Self {
         self.needs_setup = needs_setup;
+        if needs_setup {
+            self.setup_focus_index = 0;
+        }
         self
     }
 
@@ -1892,6 +1956,8 @@ impl ChatPrompt {
         // Get the callbacks for button clicks
         let on_configure = self.on_configure.clone();
         let on_claude_code = self.on_claude_code.clone();
+        let is_configure_focused = self.setup_focus_index == 0;
+        let is_claude_focused = self.setup_focus_index == 1;
 
         div()
             .flex()
@@ -1956,6 +2022,10 @@ impl ChatPrompt {
                             .bg(rgba(accent_bg))
                             .border_1()
                             .border_color(rgba(accent_border))
+                            .when(is_configure_focused, |s| {
+                                s.border_2()
+                                    .border_color(rgba((colors.accent_color << 8) | 0xCC))
+                            })
                             .cursor_pointer()
                             .hover(|s| s.bg(rgba((colors.accent_color << 8) | 0x40)))
                             // Always attach on_click, check callback inside
@@ -2004,6 +2074,10 @@ impl ChatPrompt {
                             .bg(rgba(accent_bg))
                             .border_1()
                             .border_color(rgba(accent_border))
+                            .when(is_claude_focused, |s| {
+                                s.border_2()
+                                    .border_color(rgba((colors.accent_color << 8) | 0xCC))
+                            })
                             .cursor_pointer()
                             .hover(|s| s.bg(rgba((colors.accent_color << 8) | 0x40)))
                             // Always attach on_click, check callback inside
@@ -2228,27 +2302,47 @@ impl Render for ChatPrompt {
 
         let needs_setup = self.needs_setup;
         let on_configure = self.on_configure.clone();
+        let on_claude_code = self.on_claude_code.clone();
 
         let handle_key = cx.listener(move |this, event: &KeyDownEvent, _window, cx| {
-            let key = event.keystroke.key.to_lowercase();
+            let key = event.keystroke.key.as_str();
+            let key_lower = event.keystroke.key.to_ascii_lowercase();
             let key_char = event.keystroke.key_char.as_deref();
             let has_cmd = event.keystroke.modifiers.platform; // ⌘ on macOS
 
-            // In setup mode, only handle Escape and Enter
+            // Setup mode: keyboard navigation for Configure / Claude Code buttons
             if needs_setup {
-                match key.as_str() {
-                    "escape" | "esc" => this.handle_escape(cx),
-                    "enter" | "return" => {
-                        // Trigger configure callback on Enter
+                let (next_index, action, changed) = resolve_setup_card_key(
+                    key,
+                    event.keystroke.modifiers.shift,
+                    this.setup_focus_index,
+                );
+                let handled = changed || !matches!(action, SetupCardAction::None);
+
+                if changed {
+                    this.setup_focus_index = next_index;
+                    cx.notify();
+                }
+
+                match action {
+                    SetupCardAction::ActivateConfigure => {
                         if let Some(ref callback) = on_configure {
-                            logging::log(
-                                "CHAT",
-                                "Enter pressed in setup mode - triggering configure",
-                            );
+                            logging::log("CHAT", "Setup key activate configure");
                             callback();
                         }
                     }
-                    _ => {}
+                    SetupCardAction::ActivateClaudeCode => {
+                        if let Some(ref callback) = on_claude_code {
+                            logging::log("CHAT", "Setup key activate Claude Code");
+                            callback();
+                        }
+                    }
+                    SetupCardAction::Escape => this.handle_escape(cx),
+                    SetupCardAction::None => {}
+                }
+
+                if handled {
+                    cx.stop_propagation();
                 }
                 return;
             }
@@ -2256,7 +2350,7 @@ impl Render for ChatPrompt {
             // Note: Actions menu keyboard navigation is handled by ActionsDialog window
             // We just need to handle ⌘K to open it via callback
 
-            match key.as_str() {
+            match key_lower.as_str() {
                 // Escape - stop streaming if active, otherwise close chat
                 "escape" | "esc" => {
                     if this.is_streaming() {
@@ -2384,5 +2478,75 @@ impl Render for ChatPrompt {
             // Note: Actions menu is now handled by parent via on_show_actions callback
             // The parent opens the standard ActionsDialog window
             .into_any_element()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{resolve_setup_card_key, SetupCardAction};
+
+    #[test]
+    fn resolve_setup_card_key_cycles_focus_for_tab_and_arrows() {
+        assert_eq!(
+            resolve_setup_card_key("tab", false, 0),
+            (1, SetupCardAction::None, true)
+        );
+        assert_eq!(
+            resolve_setup_card_key("Tab", false, 1),
+            (0, SetupCardAction::None, true)
+        );
+        assert_eq!(
+            resolve_setup_card_key("tab", true, 0),
+            (1, SetupCardAction::None, true)
+        );
+        assert_eq!(
+            resolve_setup_card_key("tab", true, 1),
+            (0, SetupCardAction::None, true)
+        );
+
+        assert_eq!(
+            resolve_setup_card_key("up", false, 0),
+            (1, SetupCardAction::None, true)
+        );
+        assert_eq!(
+            resolve_setup_card_key("ArrowUp", false, 1),
+            (0, SetupCardAction::None, true)
+        );
+        assert_eq!(
+            resolve_setup_card_key("down", false, 0),
+            (1, SetupCardAction::None, true)
+        );
+        assert_eq!(
+            resolve_setup_card_key("arrowdown", false, 1),
+            (0, SetupCardAction::None, true)
+        );
+    }
+
+    #[test]
+    fn resolve_setup_card_key_activates_buttons_and_escape() {
+        assert_eq!(
+            resolve_setup_card_key("enter", false, 0),
+            (0, SetupCardAction::ActivateConfigure, false)
+        );
+        assert_eq!(
+            resolve_setup_card_key("Return", false, 1),
+            (1, SetupCardAction::ActivateClaudeCode, false)
+        );
+        assert_eq!(
+            resolve_setup_card_key(" ", false, 0),
+            (0, SetupCardAction::ActivateConfigure, false)
+        );
+        assert_eq!(
+            resolve_setup_card_key("escape", false, 1),
+            (1, SetupCardAction::Escape, false)
+        );
+    }
+
+    #[test]
+    fn resolve_setup_card_key_ignores_unhandled_keys() {
+        assert_eq!(
+            resolve_setup_card_key("x", false, 1),
+            (1, SetupCardAction::None, false)
+        );
     }
 }

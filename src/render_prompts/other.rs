@@ -27,6 +27,9 @@ impl ScriptListApp {
                   event: &gpui::KeyDownEvent,
                   window: &mut Window,
                   cx: &mut Context<Self>| {
+                // Hide cursor while typing - automatically shows when mouse moves
+                this.hide_mouse_cursor(cx);
+
                 let key = event.keystroke.key.as_str();
                 let has_cmd = event.keystroke.modifiers.platform;
 
@@ -80,6 +83,9 @@ impl ScriptListApp {
                   event: &gpui::KeyDownEvent,
                   window: &mut Window,
                   cx: &mut Context<Self>| {
+                // Hide cursor while typing - automatically shows when mouse moves
+                this.hide_mouse_cursor(cx);
+
                 let key = event.keystroke.key.as_str();
                 let has_cmd = event.keystroke.modifiers.platform;
 
@@ -134,6 +140,9 @@ impl ScriptListApp {
                   event: &gpui::KeyDownEvent,
                   window: &mut Window,
                   cx: &mut Context<Self>| {
+                // Hide cursor while typing - automatically shows when mouse moves
+                this.hide_mouse_cursor(cx);
+
                 let key = event.keystroke.key.as_str();
                 let has_cmd = event.keystroke.modifiers.platform;
 
@@ -188,6 +197,9 @@ impl ScriptListApp {
                   event: &gpui::KeyDownEvent,
                   window: &mut Window,
                   cx: &mut Context<Self>| {
+                // Hide cursor while typing - automatically shows when mouse moves
+                this.hide_mouse_cursor(cx);
+
                 let key = event.keystroke.key.as_str();
                 let has_cmd = event.keystroke.modifiers.platform;
 
@@ -242,6 +254,9 @@ impl ScriptListApp {
                   event: &gpui::KeyDownEvent,
                   window: &mut Window,
                   cx: &mut Context<Self>| {
+                // Hide cursor while typing - automatically shows when mouse moves
+                this.hide_mouse_cursor(cx);
+
                 let key = event.keystroke.key.as_str();
                 let key_char = event.keystroke.key_char.as_deref();
                 let has_cmd = event.keystroke.modifiers.platform;

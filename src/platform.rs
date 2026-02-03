@@ -3108,6 +3108,39 @@ pub fn get_focused_browser_tab_url() -> Result<String, Box<dyn std::error::Error
 }
 
 // ============================================================================
+// Cursor Visibility
+// ============================================================================
+
+/// Hide the mouse cursor until the mouse moves.
+///
+/// This is the standard macOS pattern used by text editors to hide the cursor
+/// while typing. The cursor will automatically reappear when the user moves
+/// the mouse, with no additional code needed.
+///
+/// # macOS Behavior
+///
+/// Calls `[NSCursor setHiddenUntilMouseMoves:YES]` which:
+/// - Immediately hides the system cursor
+/// - Automatically shows the cursor when the mouse moves
+/// - Is idempotent (safe to call multiple times)
+///
+/// # Other Platforms
+///
+/// No-op on non-macOS platforms.
+#[cfg(target_os = "macos")]
+pub fn hide_cursor_until_mouse_moves() {
+    unsafe {
+        // NSCursor.setHiddenUntilMouseMoves(YES) - hides cursor until mouse moves
+        let _: () = msg_send![class!(NSCursor), setHiddenUntilMouseMoves: true];
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn hide_cursor_until_mouse_moves() {
+    // No-op on non-macOS platforms
+}
+
+// ============================================================================
 // Tests
 // ============================================================================
 

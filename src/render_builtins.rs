@@ -312,6 +312,9 @@ impl ScriptListApp {
                   event: &gpui::KeyDownEvent,
                   window: &mut Window,
                   cx: &mut Context<Self>| {
+                // Hide cursor while typing - automatically shows when mouse moves
+                this.hide_mouse_cursor(cx);
+
                 // If the shortcut recorder is active, don't process any key events.
                 // The recorder has its own key handlers and should receive all key events.
                 if this.shortcut_recorder_state.is_some() {
@@ -1013,6 +1016,9 @@ impl ScriptListApp {
                   event: &gpui::KeyDownEvent,
                   window: &mut Window,
                   cx: &mut Context<Self>| {
+                // Hide cursor while typing - automatically shows when mouse moves
+                this.hide_mouse_cursor(cx);
+
                 // If the shortcut recorder is active, don't process any key events.
                 // The recorder has its own key handlers and should receive all key events.
                 if this.shortcut_recorder_state.is_some() {
@@ -1343,6 +1349,9 @@ impl ScriptListApp {
                   event: &gpui::KeyDownEvent,
                   window: &mut Window,
                   cx: &mut Context<Self>| {
+                // Hide cursor while typing - automatically shows when mouse moves
+                this.hide_mouse_cursor(cx);
+
                 // If the shortcut recorder is active, don't process any key events.
                 // The recorder has its own key handlers and should receive all key events.
                 if this.shortcut_recorder_state.is_some() {
@@ -1893,6 +1902,9 @@ impl ScriptListApp {
                   event: &gpui::KeyDownEvent,
                   window: &mut Window,
                   cx: &mut Context<Self>| {
+                // Hide cursor while typing - automatically shows when mouse moves
+                this.hide_mouse_cursor(cx);
+
                 // If the shortcut recorder is active, don't process any key events.
                 // The recorder has its own key handlers and should receive all key events.
                 if this.shortcut_recorder_state.is_some() {
@@ -2368,6 +2380,9 @@ impl ScriptListApp {
                   event: &gpui::KeyDownEvent,
                   window: &mut Window,
                   cx: &mut Context<Self>| {
+                // Hide cursor while typing - automatically shows when mouse moves
+                this.hide_mouse_cursor(cx);
+
                 // If the shortcut recorder is active, don't process any key events.
                 // The recorder has its own key handlers and should receive all key events.
                 if this.shortcut_recorder_state.is_some() {
