@@ -5,11 +5,13 @@
 use anyhow::{Context, Result};
 use arboard::Clipboard;
 use rusqlite::params;
-use tracing::info;
+use tracing::{debug, info};
 
+use super::blob_store::is_blob_content;
 use super::cache::refresh_entry_cache;
 use super::database::get_connection;
 use super::image::decode_base64_image;
+use super::macos_paste::copy_blob_with_file_url;
 use super::types::ContentType;
 
 /// Copy an entry back to the clipboard
@@ -19,6 +21,18 @@ use super::types::ContentType;
 ///
 /// # Errors
 /// Returns error if the entry doesn't exist or clipboard operation fails.
+///
+/// # Image Pasting Behavior (CleanShot-style)
+///
+/// For blob-format images (the current storage format), this function uses
+/// CleanShot-style pasting which sets BOTH:
+/// - Image data: for apps that accept images (Photoshop, Preview, etc.)
+/// - File URL: for text fields, terminals, Claude Code, etc.
+///
+/// This allows pasting images to work naturally in any context - text fields
+/// get the file path while image apps get the image data.
+///
+/// For legacy png: and rgba: formats, falls back to image-only pasting.
 #[allow(dead_code)]
 pub fn copy_entry_to_clipboard(id: &str) -> Result<()> {
     let conn = get_connection()?;
@@ -36,21 +50,30 @@ pub fn copy_entry_to_clipboard(id: &str) -> Result<()> {
 
     drop(conn); // Release lock before clipboard operation
 
-    let mut clipboard = Clipboard::new().context("Failed to access clipboard")?;
-
     match ContentType::from_str(&content_type) {
         ContentType::Text => {
+            let mut clipboard = Clipboard::new().context("Failed to access clipboard")?;
             clipboard
                 .set_text(&content)
                 .context("Failed to set clipboard text")?;
         }
         ContentType::Image => {
-            if let Some(image_data) = decode_base64_image(&content) {
-                clipboard
-                    .set_image(image_data)
-                    .context("Failed to set clipboard image")?;
+            // Use CleanShot-style pasting for blob images (sets both image AND file URL)
+            if is_blob_content(&content) {
+                debug!("Using CleanShot-style paste for blob image");
+                copy_blob_with_file_url(&content)
+                    .context("Failed to copy blob image with file URL")?;
             } else {
-                anyhow::bail!("Failed to decode image data");
+                // Legacy png: and rgba: formats - use standard image-only paste
+                debug!("Using legacy image-only paste for non-blob image");
+                let mut clipboard = Clipboard::new().context("Failed to access clipboard")?;
+                if let Some(image_data) = decode_base64_image(&content) {
+                    clipboard
+                        .set_image(image_data)
+                        .context("Failed to set clipboard image")?;
+                } else {
+                    anyhow::bail!("Failed to decode image data");
+                }
             }
         }
     }
