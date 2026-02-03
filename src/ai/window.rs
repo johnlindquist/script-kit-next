@@ -413,6 +413,10 @@ pub struct AiApp {
     /// Timestamp when setup command was last copied (for showing "Copied!" feedback)
     setup_copied_at: Option<std::time::Instant>,
 
+    /// Claude Code setup feedback message (shown after clicking "Connect to Claude Code")
+    /// None = no feedback, Some(msg) = show message (e.g., "Claude CLI not found")
+    claude_code_setup_feedback: Option<String>,
+
     /// Whether we're showing the API key input field (configure mode)
     showing_api_key_input: bool,
 
@@ -626,6 +630,7 @@ impl AiApp {
             theme_rev_seen: crate::theme::service::theme_revision(),
             pending_image: None,
             setup_copied_at: None,
+            claude_code_setup_feedback: None,
             showing_api_key_input: false,
             setup_button_focus_index: 0,
             api_key_input_state,
@@ -1337,6 +1342,52 @@ impl AiApp {
                 "escape" | "esc" => self.hide_presets_dropdown(cx),
                 _ => {}
             }
+            return;
+        }
+
+        // Handle setup mode navigation (when no providers configured)
+        let in_setup_mode = self.available_models.is_empty() && !self.showing_api_key_input;
+        if in_setup_mode {
+            crate::logging::log(
+                "AI",
+                &format!(
+                    "SimulateKey in setup mode: key='{}' focus_index={}",
+                    key_lower, self.setup_button_focus_index
+                ),
+            );
+            let has_shift = modifiers.iter().any(|m| m == "shift");
+            match key_lower.as_str() {
+                "tab" => {
+                    if has_shift {
+                        self.move_setup_button_focus(-1, cx);
+                    } else {
+                        self.move_setup_button_focus(1, cx);
+                    }
+                    return;
+                }
+                "up" | "arrowup" => {
+                    self.move_setup_button_focus(-1, cx);
+                    return;
+                }
+                "down" | "arrowdown" => {
+                    self.move_setup_button_focus(1, cx);
+                    return;
+                }
+                "enter" | "return" => {
+                    match self.setup_button_focus_index {
+                        0 => self.show_api_key_input(window, cx),
+                        1 => self.enable_claude_code(window, cx),
+                        _ => {}
+                    }
+                    return;
+                }
+                _ => {}
+            }
+        }
+
+        // Handle API key input escape
+        if self.showing_api_key_input && key_lower == "escape" {
+            self.hide_api_key_input(window, cx);
             return;
         }
 
@@ -2511,8 +2562,10 @@ impl AiApp {
     }
 
     /// Hide the API key configuration input
-    fn hide_api_key_input(&mut self, cx: &mut Context<Self>) {
+    fn hide_api_key_input(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.showing_api_key_input = false;
+        // Refocus main handle for setup card keyboard navigation
+        self.focus_handle.focus(window, cx);
         cx.notify();
     }
 
@@ -2646,6 +2699,17 @@ impl AiApp {
         let config_path =
             std::path::PathBuf::from(shellexpand::tilde("~/.scriptkit/kit/config.ts").as_ref());
 
+        // Ensure parent directory exists
+        if let Some(parent) = config_path.parent() {
+            if !parent.exists() {
+                if let Err(e) = std::fs::create_dir_all(parent) {
+                    tracing::error!(error = %e, path = %parent.display(), "Failed to create config directory");
+                    return;
+                }
+                info!(path = %parent.display(), "Created config directory");
+            }
+        }
+
         // Read existing config or create new
         let content = std::fs::read_to_string(&config_path).unwrap_or_default();
 
@@ -2690,8 +2754,24 @@ export default {
 
     /// Finish Claude Code setup - reinitialize providers and update UI
     fn finish_claude_code_setup(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        // Clear any previous feedback
+        self.claude_code_setup_feedback = None;
+
         // Reload config to pick up the change
         let config = crate::config::load_config();
+
+        // Check if Claude CLI is available before reinitializing
+        let claude_path = config
+            .get_claude_code()
+            .path
+            .unwrap_or_else(|| "claude".to_string());
+        let claude_available = std::process::Command::new(&claude_path)
+            .arg("--version")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
 
         // Reinitialize the provider registry to pick up Claude Code
         self.provider_registry = ProviderRegistry::from_environment_with_config(Some(&config));
@@ -2708,8 +2788,16 @@ export default {
         info!(
             providers = self.provider_registry.provider_ids().len(),
             models = self.available_models.len(),
+            claude_cli_available = claude_available,
             "Providers reinitialized after Claude Code setup"
         );
+
+        // If config was set but Claude CLI isn't available, show feedback
+        if !claude_available && config.get_claude_code().enabled {
+            self.claude_code_setup_feedback = Some(
+                "Config saved! Install Claude CLI to complete setup: npm install -g @anthropic-ai/claude-code".to_string()
+            );
+        }
 
         // Focus the main input
         self.focus_input(window, cx);
@@ -3315,6 +3403,30 @@ export default {
                             .child("Connect to Claude Code"),
                     ),
             )
+            // Claude Code setup feedback (shown when config saved but CLI not found)
+            .when_some(self.claude_code_setup_feedback.clone(), |el, feedback| {
+                el.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .px_4()
+                        .py_2()
+                        .mt_2()
+                        .rounded_md()
+                        .bg(cx.theme().accent.opacity(0.15))
+                        .border_1()
+                        .border_color(cx.theme().accent.opacity(0.3))
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(cx.theme().accent)
+                                .text_center()
+                                .max_w(px(340.))
+                                .child(feedback),
+                        ),
+                )
+            })
             // Info text
             .child(
                 div()
@@ -3399,8 +3511,8 @@ export default {
                             .rounded_md()
                             .cursor_pointer()
                             .hover(|s| s.bg(cx.theme().muted.opacity(0.3)))
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.hide_api_key_input(cx);
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.hide_api_key_input(window, cx);
                             }))
                             .child(
                                 div()
@@ -4042,12 +4154,23 @@ impl Render for AiApp {
         // Process focus request flag (set by open_ai_window when bringing existing window to front)
         // Check both the instance flag and the global atomic flag
         // SKIP if command bar is open - the main focus_handle should have focus for arrow key routing
+        // SKIP if in setup mode - keyboard nav needs main focus_handle for Tab/Enter to work
         else if !self.command_bar.is_open()
             && (self.needs_focus_input
                 || AI_FOCUS_REQUESTED.swap(false, std::sync::atomic::Ordering::SeqCst))
         {
             self.needs_focus_input = false;
-            self.focus_input(window, cx);
+            // In setup mode, focus main handle for keyboard navigation instead of input
+            let in_setup_mode = self.available_models.is_empty() && !self.showing_api_key_input;
+            if in_setup_mode {
+                self.focus_handle.focus(window, cx);
+                crate::logging::log(
+                    "AI",
+                    "Applied setup mode focus in render (main focus handle)",
+                );
+            } else {
+                self.focus_input(window, cx);
+            }
         }
 
         // Process pending commands (for testing via stdin)
@@ -4410,6 +4533,14 @@ impl Render for AiApp {
                         }
                         _ => {}
                     }
+                }
+
+                // Escape closes any open dropdown
+                // Escape closes API key input (back to setup card)
+                if key == "escape" && this.showing_api_key_input {
+                    this.hide_api_key_input(window, cx);
+                    cx.stop_propagation();
+                    return;
                 }
 
                 // Escape closes any open dropdown
@@ -5851,5 +5982,113 @@ mod tests {
         assert_eq!(AiApp::next_setup_button_focus_index(1, 1), 0);
         assert_eq!(AiApp::next_setup_button_focus_index(0, -1), 1);
         assert_eq!(AiApp::next_setup_button_focus_index(1, -1), 0);
+    }
+
+    /// Test setup mode detection logic
+    #[test]
+    fn test_setup_mode_detection() {
+        // Setup mode is when: no models available AND not showing API key input
+        struct SetupState {
+            available_models_empty: bool,
+            showing_api_key_input: bool,
+        }
+
+        let test_cases = vec![
+            // (state, expected_in_setup_mode)
+            (
+                SetupState {
+                    available_models_empty: true,
+                    showing_api_key_input: false,
+                },
+                true,
+                "No models and not showing input = setup mode",
+            ),
+            (
+                SetupState {
+                    available_models_empty: true,
+                    showing_api_key_input: true,
+                },
+                false,
+                "No models but showing input = NOT setup mode (keyboard routes to input)",
+            ),
+            (
+                SetupState {
+                    available_models_empty: false,
+                    showing_api_key_input: false,
+                },
+                false,
+                "Has models = NOT setup mode (normal chat mode)",
+            ),
+            (
+                SetupState {
+                    available_models_empty: false,
+                    showing_api_key_input: true,
+                },
+                false,
+                "Has models and showing input = NOT setup mode",
+            ),
+        ];
+
+        for (state, expected, description) in test_cases {
+            let in_setup_mode = state.available_models_empty && !state.showing_api_key_input;
+            assert_eq!(in_setup_mode, expected, "{}", description);
+        }
+    }
+
+    /// Test that setup button navigation covers all directions
+    #[test]
+    fn test_setup_button_navigation_directions() {
+        // Test Tab (forward)
+        assert_eq!(
+            AiApp::next_setup_button_focus_index(0, 1),
+            1,
+            "Tab from 0 -> 1"
+        );
+        assert_eq!(
+            AiApp::next_setup_button_focus_index(1, 1),
+            0,
+            "Tab from 1 -> 0 (wrap)"
+        );
+
+        // Test Shift+Tab / Up (backward)
+        assert_eq!(
+            AiApp::next_setup_button_focus_index(0, -1),
+            1,
+            "Shift+Tab from 0 -> 1 (wrap)"
+        );
+        assert_eq!(
+            AiApp::next_setup_button_focus_index(1, -1),
+            0,
+            "Shift+Tab from 1 -> 0"
+        );
+
+        // Test multiple steps
+        let mut index = 0usize;
+        index = AiApp::next_setup_button_focus_index(index, 1); // 0 -> 1
+        index = AiApp::next_setup_button_focus_index(index, 1); // 1 -> 0
+        index = AiApp::next_setup_button_focus_index(index, 1); // 0 -> 1
+        assert_eq!(index, 1, "Multiple forward steps should cycle correctly");
+
+        let mut index = 0usize;
+        index = AiApp::next_setup_button_focus_index(index, -1); // 0 -> 1
+        index = AiApp::next_setup_button_focus_index(index, -1); // 1 -> 0
+        index = AiApp::next_setup_button_focus_index(index, -1); // 0 -> 1
+        assert_eq!(index, 1, "Multiple backward steps should cycle correctly");
+    }
+
+    /// Test SETUP_BUTTON_COUNT constant is correct
+    #[test]
+    fn test_setup_button_count() {
+        // We have two buttons: "Configure Vercel AI Gateway" (index 0) and "Connect to Claude Code" (index 1)
+        assert_eq!(
+            AiApp::SETUP_BUTTON_COUNT,
+            2,
+            "Should have exactly 2 setup buttons"
+        );
+
+        // Index 0 should map to "Configure Vercel AI Gateway"
+        // Index 1 should map to "Connect to Claude Code"
+        // These are documented in the code: setup_button_focus_index: usize,
+        // 0 = Configure Vercel AI Gateway, 1 = Connect to Claude Code
     }
 }
