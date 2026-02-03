@@ -6,12 +6,20 @@
 #
 # Only watches files that are actually included in the main app binary.
 # Ignores: storybook, stories, tests, benchmarks, docs, etc.
+#
+# Log mode:
+#   Defaults to SCRIPT_KIT_AI_LOG=1 (compact AI format: SS.mmm|L|C|message)
+#   Override with: SCRIPT_KIT_AI_LOG=0 ./dev.sh   (standard verbose logs)
+#   Or use:        RUST_LOG=debug ./dev.sh         (debug-level verbose logs)
 
 set -e
 
+# Default to compact AI log mode unless explicitly overridden
+export SCRIPT_KIT_AI_LOG="${SCRIPT_KIT_AI_LOG:-1}"
+
 # Check if cargo-watch is installed
 if ! command -v cargo-watch &> /dev/null; then
-    echo "❌ cargo-watch is not installed"
+    echo "cargo-watch is not installed"
     echo ""
     echo "Install it with:"
     echo "  cargo install cargo-watch"
@@ -19,9 +27,15 @@ if ! command -v cargo-watch &> /dev/null; then
     exit 1
 fi
 
-echo "🚀 Starting dev runner with cargo-watch..."
-echo "   Watching: src/ (excluding storybook/stories), scripts/kit-sdk.ts, Cargo.toml, build.rs"
-echo "   Ignoring: tests/, storybook, stories, docs, benchmarks, .md files"
+echo "Starting dev runner with cargo-watch..."
+echo "   Watching: src/, scripts/kit-sdk.ts, Cargo.toml, build.rs"
+if [ "$SCRIPT_KIT_AI_LOG" = "1" ]; then
+    echo "   Log mode: compact AI (SS.mmm|L|C|message). Override: SCRIPT_KIT_AI_LOG=0 ./dev.sh"
+else
+    echo "   Log mode: standard verbose"
+fi
+echo "   Session log: ~/.scriptkit/logs/latest-session.jsonl"
+echo "   Copy for AI: cat ~/.scriptkit/logs/latest-session.jsonl | pbcopy"
 echo "   Press Ctrl+C to stop"
 echo ""
 

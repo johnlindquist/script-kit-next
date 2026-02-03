@@ -47,6 +47,28 @@ use tracing_subscriber::{fmt, EnvFilter};
 use uuid::Uuid;
 
 // =============================================================================
+// SESSION IDENTITY & LOG PATHS
+// =============================================================================
+/// Path to the session-specific log file (latest-session.jsonl).
+static SESSION_LOG_PATH: OnceLock<PathBuf> = OnceLock::new();
+
+/// Unique ID for the current session, generated on init.
+static SESSION_ID: OnceLock<String> = OnceLock::new();
+
+/// Get the path to the session-specific log file.
+pub fn session_log_path() -> PathBuf {
+    SESSION_LOG_PATH
+        .get()
+        .cloned()
+        .unwrap_or_else(|| get_log_dir().join("latest-session.jsonl"))
+}
+
+/// Get the current session ID.
+pub fn session_id() -> &'static str {
+    SESSION_ID.get().map(|s| s.as_str()).unwrap_or("unknown")
+}
+
+// =============================================================================
 // CORRELATION ID (MANDATORY FIELD)
 // =============================================================================
 // Global default correlation_id for events where no per-run/context value is set.
@@ -522,6 +544,47 @@ impl<'a> MakeWriter<'a> for StderrWriter {
 }
 
 // =============================================================================
+// TEE WRITER - writes to both the main log AND the session log
+// =============================================================================
+
+/// A writer that duplicates output to two `NonBlocking` writers.
+struct TeeWriter {
+    main: tracing_appender::non_blocking::NonBlocking,
+    session: tracing_appender::non_blocking::NonBlocking,
+}
+
+impl Write for TeeWriter {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        let n = self.main.write(buf)?;
+        let _ = self.session.write_all(&buf[..n]);
+        Ok(n)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.main.flush()?;
+        let _ = self.session.flush();
+        Ok(())
+    }
+}
+
+/// Wrapper so tracing_subscriber can use `TeeWriter` via `MakeWriter`.
+struct TeeWriterMaker {
+    main: tracing_appender::non_blocking::NonBlocking,
+    session: tracing_appender::non_blocking::NonBlocking,
+}
+
+impl<'a> MakeWriter<'a> for TeeWriterMaker {
+    type Writer = TeeWriter;
+
+    fn make_writer(&'a self) -> Self::Writer {
+        TeeWriter {
+            main: self.main.clone(),
+            session: self.session.clone(),
+        }
+    }
+}
+
+// =============================================================================
 // LEGACY SUPPORT - In-memory log buffer for UI display
 // =============================================================================
 
@@ -674,9 +737,10 @@ fn write_to_capture(line: &str) {
 }
 
 /// Guard that must be kept alive for the duration of the program.
-/// Dropping this guard will flush and close the log file.
+/// Dropping this guard will flush and close the log files.
 pub struct LoggingGuard {
     _file_guard: WorkerGuard,
+    _session_guard: WorkerGuard,
 }
 
 /// Static storage for the logging guard to ensure it lives for the entire program.
@@ -720,63 +784,87 @@ fn init_internal() -> LoggingGuard {
     }
 
     let log_path = log_dir.join("script-kit-gpui.jsonl");
+    let session_path = log_dir.join("latest-session.jsonl");
 
-    // Print log location for discoverability (only in non-AI mode)
-    if !ai_log_mode {
-        eprintln!("========================================");
-        eprintln!("[SCRIPT-KIT-GPUI] JSONL log: {}", log_path.display());
-        eprintln!("[SCRIPT-KIT-GPUI] Pretty logs: stderr");
-        eprintln!("========================================");
-    }
+    // Store session log path for panic hook and public access
+    let _ = SESSION_LOG_PATH.set(session_path.clone());
 
-    // Open log file with append mode
+    // Initialize session ID
+    let sid = SESSION_ID
+        .get_or_init(|| Uuid::new_v4().to_string())
+        .clone();
+
+    // Always print session log path (useful in both AI and non-AI modes)
+    eprintln!("========================================");
+    eprintln!("[SCRIPT-KIT-GPUI] Session log: {}", session_path.display());
+    eprintln!("[SCRIPT-KIT-GPUI] Full log:    {}", log_path.display());
+    eprintln!(
+        "[SCRIPT-KIT-GPUI] Copy for AI:  cat {} | pbcopy",
+        session_path.display()
+    );
+    eprintln!("========================================");
+
+    // Open append-forever log file
     let file = OpenOptions::new()
         .create(true)
         .append(true)
         .open(&log_path)
         .unwrap_or_else(|e| {
             eprintln!("[LOGGING] Failed to open log file: {}", e);
-            // Fallback to /dev/null equivalent
             OpenOptions::new()
                 .write(true)
                 .open("/dev/null")
                 .expect("Failed to open /dev/null")
         });
 
-    // Create non-blocking writer for file (prevents UI freeze)
-    let (non_blocking_file, file_guard) = tracing_appender::non_blocking(file);
+    // Open session log file (truncated on each launch)
+    let session_file = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open(&session_path)
+        .unwrap_or_else(|e| {
+            eprintln!("[LOGGING] Failed to open session log file: {}", e);
+            OpenOptions::new()
+                .write(true)
+                .open("/dev/null")
+                .expect("Failed to open /dev/null")
+        });
+
+    // Create non-blocking writers for both files
+    let (non_blocking_append, file_guard) = tracing_appender::non_blocking(file);
+    let (non_blocking_session, session_guard) = tracing_appender::non_blocking(session_file);
+
+    // Tee writer: every JSONL line goes to both files
+    let tee = TeeWriterMaker {
+        main: non_blocking_append,
+        session: non_blocking_session,
+    };
 
     // Environment filter - default to info, allow override via RUST_LOG
-    // - gpui::window=off: Silences "window not found" errors from GPUI's internal callbacks
-    //   that fire when windows are closed but platform callbacks are still registered.
-    //   These are benign and spam the logs during normal operation.
-    // - gpui=warn: Other GPUI modules at WARN level to catch real issues
-    // - hyper, reqwest: HTTP libraries at WARN to reduce noise
+    let rust_log_value = std::env::var("RUST_LOG").unwrap_or_else(|_| "default".to_string());
     let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
         EnvFilter::new("info,gpui::window=off,gpui=warn,hyper=warn,reqwest=warn")
     });
 
-    // JSONL layer for file output (AI agents)
+    // JSONL layer for file output (goes to both append + session via tee)
     let json_layer = fmt::layer()
         .event_format(JsonWithCorrelation)
-        .with_writer(non_blocking_file)
+        .with_writer(tee)
         .with_ansi(false);
 
     if ai_log_mode {
-        // Compact AI layer for stderr (token-efficient for AI agents)
         let ai_layer = fmt::layer()
             .with_writer(StderrWriter)
             .with_ansi(false)
             .event_format(CompactAiFormatter);
 
-        // Initialize the subscriber with JSON file + compact stderr
         tracing_subscriber::registry()
             .with(env_filter)
             .with(json_layer)
             .with(ai_layer)
             .init();
     } else {
-        // Pretty layer for stderr (human developers)
         let pretty_layer = fmt::layer()
             .with_writer(std::io::stderr)
             .with_ansi(true)
@@ -785,7 +873,6 @@ fn init_internal() -> LoggingGuard {
             .with_thread_ids(false)
             .compact();
 
-        // Initialize the subscriber with JSON file + pretty stderr
         tracing_subscriber::registry()
             .with(env_filter)
             .with(json_layer)
@@ -793,16 +880,69 @@ fn init_internal() -> LoggingGuard {
             .init();
     }
 
+    // ---- Session preamble: rich context for AI agents ----
+    let git_hash = option_env!("GIT_HASH").unwrap_or("unknown");
+    let build_profile = option_env!("BUILD_PROFILE").unwrap_or("unknown");
+
     tracing::info!(
-        event_type = "app_lifecycle",
-        action = "started",
-        log_path = %log_path.display(),
+        event_type = "session_start",
+        session_id = %sid,
+        git_hash = git_hash,
+        build_profile = build_profile,
+        os = std::env::consts::OS,
+        arch = std::env::consts::ARCH,
+        pid = std::process::id(),
+        working_dir = %std::env::current_dir().unwrap_or_default().display(),
+        rust_log = %rust_log_value,
         ai_log_mode = ai_log_mode,
-        "Application logging initialized"
+        "Session started"
     );
+
+    // ---- Panic hook: capture panics to JSONL before process dies ----
+    let default_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let message = if let Some(s) = info.payload().downcast_ref::<&str>() {
+            s.to_string()
+        } else if let Some(s) = info.payload().downcast_ref::<String>() {
+            s.clone()
+        } else {
+            "unknown panic".to_string()
+        };
+        let location = info
+            .location()
+            .map(|l| format!("{}:{}:{}", l.file(), l.line(), l.column()))
+            .unwrap_or_else(|| "unknown".to_string());
+
+        // Log via tracing (goes to both JSONL files)
+        tracing::error!(
+            event_type = "panic",
+            panic_message = %message,
+            location = %location,
+            "PANIC: {} at {}",
+            message,
+            location
+        );
+
+        // Safety net: write directly to session log (tracing may not flush)
+        if let Some(path) = SESSION_LOG_PATH.get() {
+            let timestamp = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+            let escaped_msg = message.replace('\\', "\\\\").replace('"', "\\\"");
+            let json = format!(
+                r#"{{"timestamp":"{}","level":"ERROR","target":"panic","correlation_id":"panic","message":"PANIC: {} at {}","fields":{{"event_type":"panic","location":"{}"}}}}"#,
+                timestamp, escaped_msg, location, location
+            );
+            if let Ok(mut f) = OpenOptions::new().append(true).open(path) {
+                let _ = writeln!(f, "{}", json);
+            }
+        }
+
+        // Call original hook (prints to stderr)
+        default_hook(info);
+    }));
 
     LoggingGuard {
         _file_guard: file_guard,
+        _session_guard: session_guard,
     }
 }
 

@@ -1161,6 +1161,9 @@ impl ScriptListApp {
                 )
                 .duration_ms(Some(3000)),
             );
+
+            // Rebuild provider registry so new key is available next time chat opens
+            self.rebuild_provider_registry_async(cx);
         }
 
         // Return to main menu
@@ -1270,10 +1273,12 @@ impl ScriptListApp {
             }
         }
 
-        // Reload config
+        // Reload config and rebuild provider registry in background
         self.config = crate::config::load_config();
+        self.rebuild_provider_registry_async(cx);
 
-        // Check if Claude CLI is available
+        // Check if Claude CLI is actually installed (this is an explicit user action,
+        // so the brief sync check is acceptable for correct toast messaging)
         let claude_path = self
             .config
             .get_claude_code()
@@ -1288,7 +1293,6 @@ impl ScriptListApp {
             .unwrap_or(false);
 
         if claude_available {
-            // Claude CLI is installed - show success and open chat
             self.toast_manager.push(
                 components::toast::Toast::success(
                     "Claude Code enabled! Ready to use.".to_string(),
@@ -1297,13 +1301,10 @@ impl ScriptListApp {
                 .duration_ms(Some(3000)),
             );
 
-            // First go back to main menu
+            // Go back to main menu, then re-show inline chat
             self.go_back_or_close(window, cx);
-
-            // Then re-show inline chat (which should now have Claude Code provider)
             self.show_inline_ai_chat(None, cx);
         } else {
-            // Claude CLI not installed - show warning with install instructions
             self.toast_manager.push(
                 components::toast::Toast::warning(
                     "Config saved! Install Claude CLI: npm install -g @anthropic-ai/claude-code"

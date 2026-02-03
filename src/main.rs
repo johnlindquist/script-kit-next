@@ -1491,6 +1491,9 @@ struct ScriptListApp {
     light_opacity_offset: f32,
     /// Whether the mouse cursor is currently hidden (hidden while typing, shown on mouse move)
     mouse_cursor_hidden: bool,
+    /// Cached provider registry built in background at startup.
+    /// Avoids blocking the UI thread when opening inline AI chat.
+    cached_provider_registry: Option<crate::ai::ProviderRegistry>,
 }
 
 /// Result of alias matching - either a Script or Scriptlet
