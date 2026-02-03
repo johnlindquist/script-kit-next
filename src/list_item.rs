@@ -260,7 +260,35 @@ impl ListItemColors {
 
     /// Create from design colors for GLOBAL theming support
     /// Uses same opacity values as from_theme() for consistent vibrancy-compatible styling
+    ///
+    /// NOTE: This defaults to dark mode opacity values. For light mode support,
+    /// use `from_design_with_dark_mode()` instead.
     pub fn from_design(colors: &crate::designs::DesignColors) -> Self {
+        // Default to dark mode
+        Self::from_design_with_dark_mode(colors, true)
+    }
+
+    /// Create from design colors with explicit dark/light mode
+    ///
+    /// Light mode needs higher opacity values because low opacity on light backgrounds
+    /// (e.g., white at 7-12%) is too subtle to be visible. Dark mode uses lower opacity
+    /// because white overlays are more visible on dark backgrounds.
+    ///
+    /// # Arguments
+    /// * `colors` - Design colors to use
+    /// * `is_dark` - True for dark mode (lower opacity), false for light mode (higher opacity)
+    pub fn from_design_with_dark_mode(
+        colors: &crate::designs::DesignColors,
+        is_dark: bool,
+    ) -> Self {
+        // Dark mode: low opacity works well (white at 7-12% visible on dark bg)
+        // Light mode: needs higher opacity for visibility (black overlay on light bg)
+        let (selected_opacity, hover_opacity) = if is_dark {
+            (0.12, 0.07) // Dark mode defaults
+        } else {
+            (0.18, 0.12) // Light mode: higher opacity for visibility
+        };
+
         Self {
             text_primary: colors.text_primary,
             text_secondary: colors.text_secondary,
@@ -270,8 +298,8 @@ impl ListItemColors {
             accent_selected_subtle: colors.background_selected,
             background: colors.background,
             background_selected: colors.background_selected,
-            selected_opacity: 0.12, // Match theme default for vibrancy support
-            hover_opacity: 0.07,    // Match theme default for vibrancy support
+            selected_opacity,
+            hover_opacity,
             warning_bg: colors.warning,
             text_on_accent: colors.text_on_accent,
         }

@@ -1838,6 +1838,9 @@ impl Render for ScriptListApp {
         // Capture mouse_cursor_hidden for use in div builder
         let mouse_cursor_hidden = self.mouse_cursor_hidden;
 
+        // Get themed border color with 25% opacity (0x40 = 64/255)
+        let border_color = rgba((self.theme.colors.ui.border << 8) | 0x40);
+
         div()
             .w_full()
             .h_full()
@@ -1862,7 +1865,7 @@ impl Render for ScriptListApp {
             // Visual styling from vibrancy POC - rounded corners, subtle border, clip content
             .rounded(px(12.))
             .border_1()
-            .border_color(rgba(0xD0D0D040)) // subtle 25% opacity border
+            .border_color(border_color)
             .overflow_hidden()
             // Warning banner appears at the top when bun is not available
             .when_some(warning_banner, |container, banner| container.child(banner))

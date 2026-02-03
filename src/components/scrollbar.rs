@@ -48,32 +48,70 @@ pub struct ScrollbarColors {
 impl ScrollbarColors {
     /// Create ScrollbarColors from theme reference
     ///
-    /// Uses muted/border colors for a subtle, native appearance
+    /// Uses muted/border colors for a subtle, native appearance.
+    /// Opacity values are theme-aware: light mode uses higher opacity for visibility.
     pub fn from_theme(theme: &crate::theme::Theme) -> Self {
+        let is_dark = theme.is_dark_mode();
+        let (track_opacity, thumb_opacity, thumb_hover_opacity) = if is_dark {
+            (0.1, 0.4, 0.6) // Dark mode: lower opacity works well
+        } else {
+            (0.15, 0.5, 0.7) // Light mode: higher opacity for visibility
+        };
+
         Self {
             track: theme.colors.ui.border,
-            track_opacity: 0.1,
+            track_opacity,
             thumb: theme.colors.text.muted,
-            thumb_opacity: 0.4,
+            thumb_opacity,
             thumb_hover: theme.colors.text.secondary,
-            thumb_hover_opacity: 0.6,
+            thumb_hover_opacity,
         }
     }
 
     /// Create ScrollbarColors from design colors
+    ///
+    /// NOTE: This defaults to dark mode opacity values. For light mode support,
+    /// use `from_design_with_dark_mode()` instead.
     pub fn from_design(colors: &crate::designs::DesignColors) -> Self {
+        // Default to dark mode
+        Self::from_design_with_dark_mode(colors, true)
+    }
+
+    /// Create ScrollbarColors from design colors with explicit dark/light mode
+    ///
+    /// Light mode needs higher opacity values because low opacity on light backgrounds
+    /// is too subtle to be visible. Dark mode uses lower opacity because overlays
+    /// are more visible on dark backgrounds.
+    ///
+    /// # Arguments
+    /// * `colors` - Design colors to use
+    /// * `is_dark` - True for dark mode (lower opacity), false for light mode (higher opacity)
+    pub fn from_design_with_dark_mode(
+        colors: &crate::designs::DesignColors,
+        is_dark: bool,
+    ) -> Self {
+        let (track_opacity, thumb_opacity, thumb_hover_opacity) = if is_dark {
+            (0.1, 0.4, 0.6) // Dark mode: lower opacity works well
+        } else {
+            (0.15, 0.5, 0.7) // Light mode: higher opacity for visibility
+        };
+
         Self {
             track: colors.border,
-            track_opacity: 0.1,
+            track_opacity,
             thumb: colors.text_secondary,
-            thumb_opacity: 0.4,
+            thumb_opacity,
             thumb_hover: colors.text_primary,
-            thumb_hover_opacity: 0.6,
+            thumb_hover_opacity,
         }
     }
 }
 
 impl Default for ScrollbarColors {
+    /// Default scrollbar colors (dark mode)
+    ///
+    /// For light mode, use `from_design_with_dark_mode(colors, false)` or
+    /// `from_theme()` which auto-detects the mode.
     fn default() -> Self {
         Self {
             track: 0x464647, // Default border color

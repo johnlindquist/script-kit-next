@@ -242,16 +242,14 @@ impl TerminalCommandBar {
 
     /// Render a single keycap
     fn render_keycap(&self, key: &str, is_dark: bool) -> impl IntoElement {
+        // Use theme colors for keycaps - dark uses white overlay, light uses black overlay
         let keycap_bg = if is_dark {
             rgba(0xffffff18) // White at low opacity for dark mode
         } else {
             rgba(0x00000010) // Black at low opacity for light mode
         };
-        let keycap_text = if is_dark {
-            rgb(self.theme.colors.text.dimmed)
-        } else {
-            rgba(0x666666FF)
-        };
+        // Use theme dimmed text for both modes
+        let keycap_text = rgb(self.theme.colors.text.dimmed);
         let keycap_border = if is_dark {
             rgba(0xffffff20)
         } else {
@@ -283,21 +281,16 @@ impl TerminalCommandBar {
     ) -> impl IntoElement {
         let is_dark = self.theme.has_dark_colors();
 
-        // Selection background - theme-aware
-        let selected_bg = if is_dark {
-            let opacity = self.theme.get_opacity();
+        // Selection background - theme-aware using accent colors
+        let opacity = self.theme.get_opacity();
+        let selected_bg = {
             let alpha = (opacity.selected * 255.0) as u32;
             rgba((self.theme.colors.accent.selected_subtle << 8) | alpha)
-        } else {
-            rgba(0xE8E8E8CC) // Light gray for light mode
         };
 
-        let hover_bg = if is_dark {
-            let opacity = self.theme.get_opacity();
+        let hover_bg = {
             let alpha = (opacity.hover * 255.0) as u32;
             rgba((self.theme.colors.accent.selected_subtle << 8) | alpha)
-        } else {
-            rgba(0xE8E8E866)
         };
 
         // Text colors
@@ -358,10 +351,8 @@ impl Focusable for TerminalCommandBar {
 
 impl Render for TerminalCommandBar {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        let is_dark = self.theme.has_dark_colors();
-
         // Background color - use theme modal/main background
-        let dialog_bg = if is_dark {
+        let dialog_bg = {
             let opacity = if self.theme.is_vibrancy_enabled() {
                 0.50
             } else {
@@ -369,29 +360,14 @@ impl Render for TerminalCommandBar {
             };
             let alpha = (opacity * 255.0) as u32;
             rgba((self.theme.colors.background.main << 8) | alpha)
-        } else {
-            rgba(0xFFFFFFE8) // Near-white for light mode
         };
 
-        // Border color
-        let border_color = if is_dark {
-            rgba((self.theme.colors.ui.border << 8) | 0x80)
-        } else {
-            rgba(0xE0E0E0FF)
-        };
+        // Border color - use theme border with transparency
+        let border_color = rgba((self.theme.colors.ui.border << 8) | 0x80);
 
-        // Search input colors
-        let hint_text_color = if is_dark {
-            rgb(self.theme.colors.text.dimmed)
-        } else {
-            rgba(0x9B9B9BFF)
-        };
-
-        let input_text_color = if is_dark {
-            rgb(self.theme.colors.text.primary)
-        } else {
-            rgba(0x1A1A1AFF)
-        };
+        // Search input colors - use theme text colors
+        let hint_text_color = rgb(self.theme.colors.text.dimmed);
+        let input_text_color = rgb(self.theme.colors.text.primary);
 
         let accent_color = rgb(self.theme.colors.accent.selected);
 
@@ -420,12 +396,8 @@ impl Render for TerminalCommandBar {
             })
             .collect();
 
-        // Search input separator color
-        let separator_color = if is_dark {
-            border_color
-        } else {
-            rgba(0xE0E0E0FF)
-        };
+        // Search input separator color - same as border
+        let separator_color = border_color;
 
         // Build the popup
         div()

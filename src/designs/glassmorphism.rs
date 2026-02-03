@@ -2,13 +2,13 @@
 //! Glassmorphism Design Renderer
 //!
 //! Implements a frosted glass aesthetic with translucent backgrounds,
-//! soft white borders, layered panels, and gentle shadows.
+//! soft borders, layered panels, and gentle shadows.
 //!
 //! Design characteristics:
 //! - Heavy use of transparency (0.3-0.6 alpha backgrounds)
-//! - White/light borders (1px, 0xFFFFFF with 0.2 alpha)
+//! - Theme-aware borders (white for dark mode, black for light mode)
 //! - Layered frosted panels effect
-//! - Light text on translucent backgrounds
+//! - Appropriate text contrast for both themes
 //! - Rounded corners everywhere (16px+)
 //! - Soft drop shadows with low opacity
 //!
@@ -25,28 +25,39 @@ const LIST_ITEM_HEIGHT: f32 = 40.0;
 /// Pre-computed colors for glassmorphism rendering
 #[derive(Clone, Copy)]
 pub struct GlassColors {
-    /// Main background with transparency (white at ~25% opacity)
+    /// Main background with transparency (overlay color at ~25% opacity)
     pub background_main: u32,
-    /// Card/panel background (white at ~19% opacity)
+    /// Card/panel background (overlay color at ~19% opacity)
     pub card_bg: u32,
-    /// Selected item background (white at ~31% opacity)
+    /// Selected item background (overlay color at ~31% opacity)
     pub selected_bg: u32,
-    /// Hover state background (white at ~25% opacity)
+    /// Hover state background (overlay color at ~25% opacity)
     pub hover_bg: u32,
-    /// Border color (white at ~20% opacity)
+    /// Border color (overlay color at ~20% opacity)
     pub border: u32,
-    /// Primary text (pure white)
+    /// Primary text color
     pub text_primary: u32,
-    /// Secondary text (white at ~80% opacity)
+    /// Secondary text color
     pub text_secondary: u32,
-    /// Muted text (white at ~60% opacity)
+    /// Muted text color
     pub text_muted: u32,
-    /// Accent/highlight color (soft blue-white)
+    /// Accent/highlight color (soft blue)
     pub accent: u32,
+    /// Overlay base color (white for dark mode, black for light mode)
+    pub overlay_subtle: u32,
+    /// Overlay selected color (brighter overlay for selections)
+    pub overlay_selected: u32,
 }
 
 impl Default for GlassColors {
     fn default() -> Self {
+        Self::dark()
+    }
+}
+
+impl GlassColors {
+    /// Create dark mode glass colors (white overlays on dark backgrounds)
+    pub fn dark() -> Self {
         Self {
             // Backgrounds with alpha encoded in lower 8 bits
             // Format: 0xRRGGBBAA
@@ -60,6 +71,39 @@ impl Default for GlassColors {
             text_secondary: 0xffffffcc, // white @ 80%
             text_muted: 0xffffff99,     // white @ 60%
             accent: 0xa8d8ff,           // soft blue-white
+            // Overlay colors for borders and subtle backgrounds
+            overlay_subtle: 0xffffff15, // white @ ~8% for subtle elements
+            overlay_selected: 0xffffff40, // white @ 25% for selected borders
+        }
+    }
+
+    /// Create light mode glass colors (black overlays on light backgrounds)
+    pub fn light() -> Self {
+        Self {
+            // Backgrounds with alpha encoded in lower 8 bits
+            // Format: 0xRRGGBBAA
+            background_main: 0x00000040, // black @ 25%
+            card_bg: 0x00000030,         // black @ 19%
+            selected_bg: 0x00000050,     // black @ 31%
+            hover_bg: 0x00000040,        // black @ 25%
+            border: 0x00000033,          // black @ 20%
+            // Text colors (solid) - dark text for light mode
+            text_primary: 0x000000,     // pure black
+            text_secondary: 0x000000cc, // black @ 80%
+            text_muted: 0x00000099,     // black @ 60%
+            accent: 0x0078d4,           // soft blue
+            // Overlay colors for borders and subtle backgrounds
+            overlay_subtle: 0x00000015, // black @ ~8% for subtle elements
+            overlay_selected: 0x00000040, // black @ 25% for selected borders
+        }
+    }
+
+    /// Create glass colors based on theme mode
+    pub fn for_theme(is_dark: bool) -> Self {
+        if is_dark {
+            Self::dark()
+        } else {
+            Self::light()
         }
     }
 }
@@ -170,7 +214,7 @@ impl GlassmorphismRenderer {
             div()
                 .text_xs()
                 .text_color(rgba(colors.text_muted))
-                .bg(rgba(0xffffff15)) // very subtle background
+                .bg(rgba(colors.overlay_subtle)) // theme-aware subtle background
                 .px(px(8.))
                 .py(px(2.))
                 .rounded(px(8.))
@@ -199,9 +243,9 @@ impl GlassmorphismRenderer {
             .rounded(px(12.))
             .border_1()
             .border_color(if is_selected {
-                rgba(0xffffff40) // brighter border when selected
+                rgba(colors.overlay_selected) // brighter border when selected (theme-aware)
             } else {
-                rgba(0xffffff15) // subtle border normally
+                rgba(colors.overlay_subtle) // subtle border normally (theme-aware)
             })
             .shadow(shadow_vec)
             .px(px(16.))
@@ -444,7 +488,7 @@ pub fn render_glassmorphism_log_panel(logs: &[String], colors: GlassColors) -> i
         .w_full()
         .h(px(150.))
         .p(px(12.))
-        .bg(rgba(0xffffff15)) // Very subtle glass
+        .bg(rgba(colors.overlay_subtle)) // Theme-aware subtle glass
         .border_1()
         .border_color(rgba(colors.border))
         .rounded(px(12.))

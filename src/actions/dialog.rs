@@ -1261,26 +1261,11 @@ impl Render for ActionsDialog {
 
         // Raycast-style footer search input: minimal styling, full-width, top separator line
         // No boxed input field - just text on a clean background with a thin top border
-        let is_dark = self.theme.has_dark_colors();
-
-        // POC colors for light mode, theme colors for dark mode
-        let separator_color = if is_dark {
-            border_color
-        } else {
-            rgba(0xE0E0E0FF) // POC separator color
-        };
-
-        let hint_text_color = if is_dark {
-            dimmed_text
-        } else {
-            rgba(0x9B9B9BFF) // POC hint_text color
-        };
-
-        let input_text_color = if is_dark {
-            primary_text
-        } else {
-            rgba(0x1A1A1AFF) // POC primary_text for dark input text
-        };
+        // Use theme colors for both light and dark mode
+        // Light mode derives from the same theme tokens as dark mode
+        let separator_color = border_color;
+        let hint_text_color = dimmed_text;
+        let input_text_color = primary_text;
 
         let input_container = div()
             .w(px(POPUP_WIDTH)) // Match parent width exactly
@@ -1467,41 +1452,25 @@ impl Render for ActionsDialog {
                                             secondary_text,
                                             dimmed_text,
                                         ) = if design_variant == DesignVariant::Default {
-                                            if is_dark_mode {
-                                                // Dark mode: white at low opacity for subtle brightening
-                                                let theme_opacity = this.theme.get_opacity();
-                                                let selected_alpha =
-                                                    (theme_opacity.selected * 255.0) as u32;
-                                                let hover_alpha =
-                                                    (theme_opacity.hover * 255.0) as u32;
-                                                (
-                                                    rgba(
-                                                        (this.theme.colors.accent.selected_subtle
-                                                            << 8)
-                                                            | selected_alpha,
-                                                    ),
-                                                    rgba(
-                                                        (this.theme.colors.accent.selected_subtle
-                                                            << 8)
-                                                            | hover_alpha,
-                                                    ),
-                                                    rgb(this.theme.colors.text.primary),
-                                                    rgb(this.theme.colors.text.secondary),
-                                                    rgb(this.theme.colors.text.dimmed),
-                                                )
-                                            } else {
-                                                // Light mode: light gray at 80% opacity (POC style)
-                                                // 0xE8E8E8 = 232,232,232 - soft gray that provides
-                                                // good contrast without being too dark
-                                                // 0xCC = 204 = 80% opacity
-                                                (
-                                                    rgba(0xE8E8E8CC), // selected: gray @ 80%
-                                                    rgba(0xE8E8E866), // hover: gray @ 40%
-                                                    rgb(this.theme.colors.text.primary),
-                                                    rgb(this.theme.colors.text.secondary),
-                                                    rgb(this.theme.colors.text.dimmed),
-                                                )
-                                            }
+                                            // Use theme opacity for both light and dark mode
+                                            // Light mode uses same derivation pattern as dark mode
+                                            let theme_opacity = this.theme.get_opacity();
+                                            let selected_alpha =
+                                                (theme_opacity.selected * 255.0) as u32;
+                                            let hover_alpha = (theme_opacity.hover * 255.0) as u32;
+                                            (
+                                                rgba(
+                                                    (this.theme.colors.accent.selected_subtle << 8)
+                                                        | selected_alpha,
+                                                ),
+                                                rgba(
+                                                    (this.theme.colors.accent.selected_subtle << 8)
+                                                        | hover_alpha,
+                                                ),
+                                                rgb(this.theme.colors.text.primary),
+                                                rgb(this.theme.colors.text.secondary),
+                                                rgb(this.theme.colors.text.dimmed),
+                                            )
                                         } else {
                                             let theme_opacity = this.theme.get_opacity();
                                             let selected_alpha =
@@ -1528,34 +1497,28 @@ impl Render for ActionsDialog {
                                         } else {
                                             secondary_text
                                         };
-                                        // Keycap colors matching POC:
-                                        // Dark mode: semi-transparent dark background with theme colors
-                                        // Light mode: POC values - 0xE8E8E8FF bg, 0x6B6B6BFF text
+                                        // Keycap colors: derive from theme for both light and dark mode
+                                        // Uses theme border color with appropriate alpha values
                                         let (keycap_bg, keycap_border, shortcut_color) =
                                             if design_variant == DesignVariant::Default {
-                                                if is_dark_mode {
-                                                    (
-                                                        rgba(hex_with_alpha(
-                                                            this.theme.colors.ui.border,
-                                                            0x80,
-                                                        )),
-                                                        rgba(hex_with_alpha(
-                                                            this.theme.colors.ui.border,
-                                                            0xA0,
-                                                        )),
-                                                        dimmed_text,
-                                                    )
-                                                } else {
-                                                    // Light mode: exact POC values for keycaps
-                                                    // bg: 0xE8E8E8FF (232,232,232) solid gray
-                                                    // border: match bg for no visible border
-                                                    // text: 0x6B6B6BFF (107,107,107) medium gray
-                                                    (
-                                                        rgba(0xE8E8E8FF),
-                                                        rgba(0xE8E8E8FF), // no border effect
-                                                        rgba(0x6B6B6BFF), // POC secondary_text
-                                                    )
-                                                }
+                                                // Use theme-derived colors for both modes
+                                                // Light mode: higher alpha for visibility on light bg
+                                                // Dark mode: lower alpha for subtlety on dark bg
+                                                let bg_alpha: u8 =
+                                                    if is_dark_mode { 0x80 } else { 0xCC };
+                                                let border_alpha: u8 =
+                                                    if is_dark_mode { 0xA0 } else { 0xDD };
+                                                (
+                                                    rgba(hex_with_alpha(
+                                                        this.theme.colors.ui.border,
+                                                        bg_alpha,
+                                                    )),
+                                                    rgba(hex_with_alpha(
+                                                        this.theme.colors.ui.border,
+                                                        border_alpha,
+                                                    )),
+                                                    rgb(this.theme.colors.text.secondary),
+                                                )
                                             } else {
                                                 (
                                                     rgba(hex_with_alpha(item_colors.border, 0x80)),
