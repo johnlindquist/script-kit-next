@@ -118,14 +118,14 @@ pub type ChatClaudeCodeCallback = Arc<dyn Fn() + Send + Sync>;
 pub type ChatShowActionsCallback = Arc<dyn Fn(String) + Send + Sync>;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum SetupCardAction {
+pub(crate) enum SetupCardAction {
     None,
     ActivateConfigure,
     ActivateClaudeCode,
     Escape,
 }
 
-fn resolve_setup_card_key(
+pub(crate) fn resolve_setup_card_key(
     key: &str,
     shift: bool,
     current_index: usize,
@@ -243,7 +243,13 @@ impl ChatErrorType {
             ChatErrorType::StreamInterrupted
         } else if s_lower.contains("rate limit") || s_lower.contains("429") {
             ChatErrorType::RateLimited
-        } else if s_lower.contains("model") || s_lower.contains("invalid") {
+        } else if s_lower.contains("model")
+            && (s_lower.contains("invalid")
+                || s_lower.contains("not found")
+                || s_lower.contains("unavailable")
+                || s_lower.contains("does not exist")
+                || s_lower.contains("not supported"))
+        {
             ChatErrorType::InvalidModel
         } else if s_lower.contains("token")
             || s_lower.contains("too long")
@@ -317,6 +323,8 @@ pub struct ChatPrompt {
     // Cursor blink state for input field
     cursor_visible: bool,
     cursor_blink_started: bool,
+    // Loading providers: when true, shows "Connecting to AI..." placeholder while providers load
+    loading_providers: bool,
     // Setup mode: when true, shows API key configuration card instead of chat
     needs_setup: bool,
     // Setup card keyboard focus (0 = Configure Vercel, 1 = Claude Code)
@@ -379,6 +387,7 @@ impl ChatPrompt {
             needs_initial_response: false,
             cursor_visible: true,
             cursor_blink_started: false,
+            loading_providers: false,
             needs_setup: false,
             setup_focus_index: 0,
             on_configure: None,
@@ -546,6 +555,60 @@ impl ChatPrompt {
         self
     }
 
+    /// Set loading_providers flag - when true, shows "Connecting to AI..." placeholder
+    /// Used while provider registry is being loaded in the background
+    pub fn with_loading_providers(mut self, loading: bool) -> Self {
+        self.loading_providers = loading;
+        self
+    }
+
+    /// Whether providers are currently loading
+    pub fn loading_providers(&self) -> bool {
+        self.loading_providers
+    }
+
+    /// Mutably set the provider registry after construction (e.g., when background loading completes).
+    /// Clears loading_providers and updates available models.
+    pub fn set_provider_registry(
+        &mut self,
+        registry: ProviderRegistry,
+        prefer_vercel: bool,
+        cx: &mut Context<Self>,
+    ) {
+        let available_models = registry.get_all_models();
+
+        let selected_model = if prefer_vercel {
+            available_models
+                .iter()
+                .find(|m| m.provider.to_lowercase() == "vercel")
+                .or_else(|| available_models.first())
+                .cloned()
+        } else {
+            available_models.first().cloned()
+        };
+
+        self.models = available_models
+            .iter()
+            .map(|m| ChatModel::new(m.id.clone(), m.display_name.clone(), m.provider.clone()))
+            .collect();
+        self.model = selected_model.as_ref().map(|m| m.display_name.clone());
+
+        logging::log(
+            "CHAT",
+            &format!(
+                "set_provider_registry: {} models, selected={:?}",
+                available_models.len(),
+                selected_model.as_ref().map(|m| &m.display_name)
+            ),
+        );
+
+        self.provider_registry = Some(registry);
+        self.available_models = available_models;
+        self.selected_model = selected_model;
+        self.loading_providers = false;
+        cx.notify();
+    }
+
     /// Set the configure callback - called when user clicks "Configure API Key"
     pub fn with_configure_callback(mut self, callback: ChatConfigureCallback) -> Self {
         self.on_configure = Some(callback);
@@ -556,6 +619,44 @@ impl ChatPrompt {
     pub fn with_claude_code_callback(mut self, callback: ChatClaudeCodeCallback) -> Self {
         self.on_claude_code = Some(callback);
         self
+    }
+
+    /// Whether the setup card is showing (no providers configured)
+    pub fn needs_setup(&self) -> bool {
+        self.needs_setup
+    }
+
+    /// Handle a key event in setup mode from an external interceptor.
+    /// Returns true if the key was handled (caller should stop propagation).
+    pub fn handle_setup_key(&mut self, key: &str, shift: bool, cx: &mut Context<Self>) -> bool {
+        if !self.needs_setup {
+            return false;
+        }
+        let (next_index, action, changed) =
+            resolve_setup_card_key(key, shift, self.setup_focus_index);
+        let handled = changed || !matches!(action, SetupCardAction::None);
+
+        if changed {
+            self.setup_focus_index = next_index;
+            cx.notify();
+        }
+
+        match action {
+            SetupCardAction::ActivateConfigure => {
+                if let Some(ref callback) = self.on_configure {
+                    callback();
+                }
+            }
+            SetupCardAction::ActivateClaudeCode => {
+                if let Some(ref callback) = self.on_claude_code {
+                    callback();
+                }
+            }
+            SetupCardAction::Escape => self.handle_escape(cx),
+            SetupCardAction::None => {}
+        }
+
+        handled
     }
 
     /// Check if built-in AI mode is enabled
@@ -933,8 +1034,9 @@ impl ChatPrompt {
         let done_clone = shared_done.clone();
         let error_clone = shared_error.clone();
         let model_id_clone = model_id.clone();
-        // Use prompt ID as session ID for Claude Code CLI conversation continuity
-        let session_id = self.id.clone();
+        // Generate a fresh UUID for each submission — the chat prompt always starts
+        // a new session (the AI window handles conversation continuity separately).
+        let session_id = uuid::Uuid::new_v4().to_string();
 
         // Spawn background thread for streaming
         std::thread::spawn(move || {
@@ -1157,8 +1259,9 @@ impl ChatPrompt {
         let done_clone = shared_done.clone();
         let error_clone = shared_error.clone();
         let model_id_clone = model_id.clone();
-        // Use prompt ID as session ID for Claude Code CLI conversation continuity
-        let session_id = self.id.clone();
+        // Generate a fresh UUID for each submission — the chat prompt always starts
+        // a new session (the AI window handles conversation continuity separately).
+        let session_id = uuid::Uuid::new_v4().to_string();
 
         // Spawn background thread for streaming
         std::thread::spawn(move || {
@@ -1834,6 +1937,24 @@ impl ChatPrompt {
             }
 
             content = content.child(error_row);
+
+            // Show raw error detail so the actual cause is visible
+            let detail = error_str.trim();
+            if !detail.is_empty() && detail != error_message {
+                // Truncate very long error strings for display
+                let truncated = if detail.len() > 200 {
+                    format!("{}…", &detail[..200])
+                } else {
+                    detail.to_string()
+                };
+                content = content.child(
+                    div()
+                        .text_xs()
+                        .opacity(0.5)
+                        .text_color(rgb(error_color))
+                        .child(truncated),
+                );
+            }
         }
         // AI response (only show if no error, or show partial if stream interrupted)
         else if let Some(ref response) = turn.assistant_response {
@@ -1951,7 +2072,7 @@ impl ChatPrompt {
         let accent_25 = rgba((colors.accent_color << 8) | 0x40);
         let muted_bg = rgba((colors.code_bg << 8) | 0x60);
         let muted_bg_hover = rgba((colors.code_bg << 8) | 0x90);
-        let ring_color = rgba((colors.accent_color << 8) | 0xCC);
+        let ring_color = rgba((colors.accent_color << 8) | 0x80);
         let kbd_bg = rgba((colors.code_bg << 8) | 0x50);
 
         let on_configure = self.on_configure.clone();
@@ -2021,12 +2142,25 @@ impl ChatPrompt {
                             .px(px(20.))
                             .py(px(10.))
                             .rounded(px(10.))
-                            .bg(accent_full)
+                            .bg(if is_configure_focused {
+                                accent_25
+                            } else {
+                                accent_full
+                            })
                             .cursor_pointer()
                             .border_2()
-                            .border_color(gpui::transparent_black())
+                            .border_color(if is_configure_focused {
+                                ring_color
+                            } else {
+                                rgba(0x00000000)
+                            })
                             .when(is_configure_focused, |s| {
-                                s.border_color(ring_color).shadow_sm()
+                                s.shadow(vec![gpui::BoxShadow {
+                                    color: ring_color.into(),
+                                    offset: gpui::point(px(0.), px(0.)),
+                                    blur_radius: px(4.),
+                                    spread_radius: px(-1.),
+                                }])
                             })
                             .hover(|s| s.bg(accent_25))
                             .on_click(cx.listener(move |_this, _event, _window, _cx| {
@@ -2066,12 +2200,25 @@ impl ChatPrompt {
                             .px(px(20.))
                             .py(px(10.))
                             .rounded(px(10.))
-                            .bg(muted_bg)
+                            .bg(if is_claude_focused {
+                                muted_bg_hover
+                            } else {
+                                muted_bg
+                            })
                             .cursor_pointer()
                             .border_2()
-                            .border_color(gpui::transparent_black())
+                            .border_color(if is_claude_focused {
+                                ring_color
+                            } else {
+                                rgba(0x00000000)
+                            })
                             .when(is_claude_focused, |s| {
-                                s.border_color(ring_color).shadow_sm()
+                                s.shadow(vec![gpui::BoxShadow {
+                                    color: ring_color.into(),
+                                    offset: gpui::point(px(0.), px(0.)),
+                                    blur_radius: px(4.),
+                                    spread_radius: px(-1.),
+                                }])
                             })
                             .hover(|s| s.bg(muted_bg_hover))
                             .on_click(cx.listener(move |_this, _event, _window, _cx| {
@@ -2273,8 +2420,12 @@ impl Render for ChatPrompt {
         }
 
         // Process pending_submit on first render (used when Tab opens chat with query)
-        // Skip if in setup mode
-        if !self.needs_setup && self.pending_submit && !self.input.is_empty() {
+        // Skip if in setup mode or while providers are still loading
+        if !self.needs_setup
+            && !self.loading_providers
+            && self.pending_submit
+            && !self.input.is_empty()
+        {
             self.pending_submit = false;
             logging::log(
                 "CHAT",
@@ -2284,8 +2435,12 @@ impl Render for ChatPrompt {
         }
 
         // Process needs_initial_response on first render (used for scriptlets with pre-populated messages)
-        // Skip if in setup mode, requires built-in AI to be enabled
-        if !self.needs_setup && self.needs_initial_response && self.has_builtin_ai() {
+        // Skip if in setup mode or loading providers, requires built-in AI to be enabled
+        if !self.needs_setup
+            && !self.loading_providers
+            && self.needs_initial_response
+            && self.has_builtin_ai()
+        {
             self.needs_initial_response = false;
             logging::log(
                 "CHAT",
@@ -2413,6 +2568,31 @@ impl Render for ChatPrompt {
                 .child(self.render_header())
                 // Setup card content
                 .child(self.render_setup_card(cx))
+                .into_any_element();
+        }
+
+        // If loading_providers, show a "Connecting to AI..." placeholder
+        if self.loading_providers {
+            let colors = &self.prompt_colors;
+            return div()
+                .id("chat-prompt-loading")
+                .flex()
+                .flex_col()
+                .w_full()
+                .h_full()
+                .when_some(container_bg, |d, bg| d.bg(bg))
+                .key_context("chat_prompt_loading")
+                .track_focus(&self.focus_handle)
+                .on_key_down(handle_key)
+                .child(self.render_header())
+                .child(
+                    div().flex().flex_1().items_center().justify_center().child(
+                        div()
+                            .text_size(px(14.0))
+                            .text_color(rgb(colors.text_secondary))
+                            .child("Connecting to AI..."),
+                    ),
+                )
                 .into_any_element();
         }
 

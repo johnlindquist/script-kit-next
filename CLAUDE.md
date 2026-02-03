@@ -30,6 +30,7 @@ This project uses modular skills for detailed guidance. Skills are loaded on-dem
 | `script-kit-architecture` | Navigating codebase, understanding modules |
 | `script-kit-testing` | Writing tests, running test suites |
 | `script-kit-hive` | Task management, beads, file reservations |
+| `visual-test` | Visual iteration workflow, named-pipe testing, captureWindow screenshots |
 
 Skills are located in `.claude/skills/`.
 

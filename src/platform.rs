@@ -2878,8 +2878,12 @@ pub fn capture_window_by_title(
         let is_our_app = app_name.contains("script-kit-gpui") || app_name == "Script Kit";
         let title_matches = title.contains(title_pattern);
         let is_minimized = window.is_minimized().unwrap_or(true);
+        // Skip tiny windows (e.g. tray icon) when using empty title pattern
+        let win_width = window.width().unwrap_or(0);
+        let win_height = window.height().unwrap_or(0);
+        let is_too_small = win_width < 100 || win_height < 100;
 
-        if is_our_app && title_matches && !is_minimized {
+        if is_our_app && title_matches && !is_minimized && !is_too_small {
             tracing::debug!(
                 app_name = %app_name,
                 title = %title,

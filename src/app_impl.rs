@@ -450,6 +450,8 @@ impl ScriptListApp {
             light_opacity_offset: 0.0,
             // Mouse cursor hidden state - hidden while typing, shown on mouse move
             mouse_cursor_hidden: false,
+            // Cached provider registry - built in background, None until ready
+            cached_provider_registry: None,
         };
 
         // Build initial alias/shortcut registries (conflicts logged, not shown via HUD on startup)
@@ -462,6 +464,45 @@ impl ScriptListApp {
                     conflicts.len()
                 ),
             );
+        }
+
+        // Build provider registry in background to avoid blocking UI when opening AI chat
+        {
+            let config_clone = app.config.clone();
+            let (tx, rx) = std::sync::mpsc::channel::<crate::ai::ProviderRegistry>();
+
+            std::thread::spawn(move || {
+                let registry =
+                    crate::ai::ProviderRegistry::from_environment_with_config(Some(&config_clone));
+                let _ = tx.send(registry);
+            });
+
+            cx.spawn(async move |this, cx| {
+                loop {
+                    Timer::after(std::time::Duration::from_millis(50)).await;
+                    match rx.try_recv() {
+                        Ok(registry) => {
+                            let provider_count = registry.provider_ids().len();
+                            let _ = cx.update(|cx| {
+                                this.update(cx, |app, _cx| {
+                                    app.cached_provider_registry = Some(registry);
+                                    logging::log(
+                                        "APP",
+                                        &format!(
+                                            "Background provider registry ready: {} providers",
+                                            provider_count
+                                        ),
+                                    );
+                                })
+                            });
+                            break;
+                        }
+                        Err(std::sync::mpsc::TryRecvError::Empty) => continue,
+                        Err(std::sync::mpsc::TryRecvError::Disconnected) => break,
+                    }
+                }
+            })
+            .detach();
         }
 
         // Add Tab key interceptor for "Ask AI" feature and file search directory navigation
@@ -6341,8 +6382,11 @@ export default {
             let _ = escape_sender.try_send(());
         });
 
-        // Initialize provider registry from environment with config
-        let registry = ProviderRegistry::from_environment_with_config(Some(&self.config));
+        // Use cached registry if available, otherwise build synchronously as fallback
+        let registry = self
+            .cached_provider_registry
+            .clone()
+            .unwrap_or_else(|| ProviderRegistry::from_environment_with_config(Some(&self.config)));
 
         if !registry.has_any_provider() {
             crate::logging::log("CHAT", "No AI providers configured - showing setup card");
@@ -6445,6 +6489,47 @@ export default {
         self.pending_focus = Some(FocusTarget::ChatPrompt);
         resize_to_view_sync(ViewType::DivPrompt, 0);
         cx.notify();
+    }
+
+    /// Rebuild the cached provider registry in a background thread.
+    /// Called after config changes (API key saved, Claude Code enabled, etc.)
+    pub fn rebuild_provider_registry_async(&mut self, cx: &mut Context<Self>) {
+        self.cached_provider_registry = None;
+        let config_clone = self.config.clone();
+        let (tx, rx) = std::sync::mpsc::channel::<crate::ai::ProviderRegistry>();
+
+        std::thread::spawn(move || {
+            let registry =
+                crate::ai::ProviderRegistry::from_environment_with_config(Some(&config_clone));
+            let _ = tx.send(registry);
+        });
+
+        cx.spawn(async move |this, cx| {
+            loop {
+                Timer::after(std::time::Duration::from_millis(50)).await;
+                match rx.try_recv() {
+                    Ok(registry) => {
+                        let provider_count = registry.provider_ids().len();
+                        let _ = cx.update(|cx| {
+                            this.update(cx, |app, _cx| {
+                                app.cached_provider_registry = Some(registry);
+                                logging::log(
+                                    "APP",
+                                    &format!(
+                                        "Provider registry rebuilt: {} providers",
+                                        provider_count
+                                    ),
+                                );
+                            })
+                        });
+                        break;
+                    }
+                    Err(std::sync::mpsc::TryRecvError::Empty) => continue,
+                    Err(std::sync::mpsc::TryRecvError::Disconnected) => break,
+                }
+            }
+        })
+        .detach();
     }
 }
 
