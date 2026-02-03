@@ -1947,13 +1947,13 @@ impl ChatPrompt {
     fn render_setup_card(&self, cx: &Context<Self>) -> impl IntoElement {
         let colors = &self.prompt_colors;
 
-        // Card styling values
-        let _card_border = (colors.quote_border << 8) | 0x60; // 40% opacity (unused but kept for future)
-        let card_bg = (colors.code_bg << 8) | 0x30; // ~20% opacity
-        let accent_bg = (colors.accent_color << 8) | 0x26; // 15% opacity
-        let accent_border = (colors.accent_color << 8) | 0x40; // 25% opacity
+        let accent_full = rgba((colors.accent_color << 8) | 0xFF);
+        let accent_25 = rgba((colors.accent_color << 8) | 0x40);
+        let muted_bg = rgba((colors.code_bg << 8) | 0x60);
+        let muted_bg_hover = rgba((colors.code_bg << 8) | 0x90);
+        let ring_color = rgba((colors.accent_color << 8) | 0xCC);
+        let kbd_bg = rgba((colors.code_bg << 8) | 0x50);
 
-        // Get the callbacks for button clicks
         let on_configure = self.on_configure.clone();
         let on_claude_code = self.on_claude_code.clone();
         let is_configure_focused = self.setup_focus_index == 0;
@@ -1965,28 +1965,29 @@ impl ChatPrompt {
             .items_center()
             .justify_center()
             .flex_1()
-            .gap(px(16.))
+            .gap(px(20.))
             .px(px(24.))
-            // Icon - settings/key icon
+            .cursor_default()
+            // Icon
             .child(
                 div()
                     .flex()
                     .items_center()
                     .justify_center()
-                    .size(px(56.))
-                    .rounded(px(14.))
-                    .bg(rgba(card_bg))
+                    .size(px(72.))
+                    .rounded(px(18.))
+                    .bg(muted_bg)
                     .child(
                         svg()
-                            .path(IconName::Settings.external_path())
-                            .size(px(28.))
+                            .external_path(IconName::Settings.external_path())
+                            .size(px(36.))
                             .text_color(rgb(colors.text_secondary)),
                     ),
             )
             // Title
             .child(
                 div()
-                    .text_lg()
+                    .text_xl()
                     .font_weight(gpui::FontWeight::SEMIBOLD)
                     .text_color(rgb(colors.text_primary))
                     .child("API Key Required"),
@@ -1997,18 +1998,19 @@ impl ChatPrompt {
                     .text_sm()
                     .text_color(rgb(colors.text_secondary))
                     .text_center()
-                    .max_w(px(320.))
+                    .max_w(px(380.))
                     .child("Set up an AI provider to use the Ask AI feature."),
             )
-            // Buttons container - wrap both to ensure proper hit testing
+            // Buttons
             .child(
                 div()
                     .id("setup-buttons-container")
                     .flex()
                     .flex_col()
                     .items_center()
-                    .gap(px(12.))
-                    // Configure Vercel button FIRST (primary action)
+                    .gap(px(10.))
+                    .mt(px(4.))
+                    // Configure Vercel AI Gateway (primary)
                     .child(
                         div()
                             .id("configure-button")
@@ -2016,42 +2018,33 @@ impl ChatPrompt {
                             .items_center()
                             .justify_center()
                             .gap(px(8.))
-                            .px(px(16.))
+                            .px(px(20.))
                             .py(px(10.))
-                            .rounded(px(8.))
-                            .bg(rgba(accent_bg))
-                            .border_1()
-                            .border_color(rgba(accent_border))
-                            .when(is_configure_focused, |s| {
-                                s.border_2()
-                                    .border_color(rgba((colors.accent_color << 8) | 0xFF))
-                                    .bg(rgba((colors.accent_color << 8) | 0x40))
-                                    .shadow_md()
-                            })
+                            .rounded(px(10.))
+                            .bg(accent_full)
                             .cursor_pointer()
-                            .hover(|s| s.bg(rgba((colors.accent_color << 8) | 0x40)))
-                            // Always attach on_click, check callback inside
-                            // (fixes GPUI issue where when_some on second sibling doesn't register hits)
+                            .border_2()
+                            .border_color(gpui::transparent_black())
+                            .when(is_configure_focused, |s| {
+                                s.border_color(ring_color).shadow_sm()
+                            })
+                            .hover(|s| s.bg(accent_25))
                             .on_click(cx.listener(move |_this, _event, _window, _cx| {
-                                logging::log(
-                                    "CHAT",
-                                    "Configure button clicked - triggering API key setup",
-                                );
                                 if let Some(ref cb) = on_configure {
                                     cb();
                                 }
                             }))
                             .child(
                                 svg()
-                                    .path(IconName::Settings.external_path())
+                                    .external_path(IconName::Settings.external_path())
                                     .size(px(16.))
-                                    .text_color(rgb(colors.accent_color)),
+                                    .text_color(gpui::white()),
                             )
                             .child(
                                 div()
                                     .text_sm()
                                     .font_weight(gpui::FontWeight::MEDIUM)
-                                    .text_color(rgb(colors.accent_color))
+                                    .text_color(gpui::white())
                                     .child("Configure Vercel AI Gateway"),
                             ),
                     )
@@ -2062,7 +2055,7 @@ impl ChatPrompt {
                             .text_color(rgb(colors.text_tertiary))
                             .child("or"),
                     )
-                    // Connect to Claude Code button SECOND
+                    // Connect to Claude Code (secondary)
                     .child(
                         div()
                             .id("configure-claude-code-btn")
@@ -2070,87 +2063,84 @@ impl ChatPrompt {
                             .items_center()
                             .justify_center()
                             .gap(px(8.))
-                            .px(px(16.))
+                            .px(px(20.))
                             .py(px(10.))
-                            .rounded(px(8.))
-                            .bg(rgba(accent_bg))
-                            .border_1()
-                            .border_color(rgba(accent_border))
-                            .when(is_claude_focused, |s| {
-                                s.border_2()
-                                    .border_color(rgba((colors.accent_color << 8) | 0xFF))
-                                    .bg(rgba((colors.accent_color << 8) | 0x40))
-                                    .shadow_md()
-                            })
+                            .rounded(px(10.))
+                            .bg(muted_bg)
                             .cursor_pointer()
-                            .hover(|s| s.bg(rgba((colors.accent_color << 8) | 0x40)))
-                            // Always attach on_click, check callback inside
-                            // (fixes GPUI issue where when_some on second sibling doesn't register hits)
+                            .border_2()
+                            .border_color(gpui::transparent_black())
+                            .when(is_claude_focused, |s| {
+                                s.border_color(ring_color).shadow_sm()
+                            })
+                            .hover(|s| s.bg(muted_bg_hover))
                             .on_click(cx.listener(move |_this, _event, _window, _cx| {
-                                logging::log("CHAT", "Claude Code button clicked");
                                 if let Some(ref cb) = on_claude_code {
                                     cb();
                                 }
                             }))
                             .child(
                                 svg()
-                                    .path(IconName::Terminal.external_path())
+                                    .external_path(IconName::Terminal.external_path())
                                     .size(px(16.))
-                                    .text_color(rgb(colors.accent_color)),
+                                    .text_color(rgb(colors.text_secondary)),
                             )
                             .child(
                                 div()
                                     .text_sm()
                                     .font_weight(gpui::FontWeight::MEDIUM)
-                                    .text_color(rgb(colors.accent_color))
+                                    .text_color(rgb(colors.text_secondary))
                                     .child("Connect to Claude Code"),
                             ),
-                    ),
-            )
-            // Hint about requirements
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .items_center()
-                    .gap(px(4.))
-                    .mt(px(8.))
+                    )
+                    // Claude Code caption
                     .child(
                         div()
                             .text_xs()
                             .text_color(rgb(colors.text_tertiary))
                             .child("Requires Claude Code CLI installed"),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(rgb(colors.text_tertiary))
-                            .child("No restart required"),
                     ),
             )
-            // Keyboard hint
+            // Keyboard hints
             .child(
                 div()
                     .flex()
                     .items_center()
-                    .gap(px(6.))
+                    .gap(px(16.))
                     .mt(px(12.))
-                    .child(
-                        div()
-                            .px(px(6.))
-                            .py(px(2.))
-                            .rounded(px(4.))
-                            .bg(rgba(card_bg))
-                            .text_xs()
-                            .text_color(rgb(colors.text_tertiary))
-                            .child("Esc"),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(rgb(colors.text_tertiary))
-                            .child("to go back"),
-                    ),
+                    .child(Self::render_kbd_hint("Tab", "switch", colors, kbd_bg))
+                    .child(Self::render_kbd_hint("Enter", "select", colors, kbd_bg))
+                    .child(Self::render_kbd_hint("Esc", "go back", colors, kbd_bg)),
+            )
+    }
+
+    /// Render a keyboard hint badge with a key and label.
+    fn render_kbd_hint(
+        key: &str,
+        label: &str,
+        colors: &crate::theme::PromptColors,
+        kbd_bg: gpui::Rgba,
+    ) -> impl IntoElement {
+        div()
+            .flex()
+            .items_center()
+            .gap(px(4.))
+            .child(
+                div()
+                    .px(px(6.))
+                    .py(px(2.))
+                    .rounded(px(4.))
+                    .bg(kbd_bg)
+                    .text_xs()
+                    .font_weight(gpui::FontWeight::MEDIUM)
+                    .text_color(rgb(colors.text_tertiary))
+                    .child(key.to_string()),
+            )
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(rgb(colors.text_tertiary))
+                    .child(label.to_string()),
             )
     }
 
@@ -2270,7 +2260,12 @@ impl Focusable for ChatPrompt {
 }
 
 impl Render for ChatPrompt {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        // In setup mode, ensure focus handle is focused so keyboard events route here
+        if self.needs_setup {
+            self.focus_handle.focus(window, cx);
+        }
+
         // Start cursor blink timer on first render (only needed when not in setup mode)
         if !self.needs_setup && !self.cursor_blink_started {
             self.cursor_blink_started = true;

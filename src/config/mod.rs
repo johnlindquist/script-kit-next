@@ -25,6 +25,10 @@ pub use types::{BuiltInConfig, ClaudeCodeConfig, Config, HotkeyConfig, Suggested
 // Re-export loader
 pub use loader::load_config;
 
+// Re-export editor types for safe config writes (public API for other modules)
+#[allow(unused_imports)]
+pub use editor::{ConfigWriteError, WriteOutcome};
+
 // Additional exports for tests
 #[cfg(test)]
 pub use defaults::{

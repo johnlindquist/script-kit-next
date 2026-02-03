@@ -310,14 +310,15 @@ impl ScriptListApp {
                 match clipboard_history::copy_entry_to_clipboard(&entry.id) {
                     Ok(()) => {
                         logging::log("CLIPBOARD", "Entry copied, simulating paste");
-                        std::thread::spawn(|| {
-                            std::thread::sleep(std::time::Duration::from_millis(50));
+                        cx.spawn(async move |_this, _cx| {
+                            Timer::after(std::time::Duration::from_millis(50)).await;
                             if let Err(e) = selected_text::simulate_paste_with_cg() {
                                 logging::log("ERROR", &format!("Failed to simulate paste: {}", e));
                             } else {
                                 logging::log("CLIPBOARD", "Simulated Cmd+V paste");
                             }
-                        });
+                        })
+                        .detach();
                         self.show_hud("Pasted".to_string(), Some(1000), cx);
                         self.hide_main_and_reset(cx);
                     }
@@ -420,14 +421,15 @@ impl ScriptListApp {
                     Ok(()) => {
                         logging::log("CLIPBOARD", "Entry copied, simulating paste");
                         // Simulate Cmd+V paste after a brief delay
-                        std::thread::spawn(|| {
-                            std::thread::sleep(std::time::Duration::from_millis(50));
+                        cx.spawn(async move |_this, _cx| {
+                            Timer::after(std::time::Duration::from_millis(50)).await;
                             if let Err(e) = selected_text::simulate_paste_with_cg() {
                                 logging::log("ERROR", &format!("Failed to simulate paste: {}", e));
                             } else {
                                 logging::log("CLIPBOARD", "Simulated Cmd+V paste");
                             }
-                        });
+                        })
+                        .detach();
                         self.show_hud("Pasted".to_string(), Some(1000), cx);
                         // Keep the window open - do NOT call hide_main_and_reset
                     }

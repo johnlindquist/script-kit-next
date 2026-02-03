@@ -391,27 +391,28 @@ pub fn handle_tools_call_with_scripts(
     scripts: &[std::sync::Arc<Script>],
 ) -> JsonRpcResponse {
     // Validate params
-    let params = request.params.as_object();
-    if params.is_none() {
-        return JsonRpcResponse::error(
-            request.id,
-            error_codes::INVALID_PARAMS,
-            "Invalid params: expected object",
-        );
-    }
+    let params = match request.params.as_object() {
+        Some(p) => p,
+        None => {
+            return JsonRpcResponse::error(
+                request.id,
+                error_codes::INVALID_PARAMS,
+                "Invalid params: expected object",
+            );
+        }
+    };
 
-    let params = params.unwrap();
-    let tool_name = params.get("name").and_then(|v| v.as_str());
+    let tool_name = match params.get("name").and_then(|v| v.as_str()) {
+        Some(name) => name,
+        None => {
+            return JsonRpcResponse::error(
+                request.id,
+                error_codes::INVALID_PARAMS,
+                "Missing required parameter: name",
+            );
+        }
+    };
 
-    if tool_name.is_none() {
-        return JsonRpcResponse::error(
-            request.id,
-            error_codes::INVALID_PARAMS,
-            "Missing required parameter: name",
-        );
-    }
-
-    let tool_name = tool_name.unwrap();
     let arguments = params
         .get("arguments")
         .cloned()
@@ -466,27 +467,27 @@ fn handle_resources_read_with_context(
     app_state: Option<&mcp_resources::AppStateResource>,
 ) -> JsonRpcResponse {
     // Validate params
-    let params = request.params.as_object();
-    if params.is_none() {
-        return JsonRpcResponse::error(
-            request.id,
-            error_codes::INVALID_PARAMS,
-            "Invalid params: expected object",
-        );
-    }
+    let params = match request.params.as_object() {
+        Some(p) => p,
+        None => {
+            return JsonRpcResponse::error(
+                request.id,
+                error_codes::INVALID_PARAMS,
+                "Invalid params: expected object",
+            );
+        }
+    };
 
-    let params = params.unwrap();
-    let uri = params.get("uri").and_then(|v| v.as_str());
-
-    if uri.is_none() {
-        return JsonRpcResponse::error(
-            request.id,
-            error_codes::INVALID_PARAMS,
-            "Missing required parameter: uri",
-        );
-    }
-
-    let uri = uri.unwrap();
+    let uri = match params.get("uri").and_then(|v| v.as_str()) {
+        Some(u) => u,
+        None => {
+            return JsonRpcResponse::error(
+                request.id,
+                error_codes::INVALID_PARAMS,
+                "Missing required parameter: uri",
+            );
+        }
+    };
 
     // Read the resource
     match mcp_resources::read_resource(uri, scripts, scriptlets, app_state) {

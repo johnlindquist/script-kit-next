@@ -33,30 +33,32 @@ use crate::window_manager;
 // Thread Safety
 // ============================================================================
 
-/// Assert that the current thread is the main thread.
-///
-/// AppKit APIs (NSApp, NSWindow, NSScreen, etc.) are NOT thread-safe and MUST
-/// be called from the main thread. This function provides a cheap debug assertion
-/// that will panic in debug builds if called from a background thread.
-///
-/// # Panics (debug builds only)
-///
-/// Panics if called from a thread other than the main thread.
-///
-/// # Safety
-///
-/// Uses Objective-C message sending to query NSThread.isMainThread.
+/// Check whether the current thread is the main thread (works in release builds).
 #[cfg(target_os = "macos")]
-fn debug_assert_main_thread() {
+fn is_main_thread() -> bool {
+    // SAFETY: NSThread.isMainThread is a class method that only reads thread
+    // identity. It is safe to call from any thread and does not mutate state.
     unsafe {
         let is_main: bool = msg_send![class!(NSThread), isMainThread];
-        debug_assert!(
-            is_main,
-            "AppKit calls must run on the main thread. \
-             This function was called from a background thread, which can cause \
-             crashes, undefined behavior, or silent failures."
-        );
+        is_main
     }
+}
+
+/// Runtime guard: logs an error and returns `true` (caller should bail)
+/// when called from a non-main thread. Works in both debug and release builds.
+#[cfg(target_os = "macos")]
+fn require_main_thread(fn_name: &str) -> bool {
+    if !is_main_thread() {
+        logging::log(
+            "ERROR",
+            &format!(
+                "{} called from non-main thread; AppKit requires main thread",
+                fn_name
+            ),
+        );
+        return true;
+    }
+    false
 }
 
 // ============================================================================
@@ -84,7 +86,10 @@ fn debug_assert_main_thread() {
 /// No-op on non-macOS platforms.
 #[cfg(target_os = "macos")]
 pub fn configure_as_accessory_app() {
-    debug_assert_main_thread();
+    if require_main_thread("configure_as_accessory_app") {
+        return;
+    }
+    // SAFETY: Main thread verified. NSApp() is always valid after app launch.
     unsafe {
         let app: id = NSApp();
         // NSApplicationActivationPolicyAccessory = 1
@@ -117,7 +122,10 @@ pub fn configure_as_accessory_app() {
 /// No-op on non-macOS platforms.
 #[cfg(target_os = "macos")]
 pub fn set_regular_app_mode() {
-    debug_assert_main_thread();
+    if require_main_thread("set_regular_app_mode") {
+        return;
+    }
+    // SAFETY: Main thread verified. NSApp() is always valid after app launch.
     unsafe {
         let app: id = NSApp();
         // NSApplicationActivationPolicyRegular = 0
@@ -149,7 +157,10 @@ pub fn set_regular_app_mode() {
 /// No-op on non-macOS platforms.
 #[cfg(target_os = "macos")]
 pub fn set_accessory_app_mode() {
-    debug_assert_main_thread();
+    if require_main_thread("set_accessory_app_mode") {
+        return;
+    }
+    // SAFETY: Main thread verified. NSApp() is always valid after app launch.
     unsafe {
         let app: id = NSApp();
         // NSApplicationActivationPolicyAccessory = 1
@@ -182,12 +193,19 @@ pub fn set_accessory_app_mode() {
 /// No-op on non-macOS platforms.
 #[cfg(target_os = "macos")]
 pub fn send_ai_window_to_back() {
-    debug_assert_main_thread();
+    if require_main_thread("send_ai_window_to_back") {
+        return;
+    }
+    // SAFETY: Main thread verified. NSApp() is always valid. We check title
+    // and UTF8String for nil/null before dereferencing via CStr::from_ptr.
     unsafe {
         use std::ffi::CStr;
 
         let app: id = NSApp();
         let windows: id = msg_send![app, windows];
+        if windows.is_null() {
+            return;
+        }
         let count: usize = msg_send![windows, count];
 
         for i in 0..count {
@@ -246,7 +264,11 @@ pub fn send_ai_window_to_back() {
 #[cfg(target_os = "macos")]
 #[allow(dead_code)]
 pub fn ensure_move_to_active_space() {
-    debug_assert_main_thread();
+    if require_main_thread("ensure_move_to_active_space") {
+        return;
+    }
+    // SAFETY: Main thread verified. Window pointer from WindowManager is valid.
+    // collectionBehavior / setCollectionBehavior are standard NSWindow methods.
     unsafe {
         // Use WindowManager to get the main window (not keyWindow, which may not exist yet)
         let window = match window_manager::get_main_window() {
@@ -322,7 +344,11 @@ pub fn ensure_move_to_active_space() {
 ///
 #[cfg(target_os = "macos")]
 pub fn configure_as_floating_panel() {
-    debug_assert_main_thread();
+    if require_main_thread("configure_as_floating_panel") {
+        return;
+    }
+    // SAFETY: Main thread verified. Window from WindowManager is valid.
+    // All msg_send! calls target standard NSWindow property setters.
     unsafe {
         // Use WindowManager to get the main window (more reliable than keyWindow)
         // keyWindow is timing-sensitive and can return nil during startup,
@@ -425,7 +451,11 @@ pub fn configure_as_floating_panel() {
 /// No-op on non-macOS platforms.
 #[cfg(target_os = "macos")]
 pub fn hide_main_window() {
-    debug_assert_main_thread();
+    if require_main_thread("hide_main_window") {
+        return;
+    }
+    // SAFETY: Main thread verified. Window from WindowManager is valid.
+    // orderOut: is a standard NSWindow method; nil sender is valid.
     unsafe {
         // Use WindowManager to get the main window
         let window = match window_manager::get_main_window() {
@@ -470,7 +500,11 @@ pub fn hide_main_window() {
 /// No-op on non-macOS platforms.
 #[cfg(target_os = "macos")]
 pub fn show_main_window_without_activation() {
-    debug_assert_main_thread();
+    if require_main_thread("show_main_window_without_activation") {
+        return;
+    }
+    // SAFETY: Main thread verified. Window from WindowManager is valid.
+    // orderFrontRegardless and makeKeyWindow are standard NSWindow methods.
     unsafe {
         let window = match window_manager::get_main_window() {
             Some(w) => w,
@@ -512,7 +546,11 @@ pub fn show_main_window_without_activation() {
 /// Used when returning focus to the main window after closing overlays like the actions popup.
 #[cfg(target_os = "macos")]
 pub fn activate_main_window() {
-    debug_assert_main_thread();
+    if require_main_thread("activate_main_window") {
+        return;
+    }
+    // SAFETY: Main thread verified. NSApp() is always valid.
+    // activateIgnoringOtherApps: and makeKeyAndOrderFront: are standard methods.
     unsafe {
         let window = match window_manager::get_main_window() {
             Some(w) => w,
@@ -560,7 +598,11 @@ pub enum ShareSheetItem {
 /// Show the macOS share sheet anchored to the main window contentView.
 #[cfg(target_os = "macos")]
 pub fn show_share_sheet(item: ShareSheetItem) {
-    debug_assert_main_thread();
+    if require_main_thread("show_share_sheet") {
+        return;
+    }
+    // SAFETY: Main thread verified. Window from WindowManager is valid.
+    // All Objective-C objects are checked for nil before use.
     unsafe {
         let window = match window_manager::get_main_window() {
             Some(w) => w,
@@ -646,7 +688,11 @@ pub fn show_share_sheet(_item: ShareSheetItem) {
 /// Returns (x, y, width, height) or None if window not available.
 #[cfg(target_os = "macos")]
 pub fn get_main_window_bounds() -> Option<(f64, f64, f64, f64)> {
-    debug_assert_main_thread();
+    if require_main_thread("get_main_window_bounds") {
+        return None;
+    }
+    // SAFETY: Main thread verified. Window from WindowManager is valid.
+    // frame returns a value type (NSRect), no pointer dereference needed.
     unsafe {
         let window = window_manager::get_main_window()?;
         let frame: NSRect = msg_send![window, frame];
@@ -690,7 +736,11 @@ pub fn get_main_window_bounds() -> Option<(f64, f64, f64, f64)> {
 #[cfg(target_os = "macos")]
 #[allow(dead_code)]
 pub fn is_app_active() -> bool {
-    debug_assert_main_thread();
+    if require_main_thread("is_app_active") {
+        return false;
+    }
+    // SAFETY: Main thread verified. NSApp() is always valid after app launch.
+    // isActive returns a BOOL value type.
     unsafe {
         let app: id = NSApp();
         let is_active: bool = msg_send![app, isActive];
@@ -754,7 +804,11 @@ pub fn is_main_window_focused() -> bool {
 /// Uncached version that always makes the FFI call
 #[cfg(target_os = "macos")]
 fn is_main_window_focused_uncached() -> bool {
-    debug_assert_main_thread();
+    if require_main_thread("is_main_window_focused_uncached") {
+        return false;
+    }
+    // SAFETY: Main thread verified. Window from WindowManager is valid.
+    // isKeyWindow returns a BOOL value type.
     unsafe {
         let window = match window_manager::get_main_window() {
             Some(window) => window,
@@ -935,6 +989,11 @@ pub fn swizzle_gpui_blurred_view() {
         return;
     }
 
+    // SAFETY: Uses Objective-C runtime to look up a class by name and replace
+    // a method implementation. Both the class pointer and method pointer are
+    // checked for null before use. The swizzle is guarded by SWIZZLE_DONE
+    // to ensure it only runs once. transmute converts a Rust fn pointer to
+    // an Objective-C IMP, which is ABI-compatible for extern "C" functions.
     unsafe {
         // Get GPUI's BlurredView class
         let class_name = std::ffi::CString::new("BlurredView").unwrap();
@@ -1002,6 +1061,10 @@ extern "C" fn patched_update_layer(this: &objc::runtime::Object, _sel: objc::run
         );
     }
 
+    // SAFETY: `this` is a valid BlurredView instance (subclass of NSVisualEffectView)
+    // provided by the Objective-C runtime as the receiver of the swizzled method.
+    // super() dispatch calls the parent class (NSVisualEffectView) implementation.
+    // Layer pointers are nil-checked before recursion in dump_layer_hierarchy.
     unsafe {
         // Call NSVisualEffectView's original updateLayer (skip GPUI's BlurredView implementation)
         // We use msg_send! with super() to call the parent class implementation
@@ -1031,7 +1094,13 @@ extern "C" fn patched_update_layer(this: &objc::runtime::Object, _sel: objc::run
     }
 }
 
-/// Recursively dump layer hierarchy to find CAChameleonLayer
+/// Recursively dump layer hierarchy to find CAChameleonLayer.
+///
+/// # Safety
+///
+/// `layer` must be a valid CALayer pointer or nil (nil is checked at entry).
+/// Caller must be on the main thread. UTF8String pointers are nil-checked
+/// before CStr::from_ptr. Recursion depth is bounded to 5 levels.
 #[cfg(target_os = "macos")]
 unsafe fn dump_layer_hierarchy(layer: id, depth: usize) {
     if layer.is_null() || depth > 5 {
@@ -1164,7 +1233,12 @@ pub fn log_swizzle_diagnostics() {
 /// Uses Objective-C message sending internally.
 #[cfg(target_os = "macos")]
 pub fn configure_window_vibrancy_material_for_appearance(is_dark: bool) {
-    debug_assert_main_thread();
+    if require_main_thread("configure_window_vibrancy_material_for_appearance") {
+        return;
+    }
+    // SAFETY: Main thread verified. Window from WindowManager is valid.
+    // NSAppearance and NSVisualEffectView methods are standard AppKit APIs.
+    // Nil checks on appearance object before use.
     unsafe {
         let window = match window_manager::get_main_window() {
             Some(w) => w,
@@ -1289,12 +1363,18 @@ pub fn configure_window_vibrancy_material() {
     configure_window_vibrancy_material_for_appearance(true);
 }
 
-/// Recursively walk view hierarchy and configure all NSVisualEffectViews
+/// Recursively walk view hierarchy and configure all NSVisualEffectViews.
 ///
 /// # Arguments
 /// * `view` - The view to configure
 /// * `count` - Counter for configured views
 /// * `is_dark` - Whether to use dark mode material (HUD_WINDOW) or light mode material (POPOVER)
+///
+/// # Safety
+///
+/// `view` must be a valid NSView pointer. Caller must be on the main thread.
+/// Subview array and its elements are accessed via count-bounded iteration.
+/// UTF8String pointers are nil-checked before CStr::from_ptr.
 #[cfg(target_os = "macos")]
 unsafe fn configure_visual_effect_views_recursive(view: id, count: &mut usize, is_dark: bool) {
     // Check if this view is an NSVisualEffectView
@@ -1398,7 +1478,9 @@ pub fn configure_window_vibrancy_material() {
 pub fn cycle_vibrancy_material() -> String {
     use std::sync::atomic::Ordering;
 
-    debug_assert_main_thread();
+    if require_main_thread("cycle_vibrancy_material") {
+        return "ERROR: Not on main thread".to_string();
+    }
 
     let materials = ns_visual_effect_material::ALL_MATERIALS;
     let appearances = APPEARANCE_OPTIONS;
@@ -1432,6 +1514,9 @@ pub fn cycle_vibrancy_material() -> String {
     let appearance_name = appearances[app_idx];
     let blend_name = if blend_mode == 0 { "Behind" } else { "Within" };
 
+    // SAFETY: Main thread verified. Window from WindowManager is valid.
+    // NSAppearance and NSVisualEffectView methods are standard AppKit APIs.
+    // Appearance and content_view pointers are nil-checked before use.
     unsafe {
         let window = match window_manager::get_main_window() {
             Some(w) => w,
@@ -1521,7 +1606,9 @@ pub fn cycle_vibrancy_material() -> String {
 pub fn toggle_blending_mode() -> String {
     use std::sync::atomic::Ordering;
 
-    debug_assert_main_thread();
+    if require_main_thread("toggle_blending_mode") {
+        return "ERROR: Not on main thread".to_string();
+    }
 
     // Toggle between 0 (behindWindow) and 1 (withinWindow)
     let current = CURRENT_BLENDING_MODE.fetch_xor(1, Ordering::SeqCst);
@@ -1532,6 +1619,8 @@ pub fn toggle_blending_mode() -> String {
         "WithinWindow"
     };
 
+    // SAFETY: Main thread verified. Window from WindowManager is valid.
+    // Content view and subviews are nil-checked. setBlendingMode: is standard.
     unsafe {
         let window = match window_manager::get_main_window() {
             Some(w) => w,
@@ -1626,7 +1715,9 @@ pub fn get_current_appearance_name() -> String {
 pub fn cycle_appearance() -> String {
     use std::sync::atomic::Ordering;
 
-    debug_assert_main_thread();
+    if require_main_thread("cycle_appearance") {
+        return "ERROR: Not on main thread".to_string();
+    }
 
     let appearances = APPEARANCE_OPTIONS;
 
@@ -1637,6 +1728,8 @@ pub fn cycle_appearance() -> String {
 
     let appearance_name = appearances[new_app_idx];
 
+    // SAFETY: Main thread verified. Window from WindowManager is valid.
+    // NSAppearance pointers are nil-checked. display is a standard NSWindow method.
     unsafe {
         let window = match window_manager::get_main_window() {
             Some(w) => w,
@@ -1699,8 +1792,12 @@ pub fn cycle_appearance() -> String {
 /// * `is_dark` - Whether to use dark vibrancy (true) or light vibrancy (false)
 ///
 /// # Safety
-/// - `window` must be a valid NSWindow pointer
-/// - Must be called on the main thread
+///
+/// - `window` must be a valid, non-null NSWindow pointer obtained from GPUI
+///   window creation. The pointer is checked for null at entry.
+/// - Must be called on the main thread (all AppKit property setters require it).
+/// - NSAppearance pointers are nil-checked before use.
+/// - Content view is nil-checked before recursing into visual effect views.
 #[cfg(target_os = "macos")]
 pub unsafe fn configure_actions_popup_window(window: id, is_dark: bool) {
     if window.is_null() {
@@ -1824,8 +1921,11 @@ pub fn configure_actions_popup_window(_window: *mut std::ffi::c_void, _is_dark: 
 /// * `is_dark` - Whether to use dark vibrancy (true) or light vibrancy (false)
 ///
 /// # Safety
-/// - `window` must be a valid NSWindow pointer
-/// - Must be called on the main thread
+///
+/// - `window` must be a valid, non-null NSWindow pointer obtained from GPUI
+///   window creation. The pointer is checked for null at entry.
+/// - Must be called on the main thread (all AppKit property setters require it).
+/// - NSAppearance and content view pointers are nil-checked before use.
 #[cfg(target_os = "macos")]
 pub unsafe fn configure_secondary_window_vibrancy(window: id, window_name: &str, is_dark: bool) {
     if window.is_null() {
@@ -1939,9 +2039,16 @@ pub fn update_all_secondary_windows_appearance(is_dark: bool) {
     use cocoa::base::{id, nil};
     use objc::{class, msg_send, sel, sel_impl};
 
+    // SAFETY: NSApplication.sharedApplication is always valid after app launch.
+    // We iterate windows with count-bounded indices. Each window, title, and
+    // UTF8String pointer is checked for nil/null before use.
+    // NSAppearance pointer is checked before setAppearance:.
     unsafe {
         let app: id = msg_send![class!(NSApplication), sharedApplication];
         let windows: id = msg_send![app, windows];
+        if windows.is_null() {
+            return;
+        }
         let count: usize = msg_send![windows, count];
 
         logging::log(
@@ -2038,6 +2145,10 @@ pub fn get_global_mouse_position() -> Option<(f64, f64)> {
         fn CGEventGetLocation(event: *const c_void) -> CGPoint;
     }
 
+    // SAFETY: CGEventCreate(NULL) is the documented way to get the current
+    // mouse position. The returned event pointer is nil-checked before use.
+    // CFRelease is called to free the event, preventing a memory leak.
+    // CGEventGetLocation returns a value type (CGPoint), no pointer issues.
     unsafe {
         // CGEventCreate(NULL) returns an event that, when queried for location,
         // returns the current mouse cursor position
@@ -2082,7 +2193,11 @@ use cocoa::foundation::NSRect;
 /// macOS uses bottom-left origin; we convert to top-left origin.
 #[cfg(target_os = "macos")]
 pub fn primary_screen_height() -> Option<f64> {
-    debug_assert_main_thread();
+    if require_main_thread("primary_screen_height") {
+        return None;
+    }
+    // SAFETY: Main thread verified. NSScreen.mainScreen is a class method
+    // that returns the primary screen. Nil checked before accessing frame.
     unsafe {
         let main_screen: id = msg_send![class!(NSScreen), mainScreen];
         if main_screen == nil {
@@ -2112,9 +2227,16 @@ pub fn flip_y(primary_height: f64, y: f64, height: f64) -> f64 {
 /// correct origins for secondary displays.
 #[cfg(target_os = "macos")]
 pub fn get_macos_displays() -> Vec<DisplayBounds> {
-    debug_assert_main_thread();
+    if require_main_thread("get_macos_displays") {
+        return Vec::new();
+    }
+    // SAFETY: Main thread verified. NSScreen.screens is a class method.
+    // We check mainScreen for nil. Array iteration uses count-bounded indices.
     unsafe {
         let screens: id = msg_send![class!(NSScreen), screens];
+        if screens.is_null() {
+            return Vec::new();
+        }
         let count: usize = msg_send![screens, count];
 
         // Get primary screen height for coordinate flipping
@@ -2127,7 +2249,11 @@ pub fn get_macos_displays() -> Vec<DisplayBounds> {
                 "POSITION",
                 "WARNING: mainScreen returned nil, falling back to firstObject",
             );
-            msg_send![screens, firstObject]
+            let fallback: id = msg_send![screens, firstObject];
+            if fallback.is_null() {
+                return Vec::new();
+            }
+            fallback
         } else {
             main_screen
         };
@@ -2184,7 +2310,12 @@ use cocoa::foundation::{NSPoint, NSSize};
 /// at its bottom-left corner. Secondary displays have their own position in this space.
 #[cfg(target_os = "macos")]
 pub fn move_first_window_to(x: f64, y: f64, width: f64, height: f64) {
-    debug_assert_main_thread();
+    if require_main_thread("move_first_window_to") {
+        return;
+    }
+    // SAFETY: Main thread verified. Window from WindowManager is valid.
+    // NSScreen.mainScreen nil-checked with fallback. setFrame:display:animate:
+    // is a standard NSWindow method.
     unsafe {
         // Use WindowManager to get the main window reliably
         let window = match window_manager::get_main_window() {
@@ -2204,7 +2335,16 @@ pub fn move_first_window_to(x: f64, y: f64, width: f64, height: f64) {
         let main_screen = if main_screen == nil {
             // Fallback to firstObject if mainScreen is nil (shouldn't happen but be safe)
             let screens: id = msg_send![class!(NSScreen), screens];
-            msg_send![screens, firstObject]
+            if screens.is_null() {
+                logging::log("POSITION", "WARNING: NSScreen.screens returned nil");
+                return;
+            }
+            let fallback: id = msg_send![screens, firstObject];
+            if fallback.is_null() {
+                logging::log("POSITION", "WARNING: No screens available");
+                return;
+            }
+            fallback
         } else {
             main_screen
         };
@@ -3129,6 +3269,9 @@ pub fn get_focused_browser_tab_url() -> Result<String, Box<dyn std::error::Error
 /// No-op on non-macOS platforms.
 #[cfg(target_os = "macos")]
 pub fn hide_cursor_until_mouse_moves() {
+    // SAFETY: NSCursor.setHiddenUntilMouseMoves: is a class method that is
+    // safe to call from any thread (it's one of the few AppKit methods that is).
+    // It takes a BOOL value type and returns void.
     unsafe {
         // NSCursor.setHiddenUntilMouseMoves(YES) - hides cursor until mouse moves
         let _: () = msg_send![class!(NSCursor), setHiddenUntilMouseMoves: true];
@@ -3152,48 +3295,26 @@ mod tests {
     // Main Thread Assertion Tests
     // =========================================================================
 
-    /// Test that debug_assert_main_thread returns correct value via NSThread.isMainThread.
+    /// Test that is_main_thread returns false on a test worker thread.
     /// Note: Rust test harness does NOT run tests on the main thread - it uses a thread pool.
-    /// This test verifies that our assertion correctly detects we're NOT on the main thread.
     #[cfg(target_os = "macos")]
     #[test]
-    fn test_debug_assert_main_thread_detects_non_main_thread() {
+    fn test_is_main_thread_detects_non_main_thread() {
         // Rust tests run on thread pool workers, NOT the main thread.
-        // Verify that NSThread.isMainThread returns false (as expected)
-        unsafe {
-            let is_main: bool = msg_send![class!(NSThread), isMainThread];
-            // In tests, we should NOT be on the main thread
-            assert!(
-                !is_main,
-                "Expected test to run on non-main thread (Rust test harness behavior)"
-            );
-        }
+        assert!(
+            !is_main_thread(),
+            "Expected test to run on non-main thread (Rust test harness behavior)"
+        );
     }
 
-    /// Test that debug_assert_main_thread would panic on a background thread.
-    /// Note: This test only runs in debug mode since debug_assert is used.
-    #[cfg(all(target_os = "macos", debug_assertions))]
+    /// Test that require_main_thread returns true (bail) on a background thread.
+    #[cfg(target_os = "macos")]
     #[test]
-    fn test_debug_assert_main_thread_panics_on_background_thread() {
-        use std::sync::mpsc;
-        use std::thread;
-
-        let (tx, rx) = mpsc::channel();
-
-        thread::spawn(move || {
-            // Catch the panic from debug_assert_main_thread
-            let result = std::panic::catch_unwind(|| {
-                debug_assert_main_thread();
-            });
-            tx.send(result.is_err()).unwrap();
-        })
-        .join()
-        .unwrap();
-
-        let panicked = rx.recv().unwrap();
+    fn test_require_main_thread_returns_true_on_background_thread() {
+        // On a non-main thread, require_main_thread should return true (bail).
         assert!(
-            panicked,
-            "debug_assert_main_thread should panic on background thread"
+            require_main_thread("test_function"),
+            "require_main_thread should return true on non-main thread"
         );
     }
 
