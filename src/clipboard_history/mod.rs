@@ -28,6 +28,7 @@ mod config;
 mod database;
 mod db_worker;
 mod image;
+mod macos_paste;
 mod monitor;
 mod open_with;
 mod quick_look;
