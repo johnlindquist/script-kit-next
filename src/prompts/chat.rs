@@ -2085,10 +2085,23 @@ impl ChatPrompt {
                             .on_click(cx.listener(move |_this, _event, _window, _cx| {
                                 logging::log(
                                     "CHAT",
-                                    "Claude Code button clicked - enabling Claude Code",
+                                    &format!(
+                                        "Claude Code button clicked - callback present: {}",
+                                        on_claude_code.is_some()
+                                    ),
                                 );
                                 if let Some(ref cb) = on_claude_code {
+                                    logging::log("CHAT", "Invoking Claude Code callback...");
                                     cb();
+                                    logging::log(
+                                        "CHAT",
+                                        "Claude Code callback invoked successfully",
+                                    );
+                                } else {
+                                    logging::log(
+                                        "CHAT",
+                                        "ERROR: No Claude Code callback set! Button click ignored.",
+                                    );
                                 }
                             }))
                             .child(
