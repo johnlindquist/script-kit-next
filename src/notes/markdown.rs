@@ -362,9 +362,11 @@ struct RenderStyles {
 
 impl RenderStyles {
     fn from_theme(theme: &Theme) -> Self {
-        let code_bg = with_alpha(theme.muted, 0.28);
-        let code_block_bg = with_alpha(theme.muted, 0.2);
         let is_dark = matches!(theme.mode, ThemeMode::Dark);
+        // Use higher opacity for light mode since subtle backgrounds are harder to see
+        let (code_bg_alpha, code_block_bg_alpha) = if is_dark { (0.28, 0.2) } else { (0.45, 0.35) };
+        let code_bg = with_alpha(theme.muted, code_bg_alpha);
+        let code_block_bg = with_alpha(theme.muted, code_block_bg_alpha);
         Self {
             text: theme.foreground,
             muted: theme.muted_foreground,
