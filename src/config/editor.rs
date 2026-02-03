@@ -5,12 +5,11 @@
 //!
 //! # Design
 //!
-//! Rather than using fragile regex, this module:
-//! 1. Parses the config structure to find insertion points
-//! 2. Handles trailing commas, comments, and whitespace properly
-//! 3. Preserves formatting and comments in the original file
+//! Uses tree-sitter-typescript to parse the AST, giving exact byte offsets for
+//! insertion points. This eliminates the fragility of hand-rolled brace counting.
 
 use std::path::Path;
+use tree_sitter::Parser;
 
 /// Result of a config edit operation
 #[derive(Debug, Clone, PartialEq)]
@@ -100,14 +99,42 @@ pub fn add_property(content: &str, property: &ConfigProperty) -> EditResult {
     }
 }
 
-/// Check if the config contains a property with the given name
+/// Check if the config contains a top-level property with the given name.
+///
+/// Uses tree-sitter AST to find `pair` nodes within the export default object,
+/// correctly ignoring properties in comments, strings, or nested objects.
 pub fn contains_property(content: &str, property_name: &str) -> bool {
-    // Look for the property name followed by a colon (accounting for whitespace)
-    // This is a simple check - we look for the pattern at the start of a line or after whitespace
-    let pattern = format!(r"(?m)^\s*{}\s*:", regex::escape(property_name));
-    regex::Regex::new(&pattern)
-        .map(|re| re.is_match(content))
-        .unwrap_or(false)
+    let tree = match parse_typescript(content) {
+        Ok(t) => t,
+        Err(_) => return false,
+    };
+    let root = tree.root_node();
+
+    let export = match find_export_statement(root) {
+        Some(e) => e,
+        None => return false,
+    };
+
+    let object = match find_object_in_export(export, content) {
+        Some(o) => o,
+        None => return false,
+    };
+
+    // Check only top-level pairs (direct children of the export object)
+    for i in 0..object.named_child_count() {
+        if let Some(pair) = object.named_child(i) {
+            if pair.kind() == "pair" {
+                if let Some(key) = pair.child_by_field_name("key") {
+                    let key_text = &content[key.start_byte()..key.end_byte()];
+                    if key_text == property_name {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+
+    false
 }
 
 /// Information about where to insert a new property
@@ -121,126 +148,126 @@ struct InsertInfo {
     indent: String,
 }
 
-/// Find the end of the `export default { ... }` object
-fn find_object_end(content: &str) -> Option<InsertInfo> {
-    // Find "export default {" to locate the config object
-    let export_start = content.find("export default")?;
-    let open_brace = content[export_start..].find('{')? + export_start;
+// ==========================================================================
+// Tree-sitter AST helpers
+// ==========================================================================
 
-    // Track brace depth to find the matching close brace
-    let mut depth = 0;
-    let mut in_string = false;
-    let mut string_char = ' ';
-    let mut in_line_comment = false;
-    let mut in_block_comment = false;
-    let mut last_significant_char = ' ';
-    let mut last_significant_pos = open_brace;
+/// Parse TypeScript content into a tree-sitter AST.
+fn parse_typescript(content: &str) -> Result<tree_sitter::Tree, String> {
+    let mut parser = Parser::new();
+    parser
+        .set_language(&tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into())
+        .map_err(|e| format!("Failed to set TypeScript language: {}", e))?;
+    parser
+        .parse(content, None)
+        .ok_or_else(|| "Failed to parse TypeScript content".to_string())
+}
 
-    let chars: Vec<char> = content.chars().collect();
-    let mut i = open_brace;
+/// Find the `export_statement` node in the root of the AST.
+fn find_export_statement(root: tree_sitter::Node) -> Option<tree_sitter::Node> {
+    (0..root.named_child_count())
+        .filter_map(|i| root.named_child(i))
+        .find(|n| n.kind() == "export_statement")
+}
 
-    while i < chars.len() {
-        let c = chars[i];
-        let next = chars.get(i + 1).copied().unwrap_or(' ');
-
-        // Handle line comments
-        if !in_string && !in_block_comment && c == '/' && next == '/' {
-            in_line_comment = true;
-            i += 2;
-            continue;
-        }
-        if in_line_comment {
-            if c == '\n' {
-                in_line_comment = false;
-            }
-            i += 1;
-            continue;
-        }
-
-        // Handle block comments
-        if !in_string && !in_line_comment && c == '/' && next == '*' {
-            in_block_comment = true;
-            i += 2;
-            continue;
-        }
-        if in_block_comment {
-            if c == '*' && next == '/' {
-                in_block_comment = false;
-                i += 2;
-                continue;
-            }
-            i += 1;
-            continue;
-        }
-
-        // Handle strings
-        if !in_string && (c == '"' || c == '\'' || c == '`') {
-            in_string = true;
-            string_char = c;
-            i += 1;
-            continue;
-        }
-        if in_string {
-            if c == string_char && (i == 0 || chars[i - 1] != '\\') {
-                in_string = false;
-            }
-            i += 1;
-            continue;
-        }
-
-        // Track braces
-        if c == '{' {
-            depth += 1;
-        } else if c == '}' {
-            depth -= 1;
-            if depth == 0 {
-                // Found the closing brace
-                let has_trailing_comma = last_significant_char == ',';
-
-                // Determine indentation (typically 2 spaces for this config style)
-                let indent = detect_indent(content, open_brace);
-
-                return Some(InsertInfo {
-                    close_brace_pos: i,
-                    has_trailing_comma,
-                    indent,
-                });
+/// Find the default export object node within an export_statement.
+///
+/// Handles three forms:
+/// - `export default { ... } satisfies Config;` → satisfies_expression → object
+/// - `export default { ... } as Config;` → as_expression → object
+/// - `export default { ... };` → object directly
+fn find_object_in_export<'a>(
+    export_node: tree_sitter::Node<'a>,
+    _content: &str,
+) -> Option<tree_sitter::Node<'a>> {
+    for i in 0..export_node.named_child_count() {
+        if let Some(child) = export_node.named_child(i) {
+            match child.kind() {
+                "satisfies_expression" | "as_expression" => {
+                    // The object is the first child of kind "object"
+                    for j in 0..child.named_child_count() {
+                        if let Some(grandchild) = child.named_child(j) {
+                            if grandchild.kind() == "object" {
+                                return Some(grandchild);
+                            }
+                        }
+                    }
+                }
+                "object" => return Some(child),
+                _ => {}
             }
         }
-
-        // Track last significant (non-whitespace) character
-        if !c.is_whitespace() {
-            last_significant_char = c;
-            last_significant_pos = i;
-        }
-
-        i += 1;
     }
-
-    // Also check if we need to track last_significant_pos for unused warning
-    let _ = last_significant_pos;
-
     None
 }
 
-/// Detect the indentation used in the config file
-fn detect_indent(content: &str, after_pos: usize) -> String {
-    // Look for the first property after the opening brace to detect indent
-    let rest = &content[after_pos + 1..];
-    for line in rest.lines().skip(1) {
-        // Skip empty lines and comments
-        let trimmed = line.trim();
-        if trimmed.is_empty() || trimmed.starts_with("//") || trimmed.starts_with("/*") {
-            continue;
+/// Walk AST to collect ERROR node descriptions for diagnostics.
+fn collect_ast_errors(node: tree_sitter::Node, content: &str, out: &mut String) {
+    if node.is_error() || node.is_missing() {
+        let start = node.start_position();
+        let end_byte = node.end_byte().min(node.start_byte() + 30);
+        let text = &content[node.start_byte()..end_byte];
+        if !out.is_empty() {
+            out.push_str("; ");
         }
-        // Found a content line - extract leading whitespace
-        let leading: String = line.chars().take_while(|c| c.is_whitespace()).collect();
-        if !leading.is_empty() {
-            return leading;
+        out.push_str(&format!(
+            "line {}:{} near '{}'",
+            start.row + 1,
+            start.column,
+            text.replace('\n', "\\n")
+        ));
+    }
+    for i in 0..node.child_count() {
+        if let Some(child) = node.child(i) {
+            collect_ast_errors(child, content, out);
         }
     }
-    // Default to 2 spaces
-    "  ".to_string()
+}
+
+/// Find the export default object and return insertion info using tree-sitter AST.
+///
+/// Returns byte offsets suitable for direct `&str` slicing.
+fn find_object_end(content: &str) -> Option<InsertInfo> {
+    let tree = parse_typescript(content).ok()?;
+    let root = tree.root_node();
+
+    let export = find_export_statement(root)?;
+    let object = find_object_in_export(export, content)?;
+
+    // The object node spans { ... }. end_byte() is exclusive (byte after }).
+    let close_brace_byte = object.end_byte() - 1;
+
+    // Verify it's actually a closing brace
+    if content.as_bytes().get(close_brace_byte) != Some(&b'}') {
+        return None;
+    }
+
+    // Collect pair children (actual properties, not comments)
+    let pairs: Vec<_> = (0..object.named_child_count())
+        .filter_map(|i| object.named_child(i))
+        .filter(|n| n.kind() == "pair")
+        .collect();
+
+    // Check for trailing comma between last pair and closing brace
+    let has_trailing_comma = if let Some(last_pair) = pairs.last() {
+        let between = &content[last_pair.end_byte()..close_brace_byte];
+        between.contains(',')
+    } else {
+        false
+    };
+
+    // Detect indent from first pair's column position
+    let indent = if let Some(first_pair) = pairs.first() {
+        " ".repeat(first_pair.start_position().column)
+    } else {
+        "  ".to_string()
+    };
+
+    Some(InsertInfo {
+        close_brace_pos: close_brace_byte,
+        has_trailing_comma,
+        indent,
+    })
 }
 
 /// Insert a property into the config content
@@ -322,24 +349,37 @@ pub fn validate_typescript(content: &str, bun_path: Option<&str>) -> Result<(), 
     }
 }
 
-/// Structural validation fallback when bun is unavailable.
+/// Structural validation using tree-sitter AST.
 ///
-/// Checks basic structural integrity of the config content.
+/// Parses the content with tree-sitter-typescript and checks that:
+/// 1. Content contains `export default`
+/// 2. The AST has no ERROR nodes (no syntax errors)
+/// 3. The export default object can be found
+/// 4. Content ends with `satisfies Config;` or `as Config;`
 pub fn validate_structure(content: &str) -> Result<(), String> {
     if !content.contains("export default") {
         return Err("Missing 'export default' declaration".into());
     }
 
-    // Check for }{ corruption pattern (but not inside strings)
-    // Simple heuristic: check non-string content for }{
-    let stripped = strip_strings_and_comments(content);
-    if stripped.contains("}{") {
-        return Err("Detected }{ corruption pattern".into());
+    let tree =
+        parse_typescript(content).map_err(|e| format!("Failed to parse TypeScript: {}", e))?;
+    let root = tree.root_node();
+
+    // Check for parse errors (syntax errors, corruption, etc.)
+    if root.has_error() {
+        let mut error_msg = String::new();
+        collect_ast_errors(root, content, &mut error_msg);
+        if !error_msg.is_empty() {
+            return Err(format!("TypeScript parse errors: {}", error_msg));
+        }
+        return Err("TypeScript parse errors detected".into());
     }
 
-    if find_object_end(content).is_none() {
-        return Err("Could not find balanced config object (unbalanced braces)".into());
-    }
+    // Find export_statement and its object
+    let export = find_export_statement(root).ok_or("No export statement found in AST")?;
+
+    find_object_in_export(export, content)
+        .ok_or_else(|| "Could not find config object in export statement".to_string())?;
 
     let trimmed = content.trim();
     if !trimmed.contains("satisfies Config;") && !trimmed.contains("as Config;") {
@@ -347,68 +387,6 @@ pub fn validate_structure(content: &str) -> Result<(), String> {
     }
 
     Ok(())
-}
-
-/// Strip string literals and comments from content for pattern matching.
-/// Returns content with strings/comments replaced by spaces.
-fn strip_strings_and_comments(content: &str) -> String {
-    let mut result = String::with_capacity(content.len());
-    let chars: Vec<char> = content.chars().collect();
-    let mut i = 0;
-
-    while i < chars.len() {
-        let c = chars[i];
-        let next = chars.get(i + 1).copied().unwrap_or(' ');
-
-        // Line comment
-        if c == '/' && next == '/' {
-            while i < chars.len() && chars[i] != '\n' {
-                result.push(' ');
-                i += 1;
-            }
-            continue;
-        }
-
-        // Block comment
-        if c == '/' && next == '*' {
-            result.push(' ');
-            result.push(' ');
-            i += 2;
-            while i < chars.len() {
-                if chars[i] == '*' && chars.get(i + 1).copied() == Some('/') {
-                    result.push(' ');
-                    result.push(' ');
-                    i += 2;
-                    break;
-                }
-                result.push(' ');
-                i += 1;
-            }
-            continue;
-        }
-
-        // String literals
-        if c == '"' || c == '\'' || c == '`' {
-            let quote = c;
-            result.push(' ');
-            i += 1;
-            while i < chars.len() {
-                if chars[i] == quote && (i == 0 || chars[i - 1] != '\\') {
-                    result.push(' ');
-                    i += 1;
-                    break;
-                }
-                result.push(' ');
-                i += 1;
-            }
-            continue;
-        }
-
-        result.push(c);
-        i += 1;
-    }
-
-    result
 }
 
 /// Generate a fresh config.ts with the given property included.
@@ -627,11 +605,9 @@ mod tests {
 } satisfies Config;"#;
 
         assert!(contains_property(content, "claudeCode"));
-        // Note: This simple check doesn't distinguish nesting levels.
-        // For our use case (checking top-level config properties), this is acceptable
-        // since we only check for properties we know should be top-level.
-        // A full TypeScript parser would be needed for proper nesting detection.
-        assert!(contains_property(content, "enabled")); // It matches, but we don't use it this way
+        // Tree-sitter AST correctly distinguishes nesting levels:
+        // "enabled" is a nested property inside claudeCode, not a top-level config property
+        assert!(!contains_property(content, "enabled"));
     }
 
     // ==========================================================================
@@ -1182,7 +1158,8 @@ export default {
     fn test_validate_structure_unbalanced_braces() {
         let content3 = r#"export default {"#;
         let err = validate_structure(content3).unwrap_err();
-        assert!(err.contains("unbalanced") || err.contains("balanced"));
+        // Tree-sitter reports this as a parse error (incomplete object literal)
+        assert!(err.contains("parse error") || err.contains("parse errors"));
     }
 
     #[test]
@@ -1193,7 +1170,8 @@ export default {
   extra: true,
 } satisfies Config;"#;
         let err = validate_structure(content).unwrap_err();
-        assert!(err.contains("}{") || err.contains("corruption"));
+        // Tree-sitter detects the `}{` corruption as a parse error
+        assert!(err.contains("parse error") || err.contains("parse errors"));
     }
 
     #[test]
