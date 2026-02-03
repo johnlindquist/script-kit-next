@@ -1979,9 +1979,18 @@ fn main() {
 
         unsafe {
             // Register handlers for common termination signals
-            libc::signal(libc::SIGINT, handle_signal as libc::sighandler_t);
-            libc::signal(libc::SIGTERM, handle_signal as libc::sighandler_t);
-            libc::signal(libc::SIGHUP, handle_signal as libc::sighandler_t);
+            libc::signal(
+                libc::SIGINT,
+                handle_signal as *const () as libc::sighandler_t,
+            );
+            libc::signal(
+                libc::SIGTERM,
+                handle_signal as *const () as libc::sighandler_t,
+            );
+            libc::signal(
+                libc::SIGHUP,
+                handle_signal as *const () as libc::sighandler_t,
+            );
             logging::log(
                 "APP",
                 "Signal handlers registered (SIGINT, SIGTERM, SIGHUP) - cleanup via GPUI task",
@@ -3216,6 +3225,14 @@ fn main() {
                                         } else if view.fallback_mode && !view.cached_fallbacks.is_empty() {
                                             // Handle keys in fallback mode
                                             match key_lower.as_str() {
+                                                "tab" => {
+                                                    // Tab with filter text opens inline AI chat (even in fallback mode)
+                                                    if !view.filter_text.is_empty() && !view.show_actions_popup {
+                                                        let query = view.filter_text.clone();
+                                                        view.filter_text.clear();
+                                                        view.show_inline_ai_chat(Some(query), ctx);
+                                                    }
+                                                }
                                                 "up" | "arrowup" => {
                                                     if view.fallback_selected_index > 0 {
                                                         view.fallback_selected_index -= 1;
@@ -3242,6 +3259,14 @@ fn main() {
                                             }
                                         } else {
                                             match key_lower.as_str() {
+                                                "tab" => {
+                                                    // Tab with filter text opens inline AI chat
+                                                    if !view.filter_text.is_empty() && !view.show_actions_popup {
+                                                        let query = view.filter_text.clone();
+                                                        view.filter_text.clear();
+                                                        view.show_inline_ai_chat(Some(query), ctx);
+                                                    }
+                                                }
                                                 "up" | "arrowup" => {
                                                     // Use move_selection_up to properly skip section headers
                                                     view.move_selection_up(ctx);
@@ -3462,17 +3487,20 @@ fn main() {
                                         }
                                     }
                                     AppView::ChatPrompt { entity, .. } => {
-                                        // ChatPrompt key handling - mainly for ⌘K to open actions
+                                        // ChatPrompt key handling
                                         logging::log("STDIN", &format!("SimulateKey: Dispatching '{}' to ChatPrompt", key_lower));
 
                                         if has_cmd && key_lower == "k" {
                                             logging::log("STDIN", "SimulateKey: Cmd+K - toggle chat actions");
                                             view.toggle_chat_actions(ctx, window);
                                         } else {
-                                            // Forward other keys to the ChatPrompt entity
-                                            entity.update(ctx, |_chat, _cx| {
-                                                // Most key handling is done within ChatPrompt's Render
-                                                logging::log("STDIN", &format!("SimulateKey: Forwarding '{}' to ChatPrompt", key_lower));
+                                            // Route setup keys (tab, arrows, enter, escape) to ChatPrompt
+                                            entity.update(ctx, |chat, cx| {
+                                                if chat.handle_setup_key(&key_lower, has_shift, cx) {
+                                                    logging::log("STDIN", &format!("SimulateKey: Setup handled '{}'", key_lower));
+                                                } else {
+                                                    logging::log("STDIN", &format!("SimulateKey: Unhandled '{}' in ChatPrompt", key_lower));
+                                                }
                                             });
                                         }
                                     }

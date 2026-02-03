@@ -150,6 +150,7 @@ mod tests {
 
     #[test]
     #[cfg(target_os = "macos")]
+    #[ignore = "requires NSPasteboard access, unavailable in CI"]
     fn test_copy_image_with_file_url_requires_valid_png() {
         use std::io::Write;
         use tempfile::NamedTempFile;
