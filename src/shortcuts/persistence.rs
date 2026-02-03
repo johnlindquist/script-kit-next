@@ -12,7 +12,7 @@ use std::fs;
 use std::path::Path;
 use std::sync::{Mutex, OnceLock};
 
-use tracing::debug;
+use tracing::{debug, warn};
 
 // ============================================================================
 // Shortcut overrides cache (avoids file I/O in render paths)
@@ -41,7 +41,13 @@ pub fn get_cached_shortcut_overrides() -> HashMap<String, Shortcut> {
     }
 
     // Cache miss - load from disk and cache
-    let overrides = load_shortcut_overrides().unwrap_or_default();
+    let overrides = match load_shortcut_overrides() {
+        Ok(o) => o,
+        Err(e) => {
+            warn!("Failed to load shortcut overrides, using defaults: {e}");
+            HashMap::new()
+        }
+    };
     *guard = Some(overrides.clone());
     debug!("Shortcut overrides cache populated");
     overrides
@@ -237,7 +243,10 @@ impl ShortcutOverrides {
 /// Get the default path for shortcut overrides.
 pub fn default_overrides_path() -> std::path::PathBuf {
     dirs::home_dir()
-        .unwrap_or_default()
+        .unwrap_or_else(|| {
+            warn!("Could not determine home directory for shortcut overrides path");
+            std::path::PathBuf::default()
+        })
         .join(".scriptkit")
         .join("shortcuts.json")
 }
@@ -291,7 +300,13 @@ pub fn save_shortcut_override(command_id: &str, shortcut: &Shortcut) -> Result<(
     let path = default_overrides_path();
 
     // Load existing overrides
-    let mut overrides = load_shortcut_overrides().unwrap_or_default();
+    let mut overrides = match load_shortcut_overrides() {
+        Ok(o) => o,
+        Err(e) => {
+            warn!("Failed to load existing shortcut overrides, starting fresh: {e}");
+            HashMap::new()
+        }
+    };
 
     // Update with new shortcut
     overrides.insert(command_id.to_string(), shortcut.clone());

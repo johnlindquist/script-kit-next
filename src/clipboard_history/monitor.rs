@@ -322,6 +322,23 @@ fn compute_text_hash(text: &str) -> u64 {
     hasher.finish()
 }
 
+/// Sleep with interruptible checks against a stop flag.
+/// Returns true if sleep completed, false if stop was signaled.
+fn interruptible_sleep(duration: Duration, stop_flag: &AtomicBool) -> bool {
+    let check_interval = Duration::from_secs(1);
+    let mut remaining = duration;
+
+    while remaining > Duration::ZERO {
+        if stop_flag.load(Ordering::Relaxed) {
+            return false;
+        }
+        let sleep_time = remaining.min(check_interval);
+        thread::sleep(sleep_time);
+        remaining = remaining.saturating_sub(sleep_time);
+    }
+    true
+}
+
 /// Background loop that periodically prunes old entries
 fn background_prune_loop(stop_flag: Arc<AtomicBool>) {
     let prune_interval = Duration::from_secs(PRUNE_INTERVAL_SECS);
@@ -329,7 +346,11 @@ fn background_prune_loop(stop_flag: Arc<AtomicBool>) {
 
     loop {
         // Sleep first (initial prune already happened during init)
-        thread::sleep(prune_interval);
+        // Use interruptible sleep so stop_clipboard_monitoring() takes effect within ~1s
+        if !interruptible_sleep(prune_interval, &stop_flag) {
+            info!("Background prune thread stopping (interrupted during sleep)");
+            break;
+        }
 
         // Check if we should stop (lock-free with AtomicBool)
         if stop_flag.load(Ordering::Relaxed) {

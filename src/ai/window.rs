@@ -2691,61 +2691,28 @@ impl AiApp {
 
     /// Write Claude Code config directly to config.ts (fallback when config-cli.ts unavailable)
     ///
-    /// Uses the robust editor module to safely modify the config file.
+    /// Uses the centralized safe-write path with validation, backup, and atomic rename.
     fn write_claude_code_config_directly(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        use crate::config::editor::{self, EditResult};
+        use crate::config::editor::{self, WriteOutcome};
 
-        // CORRECT PATH: ~/.scriptkit/kit/config.ts (not ~/.scriptkit/config.ts)
         let config_path =
             std::path::PathBuf::from(shellexpand::tilde("~/.scriptkit/kit/config.ts").as_ref());
+        let config = crate::config::load_config();
+        let bun_path = config.bun_path.as_deref();
 
-        // Ensure parent directory exists
-        if let Some(parent) = config_path.parent() {
-            if !parent.exists() {
-                if let Err(e) = std::fs::create_dir_all(parent) {
-                    tracing::error!(error = %e, path = %parent.display(), "Failed to create config directory");
-                    return;
-                }
-                info!(path = %parent.display(), "Created config directory");
+        match editor::enable_claude_code_safely(&config_path, bun_path) {
+            Ok(WriteOutcome::Written | WriteOutcome::Created) => {
+                info!("Claude Code enabled in config.ts");
             }
-        }
-
-        // Read existing config or create new
-        let content = std::fs::read_to_string(&config_path).unwrap_or_default();
-
-        if content.is_empty() {
-            // Create a new config file with claudeCode enabled
-            let new_config = r#"import type { Config } from "@scriptkit/sdk";
-
-export default {
-  hotkey: { modifiers: ["meta"], key: "Semicolon" },
-  claudeCode: {
-    enabled: true,
-  },
-} satisfies Config;
-"#;
-            if let Err(e) = std::fs::write(&config_path, new_config) {
-                tracing::error!(error = %e, "Failed to create config.ts");
+            Ok(WriteOutcome::AlreadySet) => {
+                info!("Claude Code already enabled in config.ts");
+            }
+            Err(e) => {
+                tracing::error!(error = %e, "Failed to modify config.ts");
+                if let Err(recover_err) = editor::recover_from_backup(&config_path, bun_path) {
+                    tracing::error!(error = %recover_err, "Backup recovery also failed");
+                }
                 return;
-            }
-            info!("Created new config.ts with Claude Code enabled");
-        } else {
-            // Use the robust editor module to modify the config
-            match editor::enable_claude_code(&content) {
-                EditResult::Modified(new_content) => {
-                    if let Err(e) = std::fs::write(&config_path, &new_content) {
-                        tracing::error!(error = %e, "Failed to write config.ts");
-                        return;
-                    }
-                    info!("Claude Code enabled in config.ts");
-                }
-                EditResult::AlreadySet => {
-                    info!("Claude Code already enabled in config.ts");
-                }
-                EditResult::Failed(reason) => {
-                    tracing::error!(reason = %reason, "Failed to modify config.ts");
-                    return;
-                }
             }
         }
 

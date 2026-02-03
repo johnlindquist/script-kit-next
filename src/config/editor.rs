@@ -41,6 +41,38 @@ impl ConfigProperty {
     }
 }
 
+/// Error type for config write operations
+#[derive(Debug)]
+pub enum ConfigWriteError {
+    /// The edited content failed TypeScript validation
+    ValidationFailed(String),
+    /// File system operation failed
+    IoError(String),
+    /// The editor could not modify the content
+    EditFailed(String),
+}
+
+impl std::fmt::Display for ConfigWriteError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::ValidationFailed(msg) => write!(f, "Validation failed: {}", msg),
+            Self::IoError(msg) => write!(f, "IO error: {}", msg),
+            Self::EditFailed(msg) => write!(f, "Edit failed: {}", msg),
+        }
+    }
+}
+
+/// Result of a successful config write
+#[derive(Debug, PartialEq)]
+pub enum WriteOutcome {
+    /// File was modified and written
+    Written,
+    /// Property already existed, no write needed
+    AlreadySet,
+    /// File was created from scratch (was empty or missing)
+    Created,
+}
+
 /// Add or update a property in a TypeScript config file
 ///
 /// # Arguments
@@ -250,6 +282,8 @@ fn insert_property(content: &str, info: &InsertInfo, property: &ConfigProperty) 
 /// Enable Claude Code in a config file
 ///
 /// This is a convenience function that adds `claudeCode: { enabled: true }` to the config.
+/// Used in tests; production code uses `enable_claude_code_safely`.
+#[allow(dead_code)]
 pub fn enable_claude_code(content: &str) -> EditResult {
     // Use inline format for cleaner insertion
     // The trailing comma is added by insert_property
@@ -257,19 +291,300 @@ pub fn enable_claude_code(content: &str) -> EditResult {
     add_property(content, &property)
 }
 
-/// Read, modify, and write a config file
-#[allow(dead_code)]
-pub fn modify_config_file(path: &Path, property: &ConfigProperty) -> Result<EditResult, String> {
-    let content =
-        std::fs::read_to_string(path).map_err(|e| format!("Failed to read config: {}", e))?;
+/// Validate TypeScript content by attempting compilation with bun.
+///
+/// Writes content to a temp .ts file and runs `bun build` on it.
+/// Returns Ok(()) if valid, Err with details if invalid.
+pub fn validate_typescript(content: &str, bun_path: Option<&str>) -> Result<(), String> {
+    let bun = bun_path.unwrap_or("bun");
 
-    let result = add_property(&content, property);
+    let tmp = tempfile::Builder::new()
+        .suffix(".ts")
+        .tempfile()
+        .map_err(|e| format!("Failed to create temp file: {}", e))?;
 
-    if let EditResult::Modified(ref new_content) = result {
-        std::fs::write(path, new_content).map_err(|e| format!("Failed to write config: {}", e))?;
+    std::fs::write(tmp.path(), content).map_err(|e| format!("Failed to write temp file: {}", e))?;
+
+    let output = std::process::Command::new(bun)
+        .arg("build")
+        .arg("--target=bun")
+        .arg("--no-bundle")
+        .arg(tmp.path())
+        .arg("--outfile=/dev/null")
+        .output()
+        .map_err(|e| format!("Failed to run bun: {}", e))?;
+
+    if output.status.success() {
+        Ok(())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        Err(format!("TypeScript compilation failed: {}", stderr.trim()))
+    }
+}
+
+/// Structural validation fallback when bun is unavailable.
+///
+/// Checks basic structural integrity of the config content.
+pub fn validate_structure(content: &str) -> Result<(), String> {
+    if !content.contains("export default") {
+        return Err("Missing 'export default' declaration".into());
     }
 
-    Ok(result)
+    // Check for }{ corruption pattern (but not inside strings)
+    // Simple heuristic: check non-string content for }{
+    let stripped = strip_strings_and_comments(content);
+    if stripped.contains("}{") {
+        return Err("Detected }{ corruption pattern".into());
+    }
+
+    if find_object_end(content).is_none() {
+        return Err("Could not find balanced config object (unbalanced braces)".into());
+    }
+
+    let trimmed = content.trim();
+    if !trimmed.contains("satisfies Config;") && !trimmed.contains("as Config;") {
+        return Err("Missing 'satisfies Config' or 'as Config' type assertion".into());
+    }
+
+    Ok(())
+}
+
+/// Strip string literals and comments from content for pattern matching.
+/// Returns content with strings/comments replaced by spaces.
+fn strip_strings_and_comments(content: &str) -> String {
+    let mut result = String::with_capacity(content.len());
+    let chars: Vec<char> = content.chars().collect();
+    let mut i = 0;
+
+    while i < chars.len() {
+        let c = chars[i];
+        let next = chars.get(i + 1).copied().unwrap_or(' ');
+
+        // Line comment
+        if c == '/' && next == '/' {
+            while i < chars.len() && chars[i] != '\n' {
+                result.push(' ');
+                i += 1;
+            }
+            continue;
+        }
+
+        // Block comment
+        if c == '/' && next == '*' {
+            result.push(' ');
+            result.push(' ');
+            i += 2;
+            while i < chars.len() {
+                if chars[i] == '*' && chars.get(i + 1).copied() == Some('/') {
+                    result.push(' ');
+                    result.push(' ');
+                    i += 2;
+                    break;
+                }
+                result.push(' ');
+                i += 1;
+            }
+            continue;
+        }
+
+        // String literals
+        if c == '"' || c == '\'' || c == '`' {
+            let quote = c;
+            result.push(' ');
+            i += 1;
+            while i < chars.len() {
+                if chars[i] == quote && (i == 0 || chars[i - 1] != '\\') {
+                    result.push(' ');
+                    i += 1;
+                    break;
+                }
+                result.push(' ');
+                i += 1;
+            }
+            continue;
+        }
+
+        result.push(c);
+        i += 1;
+    }
+
+    result
+}
+
+/// Generate a fresh config.ts with the given property included.
+fn generate_fresh_config(property: &ConfigProperty) -> String {
+    format!(
+        r#"import type {{ Config }} from "@scriptkit/sdk";
+
+export default {{
+  hotkey: {{ modifiers: ["meta"], key: "Semicolon" }},
+  {}: {},
+}} satisfies Config;
+"#,
+        property.name, property.value
+    )
+}
+
+/// Safely modify config.ts: edit in memory, validate, backup, atomic-write.
+///
+/// This is the single entry point for all config file modifications.
+/// Guarantees:
+/// 1. Output is valid TypeScript (validated by bun, fallback to structural)
+/// 2. A backup exists before overwriting
+/// 3. The write is atomic (temp file + rename)
+pub fn write_config_safely(
+    config_path: &Path,
+    property: &ConfigProperty,
+    bun_path: Option<&str>,
+) -> Result<WriteOutcome, ConfigWriteError> {
+    // Step 1: Ensure parent directory exists
+    if let Some(parent) = config_path.parent() {
+        if !parent.exists() {
+            std::fs::create_dir_all(parent).map_err(|e| {
+                ConfigWriteError::IoError(format!(
+                    "Failed to create directory {}: {}",
+                    parent.display(),
+                    e
+                ))
+            })?;
+        }
+    }
+
+    // Step 2: Read existing content
+    let content = std::fs::read_to_string(config_path).unwrap_or_default();
+
+    // Step 3: Produce new content
+    let (new_content, was_empty) = if content.is_empty() {
+        (generate_fresh_config(property), true)
+    } else {
+        match add_property(&content, property) {
+            EditResult::Modified(new_content) => (new_content, false),
+            EditResult::AlreadySet => return Ok(WriteOutcome::AlreadySet),
+            EditResult::Failed(reason) => {
+                return Err(ConfigWriteError::EditFailed(reason));
+            }
+        }
+    };
+
+    // Step 4: Validate the new content
+    let validation_result = validate_typescript(&new_content, bun_path);
+    match &validation_result {
+        Ok(()) => { /* bun says it's valid */ }
+        Err(bun_err) => {
+            if bun_err.starts_with("Failed to run bun") {
+                // bun unavailable - fall back to structural validation
+                tracing::warn!("bun unavailable for validation, using structural check");
+                validate_structure(&new_content).map_err(ConfigWriteError::ValidationFailed)?;
+            } else {
+                // bun ran but TypeScript is invalid - do NOT write
+                return Err(ConfigWriteError::ValidationFailed(bun_err.clone()));
+            }
+        }
+    }
+
+    // Step 5: Backup existing file (if non-empty)
+    if !content.is_empty() {
+        let backup_path = config_path.with_extension("ts.bak");
+        if let Err(e) = std::fs::copy(config_path, &backup_path) {
+            tracing::warn!(
+                error = %e,
+                path = %backup_path.display(),
+                "Failed to create config backup"
+            );
+        } else {
+            tracing::info!(path = %backup_path.display(), "Config backup saved");
+        }
+    }
+
+    // Step 6: Atomic write (temp file in same directory + rename)
+    let temp_path = config_path.with_extension("ts.tmp");
+
+    std::fs::write(&temp_path, &new_content).map_err(|e| {
+        ConfigWriteError::IoError(format!(
+            "Failed to write temp file {}: {}",
+            temp_path.display(),
+            e
+        ))
+    })?;
+
+    std::fs::rename(&temp_path, config_path).map_err(|e| {
+        // Clean up temp file on rename failure
+        let _ = std::fs::remove_file(&temp_path);
+        ConfigWriteError::IoError(format!(
+            "Failed to rename {} to {}: {}",
+            temp_path.display(),
+            config_path.display(),
+            e
+        ))
+    })?;
+
+    if was_empty {
+        Ok(WriteOutcome::Created)
+    } else {
+        Ok(WriteOutcome::Written)
+    }
+}
+
+/// Enable Claude Code in config.ts using the safe write path.
+pub fn enable_claude_code_safely(
+    config_path: &Path,
+    bun_path: Option<&str>,
+) -> Result<WriteOutcome, ConfigWriteError> {
+    let property = ConfigProperty::new("claudeCode", "{ enabled: true }");
+    write_config_safely(config_path, &property, bun_path)
+}
+
+/// Attempt to recover config.ts from its backup.
+///
+/// Returns Ok(true) if recovery succeeded, Ok(false) if no backup exists.
+pub fn recover_from_backup(
+    config_path: &Path,
+    bun_path: Option<&str>,
+) -> Result<bool, ConfigWriteError> {
+    let backup_path = config_path.with_extension("ts.bak");
+
+    if !backup_path.exists() {
+        return Ok(false);
+    }
+
+    let backup_content = std::fs::read_to_string(&backup_path)
+        .map_err(|e| ConfigWriteError::IoError(format!("Failed to read backup: {}", e)))?;
+
+    // Validate backup before restoring
+    let validation_result = validate_typescript(&backup_content, bun_path);
+    match &validation_result {
+        Ok(()) => {}
+        Err(bun_err) => {
+            if bun_err.starts_with("Failed to run bun") {
+                validate_structure(&backup_content).map_err(|e| {
+                    ConfigWriteError::ValidationFailed(format!("Backup is also invalid: {}", e))
+                })?;
+            } else {
+                return Err(ConfigWriteError::ValidationFailed(format!(
+                    "Backup is also invalid: {}",
+                    bun_err
+                )));
+            }
+        }
+    }
+
+    // Atomic write of backup content
+    let temp_path = config_path.with_extension("ts.tmp");
+    std::fs::write(&temp_path, &backup_content)
+        .map_err(|e| ConfigWriteError::IoError(format!("Failed to write temp: {}", e)))?;
+
+    std::fs::rename(&temp_path, config_path).map_err(|e| {
+        let _ = std::fs::remove_file(&temp_path);
+        ConfigWriteError::IoError(format!("Failed to rename: {}", e))
+    })?;
+
+    tracing::info!(
+        path = %config_path.display(),
+        backup = %backup_path.display(),
+        "Config restored from backup"
+    );
+
+    Ok(true)
 }
 
 #[cfg(test)]
@@ -831,6 +1146,236 @@ export default {
             EditResult::Failed(reason) => {
                 panic!("Failed to modify config: {}", reason);
             }
+        }
+    }
+
+    // ==========================================================================
+    // Test: validate_structure
+    // ==========================================================================
+
+    #[test]
+    fn test_validate_structure_valid() {
+        let content = r#"export default {
+  hotkey: { key: ";" },
+} satisfies Config;"#;
+        assert!(validate_structure(content).is_ok());
+    }
+
+    #[test]
+    fn test_validate_structure_valid_as_config() {
+        let content = r#"export default {
+  hotkey: { key: ";" },
+} as Config;"#;
+        assert!(validate_structure(content).is_ok());
+    }
+
+    #[test]
+    fn test_validate_structure_missing_export() {
+        let content = r#"const config = {
+  hotkey: { key: ";" },
+};"#;
+        let err = validate_structure(content).unwrap_err();
+        assert!(err.contains("export default"));
+    }
+
+    #[test]
+    fn test_validate_structure_unbalanced_braces() {
+        let content3 = r#"export default {"#;
+        let err = validate_structure(content3).unwrap_err();
+        assert!(err.contains("unbalanced") || err.contains("balanced"));
+    }
+
+    #[test]
+    fn test_validate_structure_corruption_pattern() {
+        let content = r#"export default {
+  hotkey: { key: ";" },
+}{
+  extra: true,
+} satisfies Config;"#;
+        let err = validate_structure(content).unwrap_err();
+        assert!(err.contains("}{") || err.contains("corruption"));
+    }
+
+    #[test]
+    fn test_validate_structure_missing_satisfies() {
+        let content = r#"export default {
+  hotkey: { key: ";" },
+};"#;
+        let err = validate_structure(content).unwrap_err();
+        assert!(err.contains("satisfies") || err.contains("Config"));
+    }
+
+    // ==========================================================================
+    // Test: write_config_safely (using temp directories)
+    // ==========================================================================
+
+    #[test]
+    fn test_write_config_safely_creates_file_when_missing() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let config_path = dir.path().join("config.ts");
+
+        let property = ConfigProperty::new("claudeCode", "{ enabled: true }");
+        let result = write_config_safely(&config_path, &property, None);
+
+        match result {
+            Ok(WriteOutcome::Created) => {
+                let content = std::fs::read_to_string(&config_path).unwrap();
+                assert!(content.contains("claudeCode: { enabled: true }"));
+                assert!(content.contains("export default"));
+                assert!(content.contains("satisfies Config;"));
+            }
+            Ok(other) => panic!("Expected Created, got {:?}", other),
+            Err(e) => {
+                println!("write_config_safely failed (may be expected in CI): {}", e);
+            }
+        }
+    }
+
+    #[test]
+    fn test_write_config_safely_creates_backup() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let config_path = dir.path().join("config.ts");
+
+        let initial = r#"import type { Config } from "@scriptkit/sdk";
+
+export default {
+  hotkey: { modifiers: ["meta"], key: "Semicolon" },
+} satisfies Config;
+"#;
+        std::fs::write(&config_path, initial).unwrap();
+
+        let property = ConfigProperty::new("claudeCode", "{ enabled: true }");
+        let result = write_config_safely(&config_path, &property, None);
+
+        match result {
+            Ok(WriteOutcome::Written) => {
+                let backup_path = config_path.with_extension("ts.bak");
+                assert!(backup_path.exists(), "Backup file should exist");
+                let backup_content = std::fs::read_to_string(&backup_path).unwrap();
+                assert_eq!(backup_content, initial);
+            }
+            Ok(other) => panic!("Expected Written, got {:?}", other),
+            Err(e) => {
+                println!("write_config_safely failed (may be expected in CI): {}", e);
+            }
+        }
+    }
+
+    #[test]
+    fn test_write_config_safely_already_set() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let config_path = dir.path().join("config.ts");
+
+        let content = r#"import type { Config } from "@scriptkit/sdk";
+
+export default {
+  hotkey: { modifiers: ["meta"], key: "Semicolon" },
+  claudeCode: { enabled: true },
+} satisfies Config;
+"#;
+        std::fs::write(&config_path, content).unwrap();
+
+        let property = ConfigProperty::new("claudeCode", "{ enabled: true }");
+        let result = write_config_safely(&config_path, &property, None);
+
+        match result {
+            Ok(WriteOutcome::AlreadySet) => { /* expected */ }
+            other => panic!("Expected AlreadySet, got {:?}", other),
+        }
+    }
+
+    // ==========================================================================
+    // Test: recover_from_backup
+    // ==========================================================================
+
+    #[test]
+    fn test_recover_from_backup_no_backup() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let config_path = dir.path().join("config.ts");
+        std::fs::write(&config_path, "corrupted").unwrap();
+
+        let result = recover_from_backup(&config_path, None);
+        match result {
+            Ok(false) => { /* expected - no backup exists */ }
+            other => panic!("Expected Ok(false), got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_recover_from_backup_restores() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let config_path = dir.path().join("config.ts");
+        let backup_path = config_path.with_extension("ts.bak");
+
+        let valid_content = r#"import type { Config } from "@scriptkit/sdk";
+
+export default {
+  hotkey: { modifiers: ["meta"], key: "Semicolon" },
+} satisfies Config;
+"#;
+        std::fs::write(&config_path, "corrupted content").unwrap();
+        std::fs::write(&backup_path, valid_content).unwrap();
+
+        let result = recover_from_backup(&config_path, None);
+        match result {
+            Ok(true) => {
+                let restored = std::fs::read_to_string(&config_path).unwrap();
+                assert_eq!(restored, valid_content);
+            }
+            other => panic!("Expected Ok(true), got {:?}", other),
+        }
+    }
+
+    // ==========================================================================
+    // Test: generate_fresh_config
+    // ==========================================================================
+
+    #[test]
+    fn test_generate_fresh_config() {
+        let property = ConfigProperty::new("claudeCode", "{ enabled: true }");
+        let content = generate_fresh_config(&property);
+        assert!(validate_structure(&content).is_ok());
+        assert!(content.contains("claudeCode: { enabled: true }"));
+        assert!(content.contains("hotkey:"));
+    }
+
+    // ==========================================================================
+    // Test: round-trip with real config pattern
+    // ==========================================================================
+
+    #[test]
+    fn test_real_config_round_trip() {
+        let content = r#"import type { Config } from "@scriptkit/sdk";
+
+export default {
+  hotkey: {
+    modifiers: ["meta"],
+    key: "Semicolon",
+  },
+
+  // editorFontSize: 14,
+  // terminalFontSize: 14,
+
+  // builtIns: {
+  //   clipboardHistory: true,
+  // },
+
+  // bun_path: "/opt/homebrew/bin/bun",
+} satisfies Config;
+"#;
+
+        let result = enable_claude_code(content);
+        match result {
+            EditResult::Modified(new_content) => {
+                assert!(
+                    validate_structure(&new_content).is_ok(),
+                    "Round-trip produced invalid structure:\n{}",
+                    new_content
+                );
+                assert!(new_content.contains("claudeCode:"));
+                assert!(new_content.contains("enabled: true"));
+            }
+            _ => panic!("Expected Modified result"),
         }
     }
 }

@@ -1577,7 +1577,7 @@ impl ClaudeCodeProvider {
         // Use Arc<Mutex<>> to capture stderr content for error reporting
         let stderr_content = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
         let stderr_capture = stderr_content.clone();
-        if let Some(stderr) = child.stderr.take() {
+        let stderr_handle = child.stderr.take().map(|stderr| {
             std::thread::spawn(move || {
                 let reader = BufReader::new(stderr);
                 for line in reader.lines().map_while(Result::ok) {
@@ -1593,8 +1593,8 @@ impl ClaudeCodeProvider {
                         }
                     }
                 }
-            });
-        }
+            })
+        });
 
         // Send one user message line, then close stdin (EOF ends the query)
         {
@@ -1700,8 +1700,10 @@ impl ClaudeCodeProvider {
         // Wait for the process to finish
         let status = child.wait().context("Failed to wait for Claude CLI")?;
         if !status.success() {
-            // Give stderr thread a moment to finish capturing
-            std::thread::sleep(std::time::Duration::from_millis(50));
+            // Wait for stderr thread to finish capturing
+            if let Some(handle) = stderr_handle {
+                let _ = handle.join();
+            }
             let stderr_msg = stderr_content.lock().map(|s| s.clone()).unwrap_or_default();
             if stderr_msg.is_empty() {
                 return Err(anyhow!("`claude` CLI exited with status: {}", status));

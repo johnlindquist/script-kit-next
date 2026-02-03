@@ -2,7 +2,6 @@ use thiserror::Error;
 use tracing::{error, warn};
 
 /// Error severity for UI display
-#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ErrorSeverity {
     Info,     // Blue - informational
@@ -12,7 +11,6 @@ pub enum ErrorSeverity {
 }
 
 /// Domain-specific errors for Script Kit
-#[allow(dead_code)]
 #[derive(Error, Debug)]
 pub enum ScriptKitError {
     #[error("Script execution failed: {message}")]
@@ -23,6 +21,9 @@ pub enum ScriptKitError {
 
     #[error("Failed to parse protocol message: {0}")]
     ProtocolParse(#[from] serde_json::Error),
+
+    #[error("I/O error: {0}")]
+    Io(#[from] std::io::Error),
 
     #[error("Theme loading failed for '{path}': {source}")]
     ThemeLoad {
@@ -44,12 +45,12 @@ pub enum ScriptKitError {
     Window(String),
 }
 
-#[allow(dead_code)]
 impl ScriptKitError {
     pub fn severity(&self) -> ErrorSeverity {
         match self {
             Self::ScriptExecution { .. } => ErrorSeverity::Error,
             Self::ProtocolParse(_) => ErrorSeverity::Warning,
+            Self::Io(_) => ErrorSeverity::Error,
             Self::ThemeLoad { .. } => ErrorSeverity::Warning,
             Self::Config(_) => ErrorSeverity::Warning,
             Self::ProcessSpawn(_) => ErrorSeverity::Error,
@@ -62,6 +63,7 @@ impl ScriptKitError {
         match self {
             Self::ScriptExecution { message, .. } => message.clone(),
             Self::ProtocolParse(e) => format!("Invalid message format: {}", e),
+            Self::Io(e) => format!("I/O error: {}", e),
             Self::ThemeLoad { path, .. } => format!("Could not load theme from {}", path),
             Self::Config(msg) => format!("Configuration issue: {}", msg),
             Self::ProcessSpawn(msg) => format!("Could not start process: {}", msg),
@@ -71,45 +73,13 @@ impl ScriptKitError {
     }
 }
 
-#[allow(dead_code)]
 pub type Result<T> = std::result::Result<T, ScriptKitError>;
 
-/// Extension trait for ergonomic error logging
-#[allow(dead_code)]
-pub trait NotifyResultExt<T> {
-    fn log_err(self) -> Option<T>;
-    fn warn_on_err(self) -> Option<T>;
-}
-
-impl<T, E: std::fmt::Debug> NotifyResultExt<T> for std::result::Result<T, E> {
-    fn log_err(self) -> Option<T> {
-        match self {
-            Ok(v) => Some(v),
-            Err(e) => {
-                error!(error = ?e, "Operation failed");
-                None
-            }
-        }
-    }
-
-    fn warn_on_err(self) -> Option<T> {
-        match self {
-            Ok(v) => Some(v),
-            Err(e) => {
-                warn!(error = ?e, "Operation warning");
-                None
-            }
-        }
-    }
-}
-
-/// Extension trait for silent error logging with caller location tracking.
+/// Extension trait for error logging with caller location tracking.
 /// Use when the operation is recoverable and user doesn't need to know.
 ///
-/// This is an enhanced version that includes file/line information using
-/// `#[track_caller]` for better debugging. Follows the Zed error handling pattern.
-///
-#[allow(dead_code)]
+/// Includes file/line information using `#[track_caller]` for better debugging.
+/// Follows the Zed error handling pattern.
 pub trait ResultExt<T> {
     /// Log error with caller location and return None. Use for recoverable failures.
     fn log_err(self) -> Option<T>;
@@ -158,8 +128,6 @@ impl<T, E: std::fmt::Debug> ResultExt<T> for std::result::Result<T, E> {
 /// This is a simpler alternative to a full TryFutureExt trait that works
 /// well with GPUI's async model. Use this for background tasks where you
 /// want to log failures without propagating them.
-///
-#[allow(dead_code)]
 pub fn log_async_err<T, E: std::fmt::Debug>(
     result: std::result::Result<T, E>,
     operation: &str,
@@ -182,7 +150,6 @@ pub fn log_async_err<T, E: std::fmt::Debug>(
 /// Use for "impossible" states that should crash during development
 /// but gracefully degrade in production. This follows the Zed pattern
 /// for handling invariant violations.
-///
 #[macro_export]
 macro_rules! debug_panic {
     ( $($fmt_arg:tt)* ) => {

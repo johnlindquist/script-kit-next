@@ -1188,48 +1188,76 @@ impl ScriptListApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        use crate::config::editor::{self, EditResult};
+        use crate::config::editor::{self, ConfigWriteError, WriteOutcome};
 
         logging::log("EXEC", "Enabling Claude Code in config.ts");
 
         let config_path =
             std::path::PathBuf::from(shellexpand::tilde("~/.scriptkit/kit/config.ts").as_ref());
+        let bun_path = self.config.bun_path.as_deref();
 
-        // Ensure parent directory exists
-        if let Some(parent) = config_path.parent() {
-            if !parent.exists() {
-                if let Err(e) = std::fs::create_dir_all(parent) {
-                    logging::log("EXEC", &format!("Failed to create config directory: {}", e));
-                    self.toast_manager.push(
-                        components::toast::Toast::error(
-                            format!("Failed to create config directory: {}", e),
-                            &self.theme,
-                        )
-                        .duration_ms(Some(5000)),
-                    );
-                    cx.notify();
-                    return;
-                }
-                logging::log("EXEC", &format!("Created config directory: {}", parent.display()));
+        match editor::enable_claude_code_safely(&config_path, bun_path) {
+            Ok(WriteOutcome::Written) => {
+                logging::log("EXEC", "Claude Code enabled in config.ts");
             }
-        }
-
-        // Read existing config
-        let content = std::fs::read_to_string(&config_path).unwrap_or_default();
-
-        // Handle empty or missing config file
-        if content.is_empty() {
-            let new_config = r#"import type { Config } from "@scriptkit/sdk";
-
-export default {
-  hotkey: { modifiers: ["meta"], key: "Semicolon" },
-  claudeCode: {
-    enabled: true
-  }
-} satisfies Config;
-"#;
-            if let Err(e) = std::fs::write(&config_path, new_config) {
-                logging::log("EXEC", &format!("Failed to create config.ts: {}", e));
+            Ok(WriteOutcome::Created) => {
+                logging::log("EXEC", "Created new config.ts with Claude Code enabled");
+            }
+            Ok(WriteOutcome::AlreadySet) => {
+                logging::log("EXEC", "Claude Code already enabled in config.ts");
+            }
+            Err(ConfigWriteError::ValidationFailed(reason)) => {
+                logging::log(
+                    "EXEC",
+                    &format!("Config validation failed: {}", reason),
+                );
+                // Attempt to recover from backup
+                match editor::recover_from_backup(&config_path, bun_path) {
+                    Ok(true) => {
+                        logging::log("EXEC", "Config restored from backup after validation failure");
+                        self.toast_manager.push(
+                            components::toast::Toast::error(
+                                "Failed to enable Claude Code (invalid config). Backup restored."
+                                    .to_string(),
+                                &self.theme,
+                            )
+                            .duration_ms(Some(5000)),
+                        );
+                    }
+                    Ok(false) => {
+                        self.toast_manager.push(
+                            components::toast::Toast::error(
+                                format!(
+                                    "Failed to enable Claude Code: {}. No backup available.",
+                                    reason
+                                ),
+                                &self.theme,
+                            )
+                            .duration_ms(Some(5000)),
+                        );
+                    }
+                    Err(recover_err) => {
+                        logging::log(
+                            "EXEC",
+                            &format!("Backup recovery also failed: {}", recover_err),
+                        );
+                        self.toast_manager.push(
+                            components::toast::Toast::error(
+                                format!(
+                                    "Failed to enable Claude Code: {}. Recovery failed: {}",
+                                    reason, recover_err
+                                ),
+                                &self.theme,
+                            )
+                            .duration_ms(Some(5000)),
+                        );
+                    }
+                }
+                cx.notify();
+                return;
+            }
+            Err(e) => {
+                logging::log("EXEC", &format!("Failed to enable Claude Code: {}", e));
                 self.toast_manager.push(
                     components::toast::Toast::error(
                         format!("Failed to enable Claude Code: {}", e),
@@ -1239,41 +1267,6 @@ export default {
                 );
                 cx.notify();
                 return;
-            }
-            logging::log("EXEC", "Created new config.ts with Claude Code enabled");
-        } else {
-            // Use the robust editor module to modify the config
-            match editor::enable_claude_code(&content) {
-                EditResult::Modified(new_content) => {
-                    if let Err(e) = std::fs::write(&config_path, new_content) {
-                        logging::log("EXEC", &format!("Failed to write config.ts: {}", e));
-                        self.toast_manager.push(
-                            components::toast::Toast::error(
-                                format!("Failed to enable Claude Code: {}", e),
-                                &self.theme,
-                            )
-                            .duration_ms(Some(5000)),
-                        );
-                        cx.notify();
-                        return;
-                    }
-                    logging::log("EXEC", "Claude Code enabled in config.ts");
-                }
-                EditResult::AlreadySet => {
-                    logging::log("EXEC", "Claude Code already enabled in config.ts");
-                }
-                EditResult::Failed(reason) => {
-                    logging::log("EXEC", &format!("Failed to modify config: {}", reason));
-                    self.toast_manager.push(
-                        components::toast::Toast::error(
-                            format!("Failed to enable Claude Code: {}", reason),
-                            &self.theme,
-                        )
-                        .duration_ms(Some(5000)),
-                    );
-                    cx.notify();
-                    return;
-                }
             }
         }
 
