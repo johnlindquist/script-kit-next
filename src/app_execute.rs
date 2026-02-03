@@ -1195,6 +1195,25 @@ impl ScriptListApp {
         let config_path =
             std::path::PathBuf::from(shellexpand::tilde("~/.scriptkit/kit/config.ts").as_ref());
 
+        // Ensure parent directory exists
+        if let Some(parent) = config_path.parent() {
+            if !parent.exists() {
+                if let Err(e) = std::fs::create_dir_all(parent) {
+                    logging::log("EXEC", &format!("Failed to create config directory: {}", e));
+                    self.toast_manager.push(
+                        components::toast::Toast::error(
+                            format!("Failed to create config directory: {}", e),
+                            &self.theme,
+                        )
+                        .duration_ms(Some(5000)),
+                    );
+                    cx.notify();
+                    return;
+                }
+                logging::log("EXEC", &format!("Created config directory: {}", parent.display()));
+            }
+        }
+
         // Read existing config
         let content = std::fs::read_to_string(&config_path).unwrap_or_default();
 
@@ -1261,20 +1280,50 @@ export default {
         // Reload config
         self.config = crate::config::load_config();
 
-        // Show success toast
-        self.toast_manager.push(
-            components::toast::Toast::success(
-                "Claude Code enabled - requires `claude` CLI installed".to_string(),
-                &self.theme,
-            )
-            .duration_ms(Some(3000)),
-        );
+        // Check if Claude CLI is available
+        let claude_path = self
+            .config
+            .get_claude_code()
+            .path
+            .unwrap_or_else(|| "claude".to_string());
+        let claude_available = std::process::Command::new(&claude_path)
+            .arg("--version")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
 
-        // First go back to main menu
-        self.go_back_or_close(window, cx);
+        if claude_available {
+            // Claude CLI is installed - show success and open chat
+            self.toast_manager.push(
+                components::toast::Toast::success(
+                    "Claude Code enabled! Ready to use.".to_string(),
+                    &self.theme,
+                )
+                .duration_ms(Some(3000)),
+            );
 
-        // Then re-show inline chat (which should now have Claude Code provider)
-        self.show_inline_ai_chat(None, cx);
+            // First go back to main menu
+            self.go_back_or_close(window, cx);
+
+            // Then re-show inline chat (which should now have Claude Code provider)
+            self.show_inline_ai_chat(None, cx);
+        } else {
+            // Claude CLI not installed - show warning with install instructions
+            self.toast_manager.push(
+                components::toast::Toast::warning(
+                    "Config saved! Install Claude CLI: npm install -g @anthropic-ai/claude-code"
+                        .to_string(),
+                    &self.theme,
+                )
+                .duration_ms(Some(8000)),
+            );
+            logging::log(
+                "EXEC",
+                "Claude Code config saved but CLI not found - user needs to install it",
+            );
+        }
 
         cx.notify();
     }
