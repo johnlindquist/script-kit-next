@@ -334,6 +334,9 @@ pub struct ChatPrompt {
     on_claude_code: Option<ChatClaudeCodeCallback>,
     // Callback for showing actions dialog (handled by parent)
     on_show_actions: Option<ChatShowActionsCallback>,
+    // Stable UUID for Claude Code CLI session continuity within this prompt's lifetime.
+    // Generated once at construction so all messages share the same session.
+    cli_session_id: String,
 }
 
 impl ChatPrompt {
@@ -393,6 +396,7 @@ impl ChatPrompt {
             on_configure: None,
             on_claude_code: None,
             on_show_actions: None,
+            cli_session_id: uuid::Uuid::new_v4().to_string(),
         }
     }
 
@@ -1034,9 +1038,8 @@ impl ChatPrompt {
         let done_clone = shared_done.clone();
         let error_clone = shared_error.clone();
         let model_id_clone = model_id.clone();
-        // Generate a fresh UUID for each submission — the chat prompt always starts
-        // a new session (the AI window handles conversation continuity separately).
-        let session_id = uuid::Uuid::new_v4().to_string();
+        // Reuse the prompt's stable session UUID so follow-up messages share context.
+        let session_id = self.cli_session_id.clone();
 
         // Spawn background thread for streaming
         std::thread::spawn(move || {
@@ -1259,9 +1262,8 @@ impl ChatPrompt {
         let done_clone = shared_done.clone();
         let error_clone = shared_error.clone();
         let model_id_clone = model_id.clone();
-        // Generate a fresh UUID for each submission — the chat prompt always starts
-        // a new session (the AI window handles conversation continuity separately).
-        let session_id = uuid::Uuid::new_v4().to_string();
+        // Reuse the prompt's stable session UUID so follow-up messages share context.
+        let session_id = self.cli_session_id.clone();
 
         // Spawn background thread for streaming
         std::thread::spawn(move || {
@@ -1875,8 +1877,12 @@ impl ChatPrompt {
         let colors = &self.prompt_colors;
 
         // VIBRANCY: Use theme-aware overlay for subtle lift that lets blur show through
-        // Dark mode: white overlay brightens; Light mode: black overlay darkens
-        let container_bg = theme::hover_overlay_bg(&self.theme, 0x15); // ~8% opacity
+        // Dark mode: white overlay brightens; Light mode: much subtler black overlay
+        let container_bg = if self.theme.is_dark_mode() {
+            theme::hover_overlay_bg(&self.theme, 0x15) // ~8% white overlay for dark mode
+        } else {
+            theme::hover_overlay_bg(&self.theme, 0x08) // ~3% black overlay for light mode
+        };
         let copy_hover_bg = theme::hover_overlay_bg(&self.theme, 0x28); // ~16% for hover
         let error_color = self.theme.colors.ui.error;
         let error_bg = rgba((error_color << 8) | 0x40); // Theme error with transparency
