@@ -3488,11 +3488,54 @@ fn main() {
                                     }
                                     AppView::ChatPrompt { entity, .. } => {
                                         // ChatPrompt key handling
-                                        logging::log("STDIN", &format!("SimulateKey: Dispatching '{}' to ChatPrompt", key_lower));
+                                        logging::log("STDIN", &format!("SimulateKey: Dispatching '{}' to ChatPrompt (actions_popup={})", key_lower, view.show_actions_popup));
 
                                         if has_cmd && key_lower == "k" {
                                             logging::log("STDIN", "SimulateKey: Cmd+K - toggle chat actions");
                                             view.toggle_chat_actions(ctx, window);
+                                        } else if view.show_actions_popup {
+                                            // If actions popup is open, route to it
+                                            if let Some(ref dialog) = view.actions_dialog {
+                                                match key_lower.as_str() {
+                                                    "up" | "arrowup" => {
+                                                        logging::log("STDIN", "SimulateKey: Up in chat actions dialog");
+                                                        dialog.update(ctx, |d, cx| d.move_up(cx));
+                                                    }
+                                                    "down" | "arrowdown" => {
+                                                        logging::log("STDIN", "SimulateKey: Down in chat actions dialog");
+                                                        dialog.update(ctx, |d, cx| d.move_down(cx));
+                                                    }
+                                                    "enter" => {
+                                                        logging::log("STDIN", "SimulateKey: Enter in chat actions dialog");
+                                                        let action_id = dialog.read(ctx).get_selected_action_id();
+                                                        let should_close = dialog.read(ctx).selected_action_should_close();
+                                                        if let Some(action_id) = action_id {
+                                                            logging::log("ACTIONS", &format!("SimulateKey: Executing chat action: {} (close={})", action_id, should_close));
+                                                            if should_close {
+                                                                view.close_actions_popup(ActionsDialogHost::ChatPrompt, window, ctx);
+                                                            }
+                                                            view.execute_chat_action(&action_id, ctx);
+                                                        }
+                                                    }
+                                                    "escape" => {
+                                                        logging::log("STDIN", "SimulateKey: Escape - close chat actions dialog");
+                                                        view.close_actions_popup(ActionsDialogHost::ChatPrompt, window, ctx);
+                                                    }
+                                                    _ => {
+                                                        // Handle printable characters for search
+                                                        if let Some(ch) = key_lower.chars().next() {
+                                                            if ch.is_alphanumeric() || ch.is_whitespace() || ch == '-' || ch == '_' {
+                                                                logging::log("STDIN", &format!("SimulateKey: Char '{}' in chat actions dialog", ch));
+                                                                dialog.update(ctx, |d, cx| d.handle_char(ch, cx));
+                                                            } else {
+                                                                logging::log("STDIN", &format!("SimulateKey: Unhandled key '{}' in ChatPrompt actions dialog", key_lower));
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                // Notify the actions window to re-render
+                                                crate::actions::notify_actions_window(ctx);
+                                            }
                                         } else {
                                             // Route setup keys (tab, arrows, enter, escape) to ChatPrompt
                                             entity.update(ctx, |chat, cx| {

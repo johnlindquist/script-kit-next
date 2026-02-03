@@ -625,6 +625,18 @@ impl ScriptListApp {
                                 return;
                             }
 
+                            // Handle Tab/Shift+Tab in ChatPrompt setup mode
+                            // Must intercept here to prevent GPUI focus traversal from consuming Tab
+                            if let AppView::ChatPrompt { entity, .. } = &this.current_view {
+                                let handled = entity.update(cx, |chat, cx| {
+                                    chat.handle_setup_key("tab", has_shift, cx)
+                                });
+                                if handled {
+                                    cx.stop_propagation();
+                                    return;
+                                }
+                            }
+
                             // Handle Tab in ScriptList view for Ask AI feature
                             // Shows inline ChatPrompt with built-in AI (prefers Vercel AI Gateway)
                             if matches!(this.current_view, AppView::ScriptList)
@@ -669,6 +681,22 @@ impl ScriptListApp {
                             if crate::confirm::is_confirm_window_open()
                                 && crate::confirm::dispatch_confirm_key(&key, cx)
                             {
+                                cx.stop_propagation();
+                                return;
+                            }
+
+                            // Universal: Route arrow keys to actions dialog when popup is open
+                            // This ensures ALL views (ChatPrompt, ArgPrompt, etc.) route
+                            // arrows to the dialog, not just the few views with explicit cases below.
+                            if this.show_actions_popup {
+                                if let Some(ref dialog) = this.actions_dialog {
+                                    if key == "up" || key == "arrowup" {
+                                        dialog.update(cx, |d, cx| d.move_up(cx));
+                                    } else if key == "down" || key == "arrowdown" {
+                                        dialog.update(cx, |d, cx| d.move_down(cx));
+                                    }
+                                    crate::actions::notify_actions_window(cx);
+                                }
                                 cx.stop_propagation();
                                 return;
                             }
@@ -1134,13 +1162,19 @@ impl ScriptListApp {
                                 return;
                             }
 
-                            // Route modal actions keys for ScriptList and ClipboardHistoryView.
-                            let host = if matches!(this.current_view, AppView::ScriptList) {
-                                Some(ActionsDialogHost::MainList)
-                            } else if matches!(this.current_view, AppView::ClipboardHistoryView { .. }) {
-                                Some(ActionsDialogHost::ClipboardHistory)
-                            } else {
-                                None
+                            // Route modal actions keys for all views that support actions dialogs.
+                            // This ensures enter, escape, backspace, and character keys are
+                            // routed to the actions dialog when it's open, regardless of view type.
+                            let host = match &this.current_view {
+                                AppView::ScriptList => Some(ActionsDialogHost::MainList),
+                                AppView::ClipboardHistoryView { .. } => Some(ActionsDialogHost::ClipboardHistory),
+                                AppView::ChatPrompt { .. } => Some(ActionsDialogHost::ChatPrompt),
+                                AppView::ArgPrompt { .. } => Some(ActionsDialogHost::ArgPrompt),
+                                AppView::DivPrompt { .. } => Some(ActionsDialogHost::DivPrompt),
+                                AppView::EditorPrompt { .. } => Some(ActionsDialogHost::EditorPrompt),
+                                AppView::TermPrompt { .. } => Some(ActionsDialogHost::TermPrompt),
+                                AppView::FormPrompt { .. } => Some(ActionsDialogHost::FormPrompt),
+                                _ => None,
                             };
 
                             if let Some(host) = host {
@@ -1158,7 +1192,17 @@ impl ScriptListApp {
                                         return;
                                     }
                                     ActionsRoute::Execute { action_id } => {
-                                        this.handle_action(action_id, cx);
+                                        match host {
+                                            ActionsDialogHost::ChatPrompt => {
+                                                this.execute_chat_action(&action_id, cx);
+                                            }
+                                            ActionsDialogHost::ArgPrompt => {
+                                                this.trigger_action_by_name(&action_id, cx);
+                                            }
+                                            _ => {
+                                                this.handle_action(action_id, cx);
+                                            }
+                                        }
                                         cx.stop_propagation();
                                         return;
                                     }
@@ -3735,6 +3779,12 @@ impl ScriptListApp {
             self.show_actions_popup = true;
             // Push overlay to save chat prompt focus state
             self.push_focus_overlay(focus_coordinator::FocusRequest::actions_dialog(), cx);
+
+            // CRITICAL: Transfer focus from ChatPrompt to main focus_handle
+            // This prevents the ChatPrompt from receiving text input while
+            // the actions dialog is open (same pattern as toggle_actions for ScriptList)
+            self.focus_handle.focus(window, cx);
+            self.gpui_input_focused = false;
 
             let theme_arc = std::sync::Arc::clone(&self.theme);
             let dialog = cx.new(|cx| {
