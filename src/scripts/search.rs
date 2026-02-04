@@ -490,10 +490,14 @@ pub fn fuzzy_search_scripts(scripts: &[Arc<Script>], query: &str) -> Vec<ScriptM
         }
 
         // Score by description match - medium priority
-        // Only use ASCII fast-path when both are ASCII
+        // Substring match + nucleo fuzzy for catching typos and partial matches
         if let Some(ref desc) = script.description {
             if query_is_ascii && desc.is_ascii() && contains_ignore_ascii_case(desc, &query_lower) {
                 score += 25;
+            }
+            // Fuzzy match on description using nucleo (catches typos and partial terms)
+            if let Some(nucleo_s) = nucleo.score(desc) {
+                score += 15 + (nucleo_s / 30) as i32;
             }
         }
 
@@ -598,10 +602,14 @@ pub fn fuzzy_search_scriptlets(scriptlets: &[Arc<Scriptlet>], query: &str) -> Ve
         }
 
         // Score by description match - medium priority
-        // Only use ASCII fast-path when both are ASCII
+        // Substring match + nucleo fuzzy for catching typos and partial matches
         if let Some(ref desc) = scriptlet.description {
             if query_is_ascii && desc.is_ascii() && contains_ignore_ascii_case(desc, &query_lower) {
                 score += 25;
+            }
+            // Fuzzy match on description using nucleo (catches typos and partial terms)
+            if let Some(nucleo_s) = nucleo.score(desc) {
+                score += 15 + (nucleo_s / 30) as i32;
             }
         }
 
