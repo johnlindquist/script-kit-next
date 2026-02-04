@@ -226,6 +226,10 @@ pub struct NotesApp {
 
     /// Instant when the last save completed — used for brief "Saved" flash in footer
     last_save_confirmed: Option<Instant>,
+
+    /// Brief action feedback message shown in footer (e.g. "Deleted", "Pinned", "Duplicated")
+    /// Tuple of (message, accent_colored, timestamp). Clears after 2 seconds.
+    action_feedback: Option<(String, bool, Instant)>,
 }
 
 impl NotesApp {
@@ -251,8 +255,20 @@ impl NotesApp {
         }
 
         // Load notes from storage
-        let notes = storage::get_all_notes().unwrap_or_default();
+        let mut notes = storage::get_all_notes().unwrap_or_default();
         let deleted_notes = storage::get_deleted_notes().unwrap_or_default();
+
+        // First launch: create a welcome note if no notes exist
+        if notes.is_empty() && deleted_notes.is_empty() {
+            let welcome = Note::with_content(Self::welcome_note_content());
+            if let Err(e) = storage::save_note(&welcome) {
+                tracing::error!(error = %e, "Failed to create welcome note");
+            } else {
+                notes.push(welcome);
+                info!("Created welcome note for first launch");
+            }
+        }
+
         let selected_note_id = notes.first().map(|n| n.id);
 
         // Get initial content if we have a selected note
@@ -385,6 +401,7 @@ impl NotesApp {
             sort_mode: NotesSortMode::default(),
             show_shortcuts_help: false,
             last_save_confirmed: None,
+            action_feedback: None,
         }
     }
 
@@ -745,6 +762,7 @@ impl NotesApp {
             self.notes.retain(|n| n.id != id);
             self.selected_note_id = self.notes.first().map(|n| n.id);
 
+            self.show_action_feedback("Deleted · ⌘⇧T trash", false);
             cx.notify();
         }
     }
@@ -1057,9 +1075,11 @@ impl NotesApp {
     /// Toggle pin state of the currently selected note (Cmd+Shift+I)
     fn toggle_pin_current_note(&mut self, cx: &mut Context<Self>) {
         if let Some(id) = self.selected_note_id {
+            let mut was_pinned = false;
             if let Some(note) = self.notes.iter_mut().find(|n| n.id == id) {
                 note.is_pinned = !note.is_pinned;
                 let pinned = note.is_pinned;
+                was_pinned = pinned;
                 if let Err(e) = storage::save_note(note) {
                     tracing::error!(error = %e, "Failed to toggle pin state");
                     return;
@@ -1072,6 +1092,7 @@ impl NotesApp {
                 (false, true) => std::cmp::Ordering::Greater,
                 _ => b.updated_at.cmp(&a.updated_at),
             });
+            self.show_action_feedback(if was_pinned { "● Pinned" } else { "Unpinned" }, was_pinned);
             cx.notify();
         }
     }
@@ -1167,6 +1188,57 @@ impl NotesApp {
         Some((words, chars))
     }
 
+    /// Welcome note content for first-time users.
+    /// Teaches markdown syntax and key shortcuts through the product itself.
+    fn welcome_note_content() -> String {
+        [
+            "# Welcome to Notes",
+            "",
+            "A fast, keyboard-first notes app with markdown support.",
+            "",
+            "## Formatting",
+            "",
+            "- **Bold** with ⌘B",
+            "- *Italic* with ⌘I",
+            "- `Code` with ⌘E",
+            "- ~~Strikethrough~~ with ⌘⇧X",
+            "",
+            "## Lists",
+            "",
+            "- [ ] Checklist item (⌘⇧L)",
+            "- Bullet point (⌘⇧8)",
+            "1. Numbered list (⌘⇧7)",
+            "",
+            "## Quick shortcuts",
+            "",
+            "- ⌘N  new note",
+            "- ⌘P  switch notes",
+            "- ⌘K  actions",
+            "- ⌘.  focus mode",
+            "- ⌘/  all shortcuts",
+            "",
+            "Start typing to make this note your own!",
+        ]
+        .join("\n")
+    }
+
+    /// Show a brief action feedback message in the footer (auto-clears after 2s)
+    /// If `accent` is true, the message renders in accent color; otherwise muted.
+    fn show_action_feedback(&mut self, msg: impl Into<String>, accent: bool) {
+        self.action_feedback = Some((msg.into(), accent, Instant::now()));
+    }
+
+    /// Check if action feedback should still be visible (within 2s window)
+    fn get_action_feedback(&self) -> Option<(&str, bool)> {
+        self.action_feedback.as_ref().and_then(|(msg, accent, t)| {
+            if t.elapsed() < Duration::from_secs(2) {
+                Some((msg.as_str(), *accent))
+            } else {
+                None
+            }
+        })
+    }
+
     /// Toggle keyboard shortcuts help overlay (Cmd+/)
     fn toggle_shortcuts_help(&mut self, cx: &mut Context<Self>) {
         self.show_shortcuts_help = !self.show_shortcuts_help;
@@ -1193,9 +1265,10 @@ impl NotesApp {
     }
 
     /// Copy note content as markdown to clipboard (Cmd+Shift+C)
-    fn copy_as_markdown(&self, cx: &Context<Self>) {
+    fn copy_as_markdown(&mut self, cx: &Context<Self>) {
         let content = self.editor_state.read(cx).value().to_string();
         self.copy_text_to_clipboard(&content);
+        self.show_action_feedback("Copied", false);
         info!("Copied note as markdown to clipboard");
     }
 
@@ -1614,6 +1687,53 @@ impl NotesApp {
         cx.notify();
     }
 
+    /// Insert 2 spaces at cursor position (Tab key)
+    fn indent_at_cursor(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.editor_state.update(cx, |state, cx| {
+            let value = state.value().to_string();
+            let selection = state.selection();
+            let cursor = selection.start.min(value.len());
+            let indent = "  ";
+            let new_value = format!("{}{}{}", &value[..cursor], indent, &value[cursor..]);
+            let new_cursor = cursor + indent.len();
+            state.set_value(&new_value, window, cx);
+            state.set_selection(new_cursor, new_cursor, window, cx);
+        });
+        self.has_unsaved_changes = true;
+        cx.notify();
+    }
+
+    /// Remove up to 2 leading spaces from the current line (Shift+Tab)
+    fn outdent_line(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.editor_state.update(cx, |state, cx| {
+            let value = state.value().to_string();
+            let selection = state.selection();
+            let cursor = selection.start.min(value.len());
+
+            let line_start = value[..cursor].rfind('\n').map_or(0, |p| p + 1);
+            let line = &value[line_start..];
+
+            let remove_count = if line.starts_with("  ") {
+                2
+            } else if line.starts_with(' ') {
+                1
+            } else {
+                return;
+            };
+
+            let new_value = format!(
+                "{}{}",
+                &value[..line_start],
+                &value[line_start + remove_count..]
+            );
+            let new_cursor = cursor.saturating_sub(remove_count).max(line_start);
+            state.set_value(&new_value, window, cx);
+            state.set_selection(new_cursor, new_cursor, window, cx);
+        });
+        self.has_unsaved_changes = true;
+        cx.notify();
+    }
+
     /// Toggle bullet list prefix on current line (Cmd+Shift+8)
     ///
     /// Behavior:
@@ -1969,10 +2089,13 @@ impl NotesApp {
                     .child(shortcut("⌥⇧↑ / ⌥⇧↓", "Duplicate line"))
                     .child(shortcut("⌃⇧K", "Delete line"))
                     .child(shortcut("⌘V", "Smart paste"))
+                    .child(shortcut("Tab", "Indent (2 spaces)"))
+                    .child(shortcut("⇧Tab", "Outdent"))
                     .child(section("View"))
                     .child(shortcut("⌘.  / Esc", "Focus mode"))
                     .child(shortcut("⌘⇧P", "Markdown preview"))
                     .child(shortcut("⌘F", "Find in note"))
+                    .child(shortcut("⌘⇧F", "Search all notes"))
                     .child(shortcut("⌘⇧S", "Cycle sort"))
                     .child(shortcut("⌘⇧T", "Toggle trash"))
                     .child(section("Window"))
@@ -2122,6 +2245,7 @@ impl NotesApp {
 
         self.notes.insert(0, duplicate.clone());
         self.select_note(duplicate.id, window, cx);
+        self.show_action_feedback("Duplicated", false);
     }
 
     fn build_action_items(&self) -> Vec<NotesActionItem> {
@@ -3001,6 +3125,15 @@ impl NotesApp {
             NotesSortMode::Created => "created",
             NotesSortMode::Alphabetical => "A→Z",
         };
+        // Action feedback (e.g. "Deleted", "Pinned") — 2s flash
+        let action_feedback = self
+            .get_action_feedback()
+            .map(|(msg, accent)| (msg.to_string(), accent));
+        // Created date for the current note
+        let created_date = self
+            .selected_note_id
+            .and_then(|id| self.get_visible_notes().iter().find(|n| n.id == id))
+            .map(|note| note.created_at.format("%b %d, %Y").to_string());
         let footer = div()
             .flex()
             .items_center()
@@ -3072,6 +3205,19 @@ impl NotesApp {
                                 .text_xs()
                                 .text_color(cx.theme().accent.opacity(0.7))
                                 .child("✓"),
+                        )
+                    })
+                    // Action feedback flash (delete, pin, duplicate, copy) — 2s
+                    .when_some(action_feedback.clone(), |d, (msg, accent)| {
+                        d.child(
+                            div()
+                                .text_xs()
+                                .text_color(if accent {
+                                    cx.theme().accent
+                                } else {
+                                    cx.theme().muted_foreground.opacity(0.7)
+                                })
+                                .child(msg),
                         )
                     })
                     .when_some(note_position, |d, (pos, total)| {
@@ -3197,6 +3343,17 @@ impl NotesApp {
                                 }))
                                 .child("back to notes"),
                         )
+                    })
+                    // Created date — only visible on hover
+                    .when(window_hovered, |d| {
+                        d.when_some(created_date.clone(), |d, date| {
+                            d.child(
+                                div()
+                                    .text_xs()
+                                    .text_color(cx.theme().muted_foreground.opacity(0.35))
+                                    .child(date),
+                            )
+                        })
                     })
                     .when_some(relative_time, |d, time| {
                         d.child(
@@ -3852,6 +4009,17 @@ impl Render for NotesApp {
                     return;
                 }
 
+                // Tab: insert 2 spaces (indent); Shift+Tab: outdent
+                if key == "tab" && !modifiers.platform && !modifiers.control && !modifiers.alt {
+                    if modifiers.shift {
+                        this.outdent_line(window, cx);
+                    } else {
+                        this.indent_at_cursor(window, cx);
+                    }
+                    cx.stop_propagation();
+                    return;
+                }
+
                 // Alt+Up/Down: Move current line up/down
                 // Alt+Shift+Up/Down: Duplicate current line up/down
                 if modifiers.alt && !modifiers.platform {
@@ -3911,8 +4079,19 @@ impl Render for NotesApp {
                             }
                         }
                         "f" => {
-                            // Toggle search bar
-                            this.toggle_search(window, cx);
+                            if modifiers.shift {
+                                // Cmd+Shift+F: Cross-notes search (search across all notes)
+                                this.toggle_search(window, cx);
+                                cx.stop_propagation();
+                            } else {
+                                // Cmd+F: In-editor find (uses Input's built-in search)
+                                // Focus editor and dispatch Search action
+                                this.editor_state.update(cx, |state, cx| {
+                                    state.focus(window, cx);
+                                });
+                                cx.dispatch_action(&Search);
+                                cx.stop_propagation();
+                            }
                         }
                         "n" => {
                             if modifiers.shift {
