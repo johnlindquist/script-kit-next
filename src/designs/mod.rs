@@ -377,11 +377,17 @@ pub fn render_design_item(
                     )
                 }
                 SearchResult::Scriptlet(sm) => {
-                    // Scriptlets use BoltFilled SVG for quick actions
+                    // Scriptlets: show shortcut, keyword, or alias as badge
+                    let badge = sm
+                        .scriptlet
+                        .shortcut
+                        .clone()
+                        .or_else(|| sm.scriptlet.keyword.clone())
+                        .or_else(|| sm.scriptlet.alias.clone());
                     (
                         sm.scriptlet.name.clone(),
                         sm.scriptlet.description.clone(),
-                        sm.scriptlet.shortcut.clone(),
+                        badge,
                         Some(IconKind::Svg("BoltFilled".to_string())),
                     )
                 }

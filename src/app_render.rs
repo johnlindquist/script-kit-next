@@ -237,6 +237,46 @@ impl ScriptListApp {
                                 .child(format!("{}.{}", script.name, script.extension)),
                         );
 
+                        // Script metadata badges: kit name, alias
+                        {
+                            let mut script_badges = div()
+                                .flex()
+                                .flex_row()
+                                .flex_wrap()
+                                .gap(px(spacing.gap_sm))
+                                .pb(px(spacing.padding_sm));
+                            let mut show_script_badges = false;
+                            if let Some(ref kit) = script.kit_name {
+                                show_script_badges = true;
+                                script_badges = script_badges.child(
+                                    div()
+                                        .px(px(6.))
+                                        .py(px(2.))
+                                        .rounded(px(4.))
+                                        .bg(rgba((ui_border << 8) | 0x40))
+                                        .text_xs()
+                                        .text_color(rgb(text_muted))
+                                        .child(format!("kit: {}", kit)),
+                                );
+                            }
+                            if let Some(ref alias) = script.alias {
+                                show_script_badges = true;
+                                script_badges = script_badges.child(
+                                    div()
+                                        .px(px(6.))
+                                        .py(px(2.))
+                                        .rounded(px(4.))
+                                        .bg(rgba((colors.accent << 8) | 0x20))
+                                        .text_xs()
+                                        .text_color(rgb(colors.accent))
+                                        .child(format!("alias: {}", alias)),
+                                );
+                            }
+                            if show_script_badges {
+                                panel = panel.child(script_badges);
+                            }
+                        }
+
                         // Keyboard shortcut: prefer script metadata shortcut, fall back to config-based
                         let effective_shortcut =
                             script.shortcut.clone().or_else(|| shortcut_display.clone());
@@ -419,6 +459,79 @@ impl ScriptListApp {
                                 .pb(px(spacing.padding_sm))
                                 .child(scriptlet.name.clone()),
                         );
+
+                        // Scriptlet metadata badges: tool type, group, alias, keyword
+                        {
+                            let mut slet_badges = div()
+                                .flex()
+                                .flex_row()
+                                .flex_wrap()
+                                .gap(px(spacing.gap_sm))
+                                .pb(px(spacing.padding_sm));
+                            let tool_display = match scriptlet.tool.as_str() {
+                                "ts" => "TypeScript",
+                                "js" => "JavaScript",
+                                "bash" | "sh" => "Shell",
+                                "zsh" => "Zsh",
+                                "python" => "Python",
+                                "ruby" => "Ruby",
+                                "node" => "Node.js",
+                                "bun" => "Bun",
+                                "open" => "Open URL",
+                                "paste" => "Paste",
+                                "applescript" => "AppleScript",
+                                other => other,
+                            };
+                            slet_badges = slet_badges.child(
+                                div()
+                                    .px(px(6.))
+                                    .py(px(2.))
+                                    .rounded(px(4.))
+                                    .bg(rgba((ui_border << 8) | 0x40))
+                                    .text_xs()
+                                    .text_color(rgb(text_muted))
+                                    .child(tool_display.to_string()),
+                            );
+                            if let Some(ref group) = scriptlet.group {
+                                if !group.is_empty() {
+                                    slet_badges = slet_badges.child(
+                                        div()
+                                            .px(px(6.))
+                                            .py(px(2.))
+                                            .rounded(px(4.))
+                                            .bg(rgba((ui_border << 8) | 0x40))
+                                            .text_xs()
+                                            .text_color(rgb(text_muted))
+                                            .child(group.clone()),
+                                    );
+                                }
+                            }
+                            if let Some(ref alias) = scriptlet.alias {
+                                slet_badges = slet_badges.child(
+                                    div()
+                                        .px(px(6.))
+                                        .py(px(2.))
+                                        .rounded(px(4.))
+                                        .bg(rgba((colors.accent << 8) | 0x20))
+                                        .text_xs()
+                                        .text_color(rgb(colors.accent))
+                                        .child(format!("alias: {}", alias)),
+                                );
+                            }
+                            if let Some(ref keyword) = scriptlet.keyword {
+                                slet_badges = slet_badges.child(
+                                    div()
+                                        .px(px(6.))
+                                        .py(px(2.))
+                                        .rounded(px(4.))
+                                        .bg(rgba((colors.accent << 8) | 0x20))
+                                        .text_xs()
+                                        .text_color(rgb(colors.accent))
+                                        .child(format!("keyword: {}", keyword)),
+                                );
+                            }
+                            panel = panel.child(slet_badges);
+                        }
 
                         // Description (if present)
                         if let Some(desc) = &scriptlet.description {
