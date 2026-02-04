@@ -5812,6 +5812,106 @@ export default {
         logging::log("VISIBILITY", "=== Window closed ===");
     }
 
+    /// Clear the current built-in view's filter/query text if non-empty.
+    ///
+    /// Returns `true` if the filter was cleared (caller should stop processing ESC).
+    /// Returns `false` if the filter was already empty (caller should proceed with go_back_or_close).
+    ///
+    /// This implements the "ESC clears filter first" UX pattern that matches the main menu behavior.
+    fn clear_builtin_view_filter(&mut self, cx: &mut Context<Self>) -> bool {
+        match &self.current_view {
+            AppView::ClipboardHistoryView { filter, .. } if !filter.is_empty() => {
+                logging::log("KEY", "ESC - clearing ClipboardHistory filter");
+            }
+            AppView::AppLauncherView { filter, .. } if !filter.is_empty() => {
+                logging::log("KEY", "ESC - clearing AppLauncher filter");
+            }
+            AppView::WindowSwitcherView { filter, .. } if !filter.is_empty() => {
+                logging::log("KEY", "ESC - clearing WindowSwitcher filter");
+            }
+            AppView::DesignGalleryView { filter, .. } if !filter.is_empty() => {
+                logging::log("KEY", "ESC - clearing DesignGallery filter");
+            }
+            AppView::ThemeChooserView { filter, .. } if !filter.is_empty() => {
+                logging::log("KEY", "ESC - clearing ThemeChooser filter");
+            }
+            AppView::FileSearchView { query, .. } if !query.is_empty() => {
+                logging::log("KEY", "ESC - clearing FileSearch query");
+            }
+            _ => return false,
+        }
+
+        // Clear shared filter state (for views using the shared input component)
+        self.filter_text = String::new();
+        self.pending_filter_sync = true;
+
+        // Clear view-specific filter and reset selection
+        match &mut self.current_view {
+            AppView::ClipboardHistoryView {
+                filter,
+                selected_index,
+            } => {
+                filter.clear();
+                *selected_index = 0;
+                self.clipboard_list_scroll_handle
+                    .scroll_to_item(0, ScrollStrategy::Top);
+            }
+            AppView::AppLauncherView {
+                filter,
+                selected_index,
+            } => {
+                filter.clear();
+                *selected_index = 0;
+                self.list_scroll_handle
+                    .scroll_to_item(0, ScrollStrategy::Top);
+            }
+            AppView::WindowSwitcherView {
+                filter,
+                selected_index,
+            } => {
+                filter.clear();
+                *selected_index = 0;
+                self.window_list_scroll_handle
+                    .scroll_to_item(0, ScrollStrategy::Top);
+            }
+            AppView::DesignGalleryView {
+                filter,
+                selected_index,
+            } => {
+                filter.clear();
+                *selected_index = 0;
+                self.design_gallery_scroll_handle
+                    .scroll_to_item(0, ScrollStrategy::Top);
+            }
+            AppView::ThemeChooserView {
+                filter,
+                selected_index,
+            } => {
+                filter.clear();
+                *selected_index = 0;
+                self.theme_chooser_scroll_handle
+                    .scroll_to_item(0, ScrollStrategy::Top);
+            }
+            AppView::FileSearchView {
+                query,
+                selected_index,
+            } => {
+                query.clear();
+                *selected_index = 0;
+                // Cancel any pending search
+                self.file_search_debounce_task = None;
+                self.file_search_loading = false;
+                self.cached_file_results.clear();
+                self.file_search_scroll_handle
+                    .scroll_to_item(0, ScrollStrategy::Top);
+            }
+            _ => {}
+        }
+
+        cx.notify();
+        true
+    }
+
     /// Go back to main menu or close window depending on how the view was opened.
     ///
     /// If the current built-in view was opened from the main menu, this returns to the
