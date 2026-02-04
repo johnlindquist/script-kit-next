@@ -3753,6 +3753,7 @@ impl AiApp {
 
         let preview = self.message_previews.get(&chat_id).cloned();
         let msg_count = self.message_counts.get(&chat_id).copied().unwrap_or(0);
+        let is_external_source = matches!(chat.source, ChatSource::ChatPrompt | ChatSource::Script);
 
         // Derive short model label from model_id (e.g., "claude-3-5-sonnet..." → "Sonnet")
         let model_badge: Option<SharedString> = if !chat.model_id.is_empty() {
@@ -3945,39 +3946,69 @@ impl AiApp {
                         .child(clean_preview),
                 )
             })
-            // Bottom row: model badge + message count
-            .when(model_badge.is_some() || msg_count > 0, |d| {
-                d.child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap(px(4.))
-                        .when_some(model_badge, |d, badge| {
-                            d.child(
-                                div()
-                                    .text_xs()
-                                    .text_color(cx.theme().muted_foreground.opacity(0.4))
-                                    .overflow_hidden()
-                                    .whitespace_nowrap()
-                                    .text_ellipsis()
-                                    .child(badge),
-                            )
-                        })
-                        .when(msg_count > 0, |d| {
-                            let count_label = if msg_count == 1 {
-                                "1 msg".to_string()
-                            } else {
-                                format!("{} msgs", msg_count)
-                            };
-                            d.child(
-                                div()
-                                    .text_xs()
-                                    .text_color(cx.theme().muted_foreground.opacity(0.3))
-                                    .child(count_label),
-                            )
-                        }),
-                )
-            })
+            // Bottom row: model badge + message count + source indicator
+            .when(
+                model_badge.is_some() || msg_count > 0 || is_external_source,
+                |d| {
+                    d.child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(4.))
+                            .when(is_external_source, |d| {
+                                let source_label: &str = match chat.source {
+                                    ChatSource::ChatPrompt => "Prompt",
+                                    ChatSource::Script => "Script",
+                                    _ => "",
+                                };
+                                d.child(
+                                    div()
+                                        .flex()
+                                        .items_center()
+                                        .gap(px(2.))
+                                        .child(
+                                            svg()
+                                                .external_path(
+                                                    LocalIconName::Terminal.external_path(),
+                                                )
+                                                .size(px(10.))
+                                                .text_color(cx.theme().accent.opacity(0.4)),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_xs()
+                                                .text_color(cx.theme().accent.opacity(0.4))
+                                                .child(source_label),
+                                        ),
+                                )
+                            })
+                            .when_some(model_badge, |d, badge| {
+                                d.child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(cx.theme().muted_foreground.opacity(0.4))
+                                        .overflow_hidden()
+                                        .whitespace_nowrap()
+                                        .text_ellipsis()
+                                        .child(badge),
+                                )
+                            })
+                            .when(msg_count > 0, |d| {
+                                let count_label = if msg_count == 1 {
+                                    "1 msg".to_string()
+                                } else {
+                                    format!("{} msgs", msg_count)
+                                };
+                                d.child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(cx.theme().muted_foreground.opacity(0.3))
+                                        .child(count_label),
+                                )
+                            }),
+                    )
+                },
+            )
     }
 
     /// Abbreviate a model ID to a short display label for sidebar badges.
@@ -4701,6 +4732,7 @@ impl AiApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let is_user = message.role == MessageRole::User;
+        let is_system = message.role == MessageRole::System;
         let colors = theme::PromptColors::from_theme(&crate::theme::get_cached_theme());
 
         // Differentiated backgrounds: accent-tinted for user, subtle for assistant
@@ -4744,10 +4776,18 @@ impl AiApp {
 
         let role_icon = if is_user {
             LocalIconName::Terminal
+        } else if is_system {
+            LocalIconName::Settings
         } else {
             LocalIconName::MessageCircle
         };
-        let role_label = if is_user { "You" } else { "Assistant" };
+        let role_label = if is_user {
+            "You"
+        } else if is_system {
+            "System"
+        } else {
+            "Assistant"
+        };
 
         div()
             .id(SharedString::from(format!("msg-{}", msg_id)))
@@ -4899,7 +4939,13 @@ impl AiApp {
                             .border_l_2()
                             .border_color(cx.theme().accent.opacity(0.3))
                     })
-                    .when(!is_user, |d| d.bg(assistant_bg))
+                    .when(is_system, |d| {
+                        d.bg(cx.theme().muted.opacity(0.15))
+                            .border_l_2()
+                            .border_color(cx.theme().muted_foreground.opacity(0.2))
+                            .italic()
+                    })
+                    .when(!is_user && !is_system, |d| d.bg(assistant_bg))
                     .when(has_images, |el| {
                         el.child(
                             div().flex().flex_wrap().gap_2().mb_2().children(
@@ -5145,6 +5191,31 @@ impl AiApp {
                                         .text_color(cx.theme().muted_foreground.opacity(0.5))
                                         .child(elapsed_label),
                                 )
+                            })
+                            // Words/sec indicator during active streaming
+                            .when(!self.streaming_content.is_empty(), |d| {
+                                let word_count = self.streaming_content.split_whitespace().count();
+                                let wps = self
+                                    .streaming_started_at
+                                    .map(|started| {
+                                        let secs = started.elapsed().as_secs_f64();
+                                        if secs > 0.5 {
+                                            format!("~{:.0} words/s", word_count as f64 / secs)
+                                        } else {
+                                            String::new()
+                                        }
+                                    })
+                                    .unwrap_or_default();
+                                if wps.is_empty() {
+                                    d
+                                } else {
+                                    d.child(
+                                        div()
+                                            .text_xs()
+                                            .text_color(cx.theme().muted_foreground.opacity(0.3))
+                                            .child(wps),
+                                    )
+                                }
                             }),
                     )
                     // Escape hint to stop streaming
@@ -5336,7 +5407,17 @@ impl AiApp {
                             .map(|m| m.content.split_whitespace().count())
                             .unwrap_or(0);
                         if word_count > 0 {
-                            format!("{} \u{00b7} ~{} words", time_label, word_count)
+                            let secs = dur.as_secs_f64();
+                            if secs > 0.5 {
+                                format!(
+                                    "{} \u{00b7} ~{} words \u{00b7} {:.0} words/s",
+                                    time_label,
+                                    word_count,
+                                    word_count as f64 / secs
+                                )
+                            } else {
+                                format!("{} \u{00b7} ~{} words", time_label, word_count)
+                            }
                         } else {
                             time_label
                         }
@@ -5598,15 +5679,23 @@ impl AiApp {
                                         .size(px(14.))
                                         .text_color(cx.theme().accent_foreground),
                                 )
-                                .child(
-                                    div().text_xs().font_weight(gpui::FontWeight::MEDIUM).child(
-                                        if is_streaming {
-                                            "New content below"
+                                .child({
+                                    let pill_label: SharedString = if self.is_streaming {
+                                        let new_words =
+                                            self.streaming_content.split_whitespace().count();
+                                        if new_words > 5 {
+                                            format!("\u{2193} ~{} new words", new_words).into()
                                         } else {
-                                            "Scroll to bottom"
-                                        },
-                                    ),
-                                ),
+                                            "New content below".into()
+                                        }
+                                    } else {
+                                        "Scroll to bottom".into()
+                                    };
+                                    div()
+                                        .text_xs()
+                                        .font_weight(gpui::FontWeight::MEDIUM)
+                                        .child(pill_label)
+                                }),
                         ),
                 )
             })
@@ -5641,6 +5730,9 @@ impl AiApp {
         let has_pending_image = self.pending_image.is_some();
         let is_editing = self.editing_message_id.is_some();
         let input_is_empty = self.input_state.read(cx).value().is_empty() && !has_pending_image;
+        let input_char_count = self.input_state.read(cx).value().len();
+        let input_is_long = input_char_count > 2000;
+        let input_is_very_long = input_char_count > 4000;
 
         let input_area = div()
             .id("ai-input-area")
@@ -5719,7 +5811,16 @@ impl AiApp {
                             }),
                     )
                     // Input field with subtle accent border
-                    .child(self.render_input_with_cursor(input_border_color, cx)),
+                    .child(self.render_input_with_cursor(
+                        if input_is_very_long {
+                            cx.theme().danger.opacity(0.6)
+                        } else if input_is_long {
+                            cx.theme().warning.opacity(0.5)
+                        } else {
+                            input_border_color
+                        },
+                        cx,
+                    )),
             )
             // Bottom row: Model picker left, actions right (reduced padding)
             .child(
@@ -5763,9 +5864,16 @@ impl AiApp {
                                     } else {
                                         format!("{} words", word_count)
                                     };
+                                    let word_color = if input_is_very_long {
+                                        cx.theme().danger.opacity(0.7)
+                                    } else if input_is_long {
+                                        cx.theme().warning.opacity(0.6)
+                                    } else {
+                                        cx.theme().muted_foreground.opacity(0.4)
+                                    };
                                     div()
                                         .text_xs()
-                                        .text_color(cx.theme().muted_foreground.opacity(0.4))
+                                        .text_color(word_color)
                                         .child(label)
                                         .into_any_element()
                                 } else {
