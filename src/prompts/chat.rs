@@ -2372,13 +2372,13 @@ impl ChatPrompt {
                                 svg()
                                     .external_path(IconName::Settings.external_path())
                                     .size(px(16.))
-                                    .text_color(gpui::white()),
+                                    .text_color(cx.theme().accent_foreground),
                             )
                             .child(
                                 div()
                                     .text_sm()
                                     .font_weight(gpui::FontWeight::MEDIUM)
-                                    .text_color(gpui::white())
+                                    .text_color(cx.theme().accent_foreground)
                                     .child("Configure Vercel AI Gateway"),
                             ),
                     )
@@ -2803,7 +2803,7 @@ impl Render for ChatPrompt {
                 .child(
                     div().flex().flex_1().items_center().justify_center().child(
                         div()
-                            .text_size(px(14.0))
+                            .text_sm()
                             .text_color(rgb(colors.text_secondary))
                             .child("Connecting to AI..."),
                     ),

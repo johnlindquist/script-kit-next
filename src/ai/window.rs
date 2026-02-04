@@ -51,6 +51,60 @@ use crate::actions::{get_ai_command_bar_actions, CommandBar, CommandBarConfig};
 use crate::prompts::markdown::render_markdown;
 use crate::theme;
 
+// ── Design Tokens ────────────────────────────────────────────────────────────
+// All layout, spacing, icon, and radius values should reference these constants
+// rather than inlining magic px() numbers. Keep in sync with the 8pt grid.
+
+// -- Spacing scale (4px micro-steps on an 8pt grid) --
+const SP_1: gpui::Pixels = px(2.);
+const SP_2: gpui::Pixels = px(4.);
+const SP_3: gpui::Pixels = px(6.);
+const SP_4: gpui::Pixels = px(8.);
+const SP_5: gpui::Pixels = px(10.);
+const SP_6: gpui::Pixels = px(12.);
+const SP_7: gpui::Pixels = px(14.);
+const SP_8: gpui::Pixels = px(16.);
+const SP_9: gpui::Pixels = px(20.);
+const SP_10: gpui::Pixels = px(24.);
+
+// -- Border radii --
+const RADIUS_XS: gpui::Pixels = px(3.);
+const RADIUS_SM: gpui::Pixels = px(4.);
+const RADIUS_MD: gpui::Pixels = px(6.);
+const RADIUS_LG: gpui::Pixels = px(10.);
+
+// -- Icon sizes --
+const ICON_XS: gpui::Pixels = px(12.);
+const ICON_SM: gpui::Pixels = px(14.);
+const ICON_MD: gpui::Pixels = px(16.);
+
+// -- Layout constants --
+const SIDEBAR_W: gpui::Pixels = px(240.);
+const TITLEBAR_H: gpui::Pixels = px(36.);
+
+// -- Message bubble tokens --
+const MSG_PX: gpui::Pixels = px(14.);
+const MSG_PY: gpui::Pixels = px(12.);
+const MSG_RADIUS: gpui::Pixels = px(10.);
+const MSG_GAP: gpui::Pixels = px(18.);
+const MSG_GAP_CONTINUATION: gpui::Pixels = px(6.);
+
+// -- Semantic opacity levels --
+// Use named constants so the same semantic intent always gets the same value.
+const OP_SUBTLE: f32 = 0.15;
+const OP_MUTED: f32 = 0.3;
+const OP_MEDIUM: f32 = 0.5;
+const OP_STRONG: f32 = 0.7;
+const OP_NEAR_FULL: f32 = 0.85;
+
+// -- Message-specific opacities (contrast-tuned) --
+const OP_USER_MSG_BG: f32 = 0.12; // user bubble tint (accent)
+const OP_ASSISTANT_MSG_BG: f32 = 0.10; // assistant bubble tint (muted)
+const OP_MSG_BORDER: f32 = 0.45; // left-border on user bubbles
+
+// -- Dot separator --
+const DOT_SIZE: gpui::Pixels = px(3.);
+
 /// Events from the streaming thread
 enum StreamingEvent {
     /// A chunk of text received
@@ -3158,7 +3212,7 @@ impl AiApp {
         div()
             .id("search-container")
             .w_full()
-            .h(px(36.)) // Fixed height to prevent layout shift
+            .h(TITLEBAR_H) // Fixed height to prevent layout shift
             .flex()
             .items_center()
             .px_2()
@@ -3512,13 +3566,13 @@ impl AiApp {
         div()
             .flex()
             .flex_col()
-            .w(px(240.))
+            .w(SIDEBAR_W)
             .h_full()
             // NO .bg() - let vibrancy show through from root
             .border_r_1()
             .border_color(cx.theme().sidebar_border)
             // Spacer for titlebar height (toggle button is now absolutely positioned in main container)
-            .child(div().h(px(36.)))
+            .child(div().h(TITLEBAR_H))
             // Header with new chat button and search
             .child(
                 div()
@@ -3554,8 +3608,8 @@ impl AiApp {
                                     .flex()
                                     .items_center()
                                     .justify_center()
-                                    .size(px(20.))
-                                    .rounded(px(4.))
+                                    .size(SP_9)
+                                    .rounded(RADIUS_SM)
                                     .cursor_pointer()
                                     .hover(|el| el.bg(cx.theme().sidebar_accent.opacity(0.5)))
                                     .tooltip(|window, cx| {
@@ -3577,7 +3631,7 @@ impl AiApp {
                                     }))
                                     .child(
                                         Icon::new(IconName::ChevronDown)
-                                            .size(px(12.))
+                                            .size(ICON_XS)
                                             .text_color(cx.theme().sidebar_foreground.opacity(0.7)),
                                     ),
                             ),
@@ -3724,10 +3778,10 @@ impl AiApp {
                 div()
                     .text_xs()
                     .font_weight(gpui::FontWeight::SEMIBOLD)
-                    .text_color(cx.theme().muted_foreground.opacity(0.5))
+                    .text_color(cx.theme().muted_foreground.opacity(0.6))
                     .px_1()
-                    .pt(px(if is_first_group { 2. } else { 10. }))
-                    .pb(px(4.))
+                    .pt(px(if is_first_group { 4. } else { 12. }))
+                    .pb(px(6.))
                     .child(group_label),
             )
             // Chat items
@@ -3811,8 +3865,8 @@ impl AiApp {
             .flex_col()
             .w_full()
             .px_2()
-            .py_1()
-            .rounded_md()
+            .py(px(6.))
+            .rounded(px(8.))
             .cursor_pointer()
             .when(is_selected, |d| d.bg(selected_bg))
             .when(!is_selected, |d| d.hover(|d| d.bg(hover_bg)))
@@ -4062,16 +4116,16 @@ impl AiApp {
     ) -> impl IntoElement {
         let input_bg = cx.theme().muted.opacity(0.4);
 
-        // Make border semi-transparent for vibrancy (40% opacity)
-        let transparent_border = border_color.opacity(0.4);
+        // Make border semi-transparent for vibrancy (50% opacity for better contrast)
+        let transparent_border = border_color.opacity(0.5);
 
         // Wrap input in a styled container for vibrancy support
         // No px padding - let Input component handle text positioning
         div()
             .flex_1()
-            .h(px(32.))
+            .h(px(36.))
             .pl_2() // Small left padding for visual alignment with border
-            .rounded_md()
+            .rounded(px(10.))
             .border_1()
             .border_color(transparent_border) // Semi-transparent accent border
             .bg(input_bg) // Vibrancy-compatible semi-transparent background
@@ -4742,8 +4796,8 @@ impl AiApp {
         let colors = theme::PromptColors::from_theme(&crate::theme::get_cached_theme());
 
         // Differentiated backgrounds: accent-tinted for user, subtle for assistant
-        let user_bg = cx.theme().accent.opacity(0.13);
-        let assistant_bg = cx.theme().muted.opacity(0.18);
+        let user_bg = cx.theme().accent.opacity(0.15);
+        let assistant_bg = cx.theme().muted.opacity(0.15);
 
         // Collect cached thumbnails for this message's images
         let image_thumbnails: Vec<std::sync::Arc<RenderImage>> = message
@@ -4801,8 +4855,8 @@ impl AiApp {
             .flex()
             .flex_col()
             .w_full()
-            .when(is_continuation, |d| d.mb(px(4.)))
-            .when(!is_continuation, |d| d.mb(px(14.)))
+            .when(is_continuation, |d| d.mb(MSG_GAP_CONTINUATION))
+            .when(!is_continuation, |d| d.mb(MSG_GAP))
             // Role label row - hidden for continuation messages from same sender
             .when(!is_continuation, |el| {
                 el.child(
@@ -4810,45 +4864,45 @@ impl AiApp {
                         .flex()
                         .items_center()
                         .justify_between()
-                        .mb(px(5.))
+                        .mb(SP_3)
                         .child(
                             div()
                                 .flex()
                                 .items_center()
-                                .gap(px(5.))
+                                .gap(SP_3)
                                 .child(
                                     svg()
                                         .external_path(role_icon.external_path())
-                                        .size(px(14.))
+                                        .size(ICON_SM)
                                         .text_color(if is_user {
                                             cx.theme().accent
                                         } else {
-                                            cx.theme().muted_foreground.opacity(0.7)
+                                            cx.theme().muted_foreground.opacity(OP_STRONG)
                                         }),
                                 )
                                 .child(
                                     div()
-                                        .text_xs()
-                                        .font_weight(gpui::FontWeight::BOLD)
+                                        .text_sm()
+                                        .font_weight(gpui::FontWeight::SEMIBOLD)
                                         .text_color(if is_user {
                                             cx.theme().foreground
                                         } else {
-                                            cx.theme().muted_foreground.opacity(0.8)
+                                            cx.theme().muted_foreground.opacity(OP_NEAR_FULL)
                                         })
                                         .child(role_label),
                                 )
                                 .child(
                                     div()
-                                        .size(px(3.))
+                                        .size(DOT_SIZE)
                                         .rounded_full()
-                                        .bg(cx.theme().muted_foreground.opacity(0.25)),
+                                        .bg(cx.theme().muted_foreground.opacity(OP_MUTED)),
                                 )
                                 .child({
                                     let tooltip_text = full_timestamp.clone();
                                     div()
                                         .id(SharedString::from(format!("ts-{}", msg_id)))
                                         .text_xs()
-                                        .text_color(cx.theme().muted_foreground.opacity(0.5))
+                                        .text_color(cx.theme().muted_foreground.opacity(OP_MEDIUM))
                                         .tooltip(move |window, cx| {
                                             Tooltip::new(tooltip_text.clone()).build(window, cx)
                                         })
@@ -4862,13 +4916,15 @@ impl AiApp {
                                     .id(SharedString::from(format!("edit-{}", msg_id_for_edit)))
                                     .flex()
                                     .items_center()
-                                    .px(px(6.))
-                                    .py(px(2.))
-                                    .rounded(px(4.))
+                                    .px(SP_3)
+                                    .py(SP_1)
+                                    .rounded(RADIUS_SM)
                                     .cursor_pointer()
                                     .opacity(0.0)
                                     .group_hover("message", |s| s.opacity(0.6))
-                                    .hover(|s| s.bg(cx.theme().muted.opacity(0.5)).opacity(1.0))
+                                    .hover(|s| {
+                                        s.bg(cx.theme().muted.opacity(OP_MEDIUM)).opacity(1.0)
+                                    })
                                     .on_click(cx.listener(move |this, _, window, cx| {
                                         this.start_editing_message(
                                             msg_id_for_edit.clone(),
@@ -4880,7 +4936,7 @@ impl AiApp {
                                     .child(
                                         svg()
                                             .external_path(LocalIconName::Pencil.external_path())
-                                            .size(px(12.))
+                                            .size(ICON_XS)
                                             .text_color(cx.theme().muted_foreground.opacity(0.6)),
                                     ),
                             )
@@ -4891,15 +4947,15 @@ impl AiApp {
                                 .id(SharedString::from(format!("copy-{}", msg_id)))
                                 .flex()
                                 .items_center()
-                                .gap(px(4.))
-                                .px(px(6.))
-                                .py(px(2.))
-                                .rounded(px(4.))
+                                .gap(SP_2)
+                                .px(SP_3)
+                                .py(SP_1)
+                                .rounded(RADIUS_SM)
                                 .cursor_pointer()
                                 .when(!is_copied, |d| {
                                     d.opacity(0.0).group_hover("message", |s| s.opacity(0.6))
                                 })
-                                .hover(|s| s.bg(cx.theme().muted.opacity(0.5)).opacity(1.0))
+                                .hover(|s| s.bg(cx.theme().muted.opacity(OP_MEDIUM)).opacity(1.0))
                                 .on_click(cx.listener(move |this, _, _window, cx| {
                                     this.copy_message(
                                         msg_id_for_click.clone(),
@@ -4912,13 +4968,13 @@ impl AiApp {
                                         div()
                                             .flex()
                                             .items_center()
-                                            .gap(px(3.))
+                                            .gap(SP_1)
                                             .child(
                                                 svg()
                                                     .external_path(
                                                         LocalIconName::Check.external_path(),
                                                     )
-                                                    .size(px(12.))
+                                                    .size(ICON_XS)
                                                     .text_color(cx.theme().success),
                                             )
                                             .child(
@@ -4933,8 +4989,10 @@ impl AiApp {
                                     d.child(
                                         svg()
                                             .external_path(LocalIconName::Copy.external_path())
-                                            .size(px(12.))
-                                            .text_color(cx.theme().muted_foreground.opacity(0.5)),
+                                            .size(ICON_XS)
+                                            .text_color(
+                                                cx.theme().muted_foreground.opacity(OP_MEDIUM),
+                                            ),
                                     )
                                 }),
                         ),
@@ -4944,18 +5002,18 @@ impl AiApp {
                 // Message content - differentiated backgrounds
                 div()
                     .w_full()
-                    .px(px(12.))
-                    .py(px(10.))
-                    .rounded(px(8.))
+                    .px(MSG_PX)
+                    .py(MSG_PY)
+                    .rounded(MSG_RADIUS)
                     .when(is_user, |d| {
                         d.bg(user_bg)
                             .border_l_2()
-                            .border_color(cx.theme().accent.opacity(0.35))
+                            .border_color(cx.theme().accent.opacity(OP_MSG_BORDER))
                     })
                     .when(is_system, |d| {
-                        d.bg(cx.theme().muted.opacity(0.10))
+                        d.bg(cx.theme().muted.opacity(OP_ASSISTANT_MSG_BG))
                             .border_l_2()
-                            .border_color(cx.theme().muted_foreground.opacity(0.15))
+                            .border_color(cx.theme().muted_foreground.opacity(0.2))
                             .italic()
                     })
                     .when(!is_user && !is_system, |d| d.bg(assistant_bg))
@@ -4968,10 +5026,10 @@ impl AiApp {
                                     .map(|(i, render_img)| {
                                         div()
                                             .id(SharedString::from(format!("msg-img-{}", i)))
-                                            .rounded(px(6.))
+                                            .rounded(RADIUS_MD)
                                             .overflow_hidden()
                                             .border_1()
-                                            .border_color(cx.theme().border.opacity(0.5))
+                                            .border_color(cx.theme().border.opacity(OP_MEDIUM))
                                             .child(
                                                 img(move |_window: &mut Window, _cx: &mut App| {
                                                     Some(Ok(render_img.clone()))
@@ -5036,17 +5094,17 @@ impl AiApp {
                                         )))
                                         .flex()
                                         .items_center()
-                                        .gap(px(4.))
-                                        .mt_1()
-                                        .px(px(4.))
-                                        .py(px(2.))
-                                        .rounded(px(4.))
+                                        .gap(SP_2)
+                                        .mt(SP_3)
+                                        .px(SP_3)
+                                        .py(SP_2)
+                                        .rounded(RADIUS_MD)
                                         .cursor_pointer()
                                         .text_xs()
-                                        .text_color(cx.theme().accent.opacity(0.7))
+                                        .text_color(cx.theme().accent.opacity(OP_STRONG))
                                         .hover(|s| {
                                             s.text_color(cx.theme().accent)
-                                                .bg(cx.theme().accent.opacity(0.1))
+                                                .bg(cx.theme().accent.opacity(OP_SUBTLE))
                                         })
                                         .on_click(cx.listener(move |this, _, _, cx| {
                                             this.toggle_message_collapse(toggle_msg_id.clone(), cx);
@@ -5061,8 +5119,8 @@ impl AiApp {
                                                     }
                                                     .external_path(),
                                                 )
-                                                .size(px(12.))
-                                                .text_color(cx.theme().accent.opacity(0.5)),
+                                                .size(ICON_XS)
+                                                .text_color(cx.theme().accent.opacity(OP_MEDIUM)),
                                         )
                                         .child(toggle_label),
                                 )
@@ -5074,7 +5132,7 @@ impl AiApp {
     /// Render streaming content (assistant response in progress)
     fn render_streaming_content(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let colors = theme::PromptColors::from_theme(&crate::theme::get_cached_theme());
-        let streaming_bg = cx.theme().muted.opacity(0.18);
+        let streaming_bg = cx.theme().muted.opacity(OP_ASSISTANT_MSG_BG);
 
         let elapsed_label: SharedString = self
             .streaming_started_at
@@ -5101,7 +5159,7 @@ impl AiApp {
             div()
                 .flex()
                 .items_center()
-                .gap(px(6.))
+                .gap(SP_3)
                 .py_2()
                 .child(
                     div()
@@ -5113,31 +5171,31 @@ impl AiApp {
                     div()
                         .flex()
                         .items_center()
-                        .gap(px(3.))
+                        .gap(SP_1)
                         .child(
                             div()
-                                .size(px(4.))
+                                .size(SP_2)
                                 .rounded_full()
-                                .bg(cx.theme().accent.opacity(0.8)),
+                                .bg(cx.theme().accent.opacity(OP_NEAR_FULL)),
                         )
                         .child(
                             div()
-                                .size(px(4.))
+                                .size(SP_2)
                                 .rounded_full()
-                                .bg(cx.theme().accent.opacity(0.5)),
+                                .bg(cx.theme().accent.opacity(OP_MEDIUM)),
                         )
                         .child(
                             div()
-                                .size(px(4.))
+                                .size(SP_2)
                                 .rounded_full()
-                                .bg(cx.theme().accent.opacity(0.3)),
+                                .bg(cx.theme().accent.opacity(OP_MUTED)),
                         ),
                 )
                 .when(show_elapsed, |d| {
                     d.child(
                         div()
                             .text_xs()
-                            .text_color(cx.theme().muted_foreground.opacity(0.5))
+                            .text_color(cx.theme().muted_foreground.opacity(OP_MEDIUM))
                             .child(elapsed_label.clone()),
                     )
                 })
@@ -5169,36 +5227,36 @@ impl AiApp {
                     .flex()
                     .items_center()
                     .justify_between()
-                    .mb(px(6.))
+                    .mb(SP_3)
                     .child(
                         div()
                             .flex()
                             .items_center()
-                            .gap(px(6.))
+                            .gap(SP_3)
                             .child(
                                 svg()
                                     .external_path(LocalIconName::MessageCircle.external_path())
-                                    .size(px(14.))
-                                    .text_color(cx.theme().muted_foreground.opacity(0.7)),
+                                    .size(ICON_SM)
+                                    .text_color(cx.theme().muted_foreground.opacity(OP_STRONG)),
                             )
                             .child(
                                 div()
-                                    .text_xs()
-                                    .font_weight(gpui::FontWeight::BOLD)
-                                    .text_color(cx.theme().muted_foreground.opacity(0.8))
+                                    .text_sm()
+                                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                                    .text_color(cx.theme().muted_foreground.opacity(OP_NEAR_FULL))
                                     .child("Assistant"),
                             )
                             .child(
                                 div()
-                                    .size(px(3.))
+                                    .size(DOT_SIZE)
                                     .rounded_full()
-                                    .bg(cx.theme().muted_foreground.opacity(0.25)),
+                                    .bg(cx.theme().muted_foreground.opacity(OP_MUTED)),
                             )
                             .when_some(model_label, |d, label| {
                                 d.child(
                                     div()
                                         .text_xs()
-                                        .text_color(cx.theme().muted_foreground.opacity(0.4))
+                                        .text_color(cx.theme().muted_foreground.opacity(OP_MEDIUM))
                                         .child(label),
                                 )
                             })
@@ -5206,7 +5264,7 @@ impl AiApp {
                                 d.child(
                                     div()
                                         .text_xs()
-                                        .text_color(cx.theme().muted_foreground.opacity(0.5))
+                                        .text_color(cx.theme().muted_foreground.opacity(OP_MEDIUM))
                                         .child(elapsed_label),
                                 )
                             })
@@ -5230,7 +5288,9 @@ impl AiApp {
                                     d.child(
                                         div()
                                             .text_xs()
-                                            .text_color(cx.theme().muted_foreground.opacity(0.3))
+                                            .text_color(
+                                                cx.theme().muted_foreground.opacity(OP_MUTED),
+                                            )
                                             .child(wps),
                                     )
                                 }
@@ -5241,21 +5301,21 @@ impl AiApp {
                         div()
                             .flex()
                             .items_center()
-                            .gap(px(4.))
+                            .gap(SP_2)
                             .child(
                                 div()
-                                    .px(px(5.))
-                                    .py(px(1.))
-                                    .rounded(px(3.))
-                                    .bg(cx.theme().muted.opacity(0.4))
+                                    .px(SP_2)
+                                    .py(SP_1)
+                                    .rounded(RADIUS_XS)
+                                    .bg(cx.theme().muted.opacity(OP_MUTED))
                                     .text_xs()
-                                    .text_color(cx.theme().muted_foreground.opacity(0.5))
+                                    .text_color(cx.theme().muted_foreground.opacity(OP_MEDIUM))
                                     .child("Esc"),
                             )
                             .child(
                                 div()
                                     .text_xs()
-                                    .text_color(cx.theme().muted_foreground.opacity(0.4))
+                                    .text_color(cx.theme().muted_foreground.opacity(OP_MUTED))
                                     .child("to stop"),
                             ),
                     )
@@ -5263,9 +5323,9 @@ impl AiApp {
             .child(
                 div()
                     .w_full()
-                    .px(px(12.))
-                    .py(px(10.))
-                    .rounded(px(8.))
+                    .px(MSG_PX)
+                    .py(MSG_PY)
+                    .rounded(MSG_RADIUS)
                     .bg(streaming_bg)
                     .child(content_element),
             )
@@ -5450,22 +5510,22 @@ impl AiApp {
             .id("message-actions")
             .flex()
             .items_center()
-            .gap(px(8.))
+            .gap(SP_3)
             .pl_1()
-            .mt(px(2.))
-            .mb(px(4.))
+            .mt(SP_2)
+            .mb(SP_3)
             .child(
                 div()
                     .id("regenerate-btn")
                     .flex()
                     .items_center()
-                    .gap(px(4.))
-                    .px(px(6.))
-                    .py(px(3.))
-                    .rounded(px(4.))
+                    .gap(SP_2)
+                    .px(SP_4)
+                    .py(SP_2)
+                    .rounded(RADIUS_MD)
                     .cursor_pointer()
                     .text_xs()
-                    .text_color(muted_fg.opacity(0.6))
+                    .text_color(muted_fg.opacity(0.65))
                     .hover(|s| s.bg(cx.theme().muted.opacity(0.3)).text_color(muted_fg))
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.regenerate_response(window, cx);
@@ -5473,8 +5533,8 @@ impl AiApp {
                     .child(
                         svg()
                             .external_path(LocalIconName::Refresh.external_path())
-                            .size(px(12.))
-                            .text_color(muted_fg.opacity(0.5)),
+                            .size(ICON_XS)
+                            .text_color(muted_fg.opacity(0.55)),
                     )
                     .child("Regenerate"),
             )
@@ -5502,16 +5562,16 @@ impl AiApp {
                     .id("copy-response-btn")
                     .flex()
                     .items_center()
-                    .gap(px(4.))
-                    .px(px(6.))
-                    .py(px(3.))
-                    .rounded(px(4.))
+                    .gap(SP_2)
+                    .px(SP_4)
+                    .py(SP_2)
+                    .rounded(RADIUS_MD)
                     .cursor_pointer()
                     .text_xs()
                     .text_color(if is_copied {
                         cx.theme().success.opacity(0.7)
                     } else {
-                        muted_fg.opacity(0.6)
+                        muted_fg.opacity(0.65)
                     })
                     .hover(|s| s.bg(cx.theme().muted.opacity(0.3)).text_color(muted_fg))
                     .on_click(cx.listener(|this, _, _window, cx| {
@@ -5520,7 +5580,7 @@ impl AiApp {
                     .child(
                         svg()
                             .external_path(icon.external_path())
-                            .size(px(12.))
+                            .size(ICON_XS)
                             .text_color(icon_color),
                     )
                     .child(label)
@@ -5531,13 +5591,13 @@ impl AiApp {
                     div()
                         .flex()
                         .items_center()
-                        .gap(px(4.))
+                        .gap(SP_2)
                         .text_xs()
                         .text_color(cx.theme().success.opacity(0.7))
                         .child(
                             svg()
                                 .external_path(LocalIconName::Check.external_path())
-                                .size(px(11.))
+                                .size(ICON_XS)
                                 .text_color(cx.theme().success.opacity(0.5)),
                         )
                         .child(format!("Generated in {}", label)),
@@ -5630,8 +5690,8 @@ impl AiApp {
         })
         .with_sizing_behavior(ListSizingBehavior::Infer)
         .size_full()
-        .px(px(16.))
-        .py(px(12.));
+        .px(SP_9)
+        .py(SP_8);
 
         // Track user scroll: show pill when user scrolls up (during streaming or with many messages)
         let show_scroll_pill =
@@ -5671,7 +5731,7 @@ impl AiApp {
                     div()
                         .id("scroll-to-bottom-pill")
                         .absolute()
-                        .bottom(px(12.))
+                        .bottom(SP_6)
                         .left_0()
                         .right_0()
                         .flex()
@@ -5681,9 +5741,9 @@ impl AiApp {
                                 .id("scroll-pill-btn")
                                 .flex()
                                 .items_center()
-                                .gap(px(4.))
-                                .px(px(12.))
-                                .py(px(5.))
+                                .gap(SP_2)
+                                .px(SP_6)
+                                .py(SP_2)
                                 .rounded_full()
                                 .bg(cx.theme().accent.opacity(0.85))
                                 .text_color(cx.theme().accent_foreground)
@@ -5697,7 +5757,7 @@ impl AiApp {
                                 .child(
                                     svg()
                                         .external_path(LocalIconName::ChevronDown.external_path())
-                                        .size(px(14.))
+                                        .size(ICON_SM)
                                         .text_color(cx.theme().accent_foreground),
                                 )
                                 .child({
@@ -5735,7 +5795,7 @@ impl AiApp {
         // Build titlebar - just a spacer with border (title is now globally centered at window level)
         let titlebar = div()
             .id("ai-titlebar")
-            .h(px(36.))
+            .h(TITLEBAR_H)
             // NO .bg() - let vibrancy show through from root
             .border_b_1()
             .border_color(cx.theme().border);
@@ -5763,10 +5823,10 @@ impl AiApp {
             // NO .bg() - let vibrancy show through from root
             .border_t_1()
             .border_color(cx.theme().border.opacity(0.4))
-            .px(px(12.))
-            .pt(px(10.))
-            .pb(px(8.))
-            .gap(px(6.))
+            .px(SP_7)
+            .pt(SP_5)
+            .pb(SP_5)
+            .gap(SP_4)
             // Handle image file drops
             .on_drop(cx.listener(|this, paths: &ExternalPaths, _window, cx| {
                 this.handle_file_drop(paths, cx);
@@ -5792,13 +5852,13 @@ impl AiApp {
                             .flex()
                             .items_center()
                             .justify_center()
-                            .size(px(24.))
+                            .size(px(28.))
                             .rounded_full()
                             .border_1()
                             .border_color(if has_pending_image {
                                 cx.theme().accent.opacity(0.6)
                             } else {
-                                cx.theme().muted_foreground.opacity(0.4)
+                                cx.theme().muted_foreground.opacity(0.45)
                             })
                             .cursor_pointer()
                             .hover(|s| s.bg(cx.theme().muted.opacity(0.3)))
@@ -5813,7 +5873,7 @@ impl AiApp {
                             .child(
                                 svg()
                                     .external_path(LocalIconName::Plus.external_path())
-                                    .size(px(12.))
+                                    .size(ICON_SM)
                                     .text_color(if has_pending_image {
                                         cx.theme().accent
                                     } else {
@@ -5917,10 +5977,10 @@ impl AiApp {
                                     .id("stop-btn")
                                     .flex()
                                     .items_center()
-                                    .gap(px(4.))
-                                    .px_2()
-                                    .py(px(2.))
-                                    .rounded_md()
+                                    .gap(px(5.))
+                                    .px(px(10.))
+                                    .py(px(4.))
+                                    .rounded(px(6.))
                                     .cursor_pointer()
                                     .hover(|s| s.bg(cx.theme().danger.opacity(0.15)))
                                     .text_sm()
@@ -5949,16 +6009,17 @@ impl AiApp {
                                     .id("submit-btn")
                                     .flex()
                                     .items_center()
-                                    .px_2()
-                                    .py(px(2.))
-                                    .rounded_md()
+                                    .px(px(10.))
+                                    .py(px(4.))
+                                    .rounded(px(6.))
                                     .when(!input_is_empty, |d| {
                                         d.cursor_pointer()
                                             .hover(|s| s.bg(cx.theme().accent.opacity(0.15)))
                                     })
                                     .text_sm()
+                                    .font_weight(gpui::FontWeight::MEDIUM)
                                     .text_color(if input_is_empty {
-                                        cx.theme().muted_foreground.opacity(0.3)
+                                        cx.theme().muted_foreground.opacity(0.35)
                                     } else {
                                         cx.theme().accent
                                     })
@@ -5972,18 +6033,24 @@ impl AiApp {
                                     .into_any_element()
                             })
                             // Divider
-                            .child(div().w(px(1.)).h(px(16.)).bg(cx.theme().border))
+                            .child(
+                                div()
+                                    .w(px(1.))
+                                    .h(px(18.))
+                                    .bg(cx.theme().border.opacity(0.6)),
+                            )
                             // Actions ⌘K - opens command bar with AI-specific actions
                             .child(
                                 div()
                                     .flex()
                                     .items_center()
-                                    .px_2()
-                                    .py(px(2.)) // Reduced vertical padding to match Submit
-                                    .rounded_md()
+                                    .px(px(10.))
+                                    .py(px(4.))
+                                    .rounded(px(6.))
                                     .cursor_pointer()
                                     .hover(|s| s.bg(cx.theme().accent.opacity(0.15)))
                                     .text_sm()
+                                    .font_weight(gpui::FontWeight::MEDIUM)
                                     .text_color(cx.theme().accent) // Yellow accent like main menu
                                     .on_mouse_down(
                                         gpui::MouseButton::Left,
@@ -6224,15 +6291,16 @@ impl AiApp {
 
     /// Get modal overlay background (theme-aware)
     ///
-    /// For dark mode: black overlay (darkens content behind)
-    /// For light mode: white overlay (keeps content readable on light backgrounds)
-    /// 50% opacity (0x80) for good contrast without being too heavy
+    /// Uses theme background colors for overlay instead of hardcoded black/white.
+    /// 50% opacity (0x80) for good contrast without being too heavy.
     fn get_modal_overlay_background() -> gpui::Rgba {
         let sk_theme = crate::theme::get_cached_theme();
         if sk_theme.has_dark_colors() {
-            gpui::rgba(0x00000080) // black at 50% for dark mode
+            // Dark mode: use background-derived overlay
+            gpui::rgba(0x0B122080) // dark bg at 50%
         } else {
-            gpui::rgba(0xffffff80) // white at 50% for light mode
+            // Light mode: use background-derived overlay
+            gpui::rgba(0xF8FAFC80) // light bg at 50%
         }
     }
 }
@@ -7536,7 +7604,7 @@ impl AiApp {
                         div()
                             .id(SharedString::from(format!("remove-{}", idx)))
                             .cursor_pointer()
-                            .hover(|el| el.text_color(gpui::red()))
+                            .hover(|el| el.text_color(theme.danger))
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 this.remove_attachment(idx, cx);
                             }))
