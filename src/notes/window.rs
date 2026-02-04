@@ -223,6 +223,9 @@ pub struct NotesApp {
 
     /// Whether the keyboard shortcuts help overlay is shown (Cmd+/)
     show_shortcuts_help: bool,
+
+    /// Instant when the last save completed — used for brief "Saved" flash in footer
+    last_save_confirmed: Option<Instant>,
 }
 
 impl NotesApp {
@@ -381,6 +384,7 @@ impl NotesApp {
             focus_mode: false,
             sort_mode: NotesSortMode::default(),
             show_shortcuts_help: false,
+            last_save_confirmed: None,
         }
     }
 
@@ -445,6 +449,7 @@ impl NotesApp {
 
         self.has_unsaved_changes = false;
         self.last_save_time = Some(Instant::now());
+        self.last_save_confirmed = Some(Instant::now());
     }
 
     /// Check if we should save now (debounce check)
@@ -986,6 +991,24 @@ impl NotesApp {
         }
     }
 
+    /// Jump to the first note in the list (Cmd+Shift+Up)
+    fn select_first_note(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let notes = self.get_visible_notes();
+        if let Some(note) = notes.first() {
+            let id = note.id;
+            self.select_note(id, window, cx);
+        }
+    }
+
+    /// Jump to the last note in the list (Cmd+Shift+Down)
+    fn select_last_note(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let notes = self.get_visible_notes();
+        if let Some(note) = notes.last() {
+            let id = note.id;
+            self.select_note(id, window, cx);
+        }
+    }
+
     /// Navigate back in history (Cmd+[)
     fn navigate_back(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(prev_id) = self.history_back.pop() {
@@ -1163,6 +1186,77 @@ impl NotesApp {
         info!("Copied note as markdown to clipboard");
     }
 
+    /// Toggle checklist checkbox on the current line (Cmd+Shift+L)
+    ///
+    /// Behavior:
+    /// - If line starts with "- [ ] " → replace with "- [x] " (check)
+    /// - If line starts with "- [x] " → replace with "- [ ] " (uncheck)
+    /// - If line starts with "- " (list item) → add checkbox
+    /// - Otherwise → prepend "- [ ] " to the line
+    fn toggle_checklist(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.editor_state.update(cx, |state, cx| {
+            let value = state.value().to_string();
+            let selection = state.selection();
+            let cursor = selection.start.min(value.len());
+
+            // Find the start and end of the current line
+            let line_start = value[..cursor].rfind('\n').map_or(0, |p| p + 1);
+            let line_end = value[cursor..]
+                .find('\n')
+                .map_or(value.len(), |p| cursor + p);
+            let line = &value[line_start..line_end];
+
+            let (new_line, cursor_delta): (String, isize) =
+                if let Some(rest) = line.strip_prefix("- [x] ") {
+                    // Checked → unchecked
+                    (format!("- [ ] {}", rest), 0)
+                } else if let Some(rest) = line.strip_prefix("- [ ] ") {
+                    // Unchecked → checked
+                    (format!("- [x] {}", rest), 0)
+                } else if let Some(rest) = line.strip_prefix("- ") {
+                    // List item without checkbox → add checkbox
+                    (format!("- [ ] {}", rest), 4) // "[ ] " is 4 chars
+                } else {
+                    // Plain line → add full checkbox prefix
+                    (format!("- [ ] {}", line), 6) // "- [ ] " is 6 chars
+                };
+
+            let new_value = format!("{}{}{}", &value[..line_start], new_line, &value[line_end..]);
+            let new_cursor = (cursor as isize + cursor_delta).max(0) as usize;
+            state.set_value(&new_value, window, cx);
+            state.set_selection(new_cursor, new_cursor, window, cx);
+        });
+        self.has_unsaved_changes = true;
+        info!("Toggled checklist on current line");
+        cx.notify();
+    }
+
+    /// Insert a horizontal rule (---) at cursor position (Cmd+Shift+-)
+    fn insert_horizontal_rule(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.editor_state.update(cx, |state, cx| {
+            let value = state.value().to_string();
+            let selection = state.selection();
+            let cursor = selection.start.min(value.len());
+
+            // Ensure we're on a new line and add the rule
+            let needs_newline =
+                cursor > 0 && value.as_bytes().get(cursor - 1).is_none_or(|&b| b != b'\n');
+            let rule = if needs_newline {
+                "\n\n---\n\n"
+            } else {
+                "\n---\n\n"
+            };
+
+            let new_value = format!("{}{}{}", &value[..cursor], rule, &value[cursor..]);
+            let new_cursor = cursor + rule.len();
+            state.set_value(&new_value, window, cx);
+            state.set_selection(new_cursor, new_cursor, window, cx);
+        });
+        self.has_unsaved_changes = true;
+        info!("Inserted horizontal rule");
+        cx.notify();
+    }
+
     /// Render the keyboard shortcuts help overlay
     fn render_shortcuts_help(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let muted = cx.theme().muted_foreground;
@@ -1233,6 +1327,7 @@ impl NotesApp {
                     .child(shortcut("⌘⇧I", "Toggle pin"))
                     .child(section("Navigation"))
                     .child(shortcut("⌘↑ / ⌘↓", "Previous / next note"))
+                    .child(shortcut("⌘⇧↑ / ⌘⇧↓", "First / last note"))
                     .child(shortcut("⌘[ / ⌘]", "Back / forward in history"))
                     .child(shortcut("⌘1–9", "Jump to pinned note"))
                     .child(shortcut("⌘P", "Note switcher"))
@@ -1240,6 +1335,9 @@ impl NotesApp {
                     .child(section("Editing"))
                     .child(shortcut("⌘B", "Bold"))
                     .child(shortcut("⌘I", "Italic"))
+                    .child(shortcut("⌘⇧X", "Strikethrough"))
+                    .child(shortcut("⌘⇧L", "Toggle checklist"))
+                    .child(shortcut("⌘⇧-", "Horizontal rule"))
                     .child(shortcut("⌘⇧D", "Insert date/time"))
                     .child(shortcut("⌘⇧C", "Copy as markdown"))
                     .child(section("View"))
@@ -1945,12 +2043,48 @@ impl NotesApp {
                     })),
             )
             .child(
+                Button::new("strikethrough")
+                    .ghost()
+                    .xsmall()
+                    .label("S\u{0336}")
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.insert_formatting("~~", "~~", window, cx);
+                    })),
+            )
+            .child(
+                Button::new("checklist")
+                    .ghost()
+                    .xsmall()
+                    .label("\u{2610}")
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.toggle_checklist(window, cx);
+                    })),
+            )
+            .child(
                 Button::new("link")
                     .ghost()
                     .xsmall()
-                    .label("🔗")
+                    .label("\u{1F517}")
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.insert_formatting("[", "](url)", window, cx);
+                    })),
+            )
+            .child(
+                Button::new("rule")
+                    .ghost()
+                    .xsmall()
+                    .label("\u{2015}")
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.insert_horizontal_rule(window, cx);
+                    })),
+            )
+            .child(
+                Button::new("blockquote")
+                    .ghost()
+                    .xsmall()
+                    .label(">")
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.insert_formatting("\n> ", "", window, cx);
                     })),
             )
     }
@@ -2205,6 +2339,12 @@ impl NotesApp {
         let selection_stats = self.get_selection_stats(cx);
         let note_position = self.get_note_position();
         let has_unsaved = self.has_unsaved_changes;
+        // Show "Saved" briefly (2 seconds) after a successful save
+        let show_saved = !has_unsaved
+            && self
+                .last_save_confirmed
+                .map(|t| t.elapsed() < Duration::from_secs(2))
+                .unwrap_or(false);
         let relative_time = self.get_relative_time();
         let has_history_back = !self.history_back.is_empty();
         let has_history_forward = !self.history_forward.is_empty();
@@ -2272,9 +2412,17 @@ impl NotesApp {
                             }))
                             .child(">"),
                     )
-                    // Unsaved changes dot
+                    // Unsaved changes dot / saved confirmation
                     .when(has_unsaved, |d| {
                         d.child(div().text_xs().text_color(cx.theme().accent).child("*"))
+                    })
+                    .when(show_saved, |d| {
+                        d.child(
+                            div()
+                                .text_xs()
+                                .text_color(cx.theme().muted_foreground.opacity(0.6))
+                                .child("Saved"),
+                        )
                     })
                     .when_some(note_position, |d, (pos, total)| {
                         d.child(
@@ -3111,6 +3259,28 @@ impl Render for NotesApp {
                                 this.duplicate_selected_note(window, cx);
                             }
                         }
+                        "x" => {
+                            if modifiers.shift {
+                                // Cmd+Shift+X: Strikethrough formatting
+                                this.insert_formatting("~~", "~~", window, cx);
+                                cx.stop_propagation();
+                            }
+                            // Let default Cmd+X (cut) pass through to Input
+                        }
+                        "l" => {
+                            if modifiers.shift {
+                                // Cmd+Shift+L: Toggle checklist checkbox on current line
+                                this.toggle_checklist(window, cx);
+                                cx.stop_propagation();
+                            }
+                        }
+                        "-" => {
+                            if modifiers.shift {
+                                // Cmd+Shift+-: Insert horizontal rule
+                                this.insert_horizontal_rule(window, cx);
+                                cx.stop_propagation();
+                            }
+                        }
                         "c" => {
                             if modifiers.shift {
                                 // Cmd+Shift+C: Copy note content as markdown
@@ -3133,13 +3303,21 @@ impl Render for NotesApp {
                                 this.insert_formatting("_", "_", window, cx);
                             }
                         }
-                        // Navigate between notes with Cmd+Up/Down
+                        // Navigate between notes with Cmd+Up/Down (Shift = first/last)
                         "up" | "arrowup" => {
-                            this.select_prev_note(window, cx);
+                            if modifiers.shift {
+                                this.select_first_note(window, cx);
+                            } else {
+                                this.select_prev_note(window, cx);
+                            }
                             cx.stop_propagation();
                         }
                         "down" | "arrowdown" => {
-                            this.select_next_note(window, cx);
+                            if modifiers.shift {
+                                this.select_last_note(window, cx);
+                            } else {
+                                this.select_next_note(window, cx);
+                            }
                             cx.stop_propagation();
                         }
                         // History navigation: Cmd+[ back, Cmd+] forward
