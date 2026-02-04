@@ -98,6 +98,10 @@ mod dialog_random_action_window_tests;
 mod dialog_builtin_action_validation_tests;
 
 #[cfg(test)]
+#[path = "dialog_builtin_action_validation_tests_2.rs"]
+mod dialog_builtin_action_validation_tests_2;
+
+#[cfg(test)]
 mod tests {
     // Import from submodules directly - these are only used in tests
     use super::builders::{get_global_actions, get_script_context_actions};
