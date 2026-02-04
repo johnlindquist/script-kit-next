@@ -3105,7 +3105,7 @@ impl AiApp {
         // Fixed height container to prevent layout shift when typing
         // Style the container and use appearance(false) on Input to remove its default white background
         // Use vibrancy-compatible background: white with low alpha (similar to selected items)
-        let search_bg = rgba((0xFFFFFF << 8) | 0x15); // White at ~8% opacity for subtle vibrancy
+        let search_bg = cx.theme().muted.opacity(0.4);
         let border_color = cx.theme().border.opacity(0.3);
 
         div()
@@ -3660,8 +3660,8 @@ impl AiApp {
             }
         };
 
-        let selected_bg = rgba((0xFFFFFF << 8) | 0x28);
-        let hover_bg = rgba((0xFFFFFF << 8) | 0x18);
+        let selected_bg = cx.theme().muted.opacity(0.7);
+        let hover_bg = cx.theme().muted.opacity(0.5);
 
         let title_color = if is_selected {
             cx.theme().foreground
@@ -3793,11 +3793,9 @@ impl AiApp {
     fn render_input_with_cursor(
         &self,
         border_color: gpui::Hsla,
-        _cx: &mut Context<Self>,
+        cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        // Use vibrancy-compatible background: white with low alpha
-        // Similar to search input - lets blur show through
-        let input_bg = rgba((0xFFFFFF << 8) | 0x15); // White at ~8% opacity
+        let input_bg = cx.theme().muted.opacity(0.4);
 
         // Make border semi-transparent for vibrancy (40% opacity)
         let transparent_border = border_color.opacity(0.4);
@@ -3932,14 +3930,30 @@ impl AiApp {
             return self.render_setup_card(cx).into_any_element();
         }
 
-        let suggestion_bg = rgba((0xFFFFFF << 8) | 0x10);
-        let suggestion_hover_bg = rgba((0xFFFFFF << 8) | 0x20);
+        let suggestion_bg = cx.theme().muted.opacity(0.4);
+        let suggestion_hover_bg = cx.theme().muted.opacity(0.7);
 
-        let suggestions: Vec<(&str, &str)> = vec![
-            ("Write a script", "to automate a repetitive task"),
-            ("Explain how", "this code works step by step"),
-            ("Help me debug", "an error I'm seeing"),
-            ("Generate a function", "that processes data"),
+        let suggestions: Vec<(&str, &str, LocalIconName)> = vec![
+            (
+                "Write a script",
+                "to automate a repetitive task",
+                LocalIconName::Terminal,
+            ),
+            (
+                "Explain how",
+                "this code works step by step",
+                LocalIconName::Code,
+            ),
+            (
+                "Help me debug",
+                "an error I'm seeing",
+                LocalIconName::Warning,
+            ),
+            (
+                "Generate a function",
+                "that processes data",
+                LocalIconName::BoltFilled,
+            ),
         ];
 
         div()
@@ -3978,51 +3992,55 @@ impl AiApp {
                     .gap_2()
                     .w_full()
                     .max_w(px(400.))
-                    .children(
-                        suggestions
-                            .into_iter()
-                            .enumerate()
-                            .map(|(i, (title, desc))| {
-                                let prompt_text = SharedString::from(format!("{} {}", title, desc));
-                                let title_s: SharedString = title.into();
-                                let desc_s: SharedString = desc.into();
-                                div()
-                                    .id(SharedString::from(format!("suggestion-{}", i)))
-                                    .flex()
-                                    .items_center()
-                                    .gap_3()
-                                    .px_3()
-                                    .py_2()
-                                    .rounded_md()
-                                    .bg(suggestion_bg)
-                                    .cursor_pointer()
-                                    .hover(move |s| s.bg(suggestion_hover_bg))
-                                    .on_click(cx.listener(move |this, _, window, cx| {
-                                        this.input_state.update(cx, |state, cx| {
-                                            state.set_value(prompt_text.to_string(), window, cx);
-                                        });
-                                        this.focus_input(window, cx);
-                                    }))
-                                    .child(
-                                        div()
-                                            .flex()
-                                            .flex_col()
-                                            .child(
-                                                div()
-                                                    .text_sm()
-                                                    .font_weight(gpui::FontWeight::MEDIUM)
-                                                    .text_color(cx.theme().foreground)
-                                                    .child(title_s),
-                                            )
-                                            .child(
-                                                div()
-                                                    .text_xs()
-                                                    .text_color(cx.theme().muted_foreground)
-                                                    .child(desc_s),
-                                            ),
-                                    )
-                            }),
-                    ),
+                    .children(suggestions.into_iter().enumerate().map(
+                        |(i, (title, desc, icon))| {
+                            let prompt_text = SharedString::from(format!("{} {}", title, desc));
+                            let title_s: SharedString = title.into();
+                            let desc_s: SharedString = desc.into();
+                            div()
+                                .id(SharedString::from(format!("suggestion-{}", i)))
+                                .flex()
+                                .items_center()
+                                .gap_3()
+                                .px_3()
+                                .py(px(10.))
+                                .rounded_lg()
+                                .bg(suggestion_bg)
+                                .cursor_pointer()
+                                .hover(move |s| s.bg(suggestion_hover_bg))
+                                .on_click(cx.listener(move |this, _, window, cx| {
+                                    this.input_state.update(cx, |state, cx| {
+                                        state.set_value(prompt_text.to_string(), window, cx);
+                                    });
+                                    this.focus_input(window, cx);
+                                }))
+                                .child(
+                                    svg()
+                                        .external_path(icon.external_path())
+                                        .size(px(16.))
+                                        .text_color(cx.theme().accent.opacity(0.7))
+                                        .flex_shrink_0(),
+                                )
+                                .child(
+                                    div()
+                                        .flex()
+                                        .flex_col()
+                                        .child(
+                                            div()
+                                                .text_sm()
+                                                .font_weight(gpui::FontWeight::MEDIUM)
+                                                .text_color(cx.theme().foreground)
+                                                .child(title_s),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_xs()
+                                                .text_color(cx.theme().muted_foreground)
+                                                .child(desc_s),
+                                        ),
+                                )
+                        },
+                    )),
             )
             // Keyboard shortcut hints
             .child(
@@ -4052,7 +4070,7 @@ impl AiApp {
                                         .px(px(5.))
                                         .py(px(1.))
                                         .rounded(px(3.))
-                                        .bg(rgba((0xFFFFFF << 8) | 0x10))
+                                        .bg(cx.theme().muted.opacity(0.4))
                                         .text_xs()
                                         .text_color(cx.theme().muted_foreground.opacity(0.7))
                                         .child(key_s),
@@ -4438,7 +4456,7 @@ impl AiApp {
 
         // Differentiated backgrounds: accent-tinted for user, subtle for assistant
         let user_bg = cx.theme().accent.opacity(0.10);
-        let assistant_bg = rgba((0xFFFFFF << 8) | 0x08);
+        let assistant_bg = cx.theme().muted.opacity(0.3);
 
         // Collect cached thumbnails for this message's images
         let image_thumbnails: Vec<std::sync::Arc<RenderImage>> = message
@@ -4537,7 +4555,7 @@ impl AiApp {
                                 .cursor_pointer()
                                 .opacity(0.)
                                 .group_hover("message", |s| s.opacity(1.0))
-                                .hover(|s| s.bg(rgba((0xFFFFFF << 8) | 0x18)))
+                                .hover(|s| s.bg(cx.theme().muted.opacity(0.5)))
                                 .on_click(cx.listener(move |this, _, window, cx| {
                                     this.start_editing_message(
                                         msg_id_for_edit.clone(),
@@ -4568,7 +4586,7 @@ impl AiApp {
                             .when(!is_copied, |d| {
                                 d.opacity(0.).group_hover("message", |s| s.opacity(1.0))
                             })
-                            .hover(|s| s.bg(rgba((0xFFFFFF << 8) | 0x18)))
+                            .hover(|s| s.bg(cx.theme().muted.opacity(0.5)))
                             .on_click(cx.listener(move |this, _, _window, cx| {
                                 this.copy_message(
                                     msg_id_for_click.clone(),
@@ -4715,7 +4733,7 @@ impl AiApp {
     /// Render streaming content (assistant response in progress)
     fn render_streaming_content(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let colors = theme::PromptColors::from_theme(&crate::theme::get_cached_theme());
-        let streaming_bg = rgba((0xFFFFFF << 8) | 0x08);
+        let streaming_bg = cx.theme().muted.opacity(0.3);
 
         let elapsed_label: SharedString = self
             .streaming_started_at
@@ -4792,36 +4810,79 @@ impl AiApp {
             .flex_col()
             .w_full()
             .mb_3()
-            .child(
+            .child({
+                // Model name for display in streaming header
+                let model_label: Option<SharedString> = self
+                    .selected_model
+                    .as_ref()
+                    .map(|m| SharedString::from(m.display_name.clone()));
+
                 // Role label matching render_message style
                 div()
                     .flex()
                     .items_center()
-                    .gap(px(6.))
+                    .justify_between()
                     .mb_1()
                     .child(
-                        svg()
-                            .external_path(LocalIconName::Star.external_path())
-                            .size(px(14.))
-                            .text_color(cx.theme().muted_foreground),
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(6.))
+                            .child(
+                                svg()
+                                    .external_path(LocalIconName::Star.external_path())
+                                    .size(px(14.))
+                                    .text_color(cx.theme().muted_foreground),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child("Assistant"),
+                            )
+                            .child(div().size(px(6.)).rounded_full().bg(cx.theme().accent))
+                            .when_some(model_label, |d, label| {
+                                d.child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(cx.theme().muted_foreground.opacity(0.4))
+                                        .child(label),
+                                )
+                            })
+                            .when(show_elapsed, |d| {
+                                d.child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(cx.theme().muted_foreground.opacity(0.5))
+                                        .child(elapsed_label),
+                                )
+                            }),
                     )
+                    // Escape hint to stop streaming
                     .child(
                         div()
-                            .text_xs()
-                            .font_weight(gpui::FontWeight::SEMIBOLD)
-                            .text_color(cx.theme().muted_foreground)
-                            .child("Assistant"),
+                            .flex()
+                            .items_center()
+                            .gap(px(4.))
+                            .child(
+                                div()
+                                    .px(px(5.))
+                                    .py(px(1.))
+                                    .rounded(px(3.))
+                                    .bg(cx.theme().muted.opacity(0.4))
+                                    .text_xs()
+                                    .text_color(cx.theme().muted_foreground.opacity(0.5))
+                                    .child("Esc"),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(cx.theme().muted_foreground.opacity(0.4))
+                                    .child("to stop"),
+                            ),
                     )
-                    .child(div().size(px(6.)).rounded_full().bg(cx.theme().accent))
-                    .when(show_elapsed, |d| {
-                        d.child(
-                            div()
-                                .text_xs()
-                                .text_color(cx.theme().muted_foreground.opacity(0.5))
-                                .child(elapsed_label),
-                        )
-                    }),
-            )
+            })
             .child(
                 div()
                     .w_full()
@@ -4856,6 +4917,10 @@ impl AiApp {
             .child(div().flex_1().text_sm().text_color(danger).child(err_msg))
             .child(
                 div()
+                    .id("retry-btn")
+                    .flex()
+                    .items_center()
+                    .gap(px(4.))
                     .px_3()
                     .py_1()
                     .rounded_md()
@@ -4863,6 +4928,16 @@ impl AiApp {
                     .text_sm()
                     .text_color(danger)
                     .cursor_pointer()
+                    .hover(|s| s.bg(danger.opacity(0.3)))
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.retry_after_error(window, cx);
+                    }))
+                    .child(
+                        svg()
+                            .external_path(LocalIconName::Refresh.external_path())
+                            .size(px(12.))
+                            .text_color(danger),
+                    )
                     .child("Retry"),
             )
     }
@@ -4943,7 +5018,7 @@ impl AiApp {
                     }))
                     .child(
                         svg()
-                            .external_path(LocalIconName::ArrowUp.external_path())
+                            .external_path(LocalIconName::Refresh.external_path())
                             .size(px(12.))
                             .text_color(muted_fg.opacity(0.5)),
                     )
@@ -5053,8 +5128,9 @@ impl AiApp {
         .size_full()
         .p_3();
 
-        // Track user scroll: detect when user scrolls up (away from bottom)
-        let show_scroll_pill = self.user_has_scrolled_up && self.is_streaming;
+        // Track user scroll: show pill when user scrolls up (during streaming or with many messages)
+        let show_scroll_pill =
+            self.user_has_scrolled_up && (self.is_streaming || self.current_messages.len() > 3);
         let total_items = self.messages_list_item_count();
 
         // Wrap in a relative container with a native-style scrollbar overlay.
@@ -5119,10 +5195,13 @@ impl AiApp {
                                         .text_color(cx.theme().accent_foreground),
                                 )
                                 .child(
-                                    div()
-                                        .text_xs()
-                                        .font_weight(gpui::FontWeight::MEDIUM)
-                                        .child("New content below"),
+                                    div().text_xs().font_weight(gpui::FontWeight::MEDIUM).child(
+                                        if is_streaming {
+                                            "New content below"
+                                        } else {
+                                            "Scroll to bottom"
+                                        },
+                                    ),
                                 ),
                         ),
                 )

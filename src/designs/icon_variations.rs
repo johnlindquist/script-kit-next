@@ -104,6 +104,7 @@ pub enum IconName {
 
     // UI/Layout
     Sidebar,
+    Refresh,
 }
 
 impl IconName {
@@ -145,6 +146,7 @@ impl IconName {
             Self::PlayOutlined,
             // UI/Layout
             Self::Sidebar,
+            Self::Refresh,
         ]
     }
 
@@ -184,6 +186,7 @@ impl IconName {
             Self::PlayFilled => "Play Filled",
             Self::PlayOutlined => "Play Outlined",
             Self::Sidebar => "Sidebar",
+            Self::Refresh => "Refresh",
         }
     }
 
@@ -218,6 +221,7 @@ impl IconName {
             Self::PlayFilled => "Run/execute (filled)",
             Self::PlayOutlined => "Run/execute (outline)",
             Self::Sidebar => "Toggle sidebar panel",
+            Self::Refresh => "Refresh/regenerate action",
         }
     }
 
@@ -253,6 +257,7 @@ impl IconName {
             Self::PlayFilled => "play_filled",
             Self::PlayOutlined => "play_outlined",
             Self::Sidebar => "sidebar",
+            Self::Refresh => "refresh",
         };
         format!("icons/{}.svg", file_name).into()
     }
@@ -313,6 +318,7 @@ impl IconName {
                 "/assets/icons/play_outlined.svg"
             ),
             Self::Sidebar => concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/sidebar.svg"),
+            Self::Refresh => concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/refresh.svg"),
         }
     }
 
@@ -342,7 +348,7 @@ impl IconName {
             | Self::ChevronDown => IconCategory::Arrows,
             Self::Close => IconCategory::Actions,
             Self::PlayFilled | Self::PlayOutlined => IconCategory::Media,
-            Self::Sidebar => IconCategory::Actions,
+            Self::Sidebar | Self::Refresh => IconCategory::Actions,
         }
     }
 }
@@ -581,7 +587,7 @@ mod tests {
 
     #[test]
     fn test_icon_count() {
-        assert_eq!(IconName::count(), 28); // 26 + Pencil + Warning
+        assert_eq!(IconName::count(), 29); // 28 + Refresh
     }
 
     #[test]
