@@ -521,11 +521,28 @@ pub fn render_design_item(
             let (type_tag, source_hint) = if !filter_text.is_empty() {
                 let (label, color) = result.type_tag_info();
                 let tag = Some(crate::list_item::TypeTag { label, color });
-                // Show kit/source name (skip "main" as it's the default)
-                let hint = result
-                    .source_name()
-                    .filter(|s| *s != "main")
-                    .map(|s| s.to_string());
+                // Build source hint: kit name + file extension for scripts
+                // e.g., "cleanshot · .ts" or just ".ts" for main kit
+                let hint = match result {
+                    SearchResult::Script(sm) => {
+                        let kit = sm.script.kit_name.as_deref().filter(|s| *s != "main");
+                        let ext = if sm.script.extension.is_empty() {
+                            None
+                        } else {
+                            Some(format!(".{}", sm.script.extension))
+                        };
+                        match (kit, ext) {
+                            (Some(k), Some(e)) => Some(format!("{} · {}", k, e)),
+                            (Some(k), None) => Some(k.to_string()),
+                            (None, Some(e)) => Some(e),
+                            (None, None) => None,
+                        }
+                    }
+                    _ => result
+                        .source_name()
+                        .filter(|s| *s != "main")
+                        .map(|s| s.to_string()),
+                };
                 (tag, hint)
             } else {
                 // Grouped view: show alias/keyword hints when they're not already

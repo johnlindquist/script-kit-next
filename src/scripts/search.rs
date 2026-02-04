@@ -558,6 +558,27 @@ pub fn fuzzy_search_scripts(scripts: &[Arc<Script>], query: &str) -> Vec<ScriptM
             }
         }
 
+        // Score by keyboard shortcut match - allows finding scripts by their hotkey
+        // Users may type "opt i" or "cmd shift k" to find which script has that shortcut
+        if let Some(ref shortcut) = script.shortcut {
+            if query_is_ascii && shortcut.is_ascii() {
+                if let Some(pos) = find_ignore_ascii_case(shortcut, &query_lower) {
+                    // Strong bonus for shortcut match (shortcuts are explicit bindings)
+                    score += if pos == 0 { 80 } else { 60 };
+                }
+            }
+        }
+
+        // Score by kit name match - allows searching by kit (e.g., "cleanshot")
+        if let Some(ref kit_name) = script.kit_name {
+            if kit_name != "main" && query_is_ascii && kit_name.is_ascii() {
+                if let Some(pos) = find_ignore_ascii_case(kit_name, &query_lower) {
+                    // Moderate bonus for kit name match (helps find all scripts from a kit)
+                    score += if pos == 0 { 30 } else { 20 };
+                }
+            }
+        }
+
         // Score by description match - medium priority
         // Substring match + nucleo fuzzy for catching typos and partial matches
         if let Some(ref desc) = script.description {
@@ -736,6 +757,26 @@ pub fn fuzzy_search_scriptlets(scriptlets: &[Arc<Scriptlet>], query: &str) -> Ve
                 if let Some(pos) = find_ignore_ascii_case(alias, &query_lower) {
                     // Strong bonus for alias match (aliases are explicit shortcuts)
                     score += if pos == 0 { 80 } else { 60 };
+                }
+            }
+        }
+
+        // Bonus for keyboard shortcut match - find scriptlets by their hotkey
+        if let Some(ref shortcut) = scriptlet.shortcut {
+            if query_is_ascii && shortcut.is_ascii() {
+                if let Some(pos) = find_ignore_ascii_case(shortcut, &query_lower) {
+                    // Strong bonus for shortcut match (shortcuts are explicit bindings)
+                    score += if pos == 0 { 80 } else { 60 };
+                }
+            }
+        }
+
+        // Bonus for group name match - allows searching by group (e.g., "productivity")
+        if let Some(ref group) = scriptlet.group {
+            if group != "main" && query_is_ascii && group.is_ascii() {
+                if let Some(pos) = find_ignore_ascii_case(group, &query_lower) {
+                    // Moderate bonus for group name match (helps find all snippets from a group)
+                    score += if pos == 0 { 30 } else { 20 };
                 }
             }
         }
@@ -1454,5 +1495,156 @@ mod tests {
                 r.script.name
             );
         }
+    }
+
+    // ============================================
+    // Shortcut search tests
+    // ============================================
+
+    fn make_script_with_shortcut(name: &str, shortcut: Option<&str>) -> Arc<Script> {
+        Arc::new(Script {
+            name: name.to_string(),
+            path: PathBuf::from(format!(
+                "/test/{}.ts",
+                name.to_lowercase().replace(' ', "-")
+            )),
+            extension: "ts".to_string(),
+            shortcut: shortcut.map(|s| s.to_string()),
+            ..Default::default()
+        })
+    }
+
+    #[test]
+    fn test_shortcut_search_finds_script() {
+        let scripts = vec![
+            make_script_with_shortcut("Toggle Dark Mode", Some("opt d")),
+            make_script_with_shortcut("Open Dashboard", None),
+            make_script("Dark Reader", Some("Toggle dark mode in browser")),
+        ];
+        let results = fuzzy_search_scripts(&scripts, "opt d");
+        assert!(!results.is_empty());
+        // "Toggle Dark Mode" with shortcut "opt d" should rank first
+        assert_eq!(results[0].script.name, "Toggle Dark Mode");
+    }
+
+    #[test]
+    fn test_shortcut_search_partial_match() {
+        let scripts = vec![
+            make_script_with_shortcut("Screenshot Tool", Some("cmd shift s")),
+            make_script("Search Files", Some("Search for files")),
+        ];
+        let results = fuzzy_search_scripts(&scripts, "cmd shift");
+        assert!(!results.is_empty());
+        // Script with matching shortcut prefix should appear in results
+        assert!(
+            results.iter().any(|r| r.script.name == "Screenshot Tool"),
+            "Script with matching shortcut should be found"
+        );
+    }
+
+    // ============================================
+    // Kit name search tests
+    // ============================================
+
+    fn make_script_with_kit(name: &str, kit_name: Option<&str>) -> Arc<Script> {
+        Arc::new(Script {
+            name: name.to_string(),
+            path: PathBuf::from(format!(
+                "/test/{}.ts",
+                name.to_lowercase().replace(' ', "-")
+            )),
+            extension: "ts".to_string(),
+            kit_name: kit_name.map(|s| s.to_string()),
+            ..Default::default()
+        })
+    }
+
+    #[test]
+    fn test_kit_name_search_boosts_results() {
+        let scripts = vec![
+            make_script_with_kit("Capture Window", Some("cleanshot")),
+            make_script_with_kit("Clean Workspace", Some("main")),
+            make_script_with_kit("Annotate", Some("cleanshot")),
+        ];
+        let results = fuzzy_search_scripts(&scripts, "cleanshot");
+        assert!(!results.is_empty());
+        // Both cleanshot scripts should appear and rank above "Clean Workspace"
+        // which only matches on name substring, not kit name
+        let cleanshot_results: Vec<_> = results
+            .iter()
+            .filter(|r| r.script.kit_name.as_deref() == Some("cleanshot"))
+            .collect();
+        assert_eq!(
+            cleanshot_results.len(),
+            2,
+            "Both cleanshot scripts should match"
+        );
+    }
+
+    #[test]
+    fn test_main_kit_not_boosted() {
+        // "main" kit should NOT get a bonus since it's the default
+        let scripts = vec![
+            make_script_with_kit("My Script", Some("main")),
+            make_script("Main Event", None),
+        ];
+        let results = fuzzy_search_scripts(&scripts, "main");
+        // "Main Event" has a name match and should not be penalized
+        // "My Script" with kit "main" should NOT get a kit name bonus
+        assert!(!results.is_empty());
+    }
+
+    // ============================================
+    // Scriptlet shortcut and group search tests
+    // ============================================
+
+    fn make_scriptlet_with_opts(
+        name: &str,
+        shortcut: Option<&str>,
+        group: Option<&str>,
+    ) -> Arc<Scriptlet> {
+        Arc::new(Scriptlet {
+            name: name.to_string(),
+            description: None,
+            code: "echo hello".to_string(),
+            tool: "bash".to_string(),
+            shortcut: shortcut.map(|s| s.to_string()),
+            keyword: None,
+            group: group.map(|s| s.to_string()),
+            file_path: None,
+            command: None,
+            alias: None,
+        })
+    }
+
+    #[test]
+    fn test_scriptlet_shortcut_search() {
+        let scriptlets = vec![
+            make_scriptlet_with_opts("Quick Paste", Some("opt v"), None),
+            make_scriptlet_with_opts("Variable Dump", None, None),
+        ];
+        let results = fuzzy_search_scriptlets(&scriptlets, "opt v");
+        assert!(!results.is_empty());
+        assert_eq!(results[0].scriptlet.name, "Quick Paste");
+    }
+
+    #[test]
+    fn test_scriptlet_group_search() {
+        let scriptlets = vec![
+            make_scriptlet_with_opts("Git Commit", None, Some("development")),
+            make_scriptlet_with_opts("Git Push", None, Some("development")),
+            make_scriptlet_with_opts("Restart Server", None, Some("ops")),
+        ];
+        let results = fuzzy_search_scriptlets(&scriptlets, "development");
+        // Both "development" group scriptlets should match
+        let dev_results: Vec<_> = results
+            .iter()
+            .filter(|r| r.scriptlet.group.as_deref() == Some("development"))
+            .collect();
+        assert_eq!(
+            dev_results.len(),
+            2,
+            "Both development scriptlets should match"
+        );
     }
 }
