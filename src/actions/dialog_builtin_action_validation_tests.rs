@@ -872,6 +872,8 @@ fn note_switcher_fifty_notes_all_unique_ids() {
             char_count: i * 10,
             is_current: i == 25,
             is_pinned: i % 7 == 0,
+            preview: String::new(),
+            relative_time: String::new(),
         })
         .collect();
     let actions = get_note_switcher_actions(&notes);
@@ -891,6 +893,8 @@ fn note_switcher_pinned_current_same_note_gets_star_icon() {
         char_count: 42,
         is_current: true,
         is_pinned: true,
+        preview: String::new(),
+        relative_time: String::new(),
     }];
     let actions = get_note_switcher_actions(&notes);
     assert_eq!(actions[0].icon, Some(IconName::StarFilled));

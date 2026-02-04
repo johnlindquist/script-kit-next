@@ -829,6 +829,8 @@ fn note_switcher_single_current_note() {
         char_count: 42,
         is_current: true,
         is_pinned: false,
+        preview: String::new(),
+        relative_time: String::new(),
     }];
     let actions = get_note_switcher_actions(&notes);
     assert_eq!(actions.len(), 1);
@@ -838,7 +840,7 @@ fn note_switcher_single_current_note() {
         "Current note should have bullet prefix"
     );
     assert!(actions[0].title.contains("My Note"));
-    assert_eq!(actions[0].description.as_deref(), Some("42 characters"));
+    assert_eq!(actions[0].description.as_deref(), Some("42 chars"));
 }
 
 #[test]
@@ -850,6 +852,8 @@ fn note_switcher_pinned_note_icon() {
             char_count: 100,
             is_current: false,
             is_pinned: true,
+            preview: String::new(),
+            relative_time: String::new(),
         },
         NoteSwitcherNoteInfo {
             id: "current-1".into(),
@@ -857,6 +861,8 @@ fn note_switcher_pinned_note_icon() {
             char_count: 50,
             is_current: true,
             is_pinned: false,
+            preview: String::new(),
+            relative_time: String::new(),
         },
         NoteSwitcherNoteInfo {
             id: "plain-1".into(),
@@ -864,6 +870,8 @@ fn note_switcher_pinned_note_icon() {
             char_count: 10,
             is_current: false,
             is_pinned: false,
+            preview: String::new(),
+            relative_time: String::new(),
         },
     ];
     let actions = get_note_switcher_actions(&notes);
@@ -905,12 +913,14 @@ fn note_switcher_singular_character_count() {
         char_count: 1,
         is_current: false,
         is_pinned: false,
+        preview: String::new(),
+        relative_time: String::new(),
     }];
     let actions = get_note_switcher_actions(&notes);
     assert_eq!(
         actions[0].description.as_deref(),
-        Some("1 character"),
-        "Single char should use singular 'character'"
+        Some("1 char"),
+        "Single char should use singular 'char'"
     );
 }
 
@@ -922,12 +932,14 @@ fn note_switcher_zero_characters() {
         char_count: 0,
         is_current: false,
         is_pinned: false,
+        preview: String::new(),
+        relative_time: String::new(),
     }];
     let actions = get_note_switcher_actions(&notes);
     assert_eq!(
         actions[0].description.as_deref(),
-        Some("0 characters"),
-        "Zero chars should use plural 'characters'"
+        Some("0 chars"),
+        "Zero chars should use plural 'chars'"
     );
 }
 
@@ -940,6 +952,8 @@ fn note_switcher_all_notes_have_section() {
             char_count: 5,
             is_current: false,
             is_pinned: false,
+            preview: String::new(),
+            relative_time: String::new(),
         },
         NoteSwitcherNoteInfo {
             id: "b".into(),
@@ -947,14 +961,17 @@ fn note_switcher_all_notes_have_section() {
             char_count: 10,
             is_current: true,
             is_pinned: true,
+            preview: String::new(),
+            relative_time: String::new(),
         },
     ];
     let actions = get_note_switcher_actions(&notes);
     for action in &actions {
-        assert_eq!(
-            action.section.as_deref(),
-            Some("Notes"),
-            "All note switcher actions should be in 'Notes' section"
+        let section = action.section.as_deref();
+        assert!(
+            section == Some("Pinned") || section == Some("Recent"),
+            "Note switcher action should be in 'Pinned' or 'Recent' section, got {:?}",
+            section
         );
     }
 }

@@ -106,6 +106,10 @@ mod dialog_builtin_action_validation_tests_2;
 mod dialog_builtin_action_validation_tests_3;
 
 #[cfg(test)]
+#[path = "dialog_builtin_action_validation_tests_4.rs"]
+mod dialog_builtin_action_validation_tests_4;
+
+#[cfg(test)]
 mod tests {
     // Import from submodules directly - these are only used in tests
     use super::builders::{get_global_actions, get_script_context_actions};
