@@ -144,6 +144,96 @@ impl ScriptListApp {
         }
     }
 
+    /// Move selection up by approximately one page (~10 selectable items)
+    /// Skips section headers and clamps to the first selectable item
+    fn move_selection_page_up(&mut self, cx: &mut Context<Self>) {
+        self.input_mode = InputMode::Keyboard;
+        self.hovered_index = None;
+        self.hide_mouse_cursor(cx);
+
+        let (grouped_items, _) = self.get_grouped_results_cached();
+        let grouped_items = grouped_items.clone();
+
+        let first_selectable = grouped_items
+            .iter()
+            .position(|item| matches!(item, GroupedListItem::Item(_)));
+
+        let Some(first) = first_selectable else {
+            return;
+        };
+
+        // Already at or before first selectable → no-op (don't wrap)
+        if self.selected_index <= first {
+            return;
+        }
+
+        // Count ~10 selectable items upward from current position
+        const PAGE_SIZE: usize = 10;
+        let mut remaining = PAGE_SIZE;
+        let mut target = self.selected_index;
+        for i in (first..self.selected_index).rev() {
+            if matches!(grouped_items.get(i), Some(GroupedListItem::Item(_))) {
+                target = i;
+                remaining -= 1;
+                if remaining == 0 {
+                    break;
+                }
+            }
+        }
+
+        if target != self.selected_index {
+            self.selected_index = target;
+            self.scroll_to_selected_if_needed("page_up");
+            self.trigger_scroll_activity(cx);
+            cx.notify();
+        }
+    }
+
+    /// Move selection down by approximately one page (~10 selectable items)
+    /// Skips section headers and clamps to the last selectable item
+    fn move_selection_page_down(&mut self, cx: &mut Context<Self>) {
+        self.input_mode = InputMode::Keyboard;
+        self.hovered_index = None;
+        self.hide_mouse_cursor(cx);
+
+        let (grouped_items, _) = self.get_grouped_results_cached();
+        let grouped_items = grouped_items.clone();
+
+        let last_selectable = grouped_items
+            .iter()
+            .rposition(|item| matches!(item, GroupedListItem::Item(_)));
+
+        let Some(last) = last_selectable else {
+            return;
+        };
+
+        // Already at or after last selectable → no-op (don't wrap)
+        if self.selected_index >= last {
+            return;
+        }
+
+        // Count ~10 selectable items downward from current position
+        const PAGE_SIZE: usize = 10;
+        let mut remaining = PAGE_SIZE;
+        let mut target = self.selected_index;
+        for i in (self.selected_index + 1)..=last {
+            if matches!(grouped_items.get(i), Some(GroupedListItem::Item(_))) {
+                target = i;
+                remaining -= 1;
+                if remaining == 0 {
+                    break;
+                }
+            }
+        }
+
+        if target != self.selected_index {
+            self.selected_index = target;
+            self.scroll_to_selected_if_needed("page_down");
+            self.trigger_scroll_activity(cx);
+            cx.notify();
+        }
+    }
+
     /// Jump to the last selectable (non-header) item in the list
     fn move_selection_to_last(&mut self, cx: &mut Context<Self>) {
         self.input_mode = InputMode::Keyboard;
