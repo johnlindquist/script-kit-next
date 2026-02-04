@@ -397,12 +397,10 @@ pub fn render_design_item(
                         .shortcut
                         .clone()
                         .or_else(|| sm.script.alias.clone());
-                    (
-                        sm.script.name.clone(),
-                        sm.script.description.clone(),
-                        badge,
-                        Some(icon),
-                    )
+                    // Auto-generate description for scripts without one.
+                    // Uses extracted helper: priority is explicit > property detail > filename
+                    let description = auto_description_for_script(&sm.script);
+                    (sm.script.name.clone(), description, badge, Some(icon))
                 }
                 SearchResult::Scriptlet(sm) => {
                     // Scriptlets: show shortcut, keyword, or alias as badge
@@ -559,44 +557,10 @@ pub fn render_design_item(
                 };
                 (tag, hint)
             } else {
-                // Grouped view: show alias/keyword hints or tags for discoverability
+                // Grouped view: use extracted helpers for discoverability hints
                 let hint = match result {
-                    SearchResult::Script(sm) => {
-                        // If shortcut is the badge, show alias as hint
-                        if sm.script.shortcut.is_some() {
-                            sm.script.alias.as_ref().map(|a| format!("/{}", a))
-                        } else {
-                            // Show tags as subtle hints for discoverability (max 2)
-                            sm.script.typed_metadata.as_ref().and_then(|meta| {
-                                if !meta.tags.is_empty() {
-                                    let tag_str: String = meta
-                                        .tags
-                                        .iter()
-                                        .take(2)
-                                        .map(|t| t.as_str())
-                                        .collect::<Vec<_>>()
-                                        .join(" · ");
-                                    Some(tag_str)
-                                } else {
-                                    None
-                                }
-                            })
-                        }
-                    }
-                    SearchResult::Scriptlet(sm) => {
-                        // Show the first hidden trigger (keyword or alias not used as badge)
-                        if sm.scriptlet.shortcut.is_some() {
-                            sm.scriptlet
-                                .keyword
-                                .as_ref()
-                                .or(sm.scriptlet.alias.as_ref())
-                                .map(|k| format!("/{}", k))
-                        } else if sm.scriptlet.keyword.is_some() {
-                            sm.scriptlet.alias.as_ref().map(|a| format!("/{}", a))
-                        } else {
-                            None
-                        }
-                    }
+                    SearchResult::Script(sm) => grouped_view_hint_for_script(&sm.script),
+                    SearchResult::Scriptlet(sm) => grouped_view_hint_for_scriptlet(&sm.scriptlet),
                     _ => None,
                 };
                 (None, hint)
@@ -639,6 +603,149 @@ pub fn render_design_item(
                 .tool_badge_opt(tool_badge)
                 .into_any_element()
         }
+    }
+}
+
+/// Auto-generate a fallback description for scripts that have no explicit description.
+/// Priority: schedule expression > cron expression > watch pattern > background > system > filename
+pub(crate) fn auto_description_for_script(script: &crate::scripts::Script) -> Option<String> {
+    // If the script has an explicit description, return it as-is
+    if script.description.is_some() {
+        return script.description.clone();
+    }
+
+    // Try metadata-based descriptions
+    if let Some(ref meta) = script.typed_metadata {
+        if let Some(ref schedule) = meta.schedule {
+            return Some(format!("Scheduled: {}", schedule));
+        }
+        if let Some(ref cron) = meta.cron {
+            return Some(format!("Cron: {}", cron));
+        }
+        if let Some(first_pattern) = meta.watch.first() {
+            let display = if first_pattern.len() > 40 {
+                format!("{}...", &first_pattern[..37])
+            } else {
+                first_pattern.clone()
+            };
+            return Some(format!("Watches: {}", display));
+        }
+        if meta.background {
+            return Some("Background process".to_string());
+        }
+        if meta.system {
+            return Some("System event handler".to_string());
+        }
+    }
+
+    // Fallback: show filename when it differs from the display name
+    let filename = crate::scripts::search::extract_filename(&script.path);
+    if !filename.is_empty() && filename != script.name {
+        Some(filename)
+    } else {
+        None
+    }
+}
+
+/// Determine the grouped-view source hint for a script.
+/// Priority: alias (when shortcut is badge) > tags > kit name (non-main)
+pub(crate) fn grouped_view_hint_for_script(script: &crate::scripts::Script) -> Option<String> {
+    if script.shortcut.is_some() {
+        // Shortcut is the badge → show alias as trigger hint, then tags, then kit
+        script
+            .alias
+            .as_ref()
+            .map(|a| format!("/{}", a))
+            .or_else(|| {
+                script.typed_metadata.as_ref().and_then(|meta| {
+                    if !meta.tags.is_empty() {
+                        Some(
+                            meta.tags
+                                .iter()
+                                .take(2)
+                                .map(|t| t.as_str())
+                                .collect::<Vec<_>>()
+                                .join(" · "),
+                        )
+                    } else {
+                        None
+                    }
+                })
+            })
+    } else if script.alias.is_some() {
+        // Alias is the badge → show tags, then kit
+        script
+            .typed_metadata
+            .as_ref()
+            .and_then(|meta| {
+                if !meta.tags.is_empty() {
+                    Some(
+                        meta.tags
+                            .iter()
+                            .take(2)
+                            .map(|t| t.as_str())
+                            .collect::<Vec<_>>()
+                            .join(" · "),
+                    )
+                } else {
+                    None
+                }
+            })
+            .or_else(|| {
+                script
+                    .kit_name
+                    .as_deref()
+                    .filter(|k| *k != "main")
+                    .map(|k| k.to_string())
+            })
+    } else {
+        // No badge → show tags, then kit name as origin
+        script
+            .typed_metadata
+            .as_ref()
+            .and_then(|meta| {
+                if !meta.tags.is_empty() {
+                    Some(
+                        meta.tags
+                            .iter()
+                            .take(2)
+                            .map(|t| t.as_str())
+                            .collect::<Vec<_>>()
+                            .join(" · "),
+                    )
+                } else {
+                    None
+                }
+            })
+            .or_else(|| {
+                script
+                    .kit_name
+                    .as_deref()
+                    .filter(|k| *k != "main")
+                    .map(|k| k.to_string())
+            })
+    }
+}
+
+/// Determine the grouped-view source hint for a scriptlet.
+/// Priority: hidden trigger keyword/alias > group name (non-main)
+pub(crate) fn grouped_view_hint_for_scriptlet(
+    scriptlet: &crate::scripts::Scriptlet,
+) -> Option<String> {
+    if scriptlet.shortcut.is_some() {
+        scriptlet
+            .keyword
+            .as_ref()
+            .or(scriptlet.alias.as_ref())
+            .map(|k| format!("/{}", k))
+    } else if scriptlet.keyword.is_some() {
+        scriptlet.alias.as_ref().map(|a| format!("/{}", a))
+    } else {
+        scriptlet
+            .group
+            .as_deref()
+            .filter(|g| *g != "main")
+            .map(|g| g.to_string())
     }
 }
 
@@ -979,5 +1086,256 @@ mod tests {
                 variant
             );
         }
+    }
+
+    // =========================================================================
+    // Auto-description tests
+    // =========================================================================
+
+    use crate::metadata_parser::TypedMetadata;
+    use crate::scripts::Script;
+    use std::path::PathBuf;
+
+    fn make_test_script(name: &str) -> Script {
+        Script {
+            name: name.to_string(),
+            path: PathBuf::from(format!(
+                "/test/{}.ts",
+                name.to_lowercase().replace(' ', "-")
+            )),
+            extension: "ts".to_string(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_auto_description_preserves_explicit() {
+        let mut s = make_test_script("My Script");
+        s.description = Some("Explicit description".to_string());
+        assert_eq!(
+            auto_description_for_script(&s),
+            Some("Explicit description".to_string())
+        );
+    }
+
+    #[test]
+    fn test_auto_description_cron() {
+        let mut s = make_test_script("Daily Backup");
+        s.typed_metadata = Some(TypedMetadata {
+            cron: Some("0 0 * * *".to_string()),
+            ..Default::default()
+        });
+        assert_eq!(
+            auto_description_for_script(&s),
+            Some("Cron: 0 0 * * *".to_string())
+        );
+    }
+
+    #[test]
+    fn test_auto_description_schedule_over_cron() {
+        let mut s = make_test_script("Scheduled Task");
+        s.typed_metadata = Some(TypedMetadata {
+            schedule: Some("every weekday at 9am".to_string()),
+            cron: Some("0 9 * * 1-5".to_string()),
+            ..Default::default()
+        });
+        // schedule takes priority over cron
+        assert_eq!(
+            auto_description_for_script(&s),
+            Some("Scheduled: every weekday at 9am".to_string())
+        );
+    }
+
+    #[test]
+    fn test_auto_description_watch() {
+        let mut s = make_test_script("Config Watcher");
+        s.typed_metadata = Some(TypedMetadata {
+            watch: vec!["~/.config/**".to_string()],
+            ..Default::default()
+        });
+        assert_eq!(
+            auto_description_for_script(&s),
+            Some("Watches: ~/.config/**".to_string())
+        );
+    }
+
+    #[test]
+    fn test_auto_description_watch_truncates_long_pattern() {
+        let mut s = make_test_script("Long Watcher");
+        let long_pattern =
+            "/very/long/path/to/some/deeply/nested/directory/with/many/levels/**/*.json"
+                .to_string();
+        s.typed_metadata = Some(TypedMetadata {
+            watch: vec![long_pattern],
+            ..Default::default()
+        });
+        let desc = auto_description_for_script(&s).unwrap();
+        assert!(desc.starts_with("Watches: "));
+        assert!(desc.ends_with("..."));
+    }
+
+    #[test]
+    fn test_auto_description_background() {
+        let mut s = make_test_script("Bg Task");
+        s.typed_metadata = Some(TypedMetadata {
+            background: true,
+            ..Default::default()
+        });
+        assert_eq!(
+            auto_description_for_script(&s),
+            Some("Background process".to_string())
+        );
+    }
+
+    #[test]
+    fn test_auto_description_system() {
+        let mut s = make_test_script("Sys Handler");
+        s.typed_metadata = Some(TypedMetadata {
+            system: true,
+            ..Default::default()
+        });
+        assert_eq!(
+            auto_description_for_script(&s),
+            Some("System event handler".to_string())
+        );
+    }
+
+    #[test]
+    fn test_auto_description_filename_fallback() {
+        // Script name differs from filename
+        let s = make_test_script("My Script");
+        // Path is /test/my-script.ts, filename is "my-script.ts", name is "My Script"
+        let desc = auto_description_for_script(&s);
+        assert_eq!(desc, Some("my-script.ts".to_string()));
+    }
+
+    #[test]
+    fn test_auto_description_no_filename_when_same_as_name() {
+        let mut s = make_test_script("exact");
+        s.path = PathBuf::from("/test/exact");
+        s.name = "exact".to_string();
+        // filename == name → no description
+        assert_eq!(auto_description_for_script(&s), None);
+    }
+
+    // =========================================================================
+    // Grouped view hint tests
+    // =========================================================================
+
+    #[test]
+    fn test_hint_shortcut_shows_alias() {
+        let mut s = make_test_script("Git Commit");
+        s.shortcut = Some("opt g".to_string());
+        s.alias = Some("gc".to_string());
+        assert_eq!(grouped_view_hint_for_script(&s), Some("/gc".to_string()));
+    }
+
+    #[test]
+    fn test_hint_shortcut_falls_back_to_tags() {
+        let mut s = make_test_script("Git Commit");
+        s.shortcut = Some("opt g".to_string());
+        s.typed_metadata = Some(TypedMetadata {
+            tags: vec!["git".to_string(), "dev".to_string()],
+            ..Default::default()
+        });
+        // No alias, so falls back to tags
+        assert_eq!(
+            grouped_view_hint_for_script(&s),
+            Some("git · dev".to_string())
+        );
+    }
+
+    #[test]
+    fn test_hint_alias_badge_shows_tags() {
+        let mut s = make_test_script("Git Commit");
+        s.alias = Some("gc".to_string());
+        s.typed_metadata = Some(TypedMetadata {
+            tags: vec!["git".to_string()],
+            ..Default::default()
+        });
+        // Alias is badge, tags shown as hint
+        assert_eq!(grouped_view_hint_for_script(&s), Some("git".to_string()));
+    }
+
+    #[test]
+    fn test_hint_alias_badge_falls_back_to_kit() {
+        let mut s = make_test_script("Capture Window");
+        s.alias = Some("cw".to_string());
+        s.kit_name = Some("cleanshot".to_string());
+        // Alias is badge, no tags, so falls back to kit name
+        assert_eq!(
+            grouped_view_hint_for_script(&s),
+            Some("cleanshot".to_string())
+        );
+    }
+
+    #[test]
+    fn test_hint_no_badge_shows_tags() {
+        let mut s = make_test_script("Notes");
+        s.typed_metadata = Some(TypedMetadata {
+            tags: vec!["productivity".to_string(), "notes".to_string()],
+            ..Default::default()
+        });
+        assert_eq!(
+            grouped_view_hint_for_script(&s),
+            Some("productivity · notes".to_string())
+        );
+    }
+
+    #[test]
+    fn test_hint_no_badge_falls_back_to_kit() {
+        let mut s = make_test_script("Annotate");
+        s.kit_name = Some("cleanshot".to_string());
+        assert_eq!(
+            grouped_view_hint_for_script(&s),
+            Some("cleanshot".to_string())
+        );
+    }
+
+    #[test]
+    fn test_hint_main_kit_not_shown() {
+        let mut s = make_test_script("Notes");
+        s.kit_name = Some("main".to_string());
+        // "main" kit should not produce a hint
+        assert_eq!(grouped_view_hint_for_script(&s), None);
+    }
+
+    #[test]
+    fn test_scriptlet_hint_group_shown() {
+        use crate::scripts::Scriptlet;
+        let sl = Scriptlet {
+            name: "Open GitHub".to_string(),
+            description: None,
+            code: "open https://github.com".to_string(),
+            tool: "open".to_string(),
+            shortcut: None,
+            keyword: None,
+            group: Some("Development".to_string()),
+            file_path: None,
+            command: None,
+            alias: None,
+        };
+        assert_eq!(
+            grouped_view_hint_for_scriptlet(&sl),
+            Some("Development".to_string())
+        );
+    }
+
+    #[test]
+    fn test_scriptlet_hint_main_group_hidden() {
+        use crate::scripts::Scriptlet;
+        let sl = Scriptlet {
+            name: "Hello".to_string(),
+            description: None,
+            code: "echo hello".to_string(),
+            tool: "bash".to_string(),
+            shortcut: None,
+            keyword: None,
+            group: Some("main".to_string()),
+            file_path: None,
+            command: None,
+            alias: None,
+        };
+        assert_eq!(grouped_view_hint_for_scriptlet(&sl), None);
     }
 }
