@@ -1257,7 +1257,7 @@ pub fn detect_system_appearance() -> bool {
 
 /// Invalidate the appearance cache
 ///
-/// Call this when the system appearance changes (e.g., from AppearanceWatcher)
+/// Call this when the system appearance changes (e.g., from observe_window_appearance)
 /// to force immediate re-detection on the next call to `detect_system_appearance()`.
 pub fn invalidate_appearance_cache() {
     if let Some(cache) = APPEARANCE_CACHE.get() {

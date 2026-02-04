@@ -1246,6 +1246,9 @@ struct ScriptListApp {
     /// Subscription for window bounds changes (saves position on drag)
     #[allow(dead_code)]
     bounds_subscription: Option<Subscription>,
+    /// Subscription for window appearance changes (light/dark mode)
+    #[allow(dead_code)]
+    appearance_subscription: Option<Subscription>,
     /// Suppress handling of programmatic InputEvent::Change updates.
     suppress_filter_events: bool,
     /// Sync gpui input text on next render when window access is available.
@@ -2094,18 +2097,7 @@ fn main() {
 
     // Start watchers and track which ones succeeded
     // We only spawn poll loops for watchers that successfully started
-    let (mut appearance_watcher, appearance_rx) = watcher::AppearanceWatcher::new();
-    let appearance_watcher_ok = match appearance_watcher.start() {
-        Ok(()) => {
-            logging::log("APP", "Appearance watcher started");
-            true
-        }
-        Err(e) => {
-            logging::log("APP", &format!("Failed to start appearance watcher: {}", e));
-            false
-        }
-    };
-
+    // Note: Appearance watching is handled by GPUI's observe_window_appearance (set up on the window)
     let (mut config_watcher, config_rx) = watcher::ConfigWatcher::new();
     let config_watcher_ok = match config_watcher.start() {
         Ok(()) => {
@@ -2337,6 +2329,35 @@ fn main() {
                         }
                         // Suppress unused variable warning - we need win to access window bounds
                         let _ = win;
+                    }));
+
+                    // Observe window appearance changes (GPUI fires this when macOS changes light/dark mode)
+                    view.appearance_subscription = Some(ctx.observe_window_appearance(win, |view, _win, ctx| {
+                        logging::log("APP", "System appearance changed, reloading theme");
+
+                        // Invalidate the cached appearance detection so
+                        // detect_system_appearance() gets the fresh value
+                        theme::invalidate_appearance_cache();
+
+                        // Reload the theme cache so get_cached_theme() returns
+                        // fresh colors (used by vibrancy backgrounds, etc.)
+                        let theme = theme::reload_theme_cache();
+                        let is_dark = theme.should_use_dark_vibrancy();
+
+                        // Reconfigure vibrancy materials on NSVisualEffectViews
+                        platform::configure_window_vibrancy_material_for_appearance(is_dark);
+
+                        // Update all secondary windows (Notes, AI, Actions)
+                        platform::update_all_secondary_windows_appearance(is_dark);
+
+                        // Sync gpui-component theme with new system appearance
+                        theme::sync_gpui_component_theme(ctx);
+
+                        // Update the app entity theme
+                        view.update_theme(ctx);
+
+                        // Notify all registered windows to re-render with new colors
+                        windows::notify_all_windows(ctx);
                     }));
                 });
             })
@@ -2593,40 +2614,8 @@ fn main() {
             logging::log("VISIBILITY", "Show window listener exiting (channel closed)");
         }).detach();
 
-        // Appearance change watcher - event-driven with async_channel
-        // Only spawn if watcher started successfully
-        if appearance_watcher_ok {
-            let app_entity_for_appearance = app_entity.clone();
-            cx.spawn(async move |cx: &mut gpui::AsyncApp| {
-                // Event-driven: blocks until appearance change event received
-                while let Ok(_event) = appearance_rx.recv().await {
-                    logging::log("APP", "System appearance changed, updating theme");
-                    let _ = cx.update(|cx| {
-                        // Invalidate the cached appearance detection FIRST
-                        // This ensures load_theme() gets the fresh system appearance
-                        theme::invalidate_appearance_cache();
-
-                        // Reload theme to get new appearance mode
-                        let theme = theme::load_theme();
-                        let is_dark = theme.should_use_dark_vibrancy();
-
-                        // Reconfigure vibrancy based on actual theme colors
-                        platform::configure_window_vibrancy_material_for_appearance(is_dark);
-
-                        // Update all secondary windows (Notes, AI, Actions)
-                        platform::update_all_secondary_windows_appearance(is_dark);
-
-                        // Sync gpui-component theme with new system appearance
-                        theme::sync_gpui_component_theme(cx);
-
-                        app_entity_for_appearance.update(cx, |view, ctx| {
-                            view.update_theme(ctx);
-                        });
-                    });
-                }
-                logging::log("APP", "Appearance watcher channel closed");
-            }).detach();
-        }
+        // Note: Appearance watching is now handled by GPUI's observe_window_appearance
+        // (set up during window creation above), replacing the custom AppearanceWatcher.
 
         // Config reload watcher - watches ~/.scriptkit/kit/config.ts for changes
         // Only spawn if watcher started successfully
