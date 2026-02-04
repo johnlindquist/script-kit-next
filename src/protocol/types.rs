@@ -1543,6 +1543,9 @@ pub struct ChatPromptMessage {
     /// Creation timestamp (ISO 8601)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub created_at: Option<String>,
+    /// Optional image attachment (base64 data URI or file path)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub image: Option<String>,
 }
 
 impl ChatPromptMessage {
@@ -1560,6 +1563,7 @@ impl ChatPromptMessage {
             streaming: false,
             error: None,
             created_at: Some(chrono::Utc::now().to_rfc3339()),
+            image: None,
         }
     }
 
@@ -1577,6 +1581,7 @@ impl ChatPromptMessage {
             streaming: false,
             error: None,
             created_at: Some(chrono::Utc::now().to_rfc3339()),
+            image: None,
         }
     }
 
@@ -1594,6 +1599,7 @@ impl ChatPromptMessage {
             streaming: false,
             error: None,
             created_at: Some(chrono::Utc::now().to_rfc3339()),
+            image: None,
         }
     }
 
@@ -1611,6 +1617,7 @@ impl ChatPromptMessage {
             streaming: true,
             error: None,
             created_at: Some(chrono::Utc::now().to_rfc3339()),
+            image: None,
         }
     }
 
@@ -1628,6 +1635,7 @@ impl ChatPromptMessage {
             streaming: false,
             error: Some(error_str),
             created_at: Some(chrono::Utc::now().to_rfc3339()),
+            image: None,
         }
     }
 
