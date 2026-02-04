@@ -54,6 +54,26 @@ pub struct Scriptlet {
     pub alias: Option<String>,
 }
 
+impl Scriptlet {
+    /// Get a human-readable display name for the tool type
+    pub fn tool_display_name(&self) -> &str {
+        match self.tool.as_str() {
+            "ts" => "TypeScript",
+            "js" => "JavaScript",
+            "bash" | "sh" => "Shell",
+            "zsh" => "Zsh",
+            "python" => "Python",
+            "ruby" => "Ruby",
+            "node" => "Node.js",
+            "bun" => "Bun",
+            "open" => "Open URL",
+            "paste" => "Paste",
+            "applescript" => "AppleScript",
+            other => other,
+        }
+    }
+}
+
 /// Represents match indices for highlighting matched characters
 #[derive(Clone, Debug, Default)]
 pub struct MatchIndices {
