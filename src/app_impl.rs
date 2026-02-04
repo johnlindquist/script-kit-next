@@ -5827,16 +5827,36 @@ export default {
             );
             // Return to main menu
             self.current_view = AppView::ScriptList;
-            self.filter_text.clear();
-            self.selected_index = 0;
             // Reset the flag since we're now in main menu
             self.opened_from_main_menu = false;
+
+            // Clear filter state fully (mirror reset_to_script_list)
+            self.filter_text.clear();
+            self.computed_filter_text.clear();
+            self.filter_coalescer.reset();
+            self.pending_filter_sync = true;
+
             // Sync input and reset placeholder to default
             self.gpui_input_state.update(cx, |state, cx| {
                 state.set_value("", window, cx);
                 state.set_selection(0, 0, window, cx);
                 state.set_placeholder(DEFAULT_PLACEHOLDER.to_string(), window, cx);
             });
+
+            // Invalidate caches and sync list component
+            self.invalidate_grouped_cache();
+            self.sync_list_state();
+            self.selected_index = 0;
+            self.hovered_index = None;
+            self.validate_selection_bounds(cx);
+
+            // Scroll to top so the list starts at the first item
+            self.main_list_state.scroll_to(ListOffset {
+                item_ix: 0,
+                offset_in_item: px(0.),
+            });
+            self.last_scrolled_index = Some(0);
+
             self.update_window_size_deferred(window, cx);
             self.pending_focus = Some(FocusTarget::MainFilter);
             self.focused_input = FocusedInput::MainFilter;

@@ -224,6 +224,10 @@ impl ScriptListApp {
             }
             builtins::BuiltInFeature::DesignGallery => {
                 logging::log("EXEC", "Opening Design Gallery");
+                // Clear the shared input for fresh search (sync on next render)
+                self.filter_text = String::new();
+                self.pending_filter_sync = true;
+                self.pending_placeholder = Some("Search designs...".to_string());
                 self.current_view = AppView::DesignGalleryView {
                     filter: String::new(),
                     selected_index: 0,
@@ -232,6 +236,9 @@ impl ScriptListApp {
                 self.opened_from_main_menu = true;
                 // Use standard height for design gallery view
                 resize_to_view_sync(ViewType::ScriptList, 0);
+                // Focus the main filter input so cursor blinks and typing works
+                self.pending_focus = Some(FocusTarget::MainFilter);
+                self.focused_input = FocusedInput::MainFilter;
                 cx.notify();
             }
             builtins::BuiltInFeature::AiChat => {
@@ -968,6 +975,10 @@ impl ScriptListApp {
                         logging::log("EXEC", "Opening Theme Chooser");
                         // Back up current theme for cancel/restore
                         self.theme_before_chooser = Some(self.theme.clone());
+                        // Clear the shared input for fresh search (sync on next render)
+                        self.filter_text = String::new();
+                        self.pending_filter_sync = true;
+                        self.pending_placeholder = Some("Search themes...".to_string());
                         // Start at the currently active theme
                         let start_index =
                             theme::presets::find_current_preset_index(&self.theme);
@@ -977,6 +988,7 @@ impl ScriptListApp {
                         };
                         self.opened_from_main_menu = true;
                         resize_to_view_sync(ViewType::ScriptList, 0);
+                        // Focus the main filter input so cursor blinks and typing works
                         self.pending_focus = Some(FocusTarget::MainFilter);
                         self.focused_input = FocusedInput::MainFilter;
                         cx.notify();
