@@ -134,8 +134,8 @@ const SECTION_GAP: f32 = 6.0;
 
 /// 85% opacity — used for icon tint, section header text, descriptions
 const ALPHA_STRONG: u32 = 0xD9;
-/// 80% opacity — used for shortcut badge text
-const ALPHA_READABLE: u32 = 0xCC;
+/// 80% opacity — used for shortcut badge text and position indicator
+pub(crate) const ALPHA_READABLE: u32 = 0xCC;
 /// 70% opacity — used for description highlight base text, header icon, tool badge text
 const ALPHA_MUTED: u32 = 0xB3;
 /// 65% opacity — used for source hint text
@@ -156,13 +156,79 @@ const ALPHA_TINT_LIGHT: u32 = 0x0D;
 const ALPHA_TINT_FAINT: u32 = 0x0A;
 
 // =============================================================================
+// Empty State Constants
+// =============================================================================
+
+/// Gap between empty state icon and text elements
+pub(crate) const EMPTY_STATE_GAP: f32 = 12.0;
+/// Empty state icon size (Code / MagnifyingGlass)
+pub(crate) const EMPTY_STATE_ICON_SIZE: f32 = 32.0;
+/// Empty state primary message font size
+pub(crate) const EMPTY_STATE_MESSAGE_FONT_SIZE: f32 = 14.0;
+/// Empty state filter tips top margin
+pub(crate) const EMPTY_STATE_TIPS_MARGIN_TOP: f32 = 8.0;
+
+// Empty state opacity tokens — deliberately lower than list content
+// to keep the empty state understated while still legible
+
+/// 22% opacity — empty state icon tint (very muted)
+pub(crate) const ALPHA_EMPTY_ICON: u32 = 0x38;
+/// 38% opacity — empty state primary message text (improved from 31% for readability)
+pub(crate) const ALPHA_EMPTY_MESSAGE: u32 = 0x60;
+/// 27% opacity — empty state secondary hint text (improved from 21% for legibility)
+pub(crate) const ALPHA_EMPTY_HINT: u32 = 0x45;
+/// 17% opacity — empty state filter tips text (barely visible)
+pub(crate) const ALPHA_EMPTY_TIPS: u32 = 0x2B;
+
+// =============================================================================
+// Header Area Constants (Ask AI button, Tab badge, indicators)
+// =============================================================================
+
+/// Gap between "Ask AI" text and "Tab" badge
+pub(crate) const ASK_AI_BUTTON_GAP: f32 = 6.0;
+/// Ask AI button horizontal padding
+pub(crate) const ASK_AI_BUTTON_PADDING_X: f32 = 6.0;
+/// Ask AI button vertical padding
+pub(crate) const ASK_AI_BUTTON_PADDING_Y: f32 = 4.0;
+/// Ask AI button corner radius
+pub(crate) const ASK_AI_BUTTON_RADIUS: f32 = 4.0;
+/// Tab badge horizontal padding
+pub(crate) const TAB_BADGE_PADDING_X: f32 = 6.0;
+/// Tab badge vertical padding
+pub(crate) const TAB_BADGE_PADDING_Y: f32 = 2.0;
+/// Tab badge corner radius
+pub(crate) const TAB_BADGE_RADIUS: f32 = 4.0;
+
+/// 15% opacity — hover accent background on interactive buttons
+pub(crate) const ALPHA_HOVER_ACCENT: u32 = 0x26;
+/// 30% opacity — Tab badge background tint
+pub(crate) const ALPHA_TAB_BADGE_BG: u32 = 0x4D;
+/// 65% opacity — library size count hint (readable but unobtrusive)
+pub(crate) const ALPHA_COUNT_HINT: u32 = 0xA6;
+
+// =============================================================================
+// Divider & Scroll Constants
+// =============================================================================
+
+/// Default horizontal margin for the header/list divider
+pub(crate) const DIVIDER_MARGIN_DEFAULT: f32 = 16.0;
+/// 50% opacity — divider line between header and list (visible separation)
+pub(crate) const ALPHA_DIVIDER: u32 = 0x80;
+/// Estimated visible list container height for scrollbar calculations
+/// Window is 500px, header is ~60px → ~440px for list area
+pub(crate) const ESTIMATED_LIST_CONTAINER_HEIGHT: f32 = 440.0;
+/// Average item height for scroll-wheel delta-to-index conversion
+/// Weighted: most items are 40px (LIST_ITEM_HEIGHT), headers are 32px (SECTION_HEADER_HEIGHT)
+pub(crate) const AVERAGE_ITEM_HEIGHT_FOR_SCROLL: f32 = 44.0;
+
+// =============================================================================
 // Font Family Tokens
 // =============================================================================
 
 /// System UI font for all list item text
-const FONT_SYSTEM_UI: &str = ".AppleSystemUIFont";
+pub(crate) const FONT_SYSTEM_UI: &str = ".AppleSystemUIFont";
 /// Monospace font for keyboard shortcuts and code badges
-const FONT_MONO: &str = "SF Mono";
+pub(crate) const FONT_MONO: &str = "SF Mono";
 
 /// Enum for grouped list items - supports both regular items and section headers
 ///

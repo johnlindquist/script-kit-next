@@ -423,7 +423,7 @@ pub fn render_apple_hig_log_panel(logs: &[String]) -> impl IntoElement {
             }])
             .flex()
             .flex_col()
-            .font_family("SF Mono")
+            .font_family(crate::list_item::FONT_MONO)
             .child(
                 div()
                     .text_xs()
