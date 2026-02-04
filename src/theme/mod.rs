@@ -32,7 +32,7 @@ pub mod validation;
 mod validation_tests;
 
 // Re-export types used externally
-pub use types::{ColorScheme, Theme};
+pub use types::{ColorScheme, FontConfig, Theme, VibrancyMaterial};
 
 // Re-export helper types for lightweight color extraction (allow unused - designed for incremental adoption)
 #[allow(unused_imports)]
