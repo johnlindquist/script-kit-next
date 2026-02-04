@@ -2551,6 +2551,51 @@ impl ScriptListApp {
                     cx.notify();
                     return;
                 }
+                // Cmd+M: cycle vibrancy material
+                if has_cmd && key_str == "m" {
+                    let current_material = this
+                        .theme
+                        .vibrancy
+                        .as_ref()
+                        .map(|v| v.material)
+                        .unwrap_or_default();
+                    let idx = Self::find_vibrancy_material_index(current_material);
+                    let new_idx = (idx + 1) % Self::VIBRANCY_MATERIALS.len();
+                    let (new_material, _) = Self::VIBRANCY_MATERIALS[new_idx];
+                    let mut modified = (*this.theme).clone();
+                    if let Some(ref mut vibrancy) = modified.vibrancy {
+                        vibrancy.material = new_material;
+                    }
+                    this.theme = std::sync::Arc::new(modified);
+                    theme::sync_gpui_component_theme(cx);
+                    cx.notify();
+                    return;
+                }
+                // Cmd+R: reset customizations to selected preset defaults
+                if has_cmd && key_str == "r" {
+                    let current_filter =
+                        if let AppView::ThemeChooserView { ref filter, .. } = this.current_view {
+                            filter.clone()
+                        } else {
+                            return;
+                        };
+                    let presets = theme::presets::all_presets();
+                    let filtered = Self::theme_chooser_filtered_indices(&current_filter);
+                    if let AppView::ThemeChooserView {
+                        ref selected_index, ..
+                    } = this.current_view
+                    {
+                        if let Some(&pidx) = filtered.get(*selected_index) {
+                            if pidx < presets.len() {
+                                this.theme =
+                                    std::sync::Arc::new(presets[pidx].create_theme());
+                                theme::sync_gpui_component_theme(cx);
+                                cx.notify();
+                            }
+                        }
+                    }
+                    return;
+                }
                 // Enter: apply and close
                 if key_str == "enter" {
                     this.theme_before_chooser = None;
@@ -3048,6 +3093,162 @@ impl ScriptListApp {
                     .child(if vibrancy_enabled { "On" } else { "Off" }),
             );
 
+        // Build vibrancy material buttons (clickable, only shown when vibrancy enabled)
+        let current_material = self
+            .theme
+            .vibrancy
+            .as_ref()
+            .map(|v| v.material)
+            .unwrap_or_default();
+        let material_buttons: Vec<gpui::AnyElement> = Self::VIBRANCY_MATERIALS
+            .iter()
+            .enumerate()
+            .map(|(i, &(material, label))| {
+                let is_current = material == current_material;
+                let click_entity = entity_handle_for_customize.clone();
+                div()
+                    .id(ElementId::NamedInteger("material-btn".into(), i as u64))
+                    .px(px(6.0))
+                    .py(px(2.0))
+                    .rounded(px(4.0))
+                    .cursor_pointer()
+                    .text_xs()
+                    .when(is_current, |d| {
+                        d.bg(rgb(accent_color))
+                            .text_color(rgb(text_on_accent))
+                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                    })
+                    .when(!is_current, |d| {
+                        d.border_1()
+                            .border_color(border_rgba)
+                            .text_color(rgb(text_secondary))
+                            .hover(move |s| s.bg(rgba((selection_bg << 8) | hover_alpha)))
+                    })
+                    .on_click(
+                        move |_event: &gpui::ClickEvent,
+                              _window: &mut Window,
+                              cx: &mut gpui::App| {
+                            if let Some(app) = click_entity.upgrade() {
+                                app.update(cx, |this, cx| {
+                                    let mut modified = (*this.theme).clone();
+                                    if let Some(ref mut vibrancy) = modified.vibrancy {
+                                        vibrancy.material = material;
+                                    }
+                                    this.theme = std::sync::Arc::new(modified);
+                                    theme::sync_gpui_component_theme(cx);
+                                    cx.notify();
+                                });
+                            }
+                        },
+                    )
+                    .child(label.to_string())
+                    .into_any_element()
+            })
+            .collect();
+
+        // Build font size preset buttons (clickable)
+        let current_ui_font_size = self.theme.get_fonts().ui_size;
+        let font_size_buttons: Vec<gpui::AnyElement> = Self::FONT_SIZE_PRESETS
+            .iter()
+            .enumerate()
+            .map(|(i, &(size, label))| {
+                let is_current = (size - current_ui_font_size).abs() < 0.5;
+                let click_entity = entity_handle_for_customize.clone();
+                div()
+                    .id(ElementId::NamedInteger("fontsize-btn".into(), i as u64))
+                    .px(px(8.0))
+                    .py(px(2.0))
+                    .rounded(px(4.0))
+                    .cursor_pointer()
+                    .text_xs()
+                    .when(is_current, |d| {
+                        d.bg(rgb(accent_color))
+                            .text_color(rgb(text_on_accent))
+                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                    })
+                    .when(!is_current, |d| {
+                        d.border_1()
+                            .border_color(border_rgba)
+                            .text_color(rgb(text_secondary))
+                            .hover(move |s| s.bg(rgba((selection_bg << 8) | hover_alpha)))
+                    })
+                    .on_click(
+                        move |_event: &gpui::ClickEvent,
+                              _window: &mut Window,
+                              cx: &mut gpui::App| {
+                            if let Some(app) = click_entity.upgrade() {
+                                app.update(cx, |this, cx| {
+                                    let mut modified = (*this.theme).clone();
+                                    if let Some(ref mut fonts) = modified.fonts {
+                                        fonts.ui_size = size;
+                                    } else {
+                                        let mut fc = theme::FontConfig::default();
+                                        fc.ui_size = size;
+                                        modified.fonts = Some(fc);
+                                    }
+                                    this.theme = std::sync::Arc::new(modified);
+                                    theme::sync_gpui_component_theme(cx);
+                                    cx.notify();
+                                });
+                            }
+                        },
+                    )
+                    .child(label.to_string())
+                    .into_any_element()
+            })
+            .collect();
+
+        // Build reset button (clickable)
+        let reset_entity = entity_handle_for_customize.clone();
+        let reset_button = div()
+            .id("reset-to-preset")
+            .px(px(10.0))
+            .py(px(4.0))
+            .rounded(px(4.0))
+            .cursor_pointer()
+            .text_xs()
+            .border_1()
+            .border_color(border_rgba)
+            .text_color(rgb(text_secondary))
+            .hover(move |s| s.bg(rgba((selection_bg << 8) | hover_alpha)))
+            .on_click(
+                move |_event: &gpui::ClickEvent,
+                      _window: &mut Window,
+                      cx: &mut gpui::App| {
+                    if let Some(app) = reset_entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            let current_filter =
+                                if let AppView::ThemeChooserView { ref filter, .. } =
+                                    this.current_view
+                                {
+                                    filter.clone()
+                                } else {
+                                    return;
+                                };
+                            let presets = theme::presets::all_presets();
+                            let filtered =
+                                Self::theme_chooser_filtered_indices(&current_filter);
+                            if let AppView::ThemeChooserView {
+                                ref selected_index, ..
+                            } = this.current_view
+                            {
+                                if let Some(&pidx) = filtered.get(*selected_index) {
+                                    if pidx < presets.len() {
+                                        this.theme =
+                                            std::sync::Arc::new(presets[pidx].create_theme());
+                                        theme::sync_gpui_component_theme(cx);
+                                        cx.notify();
+                                    }
+                                }
+                            }
+                        });
+                    }
+                },
+            )
+            .child("Reset to Defaults");
+
+        let accent_name = Self::accent_color_name(accent_color);
+
         let preview_panel = div()
             .w_1_2()
             .h_full()
@@ -3067,7 +3268,7 @@ impl ScriptListApp {
                     .font_weight(gpui::FontWeight::SEMIBOLD)
                     .child("CUSTOMIZE"),
             )
-            // Accent color row
+            // Accent color row (with name)
             .child(
                 div()
                     .flex()
@@ -3075,9 +3276,23 @@ impl ScriptListApp {
                     .gap(px(4.0))
                     .child(
                         div()
-                            .text_xs()
-                            .text_color(rgb(text_muted))
-                            .child("Accent Color"),
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .gap(px(6.0))
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(rgb(text_muted))
+                                    .child("Accent Color"),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(rgb(accent_color))
+                                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                                    .child(accent_name.to_string()),
+                            ),
                     )
                     .child(
                         div()
@@ -3088,7 +3303,7 @@ impl ScriptListApp {
                             .children(accent_swatches),
                     ),
             )
-            // Opacity row
+            // Opacity row (10 steps)
             .child(
                 div()
                     .flex()
@@ -3107,11 +3322,12 @@ impl ScriptListApp {
                         div()
                             .flex()
                             .flex_row()
-                            .gap(px(4.0))
+                            .gap(px(2.0))
+                            .flex_wrap()
                             .children(opacity_buttons),
                     ),
             )
-            // Vibrancy toggle row
+            // Vibrancy toggle + material row
             .child(
                 div()
                     .flex()
@@ -3123,8 +3339,53 @@ impl ScriptListApp {
                             .text_color(rgb(text_muted))
                             .child("Vibrancy Blur"),
                     )
-                    .child(vibrancy_toggle),
+                    .child(vibrancy_toggle)
+                    .when(vibrancy_enabled, |d| {
+                        d.child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .gap(px(4.0))
+                                .mt(px(4.0))
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(rgb(text_muted))
+                                        .child("Material"),
+                                )
+                                .child(
+                                    div()
+                                        .flex()
+                                        .flex_row()
+                                        .gap(px(3.0))
+                                        .flex_wrap()
+                                        .children(material_buttons),
+                                ),
+                        )
+                    }),
             )
+            // Font size row
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(4.0))
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(text_muted))
+                            .child(format!("UI Font Size  {:.0}px", current_ui_font_size)),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .gap(px(4.0))
+                            .children(font_size_buttons),
+                    ),
+            )
+            // Reset button
+            .child(reset_button)
             // ── Preview section ────────────────────────────────────
             .child(
                 div()
@@ -3342,7 +3603,9 @@ impl ScriptListApp {
                     .gap(px(12.0))
                     .child(shortcut("⌘[]", "Accent"))
                     .child(shortcut("⌘-/=", "Opacity"))
-                    .child(shortcut("⌘B", "Vibrancy")),
+                    .child(shortcut("⌘B", "Vibrancy"))
+                    .child(shortcut("⌘M", "Material"))
+                    .child(shortcut("⌘R", "Reset")),
             );
 
         // ── Empty state when filter has no matches ─────────────────
