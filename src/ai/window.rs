@@ -3693,7 +3693,7 @@ impl AiApp {
                             .flex_col()
                             .px_2()
                             .pb_2()
-                            .gap_3()
+                            .gap_0()
                             .children(date_groups.into_iter().map(|(group, chats)| {
                                 self.render_date_group(group, chats, selected_id, cx)
                             }))
@@ -3712,21 +3712,23 @@ impl AiApp {
         selected_id: Option<ChatId>,
         cx: &mut Context<Self>,
     ) -> gpui::Div {
+        let is_first_group = group == DateGroup::Today;
+        let group_label: SharedString = group.label().to_uppercase().into();
         div()
             .flex()
             .flex_col()
             .w_full()
-            .gap_1()
+            .gap(px(2.))
             // Group header
             .child(
                 div()
                     .text_xs()
                     .font_weight(gpui::FontWeight::SEMIBOLD)
-                    .text_color(cx.theme().muted_foreground.opacity(0.6))
+                    .text_color(cx.theme().muted_foreground.opacity(0.5))
                     .px_1()
-                    .pt(px(6.))
+                    .pt(px(if is_first_group { 2. } else { 10. }))
                     .pb(px(4.))
-                    .child(group.label()),
+                    .child(group_label),
             )
             // Chat items
             .children(
@@ -3987,7 +3989,7 @@ impl AiApp {
                                 d.child(
                                     div()
                                         .text_xs()
-                                        .text_color(cx.theme().muted_foreground.opacity(0.4))
+                                        .text_color(cx.theme().muted_foreground.opacity(0.45))
                                         .overflow_hidden()
                                         .whitespace_nowrap()
                                         .text_ellipsis()
@@ -4003,7 +4005,7 @@ impl AiApp {
                                 d.child(
                                     div()
                                         .text_xs()
-                                        .text_color(cx.theme().muted_foreground.opacity(0.3))
+                                        .text_color(cx.theme().muted_foreground.opacity(0.35))
                                         .child(count_label),
                                 )
                             }),
@@ -4193,8 +4195,8 @@ impl AiApp {
             return self.render_setup_card(cx).into_any_element();
         }
 
-        let suggestion_bg = cx.theme().muted.opacity(0.25);
-        let suggestion_hover_bg = cx.theme().muted.opacity(0.45);
+        let suggestion_bg = cx.theme().muted.opacity(0.20);
+        let suggestion_hover_bg = cx.theme().muted.opacity(0.35);
 
         let suggestions: Vec<(&str, &str, LocalIconName)> = vec![
             (
@@ -4225,14 +4227,14 @@ impl AiApp {
             .items_center()
             .justify_center()
             .flex_1()
-            .gap_6()
+            .gap(px(20.))
             .px_4()
             .child(
                 div()
                     .flex()
                     .flex_col()
                     .items_center()
-                    .gap_1()
+                    .gap(px(6.))
                     .child(
                         div()
                             .text_xl()
@@ -4256,7 +4258,7 @@ impl AiApp {
                             .into();
                         div()
                             .text_sm()
-                            .text_color(cx.theme().muted_foreground)
+                            .text_color(cx.theme().muted_foreground.opacity(0.7))
                             .child(subtitle)
                     }),
             )
@@ -4265,7 +4267,7 @@ impl AiApp {
                 div()
                     .flex()
                     .flex_col()
-                    .gap_2()
+                    .gap(px(6.))
                     .w_full()
                     .max_w(px(400.))
                     .children(suggestions.into_iter().enumerate().map(
@@ -4278,9 +4280,9 @@ impl AiApp {
                                 .flex()
                                 .items_center()
                                 .gap_3()
-                                .px_3()
+                                .px(px(14.))
                                 .py(px(10.))
-                                .rounded_lg()
+                                .rounded(px(8.))
                                 .bg(suggestion_bg)
                                 .cursor_pointer()
                                 .hover(move |s| s.bg(suggestion_hover_bg))
@@ -4294,13 +4296,14 @@ impl AiApp {
                                     svg()
                                         .external_path(icon.external_path())
                                         .size(px(16.))
-                                        .text_color(cx.theme().accent.opacity(0.7))
+                                        .text_color(cx.theme().accent.opacity(0.6))
                                         .flex_shrink_0(),
                                 )
                                 .child(
                                     div()
                                         .flex()
                                         .flex_col()
+                                        .gap(px(1.))
                                         .child(
                                             div()
                                                 .text_sm()
@@ -4311,7 +4314,9 @@ impl AiApp {
                                         .child(
                                             div()
                                                 .text_xs()
-                                                .text_color(cx.theme().muted_foreground)
+                                                .text_color(
+                                                    cx.theme().muted_foreground.opacity(0.6),
+                                                )
                                                 .child(desc_s),
                                         ),
                                 )
@@ -4324,8 +4329,8 @@ impl AiApp {
                     .flex()
                     .items_center()
                     .justify_center()
-                    .gap_4()
-                    .mt_2()
+                    .gap(px(12.))
+                    .mt(px(4.))
                     .children(
                         [
                             ("\u{2318} Enter", "Send"),
@@ -4344,17 +4349,17 @@ impl AiApp {
                                 .child(
                                     div()
                                         .px(px(5.))
-                                        .py(px(1.))
-                                        .rounded(px(3.))
-                                        .bg(cx.theme().muted.opacity(0.4))
+                                        .py(px(2.))
+                                        .rounded(px(4.))
+                                        .bg(cx.theme().muted.opacity(0.3))
                                         .text_xs()
-                                        .text_color(cx.theme().muted_foreground.opacity(0.7))
+                                        .text_color(cx.theme().muted_foreground.opacity(0.55))
                                         .child(key_s),
                                 )
                                 .child(
                                     div()
                                         .text_xs()
-                                        .text_color(cx.theme().muted_foreground.opacity(0.5))
+                                        .text_color(cx.theme().muted_foreground.opacity(0.4))
                                         .child(label_s),
                                 )
                         }),
@@ -4796,8 +4801,8 @@ impl AiApp {
             .flex()
             .flex_col()
             .w_full()
-            .when(is_continuation, |d| d.mb(px(6.)))
-            .when(!is_continuation, |d| d.mb(px(16.)))
+            .when(is_continuation, |d| d.mb(px(4.)))
+            .when(!is_continuation, |d| d.mb(px(14.)))
             // Role label row - hidden for continuation messages from same sender
             .when(!is_continuation, |el| {
                 el.child(
@@ -4805,12 +4810,12 @@ impl AiApp {
                         .flex()
                         .items_center()
                         .justify_between()
-                        .mb(px(6.))
+                        .mb(px(5.))
                         .child(
                             div()
                                 .flex()
                                 .items_center()
-                                .gap(px(6.))
+                                .gap(px(5.))
                                 .child(
                                     svg()
                                         .external_path(role_icon.external_path())
@@ -4939,18 +4944,18 @@ impl AiApp {
                 // Message content - differentiated backgrounds
                 div()
                     .w_full()
-                    .px(px(14.))
-                    .py(px(12.))
+                    .px(px(12.))
+                    .py(px(10.))
                     .rounded(px(8.))
                     .when(is_user, |d| {
                         d.bg(user_bg)
                             .border_l_2()
-                            .border_color(cx.theme().accent.opacity(0.4))
+                            .border_color(cx.theme().accent.opacity(0.35))
                     })
                     .when(is_system, |d| {
-                        d.bg(cx.theme().muted.opacity(0.12))
+                        d.bg(cx.theme().muted.opacity(0.10))
                             .border_l_2()
-                            .border_color(cx.theme().muted_foreground.opacity(0.2))
+                            .border_color(cx.theme().muted_foreground.opacity(0.15))
                             .italic()
                     })
                     .when(!is_user && !is_system, |d| d.bg(assistant_bg))
@@ -5164,7 +5169,7 @@ impl AiApp {
                     .flex()
                     .items_center()
                     .justify_between()
-                    .mb_1()
+                    .mb(px(6.))
                     .child(
                         div()
                             .flex()
@@ -5174,16 +5179,21 @@ impl AiApp {
                                 svg()
                                     .external_path(LocalIconName::MessageCircle.external_path())
                                     .size(px(14.))
-                                    .text_color(cx.theme().muted_foreground),
+                                    .text_color(cx.theme().muted_foreground.opacity(0.7)),
                             )
                             .child(
                                 div()
                                     .text_xs()
-                                    .font_weight(gpui::FontWeight::SEMIBOLD)
-                                    .text_color(cx.theme().muted_foreground)
+                                    .font_weight(gpui::FontWeight::BOLD)
+                                    .text_color(cx.theme().muted_foreground.opacity(0.8))
                                     .child("Assistant"),
                             )
-                            .child(div().size(px(6.)).rounded_full().bg(cx.theme().accent))
+                            .child(
+                                div()
+                                    .size(px(3.))
+                                    .rounded_full()
+                                    .bg(cx.theme().muted_foreground.opacity(0.25)),
+                            )
                             .when_some(model_label, |d, label| {
                                 d.child(
                                     div()
@@ -5253,8 +5263,8 @@ impl AiApp {
             .child(
                 div()
                     .w_full()
-                    .px(px(14.))
-                    .py(px(12.))
+                    .px(px(12.))
+                    .py(px(10.))
                     .rounded(px(8.))
                     .bg(streaming_bg)
                     .child(content_element),
@@ -5673,11 +5683,12 @@ impl AiApp {
                                 .items_center()
                                 .gap(px(4.))
                                 .px(px(12.))
-                                .py(px(6.))
+                                .py(px(5.))
                                 .rounded_full()
-                                .bg(cx.theme().accent.opacity(0.9))
+                                .bg(cx.theme().accent.opacity(0.85))
                                 .text_color(cx.theme().accent_foreground)
                                 .cursor_pointer()
+                                .shadow_md()
                                 .hover(|s| s.bg(cx.theme().accent))
                                 .on_click(cx.listener(|this, _, _window, cx| {
                                     this.force_scroll_to_bottom();
@@ -5751,10 +5762,10 @@ impl AiApp {
             .w_full()
             // NO .bg() - let vibrancy show through from root
             .border_t_1()
-            .border_color(cx.theme().border.opacity(0.5))
-            .px(px(10.))
+            .border_color(cx.theme().border.opacity(0.4))
+            .px(px(12.))
             .pt(px(10.))
-            .pb(px(6.))
+            .pb(px(8.))
             .gap(px(6.))
             // Handle image file drops
             .on_drop(cx.listener(|this, paths: &ExternalPaths, _window, cx| {
