@@ -365,16 +365,22 @@ pub fn render_design_item(
             use crate::list_item::{IconKind, ListItem};
 
             // Compute fuzzy match indices for highlighting when actively filtering
-            let highlight_indices = if !filter_text.is_empty() {
+            let (highlight_indices, description_highlight_indices) = if !filter_text.is_empty() {
                 let indices =
                     crate::scripts::search::compute_match_indices_for_result(result, filter_text);
-                if indices.name_indices.is_empty() {
+                let name_hi = if indices.name_indices.is_empty() {
                     None
                 } else {
                     Some(indices.name_indices)
-                }
+                };
+                let desc_hi = if indices.description_indices.is_empty() {
+                    None
+                } else {
+                    Some(indices.description_indices)
+                };
+                (name_hi, desc_hi)
             } else {
-                None
+                (None, None)
             };
 
             // Extract name, description, shortcut, and icon based on result type
@@ -518,6 +524,7 @@ pub fn render_design_item(
                 .with_accent_bar(true)
                 .with_hover_effect(enable_hover_effect)
                 .highlight_indices_opt(highlight_indices)
+                .description_highlight_indices_opt(description_highlight_indices)
                 .into_any_element()
         }
     }

@@ -2315,6 +2315,7 @@ impl ScriptListApp {
         let selection_bg = self.theme.colors.accent.selected_subtle;
         let opacity = self.theme.get_opacity();
         let selected_alpha = (opacity.selected * 255.0) as u32;
+        let hover_alpha = (opacity.hover * 255.0).max(18.0) as u32;
         let presets = theme::presets::all_presets();
         let preview_colors = theme::presets::all_preset_preview_colors();
         let preset_count = presets.len();
@@ -2326,6 +2327,13 @@ impl ScriptListApp {
             .as_ref()
             .map(|t| theme::presets::find_current_preset_index(t))
             .unwrap_or(0);
+
+        // Theme item height - taller than standard for richer preview
+        let theme_item_height: f32 = 48.0;
+
+        // Entity handle for click handlers inside uniform_list
+        let entity_handle = cx.entity().downgrade();
+
         let handle_key = cx.listener(
             move |this: &mut Self,
                   event: &gpui::KeyDownEvent,
@@ -2376,6 +2384,12 @@ impl ScriptListApp {
                         "down" | "arrowdown" => {
                             *selected_index = (*selected_index + 1) % count;
                         }
+                        "home" => {
+                            *selected_index = 0;
+                        }
+                        "end" => {
+                            *selected_index = count - 1;
+                        }
                         _ => return,
                     }
                     let new_theme = std::sync::Arc::new(presets[*selected_index].create_theme());
@@ -2391,6 +2405,7 @@ impl ScriptListApp {
         let selected = selected_index;
         let orig_idx = original_index;
         let first_light_idx = first_light;
+        let hover_bg = rgba((selection_bg << 8) | hover_alpha);
         let list = uniform_list(
             "theme-chooser",
             preset_count,
@@ -2403,55 +2418,126 @@ impl ScriptListApp {
                         let desc = &preset_descs[ix];
                         let is_dark = preset_is_dark[ix];
                         let colors = &preview_colors[ix];
-                        let needs_separator = ix == first_light_idx && first_light_idx > 0;
+                        let is_first_light = ix == first_light_idx && first_light_idx > 0;
+
+                        // Color swatch - larger rounded rectangles for better visibility
                         let swatch = |color: u32| {
-                            div().w(px(8.0)).h(px(20.0)).rounded(px(2.0)).bg(rgb(color))
+                            div()
+                                .w(px(14.0))
+                                .h(px(24.0))
+                                .rounded(px(3.0))
+                                .bg(rgb(color))
                         };
                         let palette = div()
                             .flex()
                             .flex_row()
-                            .gap(px(1.0))
-                            .mr(px(8.0))
+                            .gap(px(2.0))
+                            .mr(px(10.0))
                             .child(swatch(colors.bg))
                             .child(swatch(colors.accent))
                             .child(swatch(colors.text))
                             .child(swatch(colors.secondary))
                             .child(swatch(colors.border));
+
+                        // Checkmark indicator for original (saved) theme
                         let indicator = if is_original {
                             div()
                                 .text_sm()
                                 .font_weight(gpui::FontWeight::BOLD)
                                 .text_color(rgb(accent_color))
                                 .w(px(16.0))
-                                .mr(px(4.0))
                                 .child("✓")
                         } else {
-                            div().w(px(16.0)).mr(px(4.0))
+                            div().w(px(16.0))
                         };
+
+                        // Dark/light badge
                         let badge_text = if is_dark { "dark" } else { "light" };
+                        let badge_border = rgba((ui_border << 8) | 0x40);
                         let badge = div()
                             .text_xs()
                             .text_color(rgb(text_dimmed))
                             .ml_auto()
                             .px(px(6.0))
-                            .py(px(1.0))
-                            .rounded(px(3.0))
+                            .py(px(2.0))
+                            .rounded(px(4.0))
+                            .border_1()
+                            .border_color(badge_border)
                             .child(badge_text.to_string());
+
+                        // Selection and separator backgrounds
                         let sel_bg = rgba((selection_bg << 8) | selected_alpha);
-                        let border_rgba = rgba((ui_border << 8) | 0x4D);
-                        div()
+                        let border_rgba = rgba((ui_border << 8) | 0x30);
+
+                        // Section label for light themes group
+                        let section_label = if is_first_light {
+                            Some(
+                                div()
+                                    .w_full()
+                                    .pt(px(8.0))
+                                    .pb(px(4.0))
+                                    .px(px(16.0))
+                                    .border_color(border_rgba)
+                                    .border_t_1()
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .text_color(rgb(text_dimmed))
+                                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                                            .child("LIGHT"),
+                                    ),
+                            )
+                        } else {
+                            None
+                        };
+
+                        // Theme name - accent color when selected, bold when original
+                        let name_color = if is_selected {
+                            accent_color
+                        } else {
+                            text_primary
+                        };
+
+                        // Click handler: select + preview this theme
+                        let click_entity = entity_handle.clone();
+                        let click_handler = move |_event: &gpui::ClickEvent,
+                                                   _window: &mut Window,
+                                                   cx: &mut gpui::App| {
+                            if let Some(app) = click_entity.upgrade() {
+                                app.update(cx, |this, cx| {
+                                    if let AppView::ThemeChooserView {
+                                        selected_index: ref mut si,
+                                    } = this.current_view
+                                    {
+                                        *si = ix;
+                                    }
+                                    let presets = theme::presets::all_presets();
+                                    if ix < presets.len() {
+                                        this.theme =
+                                            std::sync::Arc::new(presets[ix].create_theme());
+                                        theme::sync_gpui_component_theme(cx);
+                                        cx.notify();
+                                    }
+                                });
+                            }
+                        };
+
+                        // Build the item row
+                        let row = div()
                             .id(ix)
                             .w_full()
-                            .h(px(LIST_ITEM_HEIGHT))
+                            .h(px(theme_item_height))
                             .px(px(12.0))
                             .flex()
                             .flex_row()
                             .items_center()
-                            .gap(px(6.0))
-                            .when(is_selected, |d| d.bg(sel_bg))
-                            .when(needs_separator, |d| {
-                                d.border_color(border_rgba).border_t_1().mt(px(6.0))
+                            .gap(px(8.0))
+                            .cursor_pointer()
+                            .when(is_selected, |d| {
+                                d.bg(sel_bg).border_l_2().border_color(rgb(accent_color))
                             })
+                            .when(!is_selected, |d| d.hover(move |s| s.bg(hover_bg)))
+                            .on_click(click_handler)
                             .child(indicator)
                             .child(palette)
                             .child(
@@ -2459,13 +2545,14 @@ impl ScriptListApp {
                                     .flex()
                                     .flex_col()
                                     .overflow_hidden()
+                                    .gap(px(1.0))
                                     .child(
                                         div()
                                             .text_sm()
-                                            .when(is_original, |d| {
-                                                d.font_weight(gpui::FontWeight::BOLD)
+                                            .when(is_original || is_selected, |d| {
+                                                d.font_weight(gpui::FontWeight::SEMIBOLD)
                                             })
-                                            .text_color(rgb(text_primary))
+                                            .text_color(rgb(name_color))
                                             .child(name.clone()),
                                     )
                                     .child(
@@ -2475,8 +2562,20 @@ impl ScriptListApp {
                                             .child(desc.clone()),
                                     ),
                             )
-                            .child(badge)
-                            .into_any_element()
+                            .child(badge);
+
+                        // Wrap with optional section label
+                        if let Some(label) = section_label {
+                            div()
+                                .w_full()
+                                .flex()
+                                .flex_col()
+                                .child(label)
+                                .child(row)
+                                .into_any_element()
+                        } else {
+                            row.into_any_element()
+                        }
                     })
                     .collect()
             },
@@ -2484,18 +2583,134 @@ impl ScriptListApp {
         .h_full()
         .track_scroll(&self.theme_chooser_scroll_handle)
         .into_any_element();
+
+        // Header with theme counts and section label
+        let header = div()
+            .w_full()
+            .px(px(design_spacing.padding_lg))
+            .pt(px(design_spacing.padding_md))
+            .pb(px(4.0))
+            .flex()
+            .flex_col()
+            .gap(px(4.0))
+            .child(
+                div()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .gap(px(8.0))
+                    .child(
+                        div()
+                            .text_sm()
+                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                            .text_color(rgb(text_primary))
+                            .child("Themes"),
+                    )
+                    .child(
+                        div().text_xs().text_color(rgb(text_dimmed)).child(format!(
+                            "{} dark · {} light",
+                            dark_count, light_count
+                        )),
+                    ),
+            )
+            .child(
+                div()
+                    .w_full()
+                    .pt(px(2.0))
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(text_dimmed))
+                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                            .child("DARK"),
+                    ),
+            );
+
+        // Footer with keyboard shortcuts
+        let footer_border = rgba((ui_border << 8) | 0x30);
         let footer = div()
             .w_full()
             .px(px(design_spacing.padding_lg))
             .py(px(design_spacing.padding_sm))
+            .border_t_1()
+            .border_color(footer_border)
             .flex()
+            .flex_row()
             .justify_center()
+            .gap(px(16.0))
             .child(
                 div()
-                    .text_xs()
-                    .text_color(rgb(text_dimmed))
-                    .child("↑↓ Preview · Enter Apply · Esc Cancel".to_string()),
+                    .flex()
+                    .flex_row()
+                    .gap(px(4.0))
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(text_secondary))
+                            .child("↑↓"),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(text_dimmed))
+                            .child("Preview"),
+                    ),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_row()
+                    .gap(px(4.0))
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(text_secondary))
+                            .child("Enter"),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(text_dimmed))
+                            .child("Apply"),
+                    ),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_row()
+                    .gap(px(4.0))
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(text_secondary))
+                            .child("Esc"),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(text_dimmed))
+                            .child("Cancel"),
+                    ),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_row()
+                    .gap(px(4.0))
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(text_secondary))
+                            .child("Click"),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(text_dimmed))
+                            .child("Select"),
+                    ),
             );
+
         div()
             .flex()
             .flex_col()
@@ -2507,19 +2722,7 @@ impl ScriptListApp {
             .key_context("theme_chooser")
             .track_focus(&self.focus_handle)
             .on_key_down(handle_key)
-            .child(
-                div()
-                    .w_full()
-                    .px(px(design_spacing.padding_lg))
-                    .py(px(design_spacing.padding_md))
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .child(div().text_sm().text_color(rgb(text_dimmed)).child(format!(
-                        "Themes · {} dark · {} light",
-                        dark_count, light_count
-                    ))),
-            )
+            .child(header)
             .child(div().flex_1().overflow_hidden().child(list))
             .child(footer)
             .into_any_element()
