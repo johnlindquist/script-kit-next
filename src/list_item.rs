@@ -888,7 +888,7 @@ impl RenderOnce for ListItem {
         let separator_color = if self.selected {
             rgba(0x00000000) // No separator on selected item
         } else {
-            rgba((colors.text_dimmed << 8) | 0x0D) // ~5% opacity - barely visible
+            rgba((colors.text_muted << 8) | 0x14) // ~8% opacity - subtle but scannable
         };
 
         let mut inner_content = div()
@@ -1155,6 +1155,8 @@ pub fn render_section_header(
     };
 
     // Build the inner content row: icon (optional) → section name → count (optional)
+    // Use text_muted (0x808080) instead of text_dimmed (0xaaaaaa in light mode)
+    // for better contrast against vibrancy backgrounds
     let mut content = div()
         .flex()
         .flex_row()
@@ -1162,7 +1164,7 @@ pub fn render_section_header(
         .gap(px(5.))
         .text_size(px(11.0)) // slightly bigger than text_xs for readability
         .font_weight(FontWeight::SEMIBOLD)
-        .text_color(rgb(colors.text_dimmed));
+        .text_color(rgb(colors.text_muted));
 
     // Add icon before section name if provided
     if let Some(name) = icon {
@@ -1171,7 +1173,7 @@ pub fn render_section_header(
                 svg()
                     .external_path(icon_name.external_path())
                     .size(px(10.))
-                    .text_color(rgba((colors.text_dimmed << 8) | 0xB0)), // slightly muted
+                    .text_color(rgba((colors.text_muted << 8) | 0xC0)), // 75% opacity of muted
             );
         }
     }
@@ -1184,10 +1186,13 @@ pub fn render_section_header(
             div()
                 .text_xs()
                 .font_weight(FontWeight::NORMAL)
-                .text_color(rgba((colors.text_dimmed << 8) | 0xB0)) // 69% opacity of dimmed
+                .text_color(rgba((colors.text_muted << 8) | 0xB0)) // 69% opacity of muted
                 .child(count.to_string()),
         );
     }
+
+    // Subtle background tint for section headers to create visual grouping
+    let header_bg = rgba((colors.text_muted << 8) | 0x0A); // ~4% opacity tint
 
     let header = div()
         .w_full()
@@ -1195,6 +1200,7 @@ pub fn render_section_header(
         .px(px(16.))
         .pt(px(10.)) // More top padding for visual separation
         .pb(px(4.)) // Bottom padding
+        .bg(header_bg)
         .flex()
         .flex_col()
         .justify_center(); // Center content vertically
@@ -1205,7 +1211,7 @@ pub fn render_section_header(
     } else {
         header
             .border_t_1()
-            .border_color(rgba((colors.text_dimmed << 8) | 0x18)) // ~9% opacity - very subtle
+            .border_color(rgba((colors.text_muted << 8) | 0x30)) // ~19% opacity - visible separator
     };
 
     header.child(content)

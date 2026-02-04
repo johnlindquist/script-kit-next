@@ -996,7 +996,7 @@ impl ScriptListApp {
                             )
                     })
                     // Total item count in grouped view - subtle hint showing library size
-                    .when(self.filter_text.is_empty() && flat_results.len() > 0, |el| {
+                    .when(self.filter_text.is_empty() && !flat_results.is_empty(), |el| {
                         // Count items by type for a compact summary
                         let mut scripts_count = 0u16;
                         let mut snippets_count = 0u16;
@@ -1072,7 +1072,7 @@ impl ScriptListApp {
                             )
                     })
             })
-            // Subtle divider - semi-transparent
+            // Divider between header and list content
             // Use unified resolver for border color and spacing
             .child({
                 let divider_margin = if is_default_design {
@@ -1090,7 +1090,7 @@ impl ScriptListApp {
                 div()
                     .mx(px(divider_margin))
                     .h(px(border_width))
-                    .bg(rgba((border_color << 8) | 0x60))
+                    .bg(rgba((border_color << 8) | 0x80)) // 50% opacity - visible separation
             });
 
         // Main content area - 50/50 split: List on left, Preview on right
