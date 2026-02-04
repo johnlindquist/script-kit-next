@@ -987,6 +987,47 @@ impl ScriptListApp {
                                     .child(count_text),
                             )
                     })
+                    // Total item count in grouped view - subtle hint showing library size
+                    .when(self.filter_text.is_empty() && flat_results.len() > 0, |el| {
+                        // Count items by type for a compact summary
+                        let mut scripts_count = 0u16;
+                        let mut snippets_count = 0u16;
+                        let mut others_count = 0u16;
+                        for r in flat_results.iter() {
+                            match r {
+                                crate::scripts::SearchResult::Script(_) => scripts_count += 1,
+                                crate::scripts::SearchResult::Scriptlet(_) => snippets_count += 1,
+                                _ => others_count += 1,
+                            }
+                        }
+                        // Build compact summary (e.g., "42 scripts · 15 snippets")
+                        let mut parts: Vec<String> = Vec::new();
+                        if scripts_count > 0 {
+                            parts.push(format!("{} {}", scripts_count, if scripts_count == 1 { "script" } else { "scripts" }));
+                        }
+                        if snippets_count > 0 {
+                            parts.push(format!("{} {}", snippets_count, if snippets_count == 1 { "snippet" } else { "snippets" }));
+                        }
+                        if others_count > 0 {
+                            parts.push(format!("{} other", others_count));
+                        }
+                        let summary = if parts.len() <= 1 {
+                            let total = flat_results.len();
+                            if total == 1 { "1 item".to_string() } else { format!("{} items", total) }
+                        } else {
+                            parts.truncate(3);
+                            parts.join(" · ")
+                        };
+
+                        el.child(
+                            div()
+                                .text_xs()
+                                .text_color(rgba((text_muted << 8) | 0x80)) // 50% opacity - very subtle
+                                .flex_shrink_0()
+                                .whitespace_nowrap()
+                                .child(summary),
+                        )
+                    })
                     // "Ask AI [Tab]" button - yellow text, grey badge, hover state
                     .child({
                         // Hover background: accent color at 15% opacity
