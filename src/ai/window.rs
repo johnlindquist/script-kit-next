@@ -477,6 +477,12 @@ pub struct AiApp {
 
     /// Whether the mouse cursor is currently hidden (hidden on keyboard, shown on mouse move)
     mouse_cursor_hidden: bool,
+
+    /// ID of the message whose content was just copied (for showing checkmark feedback)
+    copied_message_id: Option<String>,
+
+    /// When the copy feedback started (resets after 2 seconds)
+    copied_at: Option<std::time::Instant>,
 }
 
 impl AiApp {
@@ -696,6 +702,9 @@ impl AiApp {
             pending_attachments: Vec::new(),
             // Mouse cursor state
             mouse_cursor_hidden: false,
+            // Copy feedback state
+            copied_message_id: None,
+            copied_at: None,
         }
     }
 
@@ -717,6 +726,61 @@ impl AiApp {
             self.mouse_cursor_hidden = false;
             cx.notify();
         }
+    }
+
+    /// Check if a message was recently copied (within 2 seconds)
+    fn is_message_copied(&self, msg_id: &str) -> bool {
+        if let (Some(ref copied_id), Some(copied_at)) = (&self.copied_message_id, self.copied_at) {
+            copied_id == msg_id && copied_at.elapsed() < std::time::Duration::from_millis(2000)
+        } else {
+            false
+        }
+    }
+
+    /// Copy message content and show checkmark feedback for 2 seconds
+    fn copy_message(&mut self, msg_id: String, content: String, cx: &mut Context<Self>) {
+        cx.write_to_clipboard(gpui::ClipboardItem::new_string(content));
+        self.copied_message_id = Some(msg_id);
+        self.copied_at = Some(std::time::Instant::now());
+        cx.notify();
+
+        // Reset feedback after 2 seconds
+        cx.spawn(async move |this, cx| {
+            gpui::Timer::after(std::time::Duration::from_millis(2000)).await;
+            let _ = cx.update(|cx| {
+                this.update(cx, |this, cx| {
+                    this.copied_message_id = None;
+                    this.copied_at = None;
+                    cx.notify();
+                })
+            });
+        })
+        .detach();
+    }
+
+    /// Delete a specific chat by ID (for sidebar delete buttons)
+    fn delete_chat_by_id(&mut self, chat_id: ChatId, cx: &mut Context<Self>) {
+        if let Err(e) = storage::delete_chat(&chat_id) {
+            tracing::error!(error = %e, "Failed to delete chat");
+            return;
+        }
+
+        // Remove from visible list
+        self.chats.retain(|c| c.id != chat_id);
+        self.message_previews.remove(&chat_id);
+
+        // If we deleted the selected chat, select next
+        if self.selected_chat_id == Some(chat_id) {
+            self.selected_chat_id = self.chats.first().map(|c| c.id);
+            self.current_messages = self
+                .selected_chat_id
+                .and_then(|new_id| storage::get_chat_messages(&new_id).ok())
+                .unwrap_or_default();
+            self.cache_message_images(&self.current_messages.clone());
+            self.sync_messages_list_and_scroll_to_bottom();
+        }
+
+        cx.notify();
     }
 
     /// Update cached theme-derived values if theme revision has changed.
@@ -3075,7 +3139,7 @@ impl AiApp {
             )
     }
 
-    /// Render a single chat item with title and preview
+    /// Render a single chat item with title, relative time, and hover-revealed delete button
     fn render_chat_item(
         &self,
         chat: &Chat,
@@ -3093,29 +3157,41 @@ impl AiApp {
 
         let preview = self.message_previews.get(&chat_id).cloned();
 
-        // Vibrancy-compatible selection/hover colors (white with alpha)
-        // Lower opacity for better vibrancy effect - 0x28 = 16%, 0x18 = 9%
-        // Formula: (hex_color << 8) | alpha
-        let selected_bg = rgba((0xFFFFFF << 8) | 0x28); // Reduced from 0x54 for more transparency
-        let hover_bg = rgba((0xFFFFFF << 8) | 0x18); // Reduced from 0x26
+        // Relative time for this chat
+        let relative_time: SharedString = {
+            let now = Utc::now();
+            let diff = now - chat.updated_at;
+            if diff.num_minutes() < 1 {
+                "now".into()
+            } else if diff.num_minutes() < 60 {
+                format!("{}m", diff.num_minutes()).into()
+            } else if diff.num_hours() < 24 {
+                format!("{}h", diff.num_hours()).into()
+            } else if diff.num_days() < 7 {
+                format!("{}d", diff.num_days()).into()
+            } else {
+                chat.updated_at.format("%b %d").to_string().into()
+            }
+        };
 
-        // Text colors change based on selection state (matching main menu behavior)
-        // Selected: bright white for high contrast against dark-tinted selection
-        // Not selected: standard sidebar/muted colors
+        let selected_bg = rgba((0xFFFFFF << 8) | 0x28);
+        let hover_bg = rgba((0xFFFFFF << 8) | 0x18);
+
         let title_color = if is_selected {
-            cx.theme().foreground // Bright white when selected
+            cx.theme().foreground
         } else {
-            cx.theme().sidebar_foreground // Normal sidebar color when not
+            cx.theme().sidebar_foreground
         };
         let description_color = if is_selected {
-            cx.theme().sidebar_foreground // Lighter when selected (still readable)
+            cx.theme().sidebar_foreground
         } else {
-            cx.theme().muted_foreground // Muted when not selected
+            cx.theme().muted_foreground
         };
 
-        // Create a custom chat item with title and preview
+        let muted_fg = cx.theme().muted_foreground;
         div()
             .id(SharedString::from(format!("chat-{}", chat_id)))
+            .group("chat-item")
             .flex()
             .flex_col()
             .w_full()
@@ -3129,29 +3205,69 @@ impl AiApp {
                 this.select_chat(chat_id, window, cx);
             }))
             .child(
-                // Title - bright when selected, normal when not
+                // Title row with relative time and hover-revealed delete
                 div()
-                    .text_sm()
-                    .font_weight(gpui::FontWeight::MEDIUM)
-                    .text_color(title_color)
-                    .overflow_hidden()
-                    .text_ellipsis()
-                    .child(title),
+                    .flex()
+                    .items_center()
+                    .w_full()
+                    .gap(px(4.))
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .text_sm()
+                            .font_weight(gpui::FontWeight::MEDIUM)
+                            .text_color(title_color)
+                            .overflow_hidden()
+                            .text_ellipsis()
+                            .child(title),
+                    )
+                    // Relative time - hidden on hover to make room for delete
+                    .child(
+                        div()
+                            .flex_shrink_0()
+                            .text_xs()
+                            .text_color(description_color.opacity(0.6))
+                            .group_hover("chat-item", |s| s.opacity(0.))
+                            .child(relative_time),
+                    )
+                    // Delete button - visible on hover only
+                    .child(
+                        div()
+                            .id(SharedString::from(format!("del-{}", chat_id)))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .size(px(18.))
+                            .rounded(px(4.))
+                            .flex_shrink_0()
+                            .cursor_pointer()
+                            .opacity(0.)
+                            .group_hover("chat-item", |s| s.opacity(1.0))
+                            .hover(|s| s.bg(rgba((0xFF0000 << 8) | 0x30)))
+                            .on_mouse_down(
+                                gpui::MouseButton::Left,
+                                cx.listener(move |this, _, _window, cx| {
+                                    this.delete_chat_by_id(chat_id, cx);
+                                }),
+                            )
+                            .child(
+                                svg()
+                                    .external_path(LocalIconName::Trash.external_path())
+                                    .size(px(12.))
+                                    .text_color(muted_fg.opacity(0.5)),
+                            ),
+                    ),
             )
             .when_some(preview, |d, preview_text| {
-                // Clean up preview: skip markdown headings, find actual content
                 let clean_preview: String = preview_text
                     .lines()
                     .map(|line| line.trim())
                     .find(|line| {
-                        // Skip empty lines
                         !line.is_empty()
-                        // Skip markdown headings
-                        && !line.starts_with('#')
-                        // Skip code fence markers
-                        && !line.starts_with("```")
-                        // Skip horizontal rules
-                        && !line.chars().all(|c| c == '-' || c == '*' || c == '_')
+                            && !line.starts_with('#')
+                            && !line.starts_with("```")
+                            && !line.chars().all(|c| c == '-' || c == '*' || c == '_')
                     })
                     .unwrap_or("")
                     .chars()
@@ -3159,7 +3275,6 @@ impl AiApp {
                     .collect();
 
                 d.child(
-                    // Preview - lighter when selected, muted when not
                     div()
                         .text_xs()
                         .text_color(description_color)
@@ -3314,24 +3429,139 @@ impl AiApp {
             return self.render_setup_card(cx).into_any_element();
         }
 
+        let suggestion_bg = rgba((0xFFFFFF << 8) | 0x10);
+        let suggestion_hover_bg = rgba((0xFFFFFF << 8) | 0x20);
+
+        let suggestions: Vec<(&str, &str)> = vec![
+            ("Write a script", "to automate a repetitive task"),
+            ("Explain how", "this code works step by step"),
+            ("Help me debug", "an error I'm seeing"),
+            ("Generate a function", "that processes data"),
+        ];
+
         div()
             .flex()
             .flex_col()
             .items_center()
             .justify_center()
             .flex_1()
-            .gap_4()
+            .gap_6()
+            .px_4()
             .child(
                 div()
-                    .text_xl()
-                    .text_color(cx.theme().foreground)
-                    .child("Ask Anything"),
+                    .flex()
+                    .flex_col()
+                    .items_center()
+                    .gap_1()
+                    .child(
+                        div()
+                            .text_xl()
+                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                            .text_color(cx.theme().foreground)
+                            .child("Ask Anything"),
+                    )
+                    .child(
+                        div()
+                            .text_sm()
+                            .text_color(cx.theme().muted_foreground)
+                            .child("Start a conversation or try a suggestion below"),
+                    ),
             )
+            // Suggestion cards
             .child(
                 div()
-                    .text_sm()
-                    .text_color(cx.theme().muted_foreground)
-                    .child("Start a conversation with AI"),
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .w_full()
+                    .max_w(px(400.))
+                    .children(
+                        suggestions
+                            .into_iter()
+                            .enumerate()
+                            .map(|(i, (title, desc))| {
+                                let prompt_text = SharedString::from(format!("{} {}", title, desc));
+                                let title_s: SharedString = title.into();
+                                let desc_s: SharedString = desc.into();
+                                div()
+                                    .id(SharedString::from(format!("suggestion-{}", i)))
+                                    .flex()
+                                    .items_center()
+                                    .gap_3()
+                                    .px_3()
+                                    .py_2()
+                                    .rounded_md()
+                                    .bg(suggestion_bg)
+                                    .cursor_pointer()
+                                    .hover(move |s| s.bg(suggestion_hover_bg))
+                                    .on_click(cx.listener(move |this, _, window, cx| {
+                                        this.input_state.update(cx, |state, cx| {
+                                            state.set_value(prompt_text.to_string(), window, cx);
+                                        });
+                                        this.focus_input(window, cx);
+                                    }))
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .flex_col()
+                                            .child(
+                                                div()
+                                                    .text_sm()
+                                                    .font_weight(gpui::FontWeight::MEDIUM)
+                                                    .text_color(cx.theme().foreground)
+                                                    .child(title_s),
+                                            )
+                                            .child(
+                                                div()
+                                                    .text_xs()
+                                                    .text_color(cx.theme().muted_foreground)
+                                                    .child(desc_s),
+                                            ),
+                                    )
+                            }),
+                    ),
+            )
+            // Keyboard shortcut hints
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .gap_4()
+                    .mt_2()
+                    .children(
+                        [
+                            ("\u{2318} Enter", "Send"),
+                            ("\u{2318} N", "New Chat"),
+                            ("\u{2318} K", "Actions"),
+                            ("Esc", "Stop"),
+                        ]
+                        .into_iter()
+                        .map(|(key, label)| {
+                            let key_s: SharedString = key.into();
+                            let label_s: SharedString = label.into();
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(4.))
+                                .child(
+                                    div()
+                                        .px(px(5.))
+                                        .py(px(1.))
+                                        .rounded(px(3.))
+                                        .bg(rgba((0xFFFFFF << 8) | 0x10))
+                                        .text_xs()
+                                        .text_color(cx.theme().muted_foreground.opacity(0.7))
+                                        .child(key_s),
+                                )
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(cx.theme().muted_foreground.opacity(0.5))
+                                        .child(label_s),
+                                )
+                        }),
+                    ),
             )
             .into_any_element()
     }
@@ -3698,14 +3928,14 @@ impl AiApp {
             )
     }
 
-    /// Render a single message bubble
+    /// Render a single message bubble with role icon, timestamp, and hover-revealed copy button
     fn render_message(&self, message: &Message, cx: &mut Context<Self>) -> impl IntoElement {
         let is_user = message.role == MessageRole::User;
         let colors = theme::PromptColors::from_theme(&crate::theme::get_cached_theme());
 
-        // Vibrancy-compatible backgrounds: white with low alpha for transparency
-        let user_bg = rgba((0xFFFFFF << 8) | 0x18); // White at ~9% opacity
-        let assistant_bg = rgba((0xFFFFFF << 8) | 0x10); // White at ~6% opacity
+        // Differentiated backgrounds: accent-tinted for user, subtle for assistant
+        let user_bg = cx.theme().accent.opacity(0.10);
+        let assistant_bg = rgba((0xFFFFFF << 8) | 0x08);
 
         // Collect cached thumbnails for this message's images
         let image_thumbnails: Vec<std::sync::Arc<RenderImage>> = message
@@ -3715,29 +3945,144 @@ impl AiApp {
             .collect();
         let has_images = !image_thumbnails.is_empty();
 
+        let content_for_copy = message.content.clone();
+        let msg_id = message.id.clone();
+        let msg_id_for_click = msg_id.clone();
+        let is_copied = self.is_message_copied(&msg_id);
+
+        // Relative timestamp
+        let timestamp: SharedString = {
+            let now = Utc::now();
+            let diff = now - message.created_at;
+            if diff.num_minutes() < 1 {
+                "just now".into()
+            } else if diff.num_minutes() < 60 {
+                format!("{}m ago", diff.num_minutes()).into()
+            } else if diff.num_hours() < 24 {
+                format!("{}h ago", diff.num_hours()).into()
+            } else {
+                message.created_at.format("%b %d").to_string().into()
+            }
+        };
+
+        let role_icon = if is_user {
+            LocalIconName::Terminal
+        } else {
+            LocalIconName::Star
+        };
+        let role_label = if is_user { "You" } else { "Assistant" };
+
         div()
+            .id(SharedString::from(format!("msg-{}", msg_id)))
+            .group("message")
             .flex()
             .flex_col()
             .w_full()
             .mb_3()
             .child(
-                // Role label
+                // Role label row with icon, timestamp, and hover-revealed copy button
                 div()
-                    .text_xs()
-                    .font_weight(gpui::FontWeight::MEDIUM)
-                    .text_color(cx.theme().muted_foreground)
+                    .flex()
+                    .items_center()
+                    .justify_between()
                     .mb_1()
-                    .child(if is_user { "You" } else { "Assistant" }),
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(6.))
+                            .child(
+                                svg()
+                                    .external_path(role_icon.external_path())
+                                    .size(px(14.))
+                                    .text_color(if is_user {
+                                        cx.theme().accent
+                                    } else {
+                                        cx.theme().muted_foreground
+                                    }),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                                    .text_color(if is_user {
+                                        cx.theme().foreground
+                                    } else {
+                                        cx.theme().muted_foreground
+                                    })
+                                    .child(role_label),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(cx.theme().muted_foreground.opacity(0.4))
+                                    .child(timestamp),
+                            ),
+                    )
+                    // Copy button - shows checkmark when recently copied, hidden until hover
+                    .child(
+                        div()
+                            .id(SharedString::from(format!("copy-{}", msg_id)))
+                            .flex()
+                            .items_center()
+                            .gap(px(4.))
+                            .px(px(6.))
+                            .py(px(2.))
+                            .rounded(px(4.))
+                            .cursor_pointer()
+                            .when(!is_copied, |d| {
+                                d.opacity(0.).group_hover("message", |s| s.opacity(1.0))
+                            })
+                            .hover(|s| s.bg(rgba((0xFFFFFF << 8) | 0x18)))
+                            .on_click(cx.listener(move |this, _, _window, cx| {
+                                this.copy_message(
+                                    msg_id_for_click.clone(),
+                                    content_for_copy.clone(),
+                                    cx,
+                                );
+                            }))
+                            .when(is_copied, |d| {
+                                d.child(
+                                    div()
+                                        .flex()
+                                        .items_center()
+                                        .gap(px(3.))
+                                        .child(
+                                            svg()
+                                                .external_path(LocalIconName::Check.external_path())
+                                                .size(px(12.))
+                                                .text_color(cx.theme().success),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_xs()
+                                                .text_color(cx.theme().success)
+                                                .child("Copied"),
+                                        ),
+                                )
+                            })
+                            .when(!is_copied, |d| {
+                                d.child(
+                                    svg()
+                                        .external_path(LocalIconName::Copy.external_path())
+                                        .size(px(12.))
+                                        .text_color(cx.theme().muted_foreground.opacity(0.5)),
+                                )
+                            }),
+                    ),
             )
             .child(
-                // Message content - vibrancy-compatible backgrounds
+                // Message content - differentiated backgrounds
                 div()
                     .w_full()
                     .p_3()
-                    .rounded_md()
-                    .when(is_user, |d| d.bg(user_bg))
+                    .rounded_lg()
+                    .when(is_user, |d| {
+                        d.bg(user_bg)
+                            .border_l_2()
+                            .border_color(cx.theme().accent.opacity(0.3))
+                    })
                     .when(!is_user, |d| d.bg(assistant_bg))
-                    // Image thumbnails row (shown above text for user messages with images)
                     .when(has_images, |el| {
                         el.child(
                             div().flex().flex_wrap().gap_2().mb_2().children(
@@ -3776,18 +4121,47 @@ impl AiApp {
     /// Render streaming content (assistant response in progress)
     fn render_streaming_content(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let colors = theme::PromptColors::from_theme(&crate::theme::get_cached_theme());
-
-        // Vibrancy-compatible background
-        let streaming_bg = rgba((0xFFFFFF << 8) | 0x10); // White at ~6% opacity
+        let streaming_bg = rgba((0xFFFFFF << 8) | 0x08);
 
         let content_element = if self.streaming_content.is_empty() {
+            // "Thinking" state with three dots
             div()
-                .text_sm()
-                .text_color(cx.theme().foreground)
-                .child("...")
+                .flex()
+                .items_center()
+                .gap(px(6.))
+                .py_2()
+                .child(
+                    div()
+                        .text_sm()
+                        .text_color(cx.theme().muted_foreground)
+                        .child("Thinking"),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(3.))
+                        .child(
+                            div()
+                                .size(px(4.))
+                                .rounded_full()
+                                .bg(cx.theme().accent.opacity(0.8)),
+                        )
+                        .child(
+                            div()
+                                .size(px(4.))
+                                .rounded_full()
+                                .bg(cx.theme().accent.opacity(0.5)),
+                        )
+                        .child(
+                            div()
+                                .size(px(4.))
+                                .rounded_full()
+                                .bg(cx.theme().accent.opacity(0.3)),
+                        ),
+                )
                 .into_any_element()
         } else {
-            // Streaming with content - append cursor and render as markdown
             let with_cursor = format!("{}▌", self.streaming_content);
             div()
                 .w_full()
@@ -3803,30 +4177,32 @@ impl AiApp {
             .w_full()
             .mb_3()
             .child(
-                // Role label with streaming indicator
+                // Role label matching render_message style
                 div()
                     .flex()
                     .items_center()
-                    .gap_2()
+                    .gap(px(6.))
                     .mb_1()
+                    .child(
+                        svg()
+                            .external_path(LocalIconName::Star.external_path())
+                            .size(px(14.))
+                            .text_color(cx.theme().muted_foreground),
+                    )
                     .child(
                         div()
                             .text_xs()
-                            .font_weight(gpui::FontWeight::MEDIUM)
+                            .font_weight(gpui::FontWeight::SEMIBOLD)
                             .text_color(cx.theme().muted_foreground)
                             .child("Assistant"),
                     )
-                    .child(
-                        // Streaming indicator
-                        div().text_xs().text_color(cx.theme().accent).child("●"),
-                    ),
+                    .child(div().size(px(6.)).rounded_full().bg(cx.theme().accent)),
             )
             .child(
-                // Streaming content - vibrancy-compatible background
                 div()
                     .w_full()
                     .p_3()
-                    .rounded_md()
+                    .rounded_lg()
                     .bg(streaming_bg)
                     .child(content_element),
             )

@@ -349,12 +349,13 @@ pub fn get_grouped_results(
     other_kit_names.sort_by_key(|a| a.to_lowercase());
 
     // Build grouped list in order: SUGGESTED, MAIN, COMMANDS, other kits, APPS
+    // Each section header includes an item count suffix (e.g., "SUGGESTED · 5")
     // 1. SUGGESTED (frecency-based, or default items for new users)
     if suggested_config.enabled {
         if !suggested_indices.is_empty() {
             // User has frecency data - show their frequently used items
             grouped.push(GroupedListItem::SectionHeader(
-                "SUGGESTED".to_string(),
+                format!("SUGGESTED · {}", suggested_indices.len()),
                 None,
             ));
             for (idx, _score) in &suggested_indices {
@@ -363,7 +364,7 @@ pub fn get_grouped_results(
         } else if !default_suggested_indices.is_empty() {
             // New user with no frecency - show default suggestions
             grouped.push(GroupedListItem::SectionHeader(
-                "SUGGESTED".to_string(),
+                format!("SUGGESTED · {}", default_suggested_indices.len()),
                 None,
             ));
             for idx in &default_suggested_indices {
@@ -375,7 +376,10 @@ pub fn get_grouped_results(
     // 2. MAIN kit (if it has items)
     if let Some(main_indices) = kit_indices.get("main") {
         if !main_indices.is_empty() {
-            grouped.push(GroupedListItem::SectionHeader("MAIN".to_string(), None));
+            grouped.push(GroupedListItem::SectionHeader(
+                format!("MAIN · {}", main_indices.len()),
+                None,
+            ));
             for idx in main_indices {
                 grouped.push(GroupedListItem::Item(*idx));
             }
@@ -384,7 +388,10 @@ pub fn get_grouped_results(
 
     // 3. COMMANDS (built-ins and window controls)
     if !commands_indices.is_empty() {
-        grouped.push(GroupedListItem::SectionHeader("COMMANDS".to_string(), None));
+        grouped.push(GroupedListItem::SectionHeader(
+            format!("COMMANDS · {}", commands_indices.len()),
+            None,
+        ));
         for idx in &commands_indices {
             grouped.push(GroupedListItem::Item(*idx));
         }
@@ -394,9 +401,9 @@ pub fn get_grouped_results(
     for kit_name in &other_kit_names {
         if let Some(indices) = kit_indices.get(*kit_name) {
             if !indices.is_empty() {
-                // Use uppercase kit name as section header
+                // Use uppercase kit name as section header with count
                 grouped.push(GroupedListItem::SectionHeader(
-                    kit_name.to_uppercase(),
+                    format!("{} · {}", kit_name.to_uppercase(), indices.len()),
                     None,
                 ));
                 for idx in indices {
@@ -408,7 +415,10 @@ pub fn get_grouped_results(
 
     // 5. APPS (installed applications)
     if !apps_indices.is_empty() {
-        grouped.push(GroupedListItem::SectionHeader("APPS".to_string(), None));
+        grouped.push(GroupedListItem::SectionHeader(
+            format!("APPS · {}", apps_indices.len()),
+            None,
+        ));
         for idx in &apps_indices {
             grouped.push(GroupedListItem::Item(*idx));
         }

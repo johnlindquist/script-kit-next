@@ -9,6 +9,7 @@ use crate::designs::icon_variations::{icon_name_from_str, IconName};
 use crate::logging;
 use crate::ui_foundation::HexColorExt;
 use gpui::*;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 /// Icon type for list items - supports emoji strings, SVG icons, and pre-decoded images
@@ -306,6 +307,56 @@ impl ListItemColors {
     }
 }
 
+/// Format a keyboard shortcut string using macOS-native modifier symbols.
+///
+/// Converts common shortcut formats to native macOS symbols:
+/// - "cmd+shift+k" → "⌘⇧K"
+/// - "ctrl+c" → "⌃C"
+/// - "alt+enter" → "⌥↩"
+///
+/// If the input already contains macOS symbols (⌘, ⇧, ⌥, ⌃), returns as-is.
+pub fn format_shortcut_display(shortcut: &str) -> String {
+    // If already contains macOS modifier symbols, return as-is
+    if shortcut.contains('⌘')
+        || shortcut.contains('⇧')
+        || shortcut.contains('⌥')
+        || shortcut.contains('⌃')
+    {
+        return shortcut.to_string();
+    }
+
+    let parts: Vec<&str> = shortcut.split('+').map(|s| s.trim()).collect();
+    let mut result = String::new();
+
+    for part in &parts {
+        match part.to_lowercase().as_str() {
+            "cmd" | "command" | "meta" | "super" => result.push('⌘'),
+            "shift" => result.push('⇧'),
+            "alt" | "option" | "opt" => result.push('⌥'),
+            "ctrl" | "control" => result.push('⌃'),
+            "enter" | "return" => result.push_str("↩"),
+            "escape" | "esc" => result.push_str("⎋"),
+            "tab" => result.push_str("⇥"),
+            "space" => result.push_str("␣"),
+            "backspace" | "delete" => result.push_str("⌫"),
+            "up" | "arrowup" => result.push_str("↑"),
+            "down" | "arrowdown" => result.push_str("↓"),
+            "left" | "arrowleft" => result.push_str("←"),
+            "right" | "arrowright" => result.push_str("→"),
+            key => {
+                // Uppercase single-character keys, preserve multi-char keys as-is
+                if key.len() == 1 {
+                    result.push_str(&key.to_uppercase());
+                } else {
+                    result.push_str(key);
+                }
+            }
+        }
+    }
+
+    result
+}
+
 /// Callback type for hover events on list items.
 /// The callback receives the item index and a boolean indicating hover state (true = entered, false = left).
 pub type OnHoverCallback = Box<dyn Fn(usize, bool) + 'static>;
@@ -344,6 +395,9 @@ pub struct ListItem {
     /// When false, the .hover() modifier is not applied, preventing visual feedback
     /// Used to disable hover when user is navigating with keyboard
     enable_hover_effect: bool,
+    /// Character indices in the name that match the search query (for fuzzy highlight)
+    /// When present, matched characters are rendered with accent color for visual emphasis
+    highlight_indices: Option<Vec<usize>>,
 }
 
 /// Width of the left accent bar for selected items
@@ -365,6 +419,7 @@ impl ListItem {
             semantic_id: None,
             show_accent_bar: false,
             enable_hover_effect: true, // Default to enabled
+            highlight_indices: None,
         }
     }
 
@@ -483,6 +538,21 @@ impl ListItem {
         self.hovered = hovered;
         self
     }
+
+    /// Set character indices for fuzzy match highlighting
+    /// When set, matched characters in the name are rendered with accent color
+    pub fn highlight_indices(mut self, indices: Vec<usize>) -> Self {
+        if !indices.is_empty() {
+            self.highlight_indices = Some(indices);
+        }
+        self
+    }
+
+    /// Set optional highlight indices (convenience for Option<Vec<usize>>)
+    pub fn highlight_indices_opt(mut self, indices: Option<Vec<usize>>) -> Self {
+        self.highlight_indices = indices.filter(|v| !v.is_empty());
+        self
+    }
 }
 
 impl RenderOnce for ListItem {
@@ -586,9 +656,43 @@ impl RenderOnce for ListItem {
             .flex_col()
             .justify_center();
 
-        // Name - 15px font size, medium weight
-        // Single-line with ellipsis truncation for long content
-        item_content = item_content.child(
+        // Name rendering - 15px font size, medium weight
+        // When highlight_indices are present, use StyledText to highlight matched characters
+        // Otherwise, render as plain text
+        let name_element = if let Some(ref indices) = self.highlight_indices {
+            // Build StyledText with highlighted matched characters
+            let index_set: HashSet<usize> = indices.iter().copied().collect();
+            let highlight_color = if self.selected {
+                rgb(colors.accent_selected)
+            } else {
+                rgb(colors.text_primary)
+            };
+            let highlight_style = HighlightStyle {
+                color: Some(highlight_color.into()),
+                font_weight: Some(FontWeight::SEMIBOLD),
+                ..Default::default()
+            };
+
+            // Convert character indices to byte ranges for StyledText
+            let mut highlights: Vec<(std::ops::Range<usize>, HighlightStyle)> = Vec::new();
+            for (char_idx, (byte_offset, ch)) in self.name.char_indices().enumerate() {
+                if index_set.contains(&char_idx) {
+                    highlights.push((
+                        byte_offset..byte_offset + ch.len_utf8(),
+                        highlight_style.clone(),
+                    ));
+                }
+            }
+
+            // Base text color is more muted when highlighting to create contrast
+            let base_color = if self.selected {
+                rgb(colors.text_secondary)
+            } else {
+                rgb(colors.text_muted)
+            };
+
+            let styled = StyledText::new(self.name.to_string()).with_highlights(highlights);
+
             div()
                 .text_size(px(15.))
                 .font_weight(FontWeight::MEDIUM)
@@ -596,8 +700,21 @@ impl RenderOnce for ListItem {
                 .text_ellipsis()
                 .whitespace_nowrap()
                 .line_height(px(20.))
-                .child(self.name),
-        );
+                .text_color(base_color)
+                .child(styled)
+        } else {
+            // Plain text rendering (no search active)
+            div()
+                .text_size(px(15.))
+                .font_weight(FontWeight::MEDIUM)
+                .overflow_hidden()
+                .text_ellipsis()
+                .whitespace_nowrap()
+                .line_height(px(20.))
+                .child(self.name)
+        };
+
+        item_content = item_content.child(name_element);
 
         // Description - text_xs (0.75rem ≈ 12px), muted color (never changes on selection - only bg shows selection)
         // Single-line with ellipsis truncation for long content
@@ -615,17 +732,22 @@ impl RenderOnce for ListItem {
             );
         }
 
-        // Shortcut badge (if present) - right-aligned
-        // text_xs (0.75rem ≈ 12px) is closest match for 11px
+        // Shortcut badge (if present) - right-aligned with kbd-style rendering
+        // Uses macOS-native modifier symbols (⌘, ⇧, ⌥, ⌃) for a native feel
         let shortcut_element = if let Some(sc) = self.shortcut {
+            let display_text = format_shortcut_display(&sc);
+            let badge_border = (colors.text_dimmed << 8) | 0x30; // 19% opacity border
             div()
                 .text_xs()
-                .text_color(rgb(colors.text_dimmed))
+                .font_family("SF Mono")
+                .text_color(rgb(colors.text_muted))
                 .px(px(6.))
-                .py(px(4.))
-                .rounded(px(3.))
+                .py(px(2.))
+                .rounded(px(4.))
                 .bg(rgba((colors.background << 8) | 0x40))
-                .child(sc)
+                .border_1()
+                .border_color(rgba(badge_border))
+                .child(display_text)
         } else {
             div()
         };
@@ -855,7 +977,14 @@ pub fn render_section_header(
     // - ~8px text height (text_xs)
     // - pb(4px) bottom padding for visual separation from below item
 
-    // Build the inner content row with label and optional icon
+    // Parse label to separate name from count (e.g., "SUGGESTED · 5" → "SUGGESTED", "5")
+    let (section_name, count_text) = if let Some(dot_pos) = label.find(" · ") {
+        (&label[..dot_pos], Some(&label[dot_pos + " · ".len()..]))
+    } else {
+        (label, None)
+    };
+
+    // Build the inner content row with section name and count
     let mut content = div()
         .flex()
         .flex_row()
@@ -864,7 +993,18 @@ pub fn render_section_header(
         .text_xs() // 10-11px font
         .font_weight(FontWeight::SEMIBOLD)
         .text_color(rgb(colors.text_dimmed))
-        .child(label.to_string());
+        .child(section_name.to_string());
+
+    // Add count badge if present - rendered as a subtle separate element
+    if let Some(count) = count_text {
+        content = content.child(
+            div()
+                .text_xs()
+                .font_weight(FontWeight::NORMAL)
+                .text_color(rgba((colors.text_dimmed << 8) | 0x80)) // 50% opacity of dimmed
+                .child(count.to_string()),
+        );
+    }
 
     // Add icon if provided
     if let Some(name) = icon {

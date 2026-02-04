@@ -326,6 +326,7 @@ use gpui::{AnyElement, IntoElement};
 /// * `is_hovered` - Whether this item is currently hovered (subtle visual feedback)
 /// * `list_colors` - Pre-computed theme colors for the default design
 /// * `enable_hover_effect` - Whether to enable instant hover effects (false during keyboard navigation)
+/// * `filter_text` - Current search filter text (empty when not filtering; used for fuzzy match highlighting)
 ///
 /// # Returns
 /// An `AnyElement` containing the rendered item
@@ -337,6 +338,7 @@ pub fn render_design_item(
     is_hovered: bool,
     list_colors: ListItemColors,
     enable_hover_effect: bool,
+    filter_text: &str,
 ) -> AnyElement {
     // NOTE: Removed per-item DEBUG log that was causing log spam.
     // This function is called for every visible list item on every render frame.
@@ -360,6 +362,19 @@ pub fn render_design_item(
         // All other variants use the default ListItem renderer
         _ => {
             use crate::list_item::{IconKind, ListItem};
+
+            // Compute fuzzy match indices for highlighting when actively filtering
+            let highlight_indices = if !filter_text.is_empty() {
+                let indices =
+                    crate::scripts::search::compute_match_indices_for_result(result, filter_text);
+                if indices.name_indices.is_empty() {
+                    None
+                } else {
+                    Some(indices.name_indices)
+                }
+            } else {
+                None
+            };
 
             // Extract name, description, shortcut, and icon based on result type
             let (name, description, shortcut, icon_kind) = match result {
@@ -501,6 +516,7 @@ pub fn render_design_item(
                 .hovered(is_hovered)
                 .with_accent_bar(true)
                 .with_hover_effect(enable_hover_effect)
+                .highlight_indices_opt(highlight_indices)
                 .into_any_element()
         }
     }

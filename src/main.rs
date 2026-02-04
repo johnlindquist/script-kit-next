@@ -878,6 +878,8 @@ enum AppView {
         query: String,
         selected_index: usize,
     },
+    /// Showing theme chooser with live preview
+    ThemeChooserView { selected_index: usize },
 }
 
 /// Wrapper to hold a script session that can be shared across async boundaries
@@ -1293,6 +1295,8 @@ struct ScriptListApp {
     design_gallery_scroll_handle: UniformListScrollHandle,
     // Scroll handle for file search list
     file_search_scroll_handle: UniformListScrollHandle,
+    // Scroll handle for theme chooser list
+    theme_chooser_scroll_handle: UniformListScrollHandle,
     // File search loading state (true while mdfind is running)
     file_search_loading: bool,
     // Debounce task for file search (cancelled when new input arrives)
@@ -1369,6 +1373,8 @@ struct ScriptListApp {
     fallback_selected_index: usize,
     // Cached fallback items for the current filter_text
     cached_fallbacks: Vec<crate::fallbacks::FallbackItem>,
+    // Theme before chooser was opened (for cancel/restore)
+    theme_before_chooser: Option<std::sync::Arc<theme::Theme>>,
     // P0-2: Debounce hover notify calls (16ms window to reduce 50% unnecessary re-renders)
     last_hover_notify: std::time::Instant,
     // Render log deduplication: only log when meaningful state changes (not cursor blink)
@@ -1670,6 +1676,7 @@ impl Render for ScriptListApp {
                 | AppView::AppLauncherView { .. }
                 | AppView::WindowSwitcherView { .. }
                 | AppView::FileSearchView { .. }
+                | AppView::ThemeChooserView { .. }
         ) {
             self.sync_filter_input_if_needed(window, cx);
         }
@@ -1765,6 +1772,8 @@ impl Render for ScriptListApp {
             } => self
                 .render_file_search(query, selected_index, cx)
                 .into_any_element(),
+            AppView::ThemeChooserView { selected_index } => self
+                .render_theme_chooser(selected_index, cx),
         };
 
         // Wrap content in a container that can have the debug grid overlay

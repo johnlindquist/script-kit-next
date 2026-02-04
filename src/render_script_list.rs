@@ -106,11 +106,9 @@ impl ScriptListApp {
         let empty_font_family = typography_resolver.primary_font();
 
         let list_element: AnyElement = if item_count == 0 {
-            // When there's no filter text, show "No scripts or snippets found"
-            // When filtering, show Raycast-style fallback list instead of "No results"
-            // Empty list handling:
+            // Empty state rendering with icon and helpful messaging
             // - When filter is empty: "No scripts or snippets found"
-            // - When filter has text: "No results match '...'" (rare - fallbacks usually exist)
+            // - When filter has text: "No results match '...'" with search icon
             //
             // Note: This branch is rarely hit when filtering because grouping.rs now
             // appends fallbacks to the results. We only get here if there are truly
@@ -120,23 +118,52 @@ impl ScriptListApp {
                     .w_full()
                     .h_full()
                     .flex()
+                    .flex_col()
                     .items_center()
                     .justify_center()
-                    .text_color(rgb(empty_text_color))
+                    .gap(px(8.))
                     .font_family(empty_font_family)
-                    .child("No scripts or snippets found")
+                    .child(
+                        div()
+                            .text_color(rgba((empty_text_color << 8) | 0x40))
+                            .text_size(px(14.))
+                            .child("No scripts or snippets found"),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgba((empty_text_color << 8) | 0x30))
+                            .child("Press ⌘N to create a new script"),
+                    )
                     .into_any_element()
             } else {
                 // Filtering but no results (including no fallbacks) - shouldn't normally happen
+                let filter_display = if self.filter_text.len() > 30 {
+                    format!("{}...", &self.filter_text[..27])
+                } else {
+                    self.filter_text.clone()
+                };
                 div()
                     .w_full()
                     .h_full()
                     .flex()
+                    .flex_col()
                     .items_center()
                     .justify_center()
-                    .text_color(rgb(empty_text_color))
+                    .gap(px(8.))
                     .font_family(empty_font_family)
-                    .child(format!("No results match '{}'", self.filter_text))
+                    .child(
+                        div()
+                            .text_color(rgba((empty_text_color << 8) | 0x40))
+                            .text_size(px(14.))
+                            .child(format!("No results for \"{}\"", filter_display)),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgba((empty_text_color << 8) | 0x30))
+                            .child("Try a different search term"),
+                    )
                     .into_any_element()
             }
         } else {
@@ -193,8 +220,9 @@ impl ScriptListApp {
             // theme_colors was pre-computed above to avoid borrow conflicts
             let current_design = self.current_design;
 
-            // Track filter for closure logging
+            // Track filter for closure logging and highlighting
             let filter_for_closure = self.filter_text.clone();
+            let filter_for_highlight = self.filter_text.clone();
 
             let variable_height_list =
                 list(self.main_list_state.clone(), move |ix, _window, cx| {
@@ -302,6 +330,7 @@ impl ScriptListApp {
                                             is_hovered,
                                             theme_colors,
                                             enable_hover,
+                                            &filter_for_highlight,
                                         );
                                         let design_elapsed = design_render_start.elapsed();
                                         
@@ -861,6 +890,22 @@ impl ScriptListApp {
                                 .focus_bordered(false),
                         ),
                     )
+                    // Result count indicator - shown only when filtering
+                    .when(!self.filter_text.is_empty() && item_count > 0, |el| {
+                        let count = flat_results.len();
+                        let count_text = if count == 1 {
+                            "1 result".to_string()
+                        } else {
+                            format!("{} results", count)
+                        };
+                        el.child(
+                            div()
+                                .text_xs()
+                                .text_color(rgb(text_muted))
+                                .flex_shrink_0()
+                                .child(count_text),
+                        )
+                    })
                     // "Ask AI [Tab]" button - yellow text, grey badge, hover state
                     .child({
                         // Hover background: accent color at 15% opacity

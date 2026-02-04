@@ -306,6 +306,7 @@ impl ScriptListApp {
             window_list_scroll_handle: UniformListScrollHandle::new(),
             design_gallery_scroll_handle: UniformListScrollHandle::new(),
             file_search_scroll_handle: UniformListScrollHandle::new(),
+            theme_chooser_scroll_handle: UniformListScrollHandle::new(),
             file_search_loading: false,
             file_search_debounce_task: None,
             file_search_current_dir: None,
@@ -353,6 +354,7 @@ impl ScriptListApp {
             fallback_mode: false,
             fallback_selected_index: 0,
             cached_fallbacks: Vec::new(),
+            theme_before_chooser: None,
             // P0-2: Initialize hover debounce timer
             last_hover_notify: std::time::Instant::now(),
             // Render log deduplication: track last logged state to skip cursor-blink spam
@@ -3354,6 +3356,10 @@ impl ScriptListApp {
                 };
                 Some((ViewType::ScriptList, filtered_count))
             }
+            AppView::ThemeChooserView { .. } => {
+                let preset_count = theme::presets::all_presets().len();
+                Some((ViewType::ScriptList, preset_count))
+            }
         }
     }
 
@@ -6082,6 +6088,7 @@ export default {
             AppView::ScratchPadView { .. } => "ScratchPadView",
             AppView::QuickTerminalView { .. } => "QuickTerminalView",
             AppView::FileSearchView { .. } => "FileSearchView",
+            AppView::ThemeChooserView { .. } => "ThemeChooserView",
         };
 
         let old_focused_input = self.focused_input;
