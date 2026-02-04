@@ -317,6 +317,17 @@ use gpui::{AnyElement, IntoElement};
 ///
 /// This is the main dispatch function for design-specific item rendering.
 /// It renders a single item based on the current design, with proper styling.
+/// Map a script's file extension to a more appropriate default icon.
+/// Returns an icon name like "Terminal" for shell scripts, "Code" for everything else.
+/// Only used when the script has no explicit `// Icon:` metadata.
+pub(crate) fn extension_default_icon(extension: &str) -> &'static str {
+    match extension {
+        "sh" | "bash" | "zsh" => "Terminal",
+        "applescript" | "scpt" => "Terminal",
+        _ => "Code",
+    }
+}
+
 ///
 /// # Arguments
 /// * `variant` - The design variant to render
@@ -389,7 +400,9 @@ pub fn render_design_item(
                     // Use script's icon metadata if present, otherwise default to "Code" SVG
                     let icon = match &sm.script.icon {
                         Some(icon_name) => IconKind::Svg(icon_name.clone()),
-                        None => IconKind::Svg("Code".to_string()),
+                        None => {
+                            IconKind::Svg(extension_default_icon(&sm.script.extension).to_string())
+                        }
                     };
                     // Scripts: show shortcut or alias as badge (matching scriptlet pattern)
                     let badge = sm
@@ -635,6 +648,21 @@ pub fn render_design_item(
     }
 }
 
+/// Map a file extension to a human-readable language/tool name.
+/// Used as a last-resort fallback description for scripts with no other context.
+pub(crate) fn extension_language_label(extension: &str) -> Option<&'static str> {
+    match extension {
+        "ts" | "tsx" => Some("TypeScript"),
+        "js" | "jsx" | "mjs" | "cjs" => Some("JavaScript"),
+        "sh" | "bash" => Some("Shell script"),
+        "zsh" => Some("Zsh script"),
+        "py" => Some("Python script"),
+        "rb" => Some("Ruby script"),
+        "applescript" | "scpt" => Some("AppleScript"),
+        _ => None,
+    }
+}
+
 /// Auto-generate a fallback description for scripts that have no explicit description.
 /// Priority: schedule expression > cron expression > watch pattern > background > system > filename
 pub(crate) fn auto_description_for_script(script: &crate::scripts::Script) -> Option<String> {
@@ -672,7 +700,8 @@ pub(crate) fn auto_description_for_script(script: &crate::scripts::Script) -> Op
     if !filename.is_empty() && filename != script.name {
         Some(filename)
     } else {
-        None
+        // Last resort: show language name based on extension
+        extension_language_label(&script.extension).map(|s| s.to_string())
     }
 }
 
@@ -1485,8 +1514,11 @@ mod tests {
         let mut s = make_test_script("exact");
         s.path = PathBuf::from("/test/exact");
         s.name = "exact".to_string();
-        // filename == name → no description
-        assert_eq!(auto_description_for_script(&s), None);
+        // filename == name → falls through to language label (extension is "ts")
+        assert_eq!(
+            auto_description_for_script(&s),
+            Some("TypeScript".to_string())
+        );
     }
 
     // =========================================================================
@@ -2053,5 +2085,122 @@ mod tests {
             preview.chars().count(),
             preview
         );
+    }
+
+    // =========================================================================
+    // Extension default icon tests
+    // =========================================================================
+
+    #[test]
+    fn test_extension_default_icon_shell() {
+        assert_eq!(extension_default_icon("sh"), "Terminal");
+        assert_eq!(extension_default_icon("bash"), "Terminal");
+        assert_eq!(extension_default_icon("zsh"), "Terminal");
+    }
+
+    #[test]
+    fn test_extension_default_icon_applescript() {
+        assert_eq!(extension_default_icon("applescript"), "Terminal");
+        assert_eq!(extension_default_icon("scpt"), "Terminal");
+    }
+
+    #[test]
+    fn test_extension_default_icon_default_code() {
+        assert_eq!(extension_default_icon("ts"), "Code");
+        assert_eq!(extension_default_icon("js"), "Code");
+        assert_eq!(extension_default_icon("py"), "Code");
+        assert_eq!(extension_default_icon("rb"), "Code");
+    }
+
+    // =========================================================================
+    // Extension language label tests
+    // =========================================================================
+
+    #[test]
+    fn test_extension_language_label_typescript() {
+        assert_eq!(extension_language_label("ts"), Some("TypeScript"));
+        assert_eq!(extension_language_label("tsx"), Some("TypeScript"));
+    }
+
+    #[test]
+    fn test_extension_language_label_javascript() {
+        assert_eq!(extension_language_label("js"), Some("JavaScript"));
+        assert_eq!(extension_language_label("mjs"), Some("JavaScript"));
+    }
+
+    #[test]
+    fn test_extension_language_label_shell() {
+        assert_eq!(extension_language_label("sh"), Some("Shell script"));
+        assert_eq!(extension_language_label("bash"), Some("Shell script"));
+        assert_eq!(extension_language_label("zsh"), Some("Zsh script"));
+    }
+
+    #[test]
+    fn test_extension_language_label_python() {
+        assert_eq!(extension_language_label("py"), Some("Python script"));
+    }
+
+    #[test]
+    fn test_extension_language_label_unknown() {
+        assert_eq!(extension_language_label("xyz"), None);
+        assert_eq!(extension_language_label(""), None);
+    }
+
+    // =========================================================================
+    // Auto-description with language label fallback tests
+    // =========================================================================
+
+    #[test]
+    fn test_auto_description_language_label_fallback() {
+        // Script with same-name filename and no metadata -> should get language label
+        let script = crate::scripts::Script {
+            name: "my-script".to_string(),
+            path: std::path::PathBuf::from("/test/my-script.ts"),
+            extension: "ts".to_string(),
+            ..Default::default()
+        };
+        let desc = auto_description_for_script(&script);
+        // Filename "my-script.ts" differs from name "my-script", so filename wins
+        assert_eq!(desc, Some("my-script.ts".to_string()));
+    }
+
+    #[test]
+    fn test_auto_description_language_label_when_filename_matches() {
+        // Script where filename equals name -> language label should appear
+        // This happens when the name IS the filename (without extension somehow)
+        let script = crate::scripts::Script {
+            name: "my-script.ts".to_string(),
+            path: std::path::PathBuf::from("/test/my-script.ts"),
+            extension: "ts".to_string(),
+            ..Default::default()
+        };
+        let desc = auto_description_for_script(&script);
+        // Filename "my-script.ts" == name "my-script.ts", so language label fallback
+        assert_eq!(desc, Some("TypeScript".to_string()));
+    }
+
+    #[test]
+    fn test_auto_description_shell_script_language_label() {
+        let script = crate::scripts::Script {
+            name: "backup.sh".to_string(),
+            path: std::path::PathBuf::from("/test/backup.sh"),
+            extension: "sh".to_string(),
+            ..Default::default()
+        };
+        let desc = auto_description_for_script(&script);
+        assert_eq!(desc, Some("Shell script".to_string()));
+    }
+
+    #[test]
+    fn test_auto_description_explicit_description_unchanged() {
+        let script = crate::scripts::Script {
+            name: "test".to_string(),
+            path: std::path::PathBuf::from("/test/test.ts"),
+            extension: "ts".to_string(),
+            description: Some("My custom description".to_string()),
+            ..Default::default()
+        };
+        let desc = auto_description_for_script(&script);
+        assert_eq!(desc, Some("My custom description".to_string()));
     }
 }
