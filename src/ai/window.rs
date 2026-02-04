@@ -337,6 +337,9 @@ pub struct AiApp {
     /// Cache of last message preview per chat (ChatId -> preview text)
     message_previews: std::collections::HashMap<ChatId, String>,
 
+    /// Cache of message counts per chat (for sidebar badges)
+    message_counts: std::collections::HashMap<ChatId, usize>,
+
     /// Chat input state (using gpui-component's Input)
     input_state: Entity<InputState>,
 
@@ -511,6 +514,10 @@ pub struct AiApp {
     /// Chat currently being renamed in the sidebar
     renaming_chat_id: Option<ChatId>,
 
+    /// Chat pending deletion confirmation (two-step delete: first click shows "Confirm?",
+    /// second click actually deletes)
+    pending_delete_chat_id: Option<ChatId>,
+
     /// Input state for the sidebar rename field
     rename_input_state: Entity<InputState>,
 
@@ -540,11 +547,13 @@ impl AiApp {
         let chats = storage::get_all_chats().unwrap_or_default();
         let selected_chat_id = chats.first().map(|c| c.id);
 
-        // Load message previews for each chat
+        // Load message previews and counts for each chat
         let mut message_previews = std::collections::HashMap::new();
+        let mut message_counts = std::collections::HashMap::new();
         for chat in &chats {
-            if let Ok(messages) = storage::get_recent_messages(&chat.id, 1) {
-                if let Some(last_msg) = messages.first() {
+            if let Ok(messages) = storage::get_chat_messages(&chat.id) {
+                message_counts.insert(chat.id, messages.len());
+                if let Some(last_msg) = messages.last() {
                     // Truncate preview to ~60 chars
                     let preview: String = last_msg.content.chars().take(60).collect();
                     let preview = if preview.len() < last_msg.content.len() {
@@ -695,6 +704,7 @@ impl AiApp {
             chats,
             selected_chat_id,
             message_previews,
+            message_counts,
             input_state,
             search_state,
             search_query: String::new(),
@@ -776,6 +786,7 @@ impl AiApp {
             chat_drafts: std::collections::HashMap::new(),
             editing_message_id: None,
             renaming_chat_id: None,
+            pending_delete_chat_id: None,
             rename_input_state,
             // UX Batch 5 state
             showing_shortcuts_overlay: false,
@@ -985,6 +996,7 @@ impl AiApp {
         // Remove from visible list
         self.chats.retain(|c| c.id != chat_id);
         self.message_previews.remove(&chat_id);
+        self.message_counts.remove(&chat_id);
 
         // If we deleted the selected chat, select next
         if self.selected_chat_id == Some(chat_id) {
@@ -2390,7 +2402,7 @@ impl AiApp {
             saved_messages.push(message);
         }
 
-        // Update message preview with the last message
+        // Update message preview and count with the last message
         if let Some(last_msg) = saved_messages.last() {
             let preview: String = last_msg.content.chars().take(60).collect();
             let preview = if preview.len() < last_msg.content.len() {
@@ -2400,6 +2412,7 @@ impl AiApp {
             };
             self.message_previews.insert(chat_id, preview);
         }
+        self.message_counts.insert(chat_id, saved_messages.len());
 
         // Add chat to the list and select it
         self.chats.insert(0, chat);
@@ -2455,6 +2468,9 @@ impl AiApp {
     fn select_chat(&mut self, id: ChatId, window: &mut Window, cx: &mut Context<Self>) {
         // Save draft for outgoing chat
         self.save_draft(cx);
+
+        // Clear any pending delete confirmation
+        self.pending_delete_chat_id = None;
 
         self.selected_chat_id = Some(id);
 
@@ -2639,7 +2655,7 @@ impl AiApp {
         // Force scroll to bottom when user sends a new message (always scroll, even if scrolled up)
         self.force_scroll_to_bottom();
 
-        // Update message preview cache
+        // Update message preview and count cache
         let preview: String = content.chars().take(60).collect();
         let preview = if preview.len() < content.len() {
             format!("{}...", preview.trim())
@@ -2647,6 +2663,8 @@ impl AiApp {
             preview
         };
         self.message_previews.insert(chat_id, preview);
+        self.message_counts
+            .insert(chat_id, self.current_messages.len());
 
         // Update chat timestamp and move to top of list
         self.touch_and_reorder_chat(chat_id);
@@ -2998,7 +3016,7 @@ impl AiApp {
                 self.current_messages.push(assistant_message);
             }
 
-            // Update message preview
+            // Update message preview and count
             let preview: String = self.streaming_content.chars().take(60).collect();
             let preview = if preview.len() < self.streaming_content.len() {
                 format!("{}...", preview.trim())
@@ -3006,6 +3024,8 @@ impl AiApp {
                 preview
             };
             self.message_previews.insert(chat_id, preview);
+            self.message_counts
+                .insert(chat_id, self.current_messages.len());
 
             // Update chat timestamp and move to top of list
             self.touch_and_reorder_chat(chat_id);
@@ -3064,6 +3084,8 @@ impl AiApp {
                 preview
             };
             self.message_previews.insert(chat_id, preview);
+            self.message_counts
+                .insert(chat_id, self.current_messages.len());
             self.touch_and_reorder_chat(chat_id);
 
             info!(
@@ -3730,6 +3752,7 @@ impl AiApp {
         };
 
         let preview = self.message_previews.get(&chat_id).cloned();
+        let msg_count = self.message_counts.get(&chat_id).copied().unwrap_or(0);
 
         // Derive short model label from model_id (e.g., "claude-3-5-sonnet..." → "Sonnet")
         let model_badge: Option<SharedString> = if !chat.model_id.is_empty() {
@@ -3840,33 +3863,62 @@ impl AiApp {
                             })
                             .child(relative_time)
                     })
-                    // Delete button - visible on hover only
-                    .child(
-                        div()
-                            .id(SharedString::from(format!("del-{}", chat_id)))
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .size(px(18.))
-                            .rounded(px(4.))
-                            .flex_shrink_0()
-                            .cursor_pointer()
-                            .opacity(0.)
-                            .group_hover("chat-item", |s| s.opacity(1.0))
-                            .hover(|s| s.bg(cx.theme().danger.opacity(0.19)))
-                            .on_mouse_down(
-                                gpui::MouseButton::Left,
-                                cx.listener(move |this, _, _window, cx| {
-                                    this.delete_chat_by_id(chat_id, cx);
-                                }),
-                            )
-                            .child(
-                                svg()
-                                    .external_path(LocalIconName::Trash.external_path())
-                                    .size(px(12.))
-                                    .text_color(muted_fg.opacity(0.5)),
-                            ),
-                    ),
+                    // Delete button - visible on hover only.
+                    // Two-step: first click shows "Delete?", second click confirms.
+                    .child({
+                        let is_confirming = self.pending_delete_chat_id == Some(chat_id);
+                        if is_confirming {
+                            // Confirmation state: show red "Delete?" label
+                            div()
+                                .id(SharedString::from(format!("del-{}", chat_id)))
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .px(px(4.))
+                                .py(px(1.))
+                                .rounded(px(4.))
+                                .flex_shrink_0()
+                                .cursor_pointer()
+                                .bg(cx.theme().danger.opacity(0.15))
+                                .text_xs()
+                                .text_color(cx.theme().danger)
+                                .hover(|s| s.bg(cx.theme().danger.opacity(0.25)))
+                                .on_mouse_down(
+                                    gpui::MouseButton::Left,
+                                    cx.listener(move |this, _, _window, cx| {
+                                        this.pending_delete_chat_id = None;
+                                        this.delete_chat_by_id(chat_id, cx);
+                                    }),
+                                )
+                                .child("Delete?")
+                        } else {
+                            div()
+                                .id(SharedString::from(format!("del-{}", chat_id)))
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .size(px(18.))
+                                .rounded(px(4.))
+                                .flex_shrink_0()
+                                .cursor_pointer()
+                                .opacity(0.)
+                                .group_hover("chat-item", |s| s.opacity(1.0))
+                                .hover(|s| s.bg(cx.theme().danger.opacity(0.19)))
+                                .on_mouse_down(
+                                    gpui::MouseButton::Left,
+                                    cx.listener(move |this, _, _window, cx| {
+                                        this.pending_delete_chat_id = Some(chat_id);
+                                        cx.notify();
+                                    }),
+                                )
+                                .child(
+                                    svg()
+                                        .external_path(LocalIconName::Trash.external_path())
+                                        .size(px(12.))
+                                        .text_color(muted_fg.opacity(0.5)),
+                                )
+                        }
+                    }),
             )
             .when_some(preview, |d, preview_text| {
                 let clean_preview: String = preview_text
@@ -3893,16 +3945,37 @@ impl AiApp {
                         .child(clean_preview),
                 )
             })
-            // Model badge (small indicator showing which model was used)
-            .when_some(model_badge, |d, badge| {
+            // Bottom row: model badge + message count
+            .when(model_badge.is_some() || msg_count > 0, |d| {
                 d.child(
                     div()
-                        .text_xs()
-                        .text_color(cx.theme().muted_foreground.opacity(0.4))
-                        .overflow_hidden()
-                        .whitespace_nowrap()
-                        .text_ellipsis()
-                        .child(badge),
+                        .flex()
+                        .items_center()
+                        .gap(px(4.))
+                        .when_some(model_badge, |d, badge| {
+                            d.child(
+                                div()
+                                    .text_xs()
+                                    .text_color(cx.theme().muted_foreground.opacity(0.4))
+                                    .overflow_hidden()
+                                    .whitespace_nowrap()
+                                    .text_ellipsis()
+                                    .child(badge),
+                            )
+                        })
+                        .when(msg_count > 0, |d| {
+                            let count_label = if msg_count == 1 {
+                                "1 msg".to_string()
+                            } else {
+                                format!("{} msgs", msg_count)
+                            };
+                            d.child(
+                                div()
+                                    .text_xs()
+                                    .text_color(cx.theme().muted_foreground.opacity(0.3))
+                                    .child(count_label),
+                            )
+                        }),
                 )
             })
     }
