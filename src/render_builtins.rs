@@ -1112,12 +1112,16 @@ impl ScriptListApp {
                         "up" | "arrowup" => {
                             if *selected_index > 0 {
                                 *selected_index -= 1;
+                                this.list_scroll_handle
+                                    .scroll_to_item(*selected_index, ScrollStrategy::Nearest);
                                 cx.notify();
                             }
                         }
                         "down" | "arrowdown" => {
                             if *selected_index < filtered_len.saturating_sub(1) {
                                 *selected_index += 1;
+                                this.list_scroll_handle
+                                    .scroll_to_item(*selected_index, ScrollStrategy::Nearest);
                                 cx.notify();
                             }
                         }
