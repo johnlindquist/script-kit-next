@@ -964,6 +964,22 @@ impl ScriptListApp {
                             cx,
                         );
                     }
+                    SettingsCommandType::ChooseTheme => {
+                        logging::log("EXEC", "Opening Theme Chooser");
+                        // Back up current theme for cancel/restore
+                        self.theme_before_chooser = Some(self.theme.clone());
+                        // Start at the currently active theme
+                        let start_index =
+                            theme::presets::find_current_preset_index(&self.theme);
+                        self.current_view = AppView::ThemeChooserView {
+                            selected_index: start_index,
+                        };
+                        self.opened_from_main_menu = true;
+                        resize_to_view_sync(ViewType::ScriptList, 0);
+                        self.pending_focus = Some(FocusTarget::MainFilter);
+                        self.focused_input = FocusedInput::MainFilter;
+                        cx.notify();
+                    }
                 }
             }
 

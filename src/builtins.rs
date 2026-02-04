@@ -142,6 +142,8 @@ pub enum SettingsCommandType {
     ConfigureOpenAiApiKey,
     /// Configure Anthropic API key
     ConfigureAnthropicApiKey,
+    /// Browse and apply color themes
+    ChooseTheme,
 }
 
 /// Utility command types for quick access tools
@@ -1028,6 +1030,22 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ],
         BuiltInFeature::SettingsCommand(SettingsCommandType::ConfigureAnthropicApiKey),
         "🔑",
+    ));
+
+    entries.push(BuiltInEntry::new_with_icon(
+        "builtin-choose-theme",
+        "Choose Theme",
+        "Browse and apply color themes with live preview",
+        vec![
+            "theme",
+            "appearance",
+            "color",
+            "dark",
+            "light",
+            "scheme",
+        ],
+        BuiltInFeature::SettingsCommand(SettingsCommandType::ChooseTheme),
+        "🎨",
     ));
 
     // =========================================================================

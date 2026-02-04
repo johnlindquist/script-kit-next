@@ -56,6 +56,7 @@ impl ScriptListApp {
             AppView::ScratchPadView { .. } => "ScratchPad",
             AppView::QuickTerminalView { .. } => "QuickTerminal",
             AppView::FileSearchView { .. } => "FileSearch",
+            AppView::ThemeChooserView { .. } => "ThemeChooser",
             AppView::ActionsDialog => "ActionsDialog",
         };
 
@@ -521,6 +522,7 @@ impl ScriptListApp {
             AppView::ScratchPadView { .. } => "scratchPad",
             AppView::QuickTerminalView { .. } => "quickTerminal",
             AppView::FileSearchView { .. } => "fileSearch",
+            AppView::ThemeChooserView { .. } => "themeChooser",
             AppView::ActionsDialog => "actionsDialog",
         };
 
