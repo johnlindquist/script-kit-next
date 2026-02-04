@@ -1098,9 +1098,9 @@ impl ScriptListApp {
                                 .flex_col()
                                 .child(
                                     div()
-                                        .text_xs()
-                                        .font_weight(gpui::FontWeight::MEDIUM)
-                                        .text_color(rgba((text_muted << 8) | 0xDD))
+                                        .text_size(px(11.0))
+                                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                                        .text_color(rgba((text_muted << 8) | 0xCC))
                                         .pb(px(spacing.padding_xs))
                                         .child("TYPE"),
                                 )
@@ -1133,9 +1133,9 @@ impl ScriptListApp {
                                 .pb(px(spacing.padding_md))
                                 .child(
                                     div()
-                                        .text_xs()
-                                        .font_weight(gpui::FontWeight::MEDIUM)
-                                        .text_color(rgba((text_muted << 8) | 0xDD))
+                                        .text_size(px(11.0))
+                                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                                        .text_color(rgba((text_muted << 8) | 0xCC))
                                         .pb(px(spacing.padding_xs))
                                         .child("APPLICATION"),
                                 )
@@ -1155,9 +1155,9 @@ impl ScriptListApp {
                                 .pb(px(spacing.padding_md))
                                 .child(
                                     div()
-                                        .text_xs()
-                                        .font_weight(gpui::FontWeight::MEDIUM)
-                                        .text_color(rgba((text_muted << 8) | 0xDD))
+                                        .text_size(px(11.0))
+                                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                                        .text_color(rgba((text_muted << 8) | 0xCC))
                                         .pb(px(spacing.padding_xs))
                                         .child("POSITION & SIZE"),
                                 )
@@ -1188,9 +1188,9 @@ impl ScriptListApp {
                                 .flex_col()
                                 .child(
                                     div()
-                                        .text_xs()
-                                        .font_weight(gpui::FontWeight::MEDIUM)
-                                        .text_color(rgba((text_muted << 8) | 0xDD))
+                                        .text_size(px(11.0))
+                                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                                        .text_color(rgba((text_muted << 8) | 0xCC))
                                         .pb(px(spacing.padding_xs))
                                         .child("TYPE"),
                                 )
@@ -1262,9 +1262,9 @@ impl ScriptListApp {
                                 .pb(px(spacing.padding_md))
                                 .child(
                                     div()
-                                        .text_xs()
-                                        .font_weight(gpui::FontWeight::MEDIUM)
-                                        .text_color(rgba((text_muted << 8) | 0xDD))
+                                        .text_size(px(11.0))
+                                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                                        .text_color(rgba((text_muted << 8) | 0xCC))
                                         .pb(px(spacing.padding_xs))
                                         .child("BACKEND"),
                                 )
@@ -1285,9 +1285,9 @@ impl ScriptListApp {
                                     .pb(px(spacing.padding_md))
                                     .child(
                                         div()
-                                            .text_xs()
-                                            .font_weight(gpui::FontWeight::MEDIUM)
-                                            .text_color(rgba((text_muted << 8) | 0xDD))
+                                            .text_size(px(11.0))
+                                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                                            .text_color(rgba((text_muted << 8) | 0xCC))
                                             .pb(px(spacing.padding_xs))
                                             .child("KIT"),
                                     )
@@ -1316,9 +1316,9 @@ impl ScriptListApp {
                                 .flex_col()
                                 .child(
                                     div()
-                                        .text_xs()
-                                        .font_weight(gpui::FontWeight::MEDIUM)
-                                        .text_color(rgba((text_muted << 8) | 0xDD))
+                                        .text_size(px(11.0))
+                                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                                        .text_color(rgba((text_muted << 8) | 0xCC))
                                         .pb(px(spacing.padding_xs))
                                         .child("TYPE"),
                                 )
@@ -1392,9 +1392,9 @@ impl ScriptListApp {
                                 .flex_col()
                                 .child(
                                     div()
-                                        .text_xs()
-                                        .font_weight(gpui::FontWeight::MEDIUM)
-                                        .text_color(rgba((text_muted << 8) | 0xDD))
+                                        .text_size(px(11.0))
+                                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                                        .text_color(rgba((text_muted << 8) | 0xCC))
                                         .pb(px(spacing.padding_xs))
                                         .child("TYPE"),
                                 )

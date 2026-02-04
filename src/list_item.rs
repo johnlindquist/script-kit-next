@@ -1021,7 +1021,14 @@ impl RenderOnce for ListItem {
         // When description_highlight_indices are present, matched characters are rendered with accent color
         if let Some(desc) = self.description {
             // Use text_secondary at muted opacity — subordinate to name for clear hierarchy
-            let desc_color = rgba((colors.text_secondary << 8) | ALPHA_MUTED);
+            // Boost opacity when selected: blue selection bg reduces effective contrast,
+            // so ALPHA_STRONG (85%) keeps description readable on the focused item
+            let desc_alpha = if self.selected {
+                ALPHA_STRONG
+            } else {
+                ALPHA_MUTED
+            };
+            let desc_color = rgba((colors.text_secondary << 8) | desc_alpha);
             let desc_element = if let Some(ref desc_indices) = self.description_highlight_indices {
                 // Build StyledText with highlighted matched characters in description
                 let index_set: HashSet<usize> = desc_indices.iter().copied().collect();
@@ -1042,7 +1049,13 @@ impl RenderOnce for ListItem {
                 }
 
                 // Base text uses secondary at moderate opacity - readable but doesn't compete with highlights
-                let base_color = rgba((colors.text_secondary << 8) | ALPHA_MUTED);
+                // Boost when selected for better readability on blue selection bg
+                let base_alpha = if self.selected {
+                    ALPHA_STRONG
+                } else {
+                    ALPHA_MUTED
+                };
+                let base_color = rgba((colors.text_secondary << 8) | base_alpha);
                 let styled = StyledText::new(desc.clone()).with_highlights(highlights);
 
                 div()
