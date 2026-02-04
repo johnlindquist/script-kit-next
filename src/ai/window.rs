@@ -13,10 +13,10 @@
 use anyhow::Result;
 use chrono::{Datelike, NaiveDate, Utc};
 use gpui::{
-    div, hsla, img, point, prelude::*, px, rgba, size, svg, App, BoxShadow, Context, CursorStyle,
-    Entity, ExternalPaths, FocusHandle, Focusable, IntoElement, KeyDownEvent, MouseMoveEvent,
-    ParentElement, Render, RenderImage, ScrollHandle, SharedString, Styled, Subscription, Window,
-    WindowBounds, WindowOptions,
+    div, hsla, img, list, point, prelude::*, px, rgba, size, svg, App, BoxShadow, Context,
+    CursorStyle, Entity, ExternalPaths, FocusHandle, Focusable, IntoElement, KeyDownEvent,
+    ListAlignment, ListSizingBehavior, ListState, MouseMoveEvent, ParentElement, Render,
+    RenderImage, SharedString, Styled, Subscription, Window, WindowBounds, WindowOptions,
 };
 
 // Import local IconName for SVG icons (has external_path() method)
@@ -382,8 +382,8 @@ pub struct AiApp {
     /// Messages for the currently selected chat (cached for display)
     current_messages: Vec<Message>,
 
-    /// Scroll handle for the messages area (for auto-scrolling during streaming)
-    messages_scroll_handle: ScrollHandle,
+    /// Virtualized list state for messages (only renders visible messages during scroll)
+    messages_list_state: ListState,
 
     /// Cached box shadows from theme (avoid reloading theme on every render)
     cached_box_shadows: Vec<BoxShadow>,
@@ -629,6 +629,8 @@ impl AiApp {
         // Compute last used settings before moving chats and available_models
         let last_used_settings = Self::compute_last_used_settings(&chats, &available_models);
 
+        let initial_msg_count = current_messages.len();
+
         Self {
             chats,
             selected_chat_id,
@@ -648,7 +650,11 @@ impl AiApp {
             streaming_chat_id: None,
             streaming_generation: 0,
             current_messages,
-            messages_scroll_handle: ScrollHandle::new(),
+            messages_list_state: ListState::new(
+                initial_msg_count,
+                ListAlignment::Bottom,
+                px(1024.),
+            ),
             cached_box_shadows,
             needs_focus_input: false,
             needs_command_bar_focus: false,
@@ -1999,7 +2005,7 @@ impl AiApp {
         self.current_messages = saved_messages;
 
         // Scroll to bottom to show the latest messages
-        self.messages_scroll_handle.scroll_to_bottom();
+        self.sync_messages_list_and_scroll_to_bottom();
 
         info!(
             chat_id = %chat_id,
@@ -2072,7 +2078,7 @@ impl AiApp {
         }
 
         // Scroll to bottom to show latest messages
-        self.messages_scroll_handle.scroll_to_bottom();
+        self.sync_messages_list_and_scroll_to_bottom();
 
         // Clear streaming state for display purposes, but don't clear streaming_chat_id/generation
         // The streaming task may still be running for the previous chat - it will be
@@ -2190,7 +2196,7 @@ impl AiApp {
         self.current_messages.push(user_message);
 
         // Scroll to bottom to show the new message
-        self.messages_scroll_handle.scroll_to_bottom();
+        self.sync_messages_list_and_scroll_to_bottom();
 
         // Update message preview cache
         let preview: String = content.chars().take(60).collect();
@@ -2406,7 +2412,7 @@ impl AiApp {
                                 }
                                 app.streaming_content = current;
                                 // Auto-scroll to bottom as new content arrives
-                                app.messages_scroll_handle.scroll_to_bottom();
+                                app.sync_messages_list_and_scroll_to_bottom();
                                 cx.notify();
                             })
                         });
@@ -2476,7 +2482,7 @@ impl AiApp {
                             }
                             app.streaming_content = current_content;
                             // Auto-scroll to bottom as new content arrives
-                            app.messages_scroll_handle.scroll_to_bottom();
+                            app.sync_messages_list_and_scroll_to_bottom();
                             cx.notify();
                             false
                         })
@@ -3826,34 +3832,48 @@ impl AiApp {
             )
     }
 
-    /// Render the messages area
-    fn render_messages(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let streaming_element = if self.is_streaming {
-            Some(self.render_streaming_content(cx))
-        } else {
-            None
-        };
+    /// Sync the messages list state item count and scroll to reveal the last item.
+    /// Call this whenever `current_messages` changes or streaming state toggles.
+    fn sync_messages_list_and_scroll_to_bottom(&mut self) {
+        let item_count = self.messages_list_item_count();
+        let old_count = self.messages_list_state.item_count();
+        if old_count != item_count {
+            self.messages_list_state.splice(0..old_count, item_count);
+        }
+        if item_count > 0 {
+            self.messages_list_state
+                .scroll_to_reveal_item(item_count - 1);
+        }
+    }
 
-        // Messages list with vertical scrollbar
-        // Note: The container (in render_main_panel) handles flex_1 for sizing
-        // We use size_full() here to fill the bounded container
-        div()
-            .id("messages-scroll-container")
-            .flex()
-            .flex_col()
-            .p_3()
-            .gap_3()
-            .size_full()
-            // Render all messages
-            .children(
-                self.current_messages
-                    .iter()
-                    .map(|msg| self.render_message(msg, cx)),
-            )
-            // Show streaming content if streaming
-            .children(streaming_element)
-            .overflow_y_scroll()
-            .track_scroll(&self.messages_scroll_handle)
+    /// Total item count for the messages list: messages + optional streaming row.
+    fn messages_list_item_count(&self) -> usize {
+        self.current_messages.len() + if self.is_streaming { 1 } else { 0 }
+    }
+
+    /// Render the messages area using a virtualized list.
+    fn render_messages(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let entity = cx.entity();
+        let msg_count = self.current_messages.len();
+        let is_streaming = self.is_streaming;
+
+        // Virtualized list: only renders visible messages + overdraw band.
+        // Item indices: 0..msg_count = saved messages, msg_count = streaming row (if active).
+        list(self.messages_list_state.clone(), move |ix, _window, cx| {
+            entity.update(cx, |this, cx| {
+                if ix < msg_count {
+                    this.render_message(&this.current_messages[ix], cx)
+                        .into_any_element()
+                } else if is_streaming {
+                    this.render_streaming_content(cx).into_any_element()
+                } else {
+                    div().into_any_element()
+                }
+            })
+        })
+        .with_sizing_behavior(ListSizingBehavior::Infer)
+        .size_full()
+        .p_3()
     }
 
     /// Render the main chat panel

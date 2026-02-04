@@ -2,9 +2,18 @@
 //!
 //! Uses pulldown-cmark for parsing and syntect for fenced code highlighting.
 //! Supports: headings, lists, blockquotes, bold/italic, inline code, code blocks, links.
+//!
+//! Performance: The markdown is parsed once and cached in a global HashMap keyed
+//! by content hash + dark-mode flag. On subsequent render frames (e.g. during
+//! scrolling at 60fps) we skip pulldown-cmark parsing and syntect highlighting
+//! entirely, and only build cheap GPUI elements from the cached representation.
 
 use gpui::{div, prelude::*, px, rgb, rgba, AnyElement, FontWeight, IntoElement};
 use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
+
+use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
+use std::sync::{Mutex, OnceLock};
 
 use crate::notes::code_highlight::{highlight_code_lines, CodeLine, CodeSpan};
 use crate::theme::PromptColors;
@@ -36,8 +45,53 @@ struct CodeBlockState {
     code: String,
 }
 
-/// Render markdown text to GPUI elements.
-pub fn render_markdown(text: &str, colors: &PromptColors) -> impl IntoElement {
+// ---------------------------------------------------------------------------
+// Cached intermediate representation
+// ---------------------------------------------------------------------------
+
+/// Cached intermediate representation of a parsed markdown block.
+/// Stored in a global cache to avoid re-parsing on every render frame.
+#[derive(Clone, Debug)]
+enum ParsedBlock {
+    Paragraph {
+        spans: Vec<InlineSpan>,
+        quote_depth: usize,
+    },
+    Heading {
+        level: u32,
+        spans: Vec<InlineSpan>,
+        quote_depth: usize,
+    },
+    ListBlock {
+        ordered: bool,
+        start: usize,
+        items: Vec<Vec<InlineSpan>>,
+        quote_depth: usize,
+    },
+    CodeBlock {
+        lang_label: String,
+        lines: Vec<CodeLine>,
+        quote_depth: usize,
+    },
+    HorizontalRule {
+        quote_depth: usize,
+    },
+}
+
+static MARKDOWN_CACHE: OnceLock<Mutex<HashMap<u64, Vec<ParsedBlock>>>> = OnceLock::new();
+
+fn markdown_cache_key(text: &str, is_dark: bool) -> u64 {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    text.hash(&mut hasher);
+    is_dark.hash(&mut hasher);
+    hasher.finish()
+}
+
+// ---------------------------------------------------------------------------
+// Phase 1: Parse markdown → Vec<ParsedBlock>  (cached)
+// ---------------------------------------------------------------------------
+
+fn parse_markdown(text: &str, is_dark: bool) -> Vec<ParsedBlock> {
     let mut options = Options::empty();
     options.insert(Options::ENABLE_STRIKETHROUGH);
     options.insert(Options::ENABLE_TABLES);
@@ -47,7 +101,7 @@ pub fn render_markdown(text: &str, colors: &PromptColors) -> impl IntoElement {
 
     let parser = Parser::new_ext(text, options);
 
-    let mut blocks: Vec<AnyElement> = Vec::new();
+    let mut blocks: Vec<ParsedBlock> = Vec::new();
     let mut spans: Vec<InlineSpan> = Vec::new();
     let mut style_stack: Vec<InlineStyle> = vec![InlineStyle::default()];
     let mut heading_level: Option<u32> = None;
@@ -91,22 +145,28 @@ pub fn render_markdown(text: &str, colors: &PromptColors) -> impl IntoElement {
             },
             Event::End(tag) => match tag {
                 TagEnd::Paragraph => {
-                    flush_paragraph(
-                        &mut blocks,
-                        &mut spans,
-                        &mut current_item,
-                        quote_depth,
-                        colors,
-                    );
+                    if !spans.is_empty() {
+                        if let Some(item_spans) = current_item.as_mut() {
+                            item_spans.append(&mut spans);
+                        } else {
+                            blocks.push(ParsedBlock::Paragraph {
+                                spans: spans.clone(),
+                                quote_depth,
+                            });
+                            spans.clear();
+                        }
+                    }
                 }
                 TagEnd::Heading(_) => {
-                    flush_heading(
-                        &mut blocks,
-                        &mut spans,
-                        heading_level.take(),
-                        quote_depth,
-                        colors,
-                    );
+                    if !spans.is_empty() {
+                        let level = heading_level.take().unwrap_or(3);
+                        blocks.push(ParsedBlock::Heading {
+                            level,
+                            spans: spans.clone(),
+                            quote_depth,
+                        });
+                        spans.clear();
+                    }
                 }
                 TagEnd::Item => {
                     if let Some(mut item_spans) = current_item.take() {
@@ -120,33 +180,12 @@ pub fn render_markdown(text: &str, colors: &PromptColors) -> impl IntoElement {
                 }
                 TagEnd::List(_) => {
                     if let Some(list) = list_state.take() {
-                        for (index, item) in list.items.iter().enumerate() {
-                            let marker = if list.ordered {
-                                format!("{}.", list.start + index)
-                            } else {
-                                "•".to_string()
-                            };
-                            let item_text: String = item.iter().map(|s| s.text.as_str()).collect();
-                            let row = div()
-                                .flex()
-                                .flex_row()
-                                .w_full()
-                                .gap(px(6.0))
-                                .text_sm()
-                                .child(
-                                    div()
-                                        .flex_shrink_0()
-                                        .text_color(rgb(colors.text_tertiary))
-                                        .child(marker),
-                                )
-                                .child(
-                                    div()
-                                        .min_w_0()
-                                        .text_color(rgb(colors.text_primary))
-                                        .child(item_text),
-                                );
-                            push_block(&mut blocks, row, quote_depth, colors);
-                        }
+                        blocks.push(ParsedBlock::ListBlock {
+                            ordered: list.ordered,
+                            start: list.start,
+                            items: list.items,
+                            quote_depth,
+                        });
                     }
                 }
                 TagEnd::BlockQuote(_) => {
@@ -157,9 +196,14 @@ pub fn render_markdown(text: &str, colors: &PromptColors) -> impl IntoElement {
                 }
                 TagEnd::CodeBlock => {
                     if let Some(block) = code_block.take() {
-                        let element =
-                            render_code_block(&block.code, block.language.as_deref(), colors);
-                        push_block(&mut blocks, element, quote_depth, colors);
+                        let lang_label = block.language.as_deref().unwrap_or("").trim().to_string();
+                        let lines =
+                            highlight_code_lines(&block.code, block.language.as_deref(), is_dark);
+                        blocks.push(ParsedBlock::CodeBlock {
+                            lang_label,
+                            lines,
+                            quote_depth,
+                        });
                     }
                 }
                 _ => {}
@@ -182,7 +226,7 @@ pub fn render_markdown(text: &str, colors: &PromptColors) -> impl IntoElement {
                 push_text_span(&mut spans, " ", style);
             }
             Event::Rule => {
-                push_block(&mut blocks, render_hr(colors), quote_depth, colors);
+                blocks.push(ParsedBlock::HorizontalRule { quote_depth });
             }
             Event::Html(html) => {
                 let style = *style_stack.last().unwrap_or(&InlineStyle::default());
@@ -192,14 +236,202 @@ pub fn render_markdown(text: &str, colors: &PromptColors) -> impl IntoElement {
         }
     }
 
+    blocks
+}
+
+// ---------------------------------------------------------------------------
+// Phase 2: Vec<ParsedBlock> → GPUI elements  (every frame, cheap)
+// ---------------------------------------------------------------------------
+
+fn build_markdown_elements(blocks: &[ParsedBlock], colors: &PromptColors) -> Vec<AnyElement> {
+    let mut elements: Vec<AnyElement> = Vec::new();
+
+    for block in blocks {
+        match block {
+            ParsedBlock::Paragraph { spans, quote_depth } => {
+                if !spans.is_empty() {
+                    let element = render_inline_spans(spans, colors).w_full();
+                    push_block(&mut elements, element, *quote_depth, colors);
+                }
+            }
+            ParsedBlock::Heading {
+                level,
+                spans,
+                quote_depth,
+            } => {
+                if !spans.is_empty() {
+                    let mut heading = render_inline_spans(spans, colors)
+                        .w_full()
+                        .text_color(rgb(colors.text_primary));
+                    heading = match level {
+                        1 => heading.text_lg().font_weight(FontWeight::BOLD),
+                        2 => heading.text_base().font_weight(FontWeight::SEMIBOLD),
+                        3 => heading.text_sm().font_weight(FontWeight::SEMIBOLD),
+                        _ => heading.text_sm().font_weight(FontWeight::MEDIUM),
+                    };
+                    push_block(&mut elements, heading, *quote_depth, colors);
+                }
+            }
+            ParsedBlock::ListBlock {
+                ordered,
+                start,
+                items,
+                quote_depth,
+            } => {
+                for (index, item) in items.iter().enumerate() {
+                    let marker = if *ordered {
+                        format!("{}.", start + index)
+                    } else {
+                        "\u{2022}".to_string()
+                    };
+                    let item_text: String = item.iter().map(|s| s.text.as_str()).collect();
+                    let row = div()
+                        .flex()
+                        .flex_row()
+                        .w_full()
+                        .gap(px(6.0))
+                        .text_sm()
+                        .child(
+                            div()
+                                .flex_shrink_0()
+                                .text_color(rgb(colors.text_tertiary))
+                                .child(marker),
+                        )
+                        .child(
+                            div()
+                                .min_w_0()
+                                .text_color(rgb(colors.text_primary))
+                                .child(item_text),
+                        );
+                    push_block(&mut elements, row, *quote_depth, colors);
+                }
+            }
+            ParsedBlock::CodeBlock {
+                lang_label,
+                lines,
+                quote_depth,
+            } => {
+                let element = build_code_block_element(lang_label, lines, colors);
+                push_block(&mut elements, element, *quote_depth, colors);
+            }
+            ParsedBlock::HorizontalRule { quote_depth } => {
+                push_block(&mut elements, render_hr(colors), *quote_depth, colors);
+            }
+        }
+    }
+
+    elements
+}
+
+/// Build a code block element from pre-highlighted lines (avoids re-running syntect).
+fn build_code_block_element(
+    lang_label: &str,
+    lines: &[CodeLine],
+    colors: &PromptColors,
+) -> gpui::Div {
+    let mut code_container = div()
+        .w_full()
+        .mt(px(4.0))
+        .mb(px(4.0))
+        .rounded(px(6.0))
+        .bg(rgba((colors.code_bg << 8) | 0xE0))
+        .border_1()
+        .border_color(rgba((colors.quote_border << 8) | 0x40))
+        .flex()
+        .flex_col()
+        .overflow_hidden();
+
+    if !lang_label.is_empty() {
+        code_container = code_container.child(
+            div()
+                .w_full()
+                .px(px(10.0))
+                .py(px(4.0))
+                .border_b_1()
+                .border_color(rgba((colors.quote_border << 8) | 0x30))
+                .text_xs()
+                .text_color(rgb(colors.text_tertiary))
+                .child(lang_label.to_string()),
+        );
+    }
+
+    let mut body = div()
+        .w_full()
+        .px(px(10.0))
+        .py(px(8.0))
+        .flex()
+        .flex_col()
+        .gap(px(2.0));
+
+    for line in lines {
+        let mut line_div = div()
+            .flex()
+            .flex_row()
+            .w_full()
+            .font_family("Menlo")
+            .text_sm()
+            .min_h(px(16.0));
+
+        if line.spans.is_empty() {
+            line_div = line_div.child(" ");
+        } else {
+            for span in &line.spans {
+                line_div =
+                    line_div.child(div().text_color(rgb(span.color)).child(span.text.clone()));
+            }
+        }
+
+        body = body.child(line_div);
+    }
+
+    code_container.child(body)
+}
+
+// ---------------------------------------------------------------------------
+// Public entry point
+// ---------------------------------------------------------------------------
+
+/// Render markdown text to GPUI elements.
+///
+/// Uses a global cache to avoid re-parsing markdown and re-highlighting code
+/// on every render frame. The cache is keyed on (content hash, dark-mode flag).
+pub fn render_markdown(text: &str, colors: &PromptColors) -> impl IntoElement {
+    // Check cache for parsed blocks
+    let key = markdown_cache_key(text, colors.is_dark);
+    let cache = MARKDOWN_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+
+    let parsed_blocks = if let Ok(guard) = cache.lock() {
+        guard.get(&key).cloned()
+    } else {
+        None
+    };
+
+    let parsed_blocks = parsed_blocks.unwrap_or_else(|| {
+        let blocks = parse_markdown(text, colors.is_dark);
+        if let Ok(mut guard) = cache.lock() {
+            // Cap cache size to prevent unbounded growth
+            if guard.len() > 256 {
+                guard.clear();
+            }
+            guard.insert(key, blocks.clone());
+        }
+        blocks
+    });
+
+    let elements = build_markdown_elements(&parsed_blocks, colors);
+
     div()
         .flex()
         .flex_col()
         .gap(px(6.0))
         .w_full()
         .min_w_0()
-        .children(blocks)
+        .children(elements)
 }
+
+// ---------------------------------------------------------------------------
+// Helpers (shared by both phases)
+// ---------------------------------------------------------------------------
 
 fn heading_level_to_u32(level: HeadingLevel) -> u32 {
     match level {
@@ -252,53 +484,6 @@ fn push_text_span(spans: &mut Vec<InlineSpan>, text: &str, style: InlineStyle) {
         text: text.to_string(),
         style,
     });
-}
-
-fn flush_paragraph(
-    blocks: &mut Vec<AnyElement>,
-    spans: &mut Vec<InlineSpan>,
-    current_item: &mut Option<Vec<InlineSpan>>,
-    quote_depth: usize,
-    colors: &PromptColors,
-) {
-    if spans.is_empty() {
-        return;
-    }
-
-    if let Some(item_spans) = current_item.as_mut() {
-        item_spans.append(spans);
-        return;
-    }
-
-    let element = render_inline_spans(spans, colors).w_full();
-    spans.clear();
-    push_block(blocks, element, quote_depth, colors);
-}
-
-fn flush_heading(
-    blocks: &mut Vec<AnyElement>,
-    spans: &mut Vec<InlineSpan>,
-    level: Option<u32>,
-    quote_depth: usize,
-    colors: &PromptColors,
-) {
-    if spans.is_empty() {
-        return;
-    }
-
-    let level = level.unwrap_or(3);
-    let mut heading = render_inline_spans(spans, colors)
-        .w_full()
-        .text_color(rgb(colors.text_primary));
-    heading = match level {
-        1 => heading.text_lg().font_weight(FontWeight::BOLD),
-        2 => heading.text_base().font_weight(FontWeight::SEMIBOLD),
-        3 => heading.text_sm().font_weight(FontWeight::SEMIBOLD),
-        _ => heading.text_sm().font_weight(FontWeight::MEDIUM),
-    };
-
-    spans.clear();
-    push_block(blocks, heading, quote_depth, colors);
 }
 
 fn push_block(
@@ -387,6 +572,9 @@ fn render_hr(colors: &PromptColors) -> gpui::Div {
         .bg(rgb(colors.hr_color))
 }
 
+/// Render a code block (kept for backward compatibility; new path uses
+/// `build_code_block_element` with pre-highlighted lines).
+#[allow(dead_code)]
 fn render_code_block(code: &str, lang: Option<&str>, colors: &PromptColors) -> gpui::Div {
     let lang_label = lang.unwrap_or("").trim();
     let lines: Vec<CodeLine> = highlight_code_lines(code, lang, colors.is_dark);
@@ -557,7 +745,7 @@ fn parse_markdown_blocks(text: &str) -> Vec<TestBlock> {
                             let marker = if list.ordered {
                                 format!("{}.", list.start + index)
                             } else {
-                                "•".to_string()
+                                "\u{2022}".to_string()
                             };
                             let item_text: String = item.iter().map(|s| s.text.as_str()).collect();
                             blocks.push(TestBlock::ListItem(marker, item_text));
@@ -612,9 +800,9 @@ mod tests {
         assert_eq!(
             blocks,
             vec![
-                TestBlock::ListItem("•".into(), "First item".into()),
-                TestBlock::ListItem("•".into(), "Second item".into()),
-                TestBlock::ListItem("•".into(), "Third item".into()),
+                TestBlock::ListItem("\u{2022}".into(), "First item".into()),
+                TestBlock::ListItem("\u{2022}".into(), "Second item".into()),
+                TestBlock::ListItem("\u{2022}".into(), "Third item".into()),
             ]
         );
     }
@@ -640,8 +828,8 @@ mod tests {
         assert_eq!(
             blocks,
             vec![
-                TestBlock::ListItem("•".into(), "Item one".into()),
-                TestBlock::ListItem("•".into(), "Item two".into()),
+                TestBlock::ListItem("\u{2022}".into(), "Item one".into()),
+                TestBlock::ListItem("\u{2022}".into(), "Item two".into()),
                 TestBlock::Paragraph("Paragraph after the list.".into()),
             ]
         );
@@ -655,8 +843,8 @@ mod tests {
             blocks,
             vec![
                 TestBlock::Heading(2, "My Heading".into()),
-                TestBlock::ListItem("•".into(), "Item A".into()),
-                TestBlock::ListItem("•".into(), "Item B".into()),
+                TestBlock::ListItem("\u{2022}".into(), "Item A".into()),
+                TestBlock::ListItem("\u{2022}".into(), "Item B".into()),
                 TestBlock::Paragraph("Some text.".into()),
             ]
         );
@@ -669,8 +857,8 @@ mod tests {
         assert_eq!(
             blocks,
             vec![
-                TestBlock::ListItem("•".into(), "Bold item".into()),
-                TestBlock::ListItem("•".into(), "Item with code".into()),
+                TestBlock::ListItem("\u{2022}".into(), "Bold item".into()),
+                TestBlock::ListItem("\u{2022}".into(), "Item with code".into()),
             ]
         );
     }
@@ -682,7 +870,7 @@ mod tests {
         assert_eq!(
             blocks,
             vec![
-                TestBlock::ListItem("•".into(), "Item".into()),
+                TestBlock::ListItem("\u{2022}".into(), "Item".into()),
                 TestBlock::CodeBlock(Some("rust".into()), "fn main() {}\n".into()),
             ]
         );
@@ -715,9 +903,9 @@ mod tests {
             blocks,
             vec![
                 TestBlock::Paragraph("Here\u{2019}s a list:".into()),
-                TestBlock::ListItem("•".into(), "First item".into()),
-                TestBlock::ListItem("•".into(), "Second item".into()),
-                TestBlock::ListItem("•".into(), "Third item".into()),
+                TestBlock::ListItem("\u{2022}".into(), "First item".into()),
+                TestBlock::ListItem("\u{2022}".into(), "Second item".into()),
+                TestBlock::ListItem("\u{2022}".into(), "Third item".into()),
                 TestBlock::Paragraph("Done!".into()),
             ]
         );

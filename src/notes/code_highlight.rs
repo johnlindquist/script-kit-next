@@ -4,7 +4,9 @@
 //! - Highlights code using syntect
 //! - Returns styled spans for GPUI rendering
 
-use std::sync::OnceLock;
+use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
+use std::sync::{Mutex, OnceLock};
 
 use syntect::easy::HighlightLines;
 use syntect::highlighting::{Style, Theme, ThemeSet};
@@ -41,6 +43,19 @@ pub struct HighlightedCodeBlock {
 static SYNTAX_SET: OnceLock<SyntaxSet> = OnceLock::new();
 static DARK_THEME: OnceLock<Theme> = OnceLock::new();
 static LIGHT_THEME: OnceLock<Theme> = OnceLock::new();
+
+/// Global cache for syntax highlighting results.
+/// Keyed by hash of (code, language, is_dark) to avoid re-running syntect
+/// on every render frame during scrolling.
+static HIGHLIGHT_CACHE: OnceLock<Mutex<HashMap<u64, Vec<CodeLine>>>> = OnceLock::new();
+
+fn highlight_cache_key(code: &str, language: Option<&str>, is_dark: bool) -> u64 {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    code.hash(&mut hasher);
+    language.hash(&mut hasher);
+    is_dark.hash(&mut hasher);
+    hasher.finish()
+}
 
 fn syntax_set() -> &'static SyntaxSet {
     SYNTAX_SET.get_or_init(SyntaxSet::load_defaults_newlines)
@@ -179,6 +194,15 @@ pub fn highlight_code_lines(code: &str, language: Option<&str>, is_dark: bool) -
         return Vec::new();
     }
 
+    // Check cache to avoid expensive syntect highlighting on every render frame
+    let key = highlight_cache_key(code, language, is_dark);
+    let cache = HIGHLIGHT_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    if let Ok(guard) = cache.lock() {
+        if let Some(cached) = guard.get(&key) {
+            return cached.clone();
+        }
+    }
+
     let ps = syntax_set();
     let theme = theme_for_mode(is_dark);
     let default_color = if is_dark { 0xCCCCCC_u32 } else { 0x333333_u32 };
@@ -234,6 +258,14 @@ pub fn highlight_code_lines(code: &str, language: Option<&str>, is_dark: bool) -
         }
 
         lines.push(CodeLine { spans });
+    }
+
+    // Cache the result
+    if let Ok(mut guard) = cache.lock() {
+        if guard.len() > 512 {
+            guard.clear();
+        }
+        guard.insert(key, lines.clone());
     }
 
     lines
