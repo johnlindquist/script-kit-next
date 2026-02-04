@@ -125,11 +125,11 @@ pub struct BackgroundOpacity {
 }
 
 fn default_selected_opacity() -> f32 {
-    0.12 // Subtle selection with vibrancy like Raycast
+    0.15 // Selection with vibrancy — bumped from 0.12 for clearer active-item indication
 }
 
 fn default_hover_opacity() -> f32 {
-    0.07 // Very subtle hover feedback
+    0.09 // Hover feedback — bumped from 0.07 for more visible mouse-tracking cue
 }
 
 fn default_preview_opacity() -> f32 {
@@ -202,12 +202,12 @@ impl BackgroundOpacity {
             title_bar: 0.30,                 // Title bar areas
             search_box: 0.40,                // Search input backgrounds
             log_panel: 0.40,                 // Log/terminal panels
-            selected: 0.12,                  // Selected list item highlight - subtle with vibrancy
-            hover: 0.07,                     // Hovered list item highlight - very subtle feedback
-            preview: 0.0,                    // Preview panel (0 = fully transparent)
-            dialog: 0.15, // Dialogs/popups - very low opacity, let vibrancy blur show through
-            input: 0.30,  // Input fields
-            panel: 0.20,  // Panels/containers
+            selected: 0.15, // Selected list item highlight — bumped from 0.12 for clearer indication
+            hover: 0.09,    // Hovered list item highlight — bumped from 0.07 for visible tracking
+            preview: 0.0,   // Preview panel (0 = fully transparent)
+            dialog: 0.15,   // Dialogs/popups - very low opacity, let vibrancy blur show through
+            input: 0.30,    // Input fields
+            panel: 0.20,    // Panels/containers
             input_inactive: 0.25, // Input fields when empty/inactive
             input_active: 0.50, // Input fields when has text/active
             border_inactive: 0.125, // Borders when inactive

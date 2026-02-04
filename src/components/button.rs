@@ -318,7 +318,7 @@ impl RenderOnce for Button {
             .text_color(text_color)
             .text_sm()
             .font_weight(FontWeight::MEDIUM)
-            .font_family(".AppleSystemUIFont")
+            .font_family(crate::list_item::FONT_SYSTEM_UI)
             .cursor_pointer()
             .child(self.label)
             .child(shortcut_element);

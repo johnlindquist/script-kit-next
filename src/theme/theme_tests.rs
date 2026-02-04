@@ -81,8 +81,8 @@ fn test_opacity_defaults() {
     assert_eq!(opacity.title_bar, 0.30);
     assert_eq!(opacity.search_box, 0.40);
     assert_eq!(opacity.log_panel, 0.40);
-    assert_eq!(opacity.selected, 0.12); // Subtle selection with vibrancy like Raycast
-    assert_eq!(opacity.hover, 0.07); // Very subtle hover with vibrancy
+    assert_eq!(opacity.selected, 0.15); // Bumped for clearer active-item indication
+    assert_eq!(opacity.hover, 0.09); // Bumped for more visible mouse-tracking cue
     assert_eq!(opacity.preview, 0.0);
     assert_eq!(opacity.dialog, 0.15);
     assert_eq!(opacity.input, 0.30);
