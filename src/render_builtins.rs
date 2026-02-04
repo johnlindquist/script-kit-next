@@ -2297,9 +2297,29 @@ impl ScriptListApp {
             .into_any_element()
     }
 
-    /// Render the theme chooser view with live preview and palette swatches
+    /// Helper: compute filtered preset indices from a filter string
+    fn theme_chooser_filtered_indices(filter: &str) -> Vec<usize> {
+        let presets = theme::presets::all_presets();
+        if filter.is_empty() {
+            (0..presets.len()).collect()
+        } else {
+            let f = filter.to_lowercase();
+            presets
+                .iter()
+                .enumerate()
+                .filter(|(_, p)| {
+                    p.name.to_lowercase().contains(&f)
+                        || p.description.to_lowercase().contains(&f)
+                })
+                .map(|(i, _)| i)
+                .collect()
+        }
+    }
+
+    /// Render the theme chooser with search, live preview, and preview panel
     pub(crate) fn render_theme_chooser(
         &mut self,
+        filter: &str,
         selected_index: usize,
         cx: &mut Context<Self>,
     ) -> AnyElement {
@@ -2310,30 +2330,68 @@ impl ScriptListApp {
         let text_primary = self.theme.colors.text.primary;
         let text_dimmed = self.theme.colors.text.dimmed;
         let text_secondary = self.theme.colors.text.secondary;
+        let text_muted = self.theme.colors.text.muted;
         let accent_color = self.theme.colors.accent.selected;
         let ui_border = self.theme.colors.ui.border;
         let selection_bg = self.theme.colors.accent.selected_subtle;
+        let bg_main = self.theme.colors.background.main;
+        let bg_search_box = self.theme.colors.background.search_box;
+        let text_on_accent = self.theme.colors.text.on_accent;
+        let ui_success = self.theme.colors.ui.success;
+        let ui_error = self.theme.colors.ui.error;
+        let ui_warning = self.theme.colors.ui.warning;
+        let ui_info = self.theme.colors.ui.info;
         let opacity = self.theme.get_opacity();
         let selected_alpha = (opacity.selected * 255.0) as u32;
         let hover_alpha = (opacity.hover * 255.0).max(18.0) as u32;
         let presets = theme::presets::all_presets();
         let preview_colors = theme::presets::all_preset_preview_colors();
-        let preset_count = presets.len();
         let first_light = theme::presets::first_light_theme_index();
-        let dark_count = first_light;
-        let light_count = preset_count - first_light;
         let original_index = self
             .theme_before_chooser
             .as_ref()
             .map(|t| theme::presets::find_current_preset_index(t))
             .unwrap_or(0);
 
-        // Theme item height - taller than standard for richer preview
-        let theme_item_height: f32 = 48.0;
+        // Filter presets by name or description
+        let filtered_indices = Self::theme_chooser_filtered_indices(filter);
+        let filtered_count = filtered_indices.len();
+        let filter_is_empty = filter.is_empty();
 
-        // Entity handle for click handlers inside uniform_list
+        // Count dark/light in filtered results
+        let dark_count = filtered_indices
+            .iter()
+            .filter(|&&i| presets[i].is_dark)
+            .count();
+        let light_count = filtered_count - dark_count;
+
+        // Terminal colors for preview panel
+        let terminal = &self.theme.colors.terminal;
+        let term_colors: Vec<u32> = vec![
+            terminal.red,
+            terminal.green,
+            terminal.yellow,
+            terminal.blue,
+            terminal.magenta,
+            terminal.cyan,
+            terminal.white,
+            terminal.black,
+        ];
+        let term_bright: Vec<u32> = vec![
+            terminal.bright_red,
+            terminal.bright_green,
+            terminal.bright_yellow,
+            terminal.bright_blue,
+            terminal.bright_magenta,
+            terminal.bright_cyan,
+            terminal.bright_white,
+            terminal.bright_black,
+        ];
+
+        let theme_item_height: f32 = 48.0;
         let entity_handle = cx.entity().downgrade();
 
+        // ── Keyboard handler ───────────────────────────────────────
         let handle_key = cx.listener(
             move |this: &mut Self,
                   event: &gpui::KeyDownEvent,
@@ -2342,6 +2400,8 @@ impl ScriptListApp {
                 this.hide_mouse_cursor(cx);
                 let key_str = event.keystroke.key.to_lowercase();
                 let has_cmd = event.keystroke.modifiers.platform;
+
+                // Escape: restore original and close
                 if key_str == "escape" {
                     if let Some(original) = this.theme_before_chooser.take() {
                         this.theme = original;
@@ -2350,6 +2410,7 @@ impl ScriptListApp {
                     this.go_back_or_close(window, cx);
                     return;
                 }
+                // Cmd+W: restore and close window
                 if has_cmd && key_str == "w" {
                     if let Some(original) = this.theme_before_chooser.take() {
                         this.theme = original;
@@ -2358,6 +2419,7 @@ impl ScriptListApp {
                     this.close_and_reset_window(cx);
                     return;
                 }
+                // Enter: apply and close
                 if key_str == "enter" {
                     this.theme_before_chooser = None;
                     if let Err(e) = theme::presets::write_theme_to_disk(&this.theme) {
@@ -2367,12 +2429,27 @@ impl ScriptListApp {
                     this.go_back_or_close(window, cx);
                     return;
                 }
+
+                // Compute filtered indices from current filter
+                let current_filter =
+                    if let AppView::ThemeChooserView { ref filter, .. } = this.current_view {
+                        filter.clone()
+                    } else {
+                        return;
+                    };
                 let presets = theme::presets::all_presets();
-                let count = presets.len();
+                let filtered = Self::theme_chooser_filtered_indices(&current_filter);
+                let count = filtered.len();
                 if count == 0 {
                     return;
                 }
-                if let AppView::ThemeChooserView { selected_index } = &mut this.current_view {
+
+                if let AppView::ThemeChooserView {
+                    ref mut selected_index,
+                    ..
+                } = this.current_view
+                {
+                    let page_size: usize = 5;
                     match key_str.as_str() {
                         "up" | "arrowup" => {
                             *selected_index = if *selected_index == 0 {
@@ -2390,15 +2467,27 @@ impl ScriptListApp {
                         "end" => {
                             *selected_index = count - 1;
                         }
+                        "pageup" => {
+                            *selected_index = selected_index.saturating_sub(page_size);
+                        }
+                        "pagedown" => {
+                            *selected_index = (*selected_index + page_size).min(count - 1);
+                        }
                         _ => return,
                     }
-                    let new_theme = std::sync::Arc::new(presets[*selected_index].create_theme());
+                    // Map to actual preset index and apply theme
+                    let preset_idx = filtered[*selected_index];
+                    let new_theme = std::sync::Arc::new(presets[preset_idx].create_theme());
                     this.theme = new_theme;
+                    this.theme_chooser_scroll_handle
+                        .scroll_to_item(*selected_index, ScrollStrategy::Nearest);
                     theme::sync_gpui_component_theme(cx);
                     cx.notify();
                 }
             },
         );
+
+        // ── Pre-compute data for list closure ──────────────────────
         let preset_names: Vec<String> = presets.iter().map(|p| p.name.to_string()).collect();
         let preset_descs: Vec<String> = presets.iter().map(|p| p.description.to_string()).collect();
         let preset_is_dark: Vec<bool> = presets.iter().map(|p| p.is_dark).collect();
@@ -2406,21 +2495,27 @@ impl ScriptListApp {
         let orig_idx = original_index;
         let first_light_idx = first_light;
         let hover_bg = rgba((selection_bg << 8) | hover_alpha);
+        let filtered_indices_for_list = filtered_indices.clone();
+
+        // ── Theme list ─────────────────────────────────────────────
         let list = uniform_list(
             "theme-chooser",
-            preset_count,
+            filtered_count,
             move |visible_range, _window, _cx| {
                 visible_range
                     .map(|ix| {
+                        let preset_idx = filtered_indices_for_list[ix];
                         let is_selected = ix == selected;
-                        let is_original = ix == orig_idx;
-                        let name = &preset_names[ix];
-                        let desc = &preset_descs[ix];
-                        let is_dark = preset_is_dark[ix];
-                        let colors = &preview_colors[ix];
-                        let is_first_light = ix == first_light_idx && first_light_idx > 0;
+                        let is_original = preset_idx == orig_idx;
+                        let name = &preset_names[preset_idx];
+                        let desc = &preset_descs[preset_idx];
+                        let is_dark = preset_is_dark[preset_idx];
+                        let colors = &preview_colors[preset_idx];
+                        let is_first_light = filter_is_empty
+                            && preset_idx == first_light_idx
+                            && first_light_idx > 0;
 
-                        // Color swatch - larger rounded rectangles for better visibility
+                        // Color swatches
                         let swatch = |color: u32| {
                             div()
                                 .w(px(14.0))
@@ -2439,7 +2534,7 @@ impl ScriptListApp {
                             .child(swatch(colors.secondary))
                             .child(swatch(colors.border));
 
-                        // Checkmark indicator for original (saved) theme
+                        // Checkmark for original (saved) theme
                         let indicator = if is_original {
                             div()
                                 .text_sm()
@@ -2465,11 +2560,10 @@ impl ScriptListApp {
                             .border_color(badge_border)
                             .child(badge_text.to_string());
 
-                        // Selection and separator backgrounds
                         let sel_bg = rgba((selection_bg << 8) | selected_alpha);
                         let border_rgba = rgba((ui_border << 8) | 0x30);
 
-                        // Section label for light themes group
+                        // Section label for light themes (only when unfiltered)
                         let section_label = if is_first_light {
                             Some(
                                 div()
@@ -2491,38 +2585,54 @@ impl ScriptListApp {
                             None
                         };
 
-                        // Theme name - accent color when selected, bold when original
                         let name_color = if is_selected {
                             accent_color
                         } else {
                             text_primary
                         };
 
-                        // Click handler: select + preview this theme
+                        // Click handler: select + preview via filtered index
                         let click_entity = entity_handle.clone();
                         let click_handler = move |_event: &gpui::ClickEvent,
                                                    _window: &mut Window,
                                                    cx: &mut gpui::App| {
                             if let Some(app) = click_entity.upgrade() {
                                 app.update(cx, |this, cx| {
-                                    if let AppView::ThemeChooserView {
-                                        selected_index: ref mut si,
+                                    // Recompute filtered indices from current filter
+                                    let current_filter = if let AppView::ThemeChooserView {
+                                        ref filter,
+                                        ..
                                     } = this.current_view
                                     {
-                                        *si = ix;
-                                    }
+                                        filter.clone()
+                                    } else {
+                                        return;
+                                    };
                                     let presets = theme::presets::all_presets();
-                                    if ix < presets.len() {
-                                        this.theme =
-                                            std::sync::Arc::new(presets[ix].create_theme());
-                                        theme::sync_gpui_component_theme(cx);
-                                        cx.notify();
+                                    let filtered =
+                                        Self::theme_chooser_filtered_indices(&current_filter);
+
+                                    if let AppView::ThemeChooserView {
+                                        ref mut selected_index,
+                                        ..
+                                    } = this.current_view
+                                    {
+                                        *selected_index = ix;
+                                    }
+                                    if let Some(&pidx) = filtered.get(ix) {
+                                        if pidx < presets.len() {
+                                            this.theme = std::sync::Arc::new(
+                                                presets[pidx].create_theme(),
+                                            );
+                                            theme::sync_gpui_component_theme(cx);
+                                            cx.notify();
+                                        }
                                     }
                                 });
                             }
                         };
 
-                        // Build the item row
+                        // Build item row
                         let row = div()
                             .id(ix)
                             .w_full()
@@ -2564,7 +2674,6 @@ impl ScriptListApp {
                             )
                             .child(badge);
 
-                        // Wrap with optional section label
                         if let Some(label) = section_label {
                             div()
                                 .w_full()
@@ -2584,7 +2693,7 @@ impl ScriptListApp {
         .track_scroll(&self.theme_chooser_scroll_handle)
         .into_any_element();
 
-        // Header with theme counts and section label
+        // ── Header with search input ───────────────────────────────
         let header = div()
             .w_full()
             .px(px(design_spacing.padding_lg))
@@ -2592,7 +2701,7 @@ impl ScriptListApp {
             .pb(px(4.0))
             .flex()
             .flex_col()
-            .gap(px(4.0))
+            .gap(px(6.0))
             .child(
                 div()
                     .flex()
@@ -2613,20 +2722,305 @@ impl ScriptListApp {
                         )),
                     ),
             )
+            // Search input
+            .child(
+                div()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .child(
+                        div().flex_1().flex().flex_row().items_center().child(
+                            Input::new(&self.gpui_input_state)
+                                .w_full()
+                                .h(px(28.))
+                                .px(px(0.))
+                                .py(px(0.))
+                                .with_size(Size::Size(px(design_typography.font_size_xl)))
+                                .appearance(false)
+                                .bordered(false)
+                                .focus_bordered(false),
+                        ),
+                    ),
+            )
+            // "DARK" section label only when unfiltered
+            .when(filter_is_empty, |d| {
+                d.child(
+                    div()
+                        .w_full()
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(rgb(text_dimmed))
+                                .font_weight(gpui::FontWeight::SEMIBOLD)
+                                .child("DARK"),
+                        ),
+                )
+            });
+
+        // ── Preview panel ──────────────────────────────────────────
+        let border_rgba = rgba((ui_border << 8) | 0x40);
+        let preview_panel = div()
+            .w_1_2()
+            .h_full()
+            .border_l_1()
+            .border_color(border_rgba)
+            .px(px(design_spacing.padding_lg))
+            .py(px(design_spacing.padding_md))
+            .flex()
+            .flex_col()
+            .gap(px(12.0))
+            .overflow_y_hidden()
+            // Section title
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(rgb(text_dimmed))
+                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                    .child("PREVIEW"),
+            )
+            // Mock search box
             .child(
                 div()
                     .w_full()
-                    .pt(px(2.0))
+                    .h(px(32.0))
+                    .rounded(px(6.0))
+                    .bg(rgb(bg_search_box))
+                    .border_1()
+                    .border_color(border_rgba)
+                    .px(px(10.0))
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .child(
+                        div()
+                            .text_sm()
+                            .text_color(rgb(text_muted))
+                            .child("Search scripts..."),
+                    ),
+            )
+            // Mock list items
+            .child(
+                div()
+                    .w_full()
+                    .rounded(px(6.0))
+                    .border_1()
+                    .border_color(border_rgba)
+                    .overflow_hidden()
+                    .flex()
+                    .flex_col()
+                    // Selected item
+                    .child(
+                        div()
+                            .w_full()
+                            .h(px(32.0))
+                            .bg(rgb(accent_color))
+                            .px(px(10.0))
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                                    .text_color(rgb(text_on_accent))
+                                    .child("Selected Item"),
+                            ),
+                    )
+                    // Normal item
+                    .child(
+                        div()
+                            .w_full()
+                            .h(px(32.0))
+                            .bg(rgb(bg_main))
+                            .px(px(10.0))
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .text_color(rgb(text_primary))
+                                    .child("Regular Item"),
+                            ),
+                    )
+                    // Secondary item
+                    .child(
+                        div()
+                            .w_full()
+                            .h(px(32.0))
+                            .bg(rgb(bg_main))
+                            .px(px(10.0))
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .text_color(rgb(text_secondary))
+                                    .child("Another Item"),
+                            ),
+                    ),
+            )
+            // Text samples
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(4.0))
+                    .child(
+                        div()
+                            .text_sm()
+                            .text_color(rgb(text_primary))
+                            .child("Primary text sample"),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(text_secondary))
+                            .child("Secondary descriptive text"),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(text_muted))
+                            .child("Muted helper text"),
+                    ),
+            )
+            // Terminal colors
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(4.0))
                     .child(
                         div()
                             .text_xs()
                             .text_color(rgb(text_dimmed))
                             .font_weight(gpui::FontWeight::SEMIBOLD)
-                            .child("DARK"),
+                            .child("TERMINAL"),
+                    )
+                    .child(
+                        div().flex().flex_row().gap(px(3.0)).children(
+                            term_colors
+                                .iter()
+                                .map(|&c| div().w(px(18.0)).h(px(14.0)).rounded(px(2.0)).bg(rgb(c))),
+                        ),
+                    )
+                    .child(
+                        div().flex().flex_row().gap(px(3.0)).children(
+                            term_bright
+                                .iter()
+                                .map(|&c| div().w(px(18.0)).h(px(14.0)).rounded(px(2.0)).bg(rgb(c))),
+                        ),
+                    ),
+            )
+            // Semantic colors
+            .child(
+                div()
+                    .flex()
+                    .flex_row()
+                    .gap(px(8.0))
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .gap(px(4.0))
+                            .child(
+                                div()
+                                    .w(px(8.0))
+                                    .h(px(8.0))
+                                    .rounded(px(4.0))
+                                    .bg(rgb(ui_success)),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(rgb(ui_success))
+                                    .child("Success"),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .gap(px(4.0))
+                            .child(
+                                div()
+                                    .w(px(8.0))
+                                    .h(px(8.0))
+                                    .rounded(px(4.0))
+                                    .bg(rgb(ui_error)),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(rgb(ui_error))
+                                    .child("Error"),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .gap(px(4.0))
+                            .child(
+                                div()
+                                    .w(px(8.0))
+                                    .h(px(8.0))
+                                    .rounded(px(4.0))
+                                    .bg(rgb(ui_warning)),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(rgb(ui_warning))
+                                    .child("Warn"),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .gap(px(4.0))
+                            .child(
+                                div()
+                                    .w(px(8.0))
+                                    .h(px(8.0))
+                                    .rounded(px(4.0))
+                                    .bg(rgb(ui_info)),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(rgb(ui_info))
+                                    .child("Info"),
+                            ),
                     ),
             );
 
-        // Footer with keyboard shortcuts
+        // ── Footer with keyboard shortcuts ─────────────────────────
+        let shortcut = |key: &str, label: &str| {
+            div()
+                .flex()
+                .flex_row()
+                .gap(px(4.0))
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(rgb(text_secondary))
+                        .child(key.to_string()),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(rgb(text_dimmed))
+                        .child(label.to_string()),
+                )
+        };
         let footer_border = rgba((ui_border << 8) | 0x30);
         let footer = div()
             .w_full()
@@ -2638,79 +3032,44 @@ impl ScriptListApp {
             .flex_row()
             .justify_center()
             .gap(px(16.0))
-            .child(
-                div()
-                    .flex()
-                    .flex_row()
-                    .gap(px(4.0))
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(rgb(text_secondary))
-                            .child("↑↓"),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(rgb(text_dimmed))
-                            .child("Preview"),
-                    ),
-            )
-            .child(
-                div()
-                    .flex()
-                    .flex_row()
-                    .gap(px(4.0))
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(rgb(text_secondary))
-                            .child("Enter"),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(rgb(text_dimmed))
-                            .child("Apply"),
-                    ),
-            )
-            .child(
-                div()
-                    .flex()
-                    .flex_row()
-                    .gap(px(4.0))
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(rgb(text_secondary))
-                            .child("Esc"),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(rgb(text_dimmed))
-                            .child("Cancel"),
-                    ),
-            )
-            .child(
-                div()
-                    .flex()
-                    .flex_row()
-                    .gap(px(4.0))
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(rgb(text_secondary))
-                            .child("Click"),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(rgb(text_dimmed))
-                            .child("Select"),
-                    ),
-            );
+            .child(shortcut("↑↓", "Preview"))
+            .child(shortcut("Enter", "Apply"))
+            .child(shortcut("Esc", "Cancel"))
+            .child(shortcut("PgUp/Dn", "Jump"))
+            .child(shortcut("Type", "Search"));
 
+        // ── Empty state when filter has no matches ─────────────────
+        if filtered_count == 0 {
+            return div()
+                .flex()
+                .flex_col()
+                .w_full()
+                .h_full()
+                .rounded(px(design_visual.radius_lg))
+                .text_color(rgb(text_primary))
+                .font_family(design_typography.font_family)
+                .key_context("theme_chooser")
+                .track_focus(&self.focus_handle)
+                .on_key_down(handle_key)
+                .child(header)
+                .child(
+                    div()
+                        .flex_1()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .child(
+                            div()
+                                .text_sm()
+                                .text_color(rgb(text_muted))
+                                .child("No matching themes"),
+                        ),
+                )
+                .child(footer)
+                .into_any_element();
+        }
+
+        // ── Main layout: list + preview panel ──────────────────────
         div()
             .flex()
             .flex_col()
@@ -2723,7 +3082,15 @@ impl ScriptListApp {
             .track_focus(&self.focus_handle)
             .on_key_down(handle_key)
             .child(header)
-            .child(div().flex_1().overflow_hidden().child(list))
+            .child(
+                div()
+                    .flex_1()
+                    .overflow_hidden()
+                    .flex()
+                    .flex_row()
+                    .child(div().w_1_2().h_full().child(list))
+                    .child(preview_panel),
+            )
             .child(footer)
             .into_any_element()
     }
