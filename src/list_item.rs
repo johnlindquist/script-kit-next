@@ -728,18 +728,24 @@ impl RenderOnce for ListItem {
             }
         };
 
-        // Build content with name + description (tighter spacing)
+        // Build content with name + description (compact with small gap)
         let mut item_content = div()
             .flex_1()
             .min_w(px(0.))
             .overflow_hidden()
             .flex()
             .flex_col()
+            .gap(px(1.)) // 1px gap between name and description for breathing room
             .justify_center();
 
-        // Name rendering - 15px font size, medium weight
+        // Name rendering - 15px font size, medium weight (semibold when selected for emphasis)
         // When highlight_indices are present, use StyledText to highlight matched characters
         // Otherwise, render as plain text
+        let name_weight = if self.selected {
+            FontWeight::SEMIBOLD // Visual emphasis for selected item
+        } else {
+            FontWeight::MEDIUM
+        };
         let name_element = if let Some(ref indices) = self.highlight_indices {
             // Build StyledText with highlighted matched characters
             let index_set: HashSet<usize> = indices.iter().copied().collect();
@@ -750,7 +756,7 @@ impl RenderOnce for ListItem {
             };
             let highlight_style = HighlightStyle {
                 color: Some(highlight_color.into()),
-                font_weight: Some(FontWeight::SEMIBOLD),
+                font_weight: Some(FontWeight::BOLD),
                 ..Default::default()
             };
 
@@ -773,7 +779,7 @@ impl RenderOnce for ListItem {
 
             div()
                 .text_size(px(15.))
-                .font_weight(FontWeight::MEDIUM)
+                .font_weight(name_weight)
                 .overflow_hidden()
                 .text_ellipsis()
                 .whitespace_nowrap()
@@ -784,7 +790,7 @@ impl RenderOnce for ListItem {
             // Plain text rendering (no search active)
             div()
                 .text_size(px(15.))
-                .font_weight(FontWeight::MEDIUM)
+                .font_weight(name_weight)
                 .overflow_hidden()
                 .text_ellipsis()
                 .whitespace_nowrap()
@@ -1161,7 +1167,7 @@ pub fn render_section_header(
         .flex()
         .flex_row()
         .items_center()
-        .gap(px(5.))
+        .gap(px(6.))
         .text_size(px(11.0)) // slightly bigger than text_xs for readability
         .font_weight(FontWeight::SEMIBOLD)
         .text_color(rgb(colors.text_muted));
