@@ -977,7 +977,7 @@ impl ScriptListApp {
                             .get(*selected_index)
                             .map(|f| f.name.clone()),
                     ),
-                    AppView::ThemeChooserView { selected_index } => (
+                    AppView::ThemeChooserView { selected_index, .. } => (
                         "themeChooser".to_string(),
                         Some("theme-chooser".to_string()),
                         None,

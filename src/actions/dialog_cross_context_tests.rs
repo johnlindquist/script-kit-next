@@ -694,6 +694,8 @@ fn note_switcher_multiple_notes_icon_assignment() {
             char_count: 100,
             is_current: true,
             is_pinned: true,
+            preview: String::new(),
+            relative_time: String::new(),
         },
         NoteSwitcherNoteInfo {
             id: "b".into(),
@@ -701,6 +703,8 @@ fn note_switcher_multiple_notes_icon_assignment() {
             char_count: 50,
             is_current: false,
             is_pinned: true,
+            preview: String::new(),
+            relative_time: String::new(),
         },
         NoteSwitcherNoteInfo {
             id: "c".into(),
@@ -708,6 +712,8 @@ fn note_switcher_multiple_notes_icon_assignment() {
             char_count: 200,
             is_current: true,
             is_pinned: false,
+            preview: String::new(),
+            relative_time: String::new(),
         },
         NoteSwitcherNoteInfo {
             id: "d".into(),
@@ -715,6 +721,8 @@ fn note_switcher_multiple_notes_icon_assignment() {
             char_count: 0,
             is_current: false,
             is_pinned: false,
+            preview: String::new(),
+            relative_time: String::new(),
         },
     ];
 
@@ -759,6 +767,8 @@ fn note_switcher_char_count_description_formatting() {
             char_count: 0,
             is_current: false,
             is_pinned: false,
+            preview: String::new(),
+            relative_time: String::new(),
         },
         NoteSwitcherNoteInfo {
             id: "b".into(),
@@ -766,6 +776,8 @@ fn note_switcher_char_count_description_formatting() {
             char_count: 1,
             is_current: false,
             is_pinned: false,
+            preview: String::new(),
+            relative_time: String::new(),
         },
         NoteSwitcherNoteInfo {
             id: "c".into(),
@@ -773,13 +785,15 @@ fn note_switcher_char_count_description_formatting() {
             char_count: 999,
             is_current: false,
             is_pinned: false,
+            preview: String::new(),
+            relative_time: String::new(),
         },
     ];
 
     let actions = get_note_switcher_actions(&notes);
-    assert_eq!(actions[0].description.as_deref(), Some("0 characters"));
-    assert_eq!(actions[1].description.as_deref(), Some("1 character"));
-    assert_eq!(actions[2].description.as_deref(), Some("999 characters"));
+    assert_eq!(actions[0].description.as_deref(), Some("0 chars"));
+    assert_eq!(actions[1].description.as_deref(), Some("1 char"));
+    assert_eq!(actions[2].description.as_deref(), Some("999 chars"));
 }
 
 #[test]
@@ -790,6 +804,8 @@ fn note_switcher_id_format() {
         char_count: 10,
         is_current: false,
         is_pinned: false,
+        preview: String::new(),
+        relative_time: String::new(),
     }];
     let actions = get_note_switcher_actions(&notes);
     assert_eq!(actions[0].id, "note_abc-123-def");

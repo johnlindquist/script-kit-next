@@ -747,13 +747,21 @@ fn note_switcher_many_notes_all_have_correct_ids() {
             char_count: i * 100,
             is_current: i == 3,
             is_pinned: i == 0 || i == 5,
+            preview: String::new(),
+            relative_time: String::new(),
         })
         .collect();
     let actions = get_note_switcher_actions(&notes);
     assert_eq!(actions.len(), 10);
     for (i, action) in actions.iter().enumerate() {
         assert_eq!(action.id, format!("note_note-{}", i));
-        assert_eq!(action.section.as_deref(), Some("Notes"));
+        assert!(
+            action.section.as_deref() == Some("Recent")
+                || action.section.as_deref() == Some("Pinned"),
+            "Note switcher action '{}' should be in 'Recent' or 'Pinned' section, got {:?}",
+            action.id,
+            action.section
+        );
     }
     // Current note (index 3) has bullet
     assert!(actions[3].title.starts_with("• "));
@@ -776,12 +784,11 @@ fn note_switcher_large_char_count() {
         char_count: 1_000_000,
         is_current: false,
         is_pinned: false,
+        preview: String::new(),
+        relative_time: String::new(),
     }];
     let actions = get_note_switcher_actions(&notes);
-    assert_eq!(
-        actions[0].description.as_deref(),
-        Some("1000000 characters")
-    );
+    assert_eq!(actions[0].description.as_deref(), Some("1000000 chars"));
 }
 
 // =========================================================================

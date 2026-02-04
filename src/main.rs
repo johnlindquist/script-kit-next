@@ -878,8 +878,11 @@ enum AppView {
         query: String,
         selected_index: usize,
     },
-    /// Showing theme chooser with live preview
-    ThemeChooserView { selected_index: usize },
+    /// Showing theme chooser with live preview and search
+    ThemeChooserView {
+        filter: String,
+        selected_index: usize,
+    },
 }
 
 /// Wrapper to hold a script session that can be shared across async boundaries
@@ -1773,9 +1776,10 @@ impl Render for ScriptListApp {
             } => self
                 .render_file_search(query, selected_index, cx)
                 .into_any_element(),
-            AppView::ThemeChooserView { selected_index } => {
-                self.render_theme_chooser(selected_index, cx)
-            }
+            AppView::ThemeChooserView {
+                ref filter,
+                selected_index,
+            } => self.render_theme_chooser(filter, selected_index, cx),
         };
 
         // Wrap content in a container that can have the debug grid overlay

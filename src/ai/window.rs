@@ -16,7 +16,8 @@ use gpui::{
     div, hsla, img, list, point, prelude::*, px, rgba, size, svg, App, BoxShadow, Context,
     CursorStyle, Entity, ExternalPaths, FocusHandle, Focusable, IntoElement, KeyDownEvent,
     ListAlignment, ListSizingBehavior, ListState, MouseMoveEvent, ParentElement, Render,
-    RenderImage, SharedString, Styled, Subscription, Window, WindowBounds, WindowOptions,
+    RenderImage, ScrollWheelEvent, SharedString, Styled, Subscription, Window, WindowBounds,
+    WindowOptions,
 };
 
 // Import local IconName for SVG icons (has external_path() method)
@@ -486,6 +487,17 @@ pub struct AiApp {
 
     /// When the current streaming session started (for elapsed time display)
     streaming_started_at: Option<std::time::Instant>,
+
+    /// Whether the user has manually scrolled up during streaming.
+    /// When true, auto-scroll is suppressed so the user can read earlier messages.
+    /// Reset when the user scrolls back to the bottom or sends a new message.
+    user_has_scrolled_up: bool,
+
+    /// Duration of the last completed streaming response (for "Generated in Xs" feedback)
+    last_streaming_duration: Option<std::time::Duration>,
+
+    /// When the last streaming response completed (for timed "Generated in Xs" display)
+    last_streaming_completed_at: Option<std::time::Instant>,
 }
 
 impl AiApp {
@@ -709,6 +721,11 @@ impl AiApp {
             copied_message_id: None,
             copied_at: None,
             streaming_started_at: None,
+            // Smart auto-scroll state
+            user_has_scrolled_up: false,
+            // Streaming completion feedback
+            last_streaming_duration: None,
+            last_streaming_completed_at: None,
         }
     }
 
@@ -762,6 +779,57 @@ impl AiApp {
         .detach();
     }
 
+    /// Copy the last assistant response to the clipboard (Cmd+Shift+C).
+    fn copy_last_assistant_response(&mut self, cx: &mut Context<Self>) {
+        if let Some(last_assistant) = self
+            .current_messages
+            .iter()
+            .rev()
+            .find(|m| m.role == MessageRole::Assistant)
+        {
+            let content = last_assistant.content.clone();
+            let msg_id = last_assistant.id.clone();
+            self.copy_message(msg_id, content, cx);
+        }
+    }
+
+    /// Navigate to the previous (-1) or next (+1) chat in the sidebar list.
+    fn navigate_chat(&mut self, direction: i32, window: &mut Window, cx: &mut Context<Self>) {
+        if self.chats.is_empty() {
+            return;
+        }
+
+        let current_index = self
+            .selected_chat_id
+            .and_then(|id| self.chats.iter().position(|c| c.id == id))
+            .unwrap_or(0);
+
+        let new_index = if direction < 0 {
+            // Navigate to previous (older) chat
+            if current_index + 1 < self.chats.len() {
+                current_index + 1
+            } else {
+                current_index // Already at the end
+            }
+        } else {
+            // Navigate to next (newer) chat
+            current_index.saturating_sub(1)
+        };
+
+        if new_index != current_index {
+            let new_id = self.chats[new_index].id;
+            self.select_chat(new_id, window, cx);
+            cx.notify();
+        }
+    }
+
+    /// Delete the currently selected chat (Cmd+Shift+Backspace).
+    fn delete_current_chat(&mut self, cx: &mut Context<Self>) {
+        if let Some(chat_id) = self.selected_chat_id {
+            self.delete_chat_by_id(chat_id, cx);
+        }
+    }
+
     /// Delete a specific chat by ID (for sidebar delete buttons)
     fn delete_chat_by_id(&mut self, chat_id: ChatId, cx: &mut Context<Self>) {
         if let Err(e) = storage::delete_chat(&chat_id) {
@@ -781,7 +849,7 @@ impl AiApp {
                 .and_then(|new_id| storage::get_chat_messages(&new_id).ok())
                 .unwrap_or_default();
             self.cache_message_images(&self.current_messages.clone());
-            self.sync_messages_list_and_scroll_to_bottom();
+            self.force_scroll_to_bottom();
         }
 
         cx.notify();
@@ -2072,8 +2140,8 @@ impl AiApp {
         self.cache_message_images(&saved_messages);
         self.current_messages = saved_messages;
 
-        // Scroll to bottom to show the latest messages
-        self.sync_messages_list_and_scroll_to_bottom();
+        // Force scroll to bottom when initializing with a transferred conversation
+        self.force_scroll_to_bottom();
 
         info!(
             chat_id = %chat_id,
@@ -2145,8 +2213,8 @@ impl AiApp {
             }
         }
 
-        // Scroll to bottom to show latest messages
-        self.sync_messages_list_and_scroll_to_bottom();
+        // Force scroll to bottom when switching chats (always scroll)
+        self.force_scroll_to_bottom();
 
         // Clear streaming state for display purposes, but don't clear streaming_chat_id/generation
         // The streaming task may still be running for the previous chat - it will be
@@ -2263,8 +2331,8 @@ impl AiApp {
         // Add to current messages for display
         self.current_messages.push(user_message);
 
-        // Scroll to bottom to show the new message
-        self.sync_messages_list_and_scroll_to_bottom();
+        // Force scroll to bottom when user sends a new message (always scroll, even if scrolled up)
+        self.force_scroll_to_bottom();
 
         // Update message preview cache
         let preview: String = content.chars().take(60).collect();
@@ -2638,6 +2706,12 @@ impl AiApp {
             );
         }
 
+        // Capture streaming duration for "Generated in Xs" feedback
+        if let Some(started) = self.streaming_started_at {
+            self.last_streaming_duration = Some(started.elapsed());
+            self.last_streaming_completed_at = Some(std::time::Instant::now());
+        }
+
         self.is_streaming = false;
         self.streaming_content.clear();
         self.streaming_chat_id = None;
@@ -2690,12 +2764,18 @@ impl AiApp {
             info!(chat_id = %chat_id, "Streaming stopped by user - no content to save");
         }
 
+        // Capture streaming duration for "Generated in Xs" feedback
+        if let Some(started) = self.streaming_started_at {
+            self.last_streaming_duration = Some(started.elapsed());
+            self.last_streaming_completed_at = Some(std::time::Instant::now());
+        }
+
         self.streaming_generation = self.streaming_generation.wrapping_add(1);
         self.is_streaming = false;
         self.streaming_content.clear();
         self.streaming_chat_id = None;
         self.streaming_started_at = None;
-        self.sync_messages_list_and_scroll_to_bottom();
+        self.force_scroll_to_bottom();
         cx.notify();
     }
 
@@ -2721,7 +2801,7 @@ impl AiApp {
                 tracing::error!(error = %e, "Failed to delete assistant message for regeneration");
             }
 
-            self.sync_messages_list_and_scroll_to_bottom();
+            self.force_scroll_to_bottom();
             info!(chat_id = %chat_id, "Regenerating response");
             self.start_streaming_response(chat_id, cx);
             cx.notify();
@@ -4329,13 +4409,32 @@ impl AiApp {
     }
 
     /// Action row below last assistant message.
+    /// Shows regenerate button and optionally "Generated in Xs" for recent completions.
     fn render_message_actions(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let muted_fg = cx.theme().muted_foreground;
+
+        // Show "Generated in Xs" for 5 seconds after streaming completes
+        let completion_label: Option<String> =
+            self.last_streaming_completed_at.and_then(|completed_at| {
+                if completed_at.elapsed().as_secs() < 5 {
+                    self.last_streaming_duration.map(|dur| {
+                        let secs = dur.as_secs();
+                        if secs < 1 {
+                            format!("{}ms", dur.as_millis())
+                        } else {
+                            format!("{}s", secs)
+                        }
+                    })
+                } else {
+                    None
+                }
+            });
+
         div()
             .id("message-actions")
             .flex()
             .items_center()
-            .gap(px(2.))
+            .gap(px(8.))
             .pl_1()
             .mt(px(-4.))
             .mb_2()
@@ -4363,11 +4462,49 @@ impl AiApp {
                     )
                     .child("Regenerate"),
             )
+            // "Generated in Xs" completion feedback (fades after 5 seconds)
+            .when_some(completion_label, |el, label| {
+                el.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(4.))
+                        .text_xs()
+                        .text_color(cx.theme().success.opacity(0.7))
+                        .child(
+                            svg()
+                                .external_path(LocalIconName::Check.external_path())
+                                .size(px(11.))
+                                .text_color(cx.theme().success.opacity(0.5)),
+                        )
+                        .child(format!("Generated in {}", label)),
+                )
+            })
     }
 
     /// Sync the messages list state item count and scroll to reveal the last item.
     /// Call this whenever `current_messages` changes or streaming state toggles.
+    ///
+    /// Respects `user_has_scrolled_up`: if the user manually scrolled up during
+    /// streaming, only the item count is synced but auto-scroll is suppressed.
     fn sync_messages_list_and_scroll_to_bottom(&mut self) {
+        let item_count = self.messages_list_item_count();
+        let old_count = self.messages_list_state.item_count();
+        if old_count != item_count {
+            self.messages_list_state.splice(0..old_count, item_count);
+        }
+        // Only auto-scroll if user hasn't scrolled up
+        if item_count > 0 && !self.user_has_scrolled_up {
+            self.messages_list_state
+                .scroll_to_reveal_item(item_count - 1);
+        }
+    }
+
+    /// Force scroll to the bottom, regardless of user_has_scrolled_up.
+    /// Used when user explicitly triggers scroll-to-bottom (clicking the pill
+    /// or submitting a new message).
+    fn force_scroll_to_bottom(&mut self) {
+        self.user_has_scrolled_up = false;
         let item_count = self.messages_list_item_count();
         let old_count = self.messages_list_state.item_count();
         if old_count != item_count {
@@ -4423,13 +4560,80 @@ impl AiApp {
         .size_full()
         .p_3();
 
+        // Track user scroll: detect when user scrolls up (away from bottom)
+        let show_scroll_pill = self.user_has_scrolled_up && self.is_streaming;
+        let total_items = self.messages_list_item_count();
+
         // Wrap in a relative container with a native-style scrollbar overlay.
         // The scrollbar uses ListState's ScrollbarHandle impl for position tracking.
         div()
             .relative()
             .size_full()
+            // Detect user scroll via scroll wheel events
+            .on_scroll_wheel(
+                cx.listener(move |this, event: &ScrollWheelEvent, _window, cx| {
+                    let delta_y = event.delta.pixel_delta(px(1.0)).y;
+                    if delta_y > px(0.) {
+                        // Scrolling up - user wants to read earlier messages
+                        this.user_has_scrolled_up = true;
+                        cx.notify();
+                    } else if delta_y < px(0.) {
+                        // Scrolling down - check if near bottom to reset flag
+                        // Use logical_scroll_top to determine position
+                        let scroll_top = this.messages_list_state.logical_scroll_top().item_ix;
+                        // If we're within 2 items of the bottom, consider it "at bottom"
+                        if total_items > 0 && scroll_top + 3 >= total_items {
+                            this.user_has_scrolled_up = false;
+                            cx.notify();
+                        }
+                    }
+                }),
+            )
             .child(messages_list)
             .vertical_scrollbar(&self.messages_list_state)
+            // Floating "scroll to bottom" pill when user has scrolled up during streaming
+            .when(show_scroll_pill, |el| {
+                el.child(
+                    div()
+                        .id("scroll-to-bottom-pill")
+                        .absolute()
+                        .bottom(px(12.))
+                        .left_0()
+                        .right_0()
+                        .flex()
+                        .justify_center()
+                        .child(
+                            div()
+                                .id("scroll-pill-btn")
+                                .flex()
+                                .items_center()
+                                .gap(px(4.))
+                                .px(px(12.))
+                                .py(px(6.))
+                                .rounded_full()
+                                .bg(cx.theme().accent.opacity(0.9))
+                                .text_color(cx.theme().accent_foreground)
+                                .cursor_pointer()
+                                .hover(|s| s.bg(cx.theme().accent))
+                                .on_click(cx.listener(|this, _, _window, cx| {
+                                    this.force_scroll_to_bottom();
+                                    cx.notify();
+                                }))
+                                .child(
+                                    svg()
+                                        .external_path(LocalIconName::ChevronDown.external_path())
+                                        .size(px(14.))
+                                        .text_color(cx.theme().accent_foreground),
+                                )
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .font_weight(gpui::FontWeight::MEDIUM)
+                                        .child("New content below"),
+                                ),
+                        ),
+                )
+            })
     }
 
     /// Render the main chat panel
@@ -5254,6 +5458,34 @@ impl Render for AiApp {
                             // Try to paste an image; if not found, let normal text paste happen
                             // We don't need to prevent the event since the Input handles text paste
                             this.handle_paste_for_image(cx);
+                        }
+                        // Cmd+L to focus input (standard shortcut)
+                        "l" => {
+                            this.focus_input(window, cx);
+                            cx.stop_propagation();
+                        }
+                        // Cmd+Shift+C to copy last assistant response
+                        "c" => {
+                            if modifiers.shift {
+                                this.copy_last_assistant_response(cx);
+                                cx.stop_propagation();
+                            }
+                        }
+                        // Cmd+[ to navigate to previous chat, Cmd+] to next chat
+                        "[" | "bracketleft" => {
+                            this.navigate_chat(-1, window, cx);
+                            cx.stop_propagation();
+                        }
+                        "]" | "bracketright" => {
+                            this.navigate_chat(1, window, cx);
+                            cx.stop_propagation();
+                        }
+                        // Cmd+Shift+Backspace to delete current chat
+                        "backspace" | "delete" => {
+                            if modifiers.shift {
+                                this.delete_current_chat(cx);
+                                cx.stop_propagation();
+                            }
                         }
                         // Cmd+W closes the AI window (standard macOS pattern)
                         "w" => {

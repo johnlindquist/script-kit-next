@@ -972,6 +972,7 @@ impl ScriptListApp {
                         let start_index =
                             theme::presets::find_current_preset_index(&self.theme);
                         self.current_view = AppView::ThemeChooserView {
+                            filter: String::new(),
                             selected_index: start_index,
                         };
                         self.opened_from_main_menu = true;
