@@ -17,6 +17,7 @@ use cocoa::base::{id, nil};
 use gpui_component::{
     button::{Button, ButtonVariants},
     input::{Input, InputEvent, InputState, Search},
+    scroll::ScrollableElement,
     theme::ActiveTheme,
     IconName, Root, Sizable,
 };
@@ -219,6 +220,9 @@ pub struct NotesApp {
 
     /// Current sort mode for notes list
     sort_mode: NotesSortMode,
+
+    /// Whether the keyboard shortcuts help overlay is shown (Cmd+/)
+    show_shortcuts_help: bool,
 }
 
 impl NotesApp {
@@ -227,6 +231,20 @@ impl NotesApp {
         // Initialize storage
         if let Err(e) = storage::init_notes_db() {
             tracing::error!(error = %e, "Failed to initialize notes database");
+        }
+
+        // Auto-prune trash entries older than 30 days
+        match storage::prune_old_deleted_notes(30) {
+            Ok(pruned) if pruned > 0 => {
+                info!(
+                    pruned_count = pruned,
+                    "Auto-pruned old trash notes (>30 days)"
+                );
+            }
+            Err(e) => {
+                tracing::error!(error = %e, "Failed to auto-prune trash");
+            }
+            _ => {}
         }
 
         // Load notes from storage
@@ -362,6 +380,7 @@ impl NotesApp {
             navigating_history: false,
             focus_mode: false,
             sort_mode: NotesSortMode::default(),
+            show_shortcuts_help: false,
         }
     }
 
@@ -1091,6 +1110,157 @@ impl NotesApp {
         } else {
             format!("~{} min read", minutes)
         }
+    }
+
+    /// Get the selected text range stats, if any text is selected
+    /// Returns (selected_words, selected_chars) or None if no selection
+    fn get_selection_stats(&self, cx: &Context<Self>) -> Option<(usize, usize)> {
+        let selection = self.editor_state.read(cx).selection();
+        if selection.start == selection.end {
+            return None;
+        }
+        let value = self.editor_state.read(cx).value().to_string();
+        let start = selection.start.min(value.len());
+        let end = selection.end.min(value.len());
+        let selected_text = &value[start..end];
+        let words = selected_text.split_whitespace().count();
+        let chars = selected_text.chars().count();
+        if chars == 0 {
+            return None;
+        }
+        Some((words, chars))
+    }
+
+    /// Toggle keyboard shortcuts help overlay (Cmd+/)
+    fn toggle_shortcuts_help(&mut self, cx: &mut Context<Self>) {
+        self.show_shortcuts_help = !self.show_shortcuts_help;
+        cx.notify();
+    }
+
+    /// Insert current date/time at cursor position (Cmd+Shift+D)
+    fn insert_date_time(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let now = chrono::Local::now();
+        let date_str = now.format("%Y-%m-%d %H:%M").to_string();
+        self.editor_state.update(cx, |state, cx| {
+            let selection = state.selection();
+            let value = state.value().to_string();
+            let start = selection.start.min(value.len());
+            let end = selection.end.min(value.len());
+            let new_value = format!("{}{}{}", &value[..start], date_str, &value[end..]);
+            let new_cursor = start + date_str.len();
+            state.set_value(&new_value, window, cx);
+            state.set_selection(new_cursor, new_cursor, window, cx);
+        });
+        self.has_unsaved_changes = true;
+        info!("Inserted date/time at cursor");
+        cx.notify();
+    }
+
+    /// Copy note content as markdown to clipboard (Cmd+Shift+C)
+    fn copy_as_markdown(&self, cx: &Context<Self>) {
+        let content = self.editor_state.read(cx).value().to_string();
+        self.copy_text_to_clipboard(&content);
+        info!("Copied note as markdown to clipboard");
+    }
+
+    /// Render the keyboard shortcuts help overlay
+    fn render_shortcuts_help(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let muted = cx.theme().muted_foreground;
+        let accent = cx.theme().accent;
+        let bg = cx.theme().background.opacity(0.95);
+
+        let shortcut = |keys: &str, desc: &str| -> AnyElement {
+            div()
+                .flex()
+                .justify_between()
+                .w_full()
+                .py(px(2.))
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(muted.opacity(0.8))
+                        .child(desc.to_string()),
+                )
+                .child(div().text_xs().text_color(accent).child(keys.to_string()))
+                .into_any_element()
+        };
+
+        let section = |title: &str| -> AnyElement {
+            div()
+                .pt_2()
+                .pb(px(2.))
+                .text_xs()
+                .text_color(muted.opacity(0.5))
+                .child(title.to_string())
+                .into_any_element()
+        };
+
+        div()
+            .id("shortcuts-help-overlay")
+            .absolute()
+            .inset_0()
+            .flex()
+            .items_center()
+            .justify_center()
+            .bg(bg)
+            .on_mouse_down(
+                gpui::MouseButton::Left,
+                cx.listener(|this, _, _, cx| {
+                    this.show_shortcuts_help = false;
+                    cx.notify();
+                }),
+            )
+            .child(
+                div()
+                    .w(px(320.))
+                    .max_h(px(460.))
+                    .overflow_y_scrollbar()
+                    .p_4()
+                    .flex()
+                    .flex_col()
+                    .child(
+                        div()
+                            .text_sm()
+                            .text_color(cx.theme().foreground)
+                            .pb_2()
+                            .child("Keyboard Shortcuts"),
+                    )
+                    .child(section("Notes"))
+                    .child(shortcut("⌘N", "New note"))
+                    .child(shortcut("⌘⇧N", "New from clipboard"))
+                    .child(shortcut("⌘D", "Duplicate note"))
+                    .child(shortcut("⌘⌫", "Delete note"))
+                    .child(shortcut("⌘⇧I", "Toggle pin"))
+                    .child(section("Navigation"))
+                    .child(shortcut("⌘↑ / ⌘↓", "Previous / next note"))
+                    .child(shortcut("⌘[ / ⌘]", "Back / forward in history"))
+                    .child(shortcut("⌘1–9", "Jump to pinned note"))
+                    .child(shortcut("⌘P", "Note switcher"))
+                    .child(shortcut("⌘K", "Actions"))
+                    .child(section("Editing"))
+                    .child(shortcut("⌘B", "Bold"))
+                    .child(shortcut("⌘I", "Italic"))
+                    .child(shortcut("⌘⇧D", "Insert date/time"))
+                    .child(shortcut("⌘⇧C", "Copy as markdown"))
+                    .child(section("View"))
+                    .child(shortcut("⌘.", "Focus mode"))
+                    .child(shortcut("⌘⇧P", "Markdown preview"))
+                    .child(shortcut("⌘F", "Search"))
+                    .child(shortcut("⌘⇧S", "Cycle sort mode"))
+                    .child(shortcut("⌘⇧T", "Toggle trash view"))
+                    .child(section("Window"))
+                    .child(shortcut("⌘W", "Close window"))
+                    .child(shortcut("Esc", "Close panel / window"))
+                    .child(shortcut("⌘/", "This help"))
+                    .child(
+                        div()
+                            .pt_3()
+                            .text_xs()
+                            .text_color(muted.opacity(0.4))
+                            .text_center()
+                            .child("Click anywhere to dismiss"),
+                    ),
+            )
     }
 
     /// Cycle sort mode: Updated → Created → Alphabetical → Updated
@@ -2032,6 +2202,7 @@ impl NotesApp {
         // Enhanced footer: note position on LEFT, word/char count CENTERED, type + time on RIGHT
         // NOTE: No .bg() - let vibrancy show through from root
         let word_count = self.get_word_count(cx);
+        let selection_stats = self.get_selection_stats(cx);
         let note_position = self.get_note_position();
         let has_unsaved = self.has_unsaved_changes;
         let relative_time = self.get_relative_time();
@@ -2114,13 +2285,24 @@ impl NotesApp {
                         )
                     }),
             )
-            // CENTER: Word count, character count, and reading time
+            // CENTER: Word count, character count, and reading time (selection-aware)
             .child(
                 div()
                     .flex()
                     .items_center()
                     .gap_2()
-                    .child(
+                    .child(if let Some((sel_words, sel_chars)) = selection_stats {
+                        // Show selection stats in accent color when text is selected
+                        div().text_xs().text_color(cx.theme().accent).child(format!(
+                            "{} of {} word{}  ·  {} of {} char{}",
+                            sel_words,
+                            word_count,
+                            if word_count == 1 { "" } else { "s" },
+                            sel_chars,
+                            char_count,
+                            if char_count == 1 { "" } else { "s" },
+                        ))
+                    } else {
                         div()
                             .text_xs()
                             .text_color(cx.theme().muted_foreground)
@@ -2130,8 +2312,8 @@ impl NotesApp {
                                 if word_count == 1 { "" } else { "s" },
                                 char_count,
                                 if char_count == 1 { "" } else { "s" },
-                            )),
-                    )
+                            ))
+                    })
                     .when(!reading_time.is_empty(), |d| {
                         d.child(
                             div()
@@ -2303,7 +2485,7 @@ impl NotesApp {
                 .id("notes-markdown-preview")
                 .flex_1()
                 .min_h(px(0.))
-                .overflow_y_scroll()
+                .overflow_y_scrollbar()
                 .child(markdown::render_markdown_preview(&content, cx.theme()))
                 .into_any_element()
         } else {
@@ -2806,6 +2988,11 @@ impl Render for NotesApp {
 
                 // Handle Escape to close panels, or close window if no panels open
                 if key == "escape" {
+                    if this.show_shortcuts_help {
+                        this.show_shortcuts_help = false;
+                        cx.notify();
+                        return;
+                    }
                     if this.show_actions_panel || this.command_bar.is_open() {
                         this.close_actions_panel(window, cx);
                         return;
@@ -2915,7 +3102,28 @@ impl Render for NotesApp {
                                 cx.stop_propagation();
                             }
                         }
-                        "d" => this.duplicate_selected_note(window, cx),
+                        "d" => {
+                            if modifiers.shift {
+                                // Cmd+Shift+D: Insert date/time at cursor
+                                this.insert_date_time(window, cx);
+                                cx.stop_propagation();
+                            } else {
+                                this.duplicate_selected_note(window, cx);
+                            }
+                        }
+                        "c" => {
+                            if modifiers.shift {
+                                // Cmd+Shift+C: Copy note content as markdown
+                                this.copy_as_markdown(cx);
+                                cx.stop_propagation();
+                            }
+                            // Let default Cmd+C (copy) pass through to Input
+                        }
+                        "/" => {
+                            // Cmd+/: Toggle keyboard shortcuts help
+                            this.toggle_shortcuts_help(cx);
+                            cx.stop_propagation();
+                        }
                         "b" => this.insert_formatting("**", "**", window, cx),
                         "i" => {
                             if modifiers.shift {
@@ -2984,6 +3192,10 @@ impl Render for NotesApp {
             // Legacy actions panel overlay (only shown when not using CommandBar)
             .when(show_actions, |d| {
                 d.child(self.render_actions_panel_overlay(cx))
+            })
+            // Keyboard shortcuts help overlay (Cmd+/)
+            .when(self.show_shortcuts_help, |d| {
+                d.child(self.render_shortcuts_help(cx))
             })
         // Note: browse panel overlay removed - note_switcher now uses CommandBar
         // which renders in its own window, not as an overlay
