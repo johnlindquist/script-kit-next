@@ -524,7 +524,7 @@ impl NotesApp {
 
         // Constants for layout calculation - adjusted for compact sticky-note style
         const TITLEBAR_HEIGHT: f32 = 32.0;
-        const FOOTER_HEIGHT: f32 = 24.0;
+        const FOOTER_HEIGHT: f32 = 28.0;
         const PADDING: f32 = 24.0; // Top + bottom padding in editor area
         const LINE_HEIGHT: f32 = 20.0; // Approximate line height
         const MAX_HEIGHT: f32 = 600.0; // Don't grow too large
@@ -1853,30 +1853,40 @@ impl NotesApp {
     fn render_shortcuts_help(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let muted = cx.theme().muted_foreground;
         let accent = cx.theme().accent;
-        let bg = cx.theme().background.opacity(0.95);
+        let border_color = cx.theme().border;
+        let bg = cx.theme().background.opacity(0.96);
 
         let shortcut = |keys: &str, desc: &str| -> AnyElement {
             div()
                 .flex()
                 .justify_between()
                 .w_full()
-                .py(px(2.))
+                .py(px(2.5))
                 .child(
                     div()
                         .text_xs()
                         .text_color(muted.opacity(0.8))
                         .child(desc.to_string()),
                 )
-                .child(div().text_xs().text_color(accent).child(keys.to_string()))
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(accent.opacity(0.85))
+                        .child(keys.to_string()),
+                )
                 .into_any_element()
         };
 
         let section = |title: &str| -> AnyElement {
             div()
-                .pt_2()
-                .pb(px(2.))
+                .pt_3()
+                .pb(px(3.))
+                .mb(px(2.))
+                .border_b_1()
+                .border_color(border_color.opacity(0.15))
                 .text_xs()
-                .text_color(muted.opacity(0.5))
+                .font_weight(gpui::FontWeight::MEDIUM)
+                .text_color(muted.opacity(0.6))
                 .child(title.to_string())
                 .into_any_element()
         };
@@ -1898,8 +1908,8 @@ impl NotesApp {
             )
             .child(
                 div()
-                    .w(px(320.))
-                    .max_h(px(460.))
+                    .w(px(340.))
+                    .max_h(px(480.))
                     .overflow_y_scrollbar()
                     .p_4()
                     .flex()
@@ -1907,6 +1917,7 @@ impl NotesApp {
                     .child(
                         div()
                             .text_sm()
+                            .font_weight(gpui::FontWeight::SEMIBOLD)
                             .text_color(cx.theme().foreground)
                             .pb_2()
                             .child("Keyboard Shortcuts"),
@@ -1920,46 +1931,47 @@ impl NotesApp {
                     .child(section("Navigation"))
                     .child(shortcut("⌘↑ / ⌘↓", "Previous / next note"))
                     .child(shortcut("⌘⇧↑ / ⌘⇧↓", "First / last note"))
-                    .child(shortcut("⌘[ / ⌘]", "Back / forward in history"))
+                    .child(shortcut("⌘[ / ⌘]", "Back / forward"))
                     .child(shortcut("⌘1–9", "Jump to pinned note"))
                     .child(shortcut("⌘P", "Note switcher"))
                     .child(shortcut("⌘K", "Actions"))
-                    .child(section("Editing"))
+                    .child(section("Formatting"))
                     .child(shortcut("⌘B", "Bold"))
                     .child(shortcut("⌘I", "Italic"))
                     .child(shortcut("⌘⇧X", "Strikethrough"))
-                    .child(shortcut("⌘⇧H", "Cycle heading level"))
+                    .child(shortcut("⌘⇧H", "Cycle heading"))
                     .child(shortcut("⌘⇧L", "Toggle checklist"))
                     .child(shortcut("⌘⇧.", "Toggle blockquote"))
                     .child(shortcut("⌘⇧-", "Horizontal rule"))
+                    .child(shortcut("⌘⇧8", "Bullet list"))
+                    .child(shortcut("⌘⇧7", "Numbered list"))
+                    .child(section("Text"))
                     .child(shortcut("⌘⇧D", "Insert date/time"))
                     .child(shortcut("⌘⇧C", "Copy as markdown"))
-                    .child(shortcut("⌘⇧8", "Toggle bullet list"))
-                    .child(shortcut("⌘⇧7", "Toggle numbered list"))
-                    .child(shortcut("⌘L", "Select current line"))
+                    .child(shortcut("⌘L", "Select line"))
                     .child(shortcut("⌘J", "Join lines"))
                     .child(shortcut("⌘⇧U", "Cycle case"))
-                    .child(shortcut("⌥↑ / ⌥↓", "Move line up / down"))
+                    .child(shortcut("⌥↑ / ⌥↓", "Move line"))
                     .child(shortcut("⌥⇧↑ / ⌥⇧↓", "Duplicate line"))
                     .child(shortcut("⌃⇧K", "Delete line"))
-                    .child(shortcut("⌘V", "Smart link paste"))
+                    .child(shortcut("⌘V", "Smart paste"))
                     .child(section("View"))
                     .child(shortcut("⌘.", "Focus mode"))
                     .child(shortcut("⌘⇧P", "Markdown preview"))
-                    .child(shortcut("⌘F", "Search"))
-                    .child(shortcut("⌘⇧S", "Cycle sort mode"))
-                    .child(shortcut("⌘⇧T", "Toggle trash view"))
+                    .child(shortcut("⌘F", "Find in note"))
+                    .child(shortcut("⌘⇧S", "Cycle sort"))
+                    .child(shortcut("⌘⇧T", "Toggle trash"))
                     .child(section("Window"))
-                    .child(shortcut("⌘W", "Close window"))
-                    .child(shortcut("Esc", "Close panel / window"))
+                    .child(shortcut("⌘W", "Close"))
+                    .child(shortcut("Esc", "Close panel"))
                     .child(shortcut("⌘/", "This help"))
                     .child(
                         div()
                             .pt_3()
                             .text_xs()
-                            .text_color(muted.opacity(0.4))
+                            .text_color(muted.opacity(0.35))
                             .text_center()
-                            .child("Click anywhere to dismiss"),
+                            .child("Click anywhere or press ⌘/ to dismiss"),
                     ),
             )
     }
@@ -2793,7 +2805,7 @@ impl NotesApp {
             .flex()
             .items_center()
             .justify_center() // Center the title
-            .h(px(26.)) // Compact titlebar height (slightly taller for visual balance)
+            .h(px(32.)) // Titlebar height (balanced for drag area and visual weight)
             .px_3()
             .relative() // For absolute positioning of icons
             // NO .bg() - let vibrancy show through from root
@@ -2816,22 +2828,24 @@ impl NotesApp {
                     .text_ellipsis()
                     .text_sm()
                     .text_color(muted_color) // Use muted color for subtle title
-                    .when(!window_hovered, |d| d.opacity(0.))
-                    // In focus mode, show "Focus" hint instead of title (only on hover)
+                    // Always show title at low opacity; brighten on hover
+                    .when(!window_hovered, |d| d.opacity(0.35))
+                    .when(window_hovered, |d| d.opacity(1.0))
+                    // In focus mode, hide title completely (distraction-free)
                     .when(in_focus_mode, |d| d.opacity(0.))
-                    // Pin indicator before title
+                    // Pin indicator — filled dot in accent color
                     .when(is_pinned && !in_focus_mode, |d| {
-                        d.child(div().text_xs().text_color(accent_color).child("*"))
+                        d.child(div().text_xs().text_color(accent_color).child("●"))
                     })
                     .child(title),
             )
-            // Focus mode hint: subtle "Cmd+. to exit" shown on hover in focus mode
+            // Focus mode hint: subtle exit hint shown on hover
             .when(in_focus_mode && window_hovered, |d| {
                 d.child(
                     div()
                         .text_xs()
-                        .text_color(muted_color.opacity(0.4))
-                        .child("⌘. to exit focus"),
+                        .text_color(muted_color.opacity(0.3))
+                        .child("⌘.  exit focus"),
                 )
             })
             // Conditionally show icons based on state - only when window is hovered
@@ -2973,11 +2987,13 @@ impl NotesApp {
             .items_center()
             .justify_center()
             .relative()
-            .h(px(24.))
+            .h(px(28.))
             .px_3()
             // NO .bg() - let vibrancy show through from root
-            // Hide when window not hovered (or in focus mode)
-            .when(!window_hovered || in_focus_mode, |d| d.opacity(0.))
+            // Always visible at reduced opacity; full on hover; hidden in focus mode
+            .when(in_focus_mode, |d| d.opacity(0.))
+            .when(!in_focus_mode && !window_hovered, |d| d.opacity(0.35))
+            .when(!in_focus_mode && window_hovered, |d| d.opacity(1.0))
             // LEFT: History arrows + note position + unsaved dot
             .child(
                 div()
@@ -2985,8 +3001,8 @@ impl NotesApp {
                     .left_3()
                     .flex()
                     .items_center()
-                    .gap_1()
-                    // History back arrow (Cmd+[)
+                    .gap(px(6.))
+                    // History back arrow (Cmd+[) — proper arrow glyph
                     .child(
                         div()
                             .id("footer-history-back")
@@ -3003,9 +3019,9 @@ impl NotesApp {
                             .on_click(cx.listener(|this, _, window, cx| {
                                 this.navigate_back(window, cx);
                             }))
-                            .child("<"),
+                            .child("‹"),
                     )
-                    // History forward arrow (Cmd+])
+                    // History forward arrow (Cmd+]) — proper arrow glyph
                     .child(
                         div()
                             .id("footer-history-forward")
@@ -3022,12 +3038,13 @@ impl NotesApp {
                             .on_click(cx.listener(|this, _, window, cx| {
                                 this.navigate_forward(window, cx);
                             }))
-                            .child(">"),
+                            .child("›"),
                     )
-                    // Unsaved changes dot / saved confirmation
+                    // Unsaved changes — filled dot in accent color
                     .when(has_unsaved, |d| {
-                        d.child(div().text_xs().text_color(cx.theme().accent).child("*"))
+                        d.child(div().text_xs().text_color(cx.theme().accent).child("●"))
                     })
+                    // "Saved" flash after successful save
                     .when(show_saved, |d| {
                         d.child(
                             div()
@@ -3041,7 +3058,7 @@ impl NotesApp {
                             div()
                                 .text_xs()
                                 .text_color(cx.theme().muted_foreground)
-                                .child(format!("{} / {}", pos, total)),
+                                .child(format!("{} of {}", pos, total)),
                         )
                     }),
             )
@@ -3078,8 +3095,8 @@ impl NotesApp {
                         d.child(
                             div()
                                 .text_xs()
-                                .text_color(cx.theme().muted_foreground.opacity(0.6))
-                                .child(reading_time),
+                                .text_color(cx.theme().muted_foreground.opacity(0.5))
+                                .child(format!("· {}", reading_time)),
                         )
                     }),
             )
@@ -3155,15 +3172,15 @@ impl NotesApp {
                         d.child(
                             div()
                                 .text_xs()
-                                .text_color(cx.theme().muted_foreground.opacity(0.6))
+                                .text_color(cx.theme().muted_foreground.opacity(0.5))
                                 .child(time),
                         )
                     })
                     .child(
                         div()
                             .text_xs()
-                            .text_color(cx.theme().muted_foreground)
-                            .child(if is_preview { "MD" } else { "T" }),
+                            .text_color(cx.theme().muted_foreground.opacity(0.5))
+                            .child(if is_preview { "MD" } else { "TXT" }),
                     ),
             );
 
@@ -3177,16 +3194,16 @@ impl NotesApp {
                 .flex_col()
                 .items_center()
                 .justify_center()
-                .gap_3()
+                .gap_4()
                 .child(
                     div()
-                        .text_lg()
-                        .text_color(cx.theme().muted_foreground)
+                        .text_base()
+                        .text_color(cx.theme().muted_foreground.opacity(0.8))
                         .child("Trash is empty"),
                 )
                 .child(
                     div()
-                        .text_xs()
+                        .text_sm()
                         .text_color(cx.theme().muted_foreground.opacity(0.5))
                         .child("Deleted notes will appear here"),
                 )
@@ -3200,11 +3217,11 @@ impl NotesApp {
                         .on_click(cx.listener(|this, _, window, cx| {
                             this.set_view_mode(NotesViewMode::AllNotes, window, cx);
                         }))
-                        .child("Back to Notes  (Cmd+Shift+T)"),
+                        .child("← Back to Notes"),
                 )
                 .into_any_element()
         } else if no_notes && !has_selection {
-            // Empty state: show helpful instructions when no notes exist
+            // Empty state: welcoming instructions when no notes exist
             div()
                 .id("notes-empty-state")
                 .flex_1()
@@ -3212,11 +3229,11 @@ impl NotesApp {
                 .flex_col()
                 .items_center()
                 .justify_center()
-                .gap_3()
+                .gap_4()
                 .child(
                     div()
-                        .text_lg()
-                        .text_color(cx.theme().muted_foreground)
+                        .text_base()
+                        .text_color(cx.theme().muted_foreground.opacity(0.8))
                         .child("No notes yet"),
                 )
                 .child(
@@ -3224,18 +3241,30 @@ impl NotesApp {
                         .flex()
                         .flex_col()
                         .items_center()
-                        .gap_1()
+                        .gap_2()
                         .child(
                             div()
-                                .text_xs()
-                                .text_color(cx.theme().muted_foreground.opacity(0.7))
-                                .child("Start typing to create a note"),
+                                .text_sm()
+                                .text_color(cx.theme().muted_foreground.opacity(0.6))
+                                .child("Just start typing to create your first note"),
                         )
                         .child(
                             div()
-                                .text_xs()
-                                .text_color(cx.theme().muted_foreground.opacity(0.5))
-                                .child("or press  Cmd+N"),
+                                .flex()
+                                .items_center()
+                                .gap_3()
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(cx.theme().muted_foreground.opacity(0.4))
+                                        .child("⌘N  new note"),
+                                )
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(cx.theme().muted_foreground.opacity(0.4))
+                                        .child("⌘/  shortcuts"),
+                                ),
                         ),
                 )
                 .into_any_element()
@@ -3246,6 +3275,7 @@ impl NotesApp {
                 .flex_1()
                 .min_h(px(0.))
                 .overflow_y_scrollbar()
+                .p_2()
                 .child(markdown::render_markdown_preview(&content, cx.theme()))
                 .into_any_element()
         } else {
