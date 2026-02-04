@@ -190,6 +190,17 @@ pub struct NotesApp {
 
     /// Theme revision seen - used to detect theme changes and recompute cached values
     theme_rev_seen: u64,
+
+    /// History stack for back navigation (Cmd+[)
+    /// Stores previously viewed note IDs (most recent at the end)
+    history_back: Vec<NoteId>,
+
+    /// History stack for forward navigation (Cmd+])
+    /// Populated when user navigates back
+    history_forward: Vec<NoteId>,
+
+    /// Flag to suppress history push during back/forward navigation
+    navigating_history: bool,
 }
 
 impl NotesApp {
@@ -328,6 +339,9 @@ impl NotesApp {
             last_persisted_bounds: None,
             last_bounds_save: Instant::now(),
             theme_rev_seen: crate::theme::service::theme_revision(),
+            history_back: Vec::new(),
+            history_forward: Vec::new(),
+            navigating_history: false,
         }
     }
 
@@ -585,6 +599,17 @@ impl NotesApp {
     fn select_note(&mut self, id: NoteId, window: &mut Window, cx: &mut Context<Self>) {
         // Save any unsaved changes to the current note before switching
         self.save_current_note();
+
+        // Push current note onto history stack (unless navigating back/forward)
+        if !self.navigating_history {
+            if let Some(prev_id) = self.selected_note_id {
+                if prev_id != id {
+                    self.history_back.push(prev_id);
+                    // Clear forward history on new navigation
+                    self.history_forward.clear();
+                }
+            }
+        }
 
         self.selected_note_id = Some(id);
 
@@ -873,6 +898,106 @@ impl NotesApp {
                     self.select_note(next_id, window, cx);
                 }
             }
+        }
+    }
+
+    /// Navigate back in history (Cmd+[)
+    fn navigate_back(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(prev_id) = self.history_back.pop() {
+            // Only navigate if the note still exists
+            if self.notes.iter().any(|n| n.id == prev_id) {
+                // Push current note onto forward stack
+                if let Some(current_id) = self.selected_note_id {
+                    self.history_forward.push(current_id);
+                }
+                self.navigating_history = true;
+                self.select_note(prev_id, window, cx);
+                self.navigating_history = false;
+            }
+        }
+    }
+
+    /// Navigate forward in history (Cmd+])
+    fn navigate_forward(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(next_id) = self.history_forward.pop() {
+            // Only navigate if the note still exists
+            if self.notes.iter().any(|n| n.id == next_id) {
+                // Push current note onto back stack
+                if let Some(current_id) = self.selected_note_id {
+                    self.history_back.push(current_id);
+                }
+                self.navigating_history = true;
+                self.select_note(next_id, window, cx);
+                self.navigating_history = false;
+            }
+        }
+    }
+
+    /// Toggle pin state of the currently selected note (Cmd+Shift+I)
+    fn toggle_pin_current_note(&mut self, cx: &mut Context<Self>) {
+        if let Some(id) = self.selected_note_id {
+            if let Some(note) = self.notes.iter_mut().find(|n| n.id == id) {
+                note.is_pinned = !note.is_pinned;
+                let pinned = note.is_pinned;
+                if let Err(e) = storage::save_note(note) {
+                    tracing::error!(error = %e, "Failed to toggle pin state");
+                    return;
+                }
+                info!(note_id = %id, pinned = pinned, "Toggled pin state");
+            }
+            // Re-sort notes: pinned first, then by updated_at descending
+            self.notes.sort_by(|a, b| match (a.is_pinned, b.is_pinned) {
+                (true, false) => std::cmp::Ordering::Less,
+                (false, true) => std::cmp::Ordering::Greater,
+                _ => b.updated_at.cmp(&a.updated_at),
+            });
+            cx.notify();
+        }
+    }
+
+    /// Get relative time description for when a note was last updated
+    fn get_relative_time(&self) -> Option<String> {
+        self.selected_note_id
+            .and_then(|id| self.get_visible_notes().iter().find(|n| n.id == id))
+            .map(|note| {
+                let now = chrono::Utc::now();
+                let diff = now - note.updated_at;
+
+                if diff.num_seconds() < 5 {
+                    "just now".to_string()
+                } else if diff.num_seconds() < 60 {
+                    format!("{}s ago", diff.num_seconds())
+                } else if diff.num_minutes() < 60 {
+                    let mins = diff.num_minutes();
+                    format!("{}m ago", mins)
+                } else if diff.num_hours() < 24 {
+                    let hours = diff.num_hours();
+                    format!("{}h ago", hours)
+                } else if diff.num_days() < 7 {
+                    let days = diff.num_days();
+                    format!("{}d ago", days)
+                } else {
+                    note.updated_at.format("%b %d").to_string()
+                }
+            })
+    }
+
+    /// Select a pinned note by its ordinal position (Cmd+1 through Cmd+9)
+    fn select_pinned_note_by_index(
+        &mut self,
+        index: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let pinned_notes: Vec<NoteId> = self
+            .notes
+            .iter()
+            .filter(|n| n.is_pinned)
+            .map(|n| n.id)
+            .collect();
+
+        if let Some(&note_id) = pinned_notes.get(index) {
+            self.select_note(note_id, window, cx);
         }
     }
 
@@ -1732,11 +1857,12 @@ impl NotesApp {
                 )
             });
 
-        // Enhanced footer: note position on LEFT, word/char count CENTERED, type on RIGHT
+        // Enhanced footer: note position on LEFT, word/char count CENTERED, type + time on RIGHT
         // NOTE: No .bg() - let vibrancy show through from root
         let word_count = self.get_word_count(cx);
         let note_position = self.get_note_position();
         let has_unsaved = self.has_unsaved_changes;
+        let relative_time = self.get_relative_time();
         let footer = div()
             .flex()
             .items_center()
@@ -1781,14 +1907,28 @@ impl NotesApp {
                         if char_count == 1 { "" } else { "s" },
                     )),
             )
-            // RIGHT: Type indicator
+            // RIGHT: Relative time + type indicator
             .child(
                 div()
                     .absolute()
                     .right_3()
-                    .text_xs()
-                    .text_color(cx.theme().muted_foreground)
-                    .child(if is_preview { "MD" } else { "T" }),
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .when_some(relative_time, |d, time| {
+                        d.child(
+                            div()
+                                .text_xs()
+                                .text_color(cx.theme().muted_foreground.opacity(0.6))
+                                .child(time),
+                        )
+                    })
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(cx.theme().muted_foreground)
+                            .child(if is_preview { "MD" } else { "T" }),
+                    ),
             );
 
         let no_notes = self.get_visible_notes().is_empty();
@@ -2401,7 +2541,14 @@ impl Render for NotesApp {
                         }
                         "d" => this.duplicate_selected_note(window, cx),
                         "b" => this.insert_formatting("**", "**", window, cx),
-                        "i" => this.insert_formatting("_", "_", window, cx),
+                        "i" => {
+                            if modifiers.shift {
+                                // Cmd+Shift+I: Toggle pin on current note
+                                this.toggle_pin_current_note(cx);
+                            } else {
+                                this.insert_formatting("_", "_", window, cx);
+                            }
+                        }
                         // Navigate between notes with Cmd+Up/Down
                         "up" | "arrowup" => {
                             this.select_prev_note(window, cx);
@@ -2410,6 +2557,47 @@ impl Render for NotesApp {
                         "down" | "arrowdown" => {
                             this.select_next_note(window, cx);
                             cx.stop_propagation();
+                        }
+                        // History navigation: Cmd+[ back, Cmd+] forward
+                        "[" => {
+                            this.navigate_back(window, cx);
+                            cx.stop_propagation();
+                        }
+                        "]" => {
+                            this.navigate_forward(window, cx);
+                            cx.stop_propagation();
+                        }
+                        // Delete current note: Cmd+Backspace
+                        "backspace" | "delete" => {
+                            if this.selected_note_id.is_some() {
+                                this.delete_selected_note(cx);
+                                // Load the newly selected note into the editor
+                                if let Some(id) = this.selected_note_id {
+                                    let content = this
+                                        .notes
+                                        .iter()
+                                        .find(|n| n.id == id)
+                                        .map(|n| n.content.clone())
+                                        .unwrap_or_default();
+                                    let content_len = content.len();
+                                    this.editor_state.update(cx, |state, cx| {
+                                        state.set_value(&content, window, cx);
+                                        state.set_selection(content_len, content_len, window, cx);
+                                    });
+                                } else {
+                                    this.editor_state.update(cx, |state, cx| {
+                                        state.set_value("", window, cx);
+                                    });
+                                }
+                                cx.stop_propagation();
+                            }
+                        }
+                        // Cmd+1 through Cmd+9: Jump to pinned notes
+                        "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" => {
+                            if let Ok(num) = key.parse::<usize>() {
+                                this.select_pinned_note_by_index(num - 1, window, cx);
+                                cx.stop_propagation();
+                            }
                         }
                         _ => {}
                     }
