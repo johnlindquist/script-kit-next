@@ -1017,6 +1017,55 @@ impl ScriptListApp {
         });
         app.gpui_input_subscriptions.push(arrow_interceptor);
 
+        // Add Home/End key interceptor for jump navigation
+        let app_entity_for_home_end = cx.entity().downgrade();
+        let home_end_interceptor = cx.intercept_keystrokes({
+            let app_entity = app_entity_for_home_end;
+            move |event, window, cx| {
+                // Skip processing if this keystroke is from Notes or AI window
+                if crate::notes::is_notes_window(window) || crate::ai::is_ai_window(window) {
+                    return;
+                }
+
+                let key = event.keystroke.key.to_lowercase();
+                let has_platform_mod = event.keystroke.modifiers.platform; // Cmd on macOS
+
+                // Home key or Cmd+Up → jump to first item
+                // End key or Cmd+Down → jump to last item
+                let is_home =
+                    key == "home" || (has_platform_mod && (key == "up" || key == "arrowup"));
+                let is_end =
+                    key == "end" || (has_platform_mod && (key == "down" || key == "arrowdown"));
+
+                if !is_home && !is_end {
+                    return;
+                }
+
+                if let Some(app) = app_entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        // Only handle in ScriptList view
+                        if !matches!(this.current_view, AppView::ScriptList) {
+                            return;
+                        }
+
+                        // Don't handle if actions popup is open
+                        if this.show_actions_popup {
+                            return;
+                        }
+
+                        if is_home {
+                            this.move_selection_to_first(cx);
+                        } else if is_end {
+                            this.move_selection_to_last(cx);
+                        }
+
+                        cx.stop_propagation();
+                    });
+                }
+            }
+        });
+        app.gpui_input_subscriptions.push(home_end_interceptor);
+
         // Add interceptor for actions popup in FileSearchView and ScriptList
         // This handles Cmd+K (toggle), Escape (close), Enter (submit), and typing
         let app_entity_for_actions = cx.entity().downgrade();
