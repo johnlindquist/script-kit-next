@@ -469,8 +469,10 @@ pub(crate) fn extract_scriptlet_display_path(file_path: &Option<String>) -> Opti
 pub fn fuzzy_search_scripts(scripts: &[Arc<Script>], query: &str) -> Vec<ScriptMatch> {
     if query.is_empty() {
         // If no query, return all scripts with equal score, sorted by name
+        // Filter out hidden scripts (metadata = { hidden: true })
         return scripts
             .iter()
+            .filter(|s| !s.typed_metadata.as_ref().is_some_and(|m| m.hidden))
             .map(|s| {
                 let filename = extract_filename(&s.path);
                 ScriptMatch {
@@ -495,6 +497,12 @@ pub fn fuzzy_search_scripts(scripts: &[Arc<Script>], query: &str) -> Vec<ScriptM
     let use_nucleo = query_lower.len() >= MIN_FUZZY_QUERY_LEN;
 
     for script in scripts {
+        // Skip hidden scripts - they should not appear in search results or grouped view
+        // Hidden flag comes from typed metadata: metadata = { hidden: true }
+        if script.typed_metadata.as_ref().is_some_and(|m| m.hidden) {
+            continue;
+        }
+
         let mut score = 0i32;
         // Lazy match indices - don't compute during scoring, will be computed on-demand
         let match_indices = MatchIndices::default();
@@ -575,6 +583,33 @@ pub fn fuzzy_search_scripts(scripts: &[Arc<Script>], query: &str) -> Vec<ScriptM
                 if let Some(pos) = find_ignore_ascii_case(kit_name, &query_lower) {
                     // Moderate bonus for kit name match (helps find all scripts from a kit)
                     score += if pos == 0 { 30 } else { 20 };
+                }
+            }
+        }
+
+        // Score by tag match - allows searching by category (e.g., "productivity", "utility")
+        // Tags come from typed metadata: metadata = { tags: ["productivity", "notes"] }
+        if let Some(ref typed_meta) = script.typed_metadata {
+            for tag in &typed_meta.tags {
+                if query_is_ascii && tag.is_ascii() {
+                    if let Some(pos) = find_ignore_ascii_case(tag, &query_lower) {
+                        // Moderate bonus for tag match (helps discover scripts by category)
+                        score += if pos == 0 { 40 } else { 25 };
+                        break; // Only count best tag match once
+                    }
+                }
+            }
+        }
+
+        // Score by author match - allows finding scripts by creator
+        // Author comes from typed metadata: metadata = { author: "John Lindquist" }
+        if let Some(ref typed_meta) = script.typed_metadata {
+            if let Some(ref author) = typed_meta.author {
+                if query_is_ascii && author.is_ascii() {
+                    if let Some(pos) = find_ignore_ascii_case(author, &query_lower) {
+                        // Moderate bonus for author match
+                        score += if pos == 0 { 30 } else { 20 };
+                    }
                 }
             }
         }
@@ -1645,6 +1680,194 @@ mod tests {
             dev_results.len(),
             2,
             "Both development scriptlets should match"
+        );
+    }
+
+    // ============================================
+    // Tag-based search tests
+    // ============================================
+
+    fn make_script_with_tags(name: &str, tags: &[&str]) -> Arc<Script> {
+        use crate::metadata_parser::TypedMetadata;
+        Arc::new(Script {
+            name: name.to_string(),
+            path: PathBuf::from(format!(
+                "/test/{}.ts",
+                name.to_lowercase().replace(' ', "-")
+            )),
+            extension: "ts".to_string(),
+            typed_metadata: Some(TypedMetadata {
+                tags: tags.iter().map(|t| t.to_string()).collect(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        })
+    }
+
+    #[test]
+    fn test_tag_search_finds_matching_scripts() {
+        let scripts = vec![
+            make_script_with_tags("Create Note", &["productivity", "notes"]),
+            make_script_with_tags("Git Commit", &["development", "git"]),
+            make_script("Untagged Script", Some("no tags")),
+        ];
+        let results = fuzzy_search_scripts(&scripts, "productivity");
+        // "Create Note" should match via its "productivity" tag
+        assert!(
+            results.iter().any(|r| r.script.name == "Create Note"),
+            "Script with matching tag should be found"
+        );
+    }
+
+    #[test]
+    fn test_tag_search_partial_match() {
+        let scripts = vec![
+            make_script_with_tags("Deploy App", &["deployment", "ci-cd"]),
+            make_script("Random Script", None),
+        ];
+        let results = fuzzy_search_scripts(&scripts, "deploy");
+        // "Deploy App" should match via both name AND tag substring
+        assert!(
+            results.iter().any(|r| r.script.name == "Deploy App"),
+            "Script should match via tag substring"
+        );
+    }
+
+    #[test]
+    fn test_tag_search_only_counts_best_match() {
+        // Multiple tags matching should only count once (break after first match)
+        let scripts = vec![make_script_with_tags(
+            "Multi Tag",
+            &["dev", "development", "developer"],
+        )];
+        let results = fuzzy_search_scripts(&scripts, "dev");
+        assert_eq!(results.len(), 1);
+        // Score should include tag bonus but only once
+        assert!(results[0].score > 0);
+    }
+
+    // ============================================
+    // Author-based search tests
+    // ============================================
+
+    fn make_script_with_author(name: &str, author: &str) -> Arc<Script> {
+        use crate::metadata_parser::TypedMetadata;
+        Arc::new(Script {
+            name: name.to_string(),
+            path: PathBuf::from(format!(
+                "/test/{}.ts",
+                name.to_lowercase().replace(' ', "-")
+            )),
+            extension: "ts".to_string(),
+            typed_metadata: Some(TypedMetadata {
+                author: Some(author.to_string()),
+                ..Default::default()
+            }),
+            ..Default::default()
+        })
+    }
+
+    #[test]
+    fn test_author_search_finds_scripts() {
+        let scripts = vec![
+            make_script_with_author("My Script", "John Lindquist"),
+            make_script_with_author("Other Script", "Jane Doe"),
+            make_script("No Author", Some("plain script")),
+        ];
+        let results = fuzzy_search_scripts(&scripts, "john");
+        // "My Script" by "John Lindquist" should match via author
+        assert!(
+            results.iter().any(|r| r.script.name == "My Script"),
+            "Script with matching author should be found"
+        );
+    }
+
+    #[test]
+    fn test_author_search_prefix_scores_higher() {
+        let scripts = vec![
+            make_script_with_author("Script A", "John Doe"),
+            make_script_with_author("Script B", "Bobby Johnson"),
+        ];
+        let results = fuzzy_search_scripts(&scripts, "john");
+        // Both should match but "Script A" (author prefix "John") should score higher
+        assert!(results.len() >= 2);
+        assert_eq!(
+            results[0].script.name, "Script A",
+            "Author prefix match should rank higher"
+        );
+    }
+
+    // ============================================
+    // Hidden script filtering tests
+    // ============================================
+
+    fn make_hidden_script(name: &str) -> Arc<Script> {
+        use crate::metadata_parser::TypedMetadata;
+        Arc::new(Script {
+            name: name.to_string(),
+            path: PathBuf::from(format!(
+                "/test/{}.ts",
+                name.to_lowercase().replace(' ', "-")
+            )),
+            extension: "ts".to_string(),
+            typed_metadata: Some(TypedMetadata {
+                hidden: true,
+                ..Default::default()
+            }),
+            ..Default::default()
+        })
+    }
+
+    #[test]
+    fn test_hidden_scripts_excluded_from_search() {
+        let scripts = vec![
+            make_script("Visible Script", Some("shown in list")),
+            make_hidden_script("Hidden Background Task"),
+            make_script("Another Visible", None),
+        ];
+        let results = fuzzy_search_scripts(&scripts, "script");
+        // Hidden script should NOT appear in results
+        assert!(
+            !results
+                .iter()
+                .any(|r| r.script.name == "Hidden Background Task"),
+            "Hidden script should not appear in search results"
+        );
+        // Visible scripts should still appear
+        assert!(results.iter().any(|r| r.script.name == "Visible Script"));
+    }
+
+    #[test]
+    fn test_hidden_scripts_excluded_from_empty_query() {
+        let scripts = vec![make_script("Visible", None), make_hidden_script("Hidden")];
+        // Empty query returns all non-hidden scripts
+        let results = fuzzy_search_scripts(&scripts, "");
+        assert_eq!(results.len(), 1, "Only visible scripts should be returned");
+        assert_eq!(results[0].script.name, "Visible");
+    }
+
+    #[test]
+    fn test_non_hidden_scripts_not_affected() {
+        // Scripts without typed_metadata or with hidden=false should not be filtered
+        use crate::metadata_parser::TypedMetadata;
+        let scripts = vec![
+            make_script("No Metadata", None),
+            Arc::new(Script {
+                name: "Explicit False".to_string(),
+                path: PathBuf::from("/test/explicit-false.ts"),
+                extension: "ts".to_string(),
+                typed_metadata: Some(TypedMetadata {
+                    hidden: false,
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }),
+        ];
+        let results = fuzzy_search_scripts(&scripts, "");
+        assert_eq!(
+            results.len(),
+            2,
+            "Non-hidden scripts should all be returned"
         );
     }
 }
