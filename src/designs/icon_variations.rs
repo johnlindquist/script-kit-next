@@ -105,6 +105,9 @@ pub enum IconName {
     // UI/Layout
     Sidebar,
     Refresh,
+
+    // Communication
+    MessageCircle,
 }
 
 impl IconName {
@@ -147,6 +150,8 @@ impl IconName {
             // UI/Layout
             Self::Sidebar,
             Self::Refresh,
+            // Communication
+            Self::MessageCircle,
         ]
     }
 
@@ -187,6 +192,7 @@ impl IconName {
             Self::PlayOutlined => "Play Outlined",
             Self::Sidebar => "Sidebar",
             Self::Refresh => "Refresh",
+            Self::MessageCircle => "Message Circle",
         }
     }
 
@@ -222,6 +228,7 @@ impl IconName {
             Self::PlayOutlined => "Run/execute (outline)",
             Self::Sidebar => "Toggle sidebar panel",
             Self::Refresh => "Refresh/regenerate action",
+            Self::MessageCircle => "Chat/conversation message",
         }
     }
 
@@ -258,6 +265,7 @@ impl IconName {
             Self::PlayOutlined => "play_outlined",
             Self::Sidebar => "sidebar",
             Self::Refresh => "refresh",
+            Self::MessageCircle => "message_circle",
         };
         format!("icons/{}.svg", file_name).into()
     }
@@ -319,6 +327,10 @@ impl IconName {
             ),
             Self::Sidebar => concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/sidebar.svg"),
             Self::Refresh => concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/refresh.svg"),
+            Self::MessageCircle => concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/assets/icons/message_circle.svg"
+            ),
         }
     }
 
@@ -349,6 +361,7 @@ impl IconName {
             Self::Close => IconCategory::Actions,
             Self::PlayFilled | Self::PlayOutlined => IconCategory::Media,
             Self::Sidebar | Self::Refresh => IconCategory::Actions,
+            Self::MessageCircle => IconCategory::Status,
         }
     }
 }
@@ -577,6 +590,9 @@ pub fn icon_name_from_str(name: &str) -> Option<IconName> {
         // UI/Layout
         "sidebar" | "panel" | "layout" => Some(IconName::Sidebar),
 
+        // Communication
+        "messagecircle" | "message" | "chat" | "conversation" => Some(IconName::MessageCircle),
+
         _ => None,
     }
 }
@@ -587,7 +603,7 @@ mod tests {
 
     #[test]
     fn test_icon_count() {
-        assert_eq!(IconName::count(), 29); // 28 + Refresh
+        assert_eq!(IconName::count(), 30); // 29 + MessageCircle
     }
 
     #[test]
