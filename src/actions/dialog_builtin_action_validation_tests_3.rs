@@ -361,7 +361,15 @@ fn ai_command_bar_section_order_is_correct() {
     let sections = sections_in_order(&actions);
     assert_eq!(
         sections,
-        vec!["Response", "Actions", "Attachments", "Settings"],
+        vec![
+            "Response",
+            "Actions",
+            "Attachments",
+            "Export",
+            "Actions",
+            "Help",
+            "Settings"
+        ],
         "AI command bar sections should be in correct order"
     );
 }
@@ -377,13 +385,13 @@ fn ai_command_bar_response_section_has_three_actions() {
 }
 
 #[test]
-fn ai_command_bar_actions_section_has_three_actions() {
+fn ai_command_bar_actions_section_has_four_actions() {
     let actions = get_ai_command_bar_actions();
     let actions_count = actions
         .iter()
         .filter(|a| a.section.as_deref() == Some("Actions"))
         .count();
-    assert_eq!(actions_count, 3, "Actions section should have 3 actions");
+    assert_eq!(actions_count, 4, "Actions section should have 4 actions");
 }
 
 #[test]
@@ -1472,8 +1480,8 @@ fn grouped_items_headers_style_produces_section_headers() {
         .filter(|g| matches!(g, GroupedActionItem::SectionHeader(_)))
         .count();
     assert!(
-        header_count >= 4,
-        "Headers style should produce at least 4 section headers, got {}",
+        header_count >= 7,
+        "Headers style should produce at least 7 section headers, got {}",
         header_count
     );
 }
@@ -2216,11 +2224,11 @@ fn clipboard_text_has_at_least_10_actions() {
 }
 
 #[test]
-fn ai_command_bar_has_exactly_9_actions() {
+fn ai_command_bar_has_exactly_12_actions() {
     let count = get_ai_command_bar_actions().len();
     assert_eq!(
-        count, 9,
-        "AI command bar should have exactly 9 actions, got {}",
+        count, 12,
+        "AI command bar should have exactly 12 actions, got {}",
         count
     );
 }

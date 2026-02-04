@@ -1000,7 +1000,10 @@ fn test_ai_command_bar_has_expected_ids() {
     assert!(ids.contains(&"add_attachment"));
     assert!(ids.contains(&"paste_image"));
     assert!(ids.contains(&"change_model"));
-    assert_eq!(ids.len(), 9);
+    assert!(ids.contains(&"export_markdown"));
+    assert!(ids.contains(&"branch_from_last"));
+    assert!(ids.contains(&"toggle_shortcuts_help"));
+    assert_eq!(ids.len(), 12);
 }
 
 // =========================================================================

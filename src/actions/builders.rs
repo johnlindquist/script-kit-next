@@ -1216,6 +1216,35 @@ pub fn get_ai_command_bar_actions() -> Vec<Action> {
         .with_shortcut("⌘V")
         .with_icon(IconName::File)
         .with_section("Attachments"),
+        // Export section
+        Action::new(
+            "export_markdown",
+            "Export as Markdown",
+            Some("Export chat to clipboard as Markdown".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("⇧⌘E")
+        .with_icon(IconName::FileCode)
+        .with_section("Export"),
+        // Actions section (continued)
+        Action::new(
+            "branch_from_last",
+            "Branch from Last Message",
+            Some("Create a new chat branching from the last message".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_icon(IconName::ArrowRight)
+        .with_section("Actions"),
+        // Help section
+        Action::new(
+            "toggle_shortcuts_help",
+            "Keyboard Shortcuts",
+            Some("Show keyboard shortcuts overlay".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("⌘/")
+        .with_icon(IconName::Star)
+        .with_section("Help"),
         // Settings section
         Action::new(
             "change_model",

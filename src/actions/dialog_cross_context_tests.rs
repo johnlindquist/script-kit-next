@@ -652,13 +652,13 @@ fn ai_command_bar_response_section_has_three_actions() {
 }
 
 #[test]
-fn ai_command_bar_actions_section_has_three_actions() {
+fn ai_command_bar_actions_section_has_four_actions() {
     let actions = get_ai_command_bar_actions();
     let action_count = actions
         .iter()
         .filter(|a| a.section.as_deref() == Some("Actions"))
         .count();
-    assert_eq!(action_count, 3);
+    assert_eq!(action_count, 4);
 }
 
 #[test]

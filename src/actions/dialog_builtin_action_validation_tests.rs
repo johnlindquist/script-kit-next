@@ -309,7 +309,14 @@ fn clipboard_destructive_actions_last_for_image_pinned() {
 
 #[test]
 fn ai_command_bar_section_labels_are_known() {
-    let known = ["Response", "Actions", "Attachments", "Settings"];
+    let known = [
+        "Response",
+        "Actions",
+        "Attachments",
+        "Export",
+        "Help",
+        "Settings",
+    ];
     let actions = get_ai_command_bar_actions();
     for action in &actions {
         let section = action.section.as_deref().unwrap();
@@ -403,8 +410,8 @@ fn clipboard_action_count_is_deterministic() {
 }
 
 #[test]
-fn ai_command_bar_action_count_is_exactly_nine() {
-    assert_eq!(get_ai_command_bar_actions().len(), 9);
+fn ai_command_bar_action_count_is_exactly_twelve() {
+    assert_eq!(get_ai_command_bar_actions().len(), 12);
 }
 
 // =========================================================================
