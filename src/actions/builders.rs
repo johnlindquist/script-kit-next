@@ -1477,6 +1477,10 @@ pub struct NoteSwitcherNoteInfo {
     pub is_current: bool,
     /// Whether this note is pinned
     pub is_pinned: bool,
+    /// Content preview (first ~60 chars of body, excluding title)
+    pub preview: String,
+    /// Relative time string (e.g. "2m ago", "3d ago")
+    pub relative_time: String,
 }
 
 /// Get actions for the note switcher dialog (Cmd+P in Notes window)
@@ -1484,8 +1488,9 @@ pub struct NoteSwitcherNoteInfo {
 /// Each note becomes an action with:
 /// - ID: "note_{uuid}" for note selection
 /// - Title: Note title (with current indicator)
-/// - Description: Character count
-/// - Icon: Star if pinned, Circle if current
+/// - Description: Content preview + relative time
+/// - Icon: Star if pinned, Check if current, File otherwise
+/// - Section: "Pinned" for pinned notes, "Recent" for others
 pub fn get_note_switcher_actions(notes: &[NoteSwitcherNoteInfo]) -> Vec<Action> {
     let mut actions = Vec::new();
 
@@ -1505,11 +1510,30 @@ pub fn get_note_switcher_actions(notes: &[NoteSwitcherNoteInfo]) -> Vec<Action> 
             note.title.clone()
         };
 
-        let description = format!(
-            "{} character{}",
-            note.char_count,
-            if note.char_count == 1 { "" } else { "s" }
-        );
+        // Show preview snippet + relative time when available, fall back to char count
+        let description = if !note.preview.is_empty() {
+            let preview: String = note.preview.chars().take(60).collect();
+            let preview = if note.preview.chars().count() > 60 {
+                format!("{}…", preview.trim_end())
+            } else {
+                preview
+            };
+            if note.relative_time.is_empty() {
+                preview
+            } else {
+                format!("{} · {}", preview, note.relative_time)
+            }
+        } else if !note.relative_time.is_empty() {
+            note.relative_time.clone()
+        } else {
+            format!(
+                "{} char{}",
+                note.char_count,
+                if note.char_count == 1 { "" } else { "s" }
+            )
+        };
+
+        let section = if note.is_pinned { "Pinned" } else { "Recent" };
 
         actions.push(
             Action::new(
@@ -1519,7 +1543,7 @@ pub fn get_note_switcher_actions(notes: &[NoteSwitcherNoteInfo]) -> Vec<Action> 
                 ActionCategory::ScriptContext,
             )
             .with_icon(icon)
-            .with_section("Notes"),
+            .with_section(section),
         );
     }
 

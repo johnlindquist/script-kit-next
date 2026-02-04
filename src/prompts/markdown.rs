@@ -8,11 +8,15 @@
 //! scrolling at 60fps) we skip pulldown-cmark parsing and syntect highlighting
 //! entirely, and only build cheap GPUI elements from the cached representation.
 
-use gpui::{div, prelude::*, px, rgb, rgba, AnyElement, FontWeight, IntoElement};
+use gpui::{
+    div, prelude::*, px, rgb, rgba, AnyElement, ClipboardItem, FontWeight, IntoElement,
+    SharedString,
+};
 use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
 
 use crate::notes::code_highlight::{highlight_code_lines, CodeLine, CodeSpan};
@@ -71,6 +75,8 @@ enum ParsedBlock {
     CodeBlock {
         lang_label: String,
         lines: Vec<CodeLine>,
+        /// Raw code text for copy-to-clipboard functionality
+        raw_code: String,
         quote_depth: usize,
     },
     HorizontalRule {
@@ -197,11 +203,13 @@ fn parse_markdown(text: &str, is_dark: bool) -> Vec<ParsedBlock> {
                 TagEnd::CodeBlock => {
                     if let Some(block) = code_block.take() {
                         let lang_label = block.language.as_deref().unwrap_or("").trim().to_string();
+                        let raw_code = block.code.clone();
                         let lines =
                             highlight_code_lines(&block.code, block.language.as_deref(), is_dark);
                         blocks.push(ParsedBlock::CodeBlock {
                             lang_label,
                             lines,
+                            raw_code,
                             quote_depth,
                         });
                     }
@@ -309,9 +317,10 @@ fn build_markdown_elements(blocks: &[ParsedBlock], colors: &PromptColors) -> Vec
             ParsedBlock::CodeBlock {
                 lang_label,
                 lines,
+                raw_code,
                 quote_depth,
             } => {
-                let element = build_code_block_element(lang_label, lines, colors);
+                let element = build_code_block_element(lang_label, lines, raw_code, colors);
                 push_block(&mut elements, element, *quote_depth, colors);
             }
             ParsedBlock::HorizontalRule { quote_depth } => {
@@ -323,13 +332,27 @@ fn build_markdown_elements(blocks: &[ParsedBlock], colors: &PromptColors) -> Vec
     elements
 }
 
+/// Global counter for generating unique code block IDs
+static CODE_BLOCK_COUNTER: AtomicU64 = AtomicU64::new(0);
+
 /// Build a code block element from pre-highlighted lines (avoids re-running syntect).
+/// Includes a language label header and a hover-revealed copy button.
 fn build_code_block_element(
     lang_label: &str,
     lines: &[CodeLine],
+    raw_code: &str,
     colors: &PromptColors,
-) -> gpui::Div {
+) -> gpui::Stateful<gpui::Div> {
+    let block_id = CODE_BLOCK_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let group_name: SharedString = format!("code-block-{}", block_id).into();
+
+    let code_for_copy = raw_code.to_string();
+    let header_border_color = rgba((colors.quote_border << 8) | 0x30);
+    let text_tertiary = colors.text_tertiary;
+
     let mut code_container = div()
+        .id(SharedString::from(format!("codeblock-{}", block_id)))
+        .group(group_name.clone())
         .w_full()
         .mt(px(4.0))
         .mb(px(4.0))
@@ -341,17 +364,49 @@ fn build_code_block_element(
         .flex_col()
         .overflow_hidden();
 
-    if !lang_label.is_empty() {
+    // Header row: language label + copy button
+    let has_label = !lang_label.is_empty();
+    if has_label || !raw_code.is_empty() {
         code_container = code_container.child(
             div()
                 .w_full()
+                .flex()
+                .items_center()
+                .justify_between()
                 .px(px(10.0))
                 .py(px(4.0))
-                .border_b_1()
-                .border_color(rgba((colors.quote_border << 8) | 0x30))
-                .text_xs()
-                .text_color(rgb(colors.text_tertiary))
-                .child(lang_label.to_string()),
+                .when(has_label || !raw_code.is_empty(), |d| {
+                    d.border_b_1().border_color(header_border_color)
+                })
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(rgb(text_tertiary))
+                        .child(if has_label {
+                            lang_label.to_string()
+                        } else {
+                            String::new()
+                        }),
+                )
+                // Copy button - visible on hover
+                .child(
+                    div()
+                        .id(SharedString::from(format!("copy-code-{}", block_id)))
+                        .flex()
+                        .items_center()
+                        .gap(px(3.))
+                        .px(px(4.))
+                        .py(px(1.))
+                        .rounded(px(3.))
+                        .cursor_pointer()
+                        .opacity(0.)
+                        .group_hover(group_name, |s| s.opacity(1.0))
+                        .hover(|s| s.bg(rgba((0xFFFFFF << 8) | 0x18)))
+                        .on_click(move |_event, _window, cx| {
+                            cx.write_to_clipboard(ClipboardItem::new_string(code_for_copy.clone()));
+                        })
+                        .child(div().text_xs().text_color(rgb(text_tertiary)).child("Copy")),
+                ),
         );
     }
 

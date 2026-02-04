@@ -17,8 +17,10 @@ use cocoa::base::{id, nil};
 use gpui_component::{
     button::{Button, ButtonVariants},
     input::{Input, InputEvent, InputState, Search},
+    kbd::Kbd,
     scroll::ScrollableElement,
     theme::ActiveTheme,
+    tooltip::Tooltip,
     IconName, Root, Sizable,
 };
 #[cfg(target_os = "macos")]
@@ -339,6 +341,8 @@ impl NotesApp {
                     char_count: n.char_count(),
                     is_current: Some(n.id) == selected_note_id,
                     is_pinned: n.is_pinned,
+                    preview: Self::strip_markdown_for_preview(&n.preview()),
+                    relative_time: Self::format_relative_time(n.updated_at),
                 })
                 .collect::<Vec<_>>(),
         );
@@ -1186,6 +1190,65 @@ impl NotesApp {
             return None;
         }
         Some((words, chars))
+    }
+
+    /// Format a DateTime as a relative time string for the note switcher
+    fn format_relative_time(dt: chrono::DateTime<chrono::Utc>) -> String {
+        let now = chrono::Utc::now();
+        let diff = now - dt;
+
+        if diff.num_seconds() < 5 {
+            "just now".to_string()
+        } else if diff.num_seconds() < 60 {
+            format!("{}s ago", diff.num_seconds())
+        } else if diff.num_minutes() < 60 {
+            format!("{}m ago", diff.num_minutes())
+        } else if diff.num_hours() < 24 {
+            format!("{}h ago", diff.num_hours())
+        } else if diff.num_days() < 7 {
+            format!("{}d ago", diff.num_days())
+        } else {
+            dt.format("%b %d").to_string()
+        }
+    }
+
+    /// Strip markdown syntax from a preview string for clean display in the note switcher
+    fn strip_markdown_for_preview(s: &str) -> String {
+        let mut result = s.to_string();
+        // Strip common markdown inline formatting
+        result = result.replace("**", "");
+        result = result.replace("__", "");
+        result = result.replace("~~", "");
+        // Strip heading markers
+        while result.starts_with('#') {
+            result = result.trim_start_matches('#').to_string();
+        }
+        // Strip list markers
+        result = result
+            .lines()
+            .map(|line| {
+                let trimmed = line.trim_start();
+                if trimmed.starts_with("- [ ] ") {
+                    &trimmed[6..]
+                } else if trimmed.starts_with("- [x] ") {
+                    &trimmed[6..]
+                } else if trimmed.starts_with("- ") {
+                    &trimmed[2..]
+                } else if trimmed.starts_with("> ") {
+                    &trimmed[2..]
+                } else {
+                    trimmed
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(" ");
+        // Collapse whitespace
+        result
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ")
+            .trim()
+            .to_string()
     }
 
     /// Welcome note content for first-time users.
@@ -2548,6 +2611,8 @@ impl NotesApp {
                     char_count: n.char_count(),
                     is_current: Some(n.id) == self.selected_note_id,
                     is_pinned: n.is_pinned,
+                    preview: Self::strip_markdown_for_preview(&n.preview()),
+                    relative_time: Self::format_relative_time(n.updated_at),
                 })
                 .collect::<Vec<_>>(),
         );
@@ -3005,15 +3070,21 @@ impl NotesApp {
                         .items_center()
                         .gap_2() // Even spacing between icons
                         // Icon 1: Command key icon - opens actions panel (⌘K)
-                        // Only show when a note is selected (actions require a note)
                         .when(has_selection, |d| {
                             d.child(
                                 div()
                                     .id("titlebar-cmd-icon")
                                     .text_sm()
-                                    .text_color(muted_color.opacity(0.7)) // Muted, subtle icon
+                                    .text_color(muted_color.opacity(0.7))
                                     .cursor_pointer()
-                                    .hover(|s| s.text_color(muted_color)) // Slightly brighter on hover
+                                    .hover(|s| s.text_color(muted_color))
+                                    .tooltip(|window, cx| {
+                                        Tooltip::new("Actions")
+                                            .key_binding(
+                                                gpui::Keystroke::parse("cmd-k").ok().map(Kbd::new),
+                                            )
+                                            .build(window, cx)
+                                    })
                                     .on_click(cx.listener(|this, _, window, cx| {
                                         if this.show_actions_panel {
                                             this.close_actions_panel(window, cx);
@@ -3024,14 +3095,21 @@ impl NotesApp {
                                     .child("⌘"),
                             )
                         })
-                        // Icon 2: List icon - for browsing notes (always visible when hovered)
+                        // Icon 2: List icon - note switcher
                         .child(
                             div()
                                 .id("titlebar-browse-icon")
                                 .text_sm()
-                                .text_color(muted_color.opacity(0.7)) // Muted, subtle icon
+                                .text_color(muted_color.opacity(0.7))
                                 .cursor_pointer()
-                                .hover(|s| s.text_color(muted_color)) // Slightly brighter on hover
+                                .hover(|s| s.text_color(muted_color))
+                                .tooltip(|window, cx| {
+                                    Tooltip::new("Note switcher")
+                                        .key_binding(
+                                            gpui::Keystroke::parse("cmd-p").ok().map(Kbd::new),
+                                        )
+                                        .build(window, cx)
+                                })
                                 .on_click(cx.listener(|this, _, window, cx| {
                                     if this.show_browse_panel {
                                         this.close_browse_panel(window, cx);
@@ -3043,7 +3121,7 @@ impl NotesApp {
                                 }))
                                 .child("≡"),
                         )
-                        // Icon 3: Markdown preview toggle (always visible when hovered)
+                        // Icon 3: Markdown preview toggle
                         .child(
                             div()
                                 .id("titlebar-preview-icon")
@@ -3051,19 +3129,35 @@ impl NotesApp {
                                 .text_color(preview_color)
                                 .cursor_pointer()
                                 .hover(|s| s.text_color(accent_color))
+                                .tooltip(|window, cx| {
+                                    Tooltip::new("Toggle preview")
+                                        .key_binding(
+                                            gpui::Keystroke::parse("cmd-shift-p")
+                                                .ok()
+                                                .map(Kbd::new),
+                                        )
+                                        .build(window, cx)
+                                })
                                 .on_click(cx.listener(|this, _, window, cx| {
                                     this.toggle_preview(window, cx);
                                 }))
                                 .child(preview_label),
                         )
-                        // Icon 4: Plus icon - for new note (always visible when hovered)
+                        // Icon 4: Plus icon - new note
                         .child(
                             div()
                                 .id("titlebar-new-icon")
                                 .text_sm()
-                                .text_color(muted_color.opacity(0.7)) // Muted, subtle icon
+                                .text_color(muted_color.opacity(0.7))
                                 .cursor_pointer()
-                                .hover(|s| s.text_color(muted_color)) // Slightly brighter on hover
+                                .hover(|s| s.text_color(muted_color))
+                                .tooltip(|window, cx| {
+                                    Tooltip::new("New note")
+                                        .key_binding(
+                                            gpui::Keystroke::parse("cmd-n").ok().map(Kbd::new),
+                                        )
+                                        .build(window, cx)
+                                })
                                 .on_click(cx.listener(|this, _, window, cx| {
                                     this.create_note(window, cx);
                                 }))
@@ -3121,10 +3215,11 @@ impl NotesApp {
         let is_trash_view = self.view_mode == NotesViewMode::Trash;
         let reading_time = self.get_reading_time(cx);
         let sort_label = match self.sort_mode {
-            NotesSortMode::Updated => "",
-            NotesSortMode::Created => "created",
+            NotesSortMode::Updated => "updated ↓",
+            NotesSortMode::Created => "created ↓",
             NotesSortMode::Alphabetical => "A→Z",
         };
+        let auto_sizing_off = !self.auto_sizing_enabled;
         // Action feedback (e.g. "Deleted", "Pinned") — 2s flash
         let action_feedback = self
             .get_action_feedback()
@@ -3284,13 +3379,28 @@ impl NotesApp {
                     .flex()
                     .items_center()
                     .gap_2()
-                    // Sort indicator (only when non-default sort is active)
-                    .when(!sort_label.is_empty() && !is_trash_view, |d| {
+                    // Auto-size disabled indicator — clickable to re-enable
+                    .when(auto_sizing_off && !is_trash_view, |d| {
+                        d.child(
+                            div()
+                                .id("footer-auto-size-off")
+                                .text_xs()
+                                .text_color(cx.theme().muted_foreground.opacity(0.35))
+                                .cursor_pointer()
+                                .hover(|s| s.text_color(cx.theme().accent))
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    this.enable_auto_sizing(window, cx);
+                                }))
+                                .child("⤢ auto-size"),
+                        )
+                    })
+                    // Sort indicator (always visible, clickable to cycle)
+                    .when(!is_trash_view, |d| {
                         d.child(
                             div()
                                 .id("footer-sort-indicator")
                                 .text_xs()
-                                .text_color(cx.theme().muted_foreground.opacity(0.5))
+                                .text_color(cx.theme().muted_foreground.opacity(0.4))
                                 .cursor_pointer()
                                 .hover(|s| s.text_color(cx.theme().muted_foreground))
                                 .on_click(cx.listener(|this, _, _, cx| {
@@ -4291,11 +4401,23 @@ impl Render for NotesApp {
                                 cx.stop_propagation();
                             }
                         }
-                        // Cmd+1 through Cmd+9: Jump to pinned notes
+                        // Cmd+Shift+7: Toggle numbered list
+                        "7" if modifiers.shift => {
+                            this.toggle_numbered_list(window, cx);
+                            cx.stop_propagation();
+                        }
+                        // Cmd+Shift+8: Toggle bullet list
+                        "8" if modifiers.shift => {
+                            this.toggle_bullet_list(window, cx);
+                            cx.stop_propagation();
+                        }
+                        // Cmd+1 through Cmd+9: Jump to pinned notes (without shift)
                         "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" => {
-                            if let Ok(num) = key.parse::<usize>() {
-                                this.select_pinned_note_by_index(num - 1, window, cx);
-                                cx.stop_propagation();
+                            if !modifiers.shift {
+                                if let Ok(num) = key.parse::<usize>() {
+                                    this.select_pinned_note_by_index(num - 1, window, cx);
+                                    cx.stop_propagation();
+                                }
                             }
                         }
                         _ => {}

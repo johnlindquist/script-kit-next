@@ -2708,6 +2708,17 @@ impl ScriptListApp {
                 }
                 return; // Don't run main menu filter logic
             }
+            AppView::ThemeChooserView {
+                filter,
+                selected_index,
+            } => {
+                if *filter != new_text {
+                    *filter = new_text.clone();
+                    *selected_index = 0;
+                    cx.notify();
+                }
+                return; // Don't run main menu filter logic
+            }
             AppView::FileSearchView {
                 query,
                 selected_index,
@@ -3356,9 +3367,21 @@ impl ScriptListApp {
                 };
                 Some((ViewType::ScriptList, filtered_count))
             }
-            AppView::ThemeChooserView { .. } => {
-                let preset_count = theme::presets::all_presets().len();
-                Some((ViewType::ScriptList, preset_count))
+            AppView::ThemeChooserView { ref filter, .. } => {
+                let presets = theme::presets::all_presets();
+                let filtered_count = if filter.is_empty() {
+                    presets.len()
+                } else {
+                    let f = filter.to_lowercase();
+                    presets
+                        .iter()
+                        .filter(|p| {
+                            p.name.to_lowercase().contains(&f)
+                                || p.description.to_lowercase().contains(&f)
+                        })
+                        .count()
+                };
+                Some((ViewType::ScriptList, filtered_count))
             }
         }
     }

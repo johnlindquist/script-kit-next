@@ -1017,6 +1017,8 @@ fn note_switcher_current_has_bullet() {
         char_count: 42,
         is_current: true,
         is_pinned: false,
+        preview: String::new(),
+        relative_time: String::new(),
     }];
     let actions = get_note_switcher_actions(&notes);
     assert!(actions[0].title.starts_with("• "));
@@ -1030,6 +1032,8 @@ fn note_switcher_non_current_no_bullet() {
         char_count: 42,
         is_current: false,
         is_pinned: false,
+        preview: String::new(),
+        relative_time: String::new(),
     }];
     let actions = get_note_switcher_actions(&notes);
     assert!(!actions[0].title.starts_with("• "));
@@ -1043,6 +1047,8 @@ fn note_switcher_pinned_gets_star_icon() {
         char_count: 10,
         is_current: false,
         is_pinned: true,
+        preview: String::new(),
+        relative_time: String::new(),
     }];
     let actions = get_note_switcher_actions(&notes);
     assert_eq!(actions[0].icon, Some(IconName::StarFilled));
@@ -1056,6 +1062,8 @@ fn note_switcher_current_gets_check_icon() {
         char_count: 10,
         is_current: true,
         is_pinned: false,
+        preview: String::new(),
+        relative_time: String::new(),
     }];
     let actions = get_note_switcher_actions(&notes);
     assert_eq!(actions[0].icon, Some(IconName::Check));
@@ -1069,6 +1077,8 @@ fn note_switcher_pinned_priority_over_current() {
         char_count: 10,
         is_current: true,
         is_pinned: true,
+        preview: String::new(),
+        relative_time: String::new(),
     }];
     let actions = get_note_switcher_actions(&notes);
     // Pinned takes priority: StarFilled
@@ -1083,9 +1093,11 @@ fn note_switcher_char_count_singular() {
         char_count: 1,
         is_current: false,
         is_pinned: false,
+        preview: String::new(),
+        relative_time: String::new(),
     }];
     let actions = get_note_switcher_actions(&notes);
-    assert_eq!(actions[0].description, Some("1 character".to_string()));
+    assert_eq!(actions[0].description, Some("1 char".to_string()));
 }
 
 #[test]
@@ -1096,9 +1108,11 @@ fn note_switcher_char_count_plural() {
         char_count: 42,
         is_current: false,
         is_pinned: false,
+        preview: String::new(),
+        relative_time: String::new(),
     }];
     let actions = get_note_switcher_actions(&notes);
-    assert_eq!(actions[0].description, Some("42 characters".to_string()));
+    assert_eq!(actions[0].description, Some("42 chars".to_string()));
 }
 
 #[test]
@@ -1109,9 +1123,11 @@ fn note_switcher_char_count_zero() {
         char_count: 0,
         is_current: false,
         is_pinned: false,
+        preview: String::new(),
+        relative_time: String::new(),
     }];
     let actions = get_note_switcher_actions(&notes);
-    assert_eq!(actions[0].description, Some("0 characters".to_string()));
+    assert_eq!(actions[0].description, Some("0 chars".to_string()));
 }
 
 #[test]
@@ -1123,6 +1139,8 @@ fn note_switcher_all_have_notes_section() {
             char_count: 1,
             is_current: true,
             is_pinned: false,
+            preview: String::new(),
+            relative_time: String::new(),
         },
         NoteSwitcherNoteInfo {
             id: "2".to_string(),
@@ -1130,11 +1148,19 @@ fn note_switcher_all_have_notes_section() {
             char_count: 2,
             is_current: false,
             is_pinned: true,
+            preview: String::new(),
+            relative_time: String::new(),
         },
     ];
     let actions = get_note_switcher_actions(&notes);
     for action in &actions {
-        assert_eq!(action.section, Some("Notes".to_string()));
+        assert!(
+            action.section.as_deref() == Some("Recent")
+                || action.section.as_deref() == Some("Pinned"),
+            "Note switcher action '{}' should be in 'Recent' or 'Pinned' section, got {:?}",
+            action.id,
+            action.section
+        );
     }
 }
 
