@@ -513,6 +513,19 @@ pub struct AiApp {
 
     /// Input state for the sidebar rename field
     rename_input_state: Entity<InputState>,
+
+    // === UX Batch 5 State ===
+    /// Whether the keyboard shortcuts overlay is visible (Cmd+/)
+    showing_shortcuts_overlay: bool,
+
+    /// Set of message IDs that the user has explicitly collapsed
+    collapsed_messages: std::collections::HashSet<String>,
+
+    /// Set of message IDs that the user has explicitly expanded (overrides auto-collapse)
+    expanded_messages: std::collections::HashSet<String>,
+
+    /// Feedback timestamp for "Exported!" clipboard feedback
+    export_copied_at: Option<std::time::Instant>,
 }
 
 impl AiApp {
@@ -764,6 +777,11 @@ impl AiApp {
             editing_message_id: None,
             renaming_chat_id: None,
             rename_input_state,
+            // UX Batch 5 state
+            showing_shortcuts_overlay: false,
+            collapsed_messages: std::collections::HashSet::new(),
+            expanded_messages: std::collections::HashSet::new(),
+            export_copied_at: None,
         }
     }
 
@@ -829,6 +847,95 @@ impl AiApp {
             let msg_id = last_assistant.id.clone();
             self.copy_message(msg_id, content, cx);
         }
+    }
+
+    // === UX Batch 5 Methods ===
+
+    /// Toggle the keyboard shortcuts overlay (Cmd+/).
+    fn toggle_shortcuts_overlay(&mut self, cx: &mut Context<Self>) {
+        self.showing_shortcuts_overlay = !self.showing_shortcuts_overlay;
+        cx.notify();
+    }
+
+    /// Export the current chat as markdown to the clipboard (Cmd+Shift+E).
+    fn export_chat_to_clipboard(&mut self, cx: &mut Context<Self>) {
+        let chat = match self.get_selected_chat() {
+            Some(c) => c.clone(),
+            None => return,
+        };
+
+        let title = if chat.title.is_empty() {
+            "New Chat"
+        } else {
+            &chat.title
+        };
+
+        let mut md = format!("# {}\n\n", title);
+        md.push_str(&format!(
+            "_Model: {} | Provider: {} | Created: {}_\n\n---\n\n",
+            chat.model_id,
+            chat.provider,
+            chat.created_at.format("%Y-%m-%d %H:%M")
+        ));
+
+        for msg in &self.current_messages {
+            let role_label = match msg.role {
+                MessageRole::User => "**You**",
+                MessageRole::Assistant => "**Assistant**",
+                MessageRole::System => "**System**",
+            };
+            md.push_str(&format!("{}\n\n{}\n\n---\n\n", role_label, msg.content));
+        }
+
+        cx.write_to_clipboard(gpui::ClipboardItem::new_string(md));
+        self.export_copied_at = Some(std::time::Instant::now());
+        cx.notify();
+
+        // Reset feedback after 2 seconds
+        cx.spawn(async move |this, cx| {
+            gpui::Timer::after(std::time::Duration::from_millis(2000)).await;
+            let _ = cx.update(|cx| {
+                this.update(cx, |this, cx| {
+                    this.export_copied_at = None;
+                    cx.notify();
+                })
+            });
+        })
+        .detach();
+    }
+
+    /// Check if the export feedback is currently showing.
+    fn is_showing_export_feedback(&self) -> bool {
+        self.export_copied_at
+            .is_some_and(|at| at.elapsed() < std::time::Duration::from_millis(2000))
+    }
+
+    /// Toggle collapse state of a message.
+    fn toggle_message_collapse(&mut self, msg_id: String, cx: &mut Context<Self>) {
+        if self.expanded_messages.contains(&msg_id) {
+            self.expanded_messages.remove(&msg_id);
+            self.collapsed_messages.insert(msg_id);
+        } else if self.collapsed_messages.contains(&msg_id) {
+            self.collapsed_messages.remove(&msg_id);
+            self.expanded_messages.insert(msg_id);
+        } else {
+            // Message was auto-collapsed; expand it
+            self.expanded_messages.insert(msg_id);
+        }
+        cx.notify();
+    }
+
+    /// Whether a message should be shown collapsed (auto-collapse long messages).
+    /// Messages over 800 chars are auto-collapsed unless the user expanded them.
+    fn is_message_collapsed(&self, msg_id: &str, content_len: usize) -> bool {
+        if self.expanded_messages.contains(msg_id) {
+            return false;
+        }
+        if self.collapsed_messages.contains(msg_id) {
+            return true;
+        }
+        // Auto-collapse messages longer than 800 chars
+        content_len > 800
     }
 
     /// Navigate to the previous (-1) or next (+1) chat in the sidebar list.
@@ -3441,7 +3548,36 @@ impl AiApp {
                     .flex_1()
                     .min_h_0() // Critical: allows flex child to shrink and enable scrolling
                     .overflow_hidden()
-                    .child(
+                    .child(if self.chats.is_empty() && !self.search_query.is_empty() {
+                        // Empty state when search has no results
+                        div()
+                            .flex()
+                            .flex_col()
+                            .items_center()
+                            .justify_center()
+                            .flex_1()
+                            .py_8()
+                            .gap_2()
+                            .child(
+                                svg()
+                                    .external_path(LocalIconName::MagnifyingGlass.external_path())
+                                    .size(px(24.))
+                                    .text_color(cx.theme().muted_foreground.opacity(0.3)),
+                            )
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .text_color(cx.theme().muted_foreground.opacity(0.5))
+                                    .child("No chats found"),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(cx.theme().muted_foreground.opacity(0.3))
+                                    .child(format!("No results for \"{}\"", self.search_query)),
+                            )
+                            .into_any_element()
+                    } else {
                         div()
                             .flex()
                             .flex_col()
@@ -3451,8 +3587,9 @@ impl AiApp {
                             .children(date_groups.into_iter().map(|(group, chats)| {
                                 self.render_date_group(group, chats, selected_id, cx)
                             }))
-                            .overflow_y_scrollbar(),
-                    ),
+                            .overflow_y_scrollbar()
+                            .into_any_element()
+                    }),
             )
             .into_any_element()
     }
@@ -4506,13 +4643,72 @@ impl AiApp {
                             ),
                         )
                     })
-                    .child(
+                    .child({
+                        let is_collapsed =
+                            self.is_message_collapsed(&msg_id, message.content.len());
+                        let display_content = if is_collapsed {
+                            // Truncate to ~300 chars at a word boundary
+                            let truncated: String = message.content.chars().take(300).collect();
+                            let truncated = match truncated.rfind(' ') {
+                                Some(pos) if pos > 200 => truncated[..pos].to_string(),
+                                _ => truncated,
+                            };
+                            format!("{}...", truncated)
+                        } else {
+                            message.content.clone()
+                        };
+                        let should_show_toggle = message.content.len() > 800;
+                        let toggle_msg_id = msg_id.clone();
                         div()
                             .w_full()
                             .min_w_0()
                             .overflow_x_hidden()
-                            .child(render_markdown(&message.content, &colors)),
-                    ),
+                            .child(render_markdown(&display_content, &colors))
+                            .when(should_show_toggle, |el| {
+                                el.child(
+                                    div()
+                                        .id(SharedString::from(format!(
+                                            "collapse-toggle-{}",
+                                            toggle_msg_id
+                                        )))
+                                        .flex()
+                                        .items_center()
+                                        .gap(px(4.))
+                                        .mt_1()
+                                        .px(px(4.))
+                                        .py(px(2.))
+                                        .rounded(px(4.))
+                                        .cursor_pointer()
+                                        .text_xs()
+                                        .text_color(cx.theme().accent.opacity(0.7))
+                                        .hover(|s| {
+                                            s.text_color(cx.theme().accent)
+                                                .bg(cx.theme().accent.opacity(0.1))
+                                        })
+                                        .on_click(cx.listener(move |this, _, _, cx| {
+                                            this.toggle_message_collapse(toggle_msg_id.clone(), cx);
+                                        }))
+                                        .child(
+                                            svg()
+                                                .external_path(
+                                                    if is_collapsed {
+                                                        LocalIconName::ChevronDown
+                                                    } else {
+                                                        LocalIconName::ArrowUp
+                                                    }
+                                                    .external_path(),
+                                                )
+                                                .size(px(12.))
+                                                .text_color(cx.theme().accent.opacity(0.5)),
+                                        )
+                                        .child(if is_collapsed {
+                                            "Show more"
+                                        } else {
+                                            "Show less"
+                                        }),
+                                )
+                            })
+                    }),
             )
     }
 
@@ -5028,8 +5224,44 @@ impl AiApp {
                     .justify_between()
                     .w_full()
                     .overflow_hidden()
-                    // Left side: Model picker with potential spinner
-                    .child(self.render_model_picker(cx))
+                    // Left side: Model picker + char count
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_2()
+                            .overflow_hidden()
+                            .child(self.render_model_picker(cx))
+                            // Character count (only shown when input has content)
+                            .child({
+                                let char_count = self.input_state.read(cx).value().len();
+                                let show_export = self.is_showing_export_feedback();
+                                if show_export {
+                                    div()
+                                        .flex()
+                                        .items_center()
+                                        .gap(px(4.))
+                                        .text_xs()
+                                        .text_color(cx.theme().success.opacity(0.8))
+                                        .child(
+                                            svg()
+                                                .external_path(LocalIconName::Check.external_path())
+                                                .size(px(11.))
+                                                .text_color(cx.theme().success.opacity(0.6)),
+                                        )
+                                        .child("Exported!")
+                                        .into_any_element()
+                                } else if char_count > 0 {
+                                    div()
+                                        .text_xs()
+                                        .text_color(cx.theme().muted_foreground.opacity(0.4))
+                                        .child(format!("{}", char_count))
+                                        .into_any_element()
+                                } else {
+                                    div().into_any_element()
+                                }
+                            }),
+                    )
                     // Right side: Submit and Actions as text labels
                     .child(
                         div()
@@ -5787,6 +6019,18 @@ impl Render for AiApp {
                                 cx.stop_propagation();
                             }
                         }
+                        // Cmd+Shift+E to export chat to clipboard as markdown
+                        "e" => {
+                            if modifiers.shift {
+                                this.export_chat_to_clipboard(cx);
+                                cx.stop_propagation();
+                            }
+                        }
+                        // Cmd+/ to toggle keyboard shortcuts overlay
+                        "/" | "slash" => {
+                            this.toggle_shortcuts_overlay(cx);
+                            cx.stop_propagation();
+                        }
                         // Cmd+W closes the AI window (standard macOS pattern)
                         "w" => {
                             // Save bounds before closing
@@ -5799,6 +6043,14 @@ impl Render for AiApp {
                         }
                         _ => {}
                     }
+                }
+
+                // Escape closes shortcuts overlay
+                if key == "escape" && this.showing_shortcuts_overlay {
+                    this.showing_shortcuts_overlay = false;
+                    cx.notify();
+                    cx.stop_propagation();
+                    return;
                 }
 
                 // Up arrow in empty input: edit last user message
@@ -5947,6 +6199,10 @@ impl Render for AiApp {
             .when(self.showing_attachments_picker, |el| {
                 el.child(self.render_attachments_picker(cx))
             })
+            // Keyboard shortcuts overlay (Cmd+/)
+            .when(self.showing_shortcuts_overlay, |el| {
+                el.child(self.render_shortcuts_overlay(cx))
+            })
     }
 }
 
@@ -5963,6 +6219,116 @@ impl AiApp {
         // Command bar now renders in a separate vibrancy window (not inline)
         // See CommandBar component for window management
         div().id("command-bar-overlay-deprecated")
+    }
+
+    /// Render the keyboard shortcuts overlay (Cmd+/).
+    fn render_shortcuts_overlay(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let overlay_bg = Self::get_modal_overlay_background();
+        let panel_bg = cx.theme().background;
+        let border = cx.theme().border;
+        let fg = cx.theme().foreground;
+        let muted = cx.theme().muted_foreground;
+        let accent = cx.theme().accent;
+
+        let shortcuts: Vec<(&str, &str)> = vec![
+            ("\u{2318} Enter", "Send message"),
+            ("\u{2318} N", "New chat"),
+            ("\u{2318} Shift N", "New chat with preset"),
+            ("\u{2318} K", "Open actions"),
+            ("\u{2318} L", "Focus input"),
+            ("\u{2318} B", "Toggle sidebar"),
+            ("\u{2318} Shift F", "Search chats"),
+            ("\u{2318} Shift C", "Copy last response"),
+            ("\u{2318} Shift E", "Export chat as markdown"),
+            ("\u{2318} [ / ]", "Previous / next chat"),
+            ("\u{2318} Shift \u{232B}", "Delete chat"),
+            ("\u{2318} /", "Toggle this overlay"),
+            ("Esc", "Stop streaming / close"),
+            ("\u{2191}", "Edit last message (empty input)"),
+        ];
+
+        div()
+            .id("shortcuts-overlay")
+            .absolute()
+            .inset_0()
+            .flex()
+            .items_center()
+            .justify_center()
+            .bg(overlay_bg)
+            .on_mouse_down(
+                gpui::MouseButton::Left,
+                cx.listener(|this, _, _, cx| {
+                    this.showing_shortcuts_overlay = false;
+                    cx.notify();
+                }),
+            )
+            .child(
+                div()
+                    .id("shortcuts-panel")
+                    .w(px(380.))
+                    .max_h(px(480.))
+                    .rounded_xl()
+                    .bg(panel_bg)
+                    .border_1()
+                    .border_color(border)
+                    .p_4()
+                    .flex()
+                    .flex_col()
+                    .gap_3()
+                    .overflow_y_scroll()
+                    // Prevent clicks inside the panel from closing the overlay
+                    .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| {
+                        cx.stop_propagation();
+                    })
+                    // Header
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .child(
+                                div()
+                                    .text_base()
+                                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                                    .text_color(fg)
+                                    .child("Keyboard Shortcuts"),
+                            )
+                            .child(
+                                div()
+                                    .px(px(6.))
+                                    .py(px(2.))
+                                    .rounded(px(4.))
+                                    .bg(cx.theme().muted.opacity(0.3))
+                                    .text_xs()
+                                    .text_color(muted)
+                                    .child("\u{2318} /"),
+                            ),
+                    )
+                    // Divider
+                    .child(div().w_full().h(px(1.)).bg(border))
+                    // Shortcuts list
+                    .children(shortcuts.into_iter().map(|(key, desc)| {
+                        let key_s: SharedString = key.into();
+                        let desc_s: SharedString = desc.into();
+                        div()
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .py(px(4.))
+                            .child(div().text_sm().text_color(fg).child(desc_s))
+                            .child(
+                                div()
+                                    .px(px(8.))
+                                    .py(px(2.))
+                                    .rounded(px(4.))
+                                    .bg(accent.opacity(0.1))
+                                    .text_xs()
+                                    .font_weight(gpui::FontWeight::MEDIUM)
+                                    .text_color(accent)
+                                    .child(key_s),
+                            )
+                    })),
+            )
     }
 
     /// Render the presets dropdown overlay
