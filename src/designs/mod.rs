@@ -533,6 +533,12 @@ pub fn render_design_item(
                             .typed_metadata
                             .as_ref()
                             .and_then(|m| m.author.as_deref());
+                        // Show alias as discoverable trigger when it's hidden behind shortcut badge
+                        let alias_hint = if sm.script.shortcut.is_some() {
+                            sm.script.alias.as_ref().map(|a| format!("/{}", a))
+                        } else {
+                            None
+                        };
                         let match_reason = detect_match_reason_for_script(&sm.script, filter_text);
                         let mut parts: Vec<String> = Vec::new();
                         if let Some(k) = kit {
@@ -543,6 +549,9 @@ pub fn render_design_item(
                         }
                         if let Some(a) = author {
                             parts.push(format!("by {}", a));
+                        }
+                        if let Some(ah) = alias_hint {
+                            parts.push(ah);
                         }
                         if let Some(reason) = match_reason {
                             parts.push(reason);
@@ -779,36 +788,60 @@ pub(crate) fn grouped_view_hint_for_scriptlet(
 }
 
 /// Generate a code preview for scriptlets without explicit descriptions.
-/// Shows the first meaningful line of code, truncated to fit the description area.
+/// Shows the first meaningful line(s) of code, truncated to fit the description area.
 /// For paste/snippet tools, this shows the pasted content; for open, the URL;
 /// for code tools, the first non-comment line.
+/// When the first line is very short (< 20 chars), appends the second line for richer context.
 pub(crate) fn code_preview_for_scriptlet(scriptlet: &crate::scripts::Scriptlet) -> Option<String> {
     let code = &scriptlet.code;
     if code.is_empty() {
         return None;
     }
-    // Find the first non-empty, non-comment line of code
-    let preview_line = code.lines().map(|l| l.trim()).find(|l| {
-        !l.is_empty()
-            && !l.starts_with('#')
-            && !l.starts_with("//")
-            && !l.starts_with("/*")
-            && !l.starts_with('*')
-            && !l.starts_with("#!/")
-    })?;
 
-    if preview_line.is_empty() {
+    // Collect meaningful (non-empty, non-comment) lines
+    let meaningful_lines: Vec<&str> = code
+        .lines()
+        .map(|l| l.trim())
+        .filter(|l| {
+            !l.is_empty()
+                && !l.starts_with('#')
+                && !l.starts_with("//")
+                && !l.starts_with("/*")
+                && !l.starts_with('*')
+                && !l.starts_with("#!/")
+        })
+        .collect();
+
+    let first_line = meaningful_lines.first()?;
+    if first_line.is_empty() {
         return None;
     }
 
-    // Truncate long lines for display (use char count for Unicode safety)
-    let char_count = preview_line.chars().count();
-    if char_count > 60 {
-        let truncated: String = preview_line.chars().take(57).collect();
-        Some(format!("{}...", truncated))
+    let first_len = first_line.chars().count();
+
+    // For very short first lines, append the second line for richer context
+    // e.g., "cd ~/projects → npm start"
+    let preview = if first_len < 20 {
+        if let Some(second_line) = meaningful_lines.get(1) {
+            let combined = format!("{} → {}", first_line, second_line);
+            let combined_len = combined.chars().count();
+            if combined_len > 60 {
+                let truncated: String = combined.chars().take(57).collect();
+                format!("{}...", truncated)
+            } else {
+                combined
+            }
+        } else {
+            first_line.to_string()
+        }
+    } else if first_len > 60 {
+        let truncated: String = first_line.chars().take(57).collect();
+        format!("{}...", truncated)
     } else {
-        Some(preview_line.to_string())
-    }
+        first_line.to_string()
+    };
+
+    Some(preview)
 }
 
 /// Detect why a script matched the search query when the name didn't match directly.
@@ -858,7 +891,68 @@ pub(crate) fn detect_match_reason_for_script(
         }
     }
 
+    // Alias (when not shown as badge - if shortcut exists, alias isn't the badge)
+    if let Some(ref alias) = script.alias {
+        if crate::scripts::search::contains_ignore_ascii_case(alias, &q) {
+            return Some(format!("alias: /{}", alias));
+        }
+    }
+
+    // Description excerpt - show brief matching context when description matched
+    if let Some(ref desc) = script.description {
+        if crate::scripts::search::contains_ignore_ascii_case(desc, &q) {
+            let excerpt = excerpt_around_match(desc, &q, 40);
+            return Some(format!("desc: {}", excerpt));
+        }
+    }
+
+    // Path match - when path matched but nothing else above did
+    if crate::scripts::search::contains_ignore_ascii_case(&script.path.to_string_lossy(), &q) {
+        return Some("path match".to_string());
+    }
+
     None
+}
+
+/// Extract a brief excerpt from text around the first match of a query.
+/// Returns a truncated substring centered on the match, with ellipsis as needed.
+/// `max_len` is the maximum character length of the returned excerpt.
+pub(crate) fn excerpt_around_match(text: &str, query_lower: &str, max_len: usize) -> String {
+    let text_chars: Vec<char> = text.chars().collect();
+    let text_len = text_chars.len();
+
+    if text_len <= max_len {
+        return text.to_string();
+    }
+
+    // Find the match position (char-level search via lowercased text)
+    let text_lower: String = text_chars.iter().map(|c| c.to_ascii_lowercase()).collect();
+    let match_byte_pos = text_lower.find(query_lower).unwrap_or(0);
+    // Convert byte position to char position
+    let char_pos = text_lower[..match_byte_pos.min(text_lower.len())]
+        .chars()
+        .count();
+
+    // Center the excerpt around the match
+    let half = max_len / 2;
+    let start = char_pos.saturating_sub(half);
+    let end = (start + max_len).min(text_len);
+    let start = if end == text_len && text_len > max_len {
+        text_len - max_len
+    } else {
+        start
+    };
+
+    let excerpt: String = text_chars[start..end].iter().collect();
+    if start > 0 && end < text_len {
+        format!("...{}...", excerpt.trim())
+    } else if start > 0 {
+        format!("...{}", excerpt.trim())
+    } else if end < text_len {
+        format!("{}...", excerpt.trim())
+    } else {
+        excerpt
+    }
 }
 
 /// Detect why a scriptlet matched the search query when the name didn't match directly.
@@ -895,6 +989,26 @@ pub(crate) fn detect_match_reason_for_scriptlet(
     if let Some(ref group) = scriptlet.group {
         if group != "main" && crate::scripts::search::contains_ignore_ascii_case(group, &q) {
             return Some(format!("group: {}", group));
+        }
+    }
+
+    // Alias
+    if let Some(ref alias) = scriptlet.alias {
+        if crate::scripts::search::contains_ignore_ascii_case(alias, &q) {
+            return Some(format!("alias: /{}", alias));
+        }
+    }
+
+    // Tool type (e.g., searching "bash" finds bash scriptlets)
+    if crate::scripts::search::contains_ignore_ascii_case(&scriptlet.tool, &q) {
+        return Some(format!("tool: {}", scriptlet.tool_display_name()));
+    }
+
+    // Description excerpt
+    if let Some(ref desc) = scriptlet.description {
+        if crate::scripts::search::contains_ignore_ascii_case(desc, &q) {
+            let excerpt = excerpt_around_match(desc, &q, 35);
+            return Some(format!("desc: {}", excerpt));
         }
     }
 
@@ -1602,9 +1716,10 @@ mod tests {
     #[test]
     fn test_code_preview_paste_shows_content() {
         let sl = make_test_scriptlet("Sig", "Best regards,\nJohn", "paste");
+        // Short first line (< 20 chars) appends second line with arrow
         assert_eq!(
             code_preview_for_scriptlet(&sl),
-            Some("Best regards,".to_string())
+            Some("Best regards, → John".to_string())
         );
     }
 
@@ -1721,6 +1836,222 @@ mod tests {
         assert_eq!(
             detect_match_reason_for_scriptlet(&sl, "development"),
             Some("group: Development".to_string())
+        );
+    }
+
+    // =========================================================================
+    // Excerpt helper tests
+    // =========================================================================
+
+    #[test]
+    fn test_excerpt_short_text_no_truncation() {
+        let result = excerpt_around_match("short text", "short", 40);
+        assert_eq!(result, "short text");
+    }
+
+    #[test]
+    fn test_excerpt_long_text_shows_ellipsis() {
+        let text = "This is a very long description that talks about managing clipboard history and other features";
+        let result = excerpt_around_match(text, "clipboard", 30);
+        assert!(
+            result.contains("clipboard"),
+            "Excerpt should contain the matched term"
+        );
+        assert!(
+            result.contains("..."),
+            "Long text should be truncated with ellipsis"
+        );
+    }
+
+    #[test]
+    fn test_excerpt_match_at_start() {
+        let text = "clipboard manager that helps you organize your copy history across all apps";
+        let result = excerpt_around_match(text, "clipboard", 30);
+        // Match is at the start, so excerpt starts from beginning
+        assert!(result.starts_with("clipboard"));
+    }
+
+    #[test]
+    fn test_excerpt_match_at_end() {
+        let text = "A tool that helps you organize and manage your clipboard";
+        let result = excerpt_around_match(text, "clipboard", 30);
+        assert!(result.contains("clipboard"));
+    }
+
+    // =========================================================================
+    // Script match reason: description excerpt tests
+    // =========================================================================
+
+    #[test]
+    fn test_match_reason_description_excerpt() {
+        let mut s = make_test_script("My Tool");
+        s.description = Some("Manages clipboard history across all your devices".to_string());
+        let reason = detect_match_reason_for_script(&s, "clipboard");
+        assert!(
+            reason.is_some(),
+            "Description match should produce a reason"
+        );
+        let reason = reason.unwrap();
+        assert!(
+            reason.starts_with("desc: "),
+            "Should start with 'desc: ', got: {}",
+            reason
+        );
+        assert!(
+            reason.contains("clipboard"),
+            "Excerpt should contain the match term"
+        );
+    }
+
+    #[test]
+    fn test_match_reason_description_not_shown_when_name_matches() {
+        let mut s = make_test_script("Clipboard Manager");
+        s.description = Some("Manages clipboard history".to_string());
+        // Name matches "clipboard" so no reason needed
+        assert_eq!(detect_match_reason_for_script(&s, "clipboard"), None);
+    }
+
+    // =========================================================================
+    // Script match reason: alias tests
+    // =========================================================================
+
+    #[test]
+    fn test_match_reason_alias_match() {
+        let mut s = make_test_script("Git Commit Helper");
+        s.alias = Some("gc".to_string());
+        let reason = detect_match_reason_for_script(&s, "gc");
+        assert_eq!(reason, Some("alias: /gc".to_string()));
+    }
+
+    #[test]
+    fn test_match_reason_alias_not_shown_when_name_matches() {
+        let mut s = make_test_script("GC Cleaner");
+        s.alias = Some("gc".to_string());
+        // Name contains "GC" so no reason needed
+        assert_eq!(detect_match_reason_for_script(&s, "gc"), None);
+    }
+
+    // =========================================================================
+    // Script match reason: path match tests
+    // =========================================================================
+
+    #[test]
+    fn test_match_reason_path_match() {
+        let mut s = make_test_script("My Tool");
+        s.path = std::path::PathBuf::from("/Users/john/.kenv/scripts/secret-helper.ts");
+        let reason = detect_match_reason_for_script(&s, "secret-helper");
+        assert_eq!(reason, Some("path match".to_string()));
+    }
+
+    // =========================================================================
+    // Scriptlet match reason: alias tests
+    // =========================================================================
+
+    #[test]
+    fn test_scriptlet_match_reason_alias() {
+        let mut sl = make_test_scriptlet("Quick Paste", "Best regards", "paste");
+        sl.alias = Some("qp".to_string());
+        assert_eq!(
+            detect_match_reason_for_scriptlet(&sl, "qp"),
+            Some("alias: /qp".to_string())
+        );
+    }
+
+    // =========================================================================
+    // Scriptlet match reason: tool type tests
+    // =========================================================================
+
+    #[test]
+    fn test_scriptlet_match_reason_tool_type() {
+        let sl = make_test_scriptlet("Run Server", "npm start", "bash");
+        let reason = detect_match_reason_for_scriptlet(&sl, "bash");
+        assert!(reason.is_some(), "Tool type match should produce a reason");
+        let reason = reason.unwrap();
+        assert!(
+            reason.starts_with("tool: "),
+            "Should start with 'tool: ', got: {}",
+            reason
+        );
+    }
+
+    #[test]
+    fn test_scriptlet_match_reason_tool_not_shown_when_name_matches() {
+        let sl = make_test_scriptlet("Bash Helper", "echo hi", "bash");
+        // Name matches "bash" so no reason needed
+        assert_eq!(detect_match_reason_for_scriptlet(&sl, "bash"), None);
+    }
+
+    // =========================================================================
+    // Scriptlet match reason: description excerpt tests
+    // =========================================================================
+
+    #[test]
+    fn test_scriptlet_match_reason_description_excerpt() {
+        let mut sl = make_test_scriptlet("Quick Action", "echo done", "bash");
+        sl.description = Some("Automates the deployment pipeline for staging".to_string());
+        let reason = detect_match_reason_for_scriptlet(&sl, "deployment");
+        assert!(reason.is_some());
+        let reason = reason.unwrap();
+        assert!(reason.starts_with("desc: "));
+        assert!(reason.contains("deployment"));
+    }
+
+    // =========================================================================
+    // Enhanced code preview tests (multi-line)
+    // =========================================================================
+
+    #[test]
+    fn test_code_preview_short_first_line_appends_second() {
+        let sl = make_test_scriptlet("Deploy", "cd ~/projects\nnpm run build", "bash");
+        let preview = code_preview_for_scriptlet(&sl).unwrap();
+        assert!(
+            preview.contains("\u{2192}"),
+            "Short first line should append second line with arrow: {}",
+            preview
+        );
+        assert!(preview.contains("cd ~/projects"));
+        assert!(preview.contains("npm run build"));
+    }
+
+    #[test]
+    fn test_code_preview_long_first_line_no_append() {
+        let sl = make_test_scriptlet(
+            "Long",
+            "const result = fetchData()\nconsole.log(result)",
+            "ts",
+        );
+        let preview = code_preview_for_scriptlet(&sl).unwrap();
+        // First line is > 20 chars, should NOT append second line
+        assert!(
+            !preview.contains("\u{2192}"),
+            "Long first line should not append second: {}",
+            preview
+        );
+    }
+
+    #[test]
+    fn test_code_preview_short_first_only_line() {
+        let sl = make_test_scriptlet("Short", "ls -la", "bash");
+        let preview = code_preview_for_scriptlet(&sl).unwrap();
+        // Only one line, can't append second
+        assert_eq!(preview, "ls -la");
+    }
+
+    #[test]
+    fn test_code_preview_multi_line_truncates_combined() {
+        let sl = make_test_scriptlet(
+            "Deploy",
+            "cd ~/projects\nexport NODE_ENV=production && npm run build && npm run deploy --target staging",
+            "bash",
+        );
+        let preview = code_preview_for_scriptlet(&sl).unwrap();
+        // Combined is long, should truncate
+        assert!(preview.contains("\u{2192}"));
+        assert!(
+            preview.chars().count() <= 63,
+            "Combined preview should be truncated, got {} chars: {}",
+            preview.chars().count(),
+            preview
         );
     }
 }
