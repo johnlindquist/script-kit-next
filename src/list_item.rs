@@ -282,12 +282,13 @@ impl ListItemColors {
         colors: &crate::designs::DesignColors,
         is_dark: bool,
     ) -> Self {
-        // Dark mode: low opacity works well (white at 7-14% visible on dark bg)
+        // Dark mode: low opacity works well (white at 7-12% visible on dark bg)
         // Light mode: needs higher opacity for visibility (black overlay on light bg)
+        // Values aligned with Material Design elevation overlay model (~4-6dp)
         let (selected_opacity, hover_opacity) = if is_dark {
-            (0.14, 0.08) // Dark mode: slightly stronger selection
+            (0.12, 0.06) // Dark mode: refined selection, subtle hover
         } else {
-            (0.20, 0.12) // Light mode: higher opacity for clear visibility
+            (0.16, 0.09) // Light mode: visible on light backgrounds
         };
 
         Self {
@@ -784,7 +785,7 @@ impl RenderOnce for ListItem {
                 .overflow_hidden()
                 .text_ellipsis()
                 .whitespace_nowrap()
-                .line_height(px(18.))
+                .line_height(px(20.))
                 .text_color(base_color)
                 .child(styled)
         } else {
@@ -795,13 +796,13 @@ impl RenderOnce for ListItem {
                 .overflow_hidden()
                 .text_ellipsis()
                 .whitespace_nowrap()
-                .line_height(px(18.))
+                .line_height(px(20.))
                 .child(self.name)
         };
 
         item_content = item_content.child(name_element);
 
-        // Description - 11.5px for tighter visual pairing with 14px name
+        // Description - 12px for readability (minimum per UI typography guidelines)
         // Muted color (never changes on selection - only bg shows selection)
         // Single-line with ellipsis truncation for long content
         // When description_highlight_indices are present, matched characters are rendered with accent color
@@ -832,8 +833,8 @@ impl RenderOnce for ListItem {
                 let styled = StyledText::new(desc.clone()).with_highlights(highlights);
 
                 div()
-                    .text_size(px(11.5))
-                    .line_height(px(15.))
+                    .text_size(px(12.))
+                    .line_height(px(16.))
                     .text_color(base_color)
                     .overflow_hidden()
                     .text_ellipsis()
@@ -841,8 +842,8 @@ impl RenderOnce for ListItem {
                     .child(styled)
             } else {
                 div()
-                    .text_size(px(11.5))
-                    .line_height(px(15.))
+                    .text_size(px(12.))
+                    .line_height(px(16.))
                     .text_color(desc_color)
                     .overflow_hidden()
                     .text_ellipsis()
@@ -897,7 +898,7 @@ impl RenderOnce for ListItem {
         let separator_color = if self.selected {
             rgba(0x00000000) // No separator on selected item
         } else {
-            rgba((colors.text_muted << 8) | 0x24) // ~14% opacity - clear scannable separator
+            rgba((colors.text_muted << 8) | 0x14) // ~8% opacity - subtle separator, content-first
         };
 
         let mut inner_content = div()
@@ -1201,7 +1202,7 @@ pub fn render_section_header(
     }
 
     // Background tint for section headers to create visual grouping
-    let header_bg = rgba((colors.text_muted << 8) | 0x14); // ~8% opacity tint - clear visual grouping
+    let header_bg = rgba((colors.text_muted << 8) | 0x0D); // ~5% opacity tint - light grouping, lets vibrancy through
 
     let header = div()
         .w_full()
@@ -1220,7 +1221,7 @@ pub fn render_section_header(
     } else {
         header
             .border_t_1()
-            .border_color(rgba((colors.text_muted << 8) | 0x47)) // ~28% opacity - strong separator between sections
+            .border_color(rgba((colors.text_muted << 8) | 0x2E)) // ~18% opacity - visible but not heavy section separator
     };
 
     header.child(content)
