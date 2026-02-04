@@ -2502,7 +2502,29 @@ impl AiApp {
         // Restore draft for incoming chat
         self.restore_draft(window, cx);
 
+        // Update placeholder based on chat context
+        self.update_input_placeholder(window, cx);
+
         cx.notify();
+    }
+
+    /// Update input placeholder text based on current context.
+    /// Shows model name when in an active chat, generic text otherwise.
+    fn update_input_placeholder(&self, window: &mut Window, cx: &mut Context<Self>) {
+        let placeholder = if !self.current_messages.is_empty() {
+            if let Some(ref model) = self.selected_model {
+                format!("Reply to {}...", model.display_name)
+            } else {
+                "Type a reply...".to_string()
+            }
+        } else if let Some(ref model) = self.selected_model {
+            format!("Ask {}...", model.display_name)
+        } else {
+            "Ask anything...".to_string()
+        };
+        self.input_state.update(cx, |state, cx| {
+            state.set_placeholder(placeholder, window, cx);
+        });
     }
 
     /// Delete the currently selected chat (soft delete)
@@ -2635,6 +2657,9 @@ impl AiApp {
             state.set_value("", window, cx);
             state.set_selection(0, 0, window, cx);
         });
+
+        // Update placeholder to "Reply to..." now that we have messages
+        self.update_input_placeholder(window, cx);
 
         info!(
             chat_id = %chat_id,
@@ -3643,6 +3668,14 @@ impl AiApp {
 
         let preview = self.message_previews.get(&chat_id).cloned();
 
+        // Derive short model label from model_id (e.g., "claude-3-5-sonnet..." → "Sonnet")
+        let model_badge: Option<SharedString> = if !chat.model_id.is_empty() {
+            let short = Self::abbreviate_model_name(&chat.model_id);
+            Some(short.into())
+        } else {
+            None
+        };
+
         // Relative time for this chat
         let relative_time: SharedString = {
             let now = Utc::now();
@@ -3747,7 +3780,7 @@ impl AiApp {
                             .cursor_pointer()
                             .opacity(0.)
                             .group_hover("chat-item", |s| s.opacity(1.0))
-                            .hover(|s| s.bg(rgba((0xFF0000 << 8) | 0x30)))
+                            .hover(|s| s.bg(cx.theme().danger.opacity(0.19)))
                             .on_mouse_down(
                                 gpui::MouseButton::Left,
                                 cx.listener(move |this, _, _window, cx| {
@@ -3787,6 +3820,58 @@ impl AiApp {
                         .child(clean_preview),
                 )
             })
+            // Model badge (small indicator showing which model was used)
+            .when_some(model_badge, |d, badge| {
+                d.child(
+                    div()
+                        .text_xs()
+                        .text_color(cx.theme().muted_foreground.opacity(0.4))
+                        .overflow_hidden()
+                        .whitespace_nowrap()
+                        .text_ellipsis()
+                        .child(badge),
+                )
+            })
+    }
+
+    /// Abbreviate a model ID to a short display label for sidebar badges.
+    /// e.g., "claude-3-5-sonnet-20241022" → "Sonnet"
+    /// e.g., "gpt-4o-mini" → "GPT-4o Mini"
+    /// e.g., "claude-3-5-haiku-20241022" → "Haiku"
+    fn abbreviate_model_name(model_id: &str) -> String {
+        let lower = model_id.to_lowercase();
+        if lower.contains("sonnet") {
+            "Sonnet".to_string()
+        } else if lower.contains("haiku") {
+            "Haiku".to_string()
+        } else if lower.contains("opus") {
+            "Opus".to_string()
+        } else if lower.contains("gpt-4o-mini") {
+            "GPT-4o Mini".to_string()
+        } else if lower.contains("gpt-4o") {
+            "GPT-4o".to_string()
+        } else if lower.contains("gpt-4") {
+            "GPT-4".to_string()
+        } else if lower.contains("gpt-3") {
+            "GPT-3.5".to_string()
+        } else if lower.contains("o1") || lower.contains("o3") {
+            // OpenAI reasoning models
+            let parts: Vec<&str> = model_id.split('-').collect();
+            parts.first().unwrap_or(&model_id).to_uppercase()
+        } else {
+            // Fallback: take the most descriptive part
+            let parts: Vec<&str> = model_id.split('-').collect();
+            if parts.len() > 1 {
+                // Skip version-like parts (dates, numbers)
+                parts
+                    .iter()
+                    .find(|p| p.len() > 2 && !p.chars().all(|c| c.is_ascii_digit()))
+                    .unwrap_or(&parts[0])
+                    .to_string()
+            } else {
+                model_id.to_string()
+            }
+        }
     }
 
     /// Render the input field with vibrancy-compatible styling
@@ -3977,12 +4062,25 @@ impl AiApp {
                             .text_color(cx.theme().foreground)
                             .child("Ask Anything"),
                     )
-                    .child(
+                    .child({
+                        let subtitle: SharedString = self
+                            .selected_model
+                            .as_ref()
+                            .map(|m| {
+                                format!(
+                                    "Start a conversation with {} or try a suggestion below",
+                                    m.display_name
+                                )
+                            })
+                            .unwrap_or_else(|| {
+                                "Start a conversation or try a suggestion below".to_string()
+                            })
+                            .into();
                         div()
                             .text_sm()
                             .text_color(cx.theme().muted_foreground)
-                            .child("Start a conversation or try a suggestion below"),
-                    ),
+                            .child(subtitle)
+                    }),
             )
             // Suggestion cards
             .child(
@@ -4491,7 +4589,7 @@ impl AiApp {
         let role_icon = if is_user {
             LocalIconName::Terminal
         } else {
-            LocalIconName::Star
+            LocalIconName::MessageCircle
         };
         let role_label = if is_user { "You" } else { "Assistant" };
 
@@ -4750,7 +4848,13 @@ impl AiApp {
         let show_elapsed = !elapsed_label.is_empty();
 
         let content_element = if self.streaming_content.is_empty() {
-            // "Thinking" state with elapsed time
+            // "Thinking" state with model name and elapsed time
+            let thinking_label: SharedString = self
+                .selected_model
+                .as_ref()
+                .map(|m| format!("Thinking with {}", m.display_name))
+                .unwrap_or_else(|| "Thinking".to_string())
+                .into();
             div()
                 .flex()
                 .items_center()
@@ -4760,7 +4864,7 @@ impl AiApp {
                     div()
                         .text_sm()
                         .text_color(cx.theme().muted_foreground)
-                        .child("Thinking"),
+                        .child(thinking_label),
                 )
                 .child(
                     div()
@@ -4830,7 +4934,7 @@ impl AiApp {
                             .gap(px(6.))
                             .child(
                                 svg()
-                                    .external_path(LocalIconName::Star.external_path())
+                                    .external_path(LocalIconName::MessageCircle.external_path())
                                     .size(px(14.))
                                     .text_color(cx.theme().muted_foreground),
                             )
@@ -4975,16 +5079,30 @@ impl AiApp {
     fn render_message_actions(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let muted_fg = cx.theme().muted_foreground;
 
-        // Show "Generated in Xs" for 5 seconds after streaming completes
+        // Show "Generated in Xs · ~N words" for 8 seconds after streaming completes
         let completion_label: Option<String> =
             self.last_streaming_completed_at.and_then(|completed_at| {
-                if completed_at.elapsed().as_secs() < 5 {
+                if completed_at.elapsed().as_secs() < 8 {
                     self.last_streaming_duration.map(|dur| {
-                        let secs = dur.as_secs();
-                        if secs < 1 {
-                            format!("{}ms", dur.as_millis())
+                        let time_label = {
+                            let secs = dur.as_secs();
+                            if secs < 1 {
+                                format!("{}ms", dur.as_millis())
+                            } else {
+                                format!("{}s", secs)
+                            }
+                        };
+                        // Count words in the last assistant message
+                        let word_count = self
+                            .current_messages
+                            .last()
+                            .filter(|m| m.role == MessageRole::Assistant)
+                            .map(|m| m.content.split_whitespace().count())
+                            .unwrap_or(0);
+                        if word_count > 0 {
+                            format!("{} \u{00b7} ~{} words", time_label, word_count)
                         } else {
-                            format!("{}s", secs)
+                            time_label
                         }
                     })
                 } else {
@@ -5311,9 +5429,10 @@ impl AiApp {
                             .gap_2()
                             .overflow_hidden()
                             .child(self.render_model_picker(cx))
-                            // Character count (only shown when input has content)
+                            // Word count (only shown when input has content)
                             .child({
-                                let char_count = self.input_state.read(cx).value().len();
+                                let input_val = self.input_state.read(cx).value().to_string();
+                                let word_count = input_val.split_whitespace().count();
                                 let show_export = self.is_showing_export_feedback();
                                 if show_export {
                                     div()
@@ -5330,11 +5449,16 @@ impl AiApp {
                                         )
                                         .child("Exported!")
                                         .into_any_element()
-                                } else if char_count > 0 {
+                                } else if word_count > 0 {
+                                    let label = if word_count == 1 {
+                                        "1 word".to_string()
+                                    } else {
+                                        format!("{} words", word_count)
+                                    };
                                     div()
                                         .text_xs()
                                         .text_color(cx.theme().muted_foreground.opacity(0.4))
-                                        .child(format!("{}", char_count))
+                                        .child(label)
                                         .into_any_element()
                                 } else {
                                     div().into_any_element()
@@ -5370,6 +5494,16 @@ impl AiApp {
                                     )
                                     .child(div().size(px(8.)).rounded(px(1.)).bg(cx.theme().danger))
                                     .child("Stop")
+                                    .child(
+                                        div()
+                                            .px(px(4.))
+                                            .py(px(1.))
+                                            .rounded(px(3.))
+                                            .bg(cx.theme().danger.opacity(0.15))
+                                            .text_xs()
+                                            .text_color(cx.theme().danger.opacity(0.7))
+                                            .child("Esc"),
+                                    )
                                     .into_any_element()
                             } else {
                                 div()
