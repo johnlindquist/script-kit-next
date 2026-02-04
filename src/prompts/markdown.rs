@@ -245,7 +245,7 @@ fn flush_paragraph(
         return;
     }
 
-    let element = render_inline_spans(spans, colors);
+    let element = render_inline_spans(spans, colors).w_full();
     spans.clear();
     push_block(blocks, element, quote_depth, colors);
 }
@@ -262,7 +262,9 @@ fn flush_heading(
     }
 
     let level = level.unwrap_or(3);
-    let mut heading = render_inline_spans(spans, colors).text_color(rgb(colors.text_primary));
+    let mut heading = render_inline_spans(spans, colors)
+        .w_full()
+        .text_color(rgb(colors.text_primary));
     heading = match level {
         1 => heading.text_lg().font_weight(FontWeight::BOLD),
         2 => heading.text_base().font_weight(FontWeight::SEMIBOLD),
@@ -293,42 +295,40 @@ fn push_block(
     blocks.push(element);
 }
 
-fn render_inline_spans(spans: &[InlineSpan], colors: &PromptColors) -> gpui::Div {
-    let mut row = div()
-        .flex()
-        .flex_row()
-        .flex_wrap()
-        .w_full()
-        .min_w_0()
-        .text_sm();
-
-    for span in spans {
-        let InlineSpan { text, style } = span;
-        let mut piece = div()
+fn style_span(span: &InlineSpan, colors: &PromptColors) -> gpui::Div {
+    let InlineSpan { text, style } = span;
+    if style.code {
+        return div()
+            .min_w_0()
+            .px(px(4.0))
+            .py(px(1.0))
+            .bg(rgba((colors.code_bg << 8) | 0x80))
+            .rounded(px(3.0))
+            .font_family("Menlo")
             .text_color(rgb(colors.text_primary))
             .child(text.clone());
+    }
+    let mut piece = div()
+        .min_w_0()
+        .text_color(rgb(colors.text_primary))
+        .child(text.clone());
+    if style.bold {
+        piece = piece.font_weight(FontWeight::BOLD);
+    }
+    if style.italic {
+        piece = piece.italic();
+    }
+    if style.link {
+        piece = piece.text_color(rgb(colors.accent_color));
+    }
+    piece
+}
 
-        if style.bold {
-            piece = piece.font_weight(FontWeight::BOLD);
-        }
-        if style.italic {
-            piece = piece.italic();
-        }
-        if style.link {
-            piece = piece.text_color(rgb(colors.accent_color));
-        }
-        if style.code {
-            piece = div()
-                .px(px(4.0))
-                .py(px(1.0))
-                .bg(rgba((colors.code_bg << 8) | 0x80))
-                .rounded(px(3.0))
-                .font_family("Menlo")
-                .text_color(rgb(colors.text_primary))
-                .child(text.clone());
-        }
+fn render_inline_spans(spans: &[InlineSpan], colors: &PromptColors) -> gpui::Div {
+    let mut row = div().flex().flex_row().flex_wrap().min_w_0().text_sm();
 
-        row = row.child(piece);
+    for span in spans {
+        row = row.child(style_span(span, colors));
     }
 
     row
@@ -342,13 +342,23 @@ fn render_list(list: ListState, colors: &PromptColors) -> gpui::Div {
         } else {
             "•".to_string()
         };
+        // Two-column layout: marker + text. Uses flex_grow() (not flex_1()) so that
+        // flex-basis remains auto. flex_1() sets flex-basis:0 which causes taffy to
+        // measure inner flex_wrap content at width 0, stacking characters vertically.
         container = container.child(
             div()
                 .flex()
                 .flex_row()
+                .w_full()
                 .gap(px(6.0))
-                .child(div().text_color(rgb(colors.text_tertiary)).child(marker))
-                .child(render_inline_spans(item, colors).flex_1()),
+                .child(
+                    div()
+                        .flex_shrink_0()
+                        .text_sm()
+                        .text_color(rgb(colors.text_tertiary))
+                        .child(marker),
+                )
+                .child(render_inline_spans(item, colors).flex_grow().min_w_0()),
         );
     }
     container
