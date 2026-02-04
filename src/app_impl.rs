@@ -5926,11 +5926,15 @@ export default {
                 self.file_search_debounce_task = None;
                 self.file_search_loading = false;
                 self.cached_file_results.clear();
+                self.file_search_display_indices.clear();
                 self.file_search_scroll_handle
                     .scroll_to_item(0, ScrollStrategy::Top);
             }
             _ => {}
         }
+
+        // Clear hover state to prevent stale highlights after filter change
+        self.hovered_index = None;
 
         cx.notify();
         true
