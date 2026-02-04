@@ -221,6 +221,32 @@ impl SearchResult {
         }
     }
 
+    /// Get a colored type tag for display as a pill badge during search mode.
+    /// Returns (label, color) where color is a u32 hex RGB value.
+    /// Each type gets a distinct, muted color for visual scanning.
+    pub fn type_tag_info(&self) -> (&'static str, u32) {
+        match self {
+            SearchResult::Script(_) => ("Script", 0x60A5FA), // Blue
+            SearchResult::Scriptlet(_) => ("Snippet", 0xA78BFA), // Purple
+            SearchResult::BuiltIn(_) => ("Command", 0x6EE7B7), // Green
+            SearchResult::App(_) => ("App", 0xFBBF24),       // Amber
+            SearchResult::Window(_) => ("Window", 0xF472B6), // Pink
+            SearchResult::Agent(_) => ("Agent", 0x38BDF8),   // Sky blue
+            SearchResult::Fallback(_) => ("Fallback", 0x9CA3AF), // Gray
+        }
+    }
+
+    /// Get the kit/source name for this result (used during search to show origin)
+    /// Returns None for items without a meaningful source (built-ins, apps, etc.)
+    pub fn source_name(&self) -> Option<&str> {
+        match self {
+            SearchResult::Script(sm) => sm.script.kit_name.as_deref(),
+            SearchResult::Scriptlet(sm) => sm.scriptlet.group.as_deref(),
+            SearchResult::Agent(am) => am.agent.kit.as_deref(),
+            _ => None,
+        }
+    }
+
     /// Get the default action text for the primary button.
     ///
     /// Priority:

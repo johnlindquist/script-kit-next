@@ -245,7 +245,7 @@ impl ScriptListApp {
                                             ix as u64,
                                         ))
                                         .h(px(28.0))
-                                        .child(render_section_header(label, icon.as_deref(), theme_colors))
+                                        .child(render_section_header(label, icon.as_deref(), theme_colors, ix == 0))
                                         .into_any_element()
                                 }
                                 GroupedListItem::Item(result_idx) => {
@@ -891,19 +891,55 @@ impl ScriptListApp {
                                 .focus_bordered(false),
                         ),
                     )
-                    // Result count indicator - shown only when filtering
+                    // Result count indicator with type breakdown - shown only when filtering
                     .when(!self.filter_text.is_empty() && item_count > 0, |el| {
-                        let count = flat_results.len();
-                        let count_text = if count == 1 {
-                            "1 result".to_string()
+                        // Count results by type for a breakdown display
+                        let mut scripts = 0u16;
+                        let mut snippets = 0u16;
+                        let mut commands = 0u16;
+                        let mut apps = 0u16;
+                        let mut others = 0u16;
+                        for r in flat_results.iter() {
+                            match r {
+                                crate::scripts::SearchResult::Script(_) => scripts += 1,
+                                crate::scripts::SearchResult::Scriptlet(_) => snippets += 1,
+                                crate::scripts::SearchResult::BuiltIn(_) => commands += 1,
+                                crate::scripts::SearchResult::App(_) => apps += 1,
+                                _ => others += 1,
+                            }
+                        }
+                        // Build a compact breakdown string (e.g., "3 scripts · 2 snippets")
+                        let mut parts: Vec<String> = Vec::new();
+                        if scripts > 0 {
+                            parts.push(format!("{} {}", scripts, if scripts == 1 { "script" } else { "scripts" }));
+                        }
+                        if snippets > 0 {
+                            parts.push(format!("{} {}", snippets, if snippets == 1 { "snippet" } else { "snippets" }));
+                        }
+                        if commands > 0 {
+                            parts.push(format!("{} {}", commands, if commands == 1 { "command" } else { "commands" }));
+                        }
+                        if apps > 0 {
+                            parts.push(format!("{} {}", apps, if apps == 1 { "app" } else { "apps" }));
+                        }
+                        if others > 0 {
+                            parts.push(format!("{} other", others));
+                        }
+                        // If all results are the same type, just show total count
+                        let count_text = if parts.len() <= 1 {
+                            let total = flat_results.len();
+                            if total == 1 { "1 result".to_string() } else { format!("{} results", total) }
                         } else {
-                            format!("{} results", count)
+                            // Show at most 3 categories to avoid overflow
+                            parts.truncate(3);
+                            parts.join(" · ")
                         };
                         el.child(
                             div()
                                 .text_xs()
                                 .text_color(rgb(text_muted))
                                 .flex_shrink_0()
+                                .whitespace_nowrap()
                                 .child(count_text),
                         )
                     })
