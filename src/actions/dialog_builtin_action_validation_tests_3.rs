@@ -901,6 +901,8 @@ fn note_switcher_pinned_current_gets_star_icon() {
         char_count: 100,
         is_current: true,
         is_pinned: true,
+        preview: String::new(),
+        relative_time: String::new(),
     }];
     let actions = get_note_switcher_actions(&notes);
     assert_eq!(actions[0].icon, Some(IconName::StarFilled));
@@ -914,6 +916,8 @@ fn note_switcher_pinned_not_current_gets_star_icon() {
         char_count: 50,
         is_current: false,
         is_pinned: true,
+        preview: String::new(),
+        relative_time: String::new(),
     }];
     let actions = get_note_switcher_actions(&notes);
     assert_eq!(actions[0].icon, Some(IconName::StarFilled));
@@ -927,6 +931,8 @@ fn note_switcher_current_not_pinned_gets_check_icon() {
         char_count: 25,
         is_current: true,
         is_pinned: false,
+        preview: String::new(),
+        relative_time: String::new(),
     }];
     let actions = get_note_switcher_actions(&notes);
     assert_eq!(actions[0].icon, Some(IconName::Check));
@@ -940,6 +946,8 @@ fn note_switcher_neither_pinned_nor_current_gets_file_icon() {
         char_count: 10,
         is_current: false,
         is_pinned: false,
+        preview: String::new(),
+        relative_time: String::new(),
     }];
     let actions = get_note_switcher_actions(&notes);
     assert_eq!(actions[0].icon, Some(IconName::File));
@@ -954,6 +962,8 @@ fn note_switcher_current_note_has_bullet_prefix() {
             char_count: 100,
             is_current: true,
             is_pinned: false,
+            preview: String::new(),
+            relative_time: String::new(),
         },
         NoteSwitcherNoteInfo {
             id: "b".into(),
@@ -961,6 +971,8 @@ fn note_switcher_current_note_has_bullet_prefix() {
             char_count: 50,
             is_current: false,
             is_pinned: false,
+            preview: String::new(),
+            relative_time: String::new(),
         },
     ];
     let actions = get_note_switcher_actions(&notes);
@@ -983,6 +995,8 @@ fn note_switcher_char_count_plural() {
             char_count: 0,
             is_current: false,
             is_pinned: false,
+            preview: String::new(),
+            relative_time: String::new(),
         },
         NoteSwitcherNoteInfo {
             id: "p1".into(),
@@ -990,6 +1004,8 @@ fn note_switcher_char_count_plural() {
             char_count: 1,
             is_current: false,
             is_pinned: false,
+            preview: String::new(),
+            relative_time: String::new(),
         },
         NoteSwitcherNoteInfo {
             id: "p2".into(),
@@ -997,12 +1013,14 @@ fn note_switcher_char_count_plural() {
             char_count: 42,
             is_current: false,
             is_pinned: false,
+            preview: String::new(),
+            relative_time: String::new(),
         },
     ];
     let actions = get_note_switcher_actions(&notes);
-    assert_eq!(actions[0].description.as_deref(), Some("0 characters"));
-    assert_eq!(actions[1].description.as_deref(), Some("1 character"));
-    assert_eq!(actions[2].description.as_deref(), Some("42 characters"));
+    assert_eq!(actions[0].description.as_deref(), Some("0 chars"));
+    assert_eq!(actions[1].description.as_deref(), Some("1 char"));
+    assert_eq!(actions[2].description.as_deref(), Some("42 chars"));
 }
 
 #[test]
@@ -1915,6 +1933,8 @@ fn note_switcher_all_actions_have_notes_section() {
             char_count: 10,
             is_current: true,
             is_pinned: false,
+            preview: String::new(),
+            relative_time: String::new(),
         },
         NoteSwitcherNoteInfo {
             id: "b".into(),
@@ -1922,15 +1942,18 @@ fn note_switcher_all_actions_have_notes_section() {
             char_count: 20,
             is_current: false,
             is_pinned: true,
+            preview: String::new(),
+            relative_time: String::new(),
         },
     ];
     let actions = get_note_switcher_actions(&notes);
     for a in &actions {
-        assert_eq!(
-            a.section.as_deref(),
-            Some("Notes"),
-            "Note switcher action '{}' should have 'Notes' section",
-            a.id
+        let section = a.section.as_deref();
+        assert!(
+            section == Some("Pinned") || section == Some("Recent"),
+            "Note switcher action '{}' should have 'Pinned' or 'Recent' section, got {:?}",
+            a.id,
+            section
         );
     }
 }
