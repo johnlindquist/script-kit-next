@@ -419,12 +419,14 @@ pub fn render_design_item(
                         "open" => IconKind::Svg("PlayFilled".to_string()),
                         _ => IconKind::Svg("BoltFilled".to_string()),
                     };
-                    (
-                        sm.scriptlet.name.clone(),
-                        sm.scriptlet.description.clone(),
-                        badge,
-                        Some(icon),
-                    )
+                    // Auto-generate description from tool type when none provided
+                    // This helps users understand what a scriptlet does at a glance
+                    let description = sm
+                        .scriptlet
+                        .description
+                        .clone()
+                        .or_else(|| Some(sm.scriptlet.tool_display_name().to_string()));
+                    (sm.scriptlet.name.clone(), description, badge, Some(icon))
                 }
                 SearchResult::BuiltIn(bm) => {
                     // Built-ins: try to map their icon to SVG, fallback to Settings
@@ -515,6 +517,7 @@ pub fn render_design_item(
             };
 
             // During search mode, build type tag and source hint for context
+            // During grouped mode, show hidden alias/keyword hints for discoverability
             let (type_tag, source_hint) = if !filter_text.is_empty() {
                 let (label, color) = result.type_tag_info();
                 let tag = Some(crate::list_item::TypeTag { label, color });
@@ -525,7 +528,34 @@ pub fn render_design_item(
                     .map(|s| s.to_string());
                 (tag, hint)
             } else {
-                (None, None)
+                // Grouped view: show alias/keyword hints when they're not already
+                // visible as the shortcut badge. This helps users discover triggers.
+                let hint = match result {
+                    SearchResult::Script(sm) => {
+                        // If shortcut is the badge, show alias as hint
+                        if sm.script.shortcut.is_some() {
+                            sm.script.alias.as_ref().map(|a| format!("/{}", a))
+                        } else {
+                            None
+                        }
+                    }
+                    SearchResult::Scriptlet(sm) => {
+                        // Show the first hidden trigger (keyword or alias not used as badge)
+                        if sm.scriptlet.shortcut.is_some() {
+                            sm.scriptlet
+                                .keyword
+                                .as_ref()
+                                .or(sm.scriptlet.alias.as_ref())
+                                .map(|k| format!("/{}", k))
+                        } else if sm.scriptlet.keyword.is_some() {
+                            sm.scriptlet.alias.as_ref().map(|a| format!("/{}", a))
+                        } else {
+                            None
+                        }
+                    }
+                    _ => None,
+                };
+                (None, hint)
             };
 
             // Tool/language badge for scriptlets (e.g., "ts", "bash", "paste")
