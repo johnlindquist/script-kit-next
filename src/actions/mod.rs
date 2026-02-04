@@ -70,6 +70,10 @@ pub use command_bar::{is_command_bar_open, CommandBar, CommandBarConfig, Command
 mod dialog_tests;
 
 #[cfg(test)]
+#[path = "dialog_behavior_tests.rs"]
+mod dialog_behavior_tests;
+
+#[cfg(test)]
 mod tests {
     // Import from submodules directly - these are only used in tests
     use super::builders::{get_global_actions, get_script_context_actions};
