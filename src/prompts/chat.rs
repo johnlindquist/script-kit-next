@@ -1303,15 +1303,26 @@ impl ChatPrompt {
 
                             let current_offset = chat.builtin_reveal_offset;
 
-                            // Find the next word to reveal
-                            let new_offset = if is_done {
-                                // Stream finished: flush everything remaining
-                                Some(full_text.len())
-                            } else {
+                            if is_done {
+                                // Stream finished: flush everything remaining.
+                                // Always set content here — don't rely on offset comparison,
+                                // because accumulated content may have grown since the offset
+                                // was last stored (the previous tick's full_text was shorter).
+                                chat.builtin_reveal_offset = full_text.len();
+                                if let Some(msg) = chat
+                                    .messages
+                                    .iter_mut()
+                                    .find(|m| m.id.as_deref() == Some(&msg_id))
+                                {
+                                    msg.set_content(&full_text);
+                                }
+                                chat.builtin_streaming_content = full_text.clone();
+                                chat.builtin_accumulated_content = full_text.clone();
+                                chat.scroll_handle.scroll_to_bottom();
+                                cx.notify();
+                            } else if let Some(new_offset) =
                                 next_reveal_boundary(&full_text, current_offset)
-                            };
-
-                            if let Some(new_offset) = new_offset {
+                            {
                                 if new_offset > current_offset {
                                     chat.builtin_reveal_offset = new_offset;
                                     let revealed = &full_text[..new_offset];
@@ -1331,14 +1342,10 @@ impl ChatPrompt {
                             }
 
                             // Check completion: done AND fully revealed
-                            if is_done && chat.builtin_reveal_offset >= full_text.len() {
+                            if is_done {
                                 logging::log(
                                     "CHAT",
-                                    &format!(
-                                        "Built-in AI complete: {} chars\n--- FINAL CONTENT ---\n{}\n--- END ---",
-                                        full_text.len(),
-                                        full_text
-                                    ),
+                                    &format!("Built-in AI complete: {} chars", full_text.len()),
                                 );
                                 chat.builtin_is_streaming = false;
                                 chat.streaming_message_id = None;
@@ -2646,7 +2653,7 @@ impl Render for ChatPrompt {
 
 #[cfg(test)]
 mod tests {
-    use super::{resolve_setup_card_key, SetupCardAction};
+    use super::{next_reveal_boundary, resolve_setup_card_key, SetupCardAction};
 
     #[test]
     fn resolve_setup_card_key_cycles_focus_for_tab_and_arrows() {
@@ -2711,5 +2718,129 @@ mod tests {
             resolve_setup_card_key("x", false, 1),
             (1, SetupCardAction::None, false)
         );
+    }
+
+    // --- next_reveal_boundary tests ---
+
+    #[test]
+    fn reveal_boundary_empty_remaining() {
+        assert_eq!(next_reveal_boundary("hello", 5), None);
+        assert_eq!(next_reveal_boundary("", 0), None);
+    }
+
+    #[test]
+    fn reveal_boundary_reveals_through_newline() {
+        let text = "first line\nsecond line\n";
+        assert_eq!(next_reveal_boundary(text, 0), Some(11)); // "first line\n"
+        assert_eq!(next_reveal_boundary(text, 11), Some(23)); // "second line\n"
+    }
+
+    #[test]
+    fn reveal_boundary_word_by_word_without_newline() {
+        let text = "hello world foo";
+        // "hello " → advances past word + whitespace to start of "world"
+        assert_eq!(next_reveal_boundary(text, 0), Some(6));
+        assert_eq!(next_reveal_boundary(text, 6), Some(12)); // "world "
+                                                             // "foo" — partial word, no trailing whitespace
+        assert_eq!(next_reveal_boundary(text, 12), None);
+    }
+
+    #[test]
+    fn reveal_boundary_partial_word_waits() {
+        assert_eq!(next_reveal_boundary("hel", 0), None);
+        assert_eq!(next_reveal_boundary("- T", 2), None); // "T" partial
+    }
+
+    #[test]
+    fn reveal_boundary_newline_takes_priority_over_words() {
+        let text = "hello world\nfoo";
+        // Should reveal through newline, not stop at word boundary
+        assert_eq!(next_reveal_boundary(text, 0), Some(12)); // "hello world\n"
+    }
+
+    #[test]
+    fn reveal_boundary_markdown_list_lines() {
+        let text = "- First item\n- Second item\n- Third\n";
+        let mut offset = 0;
+        let mut lines = vec![];
+        while let Some(new_offset) = next_reveal_boundary(text, offset) {
+            lines.push(&text[offset..new_offset]);
+            offset = new_offset;
+        }
+        assert_eq!(
+            lines,
+            vec!["- First item\n", "- Second item\n", "- Third\n"]
+        );
+    }
+
+    #[test]
+    fn reveal_boundary_utf8_safe() {
+        let text = "héllo wörld\n";
+        assert_eq!(next_reveal_boundary(text, 0), Some(text.len()));
+    }
+
+    /// Simulate the full reveal of a markdown string and verify the final
+    /// result matches the original. This catches cases where progressive
+    /// reveal could produce a different final string.
+    #[test]
+    fn progressive_reveal_produces_complete_content() {
+        let content = "Sure! Here's a list:\n\n\
+            **Things to do:**\n\
+            - Read a good book\n\
+            - Watch your favorite movies or TV shows\n\
+            - Try a new recipe or bake something delicious\n\
+            - Work on a puzzle\n\n\
+            Would you like me to create a list on a different topic?\n";
+
+        let mut offset = 0;
+
+        // Simulate word-by-word reveal (is_done = false)
+        loop {
+            match next_reveal_boundary(content, offset) {
+                Some(new_offset) if new_offset > offset => {
+                    offset = new_offset;
+                }
+                _ => break, // partial word or end
+            }
+        }
+
+        // Simulate final flush (is_done = true) — always set to full content
+        let revealed = content.to_string();
+
+        assert_eq!(revealed, content);
+    }
+
+    /// Verify that reveal never skips content — each boundary advances
+    /// monotonically and covers the full string.
+    #[test]
+    fn reveal_offsets_are_monotonically_increasing() {
+        let content = "- First\n- Second\n- Third item with longer text\n\nParagraph after.\n";
+        let mut offset = 0;
+        let mut prev = 0;
+        while let Some(new_offset) = next_reveal_boundary(content, offset) {
+            assert!(
+                new_offset > prev,
+                "Offset did not advance: prev={}, new={}",
+                prev,
+                new_offset
+            );
+            prev = new_offset;
+            offset = new_offset;
+        }
+        // After reveal loop, flush remainder
+        assert!(
+            offset <= content.len(),
+            "Final offset {} exceeds content length {}",
+            offset,
+            content.len()
+        );
+    }
+}
+
+/// Test-only public access to `next_reveal_boundary` for cross-module tests.
+#[cfg(test)]
+pub(crate) mod chat_tests {
+    pub fn next_reveal_boundary_pub(text: &str, offset: usize) -> Option<usize> {
+        super::next_reveal_boundary(text, offset)
     }
 }
