@@ -1,4 +1,5 @@
 #![allow(unexpected_cfgs)]
+#![recursion_limit = "2048"]
 
 //! Script Kit GPUI - A GPUI-based launcher for Script Kit
 //!
