@@ -595,6 +595,52 @@ impl NotesApp {
         info!(note_id = %id, "New note created");
     }
 
+    /// Create a new note pre-filled with system clipboard content (Cmd+Shift+N)
+    fn create_note_from_clipboard(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let clipboard_content = Self::read_clipboard();
+        if clipboard_content.is_empty() {
+            // Nothing on clipboard, just create an empty note
+            self.create_note(window, cx);
+            return;
+        }
+
+        let note = Note::with_content(clipboard_content);
+        let id = note.id;
+
+        if let Err(e) = storage::save_note(&note) {
+            tracing::error!(error = %e, "Failed to create note from clipboard");
+            return;
+        }
+
+        self.notes.insert(0, note);
+        self.select_note(id, window, cx);
+
+        info!(note_id = %id, "New note created from clipboard");
+    }
+
+    /// Read text from system clipboard
+    fn read_clipboard() -> String {
+        #[cfg(target_os = "macos")]
+        {
+            use std::process::Command;
+            Command::new("pbpaste")
+                .output()
+                .ok()
+                .and_then(|output| {
+                    if output.status.success() {
+                        String::from_utf8(output.stdout).ok()
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or_default()
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            String::new()
+        }
+    }
+
     /// Select a note for editing
     fn select_note(&mut self, id: NoteId, window: &mut Window, cx: &mut Context<Self>) {
         // Save any unsaved changes to the current note before switching
@@ -1702,6 +1748,13 @@ impl NotesApp {
                 }
             });
 
+        // Prepend trash indicator to title when in trash view
+        let title = if is_trash {
+            format!("🗑 {}", title)
+        } else {
+            title
+        };
+
         // Raycast-style: titlebar only visible on hover, centered title, right-aligned actions
         let window_hovered = self.window_hovered || self.force_hovered;
 
@@ -1863,6 +1916,10 @@ impl NotesApp {
         let note_position = self.get_note_position();
         let has_unsaved = self.has_unsaved_changes;
         let relative_time = self.get_relative_time();
+        let has_history_back = !self.history_back.is_empty();
+        let has_history_forward = !self.history_forward.is_empty();
+        let trash_count = self.deleted_notes.len();
+        let is_trash_view = self.view_mode == NotesViewMode::Trash;
         let footer = div()
             .flex()
             .items_center()
@@ -1873,7 +1930,7 @@ impl NotesApp {
             // NO .bg() - let vibrancy show through from root
             // Hide when window not hovered
             .when(!window_hovered, |d| d.opacity(0.))
-            // LEFT: Note position (e.g. "2 / 5") + unsaved dot
+            // LEFT: History arrows + note position + unsaved dot
             .child(
                 div()
                     .absolute()
@@ -1881,6 +1938,44 @@ impl NotesApp {
                     .flex()
                     .items_center()
                     .gap_1()
+                    // History back arrow (Cmd+[)
+                    .child(
+                        div()
+                            .id("footer-history-back")
+                            .text_xs()
+                            .text_color(if has_history_back {
+                                cx.theme().muted_foreground
+                            } else {
+                                cx.theme().muted_foreground.opacity(0.25)
+                            })
+                            .when(has_history_back, |d| {
+                                d.cursor_pointer()
+                                    .hover(|s| s.text_color(cx.theme().foreground))
+                            })
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.navigate_back(window, cx);
+                            }))
+                            .child("<"),
+                    )
+                    // History forward arrow (Cmd+])
+                    .child(
+                        div()
+                            .id("footer-history-forward")
+                            .text_xs()
+                            .text_color(if has_history_forward {
+                                cx.theme().muted_foreground
+                            } else {
+                                cx.theme().muted_foreground.opacity(0.25)
+                            })
+                            .when(has_history_forward, |d| {
+                                d.cursor_pointer()
+                                    .hover(|s| s.text_color(cx.theme().foreground))
+                            })
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.navigate_forward(window, cx);
+                            }))
+                            .child(">"),
+                    )
                     // Unsaved changes dot
                     .when(has_unsaved, |d| {
                         d.child(div().text_xs().text_color(cx.theme().accent).child("*"))
@@ -1907,7 +2002,7 @@ impl NotesApp {
                         if char_count == 1 { "" } else { "s" },
                     )),
             )
-            // RIGHT: Relative time + type indicator
+            // RIGHT: Trash badge + relative time + type indicator
             .child(
                 div()
                     .absolute()
@@ -1915,6 +2010,36 @@ impl NotesApp {
                     .flex()
                     .items_center()
                     .gap_2()
+                    // Trash badge: shows count of deleted notes when not in trash view
+                    .when(!is_trash_view && trash_count > 0, |d| {
+                        d.child(
+                            div()
+                                .id("footer-trash-badge")
+                                .text_xs()
+                                .text_color(cx.theme().muted_foreground.opacity(0.5))
+                                .cursor_pointer()
+                                .hover(|s| s.text_color(cx.theme().muted_foreground))
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    this.set_view_mode(NotesViewMode::Trash, window, cx);
+                                }))
+                                .child(format!("trash ({})", trash_count)),
+                        )
+                    })
+                    // "Back to notes" link when in trash view
+                    .when(is_trash_view, |d| {
+                        d.child(
+                            div()
+                                .id("footer-back-to-notes")
+                                .text_xs()
+                                .text_color(cx.theme().accent)
+                                .cursor_pointer()
+                                .hover(|s| s.text_color(cx.theme().foreground))
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    this.set_view_mode(NotesViewMode::AllNotes, window, cx);
+                                }))
+                                .child("back to notes"),
+                        )
+                    })
                     .when_some(relative_time, |d, time| {
                         d.child(
                             div()
@@ -1932,7 +2057,42 @@ impl NotesApp {
             );
 
         let no_notes = self.get_visible_notes().is_empty();
-        let editor_body: AnyElement = if no_notes && !has_selection {
+        let editor_body: AnyElement = if no_notes && !has_selection && is_trash {
+            // Empty trash state
+            div()
+                .id("notes-empty-trash")
+                .flex_1()
+                .flex()
+                .flex_col()
+                .items_center()
+                .justify_center()
+                .gap_3()
+                .child(
+                    div()
+                        .text_lg()
+                        .text_color(cx.theme().muted_foreground)
+                        .child("Trash is empty"),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(cx.theme().muted_foreground.opacity(0.5))
+                        .child("Deleted notes will appear here"),
+                )
+                .child(
+                    div()
+                        .id("back-to-notes-link")
+                        .text_xs()
+                        .text_color(cx.theme().accent)
+                        .cursor_pointer()
+                        .hover(|s| s.text_color(cx.theme().foreground))
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.set_view_mode(NotesViewMode::AllNotes, window, cx);
+                        }))
+                        .child("Back to Notes  (Cmd+Shift+T)"),
+                )
+                .into_any_element()
+        } else if no_notes && !has_selection {
             // Empty state: show helpful instructions when no notes exist
             div()
                 .id("notes-empty-state")
@@ -2011,7 +2171,7 @@ impl NotesApp {
                     // Use a styled input that blends with background
                     .child(editor_body),
             )
-            .when(has_selection && !is_trash, |d| d.child(footer))
+            .when(has_selection, |d| d.child(footer))
     }
 
     /// Render the actions panel overlay (Cmd+K)
@@ -2486,6 +2646,11 @@ impl Render for NotesApp {
                         this.toggle_search(window, cx);
                         return;
                     }
+                    // In trash view, Escape goes back to all notes
+                    if this.view_mode == NotesViewMode::Trash {
+                        this.set_view_mode(NotesViewMode::AllNotes, window, cx);
+                        return;
+                    }
                     // No panels open - close the window (same as Cmd+W)
                     let wb = window.window_bounds();
                     crate::window_state::save_window_from_gpui(
@@ -2525,7 +2690,25 @@ impl Render for NotesApp {
                             // Toggle search bar
                             this.toggle_search(window, cx);
                         }
-                        "n" => this.create_note(window, cx),
+                        "n" => {
+                            if modifiers.shift {
+                                // Cmd+Shift+N: New note from clipboard
+                                this.create_note_from_clipboard(window, cx);
+                            } else {
+                                this.create_note(window, cx);
+                            }
+                        }
+                        "t" => {
+                            if modifiers.shift {
+                                // Cmd+Shift+T: Toggle trash view
+                                if this.view_mode == NotesViewMode::Trash {
+                                    this.set_view_mode(NotesViewMode::AllNotes, window, cx);
+                                } else {
+                                    this.set_view_mode(NotesViewMode::Trash, window, cx);
+                                }
+                                cx.stop_propagation();
+                            }
+                        }
                         "w" => {
                             // Close the notes window (standard macOS pattern)
                             // Close any open CommandBar windows first
