@@ -335,6 +335,26 @@ fn build_markdown_elements(blocks: &[ParsedBlock], colors: &PromptColors) -> Vec
 /// Global counter for generating unique code block IDs
 static CODE_BLOCK_COUNTER: AtomicU64 = AtomicU64::new(0);
 
+/// Tracks the last-copied code block ID and the instant it was copied.
+/// Used to show brief "Copied!" feedback on the copy button.
+static LAST_COPIED_CODE_BLOCK: OnceLock<Mutex<(u64, std::time::Instant)>> = OnceLock::new();
+
+fn mark_code_block_copied(block_id: u64) {
+    let state = LAST_COPIED_CODE_BLOCK.get_or_init(|| Mutex::new((0, std::time::Instant::now())));
+    if let Ok(mut guard) = state.lock() {
+        *guard = (block_id, std::time::Instant::now());
+    }
+}
+
+fn is_code_block_recently_copied(block_id: u64) -> bool {
+    let state = LAST_COPIED_CODE_BLOCK.get_or_init(|| Mutex::new((0, std::time::Instant::now())));
+    if let Ok(guard) = state.lock() {
+        guard.0 == block_id && guard.1.elapsed().as_secs() < 2
+    } else {
+        false
+    }
+}
+
 /// Build a code block element from pre-highlighted lines (avoids re-running syntect).
 /// Includes a language label header and a hover-revealed copy button.
 fn build_code_block_element(
@@ -388,8 +408,11 @@ fn build_code_block_element(
                             String::new()
                         }),
                 )
-                // Copy button - visible on hover
-                .child(
+                // Copy button - visible on hover, shows "Copied!" feedback
+                .child({
+                    let is_just_copied = is_code_block_recently_copied(block_id);
+                    let copy_block_id = block_id;
+                    let hover_bg = rgba((colors.quote_border << 8) | 0x30);
                     div()
                         .id(SharedString::from(format!("copy-code-{}", block_id)))
                         .flex()
@@ -399,14 +422,34 @@ fn build_code_block_element(
                         .py(px(1.))
                         .rounded(px(3.))
                         .cursor_pointer()
-                        .opacity(0.)
-                        .group_hover(group_name, |s| s.opacity(1.0))
-                        .hover(|s| s.bg(rgba((0xFFFFFF << 8) | 0x18)))
+                        .when(!is_just_copied, |d| {
+                            d.opacity(0.).group_hover(group_name, |s| s.opacity(1.0))
+                        })
+                        .hover(|s| s.bg(hover_bg))
                         .on_click(move |_event, _window, cx| {
                             cx.write_to_clipboard(ClipboardItem::new_string(code_for_copy.clone()));
+                            mark_code_block_copied(copy_block_id);
                         })
-                        .child(div().text_xs().text_color(rgb(text_tertiary)).child("Copy")),
-                ),
+                        .child(if is_just_copied {
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(3.))
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(rgb(colors.accent_color))
+                                        .child("Copied!"),
+                                )
+                                .into_any_element()
+                        } else {
+                            div()
+                                .text_xs()
+                                .text_color(rgb(text_tertiary))
+                                .child("Copy")
+                                .into_any_element()
+                        })
+                }),
         );
     }
 
@@ -552,8 +595,11 @@ fn push_block(
         element = div()
             .w_full()
             .pl(px(12.0))
+            .py(px(2.0))
             .border_l_2()
             .border_color(rgb(colors.quote_border))
+            .bg(rgba((colors.quote_border << 8) | 0x10))
+            .rounded_r(px(4.0))
             .child(element)
             .into_any_element();
     }
