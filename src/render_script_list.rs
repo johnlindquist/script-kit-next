@@ -982,21 +982,23 @@ impl ScriptListApp {
                 is_light_mode: !self.theme.is_dark_mode(),
             };
 
-            // Get the primary action label from the selected item
-            // Falls back to "Run" if no item selected or not a regular item
-            let primary_label = grouped_items
+            // Get the selected result for primary label and type indicator
+            let footer_selected = grouped_items
                 .get(self.selected_index)
                 .and_then(|item| match item {
                     GroupedListItem::Item(idx) => flat_results.get(*idx),
                     GroupedListItem::SectionHeader(..) => None,
-                })
+                });
+            let primary_label = footer_selected
                 .map(|result| result.get_default_action_text())
                 .unwrap_or("Run");
+            let type_label = footer_selected
+                .map(|result| result.type_label())
+                .unwrap_or("");
 
-            // Build footer config with optional opacity indicator for light mode
+            // Build footer config with type indicator and optional opacity info
             let mut footer_config = PromptFooterConfig::default().primary_label(primary_label);
 
-            // Show opacity and vibrancy info in light mode (only when SCRIPT_KIT_WINDOW_TWEAKER=1)
             let window_tweaker_enabled = std::env::var("SCRIPT_KIT_WINDOW_TWEAKER")
                 .map(|v| v == "1")
                 .unwrap_or(false);
@@ -1008,6 +1010,8 @@ impl ScriptListApp {
                     "{}% | {} | {} | ⌘-/+ ⌘M ⌘⇧A",
                     opacity_percent, material, appearance
                 ));
+            } else if !type_label.is_empty() {
+                footer_config = footer_config.info_label(type_label);
             }
             footer_config = footer_config.show_secondary(self.has_actions());
 
