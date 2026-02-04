@@ -2313,3 +2313,7 @@ mod tests {
         assert_eq!(paste_action_chrome.title, "Paste to Google Chrome");
     }
 }
+
+#[cfg(test)]
+#[path = "builders_tests.rs"]
+mod builders_extended_tests;

@@ -811,6 +811,71 @@ impl NotesApp {
         self.editor_state.read(cx).value().chars().count()
     }
 
+    /// Get the word count of the current note
+    fn get_word_count(&self, cx: &Context<Self>) -> usize {
+        self.editor_state
+            .read(cx)
+            .value()
+            .split_whitespace()
+            .count()
+    }
+
+    /// Get the 1-based index position of the current note in the visible list
+    /// Returns (current_position, total_count) or None if no note selected
+    fn get_note_position(&self) -> Option<(usize, usize)> {
+        let notes = self.get_visible_notes();
+        let total = notes.len();
+        if total == 0 {
+            return None;
+        }
+        self.selected_note_id.and_then(|id| {
+            notes
+                .iter()
+                .position(|n| n.id == id)
+                .map(|idx| (idx + 1, total))
+        })
+    }
+
+    /// Check if the currently selected note is pinned
+    fn is_current_note_pinned(&self) -> bool {
+        self.selected_note_id
+            .and_then(|id| self.get_visible_notes().iter().find(|n| n.id == id))
+            .map(|n| n.is_pinned)
+            .unwrap_or(false)
+    }
+
+    /// Navigate to the previous note in the list
+    fn select_prev_note(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let notes = self.get_visible_notes();
+        if notes.is_empty() {
+            return;
+        }
+        if let Some(id) = self.selected_note_id {
+            if let Some(idx) = notes.iter().position(|n| n.id == id) {
+                if idx > 0 {
+                    let prev_id = notes[idx - 1].id;
+                    self.select_note(prev_id, window, cx);
+                }
+            }
+        }
+    }
+
+    /// Navigate to the next note in the list
+    fn select_next_note(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let notes = self.get_visible_notes();
+        if notes.is_empty() {
+            return;
+        }
+        if let Some(id) = self.selected_note_id {
+            if let Some(idx) = notes.iter().position(|n| n.id == id) {
+                if idx + 1 < notes.len() {
+                    let next_id = notes[idx + 1].id;
+                    self.select_note(next_id, window, cx);
+                }
+            }
+        }
+    }
+
     /// Copy the current note content to clipboard
     fn copy_note_to_clipboard(&self, cx: &Context<Self>) {
         let content = self.editor_state.read(cx).value().to_string();
@@ -1490,6 +1555,7 @@ impl NotesApp {
         let show_toolbar = self.show_format_toolbar;
         let is_preview = self.preview_enabled;
         let char_count = self.get_character_count(cx);
+        let is_pinned = self.is_current_note_pinned();
 
         // Get note title - This reads from self.notes which is updated by on_editor_change
         // The title is extracted from the first line of content via Note::set_content()
@@ -1543,15 +1609,20 @@ impl NotesApp {
                 cx.notify();
             }))
             .child(
-                // Note title (truncated) - CENTERED in titlebar
+                // Note title (truncated) - CENTERED in titlebar with pin indicator
                 div()
                     .flex()
                     .items_center()
+                    .gap_1()
                     .overflow_hidden()
                     .text_ellipsis()
                     .text_sm()
                     .text_color(muted_color) // Use muted color for subtle title
                     .when(!window_hovered, |d| d.opacity(0.))
+                    // Pin indicator before title
+                    .when(is_pinned, |d| {
+                        d.child(div().text_xs().text_color(accent_color).child("*"))
+                    })
                     .child(title),
             )
             // Conditionally show icons based on state - only when window is hovered
@@ -1661,9 +1732,11 @@ impl NotesApp {
                 )
             });
 
-        // Build character count footer - only visible on hover
-        // Raycast style: character count CENTERED, T icon on RIGHT
+        // Enhanced footer: note position on LEFT, word/char count CENTERED, type on RIGHT
         // NOTE: No .bg() - let vibrancy show through from root
+        let word_count = self.get_word_count(cx);
+        let note_position = self.get_note_position();
+        let has_unsaved = self.has_unsaved_changes;
         let footer = div()
             .flex()
             .items_center()
@@ -1674,19 +1747,42 @@ impl NotesApp {
             // NO .bg() - let vibrancy show through from root
             // Hide when window not hovered
             .when(!window_hovered, |d| d.opacity(0.))
+            // LEFT: Note position (e.g. "2 / 5") + unsaved dot
             .child(
-                // Character count CENTERED (Raycast style)
+                div()
+                    .absolute()
+                    .left_3()
+                    .flex()
+                    .items_center()
+                    .gap_1()
+                    // Unsaved changes dot
+                    .when(has_unsaved, |d| {
+                        d.child(div().text_xs().text_color(cx.theme().accent).child("*"))
+                    })
+                    .when_some(note_position, |d, (pos, total)| {
+                        d.child(
+                            div()
+                                .text_xs()
+                                .text_color(cx.theme().muted_foreground)
+                                .child(format!("{} / {}", pos, total)),
+                        )
+                    }),
+            )
+            // CENTER: Word count and character count
+            .child(
                 div()
                     .text_xs()
                     .text_color(cx.theme().muted_foreground)
                     .child(format!(
-                        "{} character{}",
+                        "{} word{}  ·  {} char{}",
+                        word_count,
+                        if word_count == 1 { "" } else { "s" },
                         char_count,
-                        if char_count == 1 { "" } else { "s" }
+                        if char_count == 1 { "" } else { "s" },
                     )),
             )
+            // RIGHT: Type indicator
             .child(
-                // Type indicator (T for text) on RIGHT (Raycast style)
                 div()
                     .absolute()
                     .right_3()
@@ -1695,7 +1791,44 @@ impl NotesApp {
                     .child(if is_preview { "MD" } else { "T" }),
             );
 
-        let editor_body: AnyElement = if is_preview {
+        let no_notes = self.get_visible_notes().is_empty();
+        let editor_body: AnyElement = if no_notes && !has_selection {
+            // Empty state: show helpful instructions when no notes exist
+            div()
+                .id("notes-empty-state")
+                .flex_1()
+                .flex()
+                .flex_col()
+                .items_center()
+                .justify_center()
+                .gap_3()
+                .child(
+                    div()
+                        .text_lg()
+                        .text_color(cx.theme().muted_foreground)
+                        .child("No notes yet"),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .items_center()
+                        .gap_1()
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(cx.theme().muted_foreground.opacity(0.7))
+                                .child("Start typing to create a note"),
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(cx.theme().muted_foreground.opacity(0.5))
+                                .child("or press  Cmd+N"),
+                        ),
+                )
+                .into_any_element()
+        } else if is_preview {
             let content = self.editor_state.read(cx).value().to_string();
             div()
                 .id("notes-markdown-preview")
@@ -2269,6 +2402,15 @@ impl Render for NotesApp {
                         "d" => this.duplicate_selected_note(window, cx),
                         "b" => this.insert_formatting("**", "**", window, cx),
                         "i" => this.insert_formatting("_", "_", window, cx),
+                        // Navigate between notes with Cmd+Up/Down
+                        "up" | "arrowup" => {
+                            this.select_prev_note(window, cx);
+                            cx.stop_propagation();
+                        }
+                        "down" | "arrowdown" => {
+                            this.select_next_note(window, cx);
+                            cx.stop_propagation();
+                        }
                         _ => {}
                     }
                 }
