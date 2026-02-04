@@ -232,8 +232,8 @@ impl BackgroundOpacity {
             title_bar: 0.85,                 // Match main for consistency
             search_box: 0.90,                // 90% - matches POC input_area_bg
             log_panel: 0.90,                 // Slightly more opaque for terminal readability
-            selected: 0.16, // Light mode selection - visible overlay, aligned with Material Design guidance
-            hover: 0.09,    // Subtle hover on light backgrounds
+            selected: 0.20, // Light mode selection - stronger overlay for visibility on vibrancy
+            hover: 0.12,    // Visible hover on light vibrancy backgrounds
             preview: 0.0,   // Preview panel (0 = fully transparent)
             dialog: 0.85,   // Dialogs match main
             input: 0.90,    // Input fields - 90% like POC input_area_bg

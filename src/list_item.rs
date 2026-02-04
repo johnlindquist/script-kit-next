@@ -288,7 +288,7 @@ impl ListItemColors {
         let (selected_opacity, hover_opacity) = if is_dark {
             (0.12, 0.06) // Dark mode: refined selection, subtle hover
         } else {
-            (0.16, 0.09) // Light mode: visible on light backgrounds
+            (0.20, 0.12) // Light mode: stronger overlay for visibility on vibrancy
         };
 
         Self {
@@ -736,7 +736,7 @@ impl RenderOnce for ListItem {
             .overflow_hidden()
             .flex()
             .flex_col()
-            .gap(px(3.)) // 3px gap between name and description for breathing room
+            .gap(px(2.)) // 2px gap between name and description for tight visual pairing
             .justify_center();
 
         // Name rendering - 14px font size for better balance with description
@@ -807,8 +807,8 @@ impl RenderOnce for ListItem {
         // Single-line with ellipsis truncation for long content
         // When description_highlight_indices are present, matched characters are rendered with accent color
         if let Some(desc) = self.description {
-            // Use text_secondary at high opacity for strong readability
-            let desc_color = rgba((colors.text_secondary << 8) | 0xB3); // ~70% opacity of secondary for clear contrast
+            // Use text_secondary at 80% opacity for strong readability on vibrancy backgrounds
+            let desc_color = rgba((colors.text_secondary << 8) | 0xCC); // ~80% opacity of secondary for clear contrast
             let desc_element = if let Some(ref desc_indices) = self.description_highlight_indices {
                 // Build StyledText with highlighted matched characters in description
                 let index_set: HashSet<usize> = desc_indices.iter().copied().collect();
@@ -828,8 +828,8 @@ impl RenderOnce for ListItem {
                     }
                 }
 
-                // Base text is more muted when highlighting to create contrast
-                let base_color = rgba((colors.text_dimmed << 8) | 0xCC);
+                // Base text uses secondary at moderate opacity - readable but doesn't compete with highlights
+                let base_color = rgba((colors.text_secondary << 8) | 0xB3);
                 let styled = StyledText::new(desc.clone()).with_highlights(highlights);
 
                 div()
@@ -1165,8 +1165,9 @@ pub fn render_section_header(
     };
 
     // Build the inner content row: icon (optional) → section name → count (optional)
-    // Use text_muted (0x808080) instead of text_dimmed (0xaaaaaa in light mode)
-    // for better contrast against vibrancy backgrounds
+    // Use text_secondary at 85% for readable section labels on vibrancy backgrounds
+    // text_muted (0x808080) was too faint on light vibrancy
+    let header_text_color = rgba((colors.text_secondary << 8) | 0xD9); // 85% opacity of secondary
     let mut content = div()
         .flex()
         .flex_row()
@@ -1174,7 +1175,7 @@ pub fn render_section_header(
         .gap(px(6.))
         .text_size(px(11.0)) // slightly bigger than text_xs for readability
         .font_weight(FontWeight::SEMIBOLD)
-        .text_color(rgb(colors.text_muted));
+        .text_color(header_text_color);
 
     // Add icon before section name if provided
     if let Some(name) = icon {
@@ -1183,7 +1184,7 @@ pub fn render_section_header(
                 svg()
                     .external_path(icon_name.external_path())
                     .size(px(10.))
-                    .text_color(rgba((colors.text_muted << 8) | 0xC0)), // 75% opacity of muted
+                    .text_color(rgba((colors.text_secondary << 8) | 0xB3)), // 70% of secondary for subordination
             );
         }
     }
@@ -1196,13 +1197,13 @@ pub fn render_section_header(
             div()
                 .text_xs()
                 .font_weight(FontWeight::NORMAL)
-                .text_color(rgba((colors.text_muted << 8) | 0xCC)) // 80% opacity of muted
+                .text_color(rgba((colors.text_secondary << 8) | 0x99)) // 60% of secondary - subordinate to label
                 .child(count.to_string()),
         );
     }
 
     // Background tint for section headers to create visual grouping
-    let header_bg = rgba((colors.text_muted << 8) | 0x0D); // ~5% opacity tint - light grouping, lets vibrancy through
+    let header_bg = rgba((colors.text_secondary << 8) | 0x0A); // ~4% opacity tint - subtle grouping, lets vibrancy through
 
     let header = div()
         .w_full()
@@ -1221,7 +1222,7 @@ pub fn render_section_header(
     } else {
         header
             .border_t_1()
-            .border_color(rgba((colors.text_muted << 8) | 0x2E)) // ~18% opacity - visible but not heavy section separator
+            .border_color(rgba((colors.text_secondary << 8) | 0x26)) // ~15% opacity - visible section separator without dominating
     };
 
     header.child(content)
