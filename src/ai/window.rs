@@ -3620,6 +3620,51 @@ impl AiApp {
                                     .child(format!("No results for \"{}\"", self.search_query)),
                             )
                             .into_any_element()
+                    } else if self.chats.is_empty() && self.search_query.is_empty() {
+                        // Empty state when no chats exist at all
+                        div()
+                            .flex()
+                            .flex_col()
+                            .items_center()
+                            .justify_center()
+                            .flex_1()
+                            .py_8()
+                            .gap_3()
+                            .child(
+                                svg()
+                                    .external_path(LocalIconName::MessageCircle.external_path())
+                                    .size(px(28.))
+                                    .text_color(cx.theme().muted_foreground.opacity(0.2)),
+                            )
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .text_color(cx.theme().muted_foreground.opacity(0.5))
+                                    .child("No conversations yet"),
+                            )
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(4.))
+                                    .child(
+                                        div()
+                                            .px(px(5.))
+                                            .py(px(1.))
+                                            .rounded(px(3.))
+                                            .bg(cx.theme().muted.opacity(0.4))
+                                            .text_xs()
+                                            .text_color(cx.theme().muted_foreground.opacity(0.5))
+                                            .child("\u{2318}N"),
+                                    )
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .text_color(cx.theme().muted_foreground.opacity(0.4))
+                                            .child("to start a new chat"),
+                                    ),
+                            )
+                            .into_any_element()
                     } else {
                         div()
                             .flex()
@@ -5170,6 +5215,53 @@ impl AiApp {
                     )
                     .child("Regenerate"),
             )
+            // Copy response button
+            .child({
+                let last_assistant_id = self
+                    .current_messages
+                    .last()
+                    .filter(|m| m.role == MessageRole::Assistant)
+                    .map(|m| m.id.clone());
+                let is_copied = last_assistant_id
+                    .as_ref()
+                    .map(|id| self.is_message_copied(id))
+                    .unwrap_or(false);
+                let (icon, label, icon_color) = if is_copied {
+                    (
+                        LocalIconName::Check,
+                        "Copied!",
+                        cx.theme().success.opacity(0.7),
+                    )
+                } else {
+                    (LocalIconName::Copy, "Copy", muted_fg.opacity(0.5))
+                };
+                div()
+                    .id("copy-response-btn")
+                    .flex()
+                    .items_center()
+                    .gap(px(4.))
+                    .px(px(6.))
+                    .py(px(3.))
+                    .rounded(px(4.))
+                    .cursor_pointer()
+                    .text_xs()
+                    .text_color(if is_copied {
+                        cx.theme().success.opacity(0.7)
+                    } else {
+                        muted_fg.opacity(0.6)
+                    })
+                    .hover(|s| s.bg(cx.theme().muted.opacity(0.3)).text_color(muted_fg))
+                    .on_click(cx.listener(|this, _, _window, cx| {
+                        this.copy_last_assistant_response(cx);
+                    }))
+                    .child(
+                        svg()
+                            .external_path(icon.external_path())
+                            .size(px(12.))
+                            .text_color(icon_color),
+                    )
+                    .child(label)
+            })
             // "Generated in Xs" completion feedback (fades after 5 seconds)
             .when_some(completion_label, |el, label| {
                 el.child(
