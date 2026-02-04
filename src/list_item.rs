@@ -869,7 +869,7 @@ impl RenderOnce for ListItem {
         let icon_text_color = if self.selected {
             rgb(colors.text_primary)
         } else {
-            rgba((colors.text_secondary << 8) | ALPHA_STRONG)
+            rgba((colors.text_primary << 8) | ALPHA_STRONG)
         };
         let icon_size = px(ICON_CONTAINER_SIZE);
         let svg_size = px(ICON_SVG_SIZE);
@@ -1122,11 +1122,7 @@ impl RenderOnce for ListItem {
             .bg(bg_color)
             .border_b_1()
             .border_color(separator_color)
-            .text_color(if self.selected {
-                rgb(colors.text_primary)
-            } else {
-                rgb(colors.text_secondary)
-            })
+            .text_color(rgb(colors.text_primary))
             .font_family(FONT_SYSTEM_UI)
             .cursor_pointer()
             .flex()
@@ -1151,7 +1147,7 @@ impl RenderOnce for ListItem {
                         div()
                             .text_size(px(TOOL_BADGE_FONT_SIZE))
                             .font_family(FONT_MONO)
-                            .text_color(rgba((colors.text_dimmed << 8) | ALPHA_MUTED))
+                            .text_color(rgba((colors.text_dimmed << 8) | ALPHA_READABLE))
                             .px(px(TOOL_BADGE_PADDING_X))
                             .py(px(TOOL_BADGE_PADDING_Y))
                             .rounded(px(TOOL_BADGE_RADIUS))
@@ -1406,7 +1402,7 @@ pub fn render_section_header(
             div()
                 .text_xs()
                 .font_weight(FontWeight::NORMAL)
-                .text_color(rgba((colors.text_secondary << 8) | ALPHA_SUBTLE))
+                .text_color(rgba((colors.text_secondary << 8) | ALPHA_HINT))
                 .child(count.to_string()),
         );
     }
