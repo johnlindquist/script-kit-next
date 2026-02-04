@@ -951,6 +951,19 @@ impl NotesApp {
         })
     }
 
+    /// Get the 1-based line number at cursor position, plus total line count
+    fn get_cursor_line_info(&self, cx: &Context<Self>) -> Option<(usize, usize)> {
+        let value = self.editor_state.read(cx).value().to_string();
+        if value.is_empty() {
+            return None;
+        }
+        let selection = self.editor_state.read(cx).selection();
+        let cursor = selection.start.min(value.len());
+        let current_line = value[..cursor].matches('\n').count() + 1;
+        let total_lines = value.lines().count().max(1);
+        Some((current_line, total_lines))
+    }
+
     /// Check if the currently selected note is pinned
     fn is_current_note_pinned(&self) -> bool {
         self.selected_note_id
@@ -1938,6 +1951,7 @@ impl NotesApp {
                     .child(section("Formatting"))
                     .child(shortcut("⌘B", "Bold"))
                     .child(shortcut("⌘I", "Italic"))
+                    .child(shortcut("⌘E", "Inline code"))
                     .child(shortcut("⌘⇧X", "Strikethrough"))
                     .child(shortcut("⌘⇧H", "Cycle heading"))
                     .child(shortcut("⌘⇧L", "Toggle checklist"))
@@ -1956,7 +1970,7 @@ impl NotesApp {
                     .child(shortcut("⌃⇧K", "Delete line"))
                     .child(shortcut("⌘V", "Smart paste"))
                     .child(section("View"))
-                    .child(shortcut("⌘.", "Focus mode"))
+                    .child(shortcut("⌘.  / Esc", "Focus mode"))
                     .child(shortcut("⌘⇧P", "Markdown preview"))
                     .child(shortcut("⌘F", "Find in note"))
                     .child(shortcut("⌘⇧S", "Cycle sort"))
@@ -2809,6 +2823,10 @@ impl NotesApp {
             .px_3()
             .relative() // For absolute positioning of icons
             // NO .bg() - let vibrancy show through from root
+            // Trash view: subtle danger-colored bottom border as visual cue
+            .when(is_trash, |d| {
+                d.border_b_1().border_color(cx.theme().danger.opacity(0.35))
+            })
             // Only show titlebar elements when window is hovered
             .on_hover(cx.listener(|this, hovered, _, cx| {
                 if this.force_hovered {
@@ -2844,8 +2862,8 @@ impl NotesApp {
                 d.child(
                     div()
                         .text_xs()
-                        .text_color(muted_color.opacity(0.3))
-                        .child("⌘.  exit focus"),
+                        .text_color(muted_color.opacity(0.25))
+                        .child("esc  or  ⌘.  exit focus"),
                 )
             })
             // Conditionally show icons based on state - only when window is hovered
@@ -2959,17 +2977,18 @@ impl NotesApp {
                 )
             });
 
-        // Enhanced footer: note position on LEFT, word/char count CENTERED, type + time on RIGHT
+        // Enhanced footer: note position + line on LEFT, word/char count CENTERED, type + time on RIGHT
         // NOTE: No .bg() - let vibrancy show through from root
         let word_count = self.get_word_count(cx);
+        let cursor_line_info = self.get_cursor_line_info(cx);
         let selection_stats = self.get_selection_stats(cx);
         let note_position = self.get_note_position();
         let has_unsaved = self.has_unsaved_changes;
-        // Show "Saved" briefly (2 seconds) after a successful save
+        // Show brief "✓" checkmark (1.5s) after a successful save — frictionless feedback
         let show_saved = !has_unsaved
             && self
                 .last_save_confirmed
-                .map(|t| t.elapsed() < Duration::from_secs(2))
+                .map(|t| t.elapsed() < Duration::from_millis(1500))
                 .unwrap_or(false);
         let relative_time = self.get_relative_time();
         let has_history_back = !self.history_back.is_empty();
@@ -2990,8 +3009,10 @@ impl NotesApp {
             .h(px(28.))
             .px_3()
             // NO .bg() - let vibrancy show through from root
-            // Always visible at reduced opacity; full on hover; hidden in focus mode
-            .when(in_focus_mode, |d| d.opacity(0.))
+            // Always visible at reduced opacity; full on hover
+            // In focus mode: hidden at rest, subtle word count on hover
+            .when(in_focus_mode && !window_hovered, |d| d.opacity(0.))
+            .when(in_focus_mode && window_hovered, |d| d.opacity(0.25))
             .when(!in_focus_mode && !window_hovered, |d| d.opacity(0.35))
             .when(!in_focus_mode && window_hovered, |d| d.opacity(1.0))
             // LEFT: History arrows + note position + unsaved dot
@@ -3044,13 +3065,13 @@ impl NotesApp {
                     .when(has_unsaved, |d| {
                         d.child(div().text_xs().text_color(cx.theme().accent).child("●"))
                     })
-                    // "Saved" flash after successful save
+                    // Brief checkmark flash after successful save — frictionless feedback
                     .when(show_saved, |d| {
                         d.child(
                             div()
                                 .text_xs()
-                                .text_color(cx.theme().muted_foreground.opacity(0.6))
-                                .child("Saved"),
+                                .text_color(cx.theme().accent.opacity(0.7))
+                                .child("✓"),
                         )
                     })
                     .when_some(note_position, |d, (pos, total)| {
@@ -3059,6 +3080,15 @@ impl NotesApp {
                                 .text_xs()
                                 .text_color(cx.theme().muted_foreground)
                                 .child(format!("{} of {}", pos, total)),
+                        )
+                    })
+                    // Cursor line position — "Ln 5/42"
+                    .when_some(cursor_line_info, |d, (line, total)| {
+                        d.child(
+                            div()
+                                .text_xs()
+                                .text_color(cx.theme().muted_foreground.opacity(0.6))
+                                .child(format!("Ln {}/{}", line, total)),
                         )
                     }),
             )
@@ -3229,43 +3259,50 @@ impl NotesApp {
                 .flex_col()
                 .items_center()
                 .justify_center()
-                .gap_4()
+                .gap_3()
                 .child(
                     div()
                         .text_base()
-                        .text_color(cx.theme().muted_foreground.opacity(0.8))
+                        .text_color(cx.theme().muted_foreground.opacity(0.6))
                         .child("No notes yet"),
                 )
                 .child(
                     div()
-                        .flex()
-                        .flex_col()
-                        .items_center()
-                        .gap_2()
-                        .child(
-                            div()
-                                .text_sm()
-                                .text_color(cx.theme().muted_foreground.opacity(0.6))
-                                .child("Just start typing to create your first note"),
-                        )
-                        .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap_3()
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(cx.theme().muted_foreground.opacity(0.4))
-                                        .child("⌘N  new note"),
-                                )
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(cx.theme().muted_foreground.opacity(0.4))
-                                        .child("⌘/  shortcuts"),
-                                ),
-                        ),
+                        .id("create-first-note")
+                        .text_sm()
+                        .text_color(cx.theme().accent.opacity(0.8))
+                        .cursor_pointer()
+                        .hover(|s| s.text_color(cx.theme().accent))
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.create_note(window, cx);
+                        }))
+                        .child("Create your first note"),
+                )
+                .child(
+                    div().flex().flex_col().items_center().gap_1().pt_2().child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_3()
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(cx.theme().muted_foreground.opacity(0.3))
+                                    .child("⌘N  new"),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(cx.theme().muted_foreground.opacity(0.3))
+                                    .child("⌘⇧N  from clipboard"),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(cx.theme().muted_foreground.opacity(0.3))
+                                    .child("⌘/  shortcuts"),
+                            ),
+                    ),
                 )
                 .into_any_element()
         } else if is_preview {
@@ -3776,7 +3813,7 @@ impl Render for NotesApp {
                     return;
                 }
 
-                // Handle Escape to close panels, or close window if no panels open
+                // Handle Escape to close panels, exit modes, or close window
                 if key == "escape" {
                     if this.show_shortcuts_help {
                         this.show_shortcuts_help = false;
@@ -3793,6 +3830,11 @@ impl Render for NotesApp {
                     }
                     if this.show_search {
                         this.toggle_search(window, cx);
+                        return;
+                    }
+                    // Exit focus mode before closing window
+                    if this.focus_mode {
+                        this.toggle_focus_mode(cx);
                         return;
                     }
                     // In trash view, Escape goes back to all notes
@@ -3987,6 +4029,11 @@ impl Render for NotesApp {
                                 cx.stop_propagation();
                             }
                             // Let default Cmd+C (copy) pass through to Input
+                        }
+                        "e" => {
+                            // Cmd+E: Inline code formatting
+                            this.insert_formatting("`", "`", window, cx);
+                            cx.stop_propagation();
                         }
                         "/" => {
                             // Cmd+/: Toggle keyboard shortcuts help
