@@ -483,6 +483,9 @@ pub struct AiApp {
 
     /// When the copy feedback started (resets after 2 seconds)
     copied_at: Option<std::time::Instant>,
+
+    /// When the current streaming session started (for elapsed time display)
+    streaming_started_at: Option<std::time::Instant>,
 }
 
 impl AiApp {
@@ -705,6 +708,7 @@ impl AiApp {
             // Copy feedback state
             copied_message_id: None,
             copied_at: None,
+            streaming_started_at: None,
         }
     }
 
@@ -2346,6 +2350,7 @@ impl AiApp {
         self.streaming_content.clear();
         self.streaming_chat_id = Some(chat_id);
         self.streaming_generation = self.streaming_generation.wrapping_add(1);
+        self.streaming_started_at = Some(std::time::Instant::now());
         let generation = self.streaming_generation;
 
         info!(
@@ -2494,6 +2499,7 @@ impl AiApp {
         self.streaming_content.clear();
         self.streaming_chat_id = Some(chat_id);
         self.streaming_generation = self.streaming_generation.wrapping_add(1);
+        self.streaming_started_at = Some(std::time::Instant::now());
         let generation = self.streaming_generation;
 
         // Get the last user message to generate a contextual mock response
@@ -2635,7 +2641,91 @@ impl AiApp {
         self.is_streaming = false;
         self.streaming_content.clear();
         self.streaming_chat_id = None;
+        self.streaming_started_at = None;
         cx.notify();
+    }
+
+    /// Stop the current streaming response.
+    fn stop_streaming(&mut self, cx: &mut Context<Self>) {
+        if !self.is_streaming {
+            return;
+        }
+
+        let chat_id = match self.streaming_chat_id {
+            Some(id) => id,
+            None => {
+                self.is_streaming = false;
+                self.streaming_content.clear();
+                self.streaming_started_at = None;
+                cx.notify();
+                return;
+            }
+        };
+
+        if !self.streaming_content.is_empty() {
+            let assistant_message = Message::assistant(chat_id, &self.streaming_content);
+            if let Err(e) = storage::save_message(&assistant_message) {
+                tracing::error!(error = %e, "Failed to save partial assistant message on stop");
+            }
+
+            if self.selected_chat_id == Some(chat_id) {
+                self.current_messages.push(assistant_message);
+            }
+
+            let preview: String = self.streaming_content.chars().take(60).collect();
+            let preview = if preview.len() < self.streaming_content.len() {
+                format!("{}...", preview.trim())
+            } else {
+                preview
+            };
+            self.message_previews.insert(chat_id, preview);
+            self.touch_and_reorder_chat(chat_id);
+
+            info!(
+                chat_id = %chat_id,
+                content_len = self.streaming_content.len(),
+                "Streaming stopped by user - partial response saved"
+            );
+        } else {
+            info!(chat_id = %chat_id, "Streaming stopped by user - no content to save");
+        }
+
+        self.streaming_generation = self.streaming_generation.wrapping_add(1);
+        self.is_streaming = false;
+        self.streaming_content.clear();
+        self.streaming_chat_id = None;
+        self.streaming_started_at = None;
+        self.sync_messages_list_and_scroll_to_bottom();
+        cx.notify();
+    }
+
+    /// Regenerate the last assistant response.
+    fn regenerate_response(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        if self.is_streaming {
+            return;
+        }
+
+        let chat_id = match self.selected_chat_id {
+            Some(id) => id,
+            None => return,
+        };
+
+        let last_assistant_idx = self
+            .current_messages
+            .iter()
+            .rposition(|m| m.role == MessageRole::Assistant);
+
+        if let Some(assistant_idx) = last_assistant_idx {
+            let removed_msg = self.current_messages.remove(assistant_idx);
+            if let Err(e) = storage::delete_message(&removed_msg.id) {
+                tracing::error!(error = %e, "Failed to delete assistant message for regeneration");
+            }
+
+            self.sync_messages_list_and_scroll_to_bottom();
+            info!(chat_id = %chat_id, "Regenerating response");
+            self.start_streaming_response(chat_id, cx);
+            cx.notify();
+        }
     }
 
     /// Get the currently selected chat
@@ -4123,8 +4213,22 @@ impl AiApp {
         let colors = theme::PromptColors::from_theme(&crate::theme::get_cached_theme());
         let streaming_bg = rgba((0xFFFFFF << 8) | 0x08);
 
+        let elapsed_label: SharedString = self
+            .streaming_started_at
+            .map(|started| {
+                let secs = started.elapsed().as_secs();
+                if secs < 1 {
+                    String::new()
+                } else {
+                    format!("{}s", secs)
+                }
+            })
+            .unwrap_or_default()
+            .into();
+        let show_elapsed = !elapsed_label.is_empty();
+
         let content_element = if self.streaming_content.is_empty() {
-            // "Thinking" state with three dots
+            // "Thinking" state with elapsed time
             div()
                 .flex()
                 .items_center()
@@ -4160,6 +4264,14 @@ impl AiApp {
                                 .bg(cx.theme().accent.opacity(0.3)),
                         ),
                 )
+                .when(show_elapsed, |d| {
+                    d.child(
+                        div()
+                            .text_xs()
+                            .text_color(cx.theme().muted_foreground.opacity(0.5))
+                            .child(elapsed_label.clone()),
+                    )
+                })
                 .into_any_element()
         } else {
             let with_cursor = format!("{}▌", self.streaming_content);
@@ -4196,7 +4308,15 @@ impl AiApp {
                             .text_color(cx.theme().muted_foreground)
                             .child("Assistant"),
                     )
-                    .child(div().size(px(6.)).rounded_full().bg(cx.theme().accent)),
+                    .child(div().size(px(6.)).rounded_full().bg(cx.theme().accent))
+                    .when(show_elapsed, |d| {
+                        d.child(
+                            div()
+                                .text_xs()
+                                .text_color(cx.theme().muted_foreground.opacity(0.5))
+                                .child(elapsed_label),
+                        )
+                    }),
             )
             .child(
                 div()
@@ -4205,6 +4325,43 @@ impl AiApp {
                     .rounded_lg()
                     .bg(streaming_bg)
                     .child(content_element),
+            )
+    }
+
+    /// Action row below last assistant message.
+    fn render_message_actions(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let muted_fg = cx.theme().muted_foreground;
+        div()
+            .id("message-actions")
+            .flex()
+            .items_center()
+            .gap(px(2.))
+            .pl_1()
+            .mt(px(-4.))
+            .mb_2()
+            .child(
+                div()
+                    .id("regenerate-btn")
+                    .flex()
+                    .items_center()
+                    .gap(px(4.))
+                    .px(px(6.))
+                    .py(px(3.))
+                    .rounded(px(4.))
+                    .cursor_pointer()
+                    .text_xs()
+                    .text_color(muted_fg.opacity(0.6))
+                    .hover(|s| s.bg(cx.theme().muted.opacity(0.3)).text_color(muted_fg))
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.regenerate_response(window, cx);
+                    }))
+                    .child(
+                        svg()
+                            .external_path(LocalIconName::ArrowUp.external_path())
+                            .size(px(12.))
+                            .text_color(muted_fg.opacity(0.5)),
+                    )
+                    .child("Regenerate"),
             )
     }
 
@@ -4238,8 +4395,23 @@ impl AiApp {
         let messages_list = list(self.messages_list_state.clone(), move |ix, _window, cx| {
             entity.update(cx, |this, cx| {
                 if ix < msg_count {
-                    this.render_message(&this.current_messages[ix], cx)
-                        .into_any_element()
+                    let is_last_assistant = !is_streaming
+                        && ix == msg_count - 1
+                        && this.current_messages[ix].role == MessageRole::Assistant;
+                    let msg_el = this
+                        .render_message(&this.current_messages[ix], cx)
+                        .into_any_element();
+                    if is_last_assistant {
+                        div()
+                            .flex()
+                            .flex_col()
+                            .w_full()
+                            .child(msg_el)
+                            .child(this.render_message_actions(cx))
+                            .into_any_element()
+                    } else {
+                        msg_el
+                    }
                 } else if is_streaming {
                     this.render_streaming_content(cx).into_any_element()
                 } else {
@@ -4361,26 +4533,50 @@ impl AiApp {
                             .items_center()
                             .gap_1()
                             .flex_shrink_0()
-                            // Submit ↵ - clickable text with accent color
-                            .child(
+                            // Submit or Stop button
+                            .child(if self.is_streaming {
                                 div()
+                                    .id("stop-btn")
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(4.))
+                                    .px_2()
+                                    .py(px(2.))
+                                    .rounded_md()
+                                    .cursor_pointer()
+                                    .hover(|s| s.bg(cx.theme().danger.opacity(0.15)))
+                                    .text_sm()
+                                    .text_color(cx.theme().danger)
+                                    .on_mouse_down(
+                                        gpui::MouseButton::Left,
+                                        cx.listener(|this, _, _window, cx| {
+                                            this.stop_streaming(cx);
+                                        }),
+                                    )
+                                    .child(div().size(px(8.)).rounded(px(1.)).bg(cx.theme().danger))
+                                    .child("Stop")
+                                    .into_any_element()
+                            } else {
+                                div()
+                                    .id("submit-btn")
                                     .flex()
                                     .items_center()
                                     .px_2()
-                                    .py(px(2.)) // Reduced vertical padding
+                                    .py(px(2.))
                                     .rounded_md()
                                     .cursor_pointer()
                                     .hover(|s| s.bg(cx.theme().accent.opacity(0.15)))
                                     .text_sm()
-                                    .text_color(cx.theme().accent) // Yellow accent like main menu
+                                    .text_color(cx.theme().accent)
                                     .on_mouse_down(
                                         gpui::MouseButton::Left,
                                         cx.listener(|this, _, window, cx| {
                                             this.submit_message(window, cx);
                                         }),
                                     )
-                                    .child("Submit ↵"),
-                            )
+                                    .child("Submit ↵")
+                                    .into_any_element()
+                            })
                             // Divider
                             .child(div().w(px(1.)).h(px(16.)).bg(cx.theme().border))
                             // Actions ⌘K - opens command bar with AI-specific actions
@@ -5073,7 +5269,13 @@ impl Render for AiApp {
                     }
                 }
 
-                // Escape closes any open dropdown
+                // Escape stops streaming if active
+                if key == "escape" && this.is_streaming {
+                    this.stop_streaming(cx);
+                    cx.stop_propagation();
+                    return;
+                }
+
                 // Escape closes API key input (back to setup card)
                 if key == "escape" && this.showing_api_key_input {
                     this.hide_api_key_input(window, cx);
