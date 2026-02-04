@@ -2749,6 +2749,8 @@ impl ScriptListApp {
                 if *filter != new_text {
                     *filter = new_text.clone();
                     *selected_index = 0;
+                    self.list_scroll_handle
+                        .scroll_to_item(0, ScrollStrategy::Top);
                     cx.notify();
                 }
                 return; // Don't run main menu filter logic
@@ -2760,6 +2762,8 @@ impl ScriptListApp {
                 if *filter != new_text {
                     *filter = new_text.clone();
                     *selected_index = 0;
+                    self.window_list_scroll_handle
+                        .scroll_to_item(0, ScrollStrategy::Top);
                     cx.notify();
                 }
                 return; // Don't run main menu filter logic
@@ -2784,6 +2788,8 @@ impl ScriptListApp {
                 if *filter != new_text {
                     *filter = new_text.clone();
                     *selected_index = 0;
+                    self.theme_chooser_scroll_handle
+                        .scroll_to_item(0, ScrollStrategy::Top);
                     cx.notify();
                 }
                 return; // Don't run main menu filter logic

@@ -581,6 +581,7 @@ impl ScriptListApp {
                 .collect();
             let selected = selected_index;
             let image_cache_for_list = image_cache.clone();
+            let click_entity_handle = cx.entity().downgrade();
 
             uniform_list(
                 "clipboard-history",
@@ -637,7 +638,66 @@ impl ScriptListApp {
                                     item = item.icon("📄");
                                 }
 
-                                div().id(ix).child(item)
+                                // Click handler: select on click, paste on double-click
+                                let click_entity = click_entity_handle.clone();
+                                let entry_id = entry.id.clone();
+                                let click_handler = move |event: &gpui::ClickEvent,
+                                                           _window: &mut Window,
+                                                           cx: &mut gpui::App| {
+                                    if let Some(app) = click_entity.upgrade() {
+                                        let entry_id = entry_id.clone();
+                                        app.update(cx, |this, cx| {
+                                            if let AppView::ClipboardHistoryView {
+                                                selected_index, ..
+                                            } = &mut this.current_view
+                                            {
+                                                *selected_index = ix;
+                                            }
+                                            this.focused_clipboard_entry_id =
+                                                Some(entry_id.clone());
+                                            cx.notify();
+
+                                            // Double-click: copy and paste
+                                            if let gpui::ClickEvent::Mouse(mouse_event) = event {
+                                                if mouse_event.down.click_count == 2 {
+                                                    logging::log(
+                                                        "UI",
+                                                        &format!(
+                                                            "Double-click paste clipboard entry {}",
+                                                            entry_id
+                                                        ),
+                                                    );
+                                                    if clipboard_history::copy_entry_to_clipboard(
+                                                        &entry_id,
+                                                    )
+                                                    .is_ok()
+                                                    {
+                                                        script_kit_gpui::set_main_window_visible(
+                                                            false,
+                                                        );
+                                                        platform::hide_main_window();
+                                                        NEEDS_RESET
+                                                            .store(true, Ordering::SeqCst);
+                                                        std::thread::spawn(|| {
+                                                            std::thread::sleep(
+                                                                std::time::Duration::from_millis(
+                                                                    100,
+                                                                ),
+                                                            );
+                                                            let _ = selected_text::simulate_paste_with_cg();
+                                                        });
+                                                    }
+                                                }
+                                            }
+                                        });
+                                    }
+                                };
+
+                                div()
+                                    .id(ix)
+                                    .cursor_pointer()
+                                    .on_click(click_handler)
+                                    .child(item)
                             } else {
                                 div().id(ix).h(px(LIST_ITEM_HEIGHT))
                             }
@@ -1199,6 +1259,7 @@ impl ScriptListApp {
                 .map(|(i, a)| (*i, (*a).clone()))
                 .collect();
             let selected = selected_index;
+            let click_entity_handle = cx.entity().downgrade();
 
             uniform_list(
                 "app-launcher",
@@ -1223,13 +1284,60 @@ impl ScriptListApp {
                                     None => list_item::IconKind::Emoji("📱".to_string()),
                                 };
 
-                                div().id(ix).child(
-                                    ListItem::new(app.name.clone(), list_colors)
-                                        .icon_kind(icon)
-                                        .description_opt(description)
-                                        .selected(is_selected)
-                                        .with_accent_bar(true),
-                                )
+                                // Click handler: select on click, launch on double-click
+                                let click_entity = click_entity_handle.clone();
+                                let app_info = app.clone();
+                                let click_handler = move |event: &gpui::ClickEvent,
+                                                           _window: &mut Window,
+                                                           cx: &mut gpui::App| {
+                                    if let Some(app_entity) = click_entity.upgrade() {
+                                        let app_info = app_info.clone();
+                                        app_entity.update(cx, |this, cx| {
+                                            if let AppView::AppLauncherView {
+                                                selected_index, ..
+                                            } = &mut this.current_view
+                                            {
+                                                *selected_index = ix;
+                                            }
+                                            cx.notify();
+
+                                            // Double-click: launch app
+                                            if let gpui::ClickEvent::Mouse(mouse_event) = event {
+                                                if mouse_event.down.click_count == 2 {
+                                                    logging::log(
+                                                        "UI",
+                                                        &format!(
+                                                            "Double-click launching app: {}",
+                                                            app_info.name
+                                                        ),
+                                                    );
+                                                    if app_launcher::launch_application(&app_info)
+                                                        .is_ok()
+                                                    {
+                                                        script_kit_gpui::set_main_window_visible(
+                                                            false,
+                                                        );
+                                                        platform::hide_main_window();
+                                                        NEEDS_RESET
+                                                            .store(true, Ordering::SeqCst);
+                                                    }
+                                                }
+                                            }
+                                        });
+                                    }
+                                };
+
+                                div()
+                                    .id(ix)
+                                    .cursor_pointer()
+                                    .on_click(click_handler)
+                                    .child(
+                                        ListItem::new(app.name.clone(), list_colors)
+                                            .icon_kind(icon)
+                                            .description_opt(description)
+                                            .selected(is_selected)
+                                            .with_accent_bar(true),
+                                    )
                             } else {
                                 div().id(ix).h(px(LIST_ITEM_HEIGHT))
                             }
@@ -1534,6 +1642,7 @@ impl ScriptListApp {
                 .map(|(i, w)| (*i, (*w).clone()))
                 .collect();
             let selected = selected_index;
+            let click_entity_handle = cx.entity().downgrade();
 
             uniform_list(
                 "window-switcher",
@@ -1556,12 +1665,57 @@ impl ScriptListApp {
                                     window_info.bounds.y
                                 );
 
-                                div().id(ix).child(
-                                    ListItem::new(name, list_colors)
-                                        .description_opt(Some(description))
-                                        .selected(is_selected)
-                                        .with_accent_bar(true),
-                                )
+                                // Click handler: select on click, focus window on double-click
+                                let click_entity = click_entity_handle.clone();
+                                let win_id = window_info.id;
+                                let click_handler = move |event: &gpui::ClickEvent,
+                                                           _window: &mut Window,
+                                                           cx: &mut gpui::App| {
+                                    if let Some(app) = click_entity.upgrade() {
+                                        app.update(cx, |this, cx| {
+                                            if let AppView::WindowSwitcherView {
+                                                selected_index, ..
+                                            } = &mut this.current_view
+                                            {
+                                                *selected_index = ix;
+                                            }
+                                            cx.notify();
+
+                                            // Double-click: focus window
+                                            if let gpui::ClickEvent::Mouse(mouse_event) = event {
+                                                if mouse_event.down.click_count == 2 {
+                                                    logging::log(
+                                                        "UI",
+                                                        &format!(
+                                                            "Double-click focusing window {}",
+                                                            win_id
+                                                        ),
+                                                    );
+                                                    if window_control::focus_window(win_id).is_ok()
+                                                    {
+                                                        script_kit_gpui::set_main_window_visible(
+                                                            false,
+                                                        );
+                                                        platform::hide_main_window();
+                                                        NEEDS_RESET
+                                                            .store(true, Ordering::SeqCst);
+                                                    }
+                                                }
+                                            }
+                                        });
+                                    }
+                                };
+
+                                div()
+                                    .id(ix)
+                                    .cursor_pointer()
+                                    .on_click(click_handler)
+                                    .child(
+                                        ListItem::new(name, list_colors)
+                                            .description_opt(Some(description))
+                                            .selected(is_selected)
+                                            .with_accent_bar(true),
+                                    )
                             } else {
                                 div().id(ix).h(px(LIST_ITEM_HEIGHT))
                             }
@@ -3931,6 +4085,7 @@ impl ScriptListApp {
             .collect();
         let current_selected = selected_index;
         let is_loading = self.file_search_loading;
+        let click_entity_handle = cx.entity().downgrade();
 
         // Use uniform_list for virtualized scrolling
         // Skeleton loading: show placeholder rows while loading and no results yet
@@ -4011,6 +4166,41 @@ impl ScriptListApp {
                                 };
                                 let hover_bg = rgba((list_hover << 8) | hover_alpha);
 
+                                // Click handler: select on click, open file on double-click
+                                let click_entity = click_entity_handle.clone();
+                                let file_path = file.path.clone();
+                                let click_handler = move |event: &gpui::ClickEvent,
+                                                           _window: &mut Window,
+                                                           cx: &mut gpui::App| {
+                                    if let Some(app) = click_entity.upgrade() {
+                                        let file_path = file_path.clone();
+                                        app.update(cx, |this, cx| {
+                                            if let AppView::FileSearchView {
+                                                selected_index, ..
+                                            } = &mut this.current_view
+                                            {
+                                                *selected_index = ix;
+                                            }
+                                            cx.notify();
+
+                                            // Double-click: open file
+                                            if let gpui::ClickEvent::Mouse(mouse_event) = event {
+                                                if mouse_event.down.click_count == 2 {
+                                                    logging::log(
+                                                        "UI",
+                                                        &format!(
+                                                            "Double-click opening file: {}",
+                                                            file_path
+                                                        ),
+                                                    );
+                                                    let _ = file_search::open_file(&file_path);
+                                                    this.close_and_reset_window(cx);
+                                                }
+                                            }
+                                        });
+                                    }
+                                };
+
                                 div()
                                     .id(ix)
                                     .w_full()
@@ -4021,7 +4211,9 @@ impl ScriptListApp {
                                     .px(px(12.))
                                     .gap(px(12.))
                                     .bg(bg)
+                                    .cursor_pointer()
                                     .hover(move |s| s.bg(hover_bg))
+                                    .on_click(click_handler)
                                     .child(
                                         div()
                                             .text_lg()
