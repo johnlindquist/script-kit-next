@@ -393,12 +393,11 @@ impl ScriptListApp {
                     }
                 }
 
-                // ESC: Use go_back_or_close for consistent navigation behavior
-                // If opened from main menu → return to main menu
-                // If opened via hotkey/protocol → close window
+                // ESC: Clear filter first if present, otherwise go back/close
                 if key_str == "escape" && !this.show_actions_popup {
-                    logging::log("KEY", "ESC in ClipboardHistory");
-                    this.go_back_or_close(window, cx);
+                    if !this.clear_builtin_view_filter(cx) {
+                        this.go_back_or_close(window, cx);
+                    }
                     return;
                 }
 
@@ -1072,12 +1071,11 @@ impl ScriptListApp {
                 let key_str = event.keystroke.key.to_lowercase();
                 let has_cmd = event.keystroke.modifiers.platform;
 
-                // ESC: Use go_back_or_close for consistent navigation behavior
-                // If opened from main menu → return to main menu
-                // If opened via hotkey/protocol → close window
+                // ESC: Clear filter first if present, otherwise go back/close
                 if key_str == "escape" && !this.show_actions_popup {
-                    logging::log("KEY", "ESC in AppLauncher");
-                    this.go_back_or_close(window, cx);
+                    if !this.clear_builtin_view_filter(cx) {
+                        this.go_back_or_close(window, cx);
+                    }
                     return;
                 }
 
@@ -1405,12 +1403,11 @@ impl ScriptListApp {
                 let key_str = event.keystroke.key.to_lowercase();
                 let has_cmd = event.keystroke.modifiers.platform;
 
-                // ESC: Use go_back_or_close for consistent navigation behavior
-                // If opened from main menu → return to main menu
-                // If opened via hotkey/protocol → close window
+                // ESC: Clear filter first if present, otherwise go back/close
                 if key_str == "escape" && !this.show_actions_popup {
-                    logging::log("KEY", "ESC in WindowSwitcher");
-                    this.go_back_or_close(window, cx);
+                    if !this.clear_builtin_view_filter(cx) {
+                        this.go_back_or_close(window, cx);
+                    }
                     return;
                 }
 
@@ -1958,12 +1955,11 @@ impl ScriptListApp {
                 let key_str = event.keystroke.key.to_lowercase();
                 let has_cmd = event.keystroke.modifiers.platform;
 
-                // ESC: Use go_back_or_close for consistent navigation behavior
-                // If opened from main menu → return to main menu
-                // If opened via hotkey/protocol → close window
+                // ESC: Clear filter first if present, otherwise go back/close
                 if key_str == "escape" && !this.show_actions_popup {
-                    logging::log("KEY", "ESC in DesignGallery");
-                    this.go_back_or_close(window, cx);
+                    if !this.clear_builtin_view_filter(cx) {
+                        this.go_back_or_close(window, cx);
+                    }
                     return;
                 }
 
@@ -2504,13 +2500,16 @@ impl ScriptListApp {
                 let key_str = event.keystroke.key.to_lowercase();
                 let has_cmd = event.keystroke.modifiers.platform;
 
-                // Escape: restore original and close
+                // Escape: clear filter first if present, otherwise restore original and close
                 if key_str == "escape" {
-                    if let Some(original) = this.theme_before_chooser.take() {
-                        this.theme = original;
-                        theme::sync_gpui_component_theme(cx);
+                    if !this.clear_builtin_view_filter(cx) {
+                        // No filter to clear — restore original theme and go back
+                        if let Some(original) = this.theme_before_chooser.take() {
+                            this.theme = original;
+                            theme::sync_gpui_component_theme(cx);
+                        }
+                        this.go_back_or_close(window, cx);
                     }
-                    this.go_back_or_close(window, cx);
                     return;
                 }
                 // Cmd+W: restore and close window
@@ -3833,17 +3832,11 @@ impl ScriptListApp {
                     }
                 }
 
-                // ESC: Use go_back_or_close for consistent navigation behavior
-                // If opened from main menu → return to main menu
-                // If opened via hotkey/protocol → close window
+                // ESC: Clear query first if present, otherwise go back/close
                 if key_str == "escape" {
-                    logging::log("KEY", "ESC in FileSearch");
-                    // Cancel any pending search and clear cached results
-                    this.file_search_debounce_task = None;
-                    this.file_search_loading = false;
-                    this.cached_file_results.clear();
-                    // Use consistent navigation: go back or close based on how view was opened
-                    this.go_back_or_close(window, cx);
+                    if !this.clear_builtin_view_filter(cx) {
+                        this.go_back_or_close(window, cx);
+                    }
                     return;
                 }
 
