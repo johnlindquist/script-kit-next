@@ -109,11 +109,11 @@ const TOOL_BADGE_PADDING_Y: f32 = 1.0;
 /// Tool badge corner radius
 const TOOL_BADGE_RADIUS: f32 = 3.0;
 /// Type tag pill horizontal padding
-const TYPE_TAG_PADDING_X: f32 = 5.0;
+const TYPE_TAG_PADDING_X: f32 = 8.0;
 /// Type tag pill vertical padding
-const TYPE_TAG_PADDING_Y: f32 = 1.0;
+const TYPE_TAG_PADDING_Y: f32 = 2.0;
 /// Type tag pill corner radius
-const TYPE_TAG_RADIUS: f32 = 3.0;
+const TYPE_TAG_RADIUS: f32 = 4.0;
 
 // =============================================================================
 // Section Header Spacing
@@ -151,7 +151,12 @@ const ALPHA_BORDER: u32 = 0x4D;
 /// 18% opacity — used for section separator border
 /// (Bumped from 15% for clearer visual grouping between sections)
 const ALPHA_SEPARATOR_STRONG: u32 = 0x2E;
-/// 12% opacity — used for item separator, type tag bg
+/// 20% opacity — used for type tag pill background
+/// (Higher than separator for visible badge fill on vibrancy)
+const ALPHA_TAG_BG: u32 = 0x33;
+/// 35% opacity — used for type tag pill border
+const ALPHA_TAG_BORDER: u32 = 0x59;
+/// 12% opacity — used for item separator
 /// (Bumped from 10% for better list scanability)
 const ALPHA_SEPARATOR: u32 = 0x1F;
 /// 7% opacity — used for tool badge background
@@ -216,8 +221,8 @@ pub(crate) const TAB_BADGE_RADIUS: f32 = 4.0;
 pub(crate) const ALPHA_HOVER_ACCENT: u32 = 0x26;
 /// 30% opacity — Tab badge background tint
 pub(crate) const ALPHA_TAB_BADGE_BG: u32 = 0x4D;
-/// 65% opacity — library size count hint (readable but unobtrusive)
-pub(crate) const ALPHA_COUNT_HINT: u32 = 0xA6;
+/// 80% opacity — library size count hint (boosted for vibrancy readability)
+pub(crate) const ALPHA_COUNT_HINT: u32 = 0xCC;
 
 // =============================================================================
 // Divider & Scroll Constants
@@ -232,8 +237,8 @@ pub(crate) const LOG_PANEL_MAX_HEIGHT: f32 = 120.0;
 /// 50% opacity — divider line between header and list (visible separation)
 pub(crate) const ALPHA_DIVIDER: u32 = 0x80;
 /// Estimated visible list container height for scrollbar calculations
-/// Window is 500px, header is ~60px → ~440px for list area
-pub(crate) const ESTIMATED_LIST_CONTAINER_HEIGHT: f32 = 440.0;
+/// Window is 500px, header is ~60px, footer is ~34px → ~406px for list area
+pub(crate) const ESTIMATED_LIST_CONTAINER_HEIGHT: f32 = 436.0;
 /// Average item height for scroll-wheel delta-to-index conversion
 /// Weighted: most items are 40px (LIST_ITEM_HEIGHT), headers are 32px (SECTION_HEADER_HEIGHT)
 pub(crate) const AVERAGE_ITEM_HEIGHT_FOR_SCROLL: f32 = 44.0;
@@ -1167,16 +1172,19 @@ impl RenderOnce for ListItem {
 
                 // Type tag pill (shown during search to distinguish result types)
                 if let Some(ref tag) = self.type_tag {
-                    let tag_bg = (tag.color << 8) | ALPHA_SEPARATOR; // 10% opacity background
+                    let tag_bg = (tag.color << 8) | ALPHA_TAG_BG;
+                    let tag_border = (tag.color << 8) | ALPHA_TAG_BORDER;
                     accessories = accessories.child(
                         div()
                             .text_size(px(TYPE_TAG_FONT_SIZE))
-                            .font_weight(FontWeight::MEDIUM)
+                            .font_weight(FontWeight::SEMIBOLD)
                             .text_color(rgb(tag.color))
                             .px(px(TYPE_TAG_PADDING_X))
                             .py(px(TYPE_TAG_PADDING_Y))
                             .rounded(px(TYPE_TAG_RADIUS))
                             .bg(rgba(tag_bg))
+                            .border_1()
+                            .border_color(rgba(tag_border))
                             .child(tag.label),
                     );
                 }

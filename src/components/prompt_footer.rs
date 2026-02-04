@@ -307,11 +307,11 @@ impl RenderOnce for PromptFooter {
         // Light mode: neutral warm gray for clean separation from content
         // Dark mode: semi-transparent for vibrancy support
         let footer_bg = if colors.is_light_mode {
-            0xf0eeefu32.to_rgb() // Neutral warm gray (no pink tint) for light mode
+            0xf2f1f1u32.to_rgb() // Light neutral gray — clean separation from content
         } else {
-            colors.background.rgba8(0x1f) // ~12% opacity in dark mode
+            colors.background.rgba8(0x33) // ~20% opacity in dark mode (boosted from 12%)
         };
-        let border_opacity = if colors.is_light_mode { 0x50 } else { 0x30 };
+        let border_opacity: u8 = 0x50; // ~31% — visible border on both light and dark
 
         let mut footer = div()
             .w_full()
@@ -333,9 +333,9 @@ impl RenderOnce for PromptFooter {
             // Inner shadow above the footer for visual separation from content
             // Footers are the ONE scenario where blocking vibrancy is OK
             .shadow(vec![BoxShadow {
-                color: hsla(0., 0., 0., 0.08), // Black at 8% opacity - subtle but defined
+                color: hsla(0., 0., 0., 0.12), // Black at 12% opacity - visible grounding
                 offset: point(px(0.), px(-1.)), // Negative Y = shadow above element
-                blur_radius: px(6.),           // Wider blur for softer edge
+                blur_radius: px(8.),           // Wider blur for softer edge
                 spread_radius: px(0.),
             }]);
 
