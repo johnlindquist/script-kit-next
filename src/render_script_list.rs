@@ -181,6 +181,14 @@ impl ScriptListApp {
                             .text_color(rgba((empty_text_color << 8) | 0x35))
                             .child("Try a different search term or press Tab to ask AI"),
                     )
+                    // Search tips: help users discover advanced search features
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgba((empty_text_color << 8) | 0x25))
+                            .pt(px(8.))
+                            .child("Search by: tags, author, shortcuts, kit names, or properties (cron, bg, watch)"),
+                    )
                     .into_any_element()
             }
         } else {
