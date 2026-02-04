@@ -238,7 +238,7 @@ impl RenderOnce for PromptContainer {
             .bg(rgba(bg_with_opacity))
             .rounded(px(config.rounded_corners))
             .text_color(rgb(colors.text_primary))
-            .font_family(".AppleSystemUIFont");
+            .font_family(crate::list_item::FONT_SYSTEM_UI);
 
         // Add header if present
         if let Some(header) = self.header {

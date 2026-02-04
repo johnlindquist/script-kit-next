@@ -477,7 +477,7 @@ impl ScriptListApp {
                 .border_t_1()
                 .border_color(rgb(log_panel_border))
                 .p(px(design_spacing.padding_md))
-                .max_h(px(120.))
+                .max_h(px(LOG_PANEL_MAX_HEIGHT))
                 .font_family(FONT_MONO);
 
             for log_line in logs.iter().rev() {
@@ -1134,7 +1134,7 @@ impl ScriptListApp {
                 };
                 let border_color = color_resolver.border;
                 let border_width = if is_default_design {
-                    1.0
+                    DIVIDER_BORDER_WIDTH_DEFAULT
                 } else {
                     design_visual.border_thin
                 };

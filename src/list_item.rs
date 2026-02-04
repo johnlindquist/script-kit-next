@@ -136,24 +136,33 @@ const SECTION_GAP: f32 = 6.0;
 const ALPHA_STRONG: u32 = 0xD9;
 /// 80% opacity — used for shortcut badge text and position indicator
 pub(crate) const ALPHA_READABLE: u32 = 0xCC;
-/// 70% opacity — used for description highlight base text, header icon, tool badge text
-const ALPHA_MUTED: u32 = 0xB3;
-/// 65% opacity — used for source hint text
-const ALPHA_HINT: u32 = 0xA6;
-/// 60% opacity — used for section header count
-const ALPHA_SUBTLE: u32 = 0x99;
-/// 25% opacity — used for shortcut badge border
-const ALPHA_BORDER: u32 = 0x40;
-/// 15% opacity — used for section separator border
-const ALPHA_SEPARATOR_STRONG: u32 = 0x26;
-/// 10% opacity — used for item separator, type tag bg
-const ALPHA_SEPARATOR: u32 = 0x1A;
-/// 6% opacity — used for tool badge background
-const ALPHA_TINT_MEDIUM: u32 = 0x0F;
-/// 5% opacity — used for shortcut badge background
-const ALPHA_TINT_LIGHT: u32 = 0x0D;
-/// 4% opacity — used for section header background tint
-const ALPHA_TINT_FAINT: u32 = 0x0A;
+/// 75% opacity — used for description highlight base text, header icon, tool badge text
+/// (Bumped from 70% for better legibility on vibrancy backgrounds)
+const ALPHA_MUTED: u32 = 0xBF;
+/// 70% opacity — used for source hint text
+/// (Bumped from 65% for WCAG-friendlier contrast on vibrancy)
+const ALPHA_HINT: u32 = 0xB3;
+/// 65% opacity — used for section header count
+/// (Bumped from 60% for better readability of numeric info)
+const ALPHA_SUBTLE: u32 = 0xA6;
+/// 30% opacity — used for shortcut badge border
+/// (Bumped from 25% so kbd borders pass ≥3:1 non-text contrast on vibrancy)
+const ALPHA_BORDER: u32 = 0x4D;
+/// 18% opacity — used for section separator border
+/// (Bumped from 15% for clearer visual grouping between sections)
+const ALPHA_SEPARATOR_STRONG: u32 = 0x2E;
+/// 12% opacity — used for item separator, type tag bg
+/// (Bumped from 10% for better list scanability)
+const ALPHA_SEPARATOR: u32 = 0x1F;
+/// 7% opacity — used for tool badge background
+/// (Bumped from 6% for slightly more visible badge pills)
+const ALPHA_TINT_MEDIUM: u32 = 0x12;
+/// 6% opacity — used for shortcut badge background
+/// (Bumped from 5% for subtle but visible kbd backgrounds)
+const ALPHA_TINT_LIGHT: u32 = 0x0F;
+/// 5% opacity — used for section header background tint
+/// (Bumped from 4% for more visible section grouping)
+const ALPHA_TINT_FAINT: u32 = 0x0D;
 
 // =============================================================================
 // Empty State Constants
@@ -171,14 +180,18 @@ pub(crate) const EMPTY_STATE_TIPS_MARGIN_TOP: f32 = 8.0;
 // Empty state opacity tokens — deliberately lower than list content
 // to keep the empty state understated while still legible
 
-/// 22% opacity — empty state icon tint (very muted)
-pub(crate) const ALPHA_EMPTY_ICON: u32 = 0x38;
-/// 38% opacity — empty state primary message text (improved from 31% for readability)
-pub(crate) const ALPHA_EMPTY_MESSAGE: u32 = 0x60;
-/// 27% opacity — empty state secondary hint text (improved from 21% for legibility)
-pub(crate) const ALPHA_EMPTY_HINT: u32 = 0x45;
-/// 17% opacity — empty state filter tips text (barely visible)
-pub(crate) const ALPHA_EMPTY_TIPS: u32 = 0x2B;
+/// 28% opacity — empty state icon tint
+/// (Bumped from 22% for better visibility; still understated vs list content)
+pub(crate) const ALPHA_EMPTY_ICON: u32 = 0x47;
+/// 45% opacity — empty state primary message text
+/// (Bumped from 38% to meet minimum readable contrast on vibrancy)
+pub(crate) const ALPHA_EMPTY_MESSAGE: u32 = 0x73;
+/// 33% opacity — empty state secondary hint text
+/// (Bumped from 27% for improved legibility of help text)
+pub(crate) const ALPHA_EMPTY_HINT: u32 = 0x54;
+/// 22% opacity — empty state filter tips text
+/// (Bumped from 17% — was barely visible; now subtly legible)
+pub(crate) const ALPHA_EMPTY_TIPS: u32 = 0x38;
 
 // =============================================================================
 // Header Area Constants (Ask AI button, Tab badge, indicators)
@@ -212,6 +225,10 @@ pub(crate) const ALPHA_COUNT_HINT: u32 = 0xA6;
 
 /// Default horizontal margin for the header/list divider
 pub(crate) const DIVIDER_MARGIN_DEFAULT: f32 = 16.0;
+/// Default border width for the header/list divider (1px hairline)
+pub(crate) const DIVIDER_BORDER_WIDTH_DEFAULT: f32 = 1.0;
+/// Maximum height for the log panel area
+pub(crate) const LOG_PANEL_MAX_HEIGHT: f32 = 120.0;
 /// 50% opacity — divider line between header and list (visible separation)
 pub(crate) const ALPHA_DIVIDER: u32 = 0x80;
 /// Estimated visible list container height for scrollbar calculations
