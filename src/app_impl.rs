@@ -278,6 +278,7 @@ impl ScriptListApp {
             gpui_input_focused: false,
             gpui_input_subscriptions: vec![gpui_input_subscription],
             bounds_subscription: None, // Set later after window setup
+            appearance_subscription: None, // Set later after window setup
             suppress_filter_events: false,
             pending_filter_sync: false,
             pending_placeholder: None,
@@ -1581,6 +1582,11 @@ impl ScriptListApp {
         let Some(target) = self.pending_focus.take() else {
             return false;
         };
+
+        // Also consume the coordinator's pending request to keep current_cursor_owner
+        // in sync. This is critical for push_overlay/pop_overlay's infer_current_request()
+        // to know what was focused before the overlay opened.
+        self.focus_coordinator.take_pending();
 
         logging::log("FOCUS", &format!("Applying pending focus: {:?}", target));
 
@@ -3782,7 +3788,10 @@ impl ScriptListApp {
 
             // Use coordinator to pop overlay and restore previous focus
             self.pop_focus_overlay(cx);
-            window.focus(&self.focus_handle, cx);
+            // Apply restored focus immediately rather than deferring to next render
+            if !self.apply_pending_focus(window, cx) {
+                window.focus(&self.focus_handle, cx);
+            }
             logging::log(
                 "FOCUS",
                 "Chat actions closed, focus restored via coordinator",
@@ -4166,8 +4175,13 @@ impl ScriptListApp {
         // to manually switch on host type anymore.
         self.pop_focus_overlay(cx);
 
-        // Also directly focus the app root for immediate feedback
-        window.focus(&self.focus_handle, cx);
+        // Apply restored focus immediately rather than deferring to next render.
+        // pop_focus_overlay sets pending_focus to the saved target (e.g. ChatPrompt).
+        // Applying it now avoids race conditions with the async window close.
+        if !self.apply_pending_focus(window, cx) {
+            // Fallback: focus app root if no pending focus was applied
+            window.focus(&self.focus_handle, cx);
+        }
         logging::log(
             "FOCUS",
             &format!(
@@ -4175,7 +4189,6 @@ impl ScriptListApp {
                 host
             ),
         );
-        // cx.notify() already called by pop_focus_overlay
     }
 
     /// Edit a script in configured editor (config.editor > $EDITOR > "code")

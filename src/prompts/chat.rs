@@ -1330,7 +1330,11 @@ impl ChatPrompt {
                             if is_done && chat.builtin_reveal_offset >= full_text.len() {
                                 logging::log(
                                     "CHAT",
-                                    &format!("Built-in AI complete: {} chars", full_text.len()),
+                                    &format!(
+                                        "Built-in AI complete: {} chars\n--- FINAL CONTENT ---\n{}\n--- END ---",
+                                        full_text.len(),
+                                        full_text
+                                    ),
                                 );
                                 chat.builtin_is_streaming = false;
                                 chat.streaming_message_id = None;

@@ -1225,8 +1225,9 @@ pub fn log_swizzle_diagnostics() {
 ///
 /// # macOS Behavior
 ///
-/// Sets the window's NSAppearance based on the is_dark parameter, then configures the
-/// NSVisualEffectView with appropriate material and state.
+/// Clears the window's NSAppearance (sets to nil) so GPUI can detect system appearance
+/// changes, then sets the appearance on each NSVisualEffectView individually along with
+/// appropriate material and state.
 ///
 /// # Safety
 ///
@@ -1237,8 +1238,8 @@ pub fn configure_window_vibrancy_material_for_appearance(is_dark: bool) {
         return;
     }
     // SAFETY: Main thread verified. Window from WindowManager is valid.
-    // NSAppearance and NSVisualEffectView methods are standard AppKit APIs.
-    // Nil checks on appearance object before use.
+    // NSAppearance set to nil on window, set on views instead.
+    // NSVisualEffectView methods are standard AppKit APIs.
     unsafe {
         let window = match window_manager::get_main_window() {
             Some(w) => w,
@@ -1251,34 +1252,17 @@ pub fn configure_window_vibrancy_material_for_appearance(is_dark: bool) {
             }
         };
 
-        // Set window appearance based on mode:
-        // - VibrantDark for dark mode (what Raycast/Spotlight use)
-        // - VibrantLight for light mode
-        let appearance: id = if is_dark {
-            msg_send![
-                class!(NSAppearance),
-                appearanceNamed: NSAppearanceNameVibrantDark
-            ]
-        } else {
-            msg_send![
-                class!(NSAppearance),
-                appearanceNamed: NSAppearanceNameVibrantLight
-            ]
-        };
-        if !appearance.is_null() {
-            let _: () = msg_send![window, setAppearance: appearance];
-            logging::log(
-                "PANEL",
-                &format!(
-                    "Set window appearance to {}",
-                    if is_dark {
-                        "VibrantDark"
-                    } else {
-                        "VibrantLight"
-                    }
-                ),
-            );
-        }
+        // Clear window appearance so GPUI can detect system appearance changes.
+        // The appearance is set on individual NSVisualEffectViews instead (see
+        // configure_visual_effect_views_recursive).
+        let _: () = msg_send![window, setAppearance: nil];
+        logging::log(
+            "PANEL",
+            &format!(
+                "Cleared window appearance (nil) for {} mode; appearance set on views instead",
+                if is_dark { "dark" } else { "light" }
+            ),
+        );
 
         // ╔════════════════════════════════════════════════════════════════════════════╗
         // ║ WINDOW BACKGROUND COLOR - DO NOT CHANGE WITHOUT TESTING                   ║
@@ -1350,8 +1334,8 @@ pub fn configure_window_vibrancy_material_for_appearance(_is_dark: bool) {
 ///
 /// # macOS Behavior
 ///
-/// Sets the window's NSAppearance to VibrantDark, then configures the
-/// NSVisualEffectView with appropriate material and state.
+/// Clears the window's NSAppearance and sets VibrantDark on each NSVisualEffectView,
+/// then configures appropriate material and state.
 ///
 /// # Safety
 ///
@@ -1385,6 +1369,23 @@ unsafe fn configure_visual_effect_views_recursive(view: id, count: &mut usize, i
         let old_state: isize = msg_send![view, state];
         let old_blending: isize = msg_send![view, blendingMode];
         let old_emphasized: bool = msg_send![view, isEmphasized];
+
+        // Set appearance on the NSVisualEffectView (NOT on the window) so that
+        // GPUI can still detect system appearance changes via the window.
+        let view_appearance: id = if is_dark {
+            msg_send![
+                class!(NSAppearance),
+                appearanceNamed: NSAppearanceNameVibrantDark
+            ]
+        } else {
+            msg_send![
+                class!(NSAppearance),
+                appearanceNamed: NSAppearanceNameVibrantLight
+            ]
+        };
+        if !view_appearance.is_null() {
+            let _: () = msg_send![view, setAppearance: view_appearance];
+        }
 
         // ╔════════════════════════════════════════════════════════════════════════════╗
         // ║ NSVISUALEFFECTVIEW SETTINGS - DO NOT CHANGE WITHOUT TESTING               ║
@@ -1785,7 +1786,7 @@ pub fn cycle_appearance() -> String {
 /// - hasShadow = true - shadow for depth perception
 /// - Disabled restoration - no position caching
 /// - animationBehavior = NSWindowAnimationBehaviorNone - no animation on close
-/// - Appearance-aware vibrancy (VibrantDark/VibrantLight) + POPOVER material for frosted glass effect
+/// - Appearance-aware vibrancy (VibrantDark/VibrantLight on views, window appearance nil) + POPOVER material for frosted glass effect
 ///
 /// # Arguments
 /// * `window` - The NSWindow pointer to configure
@@ -1839,24 +1840,16 @@ pub unsafe fn configure_actions_popup_window(window: id, is_dark: bool) {
     // VIBRANCY CONFIGURATION - Match main window settings for consistent blur
     // ═══════════════════════════════════════════════════════════════════════════
 
-    // Set window appearance based on system appearance for consistent blur rendering
-    let appearance: id = if is_dark {
-        msg_send![class!(NSAppearance), appearanceNamed: NSAppearanceNameVibrantDark]
-    } else {
-        msg_send![class!(NSAppearance), appearanceNamed: NSAppearanceNameVibrantLight]
-    };
-    if !appearance.is_null() {
-        let _: () = msg_send![window, setAppearance: appearance];
-        let appearance_name = if is_dark {
-            "VibrantDark"
-        } else {
-            "VibrantLight"
-        };
-        logging::log(
-            "ACTIONS",
-            &format!("Actions popup: Set appearance to {}", appearance_name),
-        );
-    }
+    // Clear window appearance so GPUI can detect system appearance changes.
+    // Appearance is set on individual NSVisualEffectViews instead.
+    let _: () = msg_send![window, setAppearance: nil];
+    logging::log(
+        "ACTIONS",
+        &format!(
+            "Actions popup: Cleared window appearance (nil) for {} mode; appearance set on views",
+            if is_dark { "dark" } else { "light" }
+        ),
+    );
 
     // Use windowBackgroundColor for semi-opaque background (reduces excessive transparency)
     // This matches the main window pattern and provides the native ~1px border
@@ -1943,29 +1936,17 @@ pub unsafe fn configure_secondary_window_vibrancy(window: id, window_name: &str,
     // VIBRANCY CONFIGURATION - Match main window settings for consistent blur
     // ═══════════════════════════════════════════════════════════════════════════
 
-    // Set window appearance based on system appearance for consistent blur rendering
-    // VibrantDark/VibrantLight provide better vibrancy effects than DarkAqua/Aqua
-    // This is what Raycast/Spotlight use for their blur effect
-    let appearance: id = if is_dark {
-        msg_send![class!(NSAppearance), appearanceNamed: NSAppearanceNameVibrantDark]
-    } else {
-        msg_send![class!(NSAppearance), appearanceNamed: NSAppearanceNameVibrantLight]
-    };
-    if !appearance.is_null() {
-        let _: () = msg_send![window, setAppearance: appearance];
-        let appearance_name = if is_dark {
-            "VibrantDark"
-        } else {
-            "VibrantLight"
-        };
-        logging::log(
-            "PANEL",
-            &format!(
-                "{} window: Set appearance to {}",
-                window_name, appearance_name
-            ),
-        );
-    }
+    // Clear window appearance so GPUI can detect system appearance changes.
+    // Appearance is set on individual NSVisualEffectViews instead.
+    let _: () = msg_send![window, setAppearance: nil];
+    logging::log(
+        "PANEL",
+        &format!(
+            "{} window: Cleared window appearance (nil) for {} mode; appearance set on views",
+            window_name,
+            if is_dark { "dark" } else { "light" }
+        ),
+    );
 
     // Use windowBackgroundColor for semi-opaque background (reduces excessive transparency)
     // This matches the main window pattern and provides the native ~1px border
@@ -2042,7 +2023,7 @@ pub fn update_all_secondary_windows_appearance(is_dark: bool) {
     // SAFETY: NSApplication.sharedApplication is always valid after app launch.
     // We iterate windows with count-bounded indices. Each window, title, and
     // UTF8String pointer is checked for nil/null before use.
-    // NSAppearance pointer is checked before setAppearance:.
+    // Window appearance set to nil; appearance applied to NSVisualEffectViews instead.
     unsafe {
         let app: id = msg_send![class!(NSApplication), sharedApplication];
         let windows: id = msg_send![app, windows];
@@ -2082,30 +2063,22 @@ pub fn update_all_secondary_windows_appearance(is_dark: bool) {
                 || title_string.contains("Script Kit Notes")
                 || title_string.contains("Actions")
             {
-                // Set appearance based on is_dark
-                let appearance_name = if is_dark {
-                    NSAppearanceNameVibrantDark
-                } else {
-                    NSAppearanceNameVibrantLight
-                };
+                // Clear window appearance so GPUI can detect system appearance changes.
+                // Set appearance on individual NSVisualEffectViews instead.
+                let _: () = msg_send![window, setAppearance: nil];
 
-                let appearance: id = msg_send![
-                    class!(NSAppearance),
-                    appearanceNamed: appearance_name
-                ];
-
-                if appearance != nil {
-                    let _: () = msg_send![window, setAppearance: appearance];
+                // Walk view hierarchy and set appearance + material on each NSVisualEffectView
+                let content_view: id = msg_send![window, contentView];
+                if content_view != nil {
+                    let mut vev_count = 0;
+                    configure_visual_effect_views_recursive(content_view, &mut vev_count, is_dark);
                     logging::log(
                         "APPEARANCE",
                         &format!(
-                            "Updated window '{}' to {}",
+                            "Updated window '{}': cleared window appearance, configured {} NSVisualEffectView(s) for {}",
                             title_string,
-                            if is_dark {
-                                "VibrantDark"
-                            } else {
-                                "VibrantLight"
-                            }
+                            vev_count,
+                            if is_dark { "dark" } else { "light" }
                         ),
                     );
                 }

@@ -15,6 +15,8 @@ struct InlineStyle {
     italic: bool,
     code: bool,
     link: bool,
+    /// List bullet/number marker — rendered in tertiary color.
+    marker: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -312,6 +314,9 @@ fn style_span(span: &InlineSpan, colors: &PromptColors) -> gpui::Div {
         .min_w_0()
         .text_color(rgb(colors.text_primary))
         .child(text.clone());
+    if style.marker {
+        piece = piece.flex_shrink_0().text_color(rgb(colors.text_tertiary));
+    }
     if style.bold {
         piece = piece.font_weight(FontWeight::BOLD);
     }
@@ -342,23 +347,26 @@ fn render_list(list: ListState, colors: &PromptColors) -> gpui::Div {
         } else {
             "•".to_string()
         };
-        // Two-column layout: marker + text. Uses flex_grow() (not flex_1()) so that
-        // flex-basis remains auto. flex_1() sets flex-basis:0 which causes taffy to
-        // measure inner flex_wrap content at width 0, stacking characters vertically.
+        let item_text: String = item.iter().map(|s| s.text.as_str()).collect();
         container = container.child(
             div()
                 .flex()
                 .flex_row()
                 .w_full()
                 .gap(px(6.0))
+                .text_sm()
                 .child(
                     div()
                         .flex_shrink_0()
-                        .text_sm()
                         .text_color(rgb(colors.text_tertiary))
                         .child(marker),
                 )
-                .child(render_inline_spans(item, colors).flex_grow().min_w_0()),
+                .child(
+                    div()
+                        .min_w_0()
+                        .text_color(rgb(colors.text_primary))
+                        .child(item_text),
+                ),
         );
     }
     container

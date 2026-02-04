@@ -351,7 +351,7 @@ impl RenderOnce for PromptFooter {
         if let Some(ref helper) = self.config.helper_text {
             left_side = left_side.child(
                 div()
-                    .text_xs()
+                    .text_sm()
                     .text_color(colors.accent.to_rgb())
                     .child(helper.clone()),
             );
