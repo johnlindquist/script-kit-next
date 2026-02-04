@@ -43,7 +43,16 @@ struct InlineSpan {
 struct ListState {
     ordered: bool,
     start: usize,
-    items: Vec<Vec<InlineSpan>>,
+    items: Vec<ListItem>,
+}
+
+/// Table parsing state
+#[derive(Debug)]
+struct TableState {
+    headers: Vec<Vec<InlineSpan>>,
+    rows: Vec<Vec<Vec<InlineSpan>>>,
+    current_row: Vec<Vec<InlineSpan>>,
+    in_head: bool,
 }
 
 #[derive(Debug)]
@@ -55,6 +64,14 @@ struct CodeBlockState {
 // ---------------------------------------------------------------------------
 // Cached intermediate representation
 // ---------------------------------------------------------------------------
+
+/// A single list item with inline spans and optional task-list checkbox state.
+#[derive(Clone, Debug)]
+struct ListItem {
+    spans: Vec<InlineSpan>,
+    /// `Some(true)` = checked `[x]`, `Some(false)` = unchecked `[ ]`, `None` = regular item
+    checked: Option<bool>,
+}
 
 /// Cached intermediate representation of a parsed markdown block.
 /// Stored in a global cache to avoid re-parsing on every render frame.
@@ -72,7 +89,7 @@ enum ParsedBlock {
     ListBlock {
         ordered: bool,
         start: usize,
-        items: Vec<Vec<InlineSpan>>,
+        items: Vec<ListItem>,
         quote_depth: usize,
     },
     CodeBlock {
@@ -80,6 +97,11 @@ enum ParsedBlock {
         lines: Vec<CodeLine>,
         /// Raw code text for copy-to-clipboard functionality
         raw_code: String,
+        quote_depth: usize,
+    },
+    Table {
+        headers: Vec<Vec<InlineSpan>>,
+        rows: Vec<Vec<Vec<InlineSpan>>>,
         quote_depth: usize,
     },
     HorizontalRule {
@@ -116,9 +138,12 @@ fn parse_markdown(text: &str, is_dark: bool) -> Vec<ParsedBlock> {
     let mut heading_level: Option<u32> = None;
     let mut list_state: Option<ListState> = None;
     let mut current_item: Option<Vec<InlineSpan>> = None;
+    let mut current_item_checked: Option<bool> = None;
     let mut quote_depth: usize = 0;
     let mut code_block: Option<CodeBlockState> = None;
     let mut current_link_url: Option<String> = None;
+    let mut table_state: Option<TableState> = None;
+    let mut in_table_cell: bool = false;
 
     for event in parser {
         match event {
@@ -137,6 +162,7 @@ fn parse_markdown(text: &str, is_dark: bool) -> Vec<ParsedBlock> {
                 }
                 Tag::Item => {
                     current_item = Some(Vec::new());
+                    current_item_checked = None;
                     spans.clear();
                 }
                 Tag::BlockQuote(_) => {
@@ -156,6 +182,29 @@ fn parse_markdown(text: &str, is_dark: bool) -> Vec<ParsedBlock> {
                         language: code_block_language(&kind),
                         code: String::new(),
                     });
+                }
+                Tag::Table(_alignments) => {
+                    table_state = Some(TableState {
+                        headers: Vec::new(),
+                        rows: Vec::new(),
+                        current_row: Vec::new(),
+                        in_head: false,
+                    });
+                }
+                Tag::TableHead => {
+                    if let Some(ts) = table_state.as_mut() {
+                        ts.in_head = true;
+                        ts.current_row.clear();
+                    }
+                }
+                Tag::TableRow => {
+                    if let Some(ts) = table_state.as_mut() {
+                        ts.current_row.clear();
+                    }
+                }
+                Tag::TableCell => {
+                    in_table_cell = true;
+                    spans.clear();
                 }
                 _ => {}
             },
@@ -190,9 +239,13 @@ fn parse_markdown(text: &str, is_dark: bool) -> Vec<ParsedBlock> {
                             item_spans.append(&mut spans);
                         }
                         if let Some(list) = list_state.as_mut() {
-                            list.items.push(item_spans);
+                            list.items.push(ListItem {
+                                spans: item_spans,
+                                checked: current_item_checked.take(),
+                            });
                         }
                     }
+                    current_item_checked = None;
                 }
                 TagEnd::List(_) => {
                     if let Some(list) = list_state.take() {
@@ -228,6 +281,37 @@ fn parse_markdown(text: &str, is_dark: bool) -> Vec<ParsedBlock> {
                         });
                     }
                 }
+                TagEnd::Table => {
+                    if let Some(ts) = table_state.take() {
+                        blocks.push(ParsedBlock::Table {
+                            headers: ts.headers,
+                            rows: ts.rows,
+                            quote_depth,
+                        });
+                    }
+                }
+                TagEnd::TableHead => {
+                    if let Some(ts) = table_state.as_mut() {
+                        ts.headers = ts.current_row.clone();
+                        ts.current_row.clear();
+                        ts.in_head = false;
+                    }
+                }
+                TagEnd::TableRow => {
+                    if let Some(ts) = table_state.as_mut() {
+                        if !ts.in_head {
+                            ts.rows.push(ts.current_row.clone());
+                            ts.current_row.clear();
+                        }
+                    }
+                }
+                TagEnd::TableCell => {
+                    if let Some(ts) = table_state.as_mut() {
+                        ts.current_row.push(spans.clone());
+                    }
+                    spans.clear();
+                    in_table_cell = false;
+                }
                 _ => {}
             },
             Event::Text(text) => {
@@ -254,9 +338,15 @@ fn parse_markdown(text: &str, is_dark: bool) -> Vec<ParsedBlock> {
                 let style = *style_stack.last().unwrap_or(&InlineStyle::default());
                 push_text_span(&mut spans, &html, style, current_link_url.as_deref());
             }
+            Event::TaskListMarker(checked) => {
+                current_item_checked = Some(checked);
+            }
             _ => {}
         }
     }
+
+    // Suppress unused variable warning — in_table_cell tracks state during parsing
+    let _ = in_table_cell;
 
     blocks
 }
@@ -301,30 +391,48 @@ fn build_markdown_elements(blocks: &[ParsedBlock], colors: &PromptColors) -> Vec
                 quote_depth,
             } => {
                 for (index, item) in items.iter().enumerate() {
-                    let marker = if *ordered {
-                        format!("{}.", start + index)
+                    // Task list checkbox or regular marker
+                    let marker_element: AnyElement = if let Some(checked) = item.checked {
+                        // Task list: render a checkbox indicator
+                        let (symbol, color) = if checked {
+                            ("\u{2611}", rgb(colors.accent_color)) // ☑ checked
+                        } else {
+                            ("\u{2610}", rgb(colors.text_tertiary)) // ☐ unchecked
+                        };
+                        div()
+                            .flex_shrink_0()
+                            .text_color(color)
+                            .child(symbol.to_string())
+                            .into_any_element()
                     } else {
-                        "\u{2022}".to_string()
+                        let marker = if *ordered {
+                            format!("{}.", start + index)
+                        } else {
+                            "\u{2022}".to_string()
+                        };
+                        div()
+                            .flex_shrink_0()
+                            .text_color(rgb(colors.text_tertiary))
+                            .child(marker)
+                            .into_any_element()
                     };
-                    let item_text: String = item.iter().map(|s| s.text.as_str()).collect();
+                    // Checked items get muted text color (strikethrough style)
+                    let content = render_inline_spans(&item.spans, colors).min_w_0().flex_1();
+                    let content = if item.checked == Some(true) {
+                        content
+                            .text_color(rgb(colors.text_tertiary))
+                            .into_any_element()
+                    } else {
+                        content.into_any_element()
+                    };
                     let row = div()
                         .flex()
                         .flex_row()
                         .w_full()
                         .gap(px(6.0))
                         .text_sm()
-                        .child(
-                            div()
-                                .flex_shrink_0()
-                                .text_color(rgb(colors.text_tertiary))
-                                .child(marker),
-                        )
-                        .child(
-                            div()
-                                .min_w_0()
-                                .text_color(rgb(colors.text_primary))
-                                .child(item_text),
-                        );
+                        .child(marker_element)
+                        .child(content);
                     push_block(&mut elements, row, *quote_depth, colors);
                 }
             }
@@ -335,6 +443,14 @@ fn build_markdown_elements(blocks: &[ParsedBlock], colors: &PromptColors) -> Vec
                 quote_depth,
             } => {
                 let element = build_code_block_element(lang_label, lines, raw_code, colors);
+                push_block(&mut elements, element, *quote_depth, colors);
+            }
+            ParsedBlock::Table {
+                headers,
+                rows,
+                quote_depth,
+            } => {
+                let element = build_table_element(headers, rows, colors);
                 push_block(&mut elements, element, *quote_depth, colors);
             }
             ParsedBlock::HorizontalRule { quote_depth } => {
@@ -497,6 +613,82 @@ fn build_code_block_element(
     }
 
     code_container.child(body)
+}
+
+/// Build a table element from parsed header/row data.
+/// Renders as a bordered grid with header row in bold and alternating row backgrounds.
+fn build_table_element(
+    headers: &[Vec<InlineSpan>],
+    rows: &[Vec<Vec<InlineSpan>>],
+    colors: &PromptColors,
+) -> gpui::Div {
+    let border_color = rgba((colors.quote_border << 8) | 0x40);
+    let header_bg = rgba((colors.code_bg << 8) | 0xC0);
+    let row_alt_bg = rgba((colors.code_bg << 8) | 0x40);
+
+    let mut table = div()
+        .w_full()
+        .mt(px(4.0))
+        .mb(px(4.0))
+        .rounded(px(6.0))
+        .border_1()
+        .border_color(border_color)
+        .overflow_hidden()
+        .flex()
+        .flex_col();
+
+    // Header row
+    if !headers.is_empty() {
+        let mut header_row = div()
+            .flex()
+            .flex_row()
+            .w_full()
+            .bg(header_bg)
+            .border_b_1()
+            .border_color(border_color);
+        for cell_spans in headers {
+            header_row = header_row.child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .px(px(8.0))
+                    .py(px(6.0))
+                    .text_xs()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(rgb(colors.text_primary))
+                    .child(render_inline_spans(cell_spans, colors)),
+            );
+        }
+        table = table.child(header_row);
+    }
+
+    // Data rows
+    for (row_idx, row) in rows.iter().enumerate() {
+        let is_alt = row_idx % 2 == 1;
+        let is_last = row_idx == rows.len() - 1;
+        let mut row_div = div().flex().flex_row().w_full();
+        if is_alt {
+            row_div = row_div.bg(row_alt_bg);
+        }
+        if !is_last {
+            row_div = row_div.border_b_1().border_color(border_color);
+        }
+        for cell_spans in row {
+            row_div = row_div.child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .px(px(8.0))
+                    .py(px(5.0))
+                    .text_xs()
+                    .text_color(rgb(colors.text_primary))
+                    .child(render_inline_spans(cell_spans, colors)),
+            );
+        }
+        table = table.child(row_div);
+    }
+
+    table
 }
 
 // ---------------------------------------------------------------------------
@@ -818,10 +1010,12 @@ enum TestBlock {
     Paragraph(String),
     /// A heading with level and concatenated text.
     Heading(u32, String),
-    /// A single list item: (marker, text).
+    /// A single list item: (marker, text). Marker is "☑"/"☐" for task list items.
     ListItem(String, String),
     /// A code block: (language, code).
     CodeBlock(Option<String>, String),
+    /// A table: (headers, rows) where each cell is concatenated text.
+    Table(Vec<String>, Vec<Vec<String>>),
     /// A horizontal rule.
     Hr,
 }
@@ -847,7 +1041,9 @@ fn parse_markdown_blocks(text: &str) -> Vec<TestBlock> {
     let mut heading_level: Option<u32> = None;
     let mut list_state: Option<ListState> = None;
     let mut current_item: Option<Vec<InlineSpan>> = None;
+    let mut current_item_checked: Option<bool> = None;
     let mut code_block: Option<CodeBlockState> = None;
+    let mut table_state: Option<TableState> = None;
 
     for event in parser {
         match event {
@@ -866,6 +1062,7 @@ fn parse_markdown_blocks(text: &str) -> Vec<TestBlock> {
                 }
                 Tag::Item => {
                     current_item = Some(Vec::new());
+                    current_item_checked = None;
                     spans.clear();
                 }
                 Tag::Emphasis => push_style(&mut style_stack, |s| s.italic = true),
@@ -876,6 +1073,28 @@ fn parse_markdown_blocks(text: &str) -> Vec<TestBlock> {
                         language: code_block_language(&kind),
                         code: String::new(),
                     });
+                }
+                Tag::Table(_) => {
+                    table_state = Some(TableState {
+                        headers: Vec::new(),
+                        rows: Vec::new(),
+                        current_row: Vec::new(),
+                        in_head: false,
+                    });
+                }
+                Tag::TableHead => {
+                    if let Some(ts) = table_state.as_mut() {
+                        ts.in_head = true;
+                        ts.current_row.clear();
+                    }
+                }
+                Tag::TableRow => {
+                    if let Some(ts) = table_state.as_mut() {
+                        ts.current_row.clear();
+                    }
+                }
+                Tag::TableCell => {
+                    spans.clear();
                 }
                 _ => {}
             },
@@ -905,21 +1124,77 @@ fn parse_markdown_blocks(text: &str) -> Vec<TestBlock> {
                             item_spans.append(&mut spans);
                         }
                         if let Some(list) = list_state.as_mut() {
-                            list.items.push(item_spans);
+                            list.items.push(ListItem {
+                                spans: item_spans,
+                                checked: current_item_checked.take(),
+                            });
                         }
                     }
+                    current_item_checked = None;
                 }
                 TagEnd::List(_) => {
                     if let Some(list) = list_state.take() {
                         for (index, item) in list.items.iter().enumerate() {
-                            let marker = if list.ordered {
+                            let marker = if let Some(checked) = item.checked {
+                                if checked {
+                                    "\u{2611}".to_string() // ☑
+                                } else {
+                                    "\u{2610}".to_string() // ☐
+                                }
+                            } else if list.ordered {
                                 format!("{}.", list.start + index)
                             } else {
                                 "\u{2022}".to_string()
                             };
-                            let item_text: String = item.iter().map(|s| s.text.as_str()).collect();
+                            let item_text: String =
+                                item.spans.iter().map(|s| s.text.as_str()).collect();
                             blocks.push(TestBlock::ListItem(marker, item_text));
                         }
+                    }
+                }
+                TagEnd::TableCell => {
+                    if let Some(ts) = table_state.as_mut() {
+                        let cell_text: String = spans.iter().map(|s| s.text.as_str()).collect();
+                        ts.current_row.push(vec![InlineSpan {
+                            text: cell_text,
+                            style: InlineStyle::default(),
+                            link_url: None,
+                        }]);
+                    }
+                    spans.clear();
+                }
+                TagEnd::TableHead => {
+                    if let Some(ts) = table_state.as_mut() {
+                        ts.headers = ts.current_row.clone();
+                        ts.current_row.clear();
+                        ts.in_head = false;
+                    }
+                }
+                TagEnd::TableRow => {
+                    if let Some(ts) = table_state.as_mut() {
+                        if !ts.in_head {
+                            ts.rows.push(ts.current_row.clone());
+                            ts.current_row.clear();
+                        }
+                    }
+                }
+                TagEnd::Table => {
+                    if let Some(ts) = table_state.take() {
+                        let header_texts: Vec<String> = ts
+                            .headers
+                            .iter()
+                            .map(|cell| cell.iter().map(|s| s.text.as_str()).collect())
+                            .collect();
+                        let row_texts: Vec<Vec<String>> = ts
+                            .rows
+                            .iter()
+                            .map(|row| {
+                                row.iter()
+                                    .map(|cell| cell.iter().map(|s| s.text.as_str()).collect())
+                                    .collect()
+                            })
+                            .collect();
+                        blocks.push(TestBlock::Table(header_texts, row_texts));
                     }
                 }
                 TagEnd::Emphasis | TagEnd::Strong | TagEnd::Link | TagEnd::Strikethrough => {
@@ -951,6 +1226,9 @@ fn parse_markdown_blocks(text: &str) -> Vec<TestBlock> {
             }
             Event::Rule => {
                 blocks.push(TestBlock::Hr);
+            }
+            Event::TaskListMarker(checked) => {
+                current_item_checked = Some(checked);
             }
             _ => {}
         }
@@ -1104,5 +1382,35 @@ mod tests {
     fn single_paragraph() {
         let blocks = parse_markdown_blocks("Hello world.\n");
         assert_eq!(blocks, vec![TestBlock::Paragraph("Hello world.".into())]);
+    }
+
+    #[test]
+    fn task_list_renders_checkboxes() {
+        let md = "- [x] Done task\n- [ ] Pending task\n- Regular item\n";
+        let blocks = parse_markdown_blocks(md);
+        assert_eq!(
+            blocks,
+            vec![
+                TestBlock::ListItem("\u{2611}".into(), "Done task".into()),
+                TestBlock::ListItem("\u{2610}".into(), "Pending task".into()),
+                TestBlock::ListItem("\u{2022}".into(), "Regular item".into()),
+            ]
+        );
+    }
+
+    #[test]
+    fn simple_table_parses_headers_and_rows() {
+        let md = "| Name | Age |\n|------|-----|\n| Alice | 30 |\n| Bob | 25 |\n";
+        let blocks = parse_markdown_blocks(md);
+        assert_eq!(
+            blocks,
+            vec![TestBlock::Table(
+                vec!["Name".into(), "Age".into()],
+                vec![
+                    vec!["Alice".into(), "30".into()],
+                    vec!["Bob".into(), "25".into()],
+                ]
+            )]
+        );
     }
 }
