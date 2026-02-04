@@ -13,10 +13,10 @@
 use anyhow::Result;
 use chrono::{Datelike, NaiveDate, Utc};
 use gpui::{
-    div, hsla, point, prelude::*, px, rgba, size, svg, App, BoxShadow, Context, CursorStyle,
+    div, hsla, img, point, prelude::*, px, rgba, size, svg, App, BoxShadow, Context, CursorStyle,
     Entity, ExternalPaths, FocusHandle, Focusable, IntoElement, KeyDownEvent, MouseMoveEvent,
-    ParentElement, Render, ScrollHandle, SharedString, Styled, Subscription, Window, WindowBounds,
-    WindowOptions,
+    ParentElement, Render, RenderImage, ScrollHandle, SharedString, Styled, Subscription, Window,
+    WindowBounds, WindowOptions,
 };
 
 // Import local IconName for SVG icons (has external_path() method)
@@ -411,6 +411,10 @@ pub struct AiApp {
     /// Pending image attachment (base64 encoded PNG) to include with next message
     pending_image: Option<String>,
 
+    /// Cache of decoded images: base64 hash -> Arc<RenderImage>
+    /// Avoids re-decoding images on every render frame.
+    image_cache: std::collections::HashMap<String, std::sync::Arc<RenderImage>>,
+
     /// Timestamp when setup command was last copied (for showing "Copied!" feedback)
     setup_copied_at: Option<std::time::Instant>,
 
@@ -595,6 +599,28 @@ impl AiApp {
             .and_then(|id| storage::get_chat_messages(&id).ok())
             .unwrap_or_default();
 
+        // Pre-cache any image attachments from loaded messages
+        let mut image_cache = std::collections::HashMap::new();
+        for msg in &current_messages {
+            for attachment in &msg.images {
+                let cache_key = Self::image_cache_key(&attachment.data);
+                if let std::collections::hash_map::Entry::Vacant(e) = image_cache.entry(cache_key) {
+                    use base64::Engine;
+                    if let Ok(bytes) =
+                        base64::engine::general_purpose::STANDARD.decode(&attachment.data)
+                    {
+                        if let Ok(render_image) =
+                            crate::list_item::decode_png_to_render_image_with_bgra_conversion(
+                                &bytes,
+                            )
+                        {
+                            e.insert(render_image);
+                        }
+                    }
+                }
+            }
+        }
+
         info!(chat_count = chats.len(), "AI app initialized");
 
         // Pre-compute box shadows from theme (avoid reloading on every render)
@@ -630,6 +656,7 @@ impl AiApp {
             last_bounds_save: std::time::Instant::now(),
             theme_rev_seen: crate::theme::service::theme_revision(),
             pending_image: None,
+            image_cache,
             setup_copied_at: None,
             claude_code_setup_feedback: None,
             showing_api_key_input: false,
@@ -755,6 +782,7 @@ impl AiApp {
                                 "Image pasted from clipboard"
                             );
 
+                            self.cache_image_from_base64(&base64_data);
                             self.pending_image = Some(base64_data);
                             cx.notify();
                             return true;
@@ -778,6 +806,58 @@ impl AiApp {
             self.pending_image = None;
             info!("Pending image removed");
             cx.notify();
+        }
+    }
+
+    /// Build a cache key for base64 image data (prefix + length).
+    fn image_cache_key(base64_data: &str) -> String {
+        let prefix: String = base64_data.chars().take(64).collect();
+        format!("{}:{}", prefix, base64_data.len())
+    }
+
+    /// Decode a base64 PNG and store it in the image cache.
+    /// Call this eagerly when an image is attached (not during render).
+    fn cache_image_from_base64(&mut self, base64_data: &str) {
+        let cache_key = Self::image_cache_key(base64_data);
+        if self.image_cache.contains_key(&cache_key) {
+            return;
+        }
+
+        use base64::Engine;
+        let bytes = match base64::engine::general_purpose::STANDARD.decode(base64_data) {
+            Ok(b) => b,
+            Err(e) => {
+                tracing::warn!(error = %e, "Failed to decode base64 image data");
+                return;
+            }
+        };
+
+        match crate::list_item::decode_png_to_render_image_with_bgra_conversion(&bytes) {
+            Ok(render_image) => {
+                info!(
+                    cache_key_prefix = &cache_key[..cache_key.len().min(30)],
+                    "Cached decoded image thumbnail"
+                );
+                self.image_cache.insert(cache_key, render_image);
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "Failed to decode PNG image for thumbnail");
+            }
+        }
+    }
+
+    /// Look up a cached RenderImage by base64 data. Returns None if not cached.
+    fn get_cached_image(&self, base64_data: &str) -> Option<std::sync::Arc<RenderImage>> {
+        let cache_key = Self::image_cache_key(base64_data);
+        self.image_cache.get(&cache_key).cloned()
+    }
+
+    /// Cache all images from a slice of messages (call after loading messages).
+    fn cache_message_images(&mut self, messages: &[Message]) {
+        for msg in messages {
+            for attachment in &msg.images {
+                self.cache_image_from_base64(&attachment.data);
+            }
         }
     }
 
@@ -812,6 +892,7 @@ impl AiApp {
             Ok(data) => {
                 use base64::Engine;
                 let base64_data = base64::engine::general_purpose::STANDARD.encode(&data);
+                self.cache_image_from_base64(&base64_data);
                 self.pending_image = Some(base64_data);
                 info!("Image file dropped and attached: {:?}", path);
                 cx.notify();
@@ -822,8 +903,15 @@ impl AiApp {
         }
     }
 
-    /// Render the pending image preview badge
+    /// Render the pending image preview with thumbnail
     fn render_pending_image_preview(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        // Try to get the cached decoded image for a thumbnail
+        let cached_thumbnail = self
+            .pending_image
+            .as_ref()
+            .and_then(|b64| self.get_cached_image(b64));
+        let has_thumbnail = cached_thumbnail.is_some();
+
         div().flex().items_center().gap_2().px_3().py_1().child(
             div()
                 .id("pending-image-preview")
@@ -836,18 +924,37 @@ impl AiApp {
                 .bg(cx.theme().muted.opacity(0.3))
                 .border_1()
                 .border_color(cx.theme().accent.opacity(0.5))
-                // Icon + label
-                .child(
-                    svg()
-                        .external_path(LocalIconName::File.external_path())
-                        .size(px(14.))
-                        .text_color(cx.theme().accent),
-                )
+                // Thumbnail or fallback icon
+                .when_some(cached_thumbnail, |el, render_img| {
+                    el.child(
+                        div()
+                            .size(px(36.))
+                            .rounded(px(4.))
+                            .overflow_hidden()
+                            .flex_shrink_0()
+                            .child(
+                                img(move |_window: &mut Window, _cx: &mut App| {
+                                    Some(Ok(render_img.clone()))
+                                })
+                                .w(px(36.))
+                                .h(px(36.))
+                                .object_fit(gpui::ObjectFit::Cover),
+                            ),
+                    )
+                })
+                .when(!has_thumbnail, |el| {
+                    el.child(
+                        svg()
+                            .external_path(LocalIconName::File.external_path())
+                            .size(px(14.))
+                            .text_color(cx.theme().accent),
+                    )
+                })
                 .child(
                     div()
                         .text_xs()
                         .text_color(cx.theme().foreground)
-                        .child("PNG"),
+                        .child("Image attached"),
                 )
                 // Remove button
                 .child(
@@ -859,7 +966,7 @@ impl AiApp {
                         .size(px(16.))
                         .rounded_full()
                         .cursor_pointer()
-                        .hover(|s| s.bg(cx.theme().danger.opacity(0.3))) // Theme-aware destructive hover
+                        .hover(|s| s.bg(cx.theme().danger.opacity(0.3)))
                         .on_mouse_down(
                             gpui::MouseButton::Left,
                             cx.listener(|this, _, _, cx| {
@@ -989,6 +1096,7 @@ impl AiApp {
                     // Load messages for the selected chat
                     self.current_messages =
                         storage::get_chat_messages(&first_id).unwrap_or_default();
+                    self.cache_message_images(&self.current_messages.clone());
                 }
             } else {
                 self.selected_chat_id = None;
@@ -1004,6 +1112,7 @@ impl AiApp {
                     if let Some(new_id) = self.selected_chat_id {
                         self.current_messages =
                             storage::get_chat_messages(&new_id).unwrap_or_default();
+                        self.cache_message_images(&self.current_messages.clone());
                     }
                 }
             }
@@ -1534,6 +1643,7 @@ impl AiApp {
                     // Reload messages to include system prompt
                     self.current_messages =
                         storage::get_chat_messages(&chat_id).unwrap_or_default();
+                    self.cache_message_images(&self.current_messages.clone());
                 }
 
                 // Set preferred model if specified
@@ -1885,6 +1995,7 @@ impl AiApp {
         // Add chat to the list and select it
         self.chats.insert(0, chat);
         self.selected_chat_id = Some(chat_id);
+        self.cache_message_images(&saved_messages);
         self.current_messages = saved_messages;
 
         // Scroll to bottom to show the latest messages
@@ -1937,6 +2048,7 @@ impl AiApp {
 
         // Load messages for this chat
         self.current_messages = storage::get_chat_messages(&id).unwrap_or_default();
+        self.cache_message_images(&self.current_messages.clone());
 
         // Sync selected_model with the chat's stored model (BYOK per chat)
         if let Some(chat) = self.chats.iter().find(|c| c.id == id) {
@@ -1991,6 +2103,7 @@ impl AiApp {
                 .selected_chat_id
                 .and_then(|new_id| storage::get_chat_messages(&new_id).ok())
                 .unwrap_or_default();
+            self.cache_message_images(&self.current_messages.clone());
 
             // Clear streaming state - if deleted chat was streaming, orphan the task
             // It will save to DB but won't corrupt UI since chat is deleted
@@ -3588,6 +3701,14 @@ impl AiApp {
         let user_bg = rgba((0xFFFFFF << 8) | 0x18); // White at ~9% opacity
         let assistant_bg = rgba((0xFFFFFF << 8) | 0x10); // White at ~6% opacity
 
+        // Collect cached thumbnails for this message's images
+        let image_thumbnails: Vec<std::sync::Arc<RenderImage>> = message
+            .images
+            .iter()
+            .filter_map(|attachment| self.get_cached_image(&attachment.data))
+            .collect();
+        let has_images = !image_thumbnails.is_empty();
+
         div()
             .flex()
             .flex_col()
@@ -3610,6 +3731,32 @@ impl AiApp {
                     .rounded_md()
                     .when(is_user, |d| d.bg(user_bg))
                     .when(!is_user, |d| d.bg(assistant_bg))
+                    // Image thumbnails row (shown above text for user messages with images)
+                    .when(has_images, |el| {
+                        el.child(
+                            div().flex().flex_wrap().gap_2().mb_2().children(
+                                image_thumbnails
+                                    .into_iter()
+                                    .enumerate()
+                                    .map(|(i, render_img)| {
+                                        div()
+                                            .id(SharedString::from(format!("msg-img-{}", i)))
+                                            .rounded(px(6.))
+                                            .overflow_hidden()
+                                            .border_1()
+                                            .border_color(cx.theme().border.opacity(0.5))
+                                            .child(
+                                                img(move |_window: &mut Window, _cx: &mut App| {
+                                                    Some(Ok(render_img.clone()))
+                                                })
+                                                .w(px(120.))
+                                                .h(px(120.))
+                                                .object_fit(gpui::ObjectFit::Cover),
+                                            )
+                                    }),
+                            ),
+                        )
+                    })
                     .child(
                         div()
                             .w_full()
@@ -4200,6 +4347,7 @@ impl Render for AiApp {
                         state.set_selection(text_len, text_len, window, cx);
                     });
                     // Store the pending image to be included with the next message
+                    self.cache_image_from_base64(&image_base64);
                     self.pending_image = Some(image_base64.clone());
                     crate::logging::log(
                         "AI",
