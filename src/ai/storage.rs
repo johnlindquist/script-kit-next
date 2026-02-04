@@ -596,6 +596,20 @@ fn save_message_internal(message: &Message, update_chat_timestamp: bool) -> Resu
     Ok(())
 }
 
+/// Delete a single message by ID
+pub fn delete_message(message_id: &str) -> Result<()> {
+    let db = get_db()?;
+    let conn = db
+        .lock()
+        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+
+    conn.execute("DELETE FROM messages WHERE id = ?1", params![message_id])
+        .context("Failed to delete message")?;
+
+    debug!(message_id = %message_id, "Message deleted");
+    Ok(())
+}
+
 /// Get all messages for a chat, ordered by creation time
 pub fn get_chat_messages(chat_id: &ChatId) -> Result<Vec<Message>> {
     let db = get_db()?;
