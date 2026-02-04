@@ -1264,8 +1264,12 @@ impl ChatPrompt {
                 let delay = 30 + (delay_counter % 25);
                 Timer::after(Duration::from_millis(delay)).await;
 
-                let accumulated = content_for_poll.lock().ok().map(|c| c.clone());
+                // Read is_done BEFORE accumulated content to avoid race condition:
+                // if done is true, stream_message has returned, so all chunks have
+                // been pushed to shared_content. Reading in the other order could
+                // snapshot partial content then see done=true, finalizing truncated text.
                 let is_done = done_for_poll.load(Ordering::SeqCst);
+                let accumulated = content_for_poll.lock().ok().map(|c| c.clone());
                 let error = if is_done {
                     error_for_poll.lock().ok().and_then(|e| e.clone())
                 } else {

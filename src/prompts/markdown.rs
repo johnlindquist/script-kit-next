@@ -15,8 +15,6 @@ struct InlineStyle {
     italic: bool,
     code: bool,
     link: bool,
-    /// List bullet/number marker — rendered in tertiary color.
-    marker: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -314,9 +312,6 @@ fn style_span(span: &InlineSpan, colors: &PromptColors) -> gpui::Div {
         .min_w_0()
         .text_color(rgb(colors.text_primary))
         .child(text.clone());
-    if style.marker {
-        piece = piece.flex_shrink_0().text_color(rgb(colors.text_tertiary));
-    }
     if style.bold {
         piece = piece.font_weight(FontWeight::BOLD);
     }
