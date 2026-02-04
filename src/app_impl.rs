@@ -5868,6 +5868,11 @@ export default {
                 *selected_index = 0;
                 self.clipboard_list_scroll_handle
                     .scroll_to_item(0, ScrollStrategy::Top);
+                // Update focused entry to first entry (filter cleared = show all)
+                self.focused_clipboard_entry_id = self
+                    .cached_clipboard_entries
+                    .first()
+                    .map(|e| e.id.clone());
             }
             AppView::AppLauncherView {
                 filter,
@@ -5955,6 +5960,10 @@ export default {
                 state.set_selection(0, 0, window, cx);
                 state.set_placeholder(DEFAULT_PLACEHOLDER.to_string(), window, cx);
             });
+
+            // Clear actions popup state (prevents stale overlay on return to menu)
+            self.show_actions_popup = false;
+            self.actions_dialog = None;
 
             // Invalidate caches and sync list component
             self.invalidate_grouped_cache();

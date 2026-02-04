@@ -1981,12 +1981,9 @@ impl ScriptListApp {
                     selected_index,
                 } = &mut this.current_view
                 {
-                    // Re-compute filtered_len for this scope
-                    let total_items = GroupHeaderStyle::count()
-                        + IconName::count()
-                        + GroupHeaderCategory::all().len()
-                        + IconCategory::all().len();
-                    let current_filtered_len = total_items;
+                    // Use the filtered count captured at render time (not total count)
+                    // so arrow keys respect the visible items after filtering
+                    let current_filtered_len = filtered_len;
 
                     match key_str.as_str() {
                         "up" | "arrowup" => {
@@ -2505,7 +2502,7 @@ impl ScriptListApp {
                 let has_cmd = event.keystroke.modifiers.platform;
 
                 // Escape: clear filter first if present, otherwise restore original and close
-                if key_str == "escape" {
+                if key_str == "escape" && !this.show_actions_popup {
                     if !this.clear_builtin_view_filter(cx) {
                         // No filter to clear — restore original theme and go back
                         if let Some(original) = this.theme_before_chooser.take() {
@@ -2680,14 +2677,14 @@ impl ScriptListApp {
                     let page_size: usize = 5;
                     match key_str.as_str() {
                         "up" | "arrowup" => {
-                            *selected_index = if *selected_index == 0 {
-                                count - 1
-                            } else {
-                                *selected_index - 1
-                            };
+                            if *selected_index > 0 {
+                                *selected_index -= 1;
+                            }
                         }
                         "down" | "arrowdown" => {
-                            *selected_index = (*selected_index + 1) % count;
+                            if *selected_index < count - 1 {
+                                *selected_index += 1;
+                            }
                         }
                         "home" => {
                             *selected_index = 0;
