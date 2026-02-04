@@ -2954,9 +2954,15 @@ fn test_get_grouped_results_with_frecency() {
         })
         .collect();
 
-    assert!(section_headers.contains(&"SUGGESTED"));
+    assert!(
+        section_headers.iter().any(|s| s.starts_with("SUGGESTED")),
+        "Expected a SUGGESTED section header"
+    );
     // Scripts without kit_name default to "main" kit, so we get "MAIN" section instead of "SCRIPTS"
-    assert!(section_headers.contains(&"MAIN"));
+    assert!(
+        section_headers.iter().any(|s| s.starts_with("MAIN")),
+        "Expected a MAIN section header"
+    );
 }
 
 #[test]
@@ -3053,12 +3059,12 @@ fn test_get_grouped_results_frecency_script_appears_before_builtins() {
     // Should have SUGGESTED, MAIN (kit-based section), and COMMANDS sections
     // Scripts without kit_name default to "main" kit, so we get "MAIN" section instead of "SCRIPTS"
     assert!(
-        section_headers.contains(&"MAIN"),
+        section_headers.iter().any(|s| s.starts_with("MAIN")),
         "Should have MAIN section for non-recent script. Headers: {:?}",
         section_headers
     );
     assert!(
-        section_headers.contains(&"COMMANDS"),
+        section_headers.iter().any(|s| s.starts_with("COMMANDS")),
         "Should have COMMANDS section for builtins. Headers: {:?}",
         section_headers
     );
@@ -4671,7 +4677,7 @@ fn test_get_grouped_results_respects_frecency_ordering() {
     assert!(
         first_header
             .as_ref()
-            .map_or(false, |s| s.starts_with("SUGGESTED")),
+            .is_some_and(|s| s.starts_with("SUGGESTED")),
         "After recording use, SUGGESTED section should appear"
     );
 

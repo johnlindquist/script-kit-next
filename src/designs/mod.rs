@@ -330,6 +330,7 @@ use gpui::{AnyElement, IntoElement};
 ///
 /// # Returns
 /// An `AnyElement` containing the rendered item
+#[allow(clippy::too_many_arguments)]
 pub fn render_design_item(
     variant: DesignVariant,
     result: &SearchResult,
