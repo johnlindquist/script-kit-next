@@ -431,11 +431,7 @@ impl ScriptListApp {
                         if let Some(entry) = selected_entry {
                             if let Err(e) = clipboard_history::quick_look_entry(&entry) {
                                 logging::log("ERROR", &format!("Quick Look failed: {}", e));
-                                this.show_hud(
-                                    format!("Quick Look failed: {}", e),
-                                    Some(2500),
-                                    cx,
-                                );
+                                this.show_hud(format!("Quick Look failed: {}", e), Some(2500), cx);
                             }
                         }
                         return;
@@ -2298,6 +2294,234 @@ impl ScriptListApp {
                     .show_secondary(false),
                 PromptFooterColors::from_theme(&self.theme),
             ))
+            .into_any_element()
+    }
+
+    /// Render the theme chooser view with live preview and palette swatches
+    pub(crate) fn render_theme_chooser(
+        &mut self,
+        selected_index: usize,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let tokens = get_tokens(self.current_design);
+        let design_spacing = tokens.spacing();
+        let design_typography = tokens.typography();
+        let design_visual = tokens.visual();
+        let text_primary = self.theme.colors.text.primary;
+        let text_dimmed = self.theme.colors.text.dimmed;
+        let text_secondary = self.theme.colors.text.secondary;
+        let accent_color = self.theme.colors.accent.selected;
+        let ui_border = self.theme.colors.ui.border;
+        let selection_bg = self.theme.colors.accent.selected_subtle;
+        let opacity = self.theme.get_opacity();
+        let selected_alpha = (opacity.selected * 255.0) as u32;
+        let presets = theme::presets::all_presets();
+        let preview_colors = theme::presets::all_preset_preview_colors();
+        let preset_count = presets.len();
+        let first_light = theme::presets::first_light_theme_index();
+        let dark_count = first_light;
+        let light_count = preset_count - first_light;
+        let original_index = self
+            .theme_before_chooser
+            .as_ref()
+            .map(|t| theme::presets::find_current_preset_index(t))
+            .unwrap_or(0);
+        let handle_key = cx.listener(
+            move |this: &mut Self,
+                  event: &gpui::KeyDownEvent,
+                  window: &mut Window,
+                  cx: &mut Context<Self>| {
+                this.hide_mouse_cursor(cx);
+                let key_str = event.keystroke.key.to_lowercase();
+                let has_cmd = event.keystroke.modifiers.platform;
+                if key_str == "escape" {
+                    if let Some(original) = this.theme_before_chooser.take() {
+                        this.theme = original;
+                        theme::sync_gpui_component_theme(cx);
+                    }
+                    this.go_back_or_close(window, cx);
+                    return;
+                }
+                if has_cmd && key_str == "w" {
+                    if let Some(original) = this.theme_before_chooser.take() {
+                        this.theme = original;
+                        theme::sync_gpui_component_theme(cx);
+                    }
+                    this.close_and_reset_window(cx);
+                    return;
+                }
+                if key_str == "enter" {
+                    this.theme_before_chooser = None;
+                    if let Err(e) = theme::presets::write_theme_to_disk(&this.theme) {
+                        logging::log("ERROR", &format!("Failed to save theme: {}", e));
+                    }
+                    theme::sync_gpui_component_theme(cx);
+                    this.go_back_or_close(window, cx);
+                    return;
+                }
+                let presets = theme::presets::all_presets();
+                let count = presets.len();
+                if count == 0 {
+                    return;
+                }
+                if let AppView::ThemeChooserView { selected_index } = &mut this.current_view {
+                    match key_str.as_str() {
+                        "up" | "arrowup" => {
+                            *selected_index = if *selected_index == 0 {
+                                count - 1
+                            } else {
+                                *selected_index - 1
+                            };
+                        }
+                        "down" | "arrowdown" => {
+                            *selected_index = (*selected_index + 1) % count;
+                        }
+                        _ => return,
+                    }
+                    let new_theme = std::sync::Arc::new(presets[*selected_index].create_theme());
+                    this.theme = new_theme;
+                    theme::sync_gpui_component_theme(cx);
+                    cx.notify();
+                }
+            },
+        );
+        let preset_names: Vec<String> = presets.iter().map(|p| p.name.to_string()).collect();
+        let preset_descs: Vec<String> = presets.iter().map(|p| p.description.to_string()).collect();
+        let preset_is_dark: Vec<bool> = presets.iter().map(|p| p.is_dark).collect();
+        let selected = selected_index;
+        let orig_idx = original_index;
+        let first_light_idx = first_light;
+        let list = uniform_list(
+            "theme-chooser",
+            preset_count,
+            move |visible_range, _window, _cx| {
+                visible_range
+                    .map(|ix| {
+                        let is_selected = ix == selected;
+                        let is_original = ix == orig_idx;
+                        let name = &preset_names[ix];
+                        let desc = &preset_descs[ix];
+                        let is_dark = preset_is_dark[ix];
+                        let colors = &preview_colors[ix];
+                        let needs_separator = ix == first_light_idx && first_light_idx > 0;
+                        let swatch = |color: u32| {
+                            div().w(px(8.0)).h(px(20.0)).rounded(px(2.0)).bg(rgb(color))
+                        };
+                        let palette = div()
+                            .flex()
+                            .flex_row()
+                            .gap(px(1.0))
+                            .mr(px(8.0))
+                            .child(swatch(colors.bg))
+                            .child(swatch(colors.accent))
+                            .child(swatch(colors.text))
+                            .child(swatch(colors.secondary))
+                            .child(swatch(colors.border));
+                        let indicator = if is_original {
+                            div()
+                                .text_sm()
+                                .font_weight(gpui::FontWeight::BOLD)
+                                .text_color(rgb(accent_color))
+                                .w(px(16.0))
+                                .mr(px(4.0))
+                                .child("✓")
+                        } else {
+                            div().w(px(16.0)).mr(px(4.0))
+                        };
+                        let badge_text = if is_dark { "dark" } else { "light" };
+                        let badge = div()
+                            .text_xs()
+                            .text_color(rgb(text_dimmed))
+                            .ml_auto()
+                            .px(px(6.0))
+                            .py(px(1.0))
+                            .rounded(px(3.0))
+                            .child(badge_text.to_string());
+                        let sel_bg = rgba((selection_bg << 8) | selected_alpha);
+                        let border_rgba = rgba((ui_border << 8) | 0x4D);
+                        div()
+                            .id(ix)
+                            .w_full()
+                            .h(px(LIST_ITEM_HEIGHT))
+                            .px(px(12.0))
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .gap(px(6.0))
+                            .when(is_selected, |d| d.bg(sel_bg))
+                            .when(needs_separator, |d| {
+                                d.border_color(border_rgba).border_t_1().mt(px(6.0))
+                            })
+                            .child(indicator)
+                            .child(palette)
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_col()
+                                    .overflow_hidden()
+                                    .child(
+                                        div()
+                                            .text_sm()
+                                            .when(is_original, |d| {
+                                                d.font_weight(gpui::FontWeight::BOLD)
+                                            })
+                                            .text_color(rgb(text_primary))
+                                            .child(name.clone()),
+                                    )
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .text_color(rgb(text_secondary))
+                                            .child(desc.clone()),
+                                    ),
+                            )
+                            .child(badge)
+                            .into_any_element()
+                    })
+                    .collect()
+            },
+        )
+        .h_full()
+        .track_scroll(&self.theme_chooser_scroll_handle)
+        .into_any_element();
+        let footer = div()
+            .w_full()
+            .px(px(design_spacing.padding_lg))
+            .py(px(design_spacing.padding_sm))
+            .flex()
+            .justify_center()
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(rgb(text_dimmed))
+                    .child("↑↓ Preview · Enter Apply · Esc Cancel".to_string()),
+            );
+        div()
+            .flex()
+            .flex_col()
+            .w_full()
+            .h_full()
+            .rounded(px(design_visual.radius_lg))
+            .text_color(rgb(text_primary))
+            .font_family(design_typography.font_family)
+            .key_context("theme_chooser")
+            .track_focus(&self.focus_handle)
+            .on_key_down(handle_key)
+            .child(
+                div()
+                    .w_full()
+                    .px(px(design_spacing.padding_lg))
+                    .py(px(design_spacing.padding_md))
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .child(div().text_sm().text_color(rgb(text_dimmed)).child(format!(
+                        "Themes · {} dark · {} light",
+                        dark_count, light_count
+                    ))),
+            )
+            .child(div().flex_1().overflow_hidden().child(list))
+            .child(footer)
             .into_any_element()
     }
 
