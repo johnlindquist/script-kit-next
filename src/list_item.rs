@@ -29,17 +29,140 @@ pub enum IconKind {
 /// IMPORTANT: When using GPUI `uniform_list`, the item closure must render
 /// at exactly this height (including padding). If you change visuals, keep the
 /// total height stable or update this constant everywhere it is used.
-pub const LIST_ITEM_HEIGHT: f32 = 36.0;
+pub const LIST_ITEM_HEIGHT: f32 = 40.0;
 
 /// Fixed height for section headers (RECENT, MAIN, etc.)
-/// Total height includes: pt(8px) + text (~8px via text_xs) + pb(4px) = ~20px content
-/// Using 24px for comfortable spacing while maintaining visual compactness.
+/// Total height includes: pt(12px) + text (~12px) + pb(4px) = ~28px content
+/// Using 32px (8px grid) for comfortable spacing while maintaining visual compactness.
 ///
 /// ## Performance Note (uniform_list vs list)
 /// - Use `uniform_list` when every row has the same fixed height (fast O(1) scroll math).
 /// - Use `list()` when you need variable heights (e.g., headers + items); it uses a SumTree
 ///   and scroll math is O(log n).
-pub const SECTION_HEADER_HEIGHT: f32 = 24.0;
+pub const SECTION_HEADER_HEIGHT: f32 = 32.0;
+
+// =============================================================================
+// Layout & Spacing Constants (8px grid with 4px micro-steps)
+// =============================================================================
+
+/// Horizontal padding for list item inner content
+const ITEM_PADDING_X: f32 = 14.0;
+/// Vertical padding for list item inner content
+const ITEM_PADDING_Y: f32 = 4.0;
+/// Right padding on outer container (balances accent bar width)
+const ITEM_CONTAINER_PADDING_R: f32 = 4.0;
+/// Gap between icon and text content
+const ITEM_ICON_TEXT_GAP: f32 = 8.0;
+/// Gap between name and description lines
+const ITEM_NAME_DESC_GAP: f32 = 2.0;
+/// Gap between accessory items (badge, tag, hint)
+const ITEM_ACCESSORIES_GAP: f32 = 6.0;
+
+// =============================================================================
+// Icon Dimensions
+// =============================================================================
+
+/// Icon container size (width and height)
+const ICON_CONTAINER_SIZE: f32 = 20.0;
+/// SVG icon render size (inside the container)
+const ICON_SVG_SIZE: f32 = 16.0;
+
+// =============================================================================
+// Typography — font sizes & line heights
+// =============================================================================
+
+/// Item name font size (14px — dense desktop default for primary labels)
+const NAME_FONT_SIZE: f32 = 14.0;
+/// Item name line height
+const NAME_LINE_HEIGHT: f32 = 20.0;
+/// Item description font size (12px — minimum for desktop legibility)
+const DESC_FONT_SIZE: f32 = 12.0;
+/// Item description line height
+const DESC_LINE_HEIGHT: f32 = 18.0;
+/// Keyboard shortcut badge font size
+const BADGE_FONT_SIZE: f32 = 11.0;
+/// Tool/language badge font size (e.g. "ts", "bash")
+const TOOL_BADGE_FONT_SIZE: f32 = 10.0;
+/// Source hint font size (e.g. "main", "cleanshot")
+const SOURCE_HINT_FONT_SIZE: f32 = 11.0;
+/// Type tag pill font size (e.g. "Script", "Snippet")
+const TYPE_TAG_FONT_SIZE: f32 = 11.0;
+/// Section header label font size
+const SECTION_HEADER_FONT_SIZE: f32 = 12.0;
+/// Section header icon size
+const SECTION_HEADER_ICON_SIZE: f32 = 10.0;
+
+// =============================================================================
+// Badge & Tag Spacing
+// =============================================================================
+
+/// Shortcut badge horizontal padding
+const BADGE_PADDING_X: f32 = 6.0;
+/// Shortcut badge vertical padding
+const BADGE_PADDING_Y: f32 = 2.0;
+/// Shortcut badge corner radius
+const BADGE_RADIUS: f32 = 4.0;
+/// Tool badge horizontal padding
+const TOOL_BADGE_PADDING_X: f32 = 4.0;
+/// Tool badge vertical padding
+const TOOL_BADGE_PADDING_Y: f32 = 1.0;
+/// Tool badge corner radius
+const TOOL_BADGE_RADIUS: f32 = 3.0;
+/// Type tag pill horizontal padding
+const TYPE_TAG_PADDING_X: f32 = 5.0;
+/// Type tag pill vertical padding
+const TYPE_TAG_PADDING_Y: f32 = 1.0;
+/// Type tag pill corner radius
+const TYPE_TAG_RADIUS: f32 = 3.0;
+
+// =============================================================================
+// Section Header Spacing
+// =============================================================================
+
+/// Section header horizontal padding (matches item padding for alignment)
+const SECTION_PADDING_X: f32 = 14.0;
+/// Section header top padding (visual separation from above item)
+const SECTION_PADDING_TOP: f32 = 12.0;
+/// Section header bottom padding
+const SECTION_PADDING_BOTTOM: f32 = 4.0;
+/// Gap between header elements (icon, label, count)
+const SECTION_GAP: f32 = 6.0;
+
+// =============================================================================
+// Opacity tokens — named for intent, hex for GPUI rgba() bit-packing
+// =============================================================================
+
+/// 85% opacity — used for icon tint, section header text, descriptions
+const ALPHA_STRONG: u32 = 0xD9;
+/// 80% opacity — used for shortcut badge text
+const ALPHA_READABLE: u32 = 0xCC;
+/// 70% opacity — used for description highlight base text, header icon, tool badge text
+const ALPHA_MUTED: u32 = 0xB3;
+/// 65% opacity — used for source hint text
+const ALPHA_HINT: u32 = 0xA6;
+/// 60% opacity — used for section header count
+const ALPHA_SUBTLE: u32 = 0x99;
+/// 25% opacity — used for shortcut badge border
+const ALPHA_BORDER: u32 = 0x40;
+/// 15% opacity — used for section separator border
+const ALPHA_SEPARATOR_STRONG: u32 = 0x26;
+/// 10% opacity — used for item separator, type tag bg
+const ALPHA_SEPARATOR: u32 = 0x1A;
+/// 6% opacity — used for tool badge background
+const ALPHA_TINT_MEDIUM: u32 = 0x0F;
+/// 5% opacity — used for shortcut badge background
+const ALPHA_TINT_LIGHT: u32 = 0x0D;
+/// 4% opacity — used for section header background tint
+const ALPHA_TINT_FAINT: u32 = 0x0A;
+
+// =============================================================================
+// Font Family Tokens
+// =============================================================================
+
+/// System UI font for all list item text
+const FONT_SYSTEM_UI: &str = ".AppleSystemUIFont";
+/// Monospace font for keyboard shortcuts and code badges
+const FONT_MONO: &str = "SF Mono";
 
 /// Enum for grouped list items - supports both regular items and section headers
 ///
@@ -286,7 +409,7 @@ impl ListItemColors {
         // Light mode: needs higher opacity for visibility (black overlay on light bg)
         // Values aligned with Material Design elevation overlay model (~4-6dp)
         let (selected_opacity, hover_opacity) = if is_dark {
-            (0.12, 0.06) // Dark mode: refined selection, subtle hover
+            (0.14, 0.08) // Dark mode: improved selection/hover visibility
         } else {
             (0.20, 0.12) // Light mode: stronger overlay for visibility on vibrancy
         };
@@ -658,12 +781,14 @@ impl RenderOnce for ListItem {
         let icon_text_color = if self.selected {
             rgb(colors.text_primary)
         } else {
-            rgba((colors.text_secondary << 8) | 0xD9) // 85% opacity - clear but subordinate to text
+            rgba((colors.text_secondary << 8) | ALPHA_STRONG)
         };
+        let icon_size = px(ICON_CONTAINER_SIZE);
+        let svg_size = px(ICON_SVG_SIZE);
         let icon_element = match &self.icon {
             Some(IconKind::Emoji(emoji)) => div()
-                .w(px(20.))
-                .h(px(20.))
+                .w(icon_size)
+                .h(icon_size)
                 .flex()
                 .items_center()
                 .justify_center()
@@ -675,16 +800,16 @@ impl RenderOnce for ListItem {
                 // Render pre-decoded image directly (no decoding on render - critical for perf)
                 let image = render_image.clone();
                 div()
-                    .w(px(20.))
-                    .h(px(20.))
+                    .w(icon_size)
+                    .h(icon_size)
                     .flex()
                     .items_center()
                     .justify_center()
                     .flex_shrink_0()
                     .child(
                         img(move |_window: &mut Window, _cx: &mut App| Some(Ok(image.clone())))
-                            .w(px(20.))
-                            .h(px(20.))
+                            .w(icon_size)
+                            .h(icon_size)
                             .object_fit(ObjectFit::Contain),
                     )
             }
@@ -694,8 +819,8 @@ impl RenderOnce for ListItem {
                 if let Some(icon_name) = icon_name_from_str(name) {
                     let svg_path = icon_name.external_path();
                     div()
-                        .w(px(20.))
-                        .h(px(20.))
+                        .w(icon_size)
+                        .h(icon_size)
                         .flex()
                         .items_center()
                         .justify_center()
@@ -703,15 +828,15 @@ impl RenderOnce for ListItem {
                         .child(
                             svg()
                                 .external_path(svg_path)
-                                .size(px(16.))
+                                .size(svg_size)
                                 .text_color(icon_text_color),
                         )
                 } else {
                     // Fallback to Code icon if name not recognized
                     let svg_path = IconName::Code.external_path();
                     div()
-                        .w(px(20.))
-                        .h(px(20.))
+                        .w(icon_size)
+                        .h(icon_size)
                         .flex()
                         .items_center()
                         .justify_center()
@@ -719,7 +844,7 @@ impl RenderOnce for ListItem {
                         .child(
                             svg()
                                 .external_path(svg_path)
-                                .size(px(16.))
+                                .size(svg_size)
                                 .text_color(icon_text_color),
                         )
                 }
@@ -736,7 +861,7 @@ impl RenderOnce for ListItem {
             .overflow_hidden()
             .flex()
             .flex_col()
-            .gap(px(2.)) // 2px gap between name and description for tight visual pairing
+            .gap(px(ITEM_NAME_DESC_GAP))
             .justify_center();
 
         // Name rendering - 14px font size for better balance with description
@@ -780,23 +905,23 @@ impl RenderOnce for ListItem {
             let styled = StyledText::new(self.name.to_string()).with_highlights(highlights);
 
             div()
-                .text_size(px(14.))
+                .text_size(px(NAME_FONT_SIZE))
                 .font_weight(name_weight)
                 .overflow_hidden()
                 .text_ellipsis()
                 .whitespace_nowrap()
-                .line_height(px(20.))
+                .line_height(px(NAME_LINE_HEIGHT))
                 .text_color(base_color)
                 .child(styled)
         } else {
             // Plain text rendering (no search active)
             div()
-                .text_size(px(14.))
+                .text_size(px(NAME_FONT_SIZE))
                 .font_weight(name_weight)
                 .overflow_hidden()
                 .text_ellipsis()
                 .whitespace_nowrap()
-                .line_height(px(20.))
+                .line_height(px(NAME_LINE_HEIGHT))
                 .child(self.name)
         };
 
@@ -807,8 +932,8 @@ impl RenderOnce for ListItem {
         // Single-line with ellipsis truncation for long content
         // When description_highlight_indices are present, matched characters are rendered with accent color
         if let Some(desc) = self.description {
-            // Use text_secondary at 80% opacity for strong readability on vibrancy backgrounds
-            let desc_color = rgba((colors.text_secondary << 8) | 0xCC); // ~80% opacity of secondary for clear contrast
+            // Use text_secondary at strong opacity for clear readability on vibrancy backgrounds
+            let desc_color = rgba((colors.text_secondary << 8) | ALPHA_STRONG);
             let desc_element = if let Some(ref desc_indices) = self.description_highlight_indices {
                 // Build StyledText with highlighted matched characters in description
                 let index_set: HashSet<usize> = desc_indices.iter().copied().collect();
@@ -829,12 +954,12 @@ impl RenderOnce for ListItem {
                 }
 
                 // Base text uses secondary at moderate opacity - readable but doesn't compete with highlights
-                let base_color = rgba((colors.text_secondary << 8) | 0xB3);
+                let base_color = rgba((colors.text_secondary << 8) | ALPHA_MUTED);
                 let styled = StyledText::new(desc.clone()).with_highlights(highlights);
 
                 div()
-                    .text_size(px(12.))
-                    .line_height(px(16.))
+                    .text_size(px(DESC_FONT_SIZE))
+                    .line_height(px(DESC_LINE_HEIGHT))
                     .text_color(base_color)
                     .overflow_hidden()
                     .text_ellipsis()
@@ -842,8 +967,8 @@ impl RenderOnce for ListItem {
                     .child(styled)
             } else {
                 div()
-                    .text_size(px(12.))
-                    .line_height(px(16.))
+                    .text_size(px(DESC_FONT_SIZE))
+                    .line_height(px(DESC_LINE_HEIGHT))
                     .text_color(desc_color)
                     .overflow_hidden()
                     .text_ellipsis()
@@ -857,16 +982,16 @@ impl RenderOnce for ListItem {
         // Uses macOS-native modifier symbols (⌘, ⇧, ⌥, ⌃) for a native feel
         let shortcut_element = if let Some(sc) = self.shortcut {
             let display_text = format_shortcut_display(&sc);
-            let badge_border = (colors.text_dimmed << 8) | 0x40; // 25% opacity border - cleaner
+            let badge_border = (colors.text_dimmed << 8) | ALPHA_BORDER;
             div()
-                .text_size(px(11.))
-                .font_family("SF Mono")
+                .text_size(px(BADGE_FONT_SIZE))
+                .font_family(FONT_MONO)
                 .font_weight(FontWeight::MEDIUM)
-                .text_color(rgba((colors.text_muted << 8) | 0xCC)) // 80% opacity - subtle but readable
-                .px(px(6.))
-                .py(px(2.))
-                .rounded(px(4.))
-                .bg(rgba((colors.text_dimmed << 8) | 0x0D)) // 5% bg - less heavy
+                .text_color(rgba((colors.text_muted << 8) | ALPHA_READABLE))
+                .px(px(BADGE_PADDING_X))
+                .py(px(BADGE_PADDING_Y))
+                .rounded(px(BADGE_RADIUS))
+                .bg(rgba((colors.text_dimmed << 8) | ALPHA_TINT_LIGHT))
                 .border_1()
                 .border_color(rgba(badge_border))
                 .child(display_text)
@@ -886,7 +1011,7 @@ impl RenderOnce for ListItem {
         };
 
         // Build the inner content div with all styling
-        // Horizontal padding px(12.) and vertical padding py(2.) for compact spacing
+        // Horizontal padding ITEM_PADDING_X and vertical padding ITEM_PADDING_Y
         //
         // HOVER TRANSITIONS: We use GPUI's built-in .hover() modifier for instant visual
         // feedback on non-selected items. This provides CSS-like instant hover effects
@@ -898,14 +1023,14 @@ impl RenderOnce for ListItem {
         let separator_color = if self.selected {
             rgba(0x00000000) // No separator on selected item
         } else {
-            rgba((colors.text_muted << 8) | 0x14) // ~8% opacity - subtle separator, content-first
+            rgba((colors.text_muted << 8) | ALPHA_SEPARATOR)
         };
 
         let mut inner_content = div()
             .w_full()
             .h_full()
-            .px(px(14.))
-            .py(px(3.))
+            .px(px(ITEM_PADDING_X))
+            .py(px(ITEM_PADDING_Y))
             .bg(bg_color)
             .border_b_1()
             .border_color(separator_color)
@@ -914,12 +1039,12 @@ impl RenderOnce for ListItem {
             } else {
                 rgb(colors.text_secondary)
             })
-            .font_family(".AppleSystemUIFont")
+            .font_family(FONT_SYSTEM_UI)
             .cursor_pointer()
             .flex()
             .flex_row()
             .items_center()
-            .gap(px(10.))
+            .gap(px(ITEM_ICON_TEXT_GAP))
             .child(icon_element)
             .child(item_content)
             .child({
@@ -929,19 +1054,19 @@ impl RenderOnce for ListItem {
                     .flex_row()
                     .items_center()
                     .flex_shrink_0()
-                    .gap(px(6.));
+                    .gap(px(ITEM_ACCESSORIES_GAP));
 
                 // Tool/language badge for scriptlets (e.g., "ts", "bash")
                 if let Some(ref badge) = self.tool_badge {
-                    let badge_bg = (colors.text_dimmed << 8) | 0x0F; // 6% opacity
+                    let badge_bg = (colors.text_dimmed << 8) | ALPHA_TINT_MEDIUM;
                     accessories = accessories.child(
                         div()
-                            .text_size(px(9.))
-                            .font_family("SF Mono")
-                            .text_color(rgba((colors.text_dimmed << 8) | 0xA6)) // 65% opacity - legible badge
-                            .px(px(4.))
-                            .py(px(1.))
-                            .rounded(px(3.))
+                            .text_size(px(TOOL_BADGE_FONT_SIZE))
+                            .font_family(FONT_MONO)
+                            .text_color(rgba((colors.text_dimmed << 8) | ALPHA_MUTED))
+                            .px(px(TOOL_BADGE_PADDING_X))
+                            .py(px(TOOL_BADGE_PADDING_Y))
+                            .rounded(px(TOOL_BADGE_RADIUS))
                             .bg(rgba(badge_bg))
                             .child(badge.clone()),
                     );
@@ -951,23 +1076,23 @@ impl RenderOnce for ListItem {
                 if let Some(ref hint) = self.source_hint {
                     accessories = accessories.child(
                         div()
-                            .text_size(px(10.))
-                            .text_color(rgba((colors.text_dimmed << 8) | 0x99)) // 60% opacity - readable hint
+                            .text_size(px(SOURCE_HINT_FONT_SIZE))
+                            .text_color(rgba((colors.text_dimmed << 8) | ALPHA_HINT))
                             .child(hint.clone()),
                     );
                 }
 
                 // Type tag pill (shown during search to distinguish result types)
                 if let Some(ref tag) = self.type_tag {
-                    let tag_bg = (tag.color << 8) | 0x1A; // 10% opacity background
+                    let tag_bg = (tag.color << 8) | ALPHA_SEPARATOR; // 10% opacity background
                     accessories = accessories.child(
                         div()
-                            .text_size(px(10.))
+                            .text_size(px(TYPE_TAG_FONT_SIZE))
                             .font_weight(FontWeight::MEDIUM)
                             .text_color(rgb(tag.color))
-                            .px(px(5.))
-                            .py(px(1.))
-                            .rounded(px(3.))
+                            .px(px(TYPE_TAG_PADDING_X))
+                            .py(px(TYPE_TAG_PADDING_Y))
+                            .rounded(px(TYPE_TAG_RADIUS))
                             .bg(rgba(tag_bg))
                             .child(tag.label),
                     );
@@ -1006,7 +1131,7 @@ impl RenderOnce for ListItem {
         let mut container = div()
             .w_full()
             .h(px(LIST_ITEM_HEIGHT))
-            .pr(px(4.)) // Right padding only
+            .pr(px(ITEM_CONTAINER_PADDING_R))
             .flex()
             .flex_row()
             .items_center()
@@ -1120,22 +1245,16 @@ pub fn icon_from_png(png_data: &[u8]) -> Option<IconKind> {
 ///
 /// Visual design for section headers:
 /// - Standard casing (not uppercase)
-/// - Small font (~10-11px via text_xs)
+/// - 12px font (meets desktop minimum)
 /// - Semi-bold weight (SEMIBOLD for subtlety)
 /// - Dimmed color (subtle but readable)
-/// - Compact vertical footprint within the 48px uniform_list row
-/// - Large top padding to create visual compression (appears ~24px tall)
+/// - 32px height (8px grid aligned)
 /// - Left-aligned with list item padding
-/// - No background, no border
+/// - Subtle background tint for visual grouping
 ///
-/// ## Technical Note: uniform_list Height Constraint
-/// GPUI's `uniform_list` requires fixed heights for O(1) scroll calculation.
-/// We cannot use actual variable heights. Instead, we use a visual trick:
-/// - Actual height: 48px (LIST_ITEM_HEIGHT, for uniform_list)
-/// - Visual height: ~24px (via top padding compression)
-/// - Content is pushed to the bottom 24px of the container
-///
-/// This gives the appearance of 50% height while maintaining uniform_list compatibility.
+/// ## Technical Note: list() Height
+/// Uses GPUI's `list()` component which supports variable-height items.
+/// Section headers render at 32px, regular items at 40px.
 ///
 /// # Arguments
 /// * `label` - The section label (displayed as-is, standard casing)
@@ -1149,12 +1268,12 @@ pub fn render_section_header(
     colors: ListItemColors,
     is_first: bool,
 ) -> impl IntoElement {
-    // Compact section header with explicit height (SECTION_HEADER_HEIGHT = 24px)
+    // Section header at 32px (8px grid aligned, SECTION_HEADER_HEIGHT)
     // Used with GPUI's list() component which supports variable-height items.
     //
-    // Layout: 24px total height
-    // - pt(8px) top padding for visual separation from above item
-    // - ~8px text height (text_xs)
+    // Layout: 32px total height
+    // - pt(12px) top padding for visual separation from above item
+    // - ~12px text height
     // - pb(4px) bottom padding for visual separation from below item
 
     // Parse label to separate name from count (e.g., "SUGGESTED · 5" → "SUGGESTED", "5")
@@ -1165,15 +1284,14 @@ pub fn render_section_header(
     };
 
     // Build the inner content row: icon (optional) → section name → count (optional)
-    // Use text_secondary at 85% for readable section labels on vibrancy backgrounds
-    // text_muted (0x808080) was too faint on light vibrancy
-    let header_text_color = rgba((colors.text_secondary << 8) | 0xD9); // 85% opacity of secondary
+    // Use text_secondary at strong opacity for readable section labels on vibrancy backgrounds
+    let header_text_color = rgba((colors.text_secondary << 8) | ALPHA_STRONG);
     let mut content = div()
         .flex()
         .flex_row()
         .items_center()
-        .gap(px(6.))
-        .text_size(px(11.0)) // slightly bigger than text_xs for readability
+        .gap(px(SECTION_GAP))
+        .text_size(px(SECTION_HEADER_FONT_SIZE))
         .font_weight(FontWeight::SEMIBOLD)
         .text_color(header_text_color);
 
@@ -1183,8 +1301,8 @@ pub fn render_section_header(
             content = content.child(
                 svg()
                     .external_path(icon_name.external_path())
-                    .size(px(10.))
-                    .text_color(rgba((colors.text_secondary << 8) | 0xB3)), // 70% of secondary for subordination
+                    .size(px(SECTION_HEADER_ICON_SIZE))
+                    .text_color(rgba((colors.text_secondary << 8) | ALPHA_MUTED)),
             );
         }
     }
@@ -1197,20 +1315,20 @@ pub fn render_section_header(
             div()
                 .text_xs()
                 .font_weight(FontWeight::NORMAL)
-                .text_color(rgba((colors.text_secondary << 8) | 0x99)) // 60% of secondary - subordinate to label
+                .text_color(rgba((colors.text_secondary << 8) | ALPHA_SUBTLE))
                 .child(count.to_string()),
         );
     }
 
     // Background tint for section headers to create visual grouping
-    let header_bg = rgba((colors.text_secondary << 8) | 0x0A); // ~4% opacity tint - subtle grouping, lets vibrancy through
+    let header_bg = rgba((colors.text_secondary << 8) | ALPHA_TINT_FAINT);
 
     let header = div()
         .w_full()
-        .h(px(30.0)) // Taller for clear visual separation between sections
-        .px(px(14.)) // Match item padding for alignment
-        .pt(px(12.)) // Generous top padding for visual separation
-        .pb(px(4.)) // Bottom padding
+        .h(px(SECTION_HEADER_HEIGHT))
+        .px(px(SECTION_PADDING_X))
+        .pt(px(SECTION_PADDING_TOP))
+        .pb(px(SECTION_PADDING_BOTTOM))
         .bg(header_bg)
         .flex()
         .flex_col()
@@ -1222,7 +1340,7 @@ pub fn render_section_header(
     } else {
         header
             .border_t_1()
-            .border_color(rgba((colors.text_secondary << 8) | 0x26)) // ~15% opacity - visible section separator without dominating
+            .border_color(rgba((colors.text_secondary << 8) | ALPHA_SEPARATOR_STRONG))
     };
 
     header.child(content)

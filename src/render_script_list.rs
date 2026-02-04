@@ -211,8 +211,8 @@ impl ScriptListApp {
                 }
             }
 
-            // Calculate true content height: headers at 28px (visual height), items at 36px
-            let total_content_height = (header_count as f32 * 28.0)
+            // Calculate true content height: headers at 32px (visual height), items at 40px
+            let total_content_height = (header_count as f32 * SECTION_HEADER_HEIGHT)
                 + (item_count_regular as f32 * LIST_ITEM_HEIGHT);
 
             // Estimated visible container height
@@ -262,14 +262,13 @@ impl ScriptListApp {
                         if let Some(grouped_item) = grouped_items_clone.get(ix) {
                             match grouped_item {
                                 GroupedListItem::SectionHeader(label, icon) => {
-                                    // Section header at 28px height (slightly taller than SECTION_HEADER_HEIGHT
-                                    // for breathing room with separator line)
+                                    // Section header at 32px height (8px grid) for clear visual separation
                                     div()
                                         .id(ElementId::NamedInteger(
                                             "section-header".into(),
                                             ix as u64,
                                         ))
-                                        .h(px(28.0))
+                                        .h(px(SECTION_HEADER_HEIGHT))
                                         .child(render_section_header(label, icon.as_deref(), theme_colors, ix == 0))
                                         .into_any_element()
                                 }
@@ -379,7 +378,7 @@ impl ScriptListApp {
                                                 "script-item".into(),
                                                 ix as u64,
                                             ))
-                                            .h(px(LIST_ITEM_HEIGHT)) // Explicit 48px height
+                                            .h(px(LIST_ITEM_HEIGHT)) // Explicit 40px height (8px grid)
                                             .on_hover(hover_handler)
                                             .on_click(click_handler)
                                             .child(item_element)
@@ -669,7 +668,11 @@ impl ScriptListApp {
                                     );
                                     // Only close if action has close: true (default)
                                     if should_close {
-                                        this.close_actions_popup(ActionsDialogHost::MainList, window, cx);
+                                        this.close_actions_popup(
+                                            ActionsDialogHost::MainList,
+                                            window,
+                                            cx,
+                                        );
                                     }
                                     this.handle_action(action_id, cx);
                                 }
@@ -753,7 +756,11 @@ impl ScriptListApp {
                                         ),
                                     );
                                     // Close the dialog using centralized helper
-                                    this.close_actions_popup(ActionsDialogHost::MainList, window, cx);
+                                    this.close_actions_popup(
+                                        ActionsDialogHost::MainList,
+                                        window,
+                                        cx,
+                                    );
                                     // Execute the action
                                     this.handle_action(action_id, cx);
                                     cx.notify();
@@ -951,23 +958,43 @@ impl ScriptListApp {
                         // Build a compact breakdown string (e.g., "3 scripts · 2 snippets")
                         let mut parts: Vec<String> = Vec::new();
                         if scripts > 0 {
-                            parts.push(format!("{} {}", scripts, if scripts == 1 { "script" } else { "scripts" }));
+                            parts.push(format!(
+                                "{} {}",
+                                scripts,
+                                if scripts == 1 { "script" } else { "scripts" }
+                            ));
                         }
                         if snippets > 0 {
-                            parts.push(format!("{} {}", snippets, if snippets == 1 { "snippet" } else { "snippets" }));
+                            parts.push(format!(
+                                "{} {}",
+                                snippets,
+                                if snippets == 1 { "snippet" } else { "snippets" }
+                            ));
                         }
                         if commands > 0 {
-                            parts.push(format!("{} {}", commands, if commands == 1 { "command" } else { "commands" }));
+                            parts.push(format!(
+                                "{} {}",
+                                commands,
+                                if commands == 1 { "command" } else { "commands" }
+                            ));
                         }
                         if apps > 0 {
-                            parts.push(format!("{} {}", apps, if apps == 1 { "app" } else { "apps" }));
+                            parts.push(format!(
+                                "{} {}",
+                                apps,
+                                if apps == 1 { "app" } else { "apps" }
+                            ));
                         }
                         if others > 0 {
                             parts.push(format!("{} other", others));
                         }
                         // If all results are the same type, just show total count
                         let count_text = if parts.len() <= 1 {
-                            if total_selectable == 1 { "1 result".to_string() } else { format!("{} results", total_selectable) }
+                            if total_selectable == 1 {
+                                "1 result".to_string()
+                            } else {
+                                format!("{} results", total_selectable)
+                            }
                         } else {
                             // Show at most 3 categories to avoid overflow
                             parts.truncate(3);
@@ -996,46 +1023,71 @@ impl ScriptListApp {
                             )
                     })
                     // Total item count in grouped view - subtle hint showing library size
-                    .when(self.filter_text.is_empty() && !flat_results.is_empty(), |el| {
-                        // Count items by type for a compact summary
-                        let mut scripts_count = 0u16;
-                        let mut snippets_count = 0u16;
-                        let mut others_count = 0u16;
-                        for r in flat_results.iter() {
-                            match r {
-                                crate::scripts::SearchResult::Script(_) => scripts_count += 1,
-                                crate::scripts::SearchResult::Scriptlet(_) => snippets_count += 1,
-                                _ => others_count += 1,
+                    .when(
+                        self.filter_text.is_empty() && !flat_results.is_empty(),
+                        |el| {
+                            // Count items by type for a compact summary
+                            let mut scripts_count = 0u16;
+                            let mut snippets_count = 0u16;
+                            let mut others_count = 0u16;
+                            for r in flat_results.iter() {
+                                match r {
+                                    crate::scripts::SearchResult::Script(_) => scripts_count += 1,
+                                    crate::scripts::SearchResult::Scriptlet(_) => {
+                                        snippets_count += 1
+                                    }
+                                    _ => others_count += 1,
+                                }
                             }
-                        }
-                        // Build compact summary (e.g., "42 scripts · 15 snippets")
-                        let mut parts: Vec<String> = Vec::new();
-                        if scripts_count > 0 {
-                            parts.push(format!("{} {}", scripts_count, if scripts_count == 1 { "script" } else { "scripts" }));
-                        }
-                        if snippets_count > 0 {
-                            parts.push(format!("{} {}", snippets_count, if snippets_count == 1 { "snippet" } else { "snippets" }));
-                        }
-                        if others_count > 0 {
-                            parts.push(format!("{} other", others_count));
-                        }
-                        let summary = if parts.len() <= 1 {
-                            let total = flat_results.len();
-                            if total == 1 { "1 item".to_string() } else { format!("{} items", total) }
-                        } else {
-                            parts.truncate(3);
-                            parts.join(" · ")
-                        };
+                            // Build compact summary (e.g., "42 scripts · 15 snippets")
+                            let mut parts: Vec<String> = Vec::new();
+                            if scripts_count > 0 {
+                                parts.push(format!(
+                                    "{} {}",
+                                    scripts_count,
+                                    if scripts_count == 1 {
+                                        "script"
+                                    } else {
+                                        "scripts"
+                                    }
+                                ));
+                            }
+                            if snippets_count > 0 {
+                                parts.push(format!(
+                                    "{} {}",
+                                    snippets_count,
+                                    if snippets_count == 1 {
+                                        "snippet"
+                                    } else {
+                                        "snippets"
+                                    }
+                                ));
+                            }
+                            if others_count > 0 {
+                                parts.push(format!("{} other", others_count));
+                            }
+                            let summary = if parts.len() <= 1 {
+                                let total = flat_results.len();
+                                if total == 1 {
+                                    "1 item".to_string()
+                                } else {
+                                    format!("{} items", total)
+                                }
+                            } else {
+                                parts.truncate(3);
+                                parts.join(" · ")
+                            };
 
-                        el.child(
-                            div()
-                                .text_xs()
-                                .text_color(rgba((text_muted << 8) | 0x9F)) // 62% opacity - readable but subtle
-                                .flex_shrink_0()
-                                .whitespace_nowrap()
-                                .child(summary),
-                        )
-                    })
+                            el.child(
+                                div()
+                                    .text_xs()
+                                    .text_color(rgba((text_muted << 8) | 0x9F)) // 62% opacity - readable but subtle
+                                    .flex_shrink_0()
+                                    .whitespace_nowrap()
+                                    .child(summary),
+                            )
+                        },
+                    )
                     // "Ask AI [Tab]" button - yellow text, grey badge, hover state
                     .child({
                         // Hover background: accent color at 15% opacity
@@ -1158,12 +1210,13 @@ impl ScriptListApp {
             };
 
             // Get the selected result for primary label and type indicator
-            let footer_selected = grouped_items
-                .get(self.selected_index)
-                .and_then(|item| match item {
-                    GroupedListItem::Item(idx) => flat_results.get(*idx),
-                    GroupedListItem::SectionHeader(..) => None,
-                });
+            let footer_selected =
+                grouped_items
+                    .get(self.selected_index)
+                    .and_then(|item| match item {
+                        GroupedListItem::Item(idx) => flat_results.get(*idx),
+                        GroupedListItem::SectionHeader(..) => None,
+                    });
             let primary_label = footer_selected
                 .map(|result| result.get_default_action_text())
                 .unwrap_or("Run");
@@ -1191,20 +1244,20 @@ impl ScriptListApp {
             footer_config = footer_config.show_secondary(self.has_actions());
 
             PromptFooter::new(footer_config, footer_colors)
-            .on_primary_click(Box::new(move |_, _window, cx| {
-                if let Some(app) = handle_run.upgrade() {
-                    app.update(cx, |this, cx| {
-                        this.execute_selected(cx);
-                    });
-                }
-            }))
-            .on_secondary_click(Box::new(move |_, window, cx| {
-                if let Some(app) = handle_actions.upgrade() {
-                    app.update(cx, |this, cx| {
-                        this.toggle_actions(cx, window);
-                    });
-                }
-            }))
+                .on_primary_click(Box::new(move |_, _window, cx| {
+                    if let Some(app) = handle_run.upgrade() {
+                        app.update(cx, |this, cx| {
+                            this.execute_selected(cx);
+                        });
+                    }
+                }))
+                .on_secondary_click(Box::new(move |_, window, cx| {
+                    if let Some(app) = handle_actions.upgrade() {
+                        app.update(cx, |this, cx| {
+                            this.toggle_actions(cx, window);
+                        });
+                    }
+                }))
         });
 
         if let Some(panel) = log_panel {
