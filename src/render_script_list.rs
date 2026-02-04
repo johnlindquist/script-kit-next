@@ -980,7 +980,7 @@ impl ScriptListApp {
                                 div()
                                     .text_xs()
                                     .font_family("SF Mono")
-                                    .text_color(rgba((text_muted << 8) | 0xB0)) // 69% opacity
+                                    .text_color(rgba((text_muted << 8) | 0xCC)) // 80% opacity
                                     .flex_shrink_0()
                                     .whitespace_nowrap()
                                     .child(format!("{} / {}", selected_position, total_selectable)),
@@ -1030,7 +1030,7 @@ impl ScriptListApp {
                         el.child(
                             div()
                                 .text_xs()
-                                .text_color(rgba((text_muted << 8) | 0x80)) // 50% opacity - very subtle
+                                .text_color(rgba((text_muted << 8) | 0x9F)) // 62% opacity - readable but subtle
                                 .flex_shrink_0()
                                 .whitespace_nowrap()
                                 .child(summary),
