@@ -77,8 +77,8 @@ const NAME_FONT_SIZE: f32 = 14.0;
 const NAME_LINE_HEIGHT: f32 = 20.0;
 /// Item description font size (12px — minimum for desktop legibility)
 const DESC_FONT_SIZE: f32 = 12.0;
-/// Item description line height
-const DESC_LINE_HEIGHT: f32 = 18.0;
+/// Item description line height (16px fits better within 40px item height)
+const DESC_LINE_HEIGHT: f32 = 16.0;
 /// Keyboard shortcut badge font size
 const BADGE_FONT_SIZE: f32 = 11.0;
 /// Tool/language badge font size (e.g. "ts", "bash")
@@ -148,26 +148,26 @@ const ALPHA_SUBTLE: u32 = 0xA6;
 /// 30% opacity — used for shortcut badge border
 /// (Bumped from 25% so kbd borders pass ≥3:1 non-text contrast on vibrancy)
 const ALPHA_BORDER: u32 = 0x4D;
-/// 18% opacity — used for section separator border
-/// (Bumped from 15% for clearer visual grouping between sections)
-const ALPHA_SEPARATOR_STRONG: u32 = 0x2E;
+/// 22% opacity — used for section separator border
+/// (Bumped from 18% for clearer group boundary definition)
+const ALPHA_SEPARATOR_STRONG: u32 = 0x38;
 /// 20% opacity — used for type tag pill background
 /// (Higher than separator for visible badge fill on vibrancy)
 const ALPHA_TAG_BG: u32 = 0x33;
 /// 35% opacity — used for type tag pill border
 const ALPHA_TAG_BORDER: u32 = 0x59;
-/// 12% opacity — used for item separator
-/// (Bumped from 10% for better list scanability)
-const ALPHA_SEPARATOR: u32 = 0x1F;
+/// 14% opacity — used for item separator
+/// (Bumped from 12% for better list scanability)
+const ALPHA_SEPARATOR: u32 = 0x24;
 /// 7% opacity — used for tool badge background
 /// (Bumped from 6% for slightly more visible badge pills)
 const ALPHA_TINT_MEDIUM: u32 = 0x12;
 /// 6% opacity — used for shortcut badge background
 /// (Bumped from 5% for subtle but visible kbd backgrounds)
 const ALPHA_TINT_LIGHT: u32 = 0x0F;
-/// 5% opacity — used for section header background tint
-/// (Bumped from 4% for more visible section grouping)
-const ALPHA_TINT_FAINT: u32 = 0x0D;
+/// 7% opacity — used for section header background tint
+/// (Bumped from 5% for more visible section grouping)
+const ALPHA_TINT_FAINT: u32 = 0x12;
 
 // =============================================================================
 // Empty State Constants
@@ -1020,8 +1020,8 @@ impl RenderOnce for ListItem {
         // Single-line with ellipsis truncation for long content
         // When description_highlight_indices are present, matched characters are rendered with accent color
         if let Some(desc) = self.description {
-            // Use text_secondary at strong opacity for clear readability on vibrancy backgrounds
-            let desc_color = rgba((colors.text_secondary << 8) | ALPHA_STRONG);
+            // Use text_secondary at muted opacity — subordinate to name for clear hierarchy
+            let desc_color = rgba((colors.text_secondary << 8) | ALPHA_MUTED);
             let desc_element = if let Some(ref desc_indices) = self.description_highlight_indices {
                 // Build StyledText with highlighted matched characters in description
                 let index_set: HashSet<usize> = desc_indices.iter().copied().collect();
