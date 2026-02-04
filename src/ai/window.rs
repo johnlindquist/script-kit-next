@@ -47,6 +47,7 @@ use super::model::{Chat, ChatId, ChatSource, Message, MessageRole};
 use super::providers::ProviderRegistry;
 use super::storage;
 use crate::actions::{get_ai_command_bar_actions, CommandBar, CommandBarConfig};
+use crate::prompts::markdown::render_markdown;
 use crate::theme;
 
 /// Events from the streaming thread
@@ -3581,6 +3582,7 @@ impl AiApp {
     /// Render a single message bubble
     fn render_message(&self, message: &Message, cx: &mut Context<Self>) -> impl IntoElement {
         let is_user = message.role == MessageRole::User;
+        let colors = theme::PromptColors::from_theme(&crate::theme::get_cached_theme());
 
         // Vibrancy-compatible backgrounds: white with low alpha for transparency
         let user_bg = rgba((0xFFFFFF << 8) | 0x18); // White at ~9% opacity
@@ -3610,17 +3612,37 @@ impl AiApp {
                     .when(!is_user, |d| d.bg(assistant_bg))
                     .child(
                         div()
-                            .text_sm()
-                            .text_color(cx.theme().foreground)
-                            .child(message.content.clone()),
+                            .w_full()
+                            .min_w_0()
+                            .overflow_x_hidden()
+                            .child(render_markdown(&message.content, &colors)),
                     ),
             )
     }
 
     /// Render streaming content (assistant response in progress)
     fn render_streaming_content(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let colors = theme::PromptColors::from_theme(&crate::theme::get_cached_theme());
+
         // Vibrancy-compatible background
         let streaming_bg = rgba((0xFFFFFF << 8) | 0x10); // White at ~6% opacity
+
+        let content_element = if self.streaming_content.is_empty() {
+            div()
+                .text_sm()
+                .text_color(cx.theme().foreground)
+                .child("...")
+                .into_any_element()
+        } else {
+            // Streaming with content - append cursor and render as markdown
+            let with_cursor = format!("{}▌", self.streaming_content);
+            div()
+                .w_full()
+                .min_w_0()
+                .overflow_x_hidden()
+                .child(render_markdown(&with_cursor, &colors))
+                .into_any_element()
+        };
 
         div()
             .flex()
@@ -3648,15 +3670,12 @@ impl AiApp {
             )
             .child(
                 // Streaming content - vibrancy-compatible background
-                div().w_full().p_3().rounded_md().bg(streaming_bg).child(
-                    div().text_sm().text_color(cx.theme().foreground).child(
-                        if self.streaming_content.is_empty() {
-                            "...".to_string()
-                        } else {
-                            self.streaming_content.clone()
-                        },
-                    ),
-                ),
+                div()
+                    .w_full()
+                    .p_3()
+                    .rounded_md()
+                    .bg(streaming_bg)
+                    .child(content_element),
             )
     }
 
