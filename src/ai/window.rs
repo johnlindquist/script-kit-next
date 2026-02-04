@@ -3560,7 +3560,25 @@ impl AiApp {
                                     ),
                             ),
                     )
-                    .child(self.render_search(cx)),
+                    .child(self.render_search(cx))
+                    // Search result count (shown when there's an active search query with results)
+                    .when(
+                        !self.search_query.is_empty() && !self.chats.is_empty(),
+                        |d| {
+                            let count = self.chats.len();
+                            d.child(
+                                div()
+                                    .text_xs()
+                                    .text_color(cx.theme().muted_foreground.opacity(0.6))
+                                    .px_1()
+                                    .child(format!(
+                                        "{} {}",
+                                        count,
+                                        if count == 1 { "result" } else { "results" }
+                                    )),
+                            )
+                        },
+                    ),
             )
             // Scrollable chat list with date groups
             // Note: overflow_y_scrollbar() wraps the element in a Scrollable container
@@ -4548,7 +4566,12 @@ impl AiApp {
     }
 
     /// Render a single message bubble with role icon, timestamp, and hover-revealed copy button
-    fn render_message(&self, message: &Message, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_message(
+        &self,
+        message: &Message,
+        is_continuation: bool,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
         let is_user = message.role == MessageRole::User;
         let colors = theme::PromptColors::from_theme(&crate::theme::get_cached_theme());
 
@@ -4599,129 +4622,134 @@ impl AiApp {
             .flex()
             .flex_col()
             .w_full()
-            .mb_3()
-            .child(
-                // Role label row with icon, timestamp, and hover-revealed copy button
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .mb_1()
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap(px(6.))
-                            .child(
-                                svg()
-                                    .external_path(role_icon.external_path())
-                                    .size(px(14.))
-                                    .text_color(if is_user {
-                                        cx.theme().accent
-                                    } else {
-                                        cx.theme().muted_foreground
-                                    }),
-                            )
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .font_weight(gpui::FontWeight::SEMIBOLD)
-                                    .text_color(if is_user {
-                                        cx.theme().foreground
-                                    } else {
-                                        cx.theme().muted_foreground
-                                    })
-                                    .child(role_label),
-                            )
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(cx.theme().muted_foreground.opacity(0.4))
-                                    .child(timestamp),
-                            ),
-                    )
-                    // Edit button for user messages (hover-revealed)
-                    .when(is_user, |el| {
-                        el.child(
+            .when(is_continuation, |d| d.mb_1())
+            .when(!is_continuation, |d| d.mb_3())
+            // Role label row - hidden for continuation messages from same sender
+            .when(!is_continuation, |el| {
+                el.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .mb_1()
+                        .child(
                             div()
-                                .id(SharedString::from(format!("edit-{}", msg_id_for_edit)))
                                 .flex()
                                 .items_center()
+                                .gap(px(6.))
+                                .child(
+                                    svg()
+                                        .external_path(role_icon.external_path())
+                                        .size(px(14.))
+                                        .text_color(if is_user {
+                                            cx.theme().accent
+                                        } else {
+                                            cx.theme().muted_foreground
+                                        }),
+                                )
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                                        .text_color(if is_user {
+                                            cx.theme().foreground
+                                        } else {
+                                            cx.theme().muted_foreground
+                                        })
+                                        .child(role_label),
+                                )
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(cx.theme().muted_foreground.opacity(0.6))
+                                        .child(timestamp),
+                                ),
+                        )
+                        // Edit button for user messages (hover-revealed)
+                        .when(is_user, |el| {
+                            el.child(
+                                div()
+                                    .id(SharedString::from(format!("edit-{}", msg_id_for_edit)))
+                                    .flex()
+                                    .items_center()
+                                    .px(px(6.))
+                                    .py(px(2.))
+                                    .rounded(px(4.))
+                                    .cursor_pointer()
+                                    .opacity(0.0)
+                                    .group_hover("message", |s| s.opacity(0.6))
+                                    .hover(|s| s.bg(cx.theme().muted.opacity(0.5)).opacity(1.0))
+                                    .on_click(cx.listener(move |this, _, window, cx| {
+                                        this.start_editing_message(
+                                            msg_id_for_edit.clone(),
+                                            content_for_edit.clone(),
+                                            window,
+                                            cx,
+                                        );
+                                    }))
+                                    .child(
+                                        svg()
+                                            .external_path(LocalIconName::Pencil.external_path())
+                                            .size(px(12.))
+                                            .text_color(cx.theme().muted_foreground.opacity(0.6)),
+                                    ),
+                            )
+                        })
+                        // Copy button - shows checkmark when recently copied, hidden until hover
+                        .child(
+                            div()
+                                .id(SharedString::from(format!("copy-{}", msg_id)))
+                                .flex()
+                                .items_center()
+                                .gap(px(4.))
                                 .px(px(6.))
                                 .py(px(2.))
                                 .rounded(px(4.))
                                 .cursor_pointer()
-                                .opacity(0.)
-                                .group_hover("message", |s| s.opacity(1.0))
-                                .hover(|s| s.bg(cx.theme().muted.opacity(0.5)))
-                                .on_click(cx.listener(move |this, _, window, cx| {
-                                    this.start_editing_message(
-                                        msg_id_for_edit.clone(),
-                                        content_for_edit.clone(),
-                                        window,
+                                .when(!is_copied, |d| {
+                                    d.opacity(0.0).group_hover("message", |s| s.opacity(0.6))
+                                })
+                                .hover(|s| s.bg(cx.theme().muted.opacity(0.5)).opacity(1.0))
+                                .on_click(cx.listener(move |this, _, _window, cx| {
+                                    this.copy_message(
+                                        msg_id_for_click.clone(),
+                                        content_for_copy.clone(),
                                         cx,
                                     );
                                 }))
-                                .child(
-                                    svg()
-                                        .external_path(LocalIconName::Pencil.external_path())
-                                        .size(px(12.))
-                                        .text_color(cx.theme().muted_foreground.opacity(0.5)),
-                                ),
-                        )
-                    })
-                    // Copy button - shows checkmark when recently copied, hidden until hover
-                    .child(
-                        div()
-                            .id(SharedString::from(format!("copy-{}", msg_id)))
-                            .flex()
-                            .items_center()
-                            .gap(px(4.))
-                            .px(px(6.))
-                            .py(px(2.))
-                            .rounded(px(4.))
-                            .cursor_pointer()
-                            .when(!is_copied, |d| {
-                                d.opacity(0.).group_hover("message", |s| s.opacity(1.0))
-                            })
-                            .hover(|s| s.bg(cx.theme().muted.opacity(0.5)))
-                            .on_click(cx.listener(move |this, _, _window, cx| {
-                                this.copy_message(
-                                    msg_id_for_click.clone(),
-                                    content_for_copy.clone(),
-                                    cx,
-                                );
-                            }))
-                            .when(is_copied, |d| {
-                                d.child(
-                                    div()
-                                        .flex()
-                                        .items_center()
-                                        .gap(px(3.))
-                                        .child(
-                                            svg()
-                                                .external_path(LocalIconName::Check.external_path())
-                                                .size(px(12.))
-                                                .text_color(cx.theme().success),
-                                        )
-                                        .child(
-                                            div()
-                                                .text_xs()
-                                                .text_color(cx.theme().success)
-                                                .child("Copied"),
-                                        ),
-                                )
-                            })
-                            .when(!is_copied, |d| {
-                                d.child(
-                                    svg()
-                                        .external_path(LocalIconName::Copy.external_path())
-                                        .size(px(12.))
-                                        .text_color(cx.theme().muted_foreground.opacity(0.5)),
-                                )
-                            }),
-                    ),
-            )
+                                .when(is_copied, |d| {
+                                    d.child(
+                                        div()
+                                            .flex()
+                                            .items_center()
+                                            .gap(px(3.))
+                                            .child(
+                                                svg()
+                                                    .external_path(
+                                                        LocalIconName::Check.external_path(),
+                                                    )
+                                                    .size(px(12.))
+                                                    .text_color(cx.theme().success),
+                                            )
+                                            .child(
+                                                div()
+                                                    .text_xs()
+                                                    .text_color(cx.theme().success)
+                                                    .child("Copied"),
+                                            ),
+                                    )
+                                })
+                                .when(!is_copied, |d| {
+                                    d.child(
+                                        svg()
+                                            .external_path(LocalIconName::Copy.external_path())
+                                            .size(px(12.))
+                                            .text_color(cx.theme().muted_foreground.opacity(0.5)),
+                                    )
+                                }),
+                        ),
+                )
+            })
             .child(
                 // Message content - differentiated backgrounds
                 div()
@@ -5219,8 +5247,11 @@ impl AiApp {
                         && !has_error
                         && ix == msg_count - 1
                         && this.current_messages[ix].role == MessageRole::Assistant;
+                    // Compact header when consecutive messages share the same role
+                    let is_continuation = ix > 0
+                        && this.current_messages[ix].role == this.current_messages[ix - 1].role;
                     let msg_el = this
-                        .render_message(&this.current_messages[ix], cx)
+                        .render_message(&this.current_messages[ix], is_continuation, cx)
                         .into_any_element();
                     if is_last_assistant {
                         div()
