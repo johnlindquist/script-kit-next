@@ -61,7 +61,7 @@ pub enum GroupedActionItem {
 /// 1. First tries searching DOWN to find the next Item
 /// 2. If not found, searches UP to find the previous Item
 /// 3. If still not found, returns None
-fn coerce_action_selection(rows: &[GroupedActionItem], ix: usize) -> Option<usize> {
+pub(super) fn coerce_action_selection(rows: &[GroupedActionItem], ix: usize) -> Option<usize> {
     if rows.is_empty() {
         return None;
     }
@@ -92,7 +92,7 @@ fn coerce_action_selection(rows: &[GroupedActionItem], ix: usize) -> Option<usiz
 
 /// Build grouped items from actions and filtered_actions
 /// This is a static helper used during construction to avoid borrowing issues
-fn build_grouped_items_static(
+pub(super) fn build_grouped_items_static(
     actions: &[Action],
     filtered_actions: &[usize],
     section_style: SectionStyle,
@@ -575,7 +575,7 @@ impl ActionsDialog {
 
     /// Parse a shortcut string into individual keycap characters
     /// e.g., "⌘↵" → vec!["⌘", "↵"], "⌘I" → vec!["⌘", "I"]
-    fn parse_shortcut_keycaps(shortcut: &str) -> Vec<String> {
+    pub(crate) fn parse_shortcut_keycaps(shortcut: &str) -> Vec<String> {
         let mut keycaps = Vec::new();
 
         for ch in shortcut.chars() {
@@ -648,7 +648,7 @@ impl ActionsDialog {
     }
 
     /// Format a keyboard shortcut for display (e.g., "cmd+c" → "⌘C")
-    fn format_shortcut_hint(shortcut: &str) -> String {
+    pub(crate) fn format_shortcut_hint(shortcut: &str) -> String {
         let mut result = String::new();
         let parts: Vec<&str> = shortcut.split('+').collect();
 
@@ -952,7 +952,7 @@ impl ActionsDialog {
     ///
     /// PERFORMANCE: Uses pre-computed lowercase fields (title_lower, description_lower,
     /// shortcut_lower) to avoid repeated to_lowercase() calls on every keystroke.
-    fn score_action(action: &Action, search_lower: &str) -> i32 {
+    pub(crate) fn score_action(action: &Action, search_lower: &str) -> i32 {
         let mut score = 0;
 
         // Prefix match on title (strongest) - use cached lowercase
@@ -986,7 +986,7 @@ impl ActionsDialog {
     }
 
     /// Simple fuzzy matching: check if all characters in needle appear in haystack in order.
-    fn fuzzy_match(haystack: &str, needle: &str) -> bool {
+    pub(crate) fn fuzzy_match(haystack: &str, needle: &str) -> bool {
         let mut haystack_chars = haystack.chars();
         for needle_char in needle.chars() {
             loop {
