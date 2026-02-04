@@ -614,6 +614,35 @@ pub fn fuzzy_search_scripts(scripts: &[Arc<Script>], query: &str) -> Vec<ScriptM
             }
         }
 
+        // Score by script property keyword match - allows finding scripts by behavior
+        // Users can type "cron", "scheduled", "background", "system", or "watch" to find
+        // scripts with those runtime properties. This makes special scripts discoverable.
+        if let Some(ref typed_meta) = script.typed_metadata {
+            let ql = query_lower.as_str();
+            if (typed_meta.cron.is_some() || typed_meta.schedule.is_some())
+                && (contains_ignore_ascii_case("cron", ql)
+                    || contains_ignore_ascii_case("scheduled", ql)
+                    || contains_ignore_ascii_case("schedule", ql))
+            {
+                score += 35;
+            }
+            if typed_meta.background
+                && (contains_ignore_ascii_case("background", ql)
+                    || contains_ignore_ascii_case("bg", ql))
+            {
+                score += 35;
+            }
+            if typed_meta.system && contains_ignore_ascii_case("system", ql) {
+                score += 35;
+            }
+            if !typed_meta.watch.is_empty()
+                && (contains_ignore_ascii_case("watch", ql)
+                    || contains_ignore_ascii_case("watching", ql))
+            {
+                score += 35;
+            }
+        }
+
         // Score by description match - medium priority
         // Substring match + nucleo fuzzy for catching typos and partial matches
         if let Some(ref desc) = script.description {
@@ -1868,6 +1897,159 @@ mod tests {
             results.len(),
             2,
             "Non-hidden scripts should all be returned"
+        );
+    }
+
+    // ============================================
+    // Property keyword search tests
+    // ============================================
+
+    fn make_script_with_cron(name: &str, cron: &str) -> Arc<Script> {
+        use crate::metadata_parser::TypedMetadata;
+        Arc::new(Script {
+            name: name.to_string(),
+            path: PathBuf::from(format!(
+                "/test/{}.ts",
+                name.to_lowercase().replace(' ', "-")
+            )),
+            extension: "ts".to_string(),
+            typed_metadata: Some(TypedMetadata {
+                cron: Some(cron.to_string()),
+                ..Default::default()
+            }),
+            ..Default::default()
+        })
+    }
+
+    fn make_script_with_background(name: &str) -> Arc<Script> {
+        use crate::metadata_parser::TypedMetadata;
+        Arc::new(Script {
+            name: name.to_string(),
+            path: PathBuf::from(format!(
+                "/test/{}.ts",
+                name.to_lowercase().replace(' ', "-")
+            )),
+            extension: "ts".to_string(),
+            typed_metadata: Some(TypedMetadata {
+                background: true,
+                ..Default::default()
+            }),
+            ..Default::default()
+        })
+    }
+
+    fn make_script_with_watch(name: &str, patterns: &[&str]) -> Arc<Script> {
+        use crate::metadata_parser::TypedMetadata;
+        Arc::new(Script {
+            name: name.to_string(),
+            path: PathBuf::from(format!(
+                "/test/{}.ts",
+                name.to_lowercase().replace(' ', "-")
+            )),
+            extension: "ts".to_string(),
+            typed_metadata: Some(TypedMetadata {
+                watch: patterns.iter().map(|p| p.to_string()).collect(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        })
+    }
+
+    fn make_script_with_system(name: &str) -> Arc<Script> {
+        use crate::metadata_parser::TypedMetadata;
+        Arc::new(Script {
+            name: name.to_string(),
+            path: PathBuf::from(format!(
+                "/test/{}.ts",
+                name.to_lowercase().replace(' ', "-")
+            )),
+            extension: "ts".to_string(),
+            typed_metadata: Some(TypedMetadata {
+                system: true,
+                ..Default::default()
+            }),
+            ..Default::default()
+        })
+    }
+
+    #[test]
+    fn test_property_search_finds_cron_scripts() {
+        let scripts = vec![
+            make_script_with_cron("Daily Backup", "0 0 * * *"),
+            make_script("Backup Manager", Some("Manage backups manually")),
+            make_script("Random Script", None),
+        ];
+        let results = fuzzy_search_scripts(&scripts, "cron");
+        assert!(
+            results.iter().any(|r| r.script.name == "Daily Backup"),
+            "Script with cron should be found when searching 'cron'"
+        );
+    }
+
+    #[test]
+    fn test_property_search_scheduled_synonym() {
+        let scripts = vec![
+            make_script_with_cron("Email Digest", "0 9 * * 1"),
+            make_script("Unrelated", None),
+        ];
+        let results = fuzzy_search_scripts(&scripts, "scheduled");
+        assert!(
+            results.iter().any(|r| r.script.name == "Email Digest"),
+            "Script with cron should be found when searching 'scheduled'"
+        );
+    }
+
+    #[test]
+    fn test_property_search_finds_background_scripts() {
+        let scripts = vec![
+            make_script_with_background("Clipboard Monitor"),
+            make_script("Clipboard History", Some("View clipboard history")),
+            make_script("Random Script", None),
+        ];
+        let results = fuzzy_search_scripts(&scripts, "background");
+        assert!(
+            results.iter().any(|r| r.script.name == "Clipboard Monitor"),
+            "Background script should be found when searching 'background'"
+        );
+    }
+
+    #[test]
+    fn test_property_search_finds_watch_scripts() {
+        let scripts = vec![
+            make_script_with_watch("Config Reloader", &["~/.config/**"]),
+            make_script("Watch Movie", Some("Play a movie")),
+        ];
+        let results = fuzzy_search_scripts(&scripts, "watch");
+        // Both should match - one via property, one via name
+        assert!(
+            results.iter().any(|r| r.script.name == "Config Reloader"),
+            "Script with watch patterns should be found when searching 'watch'"
+        );
+    }
+
+    #[test]
+    fn test_property_search_finds_system_scripts() {
+        let scripts = vec![
+            make_script_with_system("System Cleanup"),
+            make_script("System Info", Some("Show system information")),
+        ];
+        let results = fuzzy_search_scripts(&scripts, "system");
+        // Both should match - one via property, one via name
+        assert!(
+            results.iter().any(|r| r.script.name == "System Cleanup"),
+            "System script should be found when searching 'system'"
+        );
+    }
+
+    #[test]
+    fn test_property_search_no_false_positives() {
+        // Scripts without special properties should NOT match property keywords
+        // (unless they match on name/description/etc.)
+        let scripts = vec![make_script("Hello World", None)];
+        let results = fuzzy_search_scripts(&scripts, "cron");
+        assert!(
+            results.is_empty(),
+            "Script without cron should not match 'cron'"
         );
     }
 }

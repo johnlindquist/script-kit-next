@@ -521,8 +521,8 @@ pub fn render_design_item(
             let (type_tag, source_hint) = if !filter_text.is_empty() {
                 let (label, color) = result.type_tag_info();
                 let tag = Some(crate::list_item::TypeTag { label, color });
-                // Build source hint: kit name + file extension for scripts
-                // e.g., "cleanshot · .ts" or just ".ts" for main kit
+                // Build source hint: kit name + file extension + author for scripts
+                // e.g., "cleanshot · .ts · by John" or just ".ts" for main kit
                 let hint = match result {
                     SearchResult::Script(sm) => {
                         let kit = sm.script.kit_name.as_deref().filter(|s| *s != "main");
@@ -531,11 +531,25 @@ pub fn render_design_item(
                         } else {
                             Some(format!(".{}", sm.script.extension))
                         };
-                        match (kit, ext) {
-                            (Some(k), Some(e)) => Some(format!("{} · {}", k, e)),
-                            (Some(k), None) => Some(k.to_string()),
-                            (None, Some(e)) => Some(e),
-                            (None, None) => None,
+                        let author = sm
+                            .script
+                            .typed_metadata
+                            .as_ref()
+                            .and_then(|m| m.author.as_deref());
+                        let mut parts: Vec<String> = Vec::new();
+                        if let Some(k) = kit {
+                            parts.push(k.to_string());
+                        }
+                        if let Some(e) = ext {
+                            parts.push(e);
+                        }
+                        if let Some(a) = author {
+                            parts.push(format!("by {}", a));
+                        }
+                        if parts.is_empty() {
+                            None
+                        } else {
+                            Some(parts.join(" · "))
                         }
                     }
                     _ => result
@@ -545,15 +559,28 @@ pub fn render_design_item(
                 };
                 (tag, hint)
             } else {
-                // Grouped view: show alias/keyword hints when they're not already
-                // visible as the shortcut badge. This helps users discover triggers.
+                // Grouped view: show alias/keyword hints or tags for discoverability
                 let hint = match result {
                     SearchResult::Script(sm) => {
                         // If shortcut is the badge, show alias as hint
                         if sm.script.shortcut.is_some() {
                             sm.script.alias.as_ref().map(|a| format!("/{}", a))
                         } else {
-                            None
+                            // Show tags as subtle hints for discoverability (max 2)
+                            sm.script.typed_metadata.as_ref().and_then(|meta| {
+                                if !meta.tags.is_empty() {
+                                    let tag_str: String = meta
+                                        .tags
+                                        .iter()
+                                        .take(2)
+                                        .map(|t| t.as_str())
+                                        .collect::<Vec<_>>()
+                                        .join(" · ");
+                                    Some(tag_str)
+                                } else {
+                                    None
+                                }
+                            })
                         }
                     }
                     SearchResult::Scriptlet(sm) => {
@@ -576,7 +603,22 @@ pub fn render_design_item(
             };
 
             // Tool/language badge for scriptlets (e.g., "ts", "bash", "paste")
+            // For scripts: show property indicator if the script has special runtime behavior
+            // (cron/schedule, file watch, background, system)
             let tool_badge = match result {
+                SearchResult::Script(sm) => sm.script.typed_metadata.as_ref().and_then(|meta| {
+                    if meta.cron.is_some() || meta.schedule.is_some() {
+                        Some("cron".to_string())
+                    } else if !meta.watch.is_empty() {
+                        Some("watch".to_string())
+                    } else if meta.background {
+                        Some("bg".to_string())
+                    } else if meta.system {
+                        Some("sys".to_string())
+                    } else {
+                        None
+                    }
+                }),
                 SearchResult::Scriptlet(sm) => Some(sm.scriptlet.tool.clone()),
                 _ => None,
             };
