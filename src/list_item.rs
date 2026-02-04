@@ -325,7 +325,11 @@ pub fn format_shortcut_display(shortcut: &str) -> String {
         return shortcut.to_string();
     }
 
-    let parts: Vec<&str> = shortcut.split('+').map(|s| s.trim()).collect();
+    // Normalize: replace '+' with space, then split on whitespace.
+    // This handles both space-delimited ("opt i", "cmd shift k") and
+    // plus-delimited ("cmd+shift+k") shortcut formats from Script Kit metadata.
+    let normalized = shortcut.replace('+', " ");
+    let parts: Vec<&str> = normalized.split_whitespace().collect();
     let mut result = String::new();
 
     for part in &parts {
@@ -1207,6 +1211,7 @@ pub fn render_section_header(
     header.child(content)
 }
 
-// Note: Tests omitted for this module due to GPUI macro recursion limit issues.
+// Note: GPUI rendering tests omitted due to GPUI macro recursion limit issues.
 // The LIST_ITEM_HEIGHT constant is 48.0 and the component is integration-tested
 // via the main application's script list and arg prompt rendering.
+// Unit tests for format_shortcut_display are in src/list_item_tests.rs.
