@@ -347,9 +347,9 @@ impl ScriptListApp {
                                         div()
                                             .text_xs()
                                             .font_weight(gpui::FontWeight::MEDIUM)
-                                            .text_color(rgba((text_muted << 8) | 0xCC)) // 80% opacity for label hierarchy
+                                            .text_color(rgba((text_muted << 8) | 0xDD)) // 87% opacity for label hierarchy
                                             .pb(px(spacing.padding_xs))
-                                            .child("Keyboard Shortcut"),
+                                            .child("KEYBOARD SHORTCUT"),
                                     )
                                     .child(
                                         div()
@@ -379,9 +379,9 @@ impl ScriptListApp {
                                         div()
                                             .text_xs()
                                             .font_weight(gpui::FontWeight::MEDIUM)
-                                            .text_color(rgba((text_muted << 8) | 0xCC)) // 80% opacity for label hierarchy
+                                            .text_color(rgba((text_muted << 8) | 0xDD)) // 87% opacity for label hierarchy
                                             .pb(px(spacing.padding_xs))
-                                            .child("Description"),
+                                            .child("DESCRIPTION"),
                                     )
                                     .child(
                                         div()
@@ -406,9 +406,9 @@ impl ScriptListApp {
                             div()
                                 .text_xs()
                                 .font_weight(gpui::FontWeight::MEDIUM)
-                                .text_color(rgba((text_muted << 8) | 0xCC)) // 80% opacity label
+                                .text_color(rgba((text_muted << 8) | 0xDD)) // 87% opacity label
                                 .pb(px(spacing.padding_sm))
-                                .child("Code Preview"),
+                                .child("CODE PREVIEW"),
                         );
 
                         // Use cached syntax-highlighted lines (avoids file I/O and highlighting on every render)
@@ -590,9 +590,9 @@ impl ScriptListApp {
                                         div()
                                             .text_xs()
                                             .font_weight(gpui::FontWeight::MEDIUM)
-                                            .text_color(rgba((text_muted << 8) | 0xCC)) // 80% opacity for label hierarchy
+                                            .text_color(rgba((text_muted << 8) | 0xDD)) // 87% opacity for label hierarchy
                                             .pb(px(spacing.padding_xs))
-                                            .child("Description"),
+                                            .child("DESCRIPTION"),
                                     )
                                     .child(
                                         div()
@@ -618,9 +618,9 @@ impl ScriptListApp {
                                         div()
                                             .text_xs()
                                             .font_weight(gpui::FontWeight::MEDIUM)
-                                            .text_color(rgba((text_muted << 8) | 0xCC)) // 80% opacity for label hierarchy
+                                            .text_color(rgba((text_muted << 8) | 0xDD)) // 87% opacity for label hierarchy
                                             .pb(px(spacing.padding_xs))
-                                            .child("Keyboard Shortcut"),
+                                            .child("KEYBOARD SHORTCUT"),
                                     )
                                     .child(
                                         div()
@@ -653,9 +653,9 @@ impl ScriptListApp {
                             div()
                                 .text_xs()
                                 .font_weight(gpui::FontWeight::MEDIUM)
-                                .text_color(rgba((text_muted << 8) | 0xCC)) // 80% opacity label
+                                .text_color(rgba((text_muted << 8) | 0xDD)) // 87% opacity label
                                 .pb(px(spacing.padding_sm))
-                                .child("Content Preview"),
+                                .child("CONTENT PREVIEW"),
                         );
 
                         // Display scriptlet code with syntax highlighting
@@ -792,9 +792,9 @@ impl ScriptListApp {
                                         div()
                                             .text_xs()
                                             .font_weight(gpui::FontWeight::MEDIUM)
-                                            .text_color(rgba((text_muted << 8) | 0xCC)) // 80% opacity for label hierarchy
+                                            .text_color(rgba((text_muted << 8) | 0xDD)) // 87% opacity for label hierarchy
                                             .pb(px(spacing.padding_xs))
-                                            .child("Keyboard Shortcut"),
+                                            .child("KEYBOARD SHORTCUT"),
                                     )
                                     .child(
                                         div()
@@ -823,9 +823,9 @@ impl ScriptListApp {
                                     div()
                                         .text_xs()
                                         .font_weight(gpui::FontWeight::MEDIUM)
-                                        .text_color(rgba((text_muted << 8) | 0xCC)) // 80% opacity for label hierarchy
+                                        .text_color(rgba((text_muted << 8) | 0xDD)) // 87% opacity for label hierarchy
                                         .pb(px(spacing.padding_xs))
-                                        .child("Description"),
+                                        .child("DESCRIPTION"),
                                 )
                                 .child(
                                     div()
@@ -846,9 +846,9 @@ impl ScriptListApp {
                                         div()
                                             .text_xs()
                                             .font_weight(gpui::FontWeight::MEDIUM)
-                                            .text_color(rgba((text_muted << 8) | 0xCC)) // 80% opacity for label hierarchy
+                                            .text_color(rgba((text_muted << 8) | 0xDD)) // 87% opacity for label hierarchy
                                             .pb(px(spacing.padding_xs))
-                                            .child("Keywords"),
+                                            .child("KEYWORDS"),
                                     )
                                     .child(
                                         div()
@@ -916,9 +916,9 @@ impl ScriptListApp {
                                     div()
                                         .text_xs()
                                         .font_weight(gpui::FontWeight::MEDIUM)
-                                        .text_color(rgba((text_muted << 8) | 0xCC)) // 80% opacity for label hierarchy
+                                        .text_color(rgba((text_muted << 8) | 0xDD)) // 87% opacity for label hierarchy
                                         .pb(px(spacing.padding_xs))
-                                        .child("Feature Type"),
+                                        .child("FEATURE TYPE"),
                                 )
                                 .child(
                                     div()
@@ -952,9 +952,9 @@ impl ScriptListApp {
                                         div()
                                             .text_xs()
                                             .font_weight(gpui::FontWeight::MEDIUM)
-                                            .text_color(rgba((text_muted << 8) | 0xCC)) // 80% opacity for label hierarchy
+                                            .text_color(rgba((text_muted << 8) | 0xDD)) // 87% opacity for label hierarchy
                                             .pb(px(spacing.padding_xs))
-                                            .child("Keyboard Shortcut"),
+                                            .child("KEYBOARD SHORTCUT"),
                                     )
                                     .child(
                                         div()
@@ -983,9 +983,9 @@ impl ScriptListApp {
                                     div()
                                         .text_xs()
                                         .font_weight(gpui::FontWeight::MEDIUM)
-                                        .text_color(rgba((text_muted << 8) | 0xCC)) // 80% opacity for label hierarchy
+                                        .text_color(rgba((text_muted << 8) | 0xDD)) // 87% opacity for label hierarchy
                                         .pb(px(spacing.padding_xs))
-                                        .child("Path"),
+                                        .child("PATH"),
                                 )
                                 .child(
                                     div()
@@ -1006,9 +1006,9 @@ impl ScriptListApp {
                                         div()
                                             .text_xs()
                                             .font_weight(gpui::FontWeight::MEDIUM)
-                                            .text_color(rgba((text_muted << 8) | 0xCC)) // 80% opacity for label hierarchy
+                                            .text_color(rgba((text_muted << 8) | 0xDD)) // 87% opacity for label hierarchy
                                             .pb(px(spacing.padding_xs))
-                                            .child("Bundle ID"),
+                                            .child("BUNDLE ID"),
                                     )
                                     .child(
                                         div()
@@ -1036,9 +1036,10 @@ impl ScriptListApp {
                                 .child(
                                     div()
                                         .text_xs()
-                                        .text_color(rgb(text_muted))
-                                        .pb(px(spacing.padding_xs / 2.0))
-                                        .child("Type"),
+                                        .font_weight(gpui::FontWeight::MEDIUM)
+                                        .text_color(rgba((text_muted << 8) | 0xDD))
+                                        .pb(px(spacing.padding_xs))
+                                        .child("TYPE"),
                                 )
                                 .child(
                                     div()
@@ -1070,9 +1071,10 @@ impl ScriptListApp {
                                 .child(
                                     div()
                                         .text_xs()
-                                        .text_color(rgb(text_muted))
-                                        .pb(px(spacing.padding_xs / 2.0))
-                                        .child("Application"),
+                                        .font_weight(gpui::FontWeight::MEDIUM)
+                                        .text_color(rgba((text_muted << 8) | 0xDD))
+                                        .pb(px(spacing.padding_xs))
+                                        .child("APPLICATION"),
                                 )
                                 .child(
                                     div()
@@ -1091,9 +1093,10 @@ impl ScriptListApp {
                                 .child(
                                     div()
                                         .text_xs()
-                                        .text_color(rgb(text_muted))
-                                        .pb(px(spacing.padding_xs / 2.0))
-                                        .child("Position & Size"),
+                                        .font_weight(gpui::FontWeight::MEDIUM)
+                                        .text_color(rgba((text_muted << 8) | 0xDD))
+                                        .pb(px(spacing.padding_xs))
+                                        .child("POSITION & SIZE"),
                                 )
                                 .child(div().text_sm().text_color(rgb(text_secondary)).child(
                                     format!(
@@ -1123,9 +1126,10 @@ impl ScriptListApp {
                                 .child(
                                     div()
                                         .text_xs()
-                                        .text_color(rgb(text_muted))
-                                        .pb(px(spacing.padding_xs / 2.0))
-                                        .child("Type"),
+                                        .font_weight(gpui::FontWeight::MEDIUM)
+                                        .text_color(rgba((text_muted << 8) | 0xDD))
+                                        .pb(px(spacing.padding_xs))
+                                        .child("TYPE"),
                                 )
                                 .child(
                                     div()
@@ -1196,9 +1200,10 @@ impl ScriptListApp {
                                 .child(
                                     div()
                                         .text_xs()
-                                        .text_color(rgb(text_muted))
-                                        .pb(px(spacing.padding_xs / 2.0))
-                                        .child("Backend"),
+                                        .font_weight(gpui::FontWeight::MEDIUM)
+                                        .text_color(rgba((text_muted << 8) | 0xDD))
+                                        .pb(px(spacing.padding_xs))
+                                        .child("BACKEND"),
                                 )
                                 .child(
                                     div()
@@ -1218,9 +1223,10 @@ impl ScriptListApp {
                                     .child(
                                         div()
                                             .text_xs()
-                                            .text_color(rgb(text_muted))
-                                            .pb(px(spacing.padding_xs / 2.0))
-                                            .child("Kit"),
+                                            .font_weight(gpui::FontWeight::MEDIUM)
+                                            .text_color(rgba((text_muted << 8) | 0xDD))
+                                            .pb(px(spacing.padding_xs))
+                                            .child("KIT"),
                                     )
                                     .child(
                                         div()
@@ -1248,9 +1254,10 @@ impl ScriptListApp {
                                 .child(
                                     div()
                                         .text_xs()
-                                        .text_color(rgb(text_muted))
-                                        .pb(px(spacing.padding_xs / 2.0))
-                                        .child("Type"),
+                                        .font_weight(gpui::FontWeight::MEDIUM)
+                                        .text_color(rgba((text_muted << 8) | 0xDD))
+                                        .pb(px(spacing.padding_xs))
+                                        .child("TYPE"),
                                 )
                                 .child(
                                     div()
@@ -1323,9 +1330,10 @@ impl ScriptListApp {
                                 .child(
                                     div()
                                         .text_xs()
-                                        .text_color(rgb(text_muted))
-                                        .pb(px(spacing.padding_xs / 2.0))
-                                        .child("Type"),
+                                        .font_weight(gpui::FontWeight::MEDIUM)
+                                        .text_color(rgba((text_muted << 8) | 0xDD))
+                                        .pb(px(spacing.padding_xs))
+                                        .child("TYPE"),
                                 )
                                 .child(
                                     div()

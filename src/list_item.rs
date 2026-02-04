@@ -1192,13 +1192,13 @@ pub fn render_section_header(
             div()
                 .text_xs()
                 .font_weight(FontWeight::NORMAL)
-                .text_color(rgba((colors.text_muted << 8) | 0xB0)) // 69% opacity of muted
+                .text_color(rgba((colors.text_muted << 8) | 0xCC)) // 80% opacity of muted
                 .child(count.to_string()),
         );
     }
 
     // Subtle background tint for section headers to create visual grouping
-    let header_bg = rgba((colors.text_muted << 8) | 0x0A); // ~4% opacity tint
+    let header_bg = rgba((colors.text_muted << 8) | 0x0D); // ~5% opacity tint
 
     let header = div()
         .w_full()
