@@ -1017,7 +1017,7 @@ impl ScriptListApp {
         });
         app.gpui_input_subscriptions.push(arrow_interceptor);
 
-        // Add Home/End key interceptor for jump navigation
+        // Add Home/End/PageUp/PageDown key interceptor for jump navigation
         let app_entity_for_home_end = cx.entity().downgrade();
         let home_end_interceptor = cx.intercept_keystrokes({
             let app_entity = app_entity_for_home_end;
@@ -1036,8 +1036,11 @@ impl ScriptListApp {
                     key == "home" || (has_platform_mod && (key == "up" || key == "arrowup"));
                 let is_end =
                     key == "end" || (has_platform_mod && (key == "down" || key == "arrowdown"));
+                // Page Up/Down → move by ~10 selectable items
+                let is_page_up = key == "pageup";
+                let is_page_down = key == "pagedown";
 
-                if !is_home && !is_end {
+                if !is_home && !is_end && !is_page_up && !is_page_down {
                     return;
                 }
 
@@ -1057,6 +1060,10 @@ impl ScriptListApp {
                             this.move_selection_to_first(cx);
                         } else if is_end {
                             this.move_selection_to_last(cx);
+                        } else if is_page_up {
+                            this.move_selection_page_up(cx);
+                        } else if is_page_down {
+                            this.move_selection_page_down(cx);
                         }
 
                         cx.stop_propagation();

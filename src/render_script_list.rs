@@ -107,12 +107,13 @@ impl ScriptListApp {
 
         let list_element: AnyElement = if item_count == 0 {
             // Empty state rendering with icon and helpful messaging
-            // - When filter is empty: "No scripts or snippets found"
+            // - When filter is empty: "No scripts or snippets found" with code icon
             // - When filter has text: "No results match '...'" with search icon
             //
             // Note: This branch is rarely hit when filtering because grouping.rs now
             // appends fallbacks to the results. We only get here if there are truly
             // no results at all (including no fallbacks).
+            use crate::designs::icon_variations::IconName;
             if self.filter_text.is_empty() {
                 div()
                     .w_full()
@@ -121,18 +122,26 @@ impl ScriptListApp {
                     .flex_col()
                     .items_center()
                     .justify_center()
-                    .gap(px(8.))
+                    .gap(px(12.))
                     .font_family(empty_font_family)
+                    // Large muted icon
+                    .child(
+                        svg()
+                            .external_path(IconName::Code.external_path())
+                            .size(px(32.))
+                            .text_color(rgba((empty_text_color << 8) | 0x30)),
+                    )
                     .child(
                         div()
-                            .text_color(rgba((empty_text_color << 8) | 0x40))
+                            .text_color(rgba((empty_text_color << 8) | 0x50))
                             .text_size(px(14.))
+                            .font_weight(FontWeight::MEDIUM)
                             .child("No scripts or snippets found"),
                     )
                     .child(
                         div()
                             .text_xs()
-                            .text_color(rgba((empty_text_color << 8) | 0x30))
+                            .text_color(rgba((empty_text_color << 8) | 0x35))
                             .child("Press ⌘N to create a new script"),
                     )
                     .into_any_element()
@@ -150,19 +159,27 @@ impl ScriptListApp {
                     .flex_col()
                     .items_center()
                     .justify_center()
-                    .gap(px(8.))
+                    .gap(px(12.))
                     .font_family(empty_font_family)
+                    // Magnifying glass icon for search
+                    .child(
+                        svg()
+                            .external_path(IconName::MagnifyingGlass.external_path())
+                            .size(px(32.))
+                            .text_color(rgba((empty_text_color << 8) | 0x30)),
+                    )
                     .child(
                         div()
-                            .text_color(rgba((empty_text_color << 8) | 0x40))
+                            .text_color(rgba((empty_text_color << 8) | 0x50))
                             .text_size(px(14.))
+                            .font_weight(FontWeight::MEDIUM)
                             .child(format!("No results for \"{}\"", filter_display)),
                     )
                     .child(
                         div()
                             .text_xs()
-                            .text_color(rgba((empty_text_color << 8) | 0x30))
-                            .child("Try a different search term"),
+                            .text_color(rgba((empty_text_color << 8) | 0x35))
+                            .child("Try a different search term or press Tab to ask AI"),
                     )
                     .into_any_element()
             }
@@ -891,8 +908,23 @@ impl ScriptListApp {
                                 .focus_bordered(false),
                         ),
                     )
-                    // Result count indicator with type breakdown - shown only when filtering
+                    // Position indicator + result count - shown only when filtering
                     .when(!self.filter_text.is_empty() && item_count > 0, |el| {
+                        // Compute 1-based position of the selected item among selectable items
+                        let selected_position = {
+                            let mut pos = 0u16;
+                            for (i, item) in grouped_items.iter().enumerate() {
+                                if matches!(item, GroupedListItem::Item(_)) {
+                                    pos += 1;
+                                }
+                                if i == self.selected_index {
+                                    break;
+                                }
+                            }
+                            pos
+                        };
+                        let total_selectable = flat_results.len();
+
                         // Count results by type for a breakdown display
                         let mut scripts = 0u16;
                         let mut snippets = 0u16;
@@ -927,21 +959,33 @@ impl ScriptListApp {
                         }
                         // If all results are the same type, just show total count
                         let count_text = if parts.len() <= 1 {
-                            let total = flat_results.len();
-                            if total == 1 { "1 result".to_string() } else { format!("{} results", total) }
+                            if total_selectable == 1 { "1 result".to_string() } else { format!("{} results", total_selectable) }
                         } else {
                             // Show at most 3 categories to avoid overflow
                             parts.truncate(3);
                             parts.join(" · ")
                         };
-                        el.child(
-                            div()
-                                .text_xs()
-                                .text_color(rgb(text_muted))
-                                .flex_shrink_0()
-                                .whitespace_nowrap()
-                                .child(count_text),
-                        )
+
+                        el
+                            // Position indicator: "3 / 45" - helps orient in long result lists
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .font_family("SF Mono")
+                                    .text_color(rgba((text_muted << 8) | 0xB0)) // 69% opacity
+                                    .flex_shrink_0()
+                                    .whitespace_nowrap()
+                                    .child(format!("{} / {}", selected_position, total_selectable)),
+                            )
+                            // Result count breakdown
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(rgb(text_muted))
+                                    .flex_shrink_0()
+                                    .whitespace_nowrap()
+                                    .child(count_text),
+                            )
                     })
                     // "Ask AI [Tab]" button - yellow text, grey badge, hover state
                     .child({

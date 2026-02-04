@@ -406,6 +406,9 @@ pub struct ListItem {
     type_tag: Option<TypeTag>,
     /// Source/kit name (e.g., "main", "cleanshot") shown as subtle text during search
     source_hint: Option<String>,
+    /// Tool/language badge for scriptlets (e.g., "ts", "bash", "paste")
+    /// Shown as a subtle monospace badge in the accessories area
+    tool_badge: Option<String>,
 }
 
 /// Type tag displayed as a colored pill on list items during search
@@ -440,6 +443,7 @@ impl ListItem {
             description_highlight_indices: None,
             type_tag: None,
             source_hint: None,
+            tool_badge: None,
         }
     }
 
@@ -611,6 +615,19 @@ impl ListItem {
     /// Set an optional source hint
     pub fn source_hint_opt(mut self, hint: Option<String>) -> Self {
         self.source_hint = hint;
+        self
+    }
+
+    /// Set the tool/language badge (e.g., "ts", "bash", "paste")
+    /// Displayed as a subtle monospace badge for scriptlets
+    pub fn tool_badge(mut self, badge: impl Into<String>) -> Self {
+        self.tool_badge = Some(badge.into());
+        self
+    }
+
+    /// Set the tool/language badge from an option
+    pub fn tool_badge_opt(mut self, badge: Option<String>) -> Self {
+        self.tool_badge = badge;
         self
     }
 }
@@ -862,12 +879,22 @@ impl RenderOnce for ListItem {
         // without waiting for state updates via cx.notify().
         //
         // For selected items, we don't apply hover styles (they already have full focus styling).
+        // Subtle bottom separator for better scanability between items
+        // Very faint 1px border visible only on non-selected items to avoid clutter
+        let separator_color = if self.selected {
+            rgba(0x00000000) // No separator on selected item
+        } else {
+            rgba((colors.text_dimmed << 8) | 0x0D) // ~5% opacity - barely visible
+        };
+
         let mut inner_content = div()
             .w_full()
             .h_full()
             .px(px(12.))
             .py(px(2.))
             .bg(bg_color)
+            .border_b_1()
+            .border_color(separator_color)
             .text_color(if self.selected {
                 rgb(colors.text_primary)
             } else {
@@ -889,6 +916,22 @@ impl RenderOnce for ListItem {
                     .items_center()
                     .flex_shrink_0()
                     .gap(px(6.));
+
+                // Tool/language badge for scriptlets (e.g., "ts", "bash")
+                if let Some(ref badge) = self.tool_badge {
+                    let badge_bg = (colors.text_dimmed << 8) | 0x0F; // 6% opacity
+                    accessories = accessories.child(
+                        div()
+                            .text_size(px(9.))
+                            .font_family("SF Mono")
+                            .text_color(rgba((colors.text_dimmed << 8) | 0x90)) // 56% opacity
+                            .px(px(4.))
+                            .py(px(1.))
+                            .rounded(px(3.))
+                            .bg(rgba(badge_bg))
+                            .child(badge.clone()),
+                    );
+                }
 
                 // Source/kit hint (e.g., "main", "cleanshot") - very subtle
                 if let Some(ref hint) = self.source_hint {

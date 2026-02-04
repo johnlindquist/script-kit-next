@@ -528,6 +528,12 @@ pub fn render_design_item(
                 (None, None)
             };
 
+            // Tool/language badge for scriptlets (e.g., "ts", "bash", "paste")
+            let tool_badge = match result {
+                SearchResult::Scriptlet(sm) => Some(sm.scriptlet.tool.clone()),
+                _ => None,
+            };
+
             ListItem::new(name, list_colors)
                 .index(index)
                 .icon_kind_opt(icon_kind)
@@ -541,6 +547,7 @@ pub fn render_design_item(
                 .description_highlight_indices_opt(description_highlight_indices)
                 .type_tag_opt(type_tag)
                 .source_hint_opt(source_hint)
+                .tool_badge_opt(tool_badge)
                 .into_any_element()
         }
     }
