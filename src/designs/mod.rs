@@ -514,6 +514,20 @@ pub fn render_design_item(
                 }
             };
 
+            // During search mode, build type tag and source hint for context
+            let (type_tag, source_hint) = if !filter_text.is_empty() {
+                let (label, color) = result.type_tag_info();
+                let tag = Some(crate::list_item::TypeTag { label, color });
+                // Show kit/source name (skip "main" as it's the default)
+                let hint = result
+                    .source_name()
+                    .filter(|s| *s != "main")
+                    .map(|s| s.to_string());
+                (tag, hint)
+            } else {
+                (None, None)
+            };
+
             ListItem::new(name, list_colors)
                 .index(index)
                 .icon_kind_opt(icon_kind)
@@ -525,6 +539,8 @@ pub fn render_design_item(
                 .with_hover_effect(enable_hover_effect)
                 .highlight_indices_opt(highlight_indices)
                 .description_highlight_indices_opt(description_highlight_indices)
+                .type_tag_opt(type_tag)
+                .source_hint_opt(source_hint)
                 .into_any_element()
         }
     }

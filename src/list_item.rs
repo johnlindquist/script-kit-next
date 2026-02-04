@@ -401,6 +401,20 @@ pub struct ListItem {
     /// Character indices in the description that match the search query (for fuzzy highlight)
     /// When present, matched characters are rendered with accent color for visual emphasis
     description_highlight_indices: Option<Vec<usize>>,
+    /// Type tag shown as a subtle colored pill (e.g., "Script", "Snippet", "App")
+    /// Only shown during search mode to help distinguish mixed result types
+    type_tag: Option<TypeTag>,
+    /// Source/kit name (e.g., "main", "cleanshot") shown as subtle text during search
+    source_hint: Option<String>,
+}
+
+/// Type tag displayed as a colored pill on list items during search
+#[derive(Clone, Debug)]
+pub struct TypeTag {
+    /// Display label (e.g., "Script", "Snippet", "App")
+    pub label: &'static str,
+    /// Color for the tag (u32 hex, e.g., 0x3B82F6 for blue)
+    pub color: u32,
 }
 
 /// Width of the left accent bar for selected items
@@ -424,6 +438,8 @@ impl ListItem {
             enable_hover_effect: true, // Default to enabled
             highlight_indices: None,
             description_highlight_indices: None,
+            type_tag: None,
+            source_hint: None,
         }
     }
 
@@ -570,6 +586,31 @@ impl ListItem {
     /// Set optional description highlight indices (convenience for Option<Vec<usize>>)
     pub fn description_highlight_indices_opt(mut self, indices: Option<Vec<usize>>) -> Self {
         self.description_highlight_indices = indices.filter(|v| !v.is_empty());
+        self
+    }
+
+    /// Set a type tag to show as a colored pill (e.g., "Script", "Snippet")
+    /// Only used during search mode to distinguish mixed result types
+    pub fn type_tag(mut self, tag: TypeTag) -> Self {
+        self.type_tag = Some(tag);
+        self
+    }
+
+    /// Set an optional type tag
+    pub fn type_tag_opt(mut self, tag: Option<TypeTag>) -> Self {
+        self.type_tag = tag;
+        self
+    }
+
+    /// Set the source/kit name hint (shown during search to indicate origin)
+    pub fn source_hint(mut self, hint: impl Into<String>) -> Self {
+        self.source_hint = Some(hint.into());
+        self
+    }
+
+    /// Set an optional source hint
+    pub fn source_hint_opt(mut self, hint: Option<String>) -> Self {
+        self.source_hint = hint;
         self
     }
 }
@@ -840,14 +881,44 @@ impl RenderOnce for ListItem {
             .gap(px(8.))
             .child(icon_element)
             .child(item_content)
-            .child(
-                div()
+            .child({
+                // Right-side accessories: [source hint] [type tag] [shortcut badge]
+                let mut accessories = div()
                     .flex()
                     .flex_row()
                     .items_center()
                     .flex_shrink_0()
-                    .child(shortcut_element),
-            );
+                    .gap(px(6.));
+
+                // Source/kit hint (e.g., "main", "cleanshot") - very subtle
+                if let Some(ref hint) = self.source_hint {
+                    accessories = accessories.child(
+                        div()
+                            .text_size(px(10.))
+                            .text_color(rgba((colors.text_dimmed << 8) | 0x80)) // 50% opacity
+                            .child(hint.clone()),
+                    );
+                }
+
+                // Type tag pill (shown during search to distinguish result types)
+                if let Some(ref tag) = self.type_tag {
+                    let tag_bg = (tag.color << 8) | 0x1A; // 10% opacity background
+                    accessories = accessories.child(
+                        div()
+                            .text_size(px(10.))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(rgb(tag.color))
+                            .px(px(5.))
+                            .py(px(1.))
+                            .rounded(px(3.))
+                            .bg(rgba(tag_bg))
+                            .child(tag.label),
+                    );
+                }
+
+                accessories = accessories.child(shortcut_element);
+                accessories
+            });
 
         // Apply instant hover effect for non-selected items when hover effects are enabled
         // This provides immediate visual feedback without state updates
@@ -1013,11 +1084,13 @@ pub fn icon_from_png(png_data: &[u8]) -> Option<IconKind> {
 /// * `label` - The section label (displayed as-is, standard casing)
 /// * `icon` - Optional icon name (lucide icon, e.g., "settings")
 /// * `colors` - ListItemColors for theme-aware styling
+/// * `is_first` - Whether this is the first header in the list (suppresses top border)
 ///
 pub fn render_section_header(
     label: &str,
     icon: Option<&str>,
     colors: ListItemColors,
+    is_first: bool,
 ) -> impl IntoElement {
     // Compact section header with explicit height (SECTION_HEADER_HEIGHT = 24px)
     // Used with GPUI's list() component which supports variable-height items.
@@ -1069,18 +1142,26 @@ pub fn render_section_header(
         );
     }
 
-    div()
+    let header = div()
         .w_full()
         .h(px(28.0)) // Slightly taller than SECTION_HEADER_HEIGHT for breathing room
         .px(px(16.))
         .pt(px(10.)) // More top padding for visual separation
         .pb(px(4.)) // Bottom padding
-        .border_t_1() // Subtle top separator line
-        .border_color(rgba((colors.text_dimmed << 8) | 0x18)) // ~9% opacity - very subtle
         .flex()
         .flex_col()
-        .justify_center() // Center content vertically
-        .child(content)
+        .justify_center(); // Center content vertically
+
+    // Only show top separator on non-first headers (first header has no item above it)
+    let header = if is_first {
+        header
+    } else {
+        header
+            .border_t_1()
+            .border_color(rgba((colors.text_dimmed << 8) | 0x18)) // ~9% opacity - very subtle
+    };
+
+    header.child(content)
 }
 
 // Note: Tests omitted for this module due to GPUI macro recursion limit issues.
