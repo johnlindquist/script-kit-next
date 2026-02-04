@@ -2764,6 +2764,19 @@ impl ScriptListApp {
                 }
                 return; // Don't run main menu filter logic
             }
+            AppView::DesignGalleryView {
+                filter,
+                selected_index,
+            } => {
+                if *filter != new_text {
+                    *filter = new_text.clone();
+                    *selected_index = 0;
+                    self.design_gallery_scroll_handle
+                        .scroll_to_item(0, ScrollStrategy::Top);
+                    cx.notify();
+                }
+                return; // Don't run main menu filter logic
+            }
             AppView::ThemeChooserView {
                 filter,
                 selected_index,

@@ -1689,6 +1689,7 @@ impl Render for ScriptListApp {
                 | AppView::ClipboardHistoryView { .. }
                 | AppView::AppLauncherView { .. }
                 | AppView::WindowSwitcherView { .. }
+                | AppView::DesignGalleryView { .. }
                 | AppView::FileSearchView { .. }
                 | AppView::ThemeChooserView { .. }
         ) {

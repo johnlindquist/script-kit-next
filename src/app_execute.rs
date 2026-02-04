@@ -126,6 +126,7 @@ impl ScriptListApp {
                     filter: String::new(),
                     selected_index: 0,
                 };
+                self.hovered_index = None;
                 // Mark as opened from main menu - ESC will return to main menu
                 self.opened_from_main_menu = true;
                 // Use standard height for clipboard history view
@@ -154,6 +155,7 @@ impl ScriptListApp {
                     filter: String::new(),
                     selected_index: 0,
                 };
+                self.hovered_index = None;
                 // Mark as opened from main menu - ESC will return to main menu
                 self.opened_from_main_menu = true;
                 // Use standard height for app launcher view
@@ -201,6 +203,7 @@ impl ScriptListApp {
                             filter: String::new(),
                             selected_index: 0,
                         };
+                        self.hovered_index = None;
                         // Mark as opened from main menu - ESC will return to main menu
                         self.opened_from_main_menu = true;
                         // Use standard height for window switcher view
@@ -232,6 +235,7 @@ impl ScriptListApp {
                     filter: String::new(),
                     selected_index: 0,
                 };
+                self.hovered_index = None;
                 // Mark as opened from main menu - ESC will return to main menu
                 self.opened_from_main_menu = true;
                 // Use standard height for design gallery view
@@ -986,6 +990,7 @@ impl ScriptListApp {
                             filter: String::new(),
                             selected_index: start_index,
                         };
+                        self.hovered_index = None;
                         self.opened_from_main_menu = true;
                         resize_to_view_sync(ViewType::ScriptList, 0);
                         // Focus the main filter input so cursor blinks and typing works
@@ -1665,6 +1670,7 @@ impl ScriptListApp {
             query,
             selected_index: 0,
         };
+        self.hovered_index = None;
 
         // Use standard height for file search view (same as window switcher)
         resize_to_view_sync(ViewType::ScriptList, 0);
