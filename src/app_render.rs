@@ -129,6 +129,43 @@ impl ScriptListApp {
         let border_radius = visual.radius_md;
         let font_family = typography.font_family;
 
+        // Preview badge colors — light mode needs opaque fills for vibrancy readability
+        // Light mode: use theme text colors (dark on light) for visible badges
+        // Dark mode: use semi-transparent overlays that work with vibrancy
+        let badge_bg = if is_light_mode {
+            rgba(0x0000000Cu32) // black at ~5% → visible gray on light vibrancy
+        } else {
+            rgba((ui_border << 8) | 0x60) // border at 37% on dark
+        };
+        let badge_text = if is_light_mode {
+            rgb(text_secondary) // dark gray for strong contrast
+        } else {
+            rgb(text_muted)
+        };
+        let badge_border = if is_light_mode {
+            rgba(0x00000018u32) // black at ~9% border
+        } else {
+            rgba((ui_border << 8) | 0x40)
+        };
+        // Accent badge colors — yellow/gold design accent is unreadable on light backgrounds,
+        // so use the theme's selected accent (typically blue) for light mode instead
+        let light_accent = self.theme.colors.accent.selected;
+        let accent_badge_bg = if is_light_mode {
+            rgba((light_accent << 8) | 0x14) // theme accent at ~8%
+        } else {
+            rgba((colors.accent << 8) | 0x30) // design accent at ~19%
+        };
+        let accent_badge_border = if is_light_mode {
+            rgba((light_accent << 8) | 0x30) // theme accent at ~19%
+        } else {
+            rgba((colors.accent << 8) | 0x50) // design accent at ~31%
+        };
+        let accent_badge_text = if is_light_mode {
+            rgb(light_accent) // theme accent (blue) for light mode
+        } else {
+            rgb(colors.accent) // design accent (yellow/gold) fine on dark
+        };
+
         // Get shortcut display string for the selected item (if any)
         // Check BOTH config.ts commands AND shortcut overrides file
         let shortcut_display: Option<String> = selected_result.as_ref().and_then(|result| {
@@ -227,13 +264,13 @@ impl ScriptListApp {
 
                         panel = panel.child(path_div);
 
-                        // Script name header
+                        // Script name header — extra bottom padding for visual hierarchy
                         panel = panel.child(
                             div()
                                 .text_lg()
                                 .font_weight(gpui::FontWeight::SEMIBOLD)
                                 .text_color(rgb(text_primary))
-                                .pb(px(spacing.padding_sm))
+                                .pb(px(spacing.padding_md))
                                 .child(format!("{}.{}", script.name, script.extension)),
                         );
 
@@ -253,9 +290,11 @@ impl ScriptListApp {
                                         .px(px(6.))
                                         .py(px(2.))
                                         .rounded(px(4.))
-                                        .bg(rgba((ui_border << 8) | 0x40))
+                                        .bg(badge_bg)
+                                        .border_1()
+                                        .border_color(badge_border)
                                         .text_xs()
-                                        .text_color(rgb(text_muted))
+                                        .text_color(badge_text)
                                         .child(format!("kit: {}", kit)),
                                 );
                             }
@@ -279,9 +318,11 @@ impl ScriptListApp {
                                             .px(px(6.))
                                             .py(px(2.))
                                             .rounded(px(4.))
-                                            .bg(rgba((ui_border << 8) | 0x40))
+                                            .bg(badge_bg)
+                                            .border_1()
+                                            .border_color(badge_border)
                                             .text_xs()
-                                            .text_color(rgb(text_muted))
+                                            .text_color(badge_text)
                                             .child(ext_display.to_string()),
                                     );
                                 }
@@ -293,9 +334,11 @@ impl ScriptListApp {
                                         .px(px(6.))
                                         .py(px(2.))
                                         .rounded(px(4.))
-                                        .bg(rgba((colors.accent << 8) | 0x20))
+                                        .bg(accent_badge_bg)
+                                        .border_1()
+                                        .border_color(accent_badge_border)
                                         .text_xs()
-                                        .text_color(rgb(colors.accent))
+                                        .text_color(accent_badge_text)
                                         .child(format!("alias: {}", alias)),
                                 );
                             }
@@ -308,9 +351,11 @@ impl ScriptListApp {
                                             .px(px(6.))
                                             .py(px(2.))
                                             .rounded(px(4.))
-                                            .bg(rgba((ui_border << 8) | 0x40))
+                                            .bg(badge_bg)
+                                            .border_1()
+                                            .border_color(badge_border)
                                             .text_xs()
-                                            .text_color(rgb(text_muted))
+                                            .text_color(badge_text)
                                             .child(format!("by {}", author)),
                                     );
                                 }
@@ -322,9 +367,11 @@ impl ScriptListApp {
                                             .px(px(6.))
                                             .py(px(2.))
                                             .rounded(px(4.))
-                                            .bg(rgba((ui_border << 8) | 0x30))
+                                            .bg(badge_bg)
+                                            .border_1()
+                                            .border_color(badge_border)
                                             .text_xs()
-                                            .text_color(rgb(text_muted))
+                                            .text_color(badge_text)
                                             .child(tag.clone()),
                                     );
                                 }
@@ -342,12 +389,12 @@ impl ScriptListApp {
                                 div()
                                     .flex()
                                     .flex_col()
-                                    .pb(px(spacing.padding_md))
+                                    .pb(px(spacing.padding_lg))
                                     .child(
                                         div()
-                                            .text_xs()
-                                            .font_weight(gpui::FontWeight::MEDIUM)
-                                            .text_color(rgba((text_muted << 8) | 0xDD)) // 87% opacity for label hierarchy
+                                            .text_size(px(11.0))
+                                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                                            .text_color(rgba((text_muted << 8) | 0xCC))
                                             .pb(px(spacing.padding_xs))
                                             .child("KEYBOARD SHORTCUT"),
                                     )
@@ -361,7 +408,7 @@ impl ScriptListApp {
                                                 div()
                                                     .text_sm()
                                                     .font_weight(gpui::FontWeight::MEDIUM)
-                                                    .text_color(rgb(colors.accent))
+                                                    .text_color(accent_badge_text)
                                                     .child(shortcut_str),
                                             ),
                                     ),
@@ -374,39 +421,40 @@ impl ScriptListApp {
                                 div()
                                     .flex()
                                     .flex_col()
-                                    .pb(px(spacing.padding_md))
+                                    .pb(px(spacing.padding_lg))
                                     .child(
                                         div()
-                                            .text_xs()
-                                            .font_weight(gpui::FontWeight::MEDIUM)
-                                            .text_color(rgba((text_muted << 8) | 0xDD)) // 87% opacity for label hierarchy
+                                            .text_size(px(11.0))
+                                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                                            .text_color(rgba((text_muted << 8) | 0xCC))
                                             .pb(px(spacing.padding_xs))
                                             .child("DESCRIPTION"),
                                     )
                                     .child(
                                         div()
                                             .text_sm()
+                                            .line_height(px(20.0))
                                             .text_color(rgb(text_secondary))
                                             .child(desc.clone()),
                                     ),
                             );
                         }
 
-                        // Divider
+                        // Divider — subtle separation before code preview
                         panel = panel.child(
                             div()
                                 .w_full()
                                 .h(px(visual.border_thin))
-                                .bg(rgba((ui_border << 8) | 0x40)) // 25% opacity - subtler divider
-                                .my(px(spacing.padding_md)),       // More spacing around divider
+                                .bg(rgba((ui_border << 8) | if is_light_mode { 0x30 } else { 0x60 }))
+                                .my(px(spacing.padding_sm)),
                         );
 
                         // Code preview header
                         panel = panel.child(
                             div()
-                                .text_xs()
-                                .font_weight(gpui::FontWeight::MEDIUM)
-                                .text_color(rgba((text_muted << 8) | 0xDD)) // 87% opacity label
+                                .text_size(px(11.0))
+                                .font_weight(gpui::FontWeight::SEMIBOLD)
+                                .text_color(rgba((text_muted << 8) | 0xCC))
                                 .pb(px(spacing.padding_sm))
                                 .child("CODE PREVIEW"),
                         );
@@ -510,13 +558,13 @@ impl ScriptListApp {
                             panel = panel.child(path_div);
                         }
 
-                        // Scriptlet name header
+                        // Scriptlet name header — extra bottom padding for visual hierarchy
                         panel = panel.child(
                             div()
                                 .text_lg()
                                 .font_weight(gpui::FontWeight::SEMIBOLD)
                                 .text_color(rgb(text_primary))
-                                .pb(px(spacing.padding_sm))
+                                .pb(px(spacing.padding_md))
                                 .child(scriptlet.name.clone()),
                         );
 
@@ -533,9 +581,11 @@ impl ScriptListApp {
                                     .px(px(6.))
                                     .py(px(2.))
                                     .rounded(px(4.))
-                                    .bg(rgba((ui_border << 8) | 0x40))
+                                    .bg(badge_bg)
+                                    .border_1()
+                                    .border_color(badge_border)
                                     .text_xs()
-                                    .text_color(rgb(text_muted))
+                                    .text_color(badge_text)
                                     .child(scriptlet.tool_display_name().to_string()),
                             );
                             if let Some(ref group) = scriptlet.group {
@@ -545,9 +595,11 @@ impl ScriptListApp {
                                             .px(px(6.))
                                             .py(px(2.))
                                             .rounded(px(4.))
-                                            .bg(rgba((ui_border << 8) | 0x40))
+                                            .bg(badge_bg)
+                                            .border_1()
+                                            .border_color(badge_border)
                                             .text_xs()
-                                            .text_color(rgb(text_muted))
+                                            .text_color(badge_text)
                                             .child(group.clone()),
                                     );
                                 }
@@ -558,9 +610,11 @@ impl ScriptListApp {
                                         .px(px(6.))
                                         .py(px(2.))
                                         .rounded(px(4.))
-                                        .bg(rgba((colors.accent << 8) | 0x20))
+                                        .bg(accent_badge_bg)
+                                        .border_1()
+                                        .border_color(accent_badge_border)
                                         .text_xs()
-                                        .text_color(rgb(colors.accent))
+                                        .text_color(accent_badge_text)
                                         .child(format!("alias: {}", alias)),
                                 );
                             }
@@ -570,9 +624,11 @@ impl ScriptListApp {
                                         .px(px(6.))
                                         .py(px(2.))
                                         .rounded(px(4.))
-                                        .bg(rgba((colors.accent << 8) | 0x20))
+                                        .bg(accent_badge_bg)
+                                        .border_1()
+                                        .border_color(accent_badge_border)
                                         .text_xs()
-                                        .text_color(rgb(colors.accent))
+                                        .text_color(accent_badge_text)
                                         .child(format!("keyword: {}", keyword)),
                                 );
                             }
@@ -585,18 +641,19 @@ impl ScriptListApp {
                                 div()
                                     .flex()
                                     .flex_col()
-                                    .pb(px(spacing.padding_md))
+                                    .pb(px(spacing.padding_lg))
                                     .child(
                                         div()
-                                            .text_xs()
-                                            .font_weight(gpui::FontWeight::MEDIUM)
-                                            .text_color(rgba((text_muted << 8) | 0xDD)) // 87% opacity for label hierarchy
+                                            .text_size(px(11.0))
+                                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                                            .text_color(rgba((text_muted << 8) | 0xCC))
                                             .pb(px(spacing.padding_xs))
                                             .child("DESCRIPTION"),
                                     )
                                     .child(
                                         div()
                                             .text_sm()
+                                            .line_height(px(20.0))
                                             .text_color(rgb(text_secondary))
                                             .child(desc.clone()),
                                     ),
@@ -613,12 +670,12 @@ impl ScriptListApp {
                                 div()
                                     .flex()
                                     .flex_col()
-                                    .pb(px(spacing.padding_md))
+                                    .pb(px(spacing.padding_lg))
                                     .child(
                                         div()
-                                            .text_xs()
-                                            .font_weight(gpui::FontWeight::MEDIUM)
-                                            .text_color(rgba((text_muted << 8) | 0xDD)) // 87% opacity for label hierarchy
+                                            .text_size(px(11.0))
+                                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                                            .text_color(rgba((text_muted << 8) | 0xCC))
                                             .pb(px(spacing.padding_xs))
                                             .child("KEYBOARD SHORTCUT"),
                                     )
@@ -632,28 +689,28 @@ impl ScriptListApp {
                                                 div()
                                                     .text_sm()
                                                     .font_weight(gpui::FontWeight::MEDIUM)
-                                                    .text_color(rgb(colors.accent))
+                                                    .text_color(accent_badge_text)
                                                     .child(shortcut),
                                             ),
                                     ),
                             );
                         }
 
-                        // Divider
+                        // Divider — subtle separation before content preview
                         panel = panel.child(
                             div()
                                 .w_full()
                                 .h(px(visual.border_thin))
-                                .bg(rgba((ui_border << 8) | 0x40)) // 25% opacity - subtler divider
-                                .my(px(spacing.padding_md)),       // More spacing around divider
+                                .bg(rgba((ui_border << 8) | if is_light_mode { 0x30 } else { 0x60 }))
+                                .my(px(spacing.padding_sm)),
                         );
 
                         // Content preview header
                         panel = panel.child(
                             div()
-                                .text_xs()
-                                .font_weight(gpui::FontWeight::MEDIUM)
-                                .text_color(rgba((text_muted << 8) | 0xDD)) // 87% opacity label
+                                .text_size(px(11.0))
+                                .font_weight(gpui::FontWeight::SEMIBOLD)
+                                .text_color(rgba((text_muted << 8) | 0xCC))
                                 .pb(px(spacing.padding_sm))
                                 .child("CONTENT PREVIEW"),
                         );
@@ -771,13 +828,13 @@ impl ScriptListApp {
                     scripts::SearchResult::BuiltIn(builtin_match) => {
                         let builtin = &builtin_match.entry;
 
-                        // Built-in name header
+                        // Built-in name header — extra bottom padding for visual hierarchy
                         panel = panel.child(
                             div()
                                 .text_lg()
                                 .font_weight(gpui::FontWeight::SEMIBOLD)
                                 .text_color(rgb(text_primary))
-                                .pb(px(spacing.padding_sm))
+                                .pb(px(spacing.padding_md))
                                 .child(builtin.name.clone()),
                         );
 
@@ -787,12 +844,12 @@ impl ScriptListApp {
                                 div()
                                     .flex()
                                     .flex_col()
-                                    .pb(px(spacing.padding_md))
+                                    .pb(px(spacing.padding_lg))
                                     .child(
                                         div()
-                                            .text_xs()
-                                            .font_weight(gpui::FontWeight::MEDIUM)
-                                            .text_color(rgba((text_muted << 8) | 0xDD)) // 87% opacity for label hierarchy
+                                            .text_size(px(11.0))
+                                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                                            .text_color(rgba((text_muted << 8) | 0xCC))
                                             .pb(px(spacing.padding_xs))
                                             .child("KEYBOARD SHORTCUT"),
                                     )
@@ -806,7 +863,7 @@ impl ScriptListApp {
                                                 div()
                                                     .text_sm()
                                                     .font_weight(gpui::FontWeight::MEDIUM)
-                                                    .text_color(rgb(colors.accent))
+                                                    .text_color(accent_badge_text)
                                                     .child(shortcut_str.clone()),
                                             ),
                                     ),
@@ -818,18 +875,19 @@ impl ScriptListApp {
                             div()
                                 .flex()
                                 .flex_col()
-                                .pb(px(spacing.padding_md))
+                                .pb(px(spacing.padding_lg))
                                 .child(
                                     div()
-                                        .text_xs()
-                                        .font_weight(gpui::FontWeight::MEDIUM)
-                                        .text_color(rgba((text_muted << 8) | 0xDD)) // 87% opacity for label hierarchy
+                                        .text_size(px(11.0))
+                                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                                        .text_color(rgba((text_muted << 8) | 0xCC)) // 80% opacity — readable but subordinate
                                         .pb(px(spacing.padding_xs))
                                         .child("DESCRIPTION"),
                                 )
                                 .child(
                                     div()
                                         .text_sm()
+                                        .line_height(px(20.0))
                                         .text_color(rgb(text_secondary))
                                         .child(builtin.description.clone()),
                                 ),
@@ -841,31 +899,32 @@ impl ScriptListApp {
                                 div()
                                     .flex()
                                     .flex_col()
-                                    .pb(px(spacing.padding_md))
+                                    .pb(px(spacing.padding_lg))
                                     .child(
                                         div()
-                                            .text_xs()
-                                            .font_weight(gpui::FontWeight::MEDIUM)
-                                            .text_color(rgba((text_muted << 8) | 0xDD)) // 87% opacity for label hierarchy
+                                            .text_size(px(11.0))
+                                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                                            .text_color(rgba((text_muted << 8) | 0xCC)) // 80% opacity — readable but subordinate
                                             .pb(px(spacing.padding_xs))
                                             .child("KEYWORDS"),
                                     )
                                     .child(
                                         div()
                                             .text_sm()
+                                            .line_height(px(20.0))
                                             .text_color(rgb(text_secondary))
                                             .child(builtin.keywords.join(", ")),
                                     ),
                             );
                         }
 
-                        // Divider
+                        // Divider — subtle separation before feature type
                         panel = panel.child(
                             div()
                                 .w_full()
                                 .h(px(visual.border_thin))
-                                .bg(rgba((ui_border << 8) | 0x40)) // 25% opacity - subtler divider
-                                .my(px(spacing.padding_md)),       // More spacing around divider
+                                .bg(rgba((ui_border << 8) | if is_light_mode { 0x30 } else { 0x60 }))
+                                .my(px(spacing.padding_sm)),
                         );
 
                         // Feature type indicator
@@ -912,17 +971,19 @@ impl ScriptListApp {
                             div()
                                 .flex()
                                 .flex_col()
+                                .pt(px(spacing.padding_xs))
                                 .child(
                                     div()
-                                        .text_xs()
-                                        .font_weight(gpui::FontWeight::MEDIUM)
-                                        .text_color(rgba((text_muted << 8) | 0xDD)) // 87% opacity for label hierarchy
+                                        .text_size(px(11.0))
+                                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                                        .text_color(rgba((text_muted << 8) | 0xCC)) // 80% opacity — readable but subordinate
                                         .pb(px(spacing.padding_xs))
                                         .child("FEATURE TYPE"),
                                 )
                                 .child(
                                     div()
                                         .text_sm()
+                                        .line_height(px(20.0))
                                         .text_color(rgb(text_secondary))
                                         .child(feature_type),
                                 ),
@@ -931,13 +992,13 @@ impl ScriptListApp {
                     scripts::SearchResult::App(app_match) => {
                         let app = &app_match.app;
 
-                        // App name header
+                        // App name header — extra bottom padding for visual hierarchy
                         panel = panel.child(
                             div()
                                 .text_lg()
                                 .font_weight(gpui::FontWeight::SEMIBOLD)
                                 .text_color(rgb(text_primary))
-                                .pb(px(spacing.padding_sm))
+                                .pb(px(spacing.padding_md))
                                 .child(app.name.clone()),
                         );
 
@@ -947,12 +1008,12 @@ impl ScriptListApp {
                                 div()
                                     .flex()
                                     .flex_col()
-                                    .pb(px(spacing.padding_md))
+                                    .pb(px(spacing.padding_lg))
                                     .child(
                                         div()
-                                            .text_xs()
-                                            .font_weight(gpui::FontWeight::MEDIUM)
-                                            .text_color(rgba((text_muted << 8) | 0xDD)) // 87% opacity for label hierarchy
+                                            .text_size(px(11.0))
+                                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                                            .text_color(rgba((text_muted << 8) | 0xCC))
                                             .pb(px(spacing.padding_xs))
                                             .child("KEYBOARD SHORTCUT"),
                                     )
@@ -966,7 +1027,7 @@ impl ScriptListApp {
                                                 div()
                                                     .text_sm()
                                                     .font_weight(gpui::FontWeight::MEDIUM)
-                                                    .text_color(rgb(colors.accent))
+                                                    .text_color(accent_badge_text)
                                                     .child(shortcut_str.clone()),
                                             ),
                                     ),
@@ -978,18 +1039,19 @@ impl ScriptListApp {
                             div()
                                 .flex()
                                 .flex_col()
-                                .pb(px(spacing.padding_md))
+                                .pb(px(spacing.padding_lg))
                                 .child(
                                     div()
-                                        .text_xs()
-                                        .font_weight(gpui::FontWeight::MEDIUM)
-                                        .text_color(rgba((text_muted << 8) | 0xDD)) // 87% opacity for label hierarchy
+                                        .text_size(px(11.0))
+                                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                                        .text_color(rgba((text_muted << 8) | 0xCC))
                                         .pb(px(spacing.padding_xs))
                                         .child("PATH"),
                                 )
                                 .child(
                                     div()
                                         .text_sm()
+                                        .line_height(px(20.0))
                                         .text_color(rgb(text_secondary))
                                         .child(app.path.to_string_lossy().to_string()),
                                 ),
@@ -1001,18 +1063,19 @@ impl ScriptListApp {
                                 div()
                                     .flex()
                                     .flex_col()
-                                    .pb(px(spacing.padding_md))
+                                    .pb(px(spacing.padding_lg))
                                     .child(
                                         div()
-                                            .text_xs()
-                                            .font_weight(gpui::FontWeight::MEDIUM)
-                                            .text_color(rgba((text_muted << 8) | 0xDD)) // 87% opacity for label hierarchy
+                                            .text_size(px(11.0))
+                                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                                            .text_color(rgba((text_muted << 8) | 0xCC))
                                             .pb(px(spacing.padding_xs))
                                             .child("BUNDLE ID"),
                                     )
                                     .child(
                                         div()
                                             .text_sm()
+                                            .line_height(px(20.0))
                                             .text_color(rgb(text_secondary))
                                             .child(bundle_id.clone()),
                                     ),
