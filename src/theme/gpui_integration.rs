@@ -182,8 +182,8 @@ pub fn map_scriptkit_to_gpui_theme(sk_theme: &Theme, is_dark: bool) -> ThemeColo
     theme_color.info = hex_to_hsla(colors.ui.info);
     theme_color.info_foreground = hex_to_hsla(colors.text.primary);
 
-    // Scrollbar
-    theme_color.scrollbar = hex_to_hsla(colors.background.main);
+    // Scrollbar - track is transparent so it blends with any background
+    theme_color.scrollbar = hsla(0.0, 0.0, 0.0, 0.0);
     theme_color.scrollbar_thumb = hex_to_hsla(colors.text.dimmed);
     theme_color.scrollbar_thumb_hover = hex_to_hsla(colors.text.muted);
 
