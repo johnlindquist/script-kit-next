@@ -2316,6 +2316,61 @@ impl ScriptListApp {
         }
     }
 
+    /// Accent color palette for theme customization
+    const ACCENT_PALETTE: &'static [(u32, &'static str)] = &[
+        (0xFBBF24, "Amber"),
+        (0x3B82F6, "Blue"),
+        (0x8B5CF6, "Violet"),
+        (0xEC4899, "Pink"),
+        (0xEF4444, "Red"),
+        (0xF97316, "Orange"),
+        (0x22C55E, "Green"),
+        (0x14B8A6, "Teal"),
+        (0x06B6D4, "Cyan"),
+        (0x6366F1, "Indigo"),
+    ];
+
+    /// Opacity presets for quick selection
+    const OPACITY_PRESETS: &'static [(f32, &'static str)] = &[
+        (0.10, "10%"),
+        (0.30, "30%"),
+        (0.50, "50%"),
+        (0.80, "80%"),
+        (1.00, "100%"),
+    ];
+
+    /// Compute on-accent text color based on accent luminance
+    fn accent_on_text_color(accent: u32, bg_main: u32) -> u32 {
+        let r = ((accent >> 16) & 0xFF) as f32;
+        let g = ((accent >> 8) & 0xFF) as f32;
+        let b = (accent & 0xFF) as f32;
+        if (0.299 * r + 0.587 * g + 0.114 * b) > 128.0 {
+            bg_main
+        } else {
+            0xFFFFFF
+        }
+    }
+
+    /// Find the closest accent palette index for a given accent color
+    fn find_accent_palette_index(accent: u32) -> Option<usize> {
+        Self::ACCENT_PALETTE.iter().position(|&(c, _)| c == accent)
+    }
+
+    /// Find the closest opacity preset index for a given opacity value
+    fn find_opacity_preset_index(opacity: f32) -> usize {
+        Self::OPACITY_PRESETS
+            .iter()
+            .enumerate()
+            .min_by(|(_, a), (_, b)| {
+                (a.0 - opacity)
+                    .abs()
+                    .partial_cmp(&(b.0 - opacity).abs())
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+            .map(|(i, _)| i)
+            .unwrap_or(0)
+    }
+
     /// Render the theme chooser with search, live preview, and preview panel
     pub(crate) fn render_theme_chooser(
         &mut self,
@@ -2419,6 +2474,83 @@ impl ScriptListApp {
                     this.close_and_reset_window(cx);
                     return;
                 }
+                // Cmd+[ / Cmd+]: cycle accent colors
+                if has_cmd && (key_str == "[" || key_str == "bracketleft") {
+                    let current = this.theme.colors.accent.selected;
+                    let idx = Self::find_accent_palette_index(current).unwrap_or(0);
+                    let new_idx = if idx == 0 {
+                        Self::ACCENT_PALETTE.len() - 1
+                    } else {
+                        idx - 1
+                    };
+                    let (new_accent, _) = Self::ACCENT_PALETTE[new_idx];
+                    let mut modified = (*this.theme).clone();
+                    modified.colors.accent.selected = new_accent;
+                    modified.colors.text.on_accent =
+                        Self::accent_on_text_color(new_accent, modified.colors.background.main);
+                    this.theme = std::sync::Arc::new(modified);
+                    theme::sync_gpui_component_theme(cx);
+                    cx.notify();
+                    return;
+                }
+                if has_cmd && (key_str == "]" || key_str == "bracketright") {
+                    let current = this.theme.colors.accent.selected;
+                    let idx = Self::find_accent_palette_index(current).unwrap_or(0);
+                    let new_idx = (idx + 1) % Self::ACCENT_PALETTE.len();
+                    let (new_accent, _) = Self::ACCENT_PALETTE[new_idx];
+                    let mut modified = (*this.theme).clone();
+                    modified.colors.accent.selected = new_accent;
+                    modified.colors.text.on_accent =
+                        Self::accent_on_text_color(new_accent, modified.colors.background.main);
+                    this.theme = std::sync::Arc::new(modified);
+                    theme::sync_gpui_component_theme(cx);
+                    cx.notify();
+                    return;
+                }
+                // Cmd+- / Cmd+=: adjust opacity
+                if has_cmd && key_str == "-" {
+                    let current_main = this.theme.get_opacity().main;
+                    let idx = Self::find_opacity_preset_index(current_main);
+                    if idx > 0 {
+                        let target = Self::OPACITY_PRESETS[idx - 1].0;
+                        let mut modified = (*this.theme).clone();
+                        if let Some(ref mut op) = modified.opacity {
+                            op.main = target;
+                            op.title_bar = target;
+                        }
+                        this.theme = std::sync::Arc::new(modified);
+                        theme::sync_gpui_component_theme(cx);
+                        cx.notify();
+                    }
+                    return;
+                }
+                if has_cmd && (key_str == "=" || key_str == "+") {
+                    let current_main = this.theme.get_opacity().main;
+                    let idx = Self::find_opacity_preset_index(current_main);
+                    if idx < Self::OPACITY_PRESETS.len() - 1 {
+                        let target = Self::OPACITY_PRESETS[idx + 1].0;
+                        let mut modified = (*this.theme).clone();
+                        if let Some(ref mut op) = modified.opacity {
+                            op.main = target;
+                            op.title_bar = target;
+                        }
+                        this.theme = std::sync::Arc::new(modified);
+                        theme::sync_gpui_component_theme(cx);
+                        cx.notify();
+                    }
+                    return;
+                }
+                // Cmd+B: toggle vibrancy
+                if has_cmd && key_str == "b" {
+                    let mut modified = (*this.theme).clone();
+                    if let Some(ref mut vibrancy) = modified.vibrancy {
+                        vibrancy.enabled = !vibrancy.enabled;
+                    }
+                    this.theme = std::sync::Arc::new(modified);
+                    theme::sync_gpui_component_theme(cx);
+                    cx.notify();
+                    return;
+                }
                 // Enter: apply and close
                 if key_str == "enter" {
                     this.theme_before_chooser = None;
@@ -2496,6 +2628,7 @@ impl ScriptListApp {
         let first_light_idx = first_light;
         let hover_bg = rgba((selection_bg << 8) | hover_alpha);
         let filtered_indices_for_list = filtered_indices.clone();
+        let entity_handle_for_customize = entity_handle.clone();
 
         // ── Theme list ─────────────────────────────────────────────
         let list = uniform_list(
@@ -2757,8 +2890,164 @@ impl ScriptListApp {
                 )
             });
 
-        // ── Preview panel ──────────────────────────────────────────
+        // ── Preview panel with customization controls ─────────────
         let border_rgba = rgba((ui_border << 8) | 0x40);
+        let current_opacity_main = opacity.main;
+        let vibrancy_enabled = self
+            .theme
+            .vibrancy
+            .as_ref()
+            .map(|v| v.enabled)
+            .unwrap_or(true);
+
+        // Build accent color swatches (clickable)
+        let accent_swatches: Vec<gpui::AnyElement> = Self::ACCENT_PALETTE
+            .iter()
+            .enumerate()
+            .map(|(i, &(color, _name))| {
+                let is_current = color == accent_color;
+                let click_entity = entity_handle_for_customize.clone();
+                let swatch_bg_main = bg_main;
+                div()
+                    .id(ElementId::NamedInteger("accent-swatch".into(), i as u64))
+                    .w(px(20.0))
+                    .h(px(20.0))
+                    .rounded(px(10.0))
+                    .bg(rgb(color))
+                    .cursor_pointer()
+                    .when(is_current, |d| d.border_2().border_color(rgb(text_primary)))
+                    .when(!is_current, |d| {
+                        d.border_1()
+                            .border_color(border_rgba)
+                            .hover(move |s| s.border_color(rgb(text_secondary)))
+                    })
+                    .on_click(
+                        move |_event: &gpui::ClickEvent,
+                              _window: &mut Window,
+                              cx: &mut gpui::App| {
+                            if let Some(app) = click_entity.upgrade() {
+                                app.update(cx, |this, cx| {
+                                    let mut modified = (*this.theme).clone();
+                                    modified.colors.accent.selected = color;
+                                    modified.colors.text.on_accent =
+                                        Self::accent_on_text_color(color, swatch_bg_main);
+                                    this.theme = std::sync::Arc::new(modified);
+                                    theme::sync_gpui_component_theme(cx);
+                                    cx.notify();
+                                });
+                            }
+                        },
+                    )
+                    .into_any_element()
+            })
+            .collect();
+
+        // Build opacity preset buttons (clickable)
+        let opacity_buttons: Vec<gpui::AnyElement> = Self::OPACITY_PRESETS
+            .iter()
+            .enumerate()
+            .map(|(i, &(value, label))| {
+                let is_current = (value - current_opacity_main).abs() < 0.05;
+                let click_entity = entity_handle_for_customize.clone();
+                div()
+                    .id(ElementId::NamedInteger("opacity-btn".into(), i as u64))
+                    .px(px(8.0))
+                    .py(px(3.0))
+                    .rounded(px(4.0))
+                    .cursor_pointer()
+                    .text_xs()
+                    .when(is_current, |d| {
+                        d.bg(rgb(accent_color))
+                            .text_color(rgb(text_on_accent))
+                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                    })
+                    .when(!is_current, |d| {
+                        d.border_1()
+                            .border_color(border_rgba)
+                            .text_color(rgb(text_secondary))
+                            .hover(move |s| s.bg(rgba((selection_bg << 8) | hover_alpha)))
+                    })
+                    .on_click(
+                        move |_event: &gpui::ClickEvent,
+                              _window: &mut Window,
+                              cx: &mut gpui::App| {
+                            if let Some(app) = click_entity.upgrade() {
+                                app.update(cx, |this, cx| {
+                                    let mut modified = (*this.theme).clone();
+                                    if let Some(ref mut op) = modified.opacity {
+                                        op.main = value;
+                                        op.title_bar = value;
+                                    }
+                                    this.theme = std::sync::Arc::new(modified);
+                                    theme::sync_gpui_component_theme(cx);
+                                    cx.notify();
+                                });
+                            }
+                        },
+                    )
+                    .child(label.to_string())
+                    .into_any_element()
+            })
+            .collect();
+
+        // Build vibrancy toggle (clickable)
+        let vibrancy_entity = entity_handle_for_customize.clone();
+        let vibrancy_toggle = div()
+            .id("vibrancy-toggle")
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap(px(8.0))
+            .cursor_pointer()
+            .hover(move |s| s.bg(rgba((selection_bg << 8) | hover_alpha)))
+            .rounded(px(4.0))
+            .px(px(4.0))
+            .py(px(2.0))
+            .on_click(
+                move |_event: &gpui::ClickEvent,
+                      _window: &mut Window,
+                      cx: &mut gpui::App| {
+                    if let Some(app) = vibrancy_entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            let mut modified = (*this.theme).clone();
+                            if let Some(ref mut vibrancy) = modified.vibrancy {
+                                vibrancy.enabled = !vibrancy.enabled;
+                            }
+                            this.theme = std::sync::Arc::new(modified);
+                            theme::sync_gpui_component_theme(cx);
+                            cx.notify();
+                        });
+                    }
+                },
+            )
+            .child(
+                div()
+                    .w(px(28.0))
+                    .h(px(14.0))
+                    .rounded(px(7.0))
+                    .when(vibrancy_enabled, |d| d.bg(rgb(accent_color)))
+                    .when(!vibrancy_enabled, |d| {
+                        d.bg(rgba((ui_border << 8) | 0x80))
+                    })
+                    .flex()
+                    .items_center()
+                    .child(
+                        div()
+                            .w(px(10.0))
+                            .h(px(10.0))
+                            .rounded(px(5.0))
+                            .bg(rgb(0xffffff))
+                            .when(vibrancy_enabled, |d| d.ml(px(16.0)))
+                            .when(!vibrancy_enabled, |d| d.ml(px(2.0))),
+                    ),
+            )
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(rgb(text_secondary))
+                    .child(if vibrancy_enabled { "On" } else { "Off" }),
+            );
+
         let preview_panel = div()
             .w_1_2()
             .h_full()
@@ -2768,21 +3057,95 @@ impl ScriptListApp {
             .py(px(design_spacing.padding_md))
             .flex()
             .flex_col()
-            .gap(px(12.0))
+            .gap(px(10.0))
             .overflow_y_hidden()
-            // Section title
+            // ── Customize section ──────────────────────────────────
             .child(
                 div()
                     .text_xs()
                     .text_color(rgb(text_dimmed))
                     .font_weight(gpui::FontWeight::SEMIBOLD)
-                    .child("PREVIEW"),
+                    .child("CUSTOMIZE"),
+            )
+            // Accent color row
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(4.0))
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(text_muted))
+                            .child("Accent Color"),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .gap(px(4.0))
+                            .flex_wrap()
+                            .children(accent_swatches),
+                    ),
+            )
+            // Opacity row
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(4.0))
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(text_muted))
+                            .child(format!(
+                                "Window Opacity  {:.0}%",
+                                current_opacity_main * 100.0
+                            )),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .gap(px(4.0))
+                            .children(opacity_buttons),
+                    ),
+            )
+            // Vibrancy toggle row
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(4.0))
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(text_muted))
+                            .child("Vibrancy Blur"),
+                    )
+                    .child(vibrancy_toggle),
+            )
+            // ── Preview section ────────────────────────────────────
+            .child(
+                div()
+                    .w_full()
+                    .mt(px(4.0))
+                    .pt(px(8.0))
+                    .border_t_1()
+                    .border_color(border_rgba)
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(text_dimmed))
+                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                            .child("PREVIEW"),
+                    ),
             )
             // Mock search box
             .child(
                 div()
                     .w_full()
-                    .h(px(32.0))
+                    .h(px(28.0))
                     .rounded(px(6.0))
                     .bg(rgb(bg_search_box))
                     .border_1()
@@ -2793,7 +3156,7 @@ impl ScriptListApp {
                     .items_center()
                     .child(
                         div()
-                            .text_sm()
+                            .text_xs()
                             .text_color(rgb(text_muted))
                             .child("Search scripts..."),
                     ),
@@ -2808,11 +3171,10 @@ impl ScriptListApp {
                     .overflow_hidden()
                     .flex()
                     .flex_col()
-                    // Selected item
                     .child(
                         div()
                             .w_full()
-                            .h(px(32.0))
+                            .h(px(28.0))
                             .bg(rgb(accent_color))
                             .px(px(10.0))
                             .flex()
@@ -2820,17 +3182,16 @@ impl ScriptListApp {
                             .items_center()
                             .child(
                                 div()
-                                    .text_sm()
+                                    .text_xs()
                                     .font_weight(gpui::FontWeight::SEMIBOLD)
                                     .text_color(rgb(text_on_accent))
                                     .child("Selected Item"),
                             ),
                     )
-                    // Normal item
                     .child(
                         div()
                             .w_full()
-                            .h(px(32.0))
+                            .h(px(28.0))
                             .bg(rgb(bg_main))
                             .px(px(10.0))
                             .flex()
@@ -2838,16 +3199,15 @@ impl ScriptListApp {
                             .items_center()
                             .child(
                                 div()
-                                    .text_sm()
+                                    .text_xs()
                                     .text_color(rgb(text_primary))
                                     .child("Regular Item"),
                             ),
                     )
-                    // Secondary item
                     .child(
                         div()
                             .w_full()
-                            .h(px(32.0))
+                            .h(px(28.0))
                             .bg(rgb(bg_main))
                             .px(px(10.0))
                             .flex()
@@ -2855,38 +3215,13 @@ impl ScriptListApp {
                             .items_center()
                             .child(
                                 div()
-                                    .text_sm()
+                                    .text_xs()
                                     .text_color(rgb(text_secondary))
                                     .child("Another Item"),
                             ),
                     ),
             )
-            // Text samples
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap(px(4.0))
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(rgb(text_primary))
-                            .child("Primary text sample"),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(rgb(text_secondary))
-                            .child("Secondary descriptive text"),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(rgb(text_muted))
-                            .child("Muted helper text"),
-                    ),
-            )
-            // Terminal colors
+            // Terminal + semantic colors
             .child(
                 div()
                     .flex()
@@ -2900,17 +3235,17 @@ impl ScriptListApp {
                             .child("TERMINAL"),
                     )
                     .child(
-                        div().flex().flex_row().gap(px(3.0)).children(
+                        div().flex().flex_row().gap(px(2.0)).children(
                             term_colors
                                 .iter()
-                                .map(|&c| div().w(px(18.0)).h(px(14.0)).rounded(px(2.0)).bg(rgb(c))),
+                                .map(|&c| div().w(px(16.0)).h(px(12.0)).rounded(px(2.0)).bg(rgb(c))),
                         ),
                     )
                     .child(
-                        div().flex().flex_row().gap(px(3.0)).children(
+                        div().flex().flex_row().gap(px(2.0)).children(
                             term_bright
                                 .iter()
-                                .map(|&c| div().w(px(18.0)).h(px(14.0)).rounded(px(2.0)).bg(rgb(c))),
+                                .map(|&c| div().w(px(16.0)).h(px(12.0)).rounded(px(2.0)).bg(rgb(c))),
                         ),
                     ),
             )
@@ -2925,80 +3260,36 @@ impl ScriptListApp {
                             .flex()
                             .flex_row()
                             .items_center()
-                            .gap(px(4.0))
-                            .child(
-                                div()
-                                    .w(px(8.0))
-                                    .h(px(8.0))
-                                    .rounded(px(4.0))
-                                    .bg(rgb(ui_success)),
-                            )
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(rgb(ui_success))
-                                    .child("Success"),
-                            ),
+                            .gap(px(3.0))
+                            .child(div().w(px(7.0)).h(px(7.0)).rounded(px(4.0)).bg(rgb(ui_success)))
+                            .child(div().text_xs().text_color(rgb(ui_success)).child("OK")),
                     )
                     .child(
                         div()
                             .flex()
                             .flex_row()
                             .items_center()
-                            .gap(px(4.0))
-                            .child(
-                                div()
-                                    .w(px(8.0))
-                                    .h(px(8.0))
-                                    .rounded(px(4.0))
-                                    .bg(rgb(ui_error)),
-                            )
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(rgb(ui_error))
-                                    .child("Error"),
-                            ),
+                            .gap(px(3.0))
+                            .child(div().w(px(7.0)).h(px(7.0)).rounded(px(4.0)).bg(rgb(ui_error)))
+                            .child(div().text_xs().text_color(rgb(ui_error)).child("Err")),
                     )
                     .child(
                         div()
                             .flex()
                             .flex_row()
                             .items_center()
-                            .gap(px(4.0))
-                            .child(
-                                div()
-                                    .w(px(8.0))
-                                    .h(px(8.0))
-                                    .rounded(px(4.0))
-                                    .bg(rgb(ui_warning)),
-                            )
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(rgb(ui_warning))
-                                    .child("Warn"),
-                            ),
+                            .gap(px(3.0))
+                            .child(div().w(px(7.0)).h(px(7.0)).rounded(px(4.0)).bg(rgb(ui_warning)))
+                            .child(div().text_xs().text_color(rgb(ui_warning)).child("Warn")),
                     )
                     .child(
                         div()
                             .flex()
                             .flex_row()
                             .items_center()
-                            .gap(px(4.0))
-                            .child(
-                                div()
-                                    .w(px(8.0))
-                                    .h(px(8.0))
-                                    .rounded(px(4.0))
-                                    .bg(rgb(ui_info)),
-                            )
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(rgb(ui_info))
-                                    .child("Info"),
-                            ),
+                            .gap(px(3.0))
+                            .child(div().w(px(7.0)).h(px(7.0)).rounded(px(4.0)).bg(rgb(ui_info)))
+                            .child(div().text_xs().text_color(rgb(ui_info)).child("Info")),
                     ),
             );
 
@@ -3029,14 +3320,30 @@ impl ScriptListApp {
             .border_t_1()
             .border_color(footer_border)
             .flex()
-            .flex_row()
-            .justify_center()
-            .gap(px(16.0))
-            .child(shortcut("↑↓", "Preview"))
-            .child(shortcut("Enter", "Apply"))
-            .child(shortcut("Esc", "Cancel"))
-            .child(shortcut("PgUp/Dn", "Jump"))
-            .child(shortcut("Type", "Search"));
+            .flex_col()
+            .gap(px(2.0))
+            .child(
+                div()
+                    .flex()
+                    .flex_row()
+                    .justify_center()
+                    .gap(px(12.0))
+                    .child(shortcut("↑↓", "Preview"))
+                    .child(shortcut("Enter", "Apply"))
+                    .child(shortcut("Esc", "Cancel"))
+                    .child(shortcut("PgUp/Dn", "Jump"))
+                    .child(shortcut("Type", "Search")),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_row()
+                    .justify_center()
+                    .gap(px(12.0))
+                    .child(shortcut("⌘[]", "Accent"))
+                    .child(shortcut("⌘-/=", "Opacity"))
+                    .child(shortcut("⌘B", "Vibrancy")),
+            );
 
         // ── Empty state when filter has no matches ─────────────────
         if filtered_count == 0 {
