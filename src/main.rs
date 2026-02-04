@@ -1296,6 +1296,7 @@ struct ScriptListApp {
     // Scroll handle for file search list
     file_search_scroll_handle: UniformListScrollHandle,
     // Scroll handle for theme chooser list
+    #[allow(dead_code)]
     theme_chooser_scroll_handle: UniformListScrollHandle,
     // File search loading state (true while mdfind is running)
     file_search_loading: bool,
@@ -1772,8 +1773,9 @@ impl Render for ScriptListApp {
             } => self
                 .render_file_search(query, selected_index, cx)
                 .into_any_element(),
-            AppView::ThemeChooserView { selected_index } => self
-                .render_theme_chooser(selected_index, cx),
+            AppView::ThemeChooserView { selected_index } => {
+                self.render_theme_chooser(selected_index, cx)
+            }
         };
 
         // Wrap content in a container that can have the debug grid overlay

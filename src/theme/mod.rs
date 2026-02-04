@@ -20,6 +20,8 @@ mod color_resolver;
 mod gpui_integration;
 mod helpers;
 pub mod hex_color;
+#[allow(dead_code)]
+pub mod presets;
 pub mod semantic;
 pub mod service;
 mod types;

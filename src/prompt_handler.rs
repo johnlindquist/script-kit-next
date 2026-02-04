@@ -977,6 +977,16 @@ impl ScriptListApp {
                             .get(*selected_index)
                             .map(|f| f.name.clone()),
                     ),
+                    AppView::ThemeChooserView { selected_index } => (
+                        "themeChooser".to_string(),
+                        Some("theme-chooser".to_string()),
+                        None,
+                        String::new(),
+                        0,
+                        0,
+                        *selected_index as i32,
+                        None,
+                    ),
                 };
 
                 // Focus state: we use focused_input as a proxy since we don't have Window access here.
