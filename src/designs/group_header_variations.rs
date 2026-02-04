@@ -130,6 +130,7 @@ pub enum GroupHeaderStyle {
 
 impl GroupHeaderStyle {
     /// Get all styles
+    #[allow(dead_code)]
     pub fn all() -> &'static [GroupHeaderStyle] {
         &[
             // Text Only
@@ -169,6 +170,7 @@ impl GroupHeaderStyle {
     }
 
     /// Get the total count of styles
+    #[allow(dead_code)]
     pub fn count() -> usize {
         Self::all().len()
     }

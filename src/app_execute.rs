@@ -9,6 +9,10 @@ impl ScriptListApp {
             &format!("Executing built-in: {} (id: {})", entry.name, entry.id),
         );
 
+        // Clear any stale actions popup from previous view
+        self.show_actions_popup = false;
+        self.actions_dialog = None;
+
         // Check if this command requires confirmation - open modal if so
         if self.config.requires_confirmation(&entry.id) {
             logging::log(
