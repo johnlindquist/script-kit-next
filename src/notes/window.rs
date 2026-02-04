@@ -67,6 +67,18 @@ pub enum NotesViewMode {
     Trash,
 }
 
+/// Sort mode for the notes list
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum NotesSortMode {
+    /// Sort by last updated (most recent first) — default
+    #[default]
+    Updated,
+    /// Sort by creation date (newest first)
+    Created,
+    /// Sort alphabetically by title (A→Z)
+    Alphabetical,
+}
+
 /// The main notes application view
 ///
 /// Raycast-style single-note view:
@@ -201,6 +213,12 @@ pub struct NotesApp {
 
     /// Flag to suppress history push during back/forward navigation
     navigating_history: bool,
+
+    /// Whether focus mode is enabled (Cmd+.) — hides all chrome for distraction-free writing
+    focus_mode: bool,
+
+    /// Current sort mode for notes list
+    sort_mode: NotesSortMode,
 }
 
 impl NotesApp {
@@ -342,6 +360,8 @@ impl NotesApp {
             history_back: Vec::new(),
             history_forward: Vec::new(),
             navigating_history: false,
+            focus_mode: false,
+            sort_mode: NotesSortMode::default(),
         }
     }
 
@@ -1047,6 +1067,85 @@ impl NotesApp {
         }
     }
 
+    /// Toggle focus mode (Cmd+.) — hides titlebar icons, footer, toolbar for distraction-free writing
+    fn toggle_focus_mode(&mut self, cx: &mut Context<Self>) {
+        self.focus_mode = !self.focus_mode;
+        if self.focus_mode {
+            // Also hide search and formatting toolbar in focus mode
+            self.show_search = false;
+            self.show_format_toolbar = false;
+        }
+        info!(focus_mode = self.focus_mode, "Toggled focus mode");
+        cx.notify();
+    }
+
+    /// Get estimated reading time in minutes based on word count (200 wpm average)
+    fn get_reading_time(&self, cx: &Context<Self>) -> String {
+        let words = self.get_word_count(cx);
+        if words < 30 {
+            return String::new(); // Too short for meaningful estimate
+        }
+        let minutes = (words as f64 / 200.0).ceil() as usize;
+        if minutes <= 1 {
+            "~1 min read".to_string()
+        } else {
+            format!("~{} min read", minutes)
+        }
+    }
+
+    /// Cycle sort mode: Updated → Created → Alphabetical → Updated
+    fn cycle_sort_mode(&mut self, cx: &mut Context<Self>) {
+        self.sort_mode = match self.sort_mode {
+            NotesSortMode::Updated => NotesSortMode::Created,
+            NotesSortMode::Created => NotesSortMode::Alphabetical,
+            NotesSortMode::Alphabetical => NotesSortMode::Updated,
+        };
+        self.apply_sort(cx);
+        info!(sort_mode = ?self.sort_mode, "Cycled sort mode");
+    }
+
+    /// Apply current sort mode to the notes list
+    fn apply_sort(&mut self, cx: &mut Context<Self>) {
+        match self.sort_mode {
+            NotesSortMode::Updated => {
+                self.notes.sort_by(|a, b| match (a.is_pinned, b.is_pinned) {
+                    (true, false) => std::cmp::Ordering::Less,
+                    (false, true) => std::cmp::Ordering::Greater,
+                    _ => b.updated_at.cmp(&a.updated_at),
+                });
+            }
+            NotesSortMode::Created => {
+                self.notes.sort_by(|a, b| match (a.is_pinned, b.is_pinned) {
+                    (true, false) => std::cmp::Ordering::Less,
+                    (false, true) => std::cmp::Ordering::Greater,
+                    _ => b.created_at.cmp(&a.created_at),
+                });
+            }
+            NotesSortMode::Alphabetical => {
+                self.notes.sort_by(|a, b| match (a.is_pinned, b.is_pinned) {
+                    (true, false) => std::cmp::Ordering::Less,
+                    (false, true) => std::cmp::Ordering::Greater,
+                    _ => a.title.to_lowercase().cmp(&b.title.to_lowercase()),
+                });
+            }
+        }
+        cx.notify();
+    }
+
+    /// Empty the entire trash — permanently deletes all trashed notes
+    fn empty_trash(&mut self, cx: &mut Context<Self>) {
+        let ids: Vec<NoteId> = self.deleted_notes.iter().map(|n| n.id).collect();
+        for id in &ids {
+            if let Err(e) = storage::delete_note_permanently(*id) {
+                tracing::error!(error = %e, note_id = %id, "Failed to permanently delete note");
+            }
+        }
+        self.deleted_notes.clear();
+        self.selected_note_id = None;
+        info!(count = ids.len(), "Emptied trash");
+        cx.notify();
+    }
+
     /// Copy the current note content to clipboard
     fn copy_note_to_clipboard(&self, cx: &Context<Self>) {
         let content = self.editor_state.read(cx).value().to_string();
@@ -1524,6 +1623,10 @@ impl NotesApp {
 
     /// Toggle the search bar visibility
     fn toggle_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        // Exit focus mode if active (search requires chrome)
+        if self.focus_mode {
+            self.focus_mode = false;
+        }
         self.show_search = !self.show_search;
 
         if self.show_search {
@@ -1727,6 +1830,7 @@ impl NotesApp {
         let is_preview = self.preview_enabled;
         let char_count = self.get_character_count(cx);
         let is_pinned = self.is_current_note_pinned();
+        let in_focus_mode = self.focus_mode;
 
         // Get note title - This reads from self.notes which is updated by on_editor_change
         // The title is extracted from the first line of content via Note::set_content()
@@ -1797,18 +1901,30 @@ impl NotesApp {
                     .text_sm()
                     .text_color(muted_color) // Use muted color for subtle title
                     .when(!window_hovered, |d| d.opacity(0.))
+                    // In focus mode, show "Focus" hint instead of title (only on hover)
+                    .when(in_focus_mode, |d| d.opacity(0.))
                     // Pin indicator before title
-                    .when(is_pinned, |d| {
+                    .when(is_pinned && !in_focus_mode, |d| {
                         d.child(div().text_xs().text_color(accent_color).child("*"))
                     })
                     .child(title),
             )
+            // Focus mode hint: subtle "Cmd+. to exit" shown on hover in focus mode
+            .when(in_focus_mode && window_hovered, |d| {
+                d.child(
+                    div()
+                        .text_xs()
+                        .text_color(muted_color.opacity(0.4))
+                        .child("⌘. to exit focus"),
+                )
+            })
             // Conditionally show icons based on state - only when window is hovered
             // Raycast-style: icons on the right - settings (actions), panel (browse), + (new)
             // Use absolute positioning to keep title centered
             // Note: "+" and "≡" icons should show even with no notes (so users can create their first note)
             // The "⌘" (actions) icon only shows when a note is selected (needs a note to act on)
-            .when(window_hovered && !is_trash, |d| {
+            // Hidden in focus mode for distraction-free writing
+            .when(window_hovered && !is_trash && !in_focus_mode, |d| {
                 d.child(
                     div()
                         .absolute()
@@ -1887,13 +2003,16 @@ impl NotesApp {
                 // Trash actions (always visible)
                 d.child(
                     div()
+                        .absolute()
+                        .right_3()
                         .flex()
+                        .items_center()
                         .gap_1()
                         .child(
                             Button::new("restore")
                                 .ghost()
                                 .xsmall()
-                                .label("Restore")
+                                .label("Restore (⌘Z)")
                                 .on_click(cx.listener(|this, _, window, cx| {
                                     this.restore_note(window, cx);
                                 })),
@@ -1920,6 +2039,12 @@ impl NotesApp {
         let has_history_forward = !self.history_forward.is_empty();
         let trash_count = self.deleted_notes.len();
         let is_trash_view = self.view_mode == NotesViewMode::Trash;
+        let reading_time = self.get_reading_time(cx);
+        let sort_label = match self.sort_mode {
+            NotesSortMode::Updated => "",
+            NotesSortMode::Created => "created",
+            NotesSortMode::Alphabetical => "A→Z",
+        };
         let footer = div()
             .flex()
             .items_center()
@@ -1928,8 +2053,8 @@ impl NotesApp {
             .h(px(24.))
             .px_3()
             // NO .bg() - let vibrancy show through from root
-            // Hide when window not hovered
-            .when(!window_hovered, |d| d.opacity(0.))
+            // Hide when window not hovered (or in focus mode)
+            .when(!window_hovered || in_focus_mode, |d| d.opacity(0.))
             // LEFT: History arrows + note position + unsaved dot
             .child(
                 div()
@@ -1989,20 +2114,34 @@ impl NotesApp {
                         )
                     }),
             )
-            // CENTER: Word count and character count
+            // CENTER: Word count, character count, and reading time
             .child(
                 div()
-                    .text_xs()
-                    .text_color(cx.theme().muted_foreground)
-                    .child(format!(
-                        "{} word{}  ·  {} char{}",
-                        word_count,
-                        if word_count == 1 { "" } else { "s" },
-                        char_count,
-                        if char_count == 1 { "" } else { "s" },
-                    )),
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(cx.theme().muted_foreground)
+                            .child(format!(
+                                "{} word{}  ·  {} char{}",
+                                word_count,
+                                if word_count == 1 { "" } else { "s" },
+                                char_count,
+                                if char_count == 1 { "" } else { "s" },
+                            )),
+                    )
+                    .when(!reading_time.is_empty(), |d| {
+                        d.child(
+                            div()
+                                .text_xs()
+                                .text_color(cx.theme().muted_foreground.opacity(0.6))
+                                .child(reading_time),
+                        )
+                    }),
             )
-            // RIGHT: Trash badge + relative time + type indicator
+            // RIGHT: Sort indicator + trash badge + empty trash + relative time + type indicator
             .child(
                 div()
                     .absolute()
@@ -2010,6 +2149,21 @@ impl NotesApp {
                     .flex()
                     .items_center()
                     .gap_2()
+                    // Sort indicator (only when non-default sort is active)
+                    .when(!sort_label.is_empty() && !is_trash_view, |d| {
+                        d.child(
+                            div()
+                                .id("footer-sort-indicator")
+                                .text_xs()
+                                .text_color(cx.theme().muted_foreground.opacity(0.5))
+                                .cursor_pointer()
+                                .hover(|s| s.text_color(cx.theme().muted_foreground))
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    this.cycle_sort_mode(cx);
+                                }))
+                                .child(sort_label),
+                        )
+                    })
                     // Trash badge: shows count of deleted notes when not in trash view
                     .when(!is_trash_view && trash_count > 0, |d| {
                         d.child(
@@ -2023,6 +2177,21 @@ impl NotesApp {
                                     this.set_view_mode(NotesViewMode::Trash, window, cx);
                                 }))
                                 .child(format!("trash ({})", trash_count)),
+                        )
+                    })
+                    // "Empty Trash" link when in trash view with items
+                    .when(is_trash_view && trash_count > 0, |d| {
+                        d.child(
+                            div()
+                                .id("footer-empty-trash")
+                                .text_xs()
+                                .text_color(cx.theme().danger)
+                                .cursor_pointer()
+                                .hover(|s| s.text_color(cx.theme().foreground))
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    this.empty_trash(cx);
+                                }))
+                                .child("empty trash"),
                         )
                     })
                     // "Back to notes" link when in trash view
@@ -2157,12 +2326,15 @@ impl NotesApp {
             .h_full()
             // NO .bg() - let vibrancy show through from root
             .child(titlebar)
-            // Search bar (Cmd+F to toggle)
-            .when(self.show_search, |d| d.child(self.render_search(cx)))
-            // Toolbar hidden by default - only show when pinned
-            .when(!is_trash && has_selection && show_toolbar, |d| {
-                d.child(self.render_toolbar(cx))
+            // Search bar (Cmd+F to toggle) — hidden in focus mode
+            .when(self.show_search && !in_focus_mode, |d| {
+                d.child(self.render_search(cx))
             })
+            // Toolbar hidden by default - only show when pinned — hidden in focus mode
+            .when(
+                !is_trash && has_selection && show_toolbar && !in_focus_mode,
+                |d| d.child(self.render_toolbar(cx)),
+            )
             .child(
                 div()
                     .flex_1()
@@ -2721,6 +2893,27 @@ impl Render for NotesApp {
                                 wb,
                             );
                             window.remove_window();
+                        }
+                        "." => {
+                            // Cmd+.: Toggle focus mode
+                            this.toggle_focus_mode(cx);
+                            cx.stop_propagation();
+                        }
+                        "s" => {
+                            if modifiers.shift {
+                                // Cmd+Shift+S: Cycle sort mode
+                                this.cycle_sort_mode(cx);
+                                cx.stop_propagation();
+                            }
+                        }
+                        "z" => {
+                            // Cmd+Z: Restore from trash (when in trash view)
+                            if this.view_mode == NotesViewMode::Trash
+                                && this.selected_note_id.is_some()
+                            {
+                                this.restore_note(window, cx);
+                                cx.stop_propagation();
+                            }
                         }
                         "d" => this.duplicate_selected_note(window, cx),
                         "b" => this.insert_formatting("**", "**", window, cx),
