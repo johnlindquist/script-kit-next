@@ -77,6 +77,7 @@ pub enum IconName {
     MagnifyingGlass,
     Terminal,
     Code,
+    Pencil,
 
     // Status
     Check,
@@ -85,6 +86,7 @@ pub enum IconName {
     BoltFilled,
     BoltOutlined,
     EyeOff,
+    Warning,
 
     // Arrows
     ArrowRight,
@@ -121,6 +123,7 @@ impl IconName {
             Self::MagnifyingGlass,
             Self::Terminal,
             Self::Code,
+            Self::Pencil,
             // Status
             Self::Check,
             Self::Star,
@@ -128,6 +131,7 @@ impl IconName {
             Self::BoltFilled,
             Self::BoltOutlined,
             Self::EyeOff,
+            Self::Warning,
             // Arrows
             Self::ArrowRight,
             Self::ArrowDown,
@@ -163,12 +167,14 @@ impl IconName {
             Self::MagnifyingGlass => "Search",
             Self::Terminal => "Terminal",
             Self::Code => "Code",
+            Self::Pencil => "Pencil",
             Self::Check => "Check",
             Self::Star => "Star",
             Self::StarFilled => "Star Filled",
             Self::BoltFilled => "Bolt Filled",
             Self::BoltOutlined => "Bolt Outlined",
             Self::EyeOff => "Eye Off",
+            Self::Warning => "Warning",
             Self::ArrowRight => "Arrow Right",
             Self::ArrowDown => "Arrow Down",
             Self::ArrowUp => "Arrow Up",
@@ -195,12 +201,14 @@ impl IconName {
             Self::MagnifyingGlass => "Search/find",
             Self::Terminal => "Terminal/command line",
             Self::Code => "Code/development",
+            Self::Pencil => "Edit/rename action",
             Self::Check => "Complete/success",
             Self::Star => "Favorite (outline)",
             Self::StarFilled => "Favorite (filled)",
             Self::BoltFilled => "Quick action (filled)",
             Self::BoltOutlined => "Quick action (outline)",
             Self::EyeOff => "Hidden/secret content",
+            Self::Warning => "Warning/alert indicator",
             Self::ArrowRight => "Navigate forward",
             Self::ArrowDown => "Navigate down/expand",
             Self::ArrowUp => "Navigate up/collapse",
@@ -228,12 +236,14 @@ impl IconName {
             Self::MagnifyingGlass => "magnifying_glass",
             Self::Terminal => "terminal",
             Self::Code => "code",
+            Self::Pencil => "edit_3",
             Self::Check => "check",
             Self::Star => "star",
             Self::StarFilled => "star_filled",
             Self::BoltFilled => "bolt_filled",
             Self::BoltOutlined => "bolt_outlined",
             Self::EyeOff => "eye_off",
+            Self::Warning => "warning",
             Self::ArrowRight => "arrow_right",
             Self::ArrowDown => "arrow_down",
             Self::ArrowUp => "arrow_up",
@@ -267,6 +277,7 @@ impl IconName {
             ),
             Self::Terminal => concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/terminal.svg"),
             Self::Code => concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/code.svg"),
+            Self::Pencil => concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/edit_3.svg"),
             Self::Check => concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/check.svg"),
             Self::Star => concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/star.svg"),
             Self::StarFilled => {
@@ -280,6 +291,7 @@ impl IconName {
                 "/assets/icons/bolt_outlined.svg"
             ),
             Self::EyeOff => concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/eye_off.svg"),
+            Self::Warning => concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/warning.svg"),
             Self::ArrowRight => {
                 concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/arrow_right.svg")
             }
@@ -314,13 +326,15 @@ impl IconName {
             | Self::Settings
             | Self::MagnifyingGlass
             | Self::Terminal
-            | Self::Code => IconCategory::Actions,
+            | Self::Code
+            | Self::Pencil => IconCategory::Actions,
             Self::Check
             | Self::Star
             | Self::StarFilled
             | Self::BoltFilled
             | Self::BoltOutlined
-            | Self::EyeOff => IconCategory::Status,
+            | Self::EyeOff
+            | Self::Warning => IconCategory::Status,
             Self::ArrowRight
             | Self::ArrowDown
             | Self::ArrowUp
@@ -530,6 +544,7 @@ pub fn icon_name_from_str(name: &str) -> Option<IconName> {
         "magnifyingglass" | "search" | "find" => Some(IconName::MagnifyingGlass),
         "terminal" | "console" | "shell" | "cli" => Some(IconName::Terminal),
         "code" | "script" | "dev" => Some(IconName::Code),
+        "pencil" | "edit" | "rename" => Some(IconName::Pencil),
 
         // Status
         "check" | "checkmark" | "done" | "complete" => Some(IconName::Check),
@@ -537,6 +552,7 @@ pub fn icon_name_from_str(name: &str) -> Option<IconName> {
         "starfilled" => Some(IconName::StarFilled),
         "boltfilled" | "bolt" | "lightning" | "flash" => Some(IconName::BoltFilled),
         "boltoutlined" => Some(IconName::BoltOutlined),
+        "warning" | "alert" | "caution" => Some(IconName::Warning),
 
         // Arrows
         "arrowright" | "right" => Some(IconName::ArrowRight),
@@ -565,7 +581,7 @@ mod tests {
 
     #[test]
     fn test_icon_count() {
-        assert_eq!(IconName::count(), 26); // 22 + Sidebar + ArrowUp + Close + EyeOff
+        assert_eq!(IconName::count(), 28); // 26 + Pencil + Warning
     }
 
     #[test]

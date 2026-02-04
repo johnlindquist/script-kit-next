@@ -498,6 +498,21 @@ pub struct AiApp {
 
     /// When the last streaming response completed (for timed "Generated in Xs" display)
     last_streaming_completed_at: Option<std::time::Instant>,
+
+    /// Last streaming error message (displayed as a retry-able row below messages)
+    streaming_error: Option<String>,
+
+    /// Per-chat input drafts preserved across chat switches
+    chat_drafts: std::collections::HashMap<ChatId, String>,
+
+    /// Message ID currently being edited (inline edit mode)
+    editing_message_id: Option<String>,
+
+    /// Chat currently being renamed in the sidebar
+    renaming_chat_id: Option<ChatId>,
+
+    /// Input state for the sidebar rename field
+    rename_input_state: Entity<InputState>,
 }
 
 impl AiApp {
@@ -615,6 +630,17 @@ impl AiApp {
             }
         });
 
+        // Rename input for sidebar chat rename
+        let rename_input_state =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Chat name..."));
+        let rename_sub = cx.subscribe_in(&rename_input_state, window, {
+            move |this: &mut Self, _, ev: &InputEvent, window, cx| {
+                if let InputEvent::PressEnter { .. } = ev {
+                    this.commit_rename(window, cx)
+                }
+            }
+        });
+
         // Load messages for the selected chat
         let current_messages = selected_chat_id
             .and_then(|id| storage::get_chat_messages(&id).ok())
@@ -664,7 +690,13 @@ impl AiApp {
             available_models,
             selected_model,
             focus_handle,
-            _subscriptions: vec![input_sub, search_sub, api_key_sub, new_chat_dropdown_sub],
+            _subscriptions: vec![
+                input_sub,
+                search_sub,
+                api_key_sub,
+                new_chat_dropdown_sub,
+                rename_sub,
+            ],
             // Streaming state
             is_streaming: false,
             streaming_content: String::new(),
@@ -726,6 +758,12 @@ impl AiApp {
             // Streaming completion feedback
             last_streaming_duration: None,
             last_streaming_completed_at: None,
+            // UX enhancements
+            streaming_error: None,
+            chat_drafts: std::collections::HashMap::new(),
+            editing_message_id: None,
+            renaming_chat_id: None,
+            rename_input_state,
         }
     }
 
@@ -852,6 +890,128 @@ impl AiApp {
             self.force_scroll_to_bottom();
         }
 
+        cx.notify();
+    }
+
+    // -- UX enhancement methods --
+
+    /// Retry after a streaming error: clear the error and re-submit the last user message.
+    fn retry_after_error(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.streaming_error = None;
+        if let Some(last_user) = self
+            .current_messages
+            .iter()
+            .rev()
+            .find(|m| m.role == MessageRole::User)
+        {
+            let content = last_user.content.clone();
+            self.input_state.update(cx, |state, cx| {
+                state.set_value(content, window, cx);
+            });
+            self.submit_message(window, cx);
+        }
+        cx.notify();
+    }
+
+    /// Begin editing a specific message (sets editing_message_id + populates input).
+    fn start_editing_message(
+        &mut self,
+        msg_id: String,
+        content: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.editing_message_id = Some(msg_id);
+        self.input_state.update(cx, |state, cx| {
+            state.set_value(content, window, cx);
+        });
+        cx.notify();
+    }
+
+    /// Submit the edited message: truncate history from the edit point and re-send.
+    fn submit_edited_message(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(edit_id) = self.editing_message_id.take() {
+            if let Some(idx) = self.current_messages.iter().position(|m| m.id == edit_id) {
+                let to_delete: Vec<String> = self.current_messages[idx..]
+                    .iter()
+                    .map(|m| m.id.clone())
+                    .collect();
+                for mid in &to_delete {
+                    let _ = storage::delete_message(mid);
+                }
+                self.current_messages.truncate(idx);
+            }
+            self.submit_message(window, cx);
+        }
+    }
+
+    /// Edit the last user message (triggered by Up arrow in empty input).
+    fn edit_last_user_message(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(last_user) = self
+            .current_messages
+            .iter()
+            .rev()
+            .find(|m| m.role == MessageRole::User)
+            .cloned()
+        {
+            self.start_editing_message(last_user.id.clone(), last_user.content.clone(), window, cx);
+        }
+    }
+
+    /// Save the current input text as a draft for the current chat.
+    fn save_draft(&mut self, cx: &mut Context<Self>) {
+        if let Some(chat_id) = self.selected_chat_id {
+            let text = self.input_state.read(cx).value().to_string();
+            if text.is_empty() {
+                self.chat_drafts.remove(&chat_id);
+            } else {
+                self.chat_drafts.insert(chat_id, text);
+            }
+        }
+    }
+
+    /// Restore a previously saved draft into the input field.
+    fn restore_draft(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(chat_id) = self.selected_chat_id {
+            let draft = self.chat_drafts.get(&chat_id).cloned().unwrap_or_default();
+            self.input_state.update(cx, |state, cx| {
+                state.set_value(draft, window, cx);
+            });
+        }
+    }
+
+    /// Start renaming a chat in the sidebar (double-click).
+    fn start_rename(&mut self, chat_id: ChatId, window: &mut Window, cx: &mut Context<Self>) {
+        let title = self
+            .chats
+            .iter()
+            .find(|c| c.id == chat_id)
+            .map(|c| c.title.clone())
+            .unwrap_or_default();
+        self.renaming_chat_id = Some(chat_id);
+        self.rename_input_state.update(cx, |state, cx| {
+            state.set_value(title, window, cx);
+        });
+        cx.notify();
+    }
+
+    /// Commit the sidebar rename (Enter key).
+    fn commit_rename(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(chat_id) = self.renaming_chat_id.take() {
+            let new_title = self.rename_input_state.read(cx).value().to_string();
+            if !new_title.is_empty() {
+                if let Some(chat) = self.chats.iter_mut().find(|c| c.id == chat_id) {
+                    chat.set_title(new_title.clone());
+                }
+                let _ = storage::update_chat_title(&chat_id, &new_title);
+            }
+        }
+        cx.notify();
+    }
+
+    /// Cancel the sidebar rename (Escape key).
+    fn cancel_rename(&mut self, cx: &mut Context<Self>) {
+        self.renaming_chat_id = None;
         cx.notify();
     }
 
@@ -2185,7 +2345,10 @@ impl AiApp {
     }
 
     /// Select a chat
-    fn select_chat(&mut self, id: ChatId, _window: &mut Window, cx: &mut Context<Self>) {
+    fn select_chat(&mut self, id: ChatId, window: &mut Window, cx: &mut Context<Self>) {
+        // Save draft for outgoing chat
+        self.save_draft(cx);
+
         self.selected_chat_id = Some(id);
 
         // Load messages for this chat
@@ -2225,6 +2388,13 @@ impl AiApp {
         // This allows the background streaming to complete and save to DB correctly
         // while UI shows the newly selected chat's messages
 
+        // Reset UX state for new chat
+        self.editing_message_id = None;
+        self.streaming_error = None;
+
+        // Restore draft for incoming chat
+        self.restore_draft(window, cx);
+
         cx.notify();
     }
 
@@ -2262,6 +2432,12 @@ impl AiApp {
 
     /// Submit the current input as a message
     fn submit_message(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        // If we are in editing mode, delegate to the edit-submit flow
+        if self.editing_message_id.is_some() {
+            self.submit_edited_message(window, cx);
+            return;
+        }
+
         let content = self.input_state.read(cx).value().to_string();
 
         // Capture pending image before clearing
@@ -2416,6 +2592,7 @@ impl AiApp {
         // Set streaming state with chat-scoping guards
         self.is_streaming = true;
         self.streaming_content.clear();
+        self.streaming_error = None;
         self.streaming_chat_id = Some(chat_id);
         self.streaming_generation = self.streaming_generation.wrapping_add(1);
         self.streaming_started_at = Some(std::time::Instant::now());
@@ -2521,7 +2698,9 @@ impl AiApp {
                             }
 
                             if let Some(err) = error {
-                                tracing::error!(error = err, "Streaming error");
+                                tracing::error!(error = %err, "Streaming error");
+                                app.streaming_error = Some(err);
+                                app.streaming_started_at = None;
                                 app.is_streaming = false;
                                 app.streaming_content.clear();
                                 app.streaming_chat_id = None;
@@ -3359,6 +3538,7 @@ impl AiApp {
         };
 
         let muted_fg = cx.theme().muted_foreground;
+        let is_renaming = self.renaming_chat_id == Some(chat_id);
         div()
             .id(SharedString::from(format!("chat-{}", chat_id)))
             .group("chat-item")
@@ -3371,9 +3551,15 @@ impl AiApp {
             .cursor_pointer()
             .when(is_selected, |d| d.bg(selected_bg))
             .when(!is_selected, |d| d.hover(|d| d.bg(hover_bg)))
-            .on_click(cx.listener(move |this, _, window, cx| {
-                this.select_chat(chat_id, window, cx);
-            }))
+            .on_click(
+                cx.listener(move |this, event: &gpui::ClickEvent, window, cx| {
+                    if event.click_count() == 2 {
+                        this.start_rename(chat_id, window, cx);
+                    } else {
+                        this.select_chat(chat_id, window, cx);
+                    }
+                }),
+            )
             .child(
                 // Title row with relative time and hover-revealed delete
                 div()
@@ -3381,17 +3567,27 @@ impl AiApp {
                     .items_center()
                     .w_full()
                     .gap(px(4.))
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .text_sm()
-                            .font_weight(gpui::FontWeight::MEDIUM)
-                            .text_color(title_color)
-                            .overflow_hidden()
-                            .text_ellipsis()
-                            .child(title),
-                    )
+                    .when(is_renaming, |el| {
+                        el.child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .child(self.rename_input_state.clone()),
+                        )
+                    })
+                    .when(!is_renaming, |el| {
+                        el.child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .text_sm()
+                                .font_weight(gpui::FontWeight::MEDIUM)
+                                .text_color(title_color)
+                                .overflow_hidden()
+                                .text_ellipsis()
+                                .child(title),
+                        )
+                    })
                     // Relative time - hidden on hover to make room for delete
                     .child(
                         div()
@@ -4116,7 +4312,9 @@ impl AiApp {
         let has_images = !image_thumbnails.is_empty();
 
         let content_for_copy = message.content.clone();
+        let content_for_edit = message.content.clone();
         let msg_id = message.id.clone();
+        let msg_id_for_edit = msg_id.clone();
         let msg_id_for_click = msg_id.clone();
         let is_copied = self.is_message_copied(&msg_id);
 
@@ -4189,6 +4387,36 @@ impl AiApp {
                                     .child(timestamp),
                             ),
                     )
+                    // Edit button for user messages (hover-revealed)
+                    .when(is_user, |el| {
+                        el.child(
+                            div()
+                                .id(SharedString::from(format!("edit-{}", msg_id_for_edit)))
+                                .flex()
+                                .items_center()
+                                .px(px(6.))
+                                .py(px(2.))
+                                .rounded(px(4.))
+                                .cursor_pointer()
+                                .opacity(0.)
+                                .group_hover("message", |s| s.opacity(1.0))
+                                .hover(|s| s.bg(rgba((0xFFFFFF << 8) | 0x18)))
+                                .on_click(cx.listener(move |this, _, window, cx| {
+                                    this.start_editing_message(
+                                        msg_id_for_edit.clone(),
+                                        content_for_edit.clone(),
+                                        window,
+                                        cx,
+                                    );
+                                }))
+                                .child(
+                                    svg()
+                                        .external_path(LocalIconName::Pencil.external_path())
+                                        .size(px(12.))
+                                        .text_color(cx.theme().muted_foreground.opacity(0.5)),
+                                ),
+                        )
+                    })
                     // Copy button - shows checkmark when recently copied, hidden until hover
                     .child(
                         div()
@@ -4408,6 +4636,69 @@ impl AiApp {
             )
     }
 
+    /// Render a streaming error row with a retry button.
+    fn render_streaming_error(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let err_msg = self
+            .streaming_error
+            .clone()
+            .unwrap_or_else(|| "Unknown error".to_string());
+        let danger = cx.theme().danger;
+        div()
+            .flex()
+            .items_center()
+            .gap_2()
+            .px_4()
+            .py_2()
+            .rounded_md()
+            .bg(danger.opacity(0.1))
+            .child(
+                svg()
+                    .external_path(LocalIconName::Warning.external_path())
+                    .size_4()
+                    .text_color(danger),
+            )
+            .child(div().flex_1().text_sm().text_color(danger).child(err_msg))
+            .child(
+                div()
+                    .px_3()
+                    .py_1()
+                    .rounded_md()
+                    .bg(danger.opacity(0.2))
+                    .text_sm()
+                    .text_color(danger)
+                    .cursor_pointer()
+                    .child("Retry"),
+            )
+    }
+
+    /// Render the editing indicator bar above the input.
+    fn render_editing_indicator(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let accent = cx.theme().accent;
+        let muted_fg = cx.theme().muted_foreground;
+        div()
+            .flex()
+            .items_center()
+            .gap_2()
+            .px_4()
+            .py_1()
+            .bg(accent.opacity(0.1))
+            .rounded_t_md()
+            .child(
+                svg()
+                    .external_path(LocalIconName::Pencil.external_path())
+                    .size_3()
+                    .text_color(accent),
+            )
+            .child(div().text_xs().text_color(accent).child("Editing message"))
+            .child(div().flex_1())
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(muted_fg)
+                    .child("Esc to cancel  \u{00b7}  Enter to save"),
+            )
+    }
+
     /// Action row below last assistant message.
     /// Shows regenerate button and optionally "Generated in Xs" for recent completions.
     fn render_message_actions(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -4518,7 +4809,9 @@ impl AiApp {
 
     /// Total item count for the messages list: messages + optional streaming row.
     fn messages_list_item_count(&self) -> usize {
-        self.current_messages.len() + if self.is_streaming { 1 } else { 0 }
+        self.current_messages.len()
+            + if self.is_streaming { 1 } else { 0 }
+            + if self.streaming_error.is_some() { 1 } else { 0 }
     }
 
     /// Render the messages area using a virtualized list with native-style scrollbar.
@@ -4526,13 +4819,15 @@ impl AiApp {
         let entity = cx.entity();
         let msg_count = self.current_messages.len();
         let is_streaming = self.is_streaming;
+        let has_error = self.streaming_error.is_some();
 
         // Virtualized list: only renders visible messages + overdraw band.
-        // Item indices: 0..msg_count = saved messages, msg_count = streaming row (if active).
+        // Item indices: 0..msg_count = saved messages, msg_count = streaming/error row.
         let messages_list = list(self.messages_list_state.clone(), move |ix, _window, cx| {
             entity.update(cx, |this, cx| {
                 if ix < msg_count {
                     let is_last_assistant = !is_streaming
+                        && !has_error
                         && ix == msg_count - 1
                         && this.current_messages[ix].role == MessageRole::Assistant;
                     let msg_el = this
@@ -4549,8 +4844,10 @@ impl AiApp {
                     } else {
                         msg_el
                     }
-                } else if is_streaming {
+                } else if is_streaming && ix == msg_count {
                     this.render_streaming_content(cx).into_any_element()
+                } else if has_error {
+                    this.render_streaming_error(cx).into_any_element()
                 } else {
                     div().into_any_element()
                 }
@@ -4663,6 +4960,7 @@ impl AiApp {
 
         // Check if we have a pending image to show
         let has_pending_image = self.pending_image.is_some();
+        let is_editing = self.editing_message_id.is_some();
 
         let input_area = div()
             .id("ai-input-area")
@@ -4678,6 +4976,8 @@ impl AiApp {
             .on_drop(cx.listener(|this, paths: &ExternalPaths, _window, cx| {
                 this.handle_file_drop(paths, cx);
             }))
+            // Editing indicator (shown above input when editing a message)
+            .when(is_editing, |d| d.child(self.render_editing_indicator(cx)))
             // Pending image preview (shown above input when image is attached)
             .when(has_pending_image, |d| {
                 d.child(self.render_pending_image_preview(cx))
@@ -5499,6 +5799,34 @@ impl Render for AiApp {
                         }
                         _ => {}
                     }
+                }
+
+                // Up arrow in empty input: edit last user message
+                if (key == "up" || key == "arrowup")
+                    && this.input_state.read(cx).value().is_empty()
+                    && !this.is_streaming
+                {
+                    this.edit_last_user_message(window, cx);
+                    cx.stop_propagation();
+                    return;
+                }
+
+                // Escape cancels editing mode
+                if key == "escape" && this.editing_message_id.is_some() {
+                    this.editing_message_id = None;
+                    this.input_state.update(cx, |state, cx| {
+                        state.set_value("", window, cx);
+                    });
+                    cx.notify();
+                    cx.stop_propagation();
+                    return;
+                }
+
+                // Escape cancels rename
+                if key == "escape" && this.renaming_chat_id.is_some() {
+                    this.cancel_rename(cx);
+                    cx.stop_propagation();
+                    return;
                 }
 
                 // Escape stops streaming if active
