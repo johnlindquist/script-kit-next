@@ -2169,6 +2169,9 @@ impl NotesApp {
                     .w(px(SHORTCUTS_PANEL_WIDTH))
                     .max_h(px(SHORTCUTS_PANEL_MAX_HEIGHT))
                     .overflow_y_scrollbar()
+                    .rounded(px(10.)) // radius-md — softer card feel
+                    .border_1()
+                    .border_color(border_color.opacity(OPACITY_SECTION_BORDER))
                     .p_4()
                     .flex()
                     .flex_col()
@@ -2833,17 +2836,17 @@ impl NotesApp {
         div()
             .w_full()
             .px_3()
-            .py_2()
+            .py_1() // 4px — tighter to match toolbar density
             .flex()
             .items_center()
             .gap_2()
             .border_b_1()
-            .border_color(theme.border)
+            .border_color(theme.border.opacity(OPACITY_SECTION_BORDER))
             .child(
                 div()
-                    .text_sm()
-                    .text_color(theme.muted_foreground)
-                    .child("🔍"),
+                    .text_xs()
+                    .text_color(theme.muted_foreground.opacity(OPACITY_MUTED))
+                    .child("\u{2315}"), // ⌕ magnifying glass text char
             )
             .child(
                 div().flex_1().child(
@@ -2856,7 +2859,7 @@ impl NotesApp {
             .child(
                 div()
                     .text_xs()
-                    .text_color(theme.muted_foreground)
+                    .text_color(theme.muted_foreground.opacity(OPACITY_MUTED))
                     .child(format!("{} notes", result_count)),
             )
     }
@@ -2869,6 +2872,8 @@ impl NotesApp {
             .gap_1()
             .py_1()
             .px_3() // Align horizontally with titlebar & footer
+            .border_b_1() // Subtle bottom border — mirrors footer top border
+            .border_color(cx.theme().border.opacity(OPACITY_SECTION_BORDER))
             .child(
                 Button::new("bold")
                     .ghost()
@@ -3446,7 +3451,7 @@ impl NotesApp {
                         .child(
                             div()
                                 .text_xs()
-                                .text_color(cx.theme().muted_foreground.opacity(OPACITY_SUBTLE))
+                                .text_color(cx.theme().muted_foreground.opacity(OPACITY_MUTED))
                                 .child(FOOTER_SEP),
                         )
                     })
@@ -3469,7 +3474,7 @@ impl NotesApp {
                         d.child(
                             div()
                                 .text_xs()
-                                .text_color(cx.theme().muted_foreground.opacity(OPACITY_SUBTLE))
+                                .text_color(cx.theme().muted_foreground.opacity(OPACITY_MUTED))
                                 .child(FOOTER_SEP),
                         )
                         .child(
@@ -3662,19 +3667,19 @@ impl NotesApp {
                             .child(
                                 div()
                                     .text_xs()
-                                    .text_color(cx.theme().muted_foreground.opacity(OPACITY_SUBTLE))
+                                    .text_color(cx.theme().muted_foreground.opacity(OPACITY_MUTED))
                                     .child("⌘N  new"),
                             )
                             .child(
                                 div()
                                     .text_xs()
-                                    .text_color(cx.theme().muted_foreground.opacity(OPACITY_SUBTLE))
+                                    .text_color(cx.theme().muted_foreground.opacity(OPACITY_MUTED))
                                     .child("⌘⇧N  from clipboard"),
                             )
                             .child(
                                 div()
                                     .text_xs()
-                                    .text_color(cx.theme().muted_foreground.opacity(OPACITY_SUBTLE))
+                                    .text_color(cx.theme().muted_foreground.opacity(OPACITY_MUTED))
                                     .child("⌘/  shortcuts"),
                             ),
                     ),
@@ -3687,7 +3692,8 @@ impl NotesApp {
                 .flex_1()
                 .min_h(px(0.))
                 .overflow_y_scrollbar()
-                .p_2()
+                .px_4() // 16px horizontal — match editor content padding
+                .py_3() // 12px vertical — match editor content padding
                 .child(markdown::render_markdown_preview(&content, cx.theme()))
                 .into_any_element()
         } else {
