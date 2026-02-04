@@ -28,12 +28,15 @@ struct InlineStyle {
     italic: bool,
     code: bool,
     link: bool,
+    strikethrough: bool,
 }
 
 #[derive(Clone, Debug)]
 struct InlineSpan {
     text: String,
     style: InlineStyle,
+    /// URL for link spans (None for non-link text)
+    link_url: Option<String>,
 }
 
 #[derive(Debug)]
@@ -115,6 +118,7 @@ fn parse_markdown(text: &str, is_dark: bool) -> Vec<ParsedBlock> {
     let mut current_item: Option<Vec<InlineSpan>> = None;
     let mut quote_depth: usize = 0;
     let mut code_block: Option<CodeBlockState> = None;
+    let mut current_link_url: Option<String> = None;
 
     for event in parser {
         match event {
@@ -140,7 +144,13 @@ fn parse_markdown(text: &str, is_dark: bool) -> Vec<ParsedBlock> {
                 }
                 Tag::Emphasis => push_style(&mut style_stack, |style| style.italic = true),
                 Tag::Strong => push_style(&mut style_stack, |style| style.bold = true),
-                Tag::Link { .. } => push_style(&mut style_stack, |style| style.link = true),
+                Tag::Link { dest_url, .. } => {
+                    push_style(&mut style_stack, |style| style.link = true);
+                    current_link_url = Some(dest_url.to_string());
+                }
+                Tag::Strikethrough => {
+                    push_style(&mut style_stack, |style| style.strikethrough = true)
+                }
                 Tag::CodeBlock(kind) => {
                     code_block = Some(CodeBlockState {
                         language: code_block_language(&kind),
@@ -197,7 +207,11 @@ fn parse_markdown(text: &str, is_dark: bool) -> Vec<ParsedBlock> {
                 TagEnd::BlockQuote(_) => {
                     quote_depth = quote_depth.saturating_sub(1);
                 }
-                TagEnd::Emphasis | TagEnd::Strong | TagEnd::Link => {
+                TagEnd::Link => {
+                    pop_style(&mut style_stack);
+                    current_link_url = None;
+                }
+                TagEnd::Emphasis | TagEnd::Strong | TagEnd::Strikethrough => {
                     pop_style(&mut style_stack);
                 }
                 TagEnd::CodeBlock => {
@@ -221,24 +235,24 @@ fn parse_markdown(text: &str, is_dark: bool) -> Vec<ParsedBlock> {
                     block.code.push_str(&text);
                 } else {
                     let style = *style_stack.last().unwrap_or(&InlineStyle::default());
-                    push_text_span(&mut spans, &text, style);
+                    push_text_span(&mut spans, &text, style, current_link_url.as_deref());
                 }
             }
             Event::Code(code) => {
                 let mut style = *style_stack.last().unwrap_or(&InlineStyle::default());
                 style.code = true;
-                push_text_span(&mut spans, &code, style);
+                push_text_span(&mut spans, &code, style, current_link_url.as_deref());
             }
             Event::SoftBreak | Event::HardBreak => {
                 let style = *style_stack.last().unwrap_or(&InlineStyle::default());
-                push_text_span(&mut spans, " ", style);
+                push_text_span(&mut spans, " ", style, current_link_url.as_deref());
             }
             Event::Rule => {
                 blocks.push(ParsedBlock::HorizontalRule { quote_depth });
             }
             Event::Html(html) => {
                 let style = *style_stack.last().unwrap_or(&InlineStyle::default());
-                push_text_span(&mut spans, &html, style);
+                push_text_span(&mut spans, &html, style, current_link_url.as_deref());
             }
             _ => {}
         }
@@ -568,12 +582,17 @@ fn pop_style(stack: &mut Vec<InlineStyle>) {
     }
 }
 
-fn push_text_span(spans: &mut Vec<InlineSpan>, text: &str, style: InlineStyle) {
+fn push_text_span(
+    spans: &mut Vec<InlineSpan>,
+    text: &str,
+    style: InlineStyle,
+    link_url: Option<&str>,
+) {
     if text.is_empty() {
         return;
     }
     if let Some(last) = spans.last_mut() {
-        if last.style == style {
+        if last.style == style && last.link_url.as_deref() == link_url {
             last.text.push_str(text);
             return;
         }
@@ -581,6 +600,7 @@ fn push_text_span(spans: &mut Vec<InlineSpan>, text: &str, style: InlineStyle) {
     spans.push(InlineSpan {
         text: text.to_string(),
         style,
+        link_url: link_url.map(|s| s.to_string()),
     });
 }
 
@@ -606,7 +626,15 @@ fn push_block(
     blocks.push(element);
 }
 
-fn style_span(text: &str, style: &InlineStyle, colors: &PromptColors) -> gpui::Div {
+/// Counter for generating unique link element IDs (needed for on_click handlers).
+static NEXT_LINK_ID: AtomicU64 = AtomicU64::new(0);
+
+fn style_span(
+    text: &str,
+    style: &InlineStyle,
+    colors: &PromptColors,
+    link_url: Option<&str>,
+) -> AnyElement {
     if style.code {
         return div()
             .px(px(4.0))
@@ -615,8 +643,44 @@ fn style_span(text: &str, style: &InlineStyle, colors: &PromptColors) -> gpui::D
             .rounded(px(3.0))
             .font_family("Menlo")
             .text_color(rgb(colors.text_primary))
-            .child(text.to_string());
+            .child(text.to_string())
+            .into_any_element();
     }
+
+    // Clickable link with URL — needs .id() for interactivity
+    if style.link {
+        if let Some(url) = link_url {
+            let link_id = NEXT_LINK_ID.fetch_add(1, Ordering::Relaxed);
+            let url_owned = url.to_string();
+            let accent = rgb(colors.accent_color);
+            return div()
+                .id(SharedString::from(format!("md-link-{}", link_id)))
+                .text_color(accent)
+                .border_b_1()
+                .border_color(rgba((colors.accent_color << 8) | 0x40))
+                .cursor_pointer()
+                .hover(|s| s.opacity(0.7))
+                .on_click(move |_, _window, _cx| {
+                    let _ = open::that(&url_owned);
+                })
+                .when(style.bold, |d| d.font_weight(FontWeight::BOLD))
+                .when(style.italic, |d| d.italic())
+                .child(text.to_string())
+                .into_any_element();
+        }
+        // Link without URL (fallback — just styled text)
+        let mut piece = div()
+            .text_color(rgb(colors.accent_color))
+            .child(text.to_string());
+        if style.bold {
+            piece = piece.font_weight(FontWeight::BOLD);
+        }
+        if style.italic {
+            piece = piece.italic();
+        }
+        return piece.into_any_element();
+    }
+
     let mut piece = div()
         .text_color(rgb(colors.text_primary))
         .child(text.to_string());
@@ -626,16 +690,17 @@ fn style_span(text: &str, style: &InlineStyle, colors: &PromptColors) -> gpui::D
     if style.italic {
         piece = piece.italic();
     }
-    if style.link {
-        piece = piece.text_color(rgb(colors.accent_color));
+    if style.strikethrough {
+        // Simulate strikethrough with muted color + line-through border trick
+        piece = piece.text_color(rgb(colors.text_tertiary));
     }
-    piece
+    piece.into_any_element()
 }
 
 fn render_inline_spans(spans: &[InlineSpan], colors: &PromptColors) -> gpui::Div {
     // Fast path: single plain-text span — render as simple text child.
     // Avoids flex_wrap entirely so text wraps naturally at word boundaries.
-    if spans.len() == 1 && spans[0].style == InlineStyle::default() {
+    if spans.len() == 1 && spans[0].style == InlineStyle::default() && spans[0].link_url.is_none() {
         return div()
             .text_sm()
             .text_color(rgb(colors.text_primary))
@@ -649,14 +714,18 @@ fn render_inline_spans(spans: &[InlineSpan], colors: &PromptColors) -> gpui::Div
     let mut row = div().flex().flex_row().flex_wrap().min_w_0().text_sm();
 
     for span in spans {
+        let url = span.link_url.as_deref();
         if span.style.code {
             // Code spans stay as single units (they have bg/padding)
-            row = row.child(style_span(&span.text, &span.style, colors));
+            row = row.child(style_span(&span.text, &span.style, colors, url));
+        } else if span.style.link && url.is_some() {
+            // Link spans: keep as a single unit so the underline is continuous
+            row = row.child(style_span(&span.text, &span.style, colors, url));
         } else {
             // Split text at whitespace for natural word wrapping
             for word in span.text.split_inclusive(char::is_whitespace) {
                 if !word.is_empty() {
-                    row = row.child(style_span(word, &span.style, colors));
+                    row = row.child(style_span(word, &span.style, colors, url));
                 }
             }
         }
@@ -853,7 +922,7 @@ fn parse_markdown_blocks(text: &str) -> Vec<TestBlock> {
                         }
                     }
                 }
-                TagEnd::Emphasis | TagEnd::Strong | TagEnd::Link => {
+                TagEnd::Emphasis | TagEnd::Strong | TagEnd::Link | TagEnd::Strikethrough => {
                     pop_style(&mut style_stack);
                 }
                 TagEnd::CodeBlock => {
@@ -868,17 +937,17 @@ fn parse_markdown_blocks(text: &str) -> Vec<TestBlock> {
                     block.code.push_str(&text);
                 } else {
                     let style = *style_stack.last().unwrap_or(&InlineStyle::default());
-                    push_text_span(&mut spans, &text, style);
+                    push_text_span(&mut spans, &text, style, None);
                 }
             }
             Event::Code(code) => {
                 let mut style = *style_stack.last().unwrap_or(&InlineStyle::default());
                 style.code = true;
-                push_text_span(&mut spans, &code, style);
+                push_text_span(&mut spans, &code, style, None);
             }
             Event::SoftBreak | Event::HardBreak => {
                 let style = *style_stack.last().unwrap_or(&InlineStyle::default());
-                push_text_span(&mut spans, " ", style);
+                push_text_span(&mut spans, " ", style, None);
             }
             Event::Rule => {
                 blocks.push(TestBlock::Hr);
