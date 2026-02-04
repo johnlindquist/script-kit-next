@@ -528,16 +528,20 @@ fn build_code_block_element(
                 .when(has_label || !raw_code.is_empty(), |d| {
                     d.border_b_1().border_color(header_border_color)
                 })
-                .child(
+                .child({
+                    // Build combined label: "lang · N lines" or just "N lines" or just "lang"
+                    let line_count = lines.len();
+                    let combined_label = match (has_label, line_count > 1) {
+                        (true, true) => format!("{} · {} lines", lang_label, line_count),
+                        (true, false) => lang_label.to_string(),
+                        (false, true) => format!("{} lines", line_count),
+                        (false, false) => String::new(),
+                    };
                     div()
                         .text_xs()
                         .text_color(rgb(text_tertiary))
-                        .child(if has_label {
-                            lang_label.to_string()
-                        } else {
-                            String::new()
-                        }),
-                )
+                        .child(combined_label)
+                })
                 // Copy button - visible on hover, shows "Copied!" feedback
                 .child({
                     let is_just_copied = is_code_block_recently_copied(block_id);
