@@ -320,23 +320,20 @@ fn push_block(
     blocks.push(element);
 }
 
-fn style_span(span: &InlineSpan, colors: &PromptColors) -> gpui::Div {
-    let InlineSpan { text, style } = span;
+fn style_span(text: &str, style: &InlineStyle, colors: &PromptColors) -> gpui::Div {
     if style.code {
         return div()
-            .min_w_0()
             .px(px(4.0))
             .py(px(1.0))
             .bg(rgba((colors.code_bg << 8) | 0x80))
             .rounded(px(3.0))
             .font_family("Menlo")
             .text_color(rgb(colors.text_primary))
-            .child(text.clone());
+            .child(text.to_string());
     }
     let mut piece = div()
-        .min_w_0()
         .text_color(rgb(colors.text_primary))
-        .child(text.clone());
+        .child(text.to_string());
     if style.bold {
         piece = piece.font_weight(FontWeight::BOLD);
     }
@@ -350,10 +347,33 @@ fn style_span(span: &InlineSpan, colors: &PromptColors) -> gpui::Div {
 }
 
 fn render_inline_spans(spans: &[InlineSpan], colors: &PromptColors) -> gpui::Div {
+    // Fast path: single plain-text span — render as simple text child.
+    // Avoids flex_wrap entirely so text wraps naturally at word boundaries.
+    if spans.len() == 1 && spans[0].style == InlineStyle::default() {
+        return div()
+            .text_sm()
+            .text_color(rgb(colors.text_primary))
+            .child(spans[0].text.clone());
+    }
+
+    // Mixed styles: split non-code text into word-level flex children.
+    // Each word is a separate flex item so flex_wrap breaks at word boundaries
+    // instead of character boundaries (which happens when a long text span has
+    // min_w_0 allowing it to shrink to width 0).
     let mut row = div().flex().flex_row().flex_wrap().min_w_0().text_sm();
 
     for span in spans {
-        row = row.child(style_span(span, colors));
+        if span.style.code {
+            // Code spans stay as single units (they have bg/padding)
+            row = row.child(style_span(&span.text, &span.style, colors));
+        } else {
+            // Split text at whitespace for natural word wrapping
+            for word in span.text.split_inclusive(char::is_whitespace) {
+                if !word.is_empty() {
+                    row = row.child(style_span(word, &span.style, colors));
+                }
+            }
+        }
     }
 
     row

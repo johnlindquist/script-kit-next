@@ -11,9 +11,11 @@ use crate::components::prompt_footer::{PromptFooter, PromptFooterColors, PromptF
 use crate::components::TextInputState;
 use crate::designs::icon_variations::IconName;
 use gpui::{
-    div, prelude::*, px, rgb, rgba, svg, Context, FocusHandle, Focusable, Hsla, KeyDownEvent,
-    Render, ScrollHandle, Timer, Window,
+    div, img, prelude::*, px, rgb, rgba, svg, App, Context, ExternalPaths, FocusHandle, Focusable,
+    Hsla, KeyDownEvent, Render, RenderImage, ScrollHandle, Timer, Window,
 };
+use gpui_component::theme::ActiveTheme;
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -184,6 +186,7 @@ pub struct ConversationTurn {
     pub streaming: bool,
     pub error: Option<String>,
     pub message_id: Option<String>,
+    pub user_image: Option<Arc<RenderImage>>,
 }
 
 /// Conversation starter suggestion
@@ -392,6 +395,10 @@ pub struct ChatPrompt {
     // Stable UUID for Claude Code CLI session continuity within this prompt's lifetime.
     // Generated once at construction so all messages share the same session.
     cli_session_id: String,
+    // Image attachment support
+    pending_image: Option<String>,
+    pending_image_render: Option<Arc<RenderImage>>,
+    image_render_cache: HashMap<String, Arc<RenderImage>>,
 }
 
 impl ChatPrompt {
@@ -454,6 +461,9 @@ impl ChatPrompt {
             on_claude_code: None,
             on_show_actions: None,
             cli_session_id: uuid::Uuid::new_v4().to_string(),
+            pending_image: None,
+            pending_image_render: None,
+            image_render_cache: HashMap::new(),
         }
     }
 
@@ -757,6 +767,7 @@ impl ChatPrompt {
             streaming: true,
             error: None,
             created_at: Some(chrono::Utc::now().to_rfc3339()),
+            image: None,
         };
         self.messages.push(message);
         self.streaming_message_id = Some(message_id);
@@ -962,9 +973,163 @@ impl ChatPrompt {
         cx.notify();
     }
 
+    /// Handle paste event - check for clipboard images.
+    /// Returns true if an image was pasted (caller should not process text).
+    fn handle_paste_for_image(&mut self, cx: &mut Context<Self>) -> bool {
+        match arboard::Clipboard::new() {
+            Ok(mut clipboard) => {
+                if let Ok(image_data) = clipboard.get_image() {
+                    match crate::clipboard_history::encode_image_as_png(&image_data) {
+                        Ok(encoded) => {
+                            let base64_data =
+                                encoded.strip_prefix("png:").unwrap_or(&encoded).to_string();
+
+                            // Decode to RenderImage for preview
+                            use base64::Engine;
+                            if let Ok(png_bytes) =
+                                base64::engine::general_purpose::STANDARD.decode(&base64_data)
+                            {
+                                if let Ok(render_img) =
+                                    crate::list_item::decode_png_to_render_image_with_bgra_conversion(
+                                        &png_bytes,
+                                    )
+                                {
+                                    self.pending_image_render = Some(render_img);
+                                }
+                            }
+
+                            self.pending_image = Some(base64_data);
+                            cx.notify();
+                            return true;
+                        }
+                        Err(e) => {
+                            tracing::warn!(error = %e, "Failed to encode pasted image");
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "Failed to access clipboard");
+            }
+        }
+        false
+    }
+
+    /// Handle file drop - if it's an image, set it as pending image
+    fn handle_file_drop(&mut self, paths: &ExternalPaths, cx: &mut Context<Self>) {
+        let paths = paths.paths();
+        if paths.is_empty() {
+            return;
+        }
+
+        let path = &paths[0];
+        let extension = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|s| s.to_lowercase())
+            .unwrap_or_default();
+
+        let is_image = matches!(
+            extension.as_str(),
+            "png" | "jpg" | "jpeg" | "gif" | "webp" | "bmp"
+        );
+
+        if !is_image {
+            return;
+        }
+
+        match std::fs::read(path) {
+            Ok(data) => {
+                use base64::Engine;
+                let base64_data = base64::engine::general_purpose::STANDARD.encode(&data);
+
+                // Decode raw bytes to RenderImage for preview
+                if let Ok(render_img) =
+                    crate::list_item::decode_png_to_render_image_with_bgra_conversion(&data)
+                {
+                    self.pending_image_render = Some(render_img);
+                }
+
+                self.pending_image = Some(base64_data);
+                cx.notify();
+            }
+            Err(e) => {
+                logging::log("CHAT", &format!("Failed to read dropped image: {}", e));
+            }
+        }
+    }
+
+    /// Remove the pending image attachment
+    fn remove_pending_image(&mut self, cx: &mut Context<Self>) {
+        self.pending_image = None;
+        self.pending_image_render = None;
+        cx.notify();
+    }
+
+    /// Render the pending image preview badge
+    fn render_pending_image_preview(&self, cx: &Context<Self>) -> impl IntoElement {
+        let theme = cx.theme();
+        let render_img = self.pending_image_render.clone();
+
+        div()
+            .id("pending-image-preview")
+            .flex()
+            .items_center()
+            .gap_2()
+            .px_2()
+            .py_1()
+            .rounded_md()
+            .bg(theme.muted.opacity(0.3))
+            .border_1()
+            .border_color(theme.accent.opacity(0.5))
+            // Thumbnail
+            .when_some(render_img, |d, render_img| {
+                d.child(
+                    img(move |_window: &mut Window, _cx: &mut App| Some(Ok(render_img.clone())))
+                        .w(px(48.))
+                        .h(px(48.))
+                        .rounded_sm(),
+                )
+            })
+            // Label
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(theme.foreground)
+                    .child("Image attached"),
+            )
+            // Remove button
+            .child(
+                div()
+                    .id("remove-image-btn")
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .size(px(16.))
+                    .rounded_full()
+                    .cursor_pointer()
+                    .hover(|s| s.bg(theme.danger.opacity(0.3)))
+                    .on_mouse_down(
+                        gpui::MouseButton::Left,
+                        cx.listener(|this, _, _, cx| {
+                            this.remove_pending_image(cx);
+                        }),
+                    )
+                    .child(
+                        svg()
+                            .external_path(IconName::Close.external_path())
+                            .size(px(10.))
+                            .text_color(theme.muted_foreground),
+                    ),
+            )
+    }
+
     fn handle_submit(&mut self, cx: &mut Context<Self>) {
         let text = self.input.text().to_string();
-        if text.trim().is_empty() {
+        let pending_image = self.pending_image.take();
+        let pending_render = self.pending_image_render.take();
+
+        if text.trim().is_empty() && pending_image.is_none() {
             return;
         }
         logging::log("CHAT", &format!("User submitted: {}", text));
@@ -972,7 +1137,9 @@ impl ChatPrompt {
 
         // If built-in AI mode is enabled, handle the AI call directly
         if self.has_builtin_ai() {
-            self.handle_builtin_ai_submit(text, cx);
+            // Cache the render image for conversation history display
+            // We need the user message ID, which will be generated in handle_builtin_ai_submit
+            self.handle_builtin_ai_submit(text, pending_image, pending_render, cx);
         } else {
             // Use SDK callback for script-driven chat
             (self.on_submit)(self.id.clone(), text);
@@ -980,7 +1147,13 @@ impl ChatPrompt {
     }
 
     /// Handle submission in built-in AI mode - calls AI provider directly
-    fn handle_builtin_ai_submit(&mut self, text: String, cx: &mut Context<Self>) {
+    fn handle_builtin_ai_submit(
+        &mut self,
+        text: String,
+        pending_image: Option<String>,
+        pending_render: Option<Arc<RenderImage>>,
+        cx: &mut Context<Self>,
+    ) {
         // Don't allow new messages while streaming
         if self.builtin_is_streaming {
             return;
@@ -1005,7 +1178,15 @@ impl ChatPrompt {
 
         // Add user message to UI (ChatPromptMessage::user auto-generates UUID)
         let user_message = ChatPromptMessage::user(text.clone());
+        let user_message_id = user_message.id.clone().unwrap_or_default();
         self.messages.push(user_message);
+
+        // Cache the render image for conversation history display
+        if let Some(render) = pending_render {
+            self.image_render_cache
+                .insert(user_message_id.clone(), render);
+        }
+
         self.scroll_handle.scroll_to_bottom();
         cx.notify();
 
@@ -1067,7 +1248,15 @@ impl ChatPrompt {
         }
 
         // Add the current user message (with expanded context and slash command processing)
-        api_messages.push(ProviderMessage::user(user_message_text.clone()));
+        if let Some(image_base64) = pending_image {
+            let images = vec![crate::ai::providers::ProviderImage::png(image_base64)];
+            api_messages.push(ProviderMessage::user_with_images(
+                user_message_text.clone(),
+                images,
+            ));
+        } else {
+            api_messages.push(ProviderMessage::user(user_message_text.clone()));
+        }
 
         // Set streaming state
         self.builtin_is_streaming = true;
@@ -1814,6 +2003,10 @@ impl ChatPrompt {
             if msg.is_user() {
                 // Start a new turn with this user message
                 let user_prompt = msg.get_content().to_string();
+                let user_image = msg
+                    .id
+                    .as_ref()
+                    .and_then(|id| self.image_render_cache.get(id).cloned());
                 let mut turn = ConversationTurn {
                     user_prompt,
                     assistant_response: None,
@@ -1821,6 +2014,7 @@ impl ChatPrompt {
                     streaming: false,
                     error: None,
                     message_id: msg.id.clone(),
+                    user_image,
                 };
 
                 // Look for the next assistant response
@@ -1847,6 +2041,7 @@ impl ChatPrompt {
                     streaming: msg.streaming,
                     error: msg.error.clone(),
                     message_id: msg.id.clone(),
+                    user_image: None,
                 };
                 turns.push(turn);
             }
@@ -1892,6 +2087,17 @@ impl ChatPrompt {
                     .font_weight(gpui::FontWeight::SEMIBOLD)
                     .text_color(rgb(colors.text_secondary))
                     .child(turn.user_prompt.clone()),
+            );
+        }
+
+        // User image thumbnail (if attached)
+        if let Some(ref user_image) = turn.user_image {
+            let render_img = user_image.clone();
+            content = content.child(
+                img(move |_window: &mut Window, _cx: &mut App| Some(Ok(render_img.clone())))
+                    .w(px(64.))
+                    .h(px(64.))
+                    .rounded_sm(),
             );
         }
 
@@ -2520,6 +2726,21 @@ impl Render for ChatPrompt {
                 "c" if has_cmd => this.handle_copy_last_response(cx),
                 // ⌘+Backspace - Clear conversation
                 "backspace" if has_cmd => this.handle_clear(cx),
+                // ⌘+V - Paste (image or text)
+                "v" if has_cmd => {
+                    if !this.handle_paste_for_image(cx) {
+                        // Fall back to text paste
+                        if let Ok(mut clipboard) = arboard::Clipboard::new() {
+                            if let Ok(text) = clipboard.get_text() {
+                                let single_line: String =
+                                    text.chars().filter(|c| *c != '\n' && *c != '\r').collect();
+                                this.input.insert_str(&single_line);
+                                this.reset_cursor_blink();
+                                cx.notify();
+                            }
+                        }
+                    }
+                }
                 // Regular backspace
                 "backspace" => {
                     this.input.backspace();
@@ -2591,12 +2812,19 @@ impl Render for ChatPrompt {
         }
 
         // Input area at TOP
+        let has_pending_image = self.pending_image.is_some();
         let input_area = div()
             .w_full()
             .px(px(12.0))
             .py(px(10.0))
             .border_b_1()
             .border_color(rgba((colors.quote_border << 8) | 0x40))
+            .on_drop(cx.listener(|this, paths: &ExternalPaths, _window, cx| {
+                this.handle_file_drop(paths, cx);
+            }))
+            .when(has_pending_image, |d| {
+                d.child(self.render_pending_image_preview(cx))
+            })
             .child(self.render_input(cx));
 
         // Message list (conversation turns)
