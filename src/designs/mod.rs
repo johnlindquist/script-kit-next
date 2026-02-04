@@ -417,13 +417,12 @@ pub fn render_design_item(
                         "open" => IconKind::Svg("PlayFilled".to_string()),
                         _ => IconKind::Svg("BoltFilled".to_string()),
                     };
-                    // Auto-generate description from tool type when none provided
-                    // This helps users understand what a scriptlet does at a glance
-                    let description = sm
-                        .scriptlet
-                        .description
-                        .clone()
-                        .or_else(|| Some(sm.scriptlet.tool_display_name().to_string()));
+                    // Auto-generate description: prefer code preview, fall back to tool name
+                    // Code preview gives users immediate insight into what the scriptlet does
+                    let description = sm.scriptlet.description.clone().or_else(|| {
+                        code_preview_for_scriptlet(&sm.scriptlet)
+                            .or_else(|| Some(sm.scriptlet.tool_display_name().to_string()))
+                    });
                     (sm.scriptlet.name.clone(), description, badge, Some(icon))
                 }
                 SearchResult::BuiltIn(bm) => {
@@ -534,6 +533,7 @@ pub fn render_design_item(
                             .typed_metadata
                             .as_ref()
                             .and_then(|m| m.author.as_deref());
+                        let match_reason = detect_match_reason_for_script(&sm.script, filter_text);
                         let mut parts: Vec<String> = Vec::new();
                         if let Some(k) = kit {
                             parts.push(k.to_string());
@@ -543,6 +543,26 @@ pub fn render_design_item(
                         }
                         if let Some(a) = author {
                             parts.push(format!("by {}", a));
+                        }
+                        if let Some(reason) = match_reason {
+                            parts.push(reason);
+                        }
+                        if parts.is_empty() {
+                            None
+                        } else {
+                            Some(parts.join(" · "))
+                        }
+                    }
+                    SearchResult::Scriptlet(sm) => {
+                        let mut parts: Vec<String> = Vec::new();
+                        if let Some(source) = sm.scriptlet.group.as_deref().filter(|s| *s != "main")
+                        {
+                            parts.push(source.to_string());
+                        }
+                        if let Some(reason) =
+                            detect_match_reason_for_scriptlet(&sm.scriptlet, filter_text)
+                        {
+                            parts.push(reason);
                         }
                         if parts.is_empty() {
                             None
@@ -699,7 +719,7 @@ pub(crate) fn grouped_view_hint_for_script(script: &crate::scripts::Script) -> O
                     .map(|k| k.to_string())
             })
     } else {
-        // No badge → show tags, then kit name as origin
+        // No badge → show tags, then kit name, then custom enter text as action hint
         script
             .typed_metadata
             .as_ref()
@@ -724,6 +744,15 @@ pub(crate) fn grouped_view_hint_for_script(script: &crate::scripts::Script) -> O
                     .filter(|k| *k != "main")
                     .map(|k| k.to_string())
             })
+            .or_else(|| {
+                // Final fallback: custom enter text as action hint (e.g., "→ Execute")
+                script
+                    .typed_metadata
+                    .as_ref()
+                    .and_then(|m| m.enter.as_deref())
+                    .filter(|e| *e != "Run" && *e != "Run Script")
+                    .map(|e| format!("→ {}", e))
+            })
     }
 }
 
@@ -747,6 +776,134 @@ pub(crate) fn grouped_view_hint_for_scriptlet(
             .filter(|g| *g != "main")
             .map(|g| g.to_string())
     }
+}
+
+/// Generate a code preview for scriptlets without explicit descriptions.
+/// Shows the first meaningful line of code, truncated to fit the description area.
+/// For paste/snippet tools, this shows the pasted content; for open, the URL;
+/// for code tools, the first non-comment line.
+pub(crate) fn code_preview_for_scriptlet(scriptlet: &crate::scripts::Scriptlet) -> Option<String> {
+    let code = &scriptlet.code;
+    if code.is_empty() {
+        return None;
+    }
+    // Find the first non-empty, non-comment line of code
+    let preview_line = code.lines().map(|l| l.trim()).find(|l| {
+        !l.is_empty()
+            && !l.starts_with('#')
+            && !l.starts_with("//")
+            && !l.starts_with("/*")
+            && !l.starts_with('*')
+            && !l.starts_with("#!/")
+    })?;
+
+    if preview_line.is_empty() {
+        return None;
+    }
+
+    // Truncate long lines for display (use char count for Unicode safety)
+    let char_count = preview_line.chars().count();
+    if char_count > 60 {
+        let truncated: String = preview_line.chars().take(57).collect();
+        Some(format!("{}...", truncated))
+    } else {
+        Some(preview_line.to_string())
+    }
+}
+
+/// Detect why a script matched the search query when the name didn't match directly.
+/// Returns a concise reason string (e.g., "tag: productivity", "shortcut") for
+/// display in the search source hint area, helping users understand search results.
+pub(crate) fn detect_match_reason_for_script(
+    script: &crate::scripts::Script,
+    query: &str,
+) -> Option<String> {
+    if query.len() < 2 {
+        return None;
+    }
+    let q = query.to_lowercase();
+
+    // If name already matches, no need for a "via" indicator
+    if crate::scripts::search::contains_ignore_ascii_case(&script.name, &q) {
+        return None;
+    }
+
+    // Check metadata fields in priority order
+    if let Some(ref meta) = script.typed_metadata {
+        // Tags
+        for tag in &meta.tags {
+            if crate::scripts::search::contains_ignore_ascii_case(tag, &q) {
+                return Some(format!("tag: {}", tag));
+            }
+        }
+        // Author
+        if let Some(ref author) = meta.author {
+            if crate::scripts::search::contains_ignore_ascii_case(author, &q) {
+                return Some(format!("by {}", author));
+            }
+        }
+    }
+
+    // Shortcut
+    if let Some(ref shortcut) = script.shortcut {
+        if crate::scripts::search::contains_ignore_ascii_case(shortcut, &q) {
+            return Some("shortcut".to_string());
+        }
+    }
+
+    // Kit name
+    if let Some(ref kit) = script.kit_name {
+        if kit != "main" && crate::scripts::search::contains_ignore_ascii_case(kit, &q) {
+            return Some(format!("kit: {}", kit));
+        }
+    }
+
+    None
+}
+
+/// Detect why a scriptlet matched the search query when the name didn't match directly.
+/// Returns a concise reason string for display in search source hints.
+pub(crate) fn detect_match_reason_for_scriptlet(
+    scriptlet: &crate::scripts::Scriptlet,
+    query: &str,
+) -> Option<String> {
+    if query.len() < 2 {
+        return None;
+    }
+    let q = query.to_lowercase();
+
+    // If name already matches, no need for indicator
+    if crate::scripts::search::contains_ignore_ascii_case(&scriptlet.name, &q) {
+        return None;
+    }
+
+    // Keyword
+    if let Some(ref keyword) = scriptlet.keyword {
+        if crate::scripts::search::contains_ignore_ascii_case(keyword, &q) {
+            return Some(format!("keyword: {}", keyword));
+        }
+    }
+
+    // Shortcut
+    if let Some(ref shortcut) = scriptlet.shortcut {
+        if crate::scripts::search::contains_ignore_ascii_case(shortcut, &q) {
+            return Some("shortcut".to_string());
+        }
+    }
+
+    // Group
+    if let Some(ref group) = scriptlet.group {
+        if group != "main" && crate::scripts::search::contains_ignore_ascii_case(group, &q) {
+            return Some(format!("group: {}", group));
+        }
+    }
+
+    // Code content (only for longer queries to avoid noise)
+    if q.len() >= 4 && crate::scripts::search::contains_ignore_ascii_case(&scriptlet.code, &q) {
+        return Some("code match".to_string());
+    }
+
+    None
 }
 
 #[cfg(test)]
@@ -1337,5 +1494,233 @@ mod tests {
             alias: None,
         };
         assert_eq!(grouped_view_hint_for_scriptlet(&sl), None);
+    }
+
+    // =========================================================================
+    // Enter text hint tests
+    // =========================================================================
+
+    #[test]
+    fn test_hint_enter_text_shown_as_fallback() {
+        let mut s = make_test_script("Deploy");
+        s.kit_name = Some("main".to_string());
+        s.typed_metadata = Some(TypedMetadata {
+            enter: Some("Deploy Now".to_string()),
+            ..Default::default()
+        });
+        // No tags, main kit → falls back to enter text
+        assert_eq!(
+            grouped_view_hint_for_script(&s),
+            Some("→ Deploy Now".to_string())
+        );
+    }
+
+    #[test]
+    fn test_hint_enter_text_not_shown_for_generic_run() {
+        let mut s = make_test_script("Basic");
+        s.kit_name = Some("main".to_string());
+        s.typed_metadata = Some(TypedMetadata {
+            enter: Some("Run".to_string()),
+            ..Default::default()
+        });
+        // "Run" is generic, should not show
+        assert_eq!(grouped_view_hint_for_script(&s), None);
+    }
+
+    #[test]
+    fn test_hint_tags_preferred_over_enter_text() {
+        let mut s = make_test_script("Deploy");
+        s.typed_metadata = Some(TypedMetadata {
+            enter: Some("Deploy Now".to_string()),
+            tags: vec!["devops".to_string()],
+            ..Default::default()
+        });
+        // Tags take priority over enter text
+        assert_eq!(grouped_view_hint_for_script(&s), Some("devops".to_string()));
+    }
+
+    // =========================================================================
+    // Code preview tests
+    // =========================================================================
+
+    fn make_test_scriptlet(name: &str, code: &str, tool: &str) -> crate::scripts::Scriptlet {
+        crate::scripts::Scriptlet {
+            name: name.to_string(),
+            description: None,
+            code: code.to_string(),
+            tool: tool.to_string(),
+            shortcut: None,
+            keyword: None,
+            group: None,
+            file_path: None,
+            command: None,
+            alias: None,
+        }
+    }
+
+    #[test]
+    fn test_code_preview_shows_first_line() {
+        let sl = make_test_scriptlet("Hello", "echo hello world", "bash");
+        assert_eq!(
+            code_preview_for_scriptlet(&sl),
+            Some("echo hello world".to_string())
+        );
+    }
+
+    #[test]
+    fn test_code_preview_skips_comments() {
+        let sl = make_test_scriptlet(
+            "Script",
+            "#!/bin/bash\n# This is a comment\n// Another comment\nls -la",
+            "bash",
+        );
+        assert_eq!(code_preview_for_scriptlet(&sl), Some("ls -la".to_string()));
+    }
+
+    #[test]
+    fn test_code_preview_empty_code() {
+        let sl = make_test_scriptlet("Empty", "", "bash");
+        assert_eq!(code_preview_for_scriptlet(&sl), None);
+    }
+
+    #[test]
+    fn test_code_preview_only_comments() {
+        let sl = make_test_scriptlet("Comments", "# comment\n// another\n/* block */", "bash");
+        assert_eq!(code_preview_for_scriptlet(&sl), None);
+    }
+
+    #[test]
+    fn test_code_preview_truncates_long_lines() {
+        let long_code =
+            "const result = await fetchDataFromRemoteServerWithComplexAuthenticationAndRetryLogic(url, options)";
+        let sl = make_test_scriptlet("Long", long_code, "ts");
+        let preview = code_preview_for_scriptlet(&sl).unwrap();
+        assert!(preview.ends_with("..."));
+        assert!(preview.chars().count() <= 60);
+    }
+
+    #[test]
+    fn test_code_preview_paste_shows_content() {
+        let sl = make_test_scriptlet("Sig", "Best regards,\nJohn", "paste");
+        assert_eq!(
+            code_preview_for_scriptlet(&sl),
+            Some("Best regards,".to_string())
+        );
+    }
+
+    #[test]
+    fn test_code_preview_open_shows_url() {
+        let sl = make_test_scriptlet("GitHub", "https://github.com", "open");
+        assert_eq!(
+            code_preview_for_scriptlet(&sl),
+            Some("https://github.com".to_string())
+        );
+    }
+
+    // =========================================================================
+    // Match reason detection tests
+    // =========================================================================
+
+    #[test]
+    fn test_match_reason_name_match_returns_none() {
+        let s = make_test_script("Notes");
+        // Query matches name → no reason indicator needed
+        assert_eq!(detect_match_reason_for_script(&s, "notes"), None);
+    }
+
+    #[test]
+    fn test_match_reason_short_query_returns_none() {
+        let s = make_test_script("Notes");
+        // Single char query → skip
+        assert_eq!(detect_match_reason_for_script(&s, "n"), None);
+    }
+
+    #[test]
+    fn test_match_reason_tag_match() {
+        let mut s = make_test_script("Daily Backup");
+        s.typed_metadata = Some(TypedMetadata {
+            tags: vec!["productivity".to_string()],
+            ..Default::default()
+        });
+        assert_eq!(
+            detect_match_reason_for_script(&s, "productivity"),
+            Some("tag: productivity".to_string())
+        );
+    }
+
+    #[test]
+    fn test_match_reason_author_match() {
+        let mut s = make_test_script("My Tool");
+        s.typed_metadata = Some(TypedMetadata {
+            author: Some("John Lindquist".to_string()),
+            ..Default::default()
+        });
+        assert_eq!(
+            detect_match_reason_for_script(&s, "john"),
+            Some("by John Lindquist".to_string())
+        );
+    }
+
+    #[test]
+    fn test_match_reason_shortcut_match() {
+        let mut s = make_test_script("Quick Notes");
+        s.shortcut = Some("opt n".to_string());
+        assert_eq!(
+            detect_match_reason_for_script(&s, "opt n"),
+            Some("shortcut".to_string())
+        );
+    }
+
+    #[test]
+    fn test_match_reason_kit_match() {
+        let mut s = make_test_script("Capture");
+        s.kit_name = Some("cleanshot".to_string());
+        assert_eq!(
+            detect_match_reason_for_script(&s, "cleanshot"),
+            Some("kit: cleanshot".to_string())
+        );
+    }
+
+    #[test]
+    fn test_match_reason_main_kit_not_shown() {
+        let mut s = make_test_script("Capture");
+        s.kit_name = Some("main".to_string());
+        assert_eq!(detect_match_reason_for_script(&s, "main"), None);
+    }
+
+    #[test]
+    fn test_scriptlet_match_reason_keyword() {
+        let mut sl = make_test_scriptlet("Signature", "Best regards", "paste");
+        sl.keyword = Some("!sig".to_string());
+        assert_eq!(
+            detect_match_reason_for_scriptlet(&sl, "!sig"),
+            Some("keyword: !sig".to_string())
+        );
+    }
+
+    #[test]
+    fn test_scriptlet_match_reason_code_match() {
+        let sl = make_test_scriptlet("Open URL", "https://github.com", "open");
+        assert_eq!(
+            detect_match_reason_for_scriptlet(&sl, "github"),
+            Some("code match".to_string())
+        );
+    }
+
+    #[test]
+    fn test_scriptlet_match_reason_name_match_returns_none() {
+        let sl = make_test_scriptlet("Open GitHub", "https://github.com", "open");
+        // Query matches name → no reason indicator
+        assert_eq!(detect_match_reason_for_scriptlet(&sl, "github"), None);
+    }
+
+    #[test]
+    fn test_scriptlet_match_reason_group() {
+        let mut sl = make_test_scriptlet("Hello", "echo hello", "bash");
+        sl.group = Some("Development".to_string());
+        assert_eq!(
+            detect_match_reason_for_scriptlet(&sl, "development"),
+            Some("group: Development".to_string())
+        );
     }
 }
