@@ -3755,6 +3755,11 @@ impl AiApp {
                 chat.updated_at.format("%b %d").to_string().into()
             }
         };
+        let full_chat_time: SharedString = chat
+            .updated_at
+            .format("%B %-d, %Y at %-I:%M %p")
+            .to_string()
+            .into();
 
         let selected_bg = cx.theme().muted.opacity(0.7);
         let hover_bg = cx.theme().muted.opacity(0.5);
@@ -3822,14 +3827,19 @@ impl AiApp {
                         )
                     })
                     // Relative time - hidden on hover to make room for delete
-                    .child(
+                    .child({
+                        let tooltip_text = full_chat_time.clone();
                         div()
+                            .id(SharedString::from(format!("time-{}", chat_id)))
                             .flex_shrink_0()
                             .text_xs()
                             .text_color(description_color.opacity(0.6))
                             .group_hover("chat-item", |s| s.opacity(0.))
-                            .child(relative_time),
-                    )
+                            .tooltip(move |window, cx| {
+                                Tooltip::new(tooltip_text.clone()).build(window, cx)
+                            })
+                            .child(relative_time)
+                    })
                     // Delete button - visible on hover only
                     .child(
                         div()
@@ -4639,7 +4649,7 @@ impl AiApp {
         let msg_id_for_click = msg_id.clone();
         let is_copied = self.is_message_copied(&msg_id);
 
-        // Relative timestamp
+        // Relative timestamp + full datetime for tooltip
         let timestamp: SharedString = {
             let now = Utc::now();
             let diff = now - message.created_at;
@@ -4653,6 +4663,11 @@ impl AiApp {
                 message.created_at.format("%b %d").to_string().into()
             }
         };
+        let full_timestamp: SharedString = message
+            .created_at
+            .format("%B %-d, %Y at %-I:%M %p")
+            .to_string()
+            .into();
 
         let role_icon = if is_user {
             LocalIconName::Terminal
@@ -4703,12 +4718,17 @@ impl AiApp {
                                         })
                                         .child(role_label),
                                 )
-                                .child(
+                                .child({
+                                    let tooltip_text = full_timestamp.clone();
                                     div()
+                                        .id(SharedString::from(format!("ts-{}", msg_id)))
                                         .text_xs()
                                         .text_color(cx.theme().muted_foreground.opacity(0.6))
-                                        .child(timestamp),
-                                ),
+                                        .tooltip(move |window, cx| {
+                                            Tooltip::new(tooltip_text.clone()).build(window, cx)
+                                        })
+                                        .child(timestamp)
+                                }),
                         )
                         // Edit button for user messages (hover-revealed)
                         .when(is_user, |el| {
@@ -4848,12 +4868,34 @@ impl AiApp {
                         };
                         let should_show_toggle = message.content.len() > 800;
                         let toggle_msg_id = msg_id.clone();
+                        let total_words = message.content.split_whitespace().count();
+                        let hidden_words = if is_collapsed {
+                            let shown: String = message.content.chars().take(300).collect();
+                            let shown_words = shown.split_whitespace().count();
+                            total_words.saturating_sub(shown_words)
+                        } else {
+                            0
+                        };
                         div()
                             .w_full()
                             .min_w_0()
                             .overflow_x_hidden()
                             .child(render_markdown(&display_content, &colors))
                             .when(should_show_toggle, |el| {
+                                let toggle_label: SharedString = if is_collapsed {
+                                    if hidden_words > 0 {
+                                        format!(
+                                            "Show more ({} more {})",
+                                            hidden_words,
+                                            if hidden_words == 1 { "word" } else { "words" }
+                                        )
+                                        .into()
+                                    } else {
+                                        "Show more".into()
+                                    }
+                                } else {
+                                    format!("Show less ({} words)", total_words).into()
+                                };
                                 el.child(
                                     div()
                                         .id(SharedString::from(format!(
@@ -4890,11 +4932,7 @@ impl AiApp {
                                                 .size(px(12.))
                                                 .text_color(cx.theme().accent.opacity(0.5)),
                                         )
-                                        .child(if is_collapsed {
-                                            "Show more"
-                                        } else {
-                                            "Show less"
-                                        }),
+                                        .child(toggle_label),
                                 )
                             })
                     }),
@@ -5070,53 +5108,105 @@ impl AiApp {
             )
     }
 
-    /// Render a streaming error row with a retry button.
+    /// Render a streaming error row with a retry button and contextual help.
     fn render_streaming_error(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let err_msg = self
             .streaming_error
             .clone()
             .unwrap_or_else(|| "Unknown error".to_string());
         let danger = cx.theme().danger;
+
+        // Classify error and provide contextual help
+        let err_lower = err_msg.to_lowercase();
+        let help_hint: Option<&str> = if err_lower.contains("401")
+            || err_lower.contains("unauthorized")
+            || err_lower.contains("invalid api key")
+            || err_lower.contains("authentication")
+        {
+            Some("Check your API key in settings")
+        } else if err_lower.contains("403") || err_lower.contains("forbidden") {
+            Some("Your API key may lack required permissions")
+        } else if err_lower.contains("429")
+            || err_lower.contains("rate limit")
+            || err_lower.contains("too many requests")
+        {
+            Some("Rate limited \u{2014} wait a moment and retry")
+        } else if err_lower.contains("timeout")
+            || err_lower.contains("timed out")
+            || err_lower.contains("deadline")
+        {
+            Some("Request timed out \u{2014} check your connection")
+        } else if err_lower.contains("network")
+            || err_lower.contains("connection")
+            || err_lower.contains("dns")
+            || err_lower.contains("resolve")
+        {
+            Some("Network error \u{2014} check your internet connection")
+        } else if err_lower.contains("500")
+            || err_lower.contains("502")
+            || err_lower.contains("503")
+            || err_lower.contains("server error")
+        {
+            Some("Server error \u{2014} the provider may be experiencing issues")
+        } else {
+            None
+        };
+
         div()
             .flex()
-            .items_center()
-            .gap_2()
+            .flex_col()
+            .gap_1()
             .px_4()
             .py_2()
             .rounded_md()
             .bg(danger.opacity(0.1))
             .child(
-                svg()
-                    .external_path(LocalIconName::Warning.external_path())
-                    .size_4()
-                    .text_color(danger),
-            )
-            .child(div().flex_1().text_sm().text_color(danger).child(err_msg))
-            .child(
                 div()
-                    .id("retry-btn")
                     .flex()
                     .items_center()
-                    .gap(px(4.))
-                    .px_3()
-                    .py_1()
-                    .rounded_md()
-                    .bg(danger.opacity(0.2))
-                    .text_sm()
-                    .text_color(danger)
-                    .cursor_pointer()
-                    .hover(|s| s.bg(danger.opacity(0.3)))
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.retry_after_error(window, cx);
-                    }))
+                    .gap_2()
                     .child(
                         svg()
-                            .external_path(LocalIconName::Refresh.external_path())
-                            .size(px(12.))
+                            .external_path(LocalIconName::Warning.external_path())
+                            .size_4()
                             .text_color(danger),
                     )
-                    .child("Retry"),
+                    .child(div().flex_1().text_sm().text_color(danger).child(err_msg))
+                    .child(
+                        div()
+                            .id("retry-btn")
+                            .flex()
+                            .items_center()
+                            .gap(px(4.))
+                            .px_3()
+                            .py_1()
+                            .rounded_md()
+                            .bg(danger.opacity(0.2))
+                            .text_sm()
+                            .text_color(danger)
+                            .cursor_pointer()
+                            .hover(|s| s.bg(danger.opacity(0.3)))
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.retry_after_error(window, cx);
+                            }))
+                            .child(
+                                svg()
+                                    .external_path(LocalIconName::Refresh.external_path())
+                                    .size(px(12.))
+                                    .text_color(danger),
+                            )
+                            .child("Retry"),
+                    ),
             )
+            .when_some(help_hint, |el, hint| {
+                el.child(
+                    div()
+                        .text_xs()
+                        .text_color(cx.theme().muted_foreground.opacity(0.7))
+                        .pl(px(24.))
+                        .child(hint),
+                )
+            })
     }
 
     /// Render the editing indicator bar above the input.
@@ -5477,6 +5567,7 @@ impl AiApp {
         // Check if we have a pending image to show
         let has_pending_image = self.pending_image.is_some();
         let is_editing = self.editing_message_id.is_some();
+        let input_is_empty = self.input_state.read(cx).value().is_empty() && !has_pending_image;
 
         let input_area = div()
             .id("ai-input-area")
@@ -5509,13 +5600,18 @@ impl AiApp {
                     .child(
                         div()
                             .id("attachments-btn")
+                            .relative()
                             .flex()
                             .items_center()
                             .justify_center()
                             .size(px(24.))
                             .rounded_full()
                             .border_1()
-                            .border_color(cx.theme().muted_foreground.opacity(0.4))
+                            .border_color(if has_pending_image {
+                                cx.theme().accent.opacity(0.6)
+                            } else {
+                                cx.theme().muted_foreground.opacity(0.4)
+                            })
                             .cursor_pointer()
                             .hover(|s| s.bg(cx.theme().muted.opacity(0.3)))
                             .on_click(cx.listener(|this, _, window, cx| {
@@ -5530,8 +5626,24 @@ impl AiApp {
                                 svg()
                                     .external_path(LocalIconName::Plus.external_path())
                                     .size(px(12.))
-                                    .text_color(cx.theme().muted_foreground),
-                            ),
+                                    .text_color(if has_pending_image {
+                                        cx.theme().accent
+                                    } else {
+                                        cx.theme().muted_foreground
+                                    }),
+                            )
+                            // Small accent dot when image is attached
+                            .when(has_pending_image, |d| {
+                                d.child(
+                                    div()
+                                        .absolute()
+                                        .top(px(-1.))
+                                        .right(px(-1.))
+                                        .size(px(7.))
+                                        .rounded_full()
+                                        .bg(cx.theme().accent),
+                                )
+                            }),
                     )
                     // Input field with subtle accent border
                     .child(self.render_input_with_cursor(input_border_color, cx)),
@@ -5636,10 +5748,16 @@ impl AiApp {
                                     .px_2()
                                     .py(px(2.))
                                     .rounded_md()
-                                    .cursor_pointer()
-                                    .hover(|s| s.bg(cx.theme().accent.opacity(0.15)))
+                                    .when(!input_is_empty, |d| {
+                                        d.cursor_pointer()
+                                            .hover(|s| s.bg(cx.theme().accent.opacity(0.15)))
+                                    })
                                     .text_sm()
-                                    .text_color(cx.theme().accent)
+                                    .text_color(if input_is_empty {
+                                        cx.theme().muted_foreground.opacity(0.3)
+                                    } else {
+                                        cx.theme().accent
+                                    })
                                     .on_mouse_down(
                                         gpui::MouseButton::Left,
                                         cx.listener(|this, _, window, cx| {
