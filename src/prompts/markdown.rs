@@ -120,8 +120,33 @@ pub fn render_markdown(text: &str, colors: &PromptColors) -> impl IntoElement {
                 }
                 TagEnd::List(_) => {
                     if let Some(list) = list_state.take() {
-                        let list_element = render_list(list, colors);
-                        push_block(&mut blocks, list_element, quote_depth, colors);
+                        for (index, item) in list.items.iter().enumerate() {
+                            let marker = if list.ordered {
+                                format!("{}.", list.start + index)
+                            } else {
+                                "•".to_string()
+                            };
+                            let item_text: String = item.iter().map(|s| s.text.as_str()).collect();
+                            let row = div()
+                                .flex()
+                                .flex_row()
+                                .w_full()
+                                .gap(px(6.0))
+                                .text_sm()
+                                .child(
+                                    div()
+                                        .flex_shrink_0()
+                                        .text_color(rgb(colors.text_tertiary))
+                                        .child(marker),
+                                )
+                                .child(
+                                    div()
+                                        .min_w_0()
+                                        .text_color(rgb(colors.text_primary))
+                                        .child(item_text),
+                                );
+                            push_block(&mut blocks, row, quote_depth, colors);
+                        }
                     }
                 }
                 TagEnd::BlockQuote(_) => {
@@ -334,39 +359,6 @@ fn render_inline_spans(spans: &[InlineSpan], colors: &PromptColors) -> gpui::Div
     row
 }
 
-fn render_list(list: ListState, colors: &PromptColors) -> gpui::Div {
-    let mut container = div().flex().flex_col().gap(px(4.0)).w_full();
-    for (index, item) in list.items.iter().enumerate() {
-        let marker = if list.ordered {
-            format!("{}.", list.start + index)
-        } else {
-            "•".to_string()
-        };
-        let item_text: String = item.iter().map(|s| s.text.as_str()).collect();
-        container = container.child(
-            div()
-                .flex()
-                .flex_row()
-                .w_full()
-                .gap(px(6.0))
-                .text_sm()
-                .child(
-                    div()
-                        .flex_shrink_0()
-                        .text_color(rgb(colors.text_tertiary))
-                        .child(marker),
-                )
-                .child(
-                    div()
-                        .min_w_0()
-                        .text_color(rgb(colors.text_primary))
-                        .child(item_text),
-                ),
-        );
-    }
-    container
-}
-
 fn render_hr(colors: &PromptColors) -> gpui::Div {
     div()
         .w_full()
@@ -434,4 +426,305 @@ fn render_code_block(code: &str, lang: Option<&str>, colors: &PromptColors) -> g
     }
 
     code_container.child(body)
+}
+
+// ---------------------------------------------------------------------------
+// Test-only: parse markdown into a list of block descriptions so we can
+// verify structure without instantiating GPUI elements.
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum TestBlock {
+    /// A paragraph with concatenated text content.
+    Paragraph(String),
+    /// A heading with level and concatenated text.
+    Heading(u32, String),
+    /// A single list item: (marker, text).
+    ListItem(String, String),
+    /// A code block: (language, code).
+    CodeBlock(Option<String>, String),
+    /// A horizontal rule.
+    Hr,
+}
+
+/// Parse markdown into structural blocks for testing. Mirrors the logic in
+/// `render_markdown` but produces `TestBlock` values instead of GPUI elements.
+#[cfg(test)]
+fn parse_markdown_blocks(text: &str) -> Vec<TestBlock> {
+    use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
+
+    let mut options = Options::empty();
+    options.insert(Options::ENABLE_STRIKETHROUGH);
+    options.insert(Options::ENABLE_TABLES);
+    options.insert(Options::ENABLE_TASKLISTS);
+    options.insert(Options::ENABLE_FOOTNOTES);
+    options.insert(Options::ENABLE_SMART_PUNCTUATION);
+
+    let parser = Parser::new_ext(text, options);
+
+    let mut blocks: Vec<TestBlock> = Vec::new();
+    let mut spans: Vec<InlineSpan> = Vec::new();
+    let mut style_stack: Vec<InlineStyle> = vec![InlineStyle::default()];
+    let mut heading_level: Option<u32> = None;
+    let mut list_state: Option<ListState> = None;
+    let mut current_item: Option<Vec<InlineSpan>> = None;
+    let mut code_block: Option<CodeBlockState> = None;
+
+    for event in parser {
+        match event {
+            Event::Start(tag) => match tag {
+                Tag::Paragraph => spans.clear(),
+                Tag::Heading { level, .. } => {
+                    heading_level = Some(heading_level_to_u32(level));
+                    spans.clear();
+                }
+                Tag::List(start) => {
+                    list_state = Some(ListState {
+                        ordered: start.is_some(),
+                        start: start.unwrap_or(1) as usize,
+                        items: Vec::new(),
+                    });
+                }
+                Tag::Item => {
+                    current_item = Some(Vec::new());
+                    spans.clear();
+                }
+                Tag::Emphasis => push_style(&mut style_stack, |s| s.italic = true),
+                Tag::Strong => push_style(&mut style_stack, |s| s.bold = true),
+                Tag::Link { .. } => push_style(&mut style_stack, |s| s.link = true),
+                Tag::CodeBlock(kind) => {
+                    code_block = Some(CodeBlockState {
+                        language: code_block_language(&kind),
+                        code: String::new(),
+                    });
+                }
+                _ => {}
+            },
+            Event::End(tag) => match tag {
+                TagEnd::Paragraph => {
+                    if !spans.is_empty() {
+                        if let Some(item_spans) = current_item.as_mut() {
+                            item_spans.append(&mut spans);
+                        } else {
+                            let text: String = spans.iter().map(|s| s.text.as_str()).collect();
+                            blocks.push(TestBlock::Paragraph(text));
+                            spans.clear();
+                        }
+                    }
+                }
+                TagEnd::Heading(_) => {
+                    if !spans.is_empty() {
+                        let level = heading_level.take().unwrap_or(3);
+                        let text: String = spans.iter().map(|s| s.text.as_str()).collect();
+                        blocks.push(TestBlock::Heading(level, text));
+                        spans.clear();
+                    }
+                }
+                TagEnd::Item => {
+                    if let Some(mut item_spans) = current_item.take() {
+                        if !spans.is_empty() {
+                            item_spans.append(&mut spans);
+                        }
+                        if let Some(list) = list_state.as_mut() {
+                            list.items.push(item_spans);
+                        }
+                    }
+                }
+                TagEnd::List(_) => {
+                    if let Some(list) = list_state.take() {
+                        for (index, item) in list.items.iter().enumerate() {
+                            let marker = if list.ordered {
+                                format!("{}.", list.start + index)
+                            } else {
+                                "•".to_string()
+                            };
+                            let item_text: String = item.iter().map(|s| s.text.as_str()).collect();
+                            blocks.push(TestBlock::ListItem(marker, item_text));
+                        }
+                    }
+                }
+                TagEnd::Emphasis | TagEnd::Strong | TagEnd::Link => {
+                    pop_style(&mut style_stack);
+                }
+                TagEnd::CodeBlock => {
+                    if let Some(block) = code_block.take() {
+                        blocks.push(TestBlock::CodeBlock(block.language, block.code));
+                    }
+                }
+                _ => {}
+            },
+            Event::Text(text) => {
+                if let Some(block) = code_block.as_mut() {
+                    block.code.push_str(&text);
+                } else {
+                    let style = *style_stack.last().unwrap_or(&InlineStyle::default());
+                    push_text_span(&mut spans, &text, style);
+                }
+            }
+            Event::Code(code) => {
+                let mut style = *style_stack.last().unwrap_or(&InlineStyle::default());
+                style.code = true;
+                push_text_span(&mut spans, &code, style);
+            }
+            Event::SoftBreak | Event::HardBreak => {
+                let style = *style_stack.last().unwrap_or(&InlineStyle::default());
+                push_text_span(&mut spans, " ", style);
+            }
+            Event::Rule => {
+                blocks.push(TestBlock::Hr);
+            }
+            _ => {}
+        }
+    }
+
+    blocks
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn unordered_list_produces_separate_items() {
+        let md = "- First item\n- Second item\n- Third item\n";
+        let blocks = parse_markdown_blocks(md);
+        assert_eq!(
+            blocks,
+            vec![
+                TestBlock::ListItem("•".into(), "First item".into()),
+                TestBlock::ListItem("•".into(), "Second item".into()),
+                TestBlock::ListItem("•".into(), "Third item".into()),
+            ]
+        );
+    }
+
+    #[test]
+    fn ordered_list_produces_numbered_items() {
+        let md = "1. Alpha\n2. Beta\n3. Gamma\n";
+        let blocks = parse_markdown_blocks(md);
+        assert_eq!(
+            blocks,
+            vec![
+                TestBlock::ListItem("1.".into(), "Alpha".into()),
+                TestBlock::ListItem("2.".into(), "Beta".into()),
+                TestBlock::ListItem("3.".into(), "Gamma".into()),
+            ]
+        );
+    }
+
+    #[test]
+    fn paragraph_after_list_is_separate_block() {
+        let md = "- Item one\n- Item two\n\nParagraph after the list.\n";
+        let blocks = parse_markdown_blocks(md);
+        assert_eq!(
+            blocks,
+            vec![
+                TestBlock::ListItem("•".into(), "Item one".into()),
+                TestBlock::ListItem("•".into(), "Item two".into()),
+                TestBlock::Paragraph("Paragraph after the list.".into()),
+            ]
+        );
+    }
+
+    #[test]
+    fn heading_then_list_then_paragraph() {
+        let md = "## My Heading\n\n- Item A\n- Item B\n\nSome text.\n";
+        let blocks = parse_markdown_blocks(md);
+        assert_eq!(
+            blocks,
+            vec![
+                TestBlock::Heading(2, "My Heading".into()),
+                TestBlock::ListItem("•".into(), "Item A".into()),
+                TestBlock::ListItem("•".into(), "Item B".into()),
+                TestBlock::Paragraph("Some text.".into()),
+            ]
+        );
+    }
+
+    #[test]
+    fn list_with_bold_and_inline_code() {
+        let md = "- **Bold** item\n- Item with `code`\n";
+        let blocks = parse_markdown_blocks(md);
+        assert_eq!(
+            blocks,
+            vec![
+                TestBlock::ListItem("•".into(), "Bold item".into()),
+                TestBlock::ListItem("•".into(), "Item with code".into()),
+            ]
+        );
+    }
+
+    #[test]
+    fn code_block_after_list() {
+        let md = "- Item\n\n```rust\nfn main() {}\n```\n";
+        let blocks = parse_markdown_blocks(md);
+        assert_eq!(
+            blocks,
+            vec![
+                TestBlock::ListItem("•".into(), "Item".into()),
+                TestBlock::CodeBlock(Some("rust".into()), "fn main() {}\n".into()),
+            ]
+        );
+    }
+
+    /// Simulates progressive reveal of a markdown string containing a list.
+    /// Each intermediate revealed substring should parse without panic and
+    /// the final full string should produce the expected block structure.
+    #[test]
+    fn progressive_reveal_of_list_parses_at_every_boundary() {
+        use crate::prompts::chat::chat_tests::next_reveal_boundary_pub;
+
+        let content = "Here's a list:\n\n- First item\n- Second item\n- Third item\n\nDone!\n";
+        let mut offset = 0;
+
+        // Reveal word-by-word / line-by-line
+        while let Some(new_offset) = next_reveal_boundary_pub(content, offset) {
+            if new_offset <= offset {
+                break;
+            }
+            let partial = &content[..new_offset];
+            // Should not panic
+            let _ = parse_markdown_blocks(partial);
+            offset = new_offset;
+        }
+
+        // Final flush
+        let blocks = parse_markdown_blocks(content);
+        assert_eq!(
+            blocks,
+            vec![
+                TestBlock::Paragraph("Here\u{2019}s a list:".into()),
+                TestBlock::ListItem("•".into(), "First item".into()),
+                TestBlock::ListItem("•".into(), "Second item".into()),
+                TestBlock::ListItem("•".into(), "Third item".into()),
+                TestBlock::Paragraph("Done!".into()),
+            ]
+        );
+    }
+
+    #[test]
+    fn horizontal_rule_between_sections() {
+        let md = "Before\n\n---\n\nAfter\n";
+        let blocks = parse_markdown_blocks(md);
+        assert_eq!(
+            blocks,
+            vec![
+                TestBlock::Paragraph("Before".into()),
+                TestBlock::Hr,
+                TestBlock::Paragraph("After".into()),
+            ]
+        );
+    }
+
+    #[test]
+    fn empty_string_produces_no_blocks() {
+        assert_eq!(parse_markdown_blocks(""), vec![]);
+    }
+
+    #[test]
+    fn single_paragraph() {
+        let blocks = parse_markdown_blocks("Hello world.\n");
+        assert_eq!(blocks, vec![TestBlock::Paragraph("Hello world.".into())]);
+    }
 }
