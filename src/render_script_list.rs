@@ -186,8 +186,8 @@ impl ScriptListApp {
                 }
             }
 
-            // Calculate true content height: headers at 24px, items at 48px
-            let total_content_height = (header_count as f32 * SECTION_HEADER_HEIGHT)
+            // Calculate true content height: headers at 28px (visual height), items at 36px
+            let total_content_height = (header_count as f32 * 28.0)
                 + (item_count_regular as f32 * LIST_ITEM_HEIGHT);
 
             // Estimated visible container height
@@ -237,13 +237,14 @@ impl ScriptListApp {
                         if let Some(grouped_item) = grouped_items_clone.get(ix) {
                             match grouped_item {
                                 GroupedListItem::SectionHeader(label, icon) => {
-                                    // Section header at 24px height (SECTION_HEADER_HEIGHT)
+                                    // Section header at 28px height (slightly taller than SECTION_HEADER_HEIGHT
+                                    // for breathing room with separator line)
                                     div()
                                         .id(ElementId::NamedInteger(
                                             "section-header".into(),
                                             ix as u64,
                                         ))
-                                        .h(px(SECTION_HEADER_HEIGHT))
+                                        .h(px(28.0))
                                         .child(render_section_header(label, icon.as_deref(), theme_colors))
                                         .into_any_element()
                                 }

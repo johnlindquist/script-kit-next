@@ -19,10 +19,19 @@ impl ScriptListApp {
             .iter()
             .position(|item| matches!(item, GroupedListItem::Item(_)));
 
-        // If already at or before first selectable, can't go further up
+        // If already at or before first selectable, wrap around to the last selectable item
         if let Some(first) = first_selectable {
             if self.selected_index <= first {
-                // Already at the first selectable item, stay here
+                // Wrap around to the last selectable item
+                let last_selectable = grouped_items
+                    .iter()
+                    .rposition(|item| matches!(item, GroupedListItem::Item(_)));
+                if let Some(last) = last_selectable {
+                    self.selected_index = last;
+                    self.scroll_to_selected_if_needed("keyboard_up_wrap");
+                    self.trigger_scroll_activity(cx);
+                    cx.notify();
+                }
                 return;
             }
         }
@@ -70,10 +79,19 @@ impl ScriptListApp {
             .iter()
             .rposition(|item| matches!(item, GroupedListItem::Item(_)));
 
-        // If already at or after last selectable, can't go further down
+        // If already at or after last selectable, wrap around to the first selectable item
         if let Some(last) = last_selectable {
             if self.selected_index >= last {
-                // Already at the last selectable item, stay here
+                // Wrap around to the first selectable item
+                let first_selectable = grouped_items
+                    .iter()
+                    .position(|item| matches!(item, GroupedListItem::Item(_)));
+                if let Some(first) = first_selectable {
+                    self.selected_index = first;
+                    self.scroll_to_selected_if_needed("keyboard_down_wrap");
+                    self.trigger_scroll_activity(cx);
+                    cx.notify();
+                }
                 return;
             }
         }
@@ -100,6 +118,52 @@ impl ScriptListApp {
             self.scroll_to_selected_if_needed("keyboard_down");
             self.trigger_scroll_activity(cx);
             cx.notify();
+        }
+    }
+
+    /// Jump to the first selectable (non-header) item in the list
+    fn move_selection_to_first(&mut self, cx: &mut Context<Self>) {
+        self.input_mode = InputMode::Keyboard;
+        self.hovered_index = None;
+        self.hide_mouse_cursor(cx);
+
+        let (grouped_items, _) = self.get_grouped_results_cached();
+        let grouped_items = grouped_items.clone();
+
+        let first_selectable = grouped_items
+            .iter()
+            .position(|item| matches!(item, GroupedListItem::Item(_)));
+
+        if let Some(first) = first_selectable {
+            if self.selected_index != first {
+                self.selected_index = first;
+                self.scroll_to_selected_if_needed("jump_first");
+                self.trigger_scroll_activity(cx);
+                cx.notify();
+            }
+        }
+    }
+
+    /// Jump to the last selectable (non-header) item in the list
+    fn move_selection_to_last(&mut self, cx: &mut Context<Self>) {
+        self.input_mode = InputMode::Keyboard;
+        self.hovered_index = None;
+        self.hide_mouse_cursor(cx);
+
+        let (grouped_items, _) = self.get_grouped_results_cached();
+        let grouped_items = grouped_items.clone();
+
+        let last_selectable = grouped_items
+            .iter()
+            .rposition(|item| matches!(item, GroupedListItem::Item(_)));
+
+        if let Some(last) = last_selectable {
+            if self.selected_index != last {
+                self.selected_index = last;
+                self.scroll_to_selected_if_needed("jump_last");
+                self.trigger_scroll_activity(cx);
+                cx.notify();
+            }
         }
     }
 

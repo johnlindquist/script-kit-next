@@ -785,15 +785,16 @@ impl RenderOnce for ListItem {
         // Uses macOS-native modifier symbols (⌘, ⇧, ⌥, ⌃) for a native feel
         let shortcut_element = if let Some(sc) = self.shortcut {
             let display_text = format_shortcut_display(&sc);
-            let badge_border = (colors.text_dimmed << 8) | 0x30; // 19% opacity border
+            let badge_border = (colors.text_dimmed << 8) | 0x50; // 31% opacity border
             div()
                 .text_xs()
                 .font_family("SF Mono")
+                .font_weight(FontWeight::MEDIUM)
                 .text_color(rgb(colors.text_muted))
-                .px(px(6.))
-                .py(px(2.))
+                .px(px(7.))
+                .py(px(3.))
                 .rounded(px(4.))
-                .bg(rgba((colors.background << 8) | 0x40))
+                .bg(rgba((colors.text_dimmed << 8) | 0x10))
                 .border_1()
                 .border_color(rgba(badge_border))
                 .child(display_text)
@@ -1039,7 +1040,7 @@ pub fn render_section_header(
         .flex_row()
         .items_center()
         .gap(px(5.))
-        .text_xs() // 10-11px font
+        .text_size(px(11.0)) // slightly bigger than text_xs for readability
         .font_weight(FontWeight::SEMIBOLD)
         .text_color(rgb(colors.text_dimmed));
 
@@ -1063,17 +1064,19 @@ pub fn render_section_header(
             div()
                 .text_xs()
                 .font_weight(FontWeight::NORMAL)
-                .text_color(rgba((colors.text_dimmed << 8) | 0x80)) // 50% opacity of dimmed
+                .text_color(rgba((colors.text_dimmed << 8) | 0xB0)) // 69% opacity of dimmed
                 .child(count.to_string()),
         );
     }
 
     div()
         .w_full()
-        .h(px(SECTION_HEADER_HEIGHT)) // Explicit 24px height for variable-height list
+        .h(px(28.0)) // Slightly taller than SECTION_HEADER_HEIGHT for breathing room
         .px(px(16.))
-        .pt(px(8.)) // Top padding for visual separation
+        .pt(px(10.)) // More top padding for visual separation
         .pb(px(4.)) // Bottom padding
+        .border_t_1() // Subtle top separator line
+        .border_color(rgba((colors.text_dimmed << 8) | 0x18)) // ~9% opacity - very subtle
         .flex()
         .flex_col()
         .justify_center() // Center content vertically

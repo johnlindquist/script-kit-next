@@ -111,10 +111,72 @@ pub fn get_grouped_results(
     };
 
     // Get all unified search results
-    let results = fuzzy_search_unified_all(scripts, scriptlets, builtins_to_use, apps, filter_text);
+    let mut results =
+        fuzzy_search_unified_all(scripts, scriptlets, builtins_to_use, apps, filter_text);
 
     // Search mode: return flat list with section header for menu bar items
     if !filter_text.is_empty() {
+        // Apply frecency boost: recently/frequently used items get a score bonus.
+        // This is how modern launchers (Raycast, Alfred, Spotlight) work.
+        // The bonus is capped so a good fuzzy match still beats a poor match with high frecency.
+        {
+            let max_frecency_bonus = 50i32;
+
+            // Helper to get the frecency path for a result (mirrors grouped-view logic)
+            let get_path = |result: &SearchResult| -> Option<String> {
+                match result {
+                    SearchResult::Script(sm) => Some(sm.script.path.to_string_lossy().to_string()),
+                    SearchResult::App(am) => Some(am.app.path.to_string_lossy().to_string()),
+                    SearchResult::BuiltIn(bm) => Some(format!("builtin:{}", bm.entry.name)),
+                    SearchResult::Scriptlet(sm) => Some(format!("scriptlet:{}", sm.scriptlet.name)),
+                    SearchResult::Window(wm) => {
+                        Some(format!("window:{}:{}", wm.window.app, wm.window.title))
+                    }
+                    SearchResult::Agent(am) => {
+                        Some(format!("agent:{}", am.agent.path.to_string_lossy()))
+                    }
+                    SearchResult::Fallback(_) => None,
+                }
+            };
+
+            // Pre-compute boosted score for every result
+            let boosted: Vec<i32> = results
+                .iter()
+                .map(|result| {
+                    let frecency_bonus = if let Some(path) = get_path(result) {
+                        let score = frecency_store.get_score(&path);
+                        if score > 0.0 {
+                            // Scale frecency (typically 0-100+) via log so very high values
+                            // don't dominate. At least 1 point bonus for any frecency > 0.
+                            let scaled =
+                                (score.ln().max(0.0) * 10.0).min(max_frecency_bonus as f64) as i32;
+                            scaled.max(1)
+                        } else {
+                            0
+                        }
+                    } else {
+                        0
+                    };
+                    result.score() + frecency_bonus
+                })
+                .collect();
+
+            // Build an index array sorted by boosted score descending, then name ascending
+            let mut sort_indices: Vec<usize> = (0..results.len()).collect();
+            sort_indices.sort_by(|&a, &b| {
+                boosted[b]
+                    .cmp(&boosted[a])
+                    .then_with(|| results[a].name().cmp(results[b].name()))
+            });
+
+            // Re-order results according to boosted sort
+            let reordered: Vec<SearchResult> = sort_indices
+                .into_iter()
+                .map(|i| results[i].clone())
+                .collect();
+            results = reordered;
+        }
+
         // Partition results into non-menu-bar and menu-bar items
         let mut non_menu_bar_indices: Vec<usize> = Vec::new();
         let mut menu_bar_indices: Vec<usize> = Vec::new();
@@ -136,7 +198,6 @@ pub fn get_grouped_results(
         menu_bar_indices.truncate(MAX_MENU_BAR_ITEMS);
 
         let mut grouped: Vec<GroupedListItem> = Vec::new();
-        let mut results = results; // Make results mutable so we can append fallbacks
 
         // Track counts before consuming the vectors
         let non_menu_bar_count = non_menu_bar_indices.len();

@@ -204,7 +204,6 @@ use designs::{get_tokens, render_design_item, DesignVariant};
 use frecency::FrecencyStore;
 use list_item::{
     render_section_header, GroupedListItem, ListItem, ListItemColors, LIST_ITEM_HEIGHT,
-    SECTION_HEADER_HEIGHT,
 };
 use scripts::get_grouped_results;
 // strip_html_tags removed - DivPrompt now renders HTML properly
