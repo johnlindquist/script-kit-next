@@ -25,7 +25,7 @@ use super::types::{Action, SectionStyle};
 
 /// Count the number of section headers in the filtered action list
 /// A section header appears when an action's section differs from the previous action's section
-fn count_section_headers(actions: &[Action], filtered_indices: &[usize]) -> usize {
+pub(super) fn count_section_headers(actions: &[Action], filtered_indices: &[usize]) -> usize {
     if filtered_indices.is_empty() {
         return 0;
     }
