@@ -334,15 +334,15 @@ pub fn format_shortcut_display(shortcut: &str) -> String {
             "shift" => result.push('⇧'),
             "alt" | "option" | "opt" => result.push('⌥'),
             "ctrl" | "control" => result.push('⌃'),
-            "enter" | "return" => result.push_str("↩"),
-            "escape" | "esc" => result.push_str("⎋"),
-            "tab" => result.push_str("⇥"),
-            "space" => result.push_str("␣"),
-            "backspace" | "delete" => result.push_str("⌫"),
-            "up" | "arrowup" => result.push_str("↑"),
-            "down" | "arrowdown" => result.push_str("↓"),
-            "left" | "arrowleft" => result.push_str("←"),
-            "right" | "arrowright" => result.push_str("→"),
+            "enter" | "return" => result.push('↩'),
+            "escape" | "esc" => result.push('⎋'),
+            "tab" => result.push('⇥'),
+            "space" => result.push('␣'),
+            "backspace" | "delete" => result.push('⌫'),
+            "up" | "arrowup" => result.push('↑'),
+            "down" | "arrowdown" => result.push('↓'),
+            "left" | "arrowleft" => result.push('←'),
+            "right" | "arrowright" => result.push('→'),
             key => {
                 // Uppercase single-character keys, preserve multi-char keys as-is
                 if key.len() == 1 {
@@ -677,10 +677,7 @@ impl RenderOnce for ListItem {
             let mut highlights: Vec<(std::ops::Range<usize>, HighlightStyle)> = Vec::new();
             for (char_idx, (byte_offset, ch)) in self.name.char_indices().enumerate() {
                 if index_set.contains(&char_idx) {
-                    highlights.push((
-                        byte_offset..byte_offset + ch.len_utf8(),
-                        highlight_style.clone(),
-                    ));
+                    highlights.push((byte_offset..byte_offset + ch.len_utf8(), highlight_style));
                 }
             }
 
