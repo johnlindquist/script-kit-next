@@ -92,6 +92,55 @@ pub(crate) fn find_ignore_ascii_case(haystack: &str, needle_lower: &str) -> Opti
     None
 }
 
+/// Check if a substring match starts at a word boundary in the haystack.
+///
+/// A word boundary is:
+/// - Position 0 (start of string)
+/// - After a non-alphanumeric character (space, dash, underscore, etc.)
+/// - At a camelCase transition (lowercase followed by uppercase)
+///
+/// This is used to give bonus points when the query matches at meaningful
+/// word starts, making searches more intuitive (e.g., "new" ranks "New Tab"
+/// higher than "Renewal").
+#[inline]
+pub(crate) fn is_word_boundary_match(haystack: &str, match_pos: usize) -> bool {
+    if match_pos == 0 {
+        return true;
+    }
+    let bytes = haystack.as_bytes();
+    if match_pos >= bytes.len() {
+        return false;
+    }
+    let prev = bytes[match_pos - 1];
+    let curr = bytes[match_pos];
+    // After non-alphanumeric (space, dash, underscore, dot, slash, etc.)
+    if !prev.is_ascii_alphanumeric() {
+        return true;
+    }
+    // camelCase boundary: lowercase followed by uppercase
+    if prev.is_ascii_lowercase() && curr.is_ascii_uppercase() {
+        return true;
+    }
+    false
+}
+
+/// Check if query is an exact case-insensitive match for the full haystack.
+/// Used to give a massive boost when the user types an exact name.
+#[inline]
+pub(crate) fn is_exact_name_match(haystack: &str, query_lower: &str) -> bool {
+    haystack.len() == query_lower.len()
+        && haystack
+            .as_bytes()
+            .iter()
+            .zip(query_lower.as_bytes())
+            .all(|(h, q)| h.to_ascii_lowercase() == *q)
+}
+
+/// Minimum query length for nucleo fuzzy matching.
+/// Very short queries (1 char) generate too many low-quality fuzzy matches
+/// across all items, reducing result quality. Require at least 2 chars.
+const MIN_FUZZY_QUERY_LEN: usize = 2;
+
 /// Perform fuzzy matching without allocating a lowercase copy of haystack.
 /// `pattern_lower` must already be lowercase.
 /// Returns (matched, indices) where matched is true if all pattern chars found in order.
@@ -442,6 +491,9 @@ pub fn fuzzy_search_scripts(scripts: &[Arc<Script>], query: &str) -> Vec<ScriptM
     // Check if query is ASCII once for all items
     let query_is_ascii = query_lower.is_ascii();
 
+    // Gate nucleo fuzzy matching on minimum query length to reduce noise
+    let use_nucleo = query_lower.len() >= MIN_FUZZY_QUERY_LEN;
+
     for script in scripts {
         let mut score = 0i32;
         // Lazy match indices - don't compute during scoring, will be computed on-demand
@@ -449,19 +501,34 @@ pub fn fuzzy_search_scripts(scripts: &[Arc<Script>], query: &str) -> Vec<ScriptM
 
         let filename = extract_filename(&script.path);
 
+        // Exact name match boost: if the query IS the full name, always rank first
+        if query_is_ascii
+            && script.name.is_ascii()
+            && is_exact_name_match(&script.name, &query_lower)
+        {
+            score += 500;
+        }
+
         // Score by name match - highest priority
         // Only use ASCII fast-path when both strings are ASCII
         if query_is_ascii && script.name.is_ascii() {
             if let Some(pos) = find_ignore_ascii_case(&script.name, &query_lower) {
                 // Bonus for exact substring match at start of name
                 score += if pos == 0 { 100 } else { 75 };
+                // Extra bonus for word-boundary matches (e.g., "new" in "New Tab")
+                if pos > 0 && is_word_boundary_match(&script.name, pos) {
+                    score += 20;
+                }
             }
         }
 
         // Fuzzy character matching in name using nucleo (handles Unicode correctly)
-        if let Some(nucleo_s) = nucleo.score(&script.name) {
-            // Scale nucleo score (0-1000+) to match existing weights (~50 for fuzzy match)
-            score += 50 + (nucleo_s / 20) as i32;
+        // Only for queries >= MIN_FUZZY_QUERY_LEN to avoid noisy single-char matches
+        if use_nucleo {
+            if let Some(nucleo_s) = nucleo.score(&script.name) {
+                // Scale nucleo score (0-1000+) to match existing weights (~50 for fuzzy match)
+                score += 50 + (nucleo_s / 20) as i32;
+            }
         }
 
         // Score by filename match - high priority (allows searching by ".ts", ".js", etc.)
@@ -474,9 +541,11 @@ pub fn fuzzy_search_scripts(scripts: &[Arc<Script>], query: &str) -> Vec<ScriptM
         }
 
         // Fuzzy character matching in filename using nucleo (handles Unicode)
-        if let Some(nucleo_s) = nucleo.score(&filename) {
-            // Scale nucleo score to match existing weights (~35 for filename fuzzy match)
-            score += 35 + (nucleo_s / 30) as i32;
+        if use_nucleo {
+            if let Some(nucleo_s) = nucleo.score(&filename) {
+                // Scale nucleo score to match existing weights (~35 for filename fuzzy match)
+                score += 35 + (nucleo_s / 30) as i32;
+            }
         }
 
         // Score by alias match - allows users to search by trigger alias
@@ -496,8 +565,10 @@ pub fn fuzzy_search_scripts(scripts: &[Arc<Script>], query: &str) -> Vec<ScriptM
                 score += 25;
             }
             // Fuzzy match on description using nucleo (catches typos and partial terms)
-            if let Some(nucleo_s) = nucleo.score(desc) {
-                score += 15 + (nucleo_s / 30) as i32;
+            if use_nucleo {
+                if let Some(nucleo_s) = nucleo.score(desc) {
+                    score += 15 + (nucleo_s / 30) as i32;
+                }
             }
         }
 
@@ -562,6 +633,9 @@ pub fn fuzzy_search_scriptlets(scriptlets: &[Arc<Scriptlet>], query: &str) -> Ve
     // Check if query is ASCII once for all items
     let query_is_ascii = query_lower.is_ascii();
 
+    // Gate nucleo fuzzy matching on minimum query length to reduce noise
+    let use_nucleo = query_lower.len() >= MIN_FUZZY_QUERY_LEN;
+
     for scriptlet in scriptlets {
         let mut score = 0i32;
         // Lazy match indices - don't compute during scoring
@@ -569,19 +643,34 @@ pub fn fuzzy_search_scriptlets(scriptlets: &[Arc<Scriptlet>], query: &str) -> Ve
 
         let display_file_path = extract_scriptlet_display_path(&scriptlet.file_path);
 
+        // Exact name match boost: if the query IS the full name, always rank first
+        if query_is_ascii
+            && scriptlet.name.is_ascii()
+            && is_exact_name_match(&scriptlet.name, &query_lower)
+        {
+            score += 500;
+        }
+
         // Score by name match - highest priority
         // Only use ASCII fast-path when both strings are ASCII
         if query_is_ascii && scriptlet.name.is_ascii() {
             if let Some(pos) = find_ignore_ascii_case(&scriptlet.name, &query_lower) {
                 // Bonus for exact substring match at start of name
                 score += if pos == 0 { 100 } else { 75 };
+                // Extra bonus for word-boundary matches (e.g., "new" in "New Tab")
+                if pos > 0 && is_word_boundary_match(&scriptlet.name, pos) {
+                    score += 20;
+                }
             }
         }
 
         // Fuzzy character matching in name using nucleo (handles Unicode)
-        if let Some(nucleo_s) = nucleo.score(&scriptlet.name) {
-            // Scale nucleo score to match existing weights (~50 for fuzzy match)
-            score += 50 + (nucleo_s / 20) as i32;
+        // Only for queries >= MIN_FUZZY_QUERY_LEN to avoid noisy single-char matches
+        if use_nucleo {
+            if let Some(nucleo_s) = nucleo.score(&scriptlet.name) {
+                // Scale nucleo score to match existing weights (~50 for fuzzy match)
+                score += 50 + (nucleo_s / 20) as i32;
+            }
         }
 
         // Score by file_path match - high priority (allows searching by ".md", anchor names)
@@ -595,9 +684,11 @@ pub fn fuzzy_search_scriptlets(scriptlets: &[Arc<Scriptlet>], query: &str) -> Ve
             }
 
             // Fuzzy character matching in file_path using nucleo (handles Unicode)
-            if let Some(nucleo_s) = nucleo.score(fp) {
-                // Scale nucleo score to match existing weights (~35 for file_path fuzzy match)
-                score += 35 + (nucleo_s / 30) as i32;
+            if use_nucleo {
+                if let Some(nucleo_s) = nucleo.score(fp) {
+                    // Scale nucleo score to match existing weights (~35 for file_path fuzzy match)
+                    score += 35 + (nucleo_s / 30) as i32;
+                }
             }
         }
 
@@ -608,8 +699,10 @@ pub fn fuzzy_search_scriptlets(scriptlets: &[Arc<Scriptlet>], query: &str) -> Ve
                 score += 25;
             }
             // Fuzzy match on description using nucleo (catches typos and partial terms)
-            if let Some(nucleo_s) = nucleo.score(desc) {
-                score += 15 + (nucleo_s / 30) as i32;
+            if use_nucleo {
+                if let Some(nucleo_s) = nucleo.score(desc) {
+                    score += 15 + (nucleo_s / 30) as i32;
+                }
             }
         }
 
@@ -707,10 +800,22 @@ pub fn fuzzy_search_builtins(entries: &[BuiltInEntry], query: &str) -> Vec<Built
     // Note: Built-in names, descriptions, and keywords are typically ASCII
     let query_is_ascii = query_lower.is_ascii();
 
+    // Gate nucleo fuzzy matching on minimum query length to reduce noise
+    let use_nucleo = query_lower.len() >= MIN_FUZZY_QUERY_LEN;
+
     for entry in entries {
         let mut score = 0i32;
         let mut name_matched = false;
         let mut leaf_name_matched = false;
+
+        // Exact name match boost for non-menu-bar items
+        if entry.group != BuiltInGroup::MenuBar
+            && query_is_ascii
+            && entry.name.is_ascii()
+            && is_exact_name_match(&entry.name, &query_lower)
+        {
+            score += 500;
+        }
 
         // For menu bar items, prioritize matching the LEAF name (actual menu item)
         // e.g., for "Shell → New Tab", matching "New Tab" should score high
@@ -749,6 +854,13 @@ pub fn fuzzy_search_builtins(entries: &[BuiltInEntry], query: &str) -> Vec<Built
                     150
                 };
                 score += bonus;
+                // Extra bonus for word-boundary matches in non-menu-bar items
+                if pos > 0
+                    && entry.group != BuiltInGroup::MenuBar
+                    && is_word_boundary_match(&entry.name, pos)
+                {
+                    score += 20;
+                }
                 name_matched = true;
             }
         }
@@ -756,7 +868,7 @@ pub fn fuzzy_search_builtins(entries: &[BuiltInEntry], query: &str) -> Vec<Built
         // Fuzzy character matching in full name using nucleo (handles Unicode)
         // Skip for menu bar items entirely - they should only match on substring, not fuzzy
         // This prevents "how are" from matching menu items via scattered character matches
-        if !leaf_name_matched && entry.group != BuiltInGroup::MenuBar {
+        if use_nucleo && !leaf_name_matched && entry.group != BuiltInGroup::MenuBar {
             if let Some(nucleo_s) = nucleo.score(&entry.name) {
                 // Scale nucleo score - name fuzzy matches are worth more than keyword matches
                 score += 100 + (nucleo_s / 15) as i32;
@@ -791,7 +903,7 @@ pub fn fuzzy_search_builtins(entries: &[BuiltInEntry], query: &str) -> Vec<Built
         // Only add keyword fuzzy score if we didn't already match the name well
         // This prevents keywords from inflating scores when the name is already a good match
         // Skip for menu bar items - they should only match on substring, not fuzzy
-        if !name_matched && entry.group != BuiltInGroup::MenuBar {
+        if use_nucleo && !name_matched && entry.group != BuiltInGroup::MenuBar {
             for keyword in &entry.keywords {
                 if let Some(nucleo_s) = nucleo.score(keyword) {
                     // Scale nucleo score - keyword fuzzy is worth less than name fuzzy
@@ -849,8 +961,16 @@ pub fn fuzzy_search_apps(apps: &[AppInfo], query: &str) -> Vec<AppMatch> {
     // Check if query is ASCII once for all items
     let query_is_ascii = query_lower.is_ascii();
 
+    // Gate nucleo fuzzy matching on minimum query length to reduce noise
+    let use_nucleo = query_lower.len() >= MIN_FUZZY_QUERY_LEN;
+
     for app in apps {
         let mut score = 0i32;
+
+        // Exact name match boost
+        if query_is_ascii && app.name.is_ascii() && is_exact_name_match(&app.name, &query_lower) {
+            score += 500;
+        }
 
         // Score by name match - highest priority
         // App names can have Unicode (e.g., "日本語アプリ")
@@ -858,13 +978,19 @@ pub fn fuzzy_search_apps(apps: &[AppInfo], query: &str) -> Vec<AppMatch> {
             if let Some(pos) = find_ignore_ascii_case(&app.name, &query_lower) {
                 // Bonus for exact substring match at start of name
                 score += if pos == 0 { 100 } else { 75 };
+                // Extra bonus for word-boundary matches
+                if pos > 0 && is_word_boundary_match(&app.name, pos) {
+                    score += 20;
+                }
             }
         }
 
         // Fuzzy character matching in name using nucleo (handles Unicode)
-        if let Some(nucleo_s) = nucleo.score(&app.name) {
-            // Scale nucleo score to match existing weights (~50 for fuzzy match)
-            score += 50 + (nucleo_s / 20) as i32;
+        if use_nucleo {
+            if let Some(nucleo_s) = nucleo.score(&app.name) {
+                // Scale nucleo score to match existing weights (~50 for fuzzy match)
+                score += 50 + (nucleo_s / 20) as i32;
+            }
         }
 
         // Score by bundle_id match - lower priority
@@ -941,6 +1067,9 @@ pub fn fuzzy_search_windows(windows: &[WindowInfo], query: &str) -> Vec<WindowMa
     // Check if query is ASCII once for all items
     let query_is_ascii = query_lower.is_ascii();
 
+    // Gate nucleo fuzzy matching on minimum query length to reduce noise
+    let use_nucleo = query_lower.len() >= MIN_FUZZY_QUERY_LEN;
+
     for window in windows {
         let mut score = 0i32;
 
@@ -963,15 +1092,19 @@ pub fn fuzzy_search_windows(windows: &[WindowInfo], query: &str) -> Vec<WindowMa
         }
 
         // Fuzzy character matching in app name using nucleo (handles Unicode)
-        if let Some(nucleo_s) = nucleo.score(&window.app) {
-            // Scale nucleo score to match existing weights (~50 for app name fuzzy match)
-            score += 50 + (nucleo_s / 20) as i32;
+        if use_nucleo {
+            if let Some(nucleo_s) = nucleo.score(&window.app) {
+                // Scale nucleo score to match existing weights (~50 for app name fuzzy match)
+                score += 50 + (nucleo_s / 20) as i32;
+            }
         }
 
         // Fuzzy character matching in window title using nucleo (handles Unicode)
-        if let Some(nucleo_s) = nucleo.score(&window.title) {
-            // Scale nucleo score to match existing weights (~40 for title fuzzy match)
-            score += 40 + (nucleo_s / 25) as i32;
+        if use_nucleo {
+            if let Some(nucleo_s) = nucleo.score(&window.title) {
+                // Scale nucleo score to match existing weights (~40 for title fuzzy match)
+                score += 40 + (nucleo_s / 25) as i32;
+            }
         }
 
         if score > 0 {
@@ -1208,4 +1341,118 @@ pub fn fuzzy_search_unified_with_windows(
     });
 
     results
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    // ============================================
+    // Helper function tests
+    // ============================================
+
+    #[test]
+    fn test_is_word_boundary_match_start() {
+        assert!(is_word_boundary_match("Hello World", 0));
+    }
+
+    #[test]
+    fn test_is_word_boundary_match_after_space() {
+        // "W" in "Hello World" at position 6
+        assert!(is_word_boundary_match("Hello World", 6));
+    }
+
+    #[test]
+    fn test_is_word_boundary_match_after_dash() {
+        // "c" in "git-commit" at position 4
+        assert!(is_word_boundary_match("git-commit", 4));
+    }
+
+    #[test]
+    fn test_is_word_boundary_match_camel_case() {
+        // "C" in "gitCommit" at position 3
+        assert!(is_word_boundary_match("gitCommit", 3));
+    }
+
+    #[test]
+    fn test_is_word_boundary_match_mid_word() {
+        // "e" in "Hello" at position 1 - NOT a word boundary
+        assert!(!is_word_boundary_match("Hello", 1));
+    }
+
+    #[test]
+    fn test_is_exact_name_match() {
+        assert!(is_exact_name_match("Hello", "hello"));
+        assert!(is_exact_name_match("AI Chat", "ai chat"));
+        assert!(!is_exact_name_match("Hello World", "hello"));
+        assert!(!is_exact_name_match("Hi", "hello"));
+    }
+
+    // ============================================
+    // Search scoring tests
+    // ============================================
+
+    fn make_script(name: &str, desc: Option<&str>) -> Arc<Script> {
+        Arc::new(Script {
+            name: name.to_string(),
+            path: PathBuf::from(format!(
+                "/test/{}.ts",
+                name.to_lowercase().replace(' ', "-")
+            )),
+            extension: "ts".to_string(),
+            description: desc.map(|d| d.to_string()),
+            ..Default::default()
+        })
+    }
+
+    #[test]
+    fn test_exact_name_match_ranks_first() {
+        let scripts = vec![
+            make_script("Notes Helper", Some("Manages notes")),
+            make_script("Notes", Some("Take quick notes")),
+            make_script("Notebook Viewer", Some("View notebooks")),
+        ];
+        let results = fuzzy_search_scripts(&scripts, "Notes");
+        assert!(!results.is_empty());
+        // Exact match "Notes" should be first
+        assert_eq!(results[0].script.name, "Notes");
+    }
+
+    #[test]
+    fn test_word_boundary_bonus() {
+        let scripts = vec![
+            make_script("Renewal Plan", Some("Renew subscriptions")),
+            make_script("New Tab", Some("Open new tab")),
+        ];
+        let results = fuzzy_search_scripts(&scripts, "new");
+        assert!(!results.is_empty());
+        // "New Tab" should rank higher because "new" is at a word start
+        assert_eq!(results[0].script.name, "New Tab");
+    }
+
+    #[test]
+    fn test_single_char_query_no_nucleo() {
+        // With MIN_FUZZY_QUERY_LEN=2, single char queries should only use
+        // substring matching, not nucleo fuzzy. This reduces false positives.
+        let scripts = vec![
+            make_script("X Tool", None),
+            make_script("Backup Files", None),
+        ];
+        let results = fuzzy_search_scripts(&scripts, "x");
+        // "X Tool" should match, but "Backup Files" should only match if
+        // it actually contains "x" as substring in name/filename/path
+        for r in &results {
+            let name_lower = r.script.name.to_lowercase();
+            let filename_lower = r.filename.to_lowercase();
+            let path_lower = r.script.path.to_string_lossy().to_lowercase();
+            assert!(
+                name_lower.contains('x')
+                    || filename_lower.contains('x')
+                    || path_lower.contains('x'),
+                "Single-char query should only match via substring, not fuzzy: {}",
+                r.script.name
+            );
+        }
+    }
 }
