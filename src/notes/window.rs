@@ -109,6 +109,29 @@ const OPACITY_MUTED: f32 = 0.7;
 /// Minimum interactive target size (px) — WCAG 2.2 §2.5.8 (24 × 24 CSS px).
 const MIN_TARGET_SIZE: f32 = 24.0;
 
+// =============================================================================
+// Derived / contextual opacity tokens — extracted from inline magic numbers
+// so every transparency in this file is auditable in one place.
+// =============================================================================
+
+/// Near-opaque overlay background (e.g. keyboard-shortcuts help sheet).
+const OPACITY_OVERLAY_BG: f32 = 0.96;
+
+/// Very subtle border dividers inside overlays (section separators).
+const OPACITY_SECTION_BORDER: f32 = 0.2;
+
+/// Accent-tinted border for trash-view indicator.
+const OPACITY_ACCENT_BORDER: f32 = 0.35;
+
+/// Width reserved for macOS traffic-light buttons in the titlebar (px).
+const TITLEBAR_TRAFFIC_LIGHT_W: f32 = 60.0;
+
+/// Width reserved for the right-side icon cluster in the titlebar (px).
+const TITLEBAR_ICONS_W: f32 = 100.0;
+
+/// Footer separator: Unicode middle-dot used between stats in the footer.
+const FOOTER_SEP: &str = " · ";
+
 /// View mode for the notes list
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum NotesViewMode {
@@ -592,9 +615,8 @@ impl NotesApp {
             return;
         }
 
-        // Constants for layout calculation - adjusted for compact sticky-note style
-        const TITLEBAR_HEIGHT: f32 = 32.0;
-        const FOOTER_HEIGHT: f32 = 28.0;
+        // Layout constants — reuse module-level TITLEBAR_HEIGHT / FOOTER_HEIGHT
+        // to avoid divergence.  PADDING and LINE_HEIGHT are auto-resize-specific.
         const PADDING: f32 = 24.0; // Top + bottom padding in editor area
         const LINE_HEIGHT: f32 = 20.0; // Approximate line height
         const MAX_HEIGHT: f32 = 600.0; // Don't grow too large
@@ -2100,7 +2122,7 @@ impl NotesApp {
         let muted = cx.theme().muted_foreground;
         let accent = cx.theme().accent;
         let border_color = cx.theme().border;
-        let bg = cx.theme().background.opacity(0.96);
+        let bg = cx.theme().background.opacity(OPACITY_OVERLAY_BG);
 
         let shortcut = |keys: &str, desc: &str| -> AnyElement {
             div()
@@ -2119,7 +2141,7 @@ impl NotesApp {
                 .pb_1() // 4px — on the spacing grid
                 .mb_1() // 4px — on the spacing grid
                 .border_b_1()
-                .border_color(border_color.opacity(0.2))
+                .border_color(border_color.opacity(OPACITY_SECTION_BORDER))
                 .text_xs()
                 .font_weight(gpui::FontWeight::MEDIUM)
                 .text_color(muted.opacity(OPACITY_MUTED))
@@ -2846,6 +2868,7 @@ impl NotesApp {
             .items_center()
             .gap_1()
             .py_1()
+            .px_3() // Align horizontally with titlebar & footer
             .child(
                 Button::new("bold")
                     .ghost()
@@ -3043,107 +3066,30 @@ impl NotesApp {
             muted_color.opacity(OPACITY_MUTED)
         };
 
-        let titlebar = div()
-            .id("notes-titlebar")
+        // ---------------------------------------------------------------
+        // Titlebar: 3-column flex layout
+        //   [left spacer (traffic lights)] [title flex-1 center] [icons]
+        // This prevents the title from overlapping with the icon cluster
+        // regardless of window width.
+        // ---------------------------------------------------------------
+
+        // Build the right-column icon cluster (extracted so we can reuse
+        // the same width for the left spacer to keep the title centered).
+        let titlebar_icons = div()
+            .w(px(TITLEBAR_ICONS_W))
+            .flex_shrink_0()
             .flex()
             .items_center()
-            .justify_center() // Center the title
-            .h(px(TITLEBAR_HEIGHT))
-            .px_3()
-            .relative() // For absolute positioning of icons
-            // NO .bg() - let vibrancy show through from root
-            // Trash view: subtle danger-colored bottom border as visual cue
-            .when(is_trash, |d| {
-                d.border_b_1().border_color(cx.theme().danger.opacity(0.35))
-            })
-            // Only show titlebar elements when window is hovered
-            .on_hover(cx.listener(|this, hovered, _, cx| {
-                if this.force_hovered {
-                    return;
-                }
-
-                this.titlebar_hovered = *hovered;
-                cx.notify();
-            }))
-            .child(
-                // Note title (truncated) - CENTERED in titlebar with pin indicator
-                div()
-                    .flex()
-                    .items_center()
-                    .gap_1()
-                    .overflow_hidden()
-                    .text_ellipsis()
-                    .text_sm()
-                    .text_color(muted_color) // Use muted color for subtle title
-                    // Always show title at readable opacity; brighten on hover
-                    .when(!window_hovered, |d| d.opacity(OPACITY_SUBTLE))
-                    .when(window_hovered, |d| d.opacity(1.0))
-                    // In focus mode, hide title completely (distraction-free)
-                    .when(in_focus_mode, |d| d.opacity(0.))
-                    // Pin indicator — filled dot in accent color
-                    .when(is_pinned && !in_focus_mode, |d| {
-                        d.child(div().text_xs().text_color(accent_color).child("●"))
-                    })
-                    .child(title),
-            )
-            // Focus mode hint: subtle exit hint shown on hover
-            .when(in_focus_mode && window_hovered, |d| {
-                d.child(
-                    div()
-                        .text_xs()
-                        .text_color(muted_color.opacity(OPACITY_DISABLED))
-                        .child("esc  or  ⌘.  exit focus"),
-                )
-            })
-            // Conditionally show icons based on state - only when window is hovered
-            // Raycast-style: icons on the right - settings (actions), panel (browse), + (new)
-            // Use absolute positioning to keep title centered
-            // Note: "+" and "≡" icons should show even with no notes (so users can create their first note)
-            // The "⌘" (actions) icon only shows when a note is selected (needs a note to act on)
-            // Hidden in focus mode for distraction-free writing
+            .justify_end()
+            .gap_2() // 8px — even spacing between icons
+            // Normal view icons — only when hovered, not trash, not focus mode
             .when(window_hovered && !is_trash && !in_focus_mode, |d| {
-                d.child(
-                    div()
-                        .absolute()
-                        .right_3() // Align to right with same padding as px_3
-                        .flex()
-                        .items_center()
-                        .gap_2() // Even spacing between icons
-                        // Icon 1: Command key icon - opens actions panel (⌘K)
-                        .when(has_selection, |d| {
-                            d.child(
-                                div()
-                                    .id("titlebar-cmd-icon")
-                                    .min_w(px(MIN_TARGET_SIZE))
-                                    .min_h(px(MIN_TARGET_SIZE))
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .text_sm()
-                                    .text_color(muted_color.opacity(OPACITY_MUTED))
-                                    .cursor_pointer()
-                                    .hover(|s| s.text_color(muted_color))
-                                    .tooltip(|window, cx| {
-                                        Tooltip::new("Actions")
-                                            .key_binding(
-                                                gpui::Keystroke::parse("cmd-k").ok().map(Kbd::new),
-                                            )
-                                            .build(window, cx)
-                                    })
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        if this.show_actions_panel {
-                                            this.close_actions_panel(window, cx);
-                                        } else {
-                                            this.open_actions_panel(window, cx);
-                                        }
-                                    }))
-                                    .child("⌘"),
-                            )
-                        })
-                        // Icon 2: List icon - note switcher
-                        .child(
+                d
+                    // Icon 1: Command key icon - opens actions panel (⌘K)
+                    .when(has_selection, |d| {
+                        d.child(
                             div()
-                                .id("titlebar-browse-icon")
+                                .id("titlebar-cmd-icon")
                                 .min_w(px(MIN_TARGET_SIZE))
                                 .min_h(px(MIN_TARGET_SIZE))
                                 .flex()
@@ -3154,83 +3100,104 @@ impl NotesApp {
                                 .cursor_pointer()
                                 .hover(|s| s.text_color(muted_color))
                                 .tooltip(|window, cx| {
-                                    Tooltip::new("Note switcher")
+                                    Tooltip::new("Actions")
                                         .key_binding(
-                                            gpui::Keystroke::parse("cmd-p").ok().map(Kbd::new),
+                                            gpui::Keystroke::parse("cmd-k").ok().map(Kbd::new),
                                         )
                                         .build(window, cx)
                                 })
                                 .on_click(cx.listener(|this, _, window, cx| {
-                                    if this.show_browse_panel {
-                                        this.close_browse_panel(window, cx);
-                                    } else {
+                                    if this.show_actions_panel {
                                         this.close_actions_panel(window, cx);
-                                        this.show_browse_panel = true;
-                                        this.open_browse_panel(window, cx);
+                                    } else {
+                                        this.open_actions_panel(window, cx);
                                     }
                                 }))
-                                .child("≡"),
+                                .child("⌘"),
                         )
-                        // Icon 3: Markdown preview toggle
-                        .child(
-                            div()
-                                .id("titlebar-preview-icon")
-                                .min_w(px(MIN_TARGET_SIZE))
-                                .min_h(px(MIN_TARGET_SIZE))
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .text_sm()
-                                .text_color(preview_color)
-                                .cursor_pointer()
-                                .hover(|s| s.text_color(accent_color))
-                                .tooltip(|window, cx| {
-                                    Tooltip::new("Toggle preview")
-                                        .key_binding(
-                                            gpui::Keystroke::parse("cmd-shift-p")
-                                                .ok()
-                                                .map(Kbd::new),
-                                        )
-                                        .build(window, cx)
-                                })
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    this.toggle_preview(window, cx);
-                                }))
-                                .child(preview_label),
-                        )
-                        // Icon 4: Plus icon - new note
-                        .child(
-                            div()
-                                .id("titlebar-new-icon")
-                                .min_w(px(MIN_TARGET_SIZE))
-                                .min_h(px(MIN_TARGET_SIZE))
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .text_sm()
-                                .text_color(muted_color.opacity(OPACITY_MUTED))
-                                .cursor_pointer()
-                                .hover(|s| s.text_color(muted_color))
-                                .tooltip(|window, cx| {
-                                    Tooltip::new("New note")
-                                        .key_binding(
-                                            gpui::Keystroke::parse("cmd-n").ok().map(Kbd::new),
-                                        )
-                                        .build(window, cx)
-                                })
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    this.create_note(window, cx);
-                                }))
-                                .child("+"),
-                        ),
-                )
+                    })
+                    // Icon 2: List icon - note switcher
+                    .child(
+                        div()
+                            .id("titlebar-browse-icon")
+                            .min_w(px(MIN_TARGET_SIZE))
+                            .min_h(px(MIN_TARGET_SIZE))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .text_sm()
+                            .text_color(muted_color.opacity(OPACITY_MUTED))
+                            .cursor_pointer()
+                            .hover(|s| s.text_color(muted_color))
+                            .tooltip(|window, cx| {
+                                Tooltip::new("Note switcher")
+                                    .key_binding(gpui::Keystroke::parse("cmd-p").ok().map(Kbd::new))
+                                    .build(window, cx)
+                            })
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                if this.show_browse_panel {
+                                    this.close_browse_panel(window, cx);
+                                } else {
+                                    this.close_actions_panel(window, cx);
+                                    this.show_browse_panel = true;
+                                    this.open_browse_panel(window, cx);
+                                }
+                            }))
+                            .child("≡"),
+                    )
+                    // Icon 3: Markdown preview toggle
+                    .child(
+                        div()
+                            .id("titlebar-preview-icon")
+                            .min_w(px(MIN_TARGET_SIZE))
+                            .min_h(px(MIN_TARGET_SIZE))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .text_sm()
+                            .text_color(preview_color)
+                            .cursor_pointer()
+                            .hover(|s| s.text_color(accent_color))
+                            .tooltip(|window, cx| {
+                                Tooltip::new("Toggle preview")
+                                    .key_binding(
+                                        gpui::Keystroke::parse("cmd-shift-p").ok().map(Kbd::new),
+                                    )
+                                    .build(window, cx)
+                            })
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.toggle_preview(window, cx);
+                            }))
+                            .child(preview_label),
+                    )
+                    // Icon 4: Plus icon - new note
+                    .child(
+                        div()
+                            .id("titlebar-new-icon")
+                            .min_w(px(MIN_TARGET_SIZE))
+                            .min_h(px(MIN_TARGET_SIZE))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .text_sm()
+                            .text_color(muted_color.opacity(OPACITY_MUTED))
+                            .cursor_pointer()
+                            .hover(|s| s.text_color(muted_color))
+                            .tooltip(|window, cx| {
+                                Tooltip::new("New note")
+                                    .key_binding(gpui::Keystroke::parse("cmd-n").ok().map(Kbd::new))
+                                    .build(window, cx)
+                            })
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.create_note(window, cx);
+                            }))
+                            .child("+"),
+                    )
             })
+            // Trash view actions (always visible when in trash)
             .when(has_selection && is_trash, |d| {
-                // Trash actions (always visible)
                 d.child(
                     div()
-                        .absolute()
-                        .right_3()
                         .flex()
                         .items_center()
                         .gap_1()
@@ -3254,6 +3221,65 @@ impl NotesApp {
                         ),
                 )
             });
+
+        let titlebar = div()
+            .id("notes-titlebar")
+            .flex()
+            .items_center()
+            .h(px(TITLEBAR_HEIGHT))
+            .px_3()
+            // NO .bg() — let vibrancy show through from root
+            // Trash view: subtle danger-colored bottom border as visual cue
+            .when(is_trash, |d| {
+                d.border_b_1()
+                    .border_color(cx.theme().danger.opacity(OPACITY_ACCENT_BORDER))
+            })
+            // Track titlebar hover for showing/hiding icons
+            .on_hover(cx.listener(|this, hovered, _, cx| {
+                if this.force_hovered {
+                    return;
+                }
+                this.titlebar_hovered = *hovered;
+                cx.notify();
+            }))
+            // LEFT column — spacer matching the right icon cluster width
+            // to keep the title optically centered between traffic lights and icons.
+            .child(div().w(px(TITLEBAR_TRAFFIC_LIGHT_W)).flex_shrink_0())
+            // CENTER column — title (flex-1, centered, truncated with ellipsis)
+            .child(
+                div()
+                    .flex_1()
+                    .min_w(px(0.)) // allow flex shrinking below content size
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .gap_1()
+                    .overflow_hidden()
+                    .text_ellipsis()
+                    .text_sm()
+                    .text_color(muted_color)
+                    // OPACITY_MUTED (0.7) keeps the title legible at rest — WCAG AA.
+                    .when(!window_hovered, |d| d.opacity(OPACITY_MUTED))
+                    .when(window_hovered, |d| d.opacity(1.0))
+                    // In focus mode, hide title completely (distraction-free)
+                    .when(in_focus_mode, |d| d.opacity(0.))
+                    // Pin indicator — filled dot in accent color
+                    .when(is_pinned && !in_focus_mode, |d| {
+                        d.child(div().text_xs().text_color(accent_color).child("●"))
+                    })
+                    .child(title)
+                    // Focus mode hint: subtle exit hint shown on hover
+                    .when(in_focus_mode && window_hovered, |d| {
+                        d.child(
+                            div()
+                                .text_xs()
+                                .text_color(muted_color.opacity(OPACITY_DISABLED))
+                                .child("esc  or  ⌘.  exit focus"),
+                        )
+                    }),
+            )
+            // RIGHT column — icons
+            .child(titlebar_icons);
 
         // Enhanced footer: note position + line on LEFT, word/char count CENTERED, type + time on RIGHT
         // NOTE: No .bg() - let vibrancy show through from root
@@ -3295,7 +3321,10 @@ impl NotesApp {
             .gap_2() // 8px between left / center / right columns
             .h(px(FOOTER_HEIGHT))
             .px_3()
-            // NO .bg() - let vibrancy show through from root
+            // Subtle top border separates footer from editor content
+            .border_t_1()
+            .border_color(cx.theme().border.opacity(OPACITY_SECTION_BORDER))
+            // NO .bg() — let vibrancy show through from root
             // Always visible at readable opacity; full on hover
             // In focus mode: hidden at rest, subtle word count on hover
             .when(in_focus_mode && !window_hovered, |d| d.opacity(0.))
@@ -3397,6 +3426,7 @@ impl NotesApp {
                     }),
             )
             // CENTER (flex-1): Ln position · word count · char count · reading time
+            // Uses FOOTER_SEP (" · ") for consistent separator styling.
             .child(
                 div()
                     .flex_1()
@@ -3404,7 +3434,6 @@ impl NotesApp {
                     .flex()
                     .items_center()
                     .justify_center()
-                    .gap_1() // 4px — compact
                     .overflow_hidden()
                     // Cursor line position — "Ln 5/42"
                     .when_some(cursor_line_info, |d, (line, total)| {
@@ -3412,27 +3441,42 @@ impl NotesApp {
                             div()
                                 .text_xs()
                                 .text_color(cx.theme().muted_foreground.opacity(OPACITY_MUTED))
-                                .child(format!("Ln {}/{}  ·", line, total)),
+                                .child(format!("Ln {}/{}", line, total)),
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(cx.theme().muted_foreground.opacity(OPACITY_SUBTLE))
+                                .child(FOOTER_SEP),
                         )
                     })
                     .child(if let Some((sel_words, sel_chars)) = selection_stats {
                         // Show selection stats in accent color when text is selected
                         div().text_xs().text_color(cx.theme().accent).child(format!(
-                            "{}/{} words  ·  {}/{} chars",
-                            sel_words, word_count, sel_chars, char_count,
+                            "{}/{} words{}{}/{} chars",
+                            sel_words, word_count, FOOTER_SEP, sel_chars, char_count,
                         ))
                     } else {
                         div()
                             .text_xs()
                             .text_color(cx.theme().muted_foreground)
-                            .child(format!("{} words  ·  {} chars", word_count, char_count,))
+                            .child(format!(
+                                "{} words{}{} chars",
+                                word_count, FOOTER_SEP, char_count,
+                            ))
                     })
                     .when(!reading_time.is_empty(), |d| {
                         d.child(
                             div()
                                 .text_xs()
+                                .text_color(cx.theme().muted_foreground.opacity(OPACITY_SUBTLE))
+                                .child(FOOTER_SEP),
+                        )
+                        .child(
+                            div()
+                                .text_xs()
                                 .text_color(cx.theme().muted_foreground.opacity(OPACITY_MUTED))
-                                .child(format!("· {}", reading_time)),
+                                .child(reading_time.clone()),
                         )
                     }),
             )
@@ -3678,8 +3722,9 @@ impl NotesApp {
             .child(
                 div()
                     .flex_1()
-                    .p_3()
-                    // NO .bg() - let vibrancy show through from root
+                    .px_4() // 16px horizontal — one step up for comfortable reading
+                    .py_3() // 12px vertical — tighter to keep compact feel
+                    // NO .bg() — let vibrancy show through from root
                     // Use a styled input that blends with background
                     .child(editor_body),
             )
