@@ -1714,9 +1714,9 @@ mod tests {
     // =========================================================================
 
     #[test]
-    fn ai_command_bar_has_exactly_9_actions() {
+    fn ai_command_bar_has_exactly_12_actions() {
         let actions = get_ai_command_bar_actions();
-        assert_eq!(actions.len(), 9);
+        assert_eq!(actions.len(), 12);
     }
 
     #[test]
@@ -1740,11 +1740,12 @@ mod tests {
             .iter()
             .filter(|a| a.section.as_deref() == Some("Actions"))
             .collect();
-        assert_eq!(action_section.len(), 3);
+        assert_eq!(action_section.len(), 4);
         let ids: Vec<&str> = action_section.iter().map(|a| a.id.as_str()).collect();
         assert!(ids.contains(&"submit"));
         assert!(ids.contains(&"new_chat"));
         assert!(ids.contains(&"delete_chat"));
+        assert!(ids.contains(&"branch_from_last"));
     }
 
     #[test]
@@ -1787,7 +1788,7 @@ mod tests {
             .iter()
             .filter_map(|a| a.section.as_deref())
             .collect();
-        // Order: Response, Response, Response, Actions, Actions, Actions, Attachments, Attachments, Settings
+        // Order: Response(3), Actions(3), Attachments(2), Export(1), Actions(1), Help(1), Settings(1)
         let unique_order: Vec<&str> = {
             let mut result = vec![];
             let mut prev: Option<&str> = None;
@@ -1801,7 +1802,15 @@ mod tests {
         };
         assert_eq!(
             unique_order,
-            vec!["Response", "Actions", "Attachments", "Settings"]
+            vec![
+                "Response",
+                "Actions",
+                "Attachments",
+                "Export",
+                "Actions",
+                "Help",
+                "Settings"
+            ]
         );
     }
 

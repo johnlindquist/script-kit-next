@@ -949,7 +949,7 @@ fn notes_all_actions_have_sections() {
 // =========================================================================
 
 #[test]
-fn ai_command_bar_all_nine_ids() {
+fn ai_command_bar_all_twelve_ids() {
     let actions = get_ai_command_bar_actions();
     let ids = action_ids(&actions);
     let expected = [
@@ -962,11 +962,14 @@ fn ai_command_bar_all_nine_ids() {
         "add_attachment",
         "paste_image",
         "change_model",
+        "export_markdown",
+        "branch_from_last",
+        "toggle_shortcuts_help",
     ];
     for id in &expected {
         assert!(ids.contains(id), "Missing AI action: {}", id);
     }
-    assert_eq!(actions.len(), 9);
+    assert_eq!(actions.len(), 12);
 }
 
 #[test]

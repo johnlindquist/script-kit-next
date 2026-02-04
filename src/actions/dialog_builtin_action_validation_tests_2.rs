@@ -1798,13 +1798,13 @@ fn path_all_actions_have_no_value() {
 // =========================================================================
 
 #[test]
-fn ai_section_header_count_is_four() {
+fn ai_section_header_count_is_seven() {
     let actions = get_ai_command_bar_actions();
     let filtered: Vec<usize> = (0..actions.len()).collect();
     let header_count = count_section_headers(&actions, &filtered);
     assert_eq!(
-        header_count, 4,
-        "AI command bar should have 4 section headers (Response, Actions, Attachments, Settings)"
+        header_count, 7,
+        "AI command bar should have 7 section headers (Response, Actions, Attachments, Export, Actions, Help, Settings)"
     );
 }
 

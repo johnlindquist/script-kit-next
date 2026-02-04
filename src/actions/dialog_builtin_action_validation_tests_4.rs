@@ -549,7 +549,7 @@ fn ai_command_bar_every_action_has_section() {
 }
 
 #[test]
-fn ai_command_bar_exactly_four_sections() {
+fn ai_command_bar_exactly_six_sections() {
     let actions = get_ai_command_bar_actions();
     let unique_sections: HashSet<&str> = actions
         .iter()
@@ -557,19 +557,27 @@ fn ai_command_bar_exactly_four_sections() {
         .collect();
     assert_eq!(
         unique_sections.len(),
-        4,
-        "AI command bar should have exactly 4 sections, got {:?}",
+        6,
+        "AI command bar should have exactly 6 sections, got {:?}",
         unique_sections
     );
 }
 
 #[test]
-fn ai_command_bar_section_order_is_response_actions_attachments_settings() {
+fn ai_command_bar_section_order_is_response_actions_attachments_export_actions_help_settings() {
     let actions = get_ai_command_bar_actions();
     let order = sections_in_order(&actions);
     assert_eq!(
         order,
-        vec!["Response", "Actions", "Attachments", "Settings"]
+        vec![
+            "Response",
+            "Actions",
+            "Attachments",
+            "Export",
+            "Actions",
+            "Help",
+            "Settings"
+        ]
     );
 }
 
@@ -1004,10 +1012,10 @@ fn grouped_items_headers_style_produces_section_headers() {
         .iter()
         .filter(|g| matches!(g, GroupedActionItem::SectionHeader(_)))
         .count();
-    // Should have section headers for each unique section
+    // Should have section headers for each section transition
     assert_eq!(
-        header_count, 4,
-        "AI command bar should have 4 section headers, got {}",
+        header_count, 7,
+        "AI command bar should have 7 section headers, got {}",
         header_count
     );
 }

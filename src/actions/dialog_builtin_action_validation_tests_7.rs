@@ -904,9 +904,9 @@ mod tests {
     }
 
     #[test]
-    fn ai_command_bar_exactly_9_actions() {
+    fn ai_command_bar_exactly_12_actions() {
         let actions = get_ai_command_bar_actions();
-        assert_eq!(actions.len(), 9);
+        assert_eq!(actions.len(), 12);
     }
 
     #[test]

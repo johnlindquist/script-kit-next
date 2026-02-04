@@ -374,13 +374,13 @@ mod tests {
     }
 
     #[test]
-    fn ai_command_bar_actions_section_has_3_actions() {
+    fn ai_command_bar_actions_section_has_4_actions() {
         let actions = get_ai_command_bar_actions();
         let actions_count = actions
             .iter()
             .filter(|a| a.section.as_deref() == Some("Actions"))
             .count();
-        assert_eq!(actions_count, 3);
+        assert_eq!(actions_count, 4);
     }
 
     #[test]
@@ -404,9 +404,9 @@ mod tests {
     }
 
     #[test]
-    fn ai_command_bar_total_is_9() {
+    fn ai_command_bar_total_is_12() {
         let actions = get_ai_command_bar_actions();
-        assert_eq!(actions.len(), 9);
+        assert_eq!(actions.len(), 12);
     }
 
     #[test]
@@ -416,8 +416,7 @@ mod tests {
             .iter()
             .filter_map(|a| a.section.as_deref())
             .collect();
-        // Should transition: Response, Response, Response, Actions, Actions, Actions,
-        // Attachments, Attachments, Settings
+        // Should transition: Response, Actions, Attachments, Export, Actions, Help, Settings
         let mut seen_sections: Vec<&str> = Vec::new();
         for s in &sections {
             if seen_sections.last() != Some(s) {
@@ -426,7 +425,15 @@ mod tests {
         }
         assert_eq!(
             seen_sections,
-            vec!["Response", "Actions", "Attachments", "Settings"]
+            vec![
+                "Response",
+                "Actions",
+                "Attachments",
+                "Export",
+                "Actions",
+                "Help",
+                "Settings"
+            ]
         );
     }
 
