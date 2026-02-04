@@ -232,16 +232,16 @@ impl BackgroundOpacity {
             title_bar: 0.85,                 // Match main for consistency
             search_box: 0.90,                // 90% - matches POC input_area_bg
             log_panel: 0.90,                 // Slightly more opaque for terminal readability
-            selected: 0.12,                  // Visible selection on light
-            hover: 0.08,                     // Subtle hover on light
-            preview: 0.0,                    // Preview panel (0 = fully transparent)
-            dialog: 0.85,                    // Dialogs match main
-            input: 0.90,                     // Input fields - 90% like POC input_area_bg
-            panel: 0.85,                     // Panels match main
-            input_inactive: 0.85,            // Input fields when empty/inactive
-            input_active: 0.90,              // Input fields when has text/active
-            border_inactive: 0.30,           // Borders when inactive
-            border_active: 0.45,             // Borders when active
+            selected: 0.18, // Higher opacity for light mode visibility (black overlay)
+            hover: 0.10,    // Subtle but visible hover on light backgrounds
+            preview: 0.0,   // Preview panel (0 = fully transparent)
+            dialog: 0.85,   // Dialogs match main
+            input: 0.90,    // Input fields - 90% like POC input_area_bg
+            panel: 0.85,    // Panels match main
+            input_inactive: 0.85, // Input fields when empty/inactive
+            input_active: 0.90, // Input fields when has text/active
+            border_inactive: 0.30, // Borders when inactive
+            border_active: 0.45, // Borders when active
             vibrancy_background: Some(0.85), // Match POC: 85% opacity (0xD9/255)
         }
     }
@@ -834,7 +834,7 @@ impl ColorScheme {
                 secondary: 0x4a4a4a, // Darker gray for better readability
                 tertiary: 0x6b6b6b,  // Medium gray for hints
                 muted: 0x808080,     // Mid gray for placeholders
-                dimmed: 0xaaaaaa,    // Lighter for subtle elements
+                dimmed: 0x999999,    // Subtle but readable on light backgrounds
                 on_accent: 0xffffff, // White text on accent backgrounds
             },
             accent: AccentColors {
