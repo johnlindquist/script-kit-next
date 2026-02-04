@@ -356,7 +356,7 @@ pub fn get_grouped_results(
             // User has frecency data - show their frequently used items
             grouped.push(GroupedListItem::SectionHeader(
                 format!("SUGGESTED · {}", suggested_indices.len()),
-                None,
+                Some("StarFilled".to_string()),
             ));
             for (idx, _score) in &suggested_indices {
                 grouped.push(GroupedListItem::Item(*idx));
@@ -365,7 +365,7 @@ pub fn get_grouped_results(
             // New user with no frecency - show default suggestions
             grouped.push(GroupedListItem::SectionHeader(
                 format!("SUGGESTED · {}", default_suggested_indices.len()),
-                None,
+                Some("StarFilled".to_string()),
             ));
             for idx in &default_suggested_indices {
                 grouped.push(GroupedListItem::Item(*idx));
@@ -378,7 +378,7 @@ pub fn get_grouped_results(
         if !main_indices.is_empty() {
             grouped.push(GroupedListItem::SectionHeader(
                 format!("MAIN · {}", main_indices.len()),
-                None,
+                Some("Code".to_string()),
             ));
             for idx in main_indices {
                 grouped.push(GroupedListItem::Item(*idx));
@@ -390,7 +390,7 @@ pub fn get_grouped_results(
     if !commands_indices.is_empty() {
         grouped.push(GroupedListItem::SectionHeader(
             format!("COMMANDS · {}", commands_indices.len()),
-            None,
+            Some("Terminal".to_string()),
         ));
         for idx in &commands_indices {
             grouped.push(GroupedListItem::Item(*idx));
@@ -401,10 +401,10 @@ pub fn get_grouped_results(
     for kit_name in &other_kit_names {
         if let Some(indices) = kit_indices.get(*kit_name) {
             if !indices.is_empty() {
-                // Use uppercase kit name as section header with count
+                // Use uppercase kit name as section header with count and bolt icon
                 grouped.push(GroupedListItem::SectionHeader(
                     format!("{} · {}", kit_name.to_uppercase(), indices.len()),
-                    None,
+                    Some("BoltFilled".to_string()),
                 ));
                 for idx in indices {
                     grouped.push(GroupedListItem::Item(*idx));
@@ -417,7 +417,7 @@ pub fn get_grouped_results(
     if !apps_indices.is_empty() {
         grouped.push(GroupedListItem::SectionHeader(
             format!("APPS · {}", apps_indices.len()),
-            None,
+            Some("Folder".to_string()),
         ));
         for idx in &apps_indices {
             grouped.push(GroupedListItem::Item(*idx));

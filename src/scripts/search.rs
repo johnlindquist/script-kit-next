@@ -241,14 +241,24 @@ pub fn compute_match_indices_for_result(result: &SearchResult, query: &str) -> M
                 fuzzy_match_with_indices_ascii(&sm.script.name, &query_lower);
             if name_matched {
                 indices.name_indices = name_indices;
-                return indices;
             }
 
-            // Fall back to filename
-            let (filename_matched, filename_indices) =
-                fuzzy_match_with_indices_ascii(&sm.filename, &query_lower);
-            if filename_matched {
-                indices.filename_indices = filename_indices;
+            // Also compute description indices for highlighting
+            if let Some(ref desc) = sm.script.description {
+                let (desc_matched, desc_indices) =
+                    fuzzy_match_with_indices_ascii(desc, &query_lower);
+                if desc_matched {
+                    indices.description_indices = desc_indices;
+                }
+            }
+
+            // If name didn't match, fall back to filename
+            if indices.name_indices.is_empty() {
+                let (filename_matched, filename_indices) =
+                    fuzzy_match_with_indices_ascii(&sm.filename, &query_lower);
+                if filename_matched {
+                    indices.filename_indices = filename_indices;
+                }
             }
 
             indices
@@ -261,14 +271,24 @@ pub fn compute_match_indices_for_result(result: &SearchResult, query: &str) -> M
                 fuzzy_match_with_indices_ascii(&sm.scriptlet.name, &query_lower);
             if name_matched {
                 indices.name_indices = name_indices;
-                return indices;
             }
 
-            // Fall back to file path
-            if let Some(ref fp) = sm.display_file_path {
-                let (fp_matched, fp_indices) = fuzzy_match_with_indices_ascii(fp, &query_lower);
-                if fp_matched {
-                    indices.filename_indices = fp_indices;
+            // Also compute description indices for highlighting
+            if let Some(ref desc) = sm.scriptlet.description {
+                let (desc_matched, desc_indices) =
+                    fuzzy_match_with_indices_ascii(desc, &query_lower);
+                if desc_matched {
+                    indices.description_indices = desc_indices;
+                }
+            }
+
+            // If name didn't match, fall back to file path
+            if indices.name_indices.is_empty() {
+                if let Some(ref fp) = sm.display_file_path {
+                    let (fp_matched, fp_indices) = fuzzy_match_with_indices_ascii(fp, &query_lower);
+                    if fp_matched {
+                        indices.filename_indices = fp_indices;
+                    }
                 }
             }
 
@@ -281,6 +301,13 @@ pub fn compute_match_indices_for_result(result: &SearchResult, query: &str) -> M
                 fuzzy_match_with_indices_ascii(&bm.entry.name, &query_lower);
             if name_matched {
                 indices.name_indices = name_indices;
+            }
+
+            // Also compute description indices for highlighting
+            let (desc_matched, desc_indices) =
+                fuzzy_match_with_indices_ascii(&bm.entry.description, &query_lower);
+            if desc_matched {
+                indices.description_indices = desc_indices;
             }
 
             indices
@@ -452,6 +479,16 @@ pub fn fuzzy_search_scripts(scripts: &[Arc<Script>], query: &str) -> Vec<ScriptM
             score += 35 + (nucleo_s / 30) as i32;
         }
 
+        // Score by alias match - allows users to search by trigger alias
+        if let Some(ref alias) = script.alias {
+            if query_is_ascii && alias.is_ascii() {
+                if let Some(pos) = find_ignore_ascii_case(alias, &query_lower) {
+                    // Strong bonus for alias match (aliases are explicit shortcuts)
+                    score += if pos == 0 { 80 } else { 60 };
+                }
+            }
+        }
+
         // Score by description match - medium priority
         // Only use ASCII fast-path when both are ASCII
         if let Some(ref desc) = script.description {
@@ -579,6 +616,27 @@ pub fn fuzzy_search_scriptlets(scriptlets: &[Arc<Scriptlet>], query: &str) -> Ve
             && contains_ignore_ascii_case(&scriptlet.code, &query_lower)
         {
             score += 5;
+        }
+
+        // Bonus for keyword match - allows users to search by trigger keyword
+        // Keywords are typically short ASCII strings
+        if let Some(ref keyword) = scriptlet.keyword {
+            if query_is_ascii && keyword.is_ascii() {
+                if let Some(pos) = find_ignore_ascii_case(keyword, &query_lower) {
+                    // Strong bonus for keyword match (keywords are explicit triggers)
+                    score += if pos == 0 { 80 } else { 60 };
+                }
+            }
+        }
+
+        // Bonus for alias match - allows users to search by alias
+        if let Some(ref alias) = scriptlet.alias {
+            if query_is_ascii && alias.is_ascii() {
+                if let Some(pos) = find_ignore_ascii_case(alias, &query_lower) {
+                    // Strong bonus for alias match (aliases are explicit shortcuts)
+                    score += if pos == 0 { 80 } else { 60 };
+                }
+            }
         }
 
         // Bonus for tool type match

@@ -81,6 +81,8 @@ pub struct MatchIndices {
     pub name_indices: Vec<usize>,
     /// Indices of matched characters in the filename/path
     pub filename_indices: Vec<usize>,
+    /// Indices of matched characters in the description
+    pub description_indices: Vec<usize>,
 }
 
 /// Represents a scored match result for fuzzy search

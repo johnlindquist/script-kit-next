@@ -398,6 +398,9 @@ pub struct ListItem {
     /// Character indices in the name that match the search query (for fuzzy highlight)
     /// When present, matched characters are rendered with accent color for visual emphasis
     highlight_indices: Option<Vec<usize>>,
+    /// Character indices in the description that match the search query (for fuzzy highlight)
+    /// When present, matched characters are rendered with accent color for visual emphasis
+    description_highlight_indices: Option<Vec<usize>>,
 }
 
 /// Width of the left accent bar for selected items
@@ -420,6 +423,7 @@ impl ListItem {
             show_accent_bar: false,
             enable_hover_effect: true, // Default to enabled
             highlight_indices: None,
+            description_highlight_indices: None,
         }
     }
 
@@ -551,6 +555,21 @@ impl ListItem {
     /// Set optional highlight indices (convenience for Option<Vec<usize>>)
     pub fn highlight_indices_opt(mut self, indices: Option<Vec<usize>>) -> Self {
         self.highlight_indices = indices.filter(|v| !v.is_empty());
+        self
+    }
+
+    /// Set character indices for fuzzy match highlighting in description
+    /// When set, matched characters in the description are rendered with accent color
+    pub fn description_highlight_indices(mut self, indices: Vec<usize>) -> Self {
+        if !indices.is_empty() {
+            self.description_highlight_indices = Some(indices);
+        }
+        self
+    }
+
+    /// Set optional description highlight indices (convenience for Option<Vec<usize>>)
+    pub fn description_highlight_indices_opt(mut self, indices: Option<Vec<usize>>) -> Self {
+        self.description_highlight_indices = indices.filter(|v| !v.is_empty());
         self
     }
 }
@@ -715,9 +734,41 @@ impl RenderOnce for ListItem {
 
         // Description - text_xs (0.75rem ≈ 12px), muted color (never changes on selection - only bg shows selection)
         // Single-line with ellipsis truncation for long content
+        // When description_highlight_indices are present, matched characters are rendered with accent color
         if let Some(desc) = self.description {
             let desc_color = rgb(colors.text_muted);
-            item_content = item_content.child(
+            let desc_element = if let Some(ref desc_indices) = self.description_highlight_indices {
+                // Build StyledText with highlighted matched characters in description
+                let index_set: HashSet<usize> = desc_indices.iter().copied().collect();
+                let highlight_color = rgb(colors.accent_selected);
+                let highlight_style = HighlightStyle {
+                    color: Some(highlight_color.into()),
+                    font_weight: Some(FontWeight::SEMIBOLD),
+                    ..Default::default()
+                };
+
+                // Convert character indices to byte ranges for StyledText
+                let mut highlights: Vec<(std::ops::Range<usize>, HighlightStyle)> = Vec::new();
+                for (char_idx, (byte_offset, ch)) in desc.char_indices().enumerate() {
+                    if index_set.contains(&char_idx) {
+                        highlights
+                            .push((byte_offset..byte_offset + ch.len_utf8(), highlight_style));
+                    }
+                }
+
+                // Base text is more muted when highlighting to create contrast
+                let base_color = rgba((colors.text_dimmed << 8) | 0xCC);
+                let styled = StyledText::new(desc.clone()).with_highlights(highlights);
+
+                div()
+                    .text_xs()
+                    .line_height(px(14.))
+                    .text_color(base_color)
+                    .overflow_hidden()
+                    .text_ellipsis()
+                    .whitespace_nowrap()
+                    .child(styled)
+            } else {
                 div()
                     .text_xs()
                     .line_height(px(14.))
@@ -725,8 +776,9 @@ impl RenderOnce for ListItem {
                     .overflow_hidden()
                     .text_ellipsis()
                     .whitespace_nowrap()
-                    .child(desc),
-            );
+                    .child(desc)
+            };
+            item_content = item_content.child(desc_element);
         }
 
         // Shortcut badge (if present) - right-aligned with kbd-style rendering
@@ -981,16 +1033,29 @@ pub fn render_section_header(
         (label, None)
     };
 
-    // Build the inner content row with section name and count
+    // Build the inner content row: icon (optional) → section name → count (optional)
     let mut content = div()
         .flex()
         .flex_row()
         .items_center()
-        .gap(px(6.))
+        .gap(px(5.))
         .text_xs() // 10-11px font
         .font_weight(FontWeight::SEMIBOLD)
-        .text_color(rgb(colors.text_dimmed))
-        .child(section_name.to_string());
+        .text_color(rgb(colors.text_dimmed));
+
+    // Add icon before section name if provided
+    if let Some(name) = icon {
+        if let Some(icon_name) = icon_name_from_str(name) {
+            content = content.child(
+                svg()
+                    .external_path(icon_name.external_path())
+                    .size(px(10.))
+                    .text_color(rgba((colors.text_dimmed << 8) | 0xB0)), // slightly muted
+            );
+        }
+    }
+
+    content = content.child(section_name.to_string());
 
     // Add count badge if present - rendered as a subtle separate element
     if let Some(count) = count_text {
@@ -1001,18 +1066,6 @@ pub fn render_section_header(
                 .text_color(rgba((colors.text_dimmed << 8) | 0x80)) // 50% opacity of dimmed
                 .child(count.to_string()),
         );
-    }
-
-    // Add icon if provided
-    if let Some(name) = icon {
-        if let Some(icon_name) = icon_name_from_str(name) {
-            content = content.child(
-                svg()
-                    .external_path(icon_name.external_path())
-                    .size(px(12.))
-                    .text_color(rgb(colors.text_dimmed)),
-            );
-        }
     }
 
     div()
