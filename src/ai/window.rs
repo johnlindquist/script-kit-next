@@ -3851,7 +3851,7 @@ impl AiApp {
         self.current_messages.len() + if self.is_streaming { 1 } else { 0 }
     }
 
-    /// Render the messages area using a virtualized list.
+    /// Render the messages area using a virtualized list with native-style scrollbar.
     fn render_messages(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let entity = cx.entity();
         let msg_count = self.current_messages.len();
@@ -3859,7 +3859,7 @@ impl AiApp {
 
         // Virtualized list: only renders visible messages + overdraw band.
         // Item indices: 0..msg_count = saved messages, msg_count = streaming row (if active).
-        list(self.messages_list_state.clone(), move |ix, _window, cx| {
+        let messages_list = list(self.messages_list_state.clone(), move |ix, _window, cx| {
             entity.update(cx, |this, cx| {
                 if ix < msg_count {
                     this.render_message(&this.current_messages[ix], cx)
@@ -3873,7 +3873,15 @@ impl AiApp {
         })
         .with_sizing_behavior(ListSizingBehavior::Infer)
         .size_full()
-        .p_3()
+        .p_3();
+
+        // Wrap in a relative container with a native-style scrollbar overlay.
+        // The scrollbar uses ListState's ScrollbarHandle impl for position tracking.
+        div()
+            .relative()
+            .size_full()
+            .child(messages_list)
+            .vertical_scrollbar(&self.messages_list_state)
     }
 
     /// Render the main chat panel
