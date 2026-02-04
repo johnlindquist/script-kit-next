@@ -3721,10 +3721,11 @@ impl AiApp {
             .child(
                 div()
                     .text_xs()
-                    .font_weight(gpui::FontWeight::MEDIUM)
-                    .text_color(cx.theme().muted_foreground)
+                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                    .text_color(cx.theme().muted_foreground.opacity(0.6))
                     .px_1()
-                    .py_1()
+                    .pt(px(6.))
+                    .pb(px(4.))
                     .child(group.label()),
             )
             // Chat items
@@ -4192,8 +4193,8 @@ impl AiApp {
             return self.render_setup_card(cx).into_any_element();
         }
 
-        let suggestion_bg = cx.theme().muted.opacity(0.4);
-        let suggestion_hover_bg = cx.theme().muted.opacity(0.7);
+        let suggestion_bg = cx.theme().muted.opacity(0.25);
+        let suggestion_hover_bg = cx.theme().muted.opacity(0.45);
 
         let suggestions: Vec<(&str, &str, LocalIconName)> = vec![
             (
@@ -4235,7 +4236,7 @@ impl AiApp {
                     .child(
                         div()
                             .text_xl()
-                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                            .font_weight(gpui::FontWeight::BOLD)
                             .text_color(cx.theme().foreground)
                             .child("Ask Anything"),
                     )
@@ -4736,8 +4737,8 @@ impl AiApp {
         let colors = theme::PromptColors::from_theme(&crate::theme::get_cached_theme());
 
         // Differentiated backgrounds: accent-tinted for user, subtle for assistant
-        let user_bg = cx.theme().accent.opacity(0.10);
-        let assistant_bg = cx.theme().muted.opacity(0.3);
+        let user_bg = cx.theme().accent.opacity(0.13);
+        let assistant_bg = cx.theme().muted.opacity(0.18);
 
         // Collect cached thumbnails for this message's images
         let image_thumbnails: Vec<std::sync::Arc<RenderImage>> = message
@@ -4795,8 +4796,8 @@ impl AiApp {
             .flex()
             .flex_col()
             .w_full()
-            .when(is_continuation, |d| d.mb_1())
-            .when(!is_continuation, |d| d.mb_3())
+            .when(is_continuation, |d| d.mb(px(6.)))
+            .when(!is_continuation, |d| d.mb(px(16.)))
             // Role label row - hidden for continuation messages from same sender
             .when(!is_continuation, |el| {
                 el.child(
@@ -4804,7 +4805,7 @@ impl AiApp {
                         .flex()
                         .items_center()
                         .justify_between()
-                        .mb_1()
+                        .mb(px(6.))
                         .child(
                             div()
                                 .flex()
@@ -4817,26 +4818,32 @@ impl AiApp {
                                         .text_color(if is_user {
                                             cx.theme().accent
                                         } else {
-                                            cx.theme().muted_foreground
+                                            cx.theme().muted_foreground.opacity(0.7)
                                         }),
                                 )
                                 .child(
                                     div()
                                         .text_xs()
-                                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                                        .font_weight(gpui::FontWeight::BOLD)
                                         .text_color(if is_user {
                                             cx.theme().foreground
                                         } else {
-                                            cx.theme().muted_foreground
+                                            cx.theme().muted_foreground.opacity(0.8)
                                         })
                                         .child(role_label),
+                                )
+                                .child(
+                                    div()
+                                        .size(px(3.))
+                                        .rounded_full()
+                                        .bg(cx.theme().muted_foreground.opacity(0.25)),
                                 )
                                 .child({
                                     let tooltip_text = full_timestamp.clone();
                                     div()
                                         .id(SharedString::from(format!("ts-{}", msg_id)))
                                         .text_xs()
-                                        .text_color(cx.theme().muted_foreground.opacity(0.6))
+                                        .text_color(cx.theme().muted_foreground.opacity(0.5))
                                         .tooltip(move |window, cx| {
                                             Tooltip::new(tooltip_text.clone()).build(window, cx)
                                         })
@@ -4932,15 +4939,16 @@ impl AiApp {
                 // Message content - differentiated backgrounds
                 div()
                     .w_full()
-                    .p_3()
-                    .rounded_lg()
+                    .px(px(14.))
+                    .py(px(12.))
+                    .rounded(px(8.))
                     .when(is_user, |d| {
                         d.bg(user_bg)
                             .border_l_2()
-                            .border_color(cx.theme().accent.opacity(0.3))
+                            .border_color(cx.theme().accent.opacity(0.4))
                     })
                     .when(is_system, |d| {
-                        d.bg(cx.theme().muted.opacity(0.15))
+                        d.bg(cx.theme().muted.opacity(0.12))
                             .border_l_2()
                             .border_color(cx.theme().muted_foreground.opacity(0.2))
                             .italic()
@@ -5061,7 +5069,7 @@ impl AiApp {
     /// Render streaming content (assistant response in progress)
     fn render_streaming_content(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let colors = theme::PromptColors::from_theme(&crate::theme::get_cached_theme());
-        let streaming_bg = cx.theme().muted.opacity(0.3);
+        let streaming_bg = cx.theme().muted.opacity(0.18);
 
         let elapsed_label: SharedString = self
             .streaming_started_at
@@ -5245,8 +5253,9 @@ impl AiApp {
             .child(
                 div()
                     .w_full()
-                    .p_3()
-                    .rounded_lg()
+                    .px(px(14.))
+                    .py(px(12.))
+                    .rounded(px(8.))
                     .bg(streaming_bg)
                     .child(content_element),
             )
@@ -5433,8 +5442,8 @@ impl AiApp {
             .items_center()
             .gap(px(8.))
             .pl_1()
-            .mt(px(-4.))
-            .mb_2()
+            .mt(px(2.))
+            .mb(px(4.))
             .child(
                 div()
                     .id("regenerate-btn")
@@ -5611,7 +5620,8 @@ impl AiApp {
         })
         .with_sizing_behavior(ListSizingBehavior::Infer)
         .size_full()
-        .p_3();
+        .px(px(16.))
+        .py(px(12.));
 
         // Track user scroll: show pill when user scrolls up (during streaming or with many messages)
         let show_scroll_pill =
@@ -5740,10 +5750,12 @@ impl AiApp {
             .flex_col()
             .w_full()
             // NO .bg() - let vibrancy show through from root
-            .px_2()
-            .pt_2()
-            .pb_1() // Tighter padding for cleaner look
-            .gap_1()
+            .border_t_1()
+            .border_color(cx.theme().border.opacity(0.5))
+            .px(px(10.))
+            .pt(px(10.))
+            .pb(px(6.))
+            .gap(px(6.))
             // Handle image file drops
             .on_drop(cx.listener(|this, paths: &ExternalPaths, _window, cx| {
                 this.handle_file_drop(paths, cx);
@@ -6767,7 +6779,8 @@ impl Render for AiApp {
                     .child(
                         div()
                             .text_sm()
-                            .text_color(cx.theme().muted_foreground)
+                            .font_weight(gpui::FontWeight::MEDIUM)
+                            .text_color(cx.theme().muted_foreground.opacity(0.7))
                             .child(
                                 self.get_selected_chat()
                                     .map(|c| {
