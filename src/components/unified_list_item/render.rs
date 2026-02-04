@@ -166,7 +166,7 @@ impl RenderOnce for UnifiedListItem {
             .py(px(layout.padding_y))
             .bg(bg_color)
             .text_color(title_color)
-            .font_family(".AppleSystemUIFont")
+            .font_family(crate::list_item::FONT_SYSTEM_UI)
             .cursor_pointer()
             .flex()
             .flex_row()

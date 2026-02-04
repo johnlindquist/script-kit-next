@@ -122,26 +122,26 @@ impl ScriptListApp {
                     .flex_col()
                     .items_center()
                     .justify_center()
-                    .gap(px(12.))
+                    .gap(px(EMPTY_STATE_GAP))
                     .font_family(empty_font_family)
                     // Large muted icon
                     .child(
                         svg()
                             .external_path(IconName::Code.external_path())
-                            .size(px(32.))
-                            .text_color(rgba((empty_text_color << 8) | 0x30)),
+                            .size(px(EMPTY_STATE_ICON_SIZE))
+                            .text_color(rgba((empty_text_color << 8) | ALPHA_EMPTY_ICON)),
                     )
                     .child(
                         div()
-                            .text_color(rgba((empty_text_color << 8) | 0x50))
-                            .text_size(px(14.))
+                            .text_color(rgba((empty_text_color << 8) | ALPHA_EMPTY_MESSAGE))
+                            .text_size(px(EMPTY_STATE_MESSAGE_FONT_SIZE))
                             .font_weight(FontWeight::MEDIUM)
                             .child("No scripts or snippets found"),
                     )
                     .child(
                         div()
                             .text_xs()
-                            .text_color(rgba((empty_text_color << 8) | 0x35))
+                            .text_color(rgba((empty_text_color << 8) | ALPHA_EMPTY_HINT))
                             .child("Press ⌘N to create a new script"),
                     )
                     .into_any_element()
@@ -159,34 +159,34 @@ impl ScriptListApp {
                     .flex_col()
                     .items_center()
                     .justify_center()
-                    .gap(px(12.))
+                    .gap(px(EMPTY_STATE_GAP))
                     .font_family(empty_font_family)
                     // Magnifying glass icon for search
                     .child(
                         svg()
                             .external_path(IconName::MagnifyingGlass.external_path())
-                            .size(px(32.))
-                            .text_color(rgba((empty_text_color << 8) | 0x30)),
+                            .size(px(EMPTY_STATE_ICON_SIZE))
+                            .text_color(rgba((empty_text_color << 8) | ALPHA_EMPTY_ICON)),
                     )
                     .child(
                         div()
-                            .text_color(rgba((empty_text_color << 8) | 0x50))
-                            .text_size(px(14.))
+                            .text_color(rgba((empty_text_color << 8) | ALPHA_EMPTY_MESSAGE))
+                            .text_size(px(EMPTY_STATE_MESSAGE_FONT_SIZE))
                             .font_weight(FontWeight::MEDIUM)
                             .child(format!("No results for \"{}\"", filter_display)),
                     )
                     .child(
                         div()
                             .text_xs()
-                            .text_color(rgba((empty_text_color << 8) | 0x35))
+                            .text_color(rgba((empty_text_color << 8) | ALPHA_EMPTY_HINT))
                             .child("Try a different search term or press Tab to ask AI"),
                     )
                     // Search tips: help users discover advanced search features
                     .child(
                         div()
                             .text_xs()
-                            .text_color(rgba((empty_text_color << 8) | 0x25))
-                            .pt(px(8.))
+                            .text_color(rgba((empty_text_color << 8) | ALPHA_EMPTY_TIPS))
+                            .pt(px(EMPTY_STATE_TIPS_MARGIN_TOP))
                             .child("Filters: tag:X, author:X, kit:X, is:cron/bg/watch, type:script/snippet"),
                     )
                     .into_any_element()
@@ -219,7 +219,7 @@ impl ScriptListApp {
             // Window is 500px, header is ~60px, remaining ~440px for list area
             // Use a slightly higher estimate to ensure scrollbar thumb reaches bottom
             // (underestimating visible items causes thumb to not reach bottom)
-            let estimated_container_height = 440.0_f32;
+            let estimated_container_height = ESTIMATED_LIST_CONTAINER_HEIGHT;
 
             // Calculate visible items as a ratio of container to total content
             // This gives a more accurate thumb size for the scrollbar
@@ -410,7 +410,7 @@ impl ScriptListApp {
             // Average item height for delta-to-index conversion:
             // Most items are LIST_ITEM_HEIGHT (48px), headers are SECTION_HEADER_HEIGHT (24px)
             // Use 44px as a reasonable average that feels natural for scrolling
-            let avg_item_height = 44.0_f32;
+            let avg_item_height = AVERAGE_ITEM_HEIGHT_FOR_SCROLL;
 
             // Capture item count for scroll handler logging
             let scroll_item_count = item_count;
@@ -478,7 +478,7 @@ impl ScriptListApp {
                 .border_color(rgb(log_panel_border))
                 .p(px(design_spacing.padding_md))
                 .max_h(px(120.))
-                .font_family("SF Mono");
+                .font_family(FONT_MONO);
 
             for log_line in logs.iter().rev() {
                 log_container = log_container.child(
@@ -1006,8 +1006,8 @@ impl ScriptListApp {
                             .child(
                                 div()
                                     .text_xs()
-                                    .font_family("SF Mono")
-                                    .text_color(rgba((text_muted << 8) | 0xCC)) // 80% opacity
+                                    .font_family(FONT_MONO)
+                                    .text_color(rgba((text_muted << 8) | ALPHA_READABLE))
                                     .flex_shrink_0()
                                     .whitespace_nowrap()
                                     .child(format!("{} / {}", selected_position, total_selectable)),
@@ -1081,7 +1081,7 @@ impl ScriptListApp {
                             el.child(
                                 div()
                                     .text_xs()
-                                    .text_color(rgba((text_muted << 8) | 0x9F)) // 62% opacity - readable but subtle
+                                    .text_color(rgba((text_muted << 8) | ALPHA_COUNT_HINT))
                                     .flex_shrink_0()
                                     .whitespace_nowrap()
                                     .child(summary),
@@ -1090,18 +1090,18 @@ impl ScriptListApp {
                     )
                     // "Ask AI [Tab]" button - yellow text, grey badge, hover state
                     .child({
-                        // Hover background: accent color at 15% opacity
-                        let hover_bg = (accent_color << 8) | 0x26;
-                        let tab_bg = (search_box_bg << 8) | 0x4D; // 30% opacity
+                        // Hover background: accent color at ALPHA_HOVER_ACCENT opacity
+                        let hover_bg = (accent_color << 8) | ALPHA_HOVER_ACCENT;
+                        let tab_bg = (search_box_bg << 8) | ALPHA_TAB_BADGE_BG;
                         div()
                             .id("ask-ai-button")
                             .flex()
                             .flex_row()
                             .items_center()
-                            .gap(px(6.))
-                            .px(px(6.))
-                            .py(px(4.))
-                            .rounded(px(4.))
+                            .gap(px(ASK_AI_BUTTON_GAP))
+                            .px(px(ASK_AI_BUTTON_PADDING_X))
+                            .py(px(ASK_AI_BUTTON_PADDING_Y))
+                            .rounded(px(ASK_AI_BUTTON_RADIUS))
                             .cursor_pointer()
                             .hover(move |s| s.bg(rgba(hover_bg)))
                             // "Ask AI" text - YELLOW (accent)
@@ -1111,12 +1111,12 @@ impl ScriptListApp {
                                     .text_color(rgb(accent_color))
                                     .child("Ask AI"),
                             )
-                            // "Tab" badge - grey background at 30% opacity (no border)
+                            // "Tab" badge - grey background at ALPHA_TAB_BADGE_BG opacity (no border)
                             .child(
                                 div()
-                                    .px(px(6.))
-                                    .py(px(2.))
-                                    .rounded(px(4.))
+                                    .px(px(TAB_BADGE_PADDING_X))
+                                    .py(px(TAB_BADGE_PADDING_Y))
+                                    .rounded(px(TAB_BADGE_RADIUS))
                                     .bg(rgba(tab_bg))
                                     .text_xs()
                                     .text_color(rgb(text_muted))
@@ -1128,7 +1128,7 @@ impl ScriptListApp {
             // Use unified resolver for border color and spacing
             .child({
                 let divider_margin = if is_default_design {
-                    16.0
+                    DIVIDER_MARGIN_DEFAULT
                 } else {
                     spacing_resolver.margin_lg
                 };
@@ -1142,7 +1142,7 @@ impl ScriptListApp {
                 div()
                     .mx(px(divider_margin))
                     .h(px(border_width))
-                    .bg(rgba((border_color << 8) | 0x80)) // 50% opacity - visible separation
+                    .bg(rgba((border_color << 8) | ALPHA_DIVIDER))
             });
 
         // Main content area - 50/50 split: List on left, Preview on right
