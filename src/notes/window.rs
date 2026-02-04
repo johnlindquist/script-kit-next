@@ -1223,19 +1223,20 @@ impl NotesApp {
         while result.starts_with('#') {
             result = result.trim_start_matches('#').to_string();
         }
-        // Strip list markers
+        // Strip list markers and blockquotes
         result = result
             .lines()
             .map(|line| {
                 let trimmed = line.trim_start();
-                if trimmed.starts_with("- [ ] ") {
-                    &trimmed[6..]
-                } else if trimmed.starts_with("- [x] ") {
-                    &trimmed[6..]
-                } else if trimmed.starts_with("- ") {
-                    &trimmed[2..]
-                } else if trimmed.starts_with("> ") {
-                    &trimmed[2..]
+                if let Some(rest) = trimmed
+                    .strip_prefix("- [ ] ")
+                    .or_else(|| trimmed.strip_prefix("- [x] "))
+                {
+                    rest
+                } else if let Some(rest) = trimmed.strip_prefix("- ") {
+                    rest
+                } else if let Some(rest) = trimmed.strip_prefix("> ") {
+                    rest
                 } else {
                     trimmed
                 }
