@@ -214,6 +214,58 @@ fn default_conversation_starters() -> Vec<ConversationStarter> {
     ]
 }
 
+/// Find the next reveal boundary after `offset` in `text`.
+///
+/// Reveals through the next newline so markdown structural elements (list markers,
+/// headings) are always delivered as complete lines. Within a long line that has no
+/// newline yet, falls back to word boundaries for smooth character-level pacing.
+///
+/// Returns `None` when only a partial token remains (no whitespace yet), signalling
+/// the reveal loop to wait for more data. All returned offsets land on UTF-8
+/// character boundaries.
+fn next_reveal_boundary(text: &str, offset: usize) -> Option<usize> {
+    let remaining = &text[offset..];
+    if remaining.is_empty() {
+        return None;
+    }
+
+    // Strategy: reveal through the next newline (keeps markdown lines intact).
+    // If no newline is found, fall back to next word boundary within the line.
+    if let Some(nl_pos) = remaining.find('\n') {
+        // Include the newline itself
+        return Some(offset + nl_pos + 1);
+    }
+
+    // No newline — reveal next word within the current (incomplete) line.
+    let mut found_non_ws = false;
+    let mut word_end: Option<usize> = None;
+
+    for (i, c) in remaining.char_indices() {
+        if c.is_whitespace() {
+            if found_non_ws && word_end.is_none() {
+                word_end = Some(i);
+            }
+            if word_end.is_some() {
+                continue;
+            }
+        } else {
+            if word_end.is_some() {
+                return Some(offset + i);
+            }
+            found_non_ws = true;
+        }
+    }
+
+    if word_end.is_some() {
+        Some(offset + remaining.len())
+    } else if found_non_ws {
+        // Partial word, no trailing whitespace — wait for more data
+        None
+    } else {
+        Some(offset + remaining.len())
+    }
+}
+
 /// Error types for chat operations
 #[derive(Clone, Debug, PartialEq)]
 pub enum ChatErrorType {
@@ -316,6 +368,9 @@ pub struct ChatPrompt {
     selected_model: Option<ModelInfo>,
     builtin_streaming_content: String,
     builtin_is_streaming: bool,
+    // Word-buffered reveal: full accumulated content from provider and reveal watermark
+    builtin_accumulated_content: String,
+    builtin_reveal_offset: usize,
     // Auto-submit flag: when true, submit the input on first render (for Tab from main menu)
     pending_submit: bool,
     // Auto-respond flag: when true, respond to initial messages on first render (for scriptlets)
@@ -386,6 +441,8 @@ impl ChatPrompt {
             selected_model: None,
             builtin_streaming_content: String::new(),
             builtin_is_streaming: false,
+            builtin_accumulated_content: String::new(),
+            builtin_reveal_offset: 0,
             pending_submit: false,
             needs_initial_response: false,
             cursor_visible: true,
@@ -753,20 +810,24 @@ impl ChatPrompt {
     pub fn stop_streaming(&mut self, cx: &mut Context<Self>) {
         logging::log("CHAT", "Stop streaming requested (Cmd+. or Escape)");
 
-        // Mark streaming as complete but keep the partial content
+        // Flush all accumulated content so the user sees everything received so far
         if let Some(msg_id) = self.streaming_message_id.take() {
             if let Some(msg) = self
                 .messages
                 .iter_mut()
                 .find(|m| m.id.as_deref() == Some(&msg_id))
             {
+                if !self.builtin_accumulated_content.is_empty() {
+                    msg.set_content(&self.builtin_accumulated_content);
+                }
                 msg.streaming = false;
-                // Don't clear content - keep partial response
             }
         }
 
         self.builtin_is_streaming = false;
         self.builtin_streaming_content.clear();
+        self.builtin_accumulated_content.clear();
+        self.builtin_reveal_offset = 0;
 
         cx.notify();
     }
@@ -1029,129 +1090,7 @@ impl ChatPrompt {
             ),
         );
 
-        // Use shared buffer for streaming content
-        let shared_content = Arc::new(std::sync::Mutex::new(String::new()));
-        let shared_done = Arc::new(AtomicBool::new(false));
-        let shared_error = Arc::new(std::sync::Mutex::new(None::<String>));
-
-        let content_clone = shared_content.clone();
-        let done_clone = shared_done.clone();
-        let error_clone = shared_error.clone();
-        let model_id_clone = model_id.clone();
-        // Reuse the prompt's stable session UUID so follow-up messages share context.
-        let session_id = self.cli_session_id.clone();
-
-        // Spawn background thread for streaming
-        std::thread::spawn(move || {
-            let result = ai_provider.stream_message(
-                &api_messages,
-                &model_id_clone,
-                Box::new(move |chunk| {
-                    if let Ok(mut content) = content_clone.lock() {
-                        content.push_str(&chunk);
-                    }
-                }),
-                Some(&session_id),
-            );
-
-            match result {
-                Ok(()) => {
-                    done_clone.store(true, Ordering::SeqCst);
-                }
-                Err(e) => {
-                    if let Ok(mut err) = error_clone.lock() {
-                        *err = Some(e.to_string());
-                    }
-                    done_clone.store(true, Ordering::SeqCst);
-                }
-            }
-        });
-
-        // Poll for streaming updates
-        let content_for_poll = shared_content.clone();
-        let done_for_poll = shared_done.clone();
-        let error_for_poll = shared_error.clone();
-        let msg_id = assistant_msg_id.clone();
-
-        cx.spawn(async move |this, cx| {
-            let mut last_content_len = 0;
-
-            loop {
-                Timer::after(std::time::Duration::from_millis(50)).await;
-
-                // Check for new content
-                if let Ok(content) = content_for_poll.lock() {
-                    if content.len() > last_content_len {
-                        let new_content = content.clone();
-                        last_content_len = content.len();
-
-                        let msg_id_clone = msg_id.clone();
-                        let _ = cx.update(|cx| {
-                            this.update(cx, |chat, cx| {
-                                // Update the streaming message content
-                                if let Some(msg) = chat
-                                    .messages
-                                    .iter_mut()
-                                    .find(|m| m.id.as_deref() == Some(&msg_id_clone))
-                                {
-                                    msg.set_content(&new_content);
-                                }
-                                chat.builtin_streaming_content = new_content;
-                                chat.scroll_handle.scroll_to_bottom();
-                                cx.notify();
-                            })
-                            .ok();
-                        });
-                    }
-                }
-
-                // Check if done
-                if done_for_poll.load(Ordering::SeqCst) {
-                    let final_content = content_for_poll.lock().ok().map(|c| c.clone());
-                    let error = error_for_poll.lock().ok().and_then(|e| e.clone());
-
-                    let msg_id_clone = msg_id.clone();
-                    let _ = cx.update(|cx| {
-                        this.update(cx, |chat, cx| {
-                            // Complete streaming
-                            chat.builtin_is_streaming = false;
-                            chat.streaming_message_id = None;
-
-                            if let Some(err) = error {
-                                logging::log("CHAT", &format!("Built-in AI error: {}", err));
-                                // Set error on the message
-                                if let Some(msg) = chat
-                                    .messages
-                                    .iter_mut()
-                                    .find(|m| m.id.as_deref() == Some(&msg_id_clone))
-                                {
-                                    msg.error = Some(err);
-                                    msg.streaming = false;
-                                }
-                            } else if let Some(content) = final_content {
-                                logging::log(
-                                    "CHAT",
-                                    &format!("Built-in AI complete: {} chars", content.len()),
-                                );
-                                // Set final content
-                                if let Some(msg) = chat
-                                    .messages
-                                    .iter_mut()
-                                    .find(|m| m.id.as_deref() == Some(&msg_id_clone))
-                                {
-                                    msg.set_content(&content);
-                                    msg.streaming = false;
-                                }
-                            }
-                            cx.notify();
-                        })
-                        .ok();
-                    });
-                    break;
-                }
-            }
-        })
-        .detach();
+        self.spawn_streaming_reveal(ai_provider, api_messages, model_id, assistant_msg_id, cx);
     }
 
     /// Handle initial response for pre-populated messages (scriptlets using chat())
@@ -1253,7 +1192,27 @@ impl ChatPrompt {
             ),
         );
 
-        // Use shared buffer for streaming content
+        self.spawn_streaming_reveal(ai_provider, api_messages, model_id, assistant_msg_id, cx);
+    }
+
+    /// Spawn the provider streaming thread and the word-buffered reveal loop.
+    ///
+    /// The background thread accumulates raw chunks into a shared buffer.
+    /// The reveal loop reads from that buffer and advances a word-at-a-time
+    /// watermark at ~30-55ms per word, giving a smooth typewriter feel.
+    fn spawn_streaming_reveal(
+        &mut self,
+        ai_provider: Arc<dyn crate::ai::providers::AiProvider>,
+        api_messages: Vec<ProviderMessage>,
+        model_id: String,
+        msg_id: String,
+        cx: &mut Context<Self>,
+    ) {
+        // Reset reveal state
+        self.builtin_accumulated_content.clear();
+        self.builtin_reveal_offset = 0;
+
+        // Shared buffer between provider thread and reveal loop
         let shared_content = Arc::new(std::sync::Mutex::new(String::new()));
         let shared_done = Arc::new(AtomicBool::new(false));
         let shared_error = Arc::new(std::sync::Mutex::new(None::<String>));
@@ -1262,10 +1221,9 @@ impl ChatPrompt {
         let done_clone = shared_done.clone();
         let error_clone = shared_error.clone();
         let model_id_clone = model_id.clone();
-        // Reuse the prompt's stable session UUID so follow-up messages share context.
         let session_id = self.cli_session_id.clone();
 
-        // Spawn background thread for streaming
+        // Background thread: accumulate raw chunks from the provider
         std::thread::spawn(move || {
             let result = ai_provider.stream_message(
                 &api_messages,
@@ -1291,92 +1249,109 @@ impl ChatPrompt {
             }
         });
 
-        // Poll for streaming updates
+        // Word-buffered reveal loop
         let content_for_poll = shared_content.clone();
         let done_for_poll = shared_done.clone();
         let error_for_poll = shared_error.clone();
-        let msg_id = assistant_msg_id.clone();
+        let msg_id_for_loop = msg_id.clone();
 
         cx.spawn(async move |this, cx| {
-            let mut last_content_len = 0;
+            let mut delay_counter: u64 = 0;
 
             loop {
-                Timer::after(std::time::Duration::from_millis(50)).await;
+                // Variable delay per word: 30-55ms for natural pacing
+                delay_counter = delay_counter.wrapping_add(17);
+                let delay = 30 + (delay_counter % 25);
+                Timer::after(Duration::from_millis(delay)).await;
 
-                // Check for new content
-                if let Ok(content) = content_for_poll.lock() {
-                    if content.len() > last_content_len {
-                        let new_content = content.clone();
-                        last_content_len = content.len();
+                let accumulated = content_for_poll.lock().ok().map(|c| c.clone());
+                let is_done = done_for_poll.load(Ordering::SeqCst);
+                let error = if is_done {
+                    error_for_poll.lock().ok().and_then(|e| e.clone())
+                } else {
+                    None
+                };
 
-                        let msg_id_clone = msg_id.clone();
-                        let _ = cx.update(|cx| {
-                            this.update(cx, |chat, cx| {
-                                // Update the streaming message content
-                                if let Some(msg) = chat
-                                    .messages
-                                    .iter_mut()
-                                    .find(|m| m.id.as_deref() == Some(&msg_id_clone))
-                                {
-                                    msg.set_content(&new_content);
-                                }
-                                chat.builtin_streaming_content = new_content;
-                                chat.scroll_handle.scroll_to_bottom();
-                                cx.notify();
-                            })
-                            .ok();
-                        });
-                    }
-                }
+                let Some(full_text) = accumulated else {
+                    continue;
+                };
 
-                // Check if done
-                if done_for_poll.load(Ordering::SeqCst) {
-                    let final_content = content_for_poll.lock().ok().map(|c| c.clone());
-                    let error = error_for_poll.lock().ok().and_then(|e| e.clone());
-
-                    let msg_id_clone = msg_id.clone();
-                    let _ = cx.update(|cx| {
+                let msg_id = msg_id_for_loop.clone();
+                let should_break = cx
+                    .update(|cx| {
                         this.update(cx, |chat, cx| {
-                            // Complete streaming
-                            chat.builtin_is_streaming = false;
-                            chat.streaming_message_id = None;
-
-                            if let Some(err) = error {
-                                logging::log(
-                                    "CHAT",
-                                    &format!("Built-in AI initial response error: {}", err),
-                                );
-                                // Set error on the message
+                            // Error path
+                            if let Some(err) = &error {
+                                logging::log("CHAT", &format!("Built-in AI error: {}", err));
+                                chat.builtin_is_streaming = false;
+                                chat.streaming_message_id = None;
                                 if let Some(msg) = chat
                                     .messages
                                     .iter_mut()
-                                    .find(|m| m.id.as_deref() == Some(&msg_id_clone))
+                                    .find(|m| m.id.as_deref() == Some(&msg_id))
                                 {
-                                    msg.error = Some(err);
+                                    msg.error = Some(err.clone());
                                     msg.streaming = false;
                                 }
-                            } else if let Some(content) = final_content {
-                                logging::log(
-                                    "CHAT",
-                                    &format!(
-                                        "Built-in AI initial response complete: {} chars",
-                                        content.len()
-                                    ),
-                                );
-                                // Set final content
-                                if let Some(msg) = chat
-                                    .messages
-                                    .iter_mut()
-                                    .find(|m| m.id.as_deref() == Some(&msg_id_clone))
-                                {
-                                    msg.set_content(&content);
-                                    msg.streaming = false;
+                                cx.notify();
+                                return true; // break
+                            }
+
+                            let current_offset = chat.builtin_reveal_offset;
+
+                            // Find the next word to reveal
+                            let new_offset = if is_done {
+                                // Stream finished: flush everything remaining
+                                Some(full_text.len())
+                            } else {
+                                next_reveal_boundary(&full_text, current_offset)
+                            };
+
+                            if let Some(new_offset) = new_offset {
+                                if new_offset > current_offset {
+                                    chat.builtin_reveal_offset = new_offset;
+                                    let revealed = &full_text[..new_offset];
+
+                                    if let Some(msg) = chat
+                                        .messages
+                                        .iter_mut()
+                                        .find(|m| m.id.as_deref() == Some(&msg_id))
+                                    {
+                                        msg.set_content(revealed);
+                                    }
+                                    chat.builtin_streaming_content = revealed.to_string();
+                                    chat.builtin_accumulated_content = full_text.clone();
+                                    chat.scroll_handle.scroll_to_bottom();
+                                    cx.notify();
                                 }
                             }
-                            cx.notify();
+
+                            // Check completion: done AND fully revealed
+                            if is_done && chat.builtin_reveal_offset >= full_text.len() {
+                                logging::log(
+                                    "CHAT",
+                                    &format!("Built-in AI complete: {} chars", full_text.len()),
+                                );
+                                chat.builtin_is_streaming = false;
+                                chat.streaming_message_id = None;
+                                if let Some(msg) = chat
+                                    .messages
+                                    .iter_mut()
+                                    .find(|m| m.id.as_deref() == Some(&msg_id))
+                                {
+                                    msg.streaming = false;
+                                }
+                                cx.notify();
+                                return true; // break
+                            }
+
+                            false // continue
                         })
-                        .ok();
-                    });
+                        .unwrap_or(true)
+                    })
+                    .unwrap_or(true);
+
+                if should_break {
                     break;
                 }
             }
@@ -1969,16 +1944,14 @@ impl ChatPrompt {
                 // Empty streaming state
                 content = content.child(div().text_xs().opacity(0.6).child("Thinking..."));
             } else if turn.streaming {
-                // Streaming with content - render markdown + cursor
+                // Streaming with content - append cursor inline so it doesn't take its own line
+                let with_cursor = format!("{}▌", response);
                 content = content.child(
                     div()
-                        .flex()
-                        .flex_col()
                         .w_full()
                         .min_w_0()
-                        .overflow_x_hidden() // Only clip horizontal overflow for long unbreakable content
-                        .child(render_markdown(response, colors))
-                        .child(div().text_color(rgb(colors.accent_color)).child("▌")),
+                        .overflow_x_hidden()
+                        .child(render_markdown(&with_cursor, colors)),
                 );
             } else {
                 // Complete response - full markdown rendering (with container for proper wrapping)
