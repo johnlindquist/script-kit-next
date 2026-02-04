@@ -187,7 +187,7 @@ impl ScriptListApp {
                             .text_xs()
                             .text_color(rgba((empty_text_color << 8) | 0x25))
                             .pt(px(8.))
-                            .child("Search by: tags, author, shortcuts, kit names, or properties (cron, bg, watch)"),
+                            .child("Filters: tag:X, author:X, kit:X, is:cron/bg/watch, type:script/snippet"),
                     )
                     .into_any_element()
             }

@@ -459,6 +459,209 @@ pub(crate) fn extract_scriptlet_display_path(file_path: &Option<String>) -> Opti
     })
 }
 
+// ============================================
+// PREFIX FILTER SEARCH SYNTAX
+// ============================================
+// Supports structured prefix filters like:
+//   tag:productivity, author:john, kit:cleanshot,
+//   is:cron, is:bg, is:watch, is:system, is:scheduled,
+//   type:script, type:snippet, type:command, type:app,
+//   group:dev, tool:bash
+
+/// Represents a parsed query with an optional structured filter prefix.
+/// E.g., "tag:productivity notes" -> filter_kind="tag", filter_value="productivity", remainder="notes"
+#[derive(Debug, Clone, PartialEq)]
+pub struct ParsedQuery {
+    /// Filter kind: "tag", "author", "kit", "is", "type", "group", "tool"
+    pub filter_kind: Option<String>,
+    /// Filter value (the text after the colon, before any space)
+    pub filter_value: Option<String>,
+    /// Remaining query text for fuzzy matching
+    pub remainder: String,
+}
+
+/// Parse a query string for optional prefix filter syntax.
+/// Supports: tag:X, author:X, kit:X, is:X, type:X, group:X, tool:X
+/// E.g., "tag:productivity notes" -> { filter_kind: "tag", filter_value: "productivity", remainder: "notes" }
+/// E.g., "is:cron" -> { filter_kind: "is", filter_value: "cron", remainder: "" }
+/// E.g., "hello world" -> { filter_kind: None, filter_value: None, remainder: "hello world" }
+pub fn parse_query_prefix(query: &str) -> ParsedQuery {
+    let trimmed = query.trim();
+
+    // Check for recognized prefix patterns
+    let prefixes = ["tag:", "author:", "kit:", "is:", "type:", "group:", "tool:"];
+
+    for prefix in &prefixes {
+        if let Some(rest) = trimmed.strip_prefix(prefix) {
+            let kind = prefix.trim_end_matches(':').to_string();
+            // Split filter value from remainder at first space
+            let (value, remainder) = match rest.find(' ') {
+                Some(pos) => (rest[..pos].to_string(), rest[pos + 1..].trim().to_string()),
+                None => (rest.to_string(), String::new()),
+            };
+            if value.is_empty() {
+                // "tag:" with no value - treat as regular query
+                return ParsedQuery {
+                    filter_kind: None,
+                    filter_value: None,
+                    remainder: trimmed.to_string(),
+                };
+            }
+            return ParsedQuery {
+                filter_kind: Some(kind),
+                filter_value: Some(value.to_lowercase()),
+                remainder,
+            };
+        }
+    }
+
+    ParsedQuery {
+        filter_kind: None,
+        filter_value: None,
+        remainder: trimmed.to_string(),
+    }
+}
+
+/// Check if a script passes a prefix filter.
+/// Returns true if no filter is active or if the script matches the filter.
+pub(crate) fn script_passes_prefix_filter(script: &Script, parsed: &ParsedQuery) -> bool {
+    let (kind, value) = match (&parsed.filter_kind, &parsed.filter_value) {
+        (Some(k), Some(v)) => (k.as_str(), v.as_str()),
+        _ => return true, // No filter active
+    };
+
+    match kind {
+        "tag" => {
+            if let Some(ref meta) = script.typed_metadata {
+                meta.tags
+                    .iter()
+                    .any(|t| contains_ignore_ascii_case(t, value))
+            } else {
+                false
+            }
+        }
+        "author" => script
+            .typed_metadata
+            .as_ref()
+            .and_then(|m| m.author.as_deref())
+            .is_some_and(|a| contains_ignore_ascii_case(a, value)),
+        "kit" => script
+            .kit_name
+            .as_deref()
+            .is_some_and(|k| contains_ignore_ascii_case(k, value)),
+        "is" => {
+            if let Some(ref meta) = script.typed_metadata {
+                match value {
+                    "cron" => meta.cron.is_some(),
+                    "scheduled" | "schedule" => meta.cron.is_some() || meta.schedule.is_some(),
+                    "bg" | "background" => meta.background,
+                    "watch" | "watching" => !meta.watch.is_empty(),
+                    "system" | "sys" => meta.system,
+                    _ => false,
+                }
+            } else {
+                false
+            }
+        }
+        "type" => matches!(value, "script" | "scripts"),
+        // group: and tool: don't apply to scripts
+        "group" | "tool" => false,
+        _ => true,
+    }
+}
+
+/// Check if a scriptlet passes a prefix filter.
+pub(crate) fn scriptlet_passes_prefix_filter(scriptlet: &Scriptlet, parsed: &ParsedQuery) -> bool {
+    let (kind, value) = match (&parsed.filter_kind, &parsed.filter_value) {
+        (Some(k), Some(v)) => (k.as_str(), v.as_str()),
+        _ => return true,
+    };
+
+    match kind {
+        "group" => scriptlet
+            .group
+            .as_deref()
+            .is_some_and(|g| contains_ignore_ascii_case(g, value)),
+        "tool" => {
+            contains_ignore_ascii_case(&scriptlet.tool, value)
+                || contains_ignore_ascii_case(scriptlet.tool_display_name(), value)
+        }
+        "type" => matches!(value, "snippet" | "snippets" | "scriptlet" | "scriptlets"),
+        // tag:, author:, kit:, is: don't apply to scriptlets (they don't have these fields)
+        "tag" | "author" | "kit" | "is" => false,
+        _ => true,
+    }
+}
+
+/// Check if a built-in passes a prefix filter.
+pub(crate) fn builtin_passes_prefix_filter(parsed: &ParsedQuery) -> bool {
+    let (kind, value) = match (&parsed.filter_kind, &parsed.filter_value) {
+        (Some(k), Some(v)) => (k.as_str(), v.as_str()),
+        _ => return true,
+    };
+    match kind {
+        "type" => matches!(value, "command" | "commands" | "builtin" | "builtins"),
+        // Other filters don't apply to builtins
+        _ => false,
+    }
+}
+
+/// Check if an app passes a prefix filter.
+pub(crate) fn app_passes_prefix_filter(parsed: &ParsedQuery) -> bool {
+    let (kind, value) = match (&parsed.filter_kind, &parsed.filter_value) {
+        (Some(k), Some(v)) => (k.as_str(), v.as_str()),
+        _ => return true,
+    };
+    match kind {
+        "type" => matches!(value, "app" | "apps"),
+        _ => false,
+    }
+}
+
+/// Check if a window passes a prefix filter.
+pub(crate) fn window_passes_prefix_filter(parsed: &ParsedQuery) -> bool {
+    let (kind, value) = match (&parsed.filter_kind, &parsed.filter_value) {
+        (Some(k), Some(v)) => (k.as_str(), v.as_str()),
+        _ => return true,
+    };
+    match kind {
+        "type" => matches!(value, "window" | "windows"),
+        _ => false,
+    }
+}
+
+/// Check if scripts should be searched at all given the filter.
+/// Returns false when the filter targets a category that scripts can never match
+/// (e.g., type:snippet, group:X, tool:X).
+fn should_search_scripts(parsed: &ParsedQuery) -> bool {
+    match (
+        parsed.filter_kind.as_deref(),
+        parsed.filter_value.as_deref(),
+    ) {
+        (None, _) => true,
+        (Some("type"), Some(v)) => matches!(v, "script" | "scripts"),
+        (Some("tag" | "author" | "kit" | "is"), _) => true,
+        (Some("group" | "tool"), _) => false,
+        _ => true,
+    }
+}
+
+/// Check if scriptlets should be searched at all given the filter.
+/// Returns false when the filter targets a category that scriptlets can never match
+/// (e.g., type:script, tag:X, author:X, kit:X, is:X).
+fn should_search_scriptlets(parsed: &ParsedQuery) -> bool {
+    match (
+        parsed.filter_kind.as_deref(),
+        parsed.filter_value.as_deref(),
+    ) {
+        (None, _) => true,
+        (Some("type"), Some(v)) => matches!(v, "snippet" | "snippets" | "scriptlet" | "scriptlets"),
+        (Some("group" | "tool"), _) => true,
+        (Some("tag" | "author" | "kit" | "is"), _) => false,
+        _ => true,
+    }
+}
+
 /// Fuzzy search scripts by query string
 /// Searches across name, filename (e.g., "my-script.ts"), description, and path
 /// Returns results sorted by relevance score (highest first)
@@ -1277,37 +1480,58 @@ pub fn fuzzy_search_unified_all(
     let total_start = std::time::Instant::now();
     let mut results = Vec::new();
 
-    // Search built-ins first (they should appear at top when scores are equal)
+    // Parse prefix filter from query
+    let parsed = parse_query_prefix(query);
+    let search_query = if parsed.filter_kind.is_some() {
+        parsed.remainder.as_str()
+    } else {
+        query
+    };
+
+    // Search built-ins first (skip if prefix filter excludes them)
     let builtin_start = std::time::Instant::now();
-    let builtin_matches = fuzzy_search_builtins(builtins, query);
+    if builtin_passes_prefix_filter(&parsed) {
+        let builtin_matches = fuzzy_search_builtins(builtins, search_query);
+        for bm in builtin_matches {
+            results.push(SearchResult::BuiltIn(bm));
+        }
+    }
     let builtin_elapsed = builtin_start.elapsed();
-    for bm in builtin_matches {
-        results.push(SearchResult::BuiltIn(bm));
-    }
 
-    // Search apps (appear after built-ins but before scripts)
+    // Search apps (skip if prefix filter excludes them)
     let apps_start = std::time::Instant::now();
-    let app_matches = fuzzy_search_apps(apps, query);
+    if app_passes_prefix_filter(&parsed) {
+        let app_matches = fuzzy_search_apps(apps, search_query);
+        for am in app_matches {
+            results.push(SearchResult::App(am));
+        }
+    }
     let apps_elapsed = apps_start.elapsed();
-    for am in app_matches {
-        results.push(SearchResult::App(am));
-    }
 
-    // Search scripts
+    // Search scripts (skip if filter excludes scripts as a category)
     let scripts_start = std::time::Instant::now();
-    let script_matches = fuzzy_search_scripts(scripts, query);
+    if should_search_scripts(&parsed) {
+        let script_matches = fuzzy_search_scripts(scripts, search_query);
+        for sm in script_matches {
+            // Post-filter by prefix filter (tag, author, kit, is)
+            if script_passes_prefix_filter(&sm.script, &parsed) {
+                results.push(SearchResult::Script(sm));
+            }
+        }
+    }
     let scripts_elapsed = scripts_start.elapsed();
-    for sm in script_matches {
-        results.push(SearchResult::Script(sm));
-    }
 
-    // Search scriptlets
+    // Search scriptlets (skip if filter excludes scriptlets as a category)
     let scriptlets_start = std::time::Instant::now();
-    let scriptlet_matches = fuzzy_search_scriptlets(scriptlets, query);
-    let scriptlets_elapsed = scriptlets_start.elapsed();
-    for sm in scriptlet_matches {
-        results.push(SearchResult::Scriptlet(sm));
+    if should_search_scriptlets(&parsed) {
+        let scriptlet_matches = fuzzy_search_scriptlets(scriptlets, search_query);
+        for sm in scriptlet_matches {
+            if scriptlet_passes_prefix_filter(&sm.scriptlet, &parsed) {
+                results.push(SearchResult::Scriptlet(sm));
+            }
+        }
     }
+    let scriptlets_elapsed = scriptlets_start.elapsed();
 
     // Log search timing breakdown
     if !query.is_empty() {
@@ -1387,34 +1611,56 @@ pub fn fuzzy_search_unified_with_windows(
 ) -> Vec<SearchResult> {
     let mut results = Vec::new();
 
-    // Search built-ins first (they should appear at top when scores are equal)
-    let builtin_matches = fuzzy_search_builtins(builtins, query);
-    for bm in builtin_matches {
-        results.push(SearchResult::BuiltIn(bm));
+    // Parse prefix filter from query
+    let parsed = parse_query_prefix(query);
+    let search_query = if parsed.filter_kind.is_some() {
+        parsed.remainder.as_str()
+    } else {
+        query
+    };
+
+    // Search built-ins first (skip if prefix filter excludes them)
+    if builtin_passes_prefix_filter(&parsed) {
+        let builtin_matches = fuzzy_search_builtins(builtins, search_query);
+        for bm in builtin_matches {
+            results.push(SearchResult::BuiltIn(bm));
+        }
     }
 
-    // Search apps (appear after built-ins)
-    let app_matches = fuzzy_search_apps(apps, query);
-    for am in app_matches {
-        results.push(SearchResult::App(am));
+    // Search apps (skip if prefix filter excludes them)
+    if app_passes_prefix_filter(&parsed) {
+        let app_matches = fuzzy_search_apps(apps, search_query);
+        for am in app_matches {
+            results.push(SearchResult::App(am));
+        }
     }
 
-    // Search windows (appear after apps)
-    let window_matches = fuzzy_search_windows(windows, query);
-    for wm in window_matches {
-        results.push(SearchResult::Window(wm));
+    // Search windows (skip if prefix filter excludes them)
+    if window_passes_prefix_filter(&parsed) {
+        let window_matches = fuzzy_search_windows(windows, search_query);
+        for wm in window_matches {
+            results.push(SearchResult::Window(wm));
+        }
     }
 
-    // Search scripts
-    let script_matches = fuzzy_search_scripts(scripts, query);
-    for sm in script_matches {
-        results.push(SearchResult::Script(sm));
+    // Search scripts (skip if filter excludes scripts as a category)
+    if should_search_scripts(&parsed) {
+        let script_matches = fuzzy_search_scripts(scripts, search_query);
+        for sm in script_matches {
+            if script_passes_prefix_filter(&sm.script, &parsed) {
+                results.push(SearchResult::Script(sm));
+            }
+        }
     }
 
-    // Search scriptlets
-    let scriptlet_matches = fuzzy_search_scriptlets(scriptlets, query);
-    for sm in scriptlet_matches {
-        results.push(SearchResult::Scriptlet(sm));
+    // Search scriptlets (skip if filter excludes scriptlets as a category)
+    if should_search_scriptlets(&parsed) {
+        let scriptlet_matches = fuzzy_search_scriptlets(scriptlets, search_query);
+        for sm in scriptlet_matches {
+            if scriptlet_passes_prefix_filter(&sm.scriptlet, &parsed) {
+                results.push(SearchResult::Scriptlet(sm));
+            }
+        }
     }
 
     // Sort by score (highest first), then by type (builtins first, apps, windows, scripts, scriptlets, agents), then by name
@@ -2051,5 +2297,269 @@ mod tests {
             results.is_empty(),
             "Script without cron should not match 'cron'"
         );
+    }
+
+    // =========================================================================
+    // Prefix filter search syntax tests
+    // =========================================================================
+
+    #[test]
+    fn test_parse_query_prefix_tag() {
+        let parsed = parse_query_prefix("tag:productivity");
+        assert_eq!(parsed.filter_kind.as_deref(), Some("tag"));
+        assert_eq!(parsed.filter_value.as_deref(), Some("productivity"));
+        assert_eq!(parsed.remainder, "");
+    }
+
+    #[test]
+    fn test_parse_query_prefix_tag_with_remainder() {
+        let parsed = parse_query_prefix("tag:productivity notes");
+        assert_eq!(parsed.filter_kind.as_deref(), Some("tag"));
+        assert_eq!(parsed.filter_value.as_deref(), Some("productivity"));
+        assert_eq!(parsed.remainder, "notes");
+    }
+
+    #[test]
+    fn test_parse_query_prefix_no_prefix() {
+        let parsed = parse_query_prefix("hello world");
+        assert_eq!(parsed.filter_kind, None);
+        assert_eq!(parsed.filter_value, None);
+        assert_eq!(parsed.remainder, "hello world");
+    }
+
+    #[test]
+    fn test_parse_query_prefix_empty_value() {
+        let parsed = parse_query_prefix("tag:");
+        assert_eq!(parsed.filter_kind, None); // empty value = not a filter
+    }
+
+    #[test]
+    fn test_parse_query_prefix_is_cron() {
+        let parsed = parse_query_prefix("is:cron");
+        assert_eq!(parsed.filter_kind.as_deref(), Some("is"));
+        assert_eq!(parsed.filter_value.as_deref(), Some("cron"));
+    }
+
+    #[test]
+    fn test_parse_query_prefix_type_script() {
+        let parsed = parse_query_prefix("type:script");
+        assert_eq!(parsed.filter_kind.as_deref(), Some("type"));
+        assert_eq!(parsed.filter_value.as_deref(), Some("script"));
+    }
+
+    #[test]
+    fn test_parse_query_prefix_author() {
+        let parsed = parse_query_prefix("author:john search term");
+        assert_eq!(parsed.filter_kind.as_deref(), Some("author"));
+        assert_eq!(parsed.filter_value.as_deref(), Some("john"));
+        assert_eq!(parsed.remainder, "search term");
+    }
+
+    #[test]
+    fn test_script_passes_tag_filter() {
+        use crate::metadata_parser::TypedMetadata;
+        let mut script = Script {
+            name: "Test".to_string(),
+            path: PathBuf::from("/test.ts"),
+            extension: "ts".to_string(),
+            ..Default::default()
+        };
+        let meta = TypedMetadata {
+            tags: vec!["productivity".to_string(), "notes".to_string()],
+            ..Default::default()
+        };
+        script.typed_metadata = Some(meta);
+
+        let parsed = parse_query_prefix("tag:prod");
+        assert!(script_passes_prefix_filter(&script, &parsed));
+
+        let parsed_no = parse_query_prefix("tag:gaming");
+        assert!(!script_passes_prefix_filter(&script, &parsed_no));
+    }
+
+    #[test]
+    fn test_script_passes_author_filter() {
+        use crate::metadata_parser::TypedMetadata;
+        let mut script = Script {
+            name: "Test".to_string(),
+            path: PathBuf::from("/test.ts"),
+            extension: "ts".to_string(),
+            ..Default::default()
+        };
+        let meta = TypedMetadata {
+            author: Some("John Lindquist".to_string()),
+            ..Default::default()
+        };
+        script.typed_metadata = Some(meta);
+
+        let parsed = parse_query_prefix("author:john");
+        assert!(script_passes_prefix_filter(&script, &parsed));
+    }
+
+    #[test]
+    fn test_script_passes_kit_filter() {
+        let script = Script {
+            name: "Test".to_string(),
+            path: PathBuf::from("/test.ts"),
+            extension: "ts".to_string(),
+            kit_name: Some("cleanshot".to_string()),
+            ..Default::default()
+        };
+
+        let parsed = parse_query_prefix("kit:cleanshot");
+        assert!(script_passes_prefix_filter(&script, &parsed));
+
+        let parsed_no = parse_query_prefix("kit:main");
+        assert!(!script_passes_prefix_filter(&script, &parsed_no));
+    }
+
+    #[test]
+    fn test_script_passes_is_cron_filter() {
+        use crate::metadata_parser::TypedMetadata;
+        let mut script = Script {
+            name: "Backup".to_string(),
+            path: PathBuf::from("/backup.ts"),
+            extension: "ts".to_string(),
+            ..Default::default()
+        };
+        let meta = TypedMetadata {
+            cron: Some("0 0 * * *".to_string()),
+            ..Default::default()
+        };
+        script.typed_metadata = Some(meta);
+
+        let parsed = parse_query_prefix("is:cron");
+        assert!(script_passes_prefix_filter(&script, &parsed));
+
+        let parsed_sched = parse_query_prefix("is:scheduled");
+        assert!(script_passes_prefix_filter(&script, &parsed_sched));
+    }
+
+    #[test]
+    fn test_script_passes_is_bg_filter() {
+        use crate::metadata_parser::TypedMetadata;
+        let mut script = Script {
+            name: "Monitor".to_string(),
+            path: PathBuf::from("/monitor.ts"),
+            extension: "ts".to_string(),
+            ..Default::default()
+        };
+        let meta = TypedMetadata {
+            background: true,
+            ..Default::default()
+        };
+        script.typed_metadata = Some(meta);
+
+        let parsed = parse_query_prefix("is:bg");
+        assert!(script_passes_prefix_filter(&script, &parsed));
+
+        let parsed_full = parse_query_prefix("is:background");
+        assert!(script_passes_prefix_filter(&script, &parsed_full));
+    }
+
+    #[test]
+    fn test_script_fails_wrong_is_filter() {
+        let script = Script {
+            name: "Test".to_string(),
+            path: PathBuf::from("/test.ts"),
+            extension: "ts".to_string(),
+            ..Default::default()
+        };
+
+        let parsed = parse_query_prefix("is:cron");
+        assert!(!script_passes_prefix_filter(&script, &parsed));
+    }
+
+    #[test]
+    fn test_scriptlet_passes_group_filter() {
+        let scriptlet = Scriptlet {
+            name: "Deploy".to_string(),
+            code: "echo deploy".to_string(),
+            tool: "bash".to_string(),
+            group: Some("Development".to_string()),
+            description: None,
+            shortcut: None,
+            keyword: None,
+            file_path: None,
+            command: None,
+            alias: None,
+        };
+
+        let parsed = parse_query_prefix("group:dev");
+        assert!(scriptlet_passes_prefix_filter(&scriptlet, &parsed));
+    }
+
+    #[test]
+    fn test_scriptlet_passes_tool_filter() {
+        let scriptlet = Scriptlet {
+            name: "Deploy".to_string(),
+            code: "echo deploy".to_string(),
+            tool: "bash".to_string(),
+            group: None,
+            description: None,
+            shortcut: None,
+            keyword: None,
+            file_path: None,
+            command: None,
+            alias: None,
+        };
+
+        let parsed = parse_query_prefix("tool:bash");
+        assert!(scriptlet_passes_prefix_filter(&scriptlet, &parsed));
+
+        let parsed_display = parse_query_prefix("tool:shell");
+        assert!(scriptlet_passes_prefix_filter(&scriptlet, &parsed_display));
+    }
+
+    #[test]
+    fn test_type_filter_script_excludes_scriptlets() {
+        let parsed = parse_query_prefix("type:script");
+        // Scripts should pass
+        let script = Script {
+            name: "Test".to_string(),
+            path: PathBuf::from("/test.ts"),
+            extension: "ts".to_string(),
+            ..Default::default()
+        };
+        assert!(script_passes_prefix_filter(&script, &parsed));
+
+        // Scriptlets should not pass
+        let scriptlet = Scriptlet {
+            name: "Snippet".to_string(),
+            code: "echo hi".to_string(),
+            tool: "bash".to_string(),
+            group: None,
+            description: None,
+            shortcut: None,
+            keyword: None,
+            file_path: None,
+            command: None,
+            alias: None,
+        };
+        assert!(!scriptlet_passes_prefix_filter(&scriptlet, &parsed));
+    }
+
+    #[test]
+    fn test_type_filter_snippet_excludes_scripts() {
+        let parsed = parse_query_prefix("type:snippet");
+        let script = Script {
+            name: "Test".to_string(),
+            path: PathBuf::from("/test.ts"),
+            extension: "ts".to_string(),
+            ..Default::default()
+        };
+        assert!(!script_passes_prefix_filter(&script, &parsed));
+    }
+
+    #[test]
+    fn test_no_filter_passes_everything() {
+        let parsed = parse_query_prefix("hello");
+        let script = Script {
+            name: "Test".to_string(),
+            path: PathBuf::from("/test.ts"),
+            extension: "ts".to_string(),
+            ..Default::default()
+        };
+        assert!(script_passes_prefix_filter(&script, &parsed));
     }
 }
