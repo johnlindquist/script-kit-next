@@ -237,7 +237,7 @@ impl ScriptListApp {
                                 .child(format!("{}.{}", script.name, script.extension)),
                         );
 
-                        // Script metadata badges: kit name, alias
+                        // Script metadata badges: kit name, alias, author, tags
                         {
                             let mut script_badges = div()
                                 .flex()
@@ -259,6 +259,33 @@ impl ScriptListApp {
                                         .child(format!("kit: {}", kit)),
                                 );
                             }
+                            // Extension badge (e.g., "TypeScript", "JavaScript", "Shell")
+                            {
+                                let ext_display = match script.extension.as_str() {
+                                    "ts" => "TypeScript",
+                                    "js" => "JavaScript",
+                                    "mjs" => "JavaScript",
+                                    "sh" => "Shell",
+                                    "bash" => "Bash",
+                                    "zsh" => "Zsh",
+                                    "py" => "Python",
+                                    "rb" => "Ruby",
+                                    _ => "",
+                                };
+                                if !ext_display.is_empty() {
+                                    show_script_badges = true;
+                                    script_badges = script_badges.child(
+                                        div()
+                                            .px(px(6.))
+                                            .py(px(2.))
+                                            .rounded(px(4.))
+                                            .bg(rgba((ui_border << 8) | 0x40))
+                                            .text_xs()
+                                            .text_color(rgb(text_muted))
+                                            .child(ext_display.to_string()),
+                                    );
+                                }
+                            }
                             if let Some(ref alias) = script.alias {
                                 show_script_badges = true;
                                 script_badges = script_badges.child(
@@ -271,6 +298,36 @@ impl ScriptListApp {
                                         .text_color(rgb(colors.accent))
                                         .child(format!("alias: {}", alias)),
                                 );
+                            }
+                            // Author badge from typed metadata
+                            if let Some(ref typed_meta) = script.typed_metadata {
+                                if let Some(ref author) = typed_meta.author {
+                                    show_script_badges = true;
+                                    script_badges = script_badges.child(
+                                        div()
+                                            .px(px(6.))
+                                            .py(px(2.))
+                                            .rounded(px(4.))
+                                            .bg(rgba((ui_border << 8) | 0x40))
+                                            .text_xs()
+                                            .text_color(rgb(text_muted))
+                                            .child(format!("by {}", author)),
+                                    );
+                                }
+                                // Tags badges from typed metadata
+                                for tag in &typed_meta.tags {
+                                    show_script_badges = true;
+                                    script_badges = script_badges.child(
+                                        div()
+                                            .px(px(6.))
+                                            .py(px(2.))
+                                            .rounded(px(4.))
+                                            .bg(rgba((ui_border << 8) | 0x30))
+                                            .text_xs()
+                                            .text_color(rgb(text_muted))
+                                            .child(tag.clone()),
+                                    );
+                                }
                             }
                             if show_script_badges {
                                 panel = panel.child(script_badges);
@@ -468,20 +525,6 @@ impl ScriptListApp {
                                 .flex_wrap()
                                 .gap(px(spacing.gap_sm))
                                 .pb(px(spacing.padding_sm));
-                            let tool_display = match scriptlet.tool.as_str() {
-                                "ts" => "TypeScript",
-                                "js" => "JavaScript",
-                                "bash" | "sh" => "Shell",
-                                "zsh" => "Zsh",
-                                "python" => "Python",
-                                "ruby" => "Ruby",
-                                "node" => "Node.js",
-                                "bun" => "Bun",
-                                "open" => "Open URL",
-                                "paste" => "Paste",
-                                "applescript" => "AppleScript",
-                                other => other,
-                            };
                             slet_badges = slet_badges.child(
                                 div()
                                     .px(px(6.))
@@ -490,7 +533,7 @@ impl ScriptListApp {
                                     .bg(rgba((ui_border << 8) | 0x40))
                                     .text_xs()
                                     .text_color(rgb(text_muted))
-                                    .child(tool_display.to_string()),
+                                    .child(scriptlet.tool_display_name().to_string()),
                             );
                             if let Some(ref group) = scriptlet.group {
                                 if !group.is_empty() {

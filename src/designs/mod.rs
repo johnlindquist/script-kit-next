@@ -362,17 +362,23 @@ pub fn render_design_item(
             use crate::list_item::{IconKind, ListItem};
 
             // Extract name, description, shortcut, and icon based on result type
-            let (name, _description, shortcut, icon_kind) = match result {
+            let (name, description, shortcut, icon_kind) = match result {
                 SearchResult::Script(sm) => {
                     // Use script's icon metadata if present, otherwise default to "Code" SVG
                     let icon = match &sm.script.icon {
                         Some(icon_name) => IconKind::Svg(icon_name.clone()),
                         None => IconKind::Svg("Code".to_string()),
                     };
+                    // Scripts: show shortcut or alias as badge (matching scriptlet pattern)
+                    let badge = sm
+                        .script
+                        .shortcut
+                        .clone()
+                        .or_else(|| sm.script.alias.clone());
                     (
                         sm.script.name.clone(),
                         sm.script.description.clone(),
-                        None,
+                        badge,
                         Some(icon),
                     )
                 }
@@ -384,11 +390,18 @@ pub fn render_design_item(
                         .clone()
                         .or_else(|| sm.scriptlet.keyword.clone())
                         .or_else(|| sm.scriptlet.alias.clone());
+                    // Differentiate scriptlet icon by tool type
+                    let icon = match sm.scriptlet.tool.as_str() {
+                        "bash" | "sh" | "zsh" => IconKind::Svg("Terminal".to_string()),
+                        "paste" | "snippet" => IconKind::Svg("Copy".to_string()),
+                        "open" => IconKind::Svg("PlayFilled".to_string()),
+                        _ => IconKind::Svg("BoltFilled".to_string()),
+                    };
                     (
                         sm.scriptlet.name.clone(),
                         sm.scriptlet.description.clone(),
                         badge,
-                        Some(IconKind::Svg("BoltFilled".to_string())),
+                        Some(icon),
                     )
                 }
                 SearchResult::BuiltIn(bm) => {
@@ -479,11 +492,11 @@ pub fn render_design_item(
                 }
             };
 
-            // Compact design: no description, just name + icon + shortcut
             ListItem::new(name, list_colors)
                 .index(index)
                 .icon_kind_opt(icon_kind)
                 .shortcut_opt(shortcut)
+                .description_opt(description)
                 .selected(is_selected)
                 .hovered(is_hovered)
                 .with_accent_bar(true)
