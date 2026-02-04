@@ -1257,6 +1257,263 @@ impl NotesApp {
         cx.notify();
     }
 
+    /// Cycle heading level on the current line (Cmd+Shift+H)
+    ///
+    /// Behavior:
+    /// - Plain text → `# text`
+    /// - `# text` → `## text`
+    /// - `## text` → `### text`
+    /// - `### text` → plain text (strip heading)
+    fn cycle_heading(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.editor_state.update(cx, |state, cx| {
+            let value = state.value().to_string();
+            let selection = state.selection();
+            let cursor = selection.start.min(value.len());
+
+            // Find the start and end of the current line
+            let line_start = value[..cursor].rfind('\n').map_or(0, |p| p + 1);
+            let line_end = value[cursor..]
+                .find('\n')
+                .map_or(value.len(), |p| cursor + p);
+            let line = &value[line_start..line_end];
+
+            let (new_line, cursor_delta): (String, isize) =
+                if let Some(rest) = line.strip_prefix("### ") {
+                    // ### → plain (remove 4 chars)
+                    (rest.to_string(), -4)
+                } else if let Some(rest) = line.strip_prefix("## ") {
+                    // ## → ### (add 1 char)
+                    (format!("### {}", rest), 1)
+                } else if let Some(rest) = line.strip_prefix("# ") {
+                    // # → ## (add 1 char)
+                    (format!("## {}", rest), 1)
+                } else {
+                    // plain → # (add 2 chars)
+                    (format!("# {}", line), 2)
+                };
+
+            let new_value = format!("{}{}{}", &value[..line_start], new_line, &value[line_end..]);
+            let new_cursor = (cursor as isize + cursor_delta).max(line_start as isize) as usize;
+            state.set_value(&new_value, window, cx);
+            state.set_selection(new_cursor, new_cursor, window, cx);
+        });
+        self.has_unsaved_changes = true;
+        info!("Cycled heading level on current line");
+        cx.notify();
+    }
+
+    /// Move the current line up (Alt+Up)
+    fn move_line_up(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.editor_state.update(cx, |state, cx| {
+            let value = state.value().to_string();
+            let selection = state.selection();
+            let cursor = selection.start.min(value.len());
+
+            // Find current line boundaries
+            let line_start = value[..cursor].rfind('\n').map_or(0, |p| p + 1);
+            let line_end = value[cursor..]
+                .find('\n')
+                .map_or(value.len(), |p| cursor + p);
+
+            // Can't move up if already on first line
+            if line_start == 0 {
+                return;
+            }
+
+            // Find the previous line boundaries
+            let prev_line_start = value[..line_start - 1].rfind('\n').map_or(0, |p| p + 1);
+
+            let current_line = &value[line_start..line_end];
+            let prev_line = &value[prev_line_start..line_start - 1]; // exclude the \n
+
+            // Build new value: prev_line and current_line swapped
+            let new_value = format!(
+                "{}{}\n{}{}",
+                &value[..prev_line_start],
+                current_line,
+                prev_line,
+                &value[line_end..]
+            );
+
+            // Adjust cursor position: move it up by the length of prev_line + newline
+            let offset_in_line = cursor - line_start;
+            let new_cursor = prev_line_start + offset_in_line;
+
+            state.set_value(&new_value, window, cx);
+            state.set_selection(new_cursor, new_cursor, window, cx);
+        });
+        self.has_unsaved_changes = true;
+        cx.notify();
+    }
+
+    /// Move the current line down (Alt+Down)
+    fn move_line_down(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.editor_state.update(cx, |state, cx| {
+            let value = state.value().to_string();
+            let selection = state.selection();
+            let cursor = selection.start.min(value.len());
+
+            // Find current line boundaries
+            let line_start = value[..cursor].rfind('\n').map_or(0, |p| p + 1);
+            let line_end = value[cursor..]
+                .find('\n')
+                .map_or(value.len(), |p| cursor + p);
+
+            // Can't move down if already on last line
+            if line_end >= value.len() {
+                return;
+            }
+
+            // Find the next line boundaries
+            let next_line_end = value[line_end + 1..]
+                .find('\n')
+                .map_or(value.len(), |p| line_end + 1 + p);
+
+            let current_line = &value[line_start..line_end];
+            let next_line = &value[line_end + 1..next_line_end];
+
+            // Build new value: next_line and current_line swapped
+            let new_value = format!(
+                "{}{}\n{}{}",
+                &value[..line_start],
+                next_line,
+                current_line,
+                &value[next_line_end..]
+            );
+
+            // Adjust cursor: it moves down by length of next_line + newline
+            let offset_in_line = cursor - line_start;
+            let new_line_start = line_start + next_line.len() + 1;
+            let new_cursor = new_line_start + offset_in_line;
+
+            state.set_value(&new_value, window, cx);
+            state.set_selection(
+                new_cursor.min(new_value.len()),
+                new_cursor.min(new_value.len()),
+                window,
+                cx,
+            );
+        });
+        self.has_unsaved_changes = true;
+        cx.notify();
+    }
+
+    /// Select the entire current line (Cmd+L)
+    fn select_current_line(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.editor_state.update(cx, |state, cx| {
+            let value = state.value().to_string();
+            let selection = state.selection();
+            let cursor = selection.start.min(value.len());
+
+            let line_start = value[..cursor].rfind('\n').map_or(0, |p| p + 1);
+            let line_end = value[cursor..]
+                .find('\n')
+                .map_or(value.len(), |p| cursor + p);
+
+            state.set_selection(line_start, line_end, window, cx);
+        });
+        cx.notify();
+    }
+
+    /// Smart paste: if text is selected and clipboard contains a URL, wrap as markdown link.
+    /// Otherwise, fall through to normal paste behavior.
+    /// Returns true if smart paste was handled, false to let default paste proceed.
+    fn try_smart_paste(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        let clipboard = Self::read_clipboard();
+        let trimmed = clipboard.trim();
+
+        // Check if clipboard looks like a URL
+        if !trimmed.starts_with("http://") && !trimmed.starts_with("https://") {
+            return false;
+        }
+
+        // Check if we have a text selection
+        let selection = self.editor_state.read(cx).selection();
+        if selection.start == selection.end {
+            return false;
+        }
+
+        // We have a URL on clipboard and selected text — create a markdown link
+        let value = self.editor_state.read(cx).value().to_string();
+        let start = selection.start.min(value.len());
+        let end = selection.end.min(value.len());
+        let (start, end) = if start > end {
+            (end, start)
+        } else {
+            (start, end)
+        };
+        let selected_text = &value[start..end];
+        let link = format!("[{}]({})", selected_text, trimmed);
+        let new_value = format!("{}{}{}", &value[..start], link, &value[end..]);
+        let new_cursor = start + link.len();
+
+        self.editor_state.update(cx, |state, cx| {
+            state.set_value(&new_value, window, cx);
+            state.set_selection(new_cursor, new_cursor, window, cx);
+        });
+        self.has_unsaved_changes = true;
+        info!("Smart paste: wrapped selection as markdown link");
+        cx.notify();
+        true
+    }
+
+    /// Wrap selected lines as blockquote (Cmd+Shift+.)
+    ///
+    /// Prefixes each selected line (or current line if no selection) with "> ".
+    /// If all target lines already start with "> ", remove the prefix instead (toggle).
+    fn toggle_blockquote(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.editor_state.update(cx, |state, cx| {
+            let value = state.value().to_string();
+            let selection = state.selection();
+            let sel_start = selection.start.min(value.len());
+            let sel_end = selection.end.min(value.len());
+            let (sel_start, sel_end) = if sel_start > sel_end {
+                (sel_end, sel_start)
+            } else {
+                (sel_start, sel_end)
+            };
+
+            // Expand to full lines
+            let region_start = value[..sel_start].rfind('\n').map_or(0, |p| p + 1);
+            let region_end = value[sel_end..]
+                .find('\n')
+                .map_or(value.len(), |p| sel_end + p);
+
+            let region = &value[region_start..region_end];
+            let lines: Vec<&str> = region.split('\n').collect();
+
+            // Check if ALL lines already have blockquote prefix
+            let all_quoted = lines.iter().all(|l| l.starts_with("> "));
+
+            let new_lines: Vec<String> = if all_quoted {
+                // Remove "> " prefix from all lines
+                lines
+                    .iter()
+                    .map(|l| l.strip_prefix("> ").unwrap_or(l).to_string())
+                    .collect()
+            } else {
+                // Add "> " prefix to all lines
+                lines.iter().map(|l| format!("> {}", l)).collect()
+            };
+
+            let new_region = new_lines.join("\n");
+            let new_value = format!(
+                "{}{}{}",
+                &value[..region_start],
+                new_region,
+                &value[region_end..]
+            );
+
+            // Place cursor at end of modified region
+            let new_cursor = region_start + new_region.len();
+            state.set_value(&new_value, window, cx);
+            state.set_selection(new_cursor, new_cursor, window, cx);
+        });
+        self.has_unsaved_changes = true;
+        info!("Toggled blockquote on selected lines");
+        cx.notify();
+    }
+
     /// Render the keyboard shortcuts help overlay
     fn render_shortcuts_help(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let muted = cx.theme().muted_foreground;
@@ -1336,10 +1593,15 @@ impl NotesApp {
                     .child(shortcut("⌘B", "Bold"))
                     .child(shortcut("⌘I", "Italic"))
                     .child(shortcut("⌘⇧X", "Strikethrough"))
+                    .child(shortcut("⌘⇧H", "Cycle heading level"))
                     .child(shortcut("⌘⇧L", "Toggle checklist"))
+                    .child(shortcut("⌘⇧.", "Toggle blockquote"))
                     .child(shortcut("⌘⇧-", "Horizontal rule"))
                     .child(shortcut("⌘⇧D", "Insert date/time"))
                     .child(shortcut("⌘⇧C", "Copy as markdown"))
+                    .child(shortcut("⌘L", "Select current line"))
+                    .child(shortcut("⌥↑ / ⌥↓", "Move line up / down"))
+                    .child(shortcut("⌘V", "Smart link paste"))
                     .child(section("View"))
                     .child(shortcut("⌘.", "Focus mode"))
                     .child(shortcut("⌘⇧P", "Markdown preview"))
@@ -2012,7 +2274,7 @@ impl NotesApp {
                     .xsmall()
                     .label("H")
                     .on_click(cx.listener(|this, _, window, cx| {
-                        this.insert_formatting("\n## ", "", window, cx);
+                        this.cycle_heading(window, cx);
                     })),
             )
             .child(
@@ -3168,6 +3430,23 @@ impl Render for NotesApp {
                     return;
                 }
 
+                // Alt+Up/Down: Move current line up/down
+                if modifiers.alt && !modifiers.platform {
+                    match key.as_str() {
+                        "up" | "arrowup" => {
+                            this.move_line_up(window, cx);
+                            cx.stop_propagation();
+                            return;
+                        }
+                        "down" | "arrowdown" => {
+                            this.move_line_down(window, cx);
+                            cx.stop_propagation();
+                            return;
+                        }
+                        _ => {}
+                    }
+                }
+
                 // platform modifier = Cmd on macOS, Ctrl on Windows/Linux
                 if modifiers.platform {
                     match key.as_str() {
@@ -3230,8 +3509,13 @@ impl Render for NotesApp {
                             window.remove_window();
                         }
                         "." => {
-                            // Cmd+.: Toggle focus mode
-                            this.toggle_focus_mode(cx);
+                            if modifiers.shift {
+                                // Cmd+Shift+.: Toggle blockquote on selected lines
+                                this.toggle_blockquote(window, cx);
+                            } else {
+                                // Cmd+.: Toggle focus mode
+                                this.toggle_focus_mode(cx);
+                            }
                             cx.stop_propagation();
                         }
                         "s" => {
@@ -3272,6 +3556,10 @@ impl Render for NotesApp {
                                 // Cmd+Shift+L: Toggle checklist checkbox on current line
                                 this.toggle_checklist(window, cx);
                                 cx.stop_propagation();
+                            } else {
+                                // Cmd+L: Select current line
+                                this.select_current_line(window, cx);
+                                cx.stop_propagation();
                             }
                         }
                         "-" => {
@@ -3280,6 +3568,21 @@ impl Render for NotesApp {
                                 this.insert_horizontal_rule(window, cx);
                                 cx.stop_propagation();
                             }
+                        }
+                        "h" => {
+                            if modifiers.shift {
+                                // Cmd+Shift+H: Cycle heading level on current line
+                                this.cycle_heading(window, cx);
+                                cx.stop_propagation();
+                            }
+                        }
+                        "v" => {
+                            // Cmd+V: Smart paste — if URL on clipboard + text selected,
+                            // wrap as [text](url). Otherwise let default paste proceed.
+                            if this.try_smart_paste(window, cx) {
+                                cx.stop_propagation();
+                            }
+                            // If not handled, default Cmd+V paste proceeds
                         }
                         "c" => {
                             if modifiers.shift {
