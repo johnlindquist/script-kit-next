@@ -282,12 +282,12 @@ impl ListItemColors {
         colors: &crate::designs::DesignColors,
         is_dark: bool,
     ) -> Self {
-        // Dark mode: low opacity works well (white at 7-12% visible on dark bg)
+        // Dark mode: low opacity works well (white at 7-14% visible on dark bg)
         // Light mode: needs higher opacity for visibility (black overlay on light bg)
         let (selected_opacity, hover_opacity) = if is_dark {
-            (0.12, 0.07) // Dark mode defaults
+            (0.14, 0.08) // Dark mode: slightly stronger selection
         } else {
-            (0.18, 0.12) // Light mode: higher opacity for visibility
+            (0.20, 0.12) // Light mode: higher opacity for clear visibility
         };
 
         Self {
@@ -653,11 +653,11 @@ impl RenderOnce for ListItem {
 
         // Icon element (if present) - displayed on the left
         // Supports both emoji strings and PNG image data
-        // Icon text color matches the item's text color (primary when selected, secondary otherwise)
+        // Icons use slightly muted color to maintain text hierarchy
         let icon_text_color = if self.selected {
             rgb(colors.text_primary)
         } else {
-            rgb(colors.text_secondary)
+            rgba((colors.text_secondary << 8) | 0xD9) // 85% opacity - clear but subordinate to text
         };
         let icon_element = match &self.icon {
             Some(IconKind::Emoji(emoji)) => div()
@@ -735,10 +735,11 @@ impl RenderOnce for ListItem {
             .overflow_hidden()
             .flex()
             .flex_col()
-            .gap(px(1.)) // 1px gap between name and description for breathing room
+            .gap(px(3.)) // 3px gap between name and description for breathing room
             .justify_center();
 
-        // Name rendering - 15px font size, medium weight (semibold when selected for emphasis)
+        // Name rendering - 14px font size for better balance with description
+        // Medium weight for unselected, semibold when selected for clear emphasis
         // When highlight_indices are present, use StyledText to highlight matched characters
         // Otherwise, render as plain text
         let name_weight = if self.selected {
@@ -778,33 +779,35 @@ impl RenderOnce for ListItem {
             let styled = StyledText::new(self.name.to_string()).with_highlights(highlights);
 
             div()
-                .text_size(px(15.))
+                .text_size(px(14.))
                 .font_weight(name_weight)
                 .overflow_hidden()
                 .text_ellipsis()
                 .whitespace_nowrap()
-                .line_height(px(20.))
+                .line_height(px(18.))
                 .text_color(base_color)
                 .child(styled)
         } else {
             // Plain text rendering (no search active)
             div()
-                .text_size(px(15.))
+                .text_size(px(14.))
                 .font_weight(name_weight)
                 .overflow_hidden()
                 .text_ellipsis()
                 .whitespace_nowrap()
-                .line_height(px(20.))
+                .line_height(px(18.))
                 .child(self.name)
         };
 
         item_content = item_content.child(name_element);
 
-        // Description - text_xs (0.75rem ≈ 12px), muted color (never changes on selection - only bg shows selection)
+        // Description - 11.5px for tighter visual pairing with 14px name
+        // Muted color (never changes on selection - only bg shows selection)
         // Single-line with ellipsis truncation for long content
         // When description_highlight_indices are present, matched characters are rendered with accent color
         if let Some(desc) = self.description {
-            let desc_color = rgb(colors.text_muted);
+            // Use text_secondary at high opacity for strong readability
+            let desc_color = rgba((colors.text_secondary << 8) | 0xB3); // ~70% opacity of secondary for clear contrast
             let desc_element = if let Some(ref desc_indices) = self.description_highlight_indices {
                 // Build StyledText with highlighted matched characters in description
                 let index_set: HashSet<usize> = desc_indices.iter().copied().collect();
@@ -829,8 +832,8 @@ impl RenderOnce for ListItem {
                 let styled = StyledText::new(desc.clone()).with_highlights(highlights);
 
                 div()
-                    .text_xs()
-                    .line_height(px(14.))
+                    .text_size(px(11.5))
+                    .line_height(px(15.))
                     .text_color(base_color)
                     .overflow_hidden()
                     .text_ellipsis()
@@ -838,8 +841,8 @@ impl RenderOnce for ListItem {
                     .child(styled)
             } else {
                 div()
-                    .text_xs()
-                    .line_height(px(14.))
+                    .text_size(px(11.5))
+                    .line_height(px(15.))
                     .text_color(desc_color)
                     .overflow_hidden()
                     .text_ellipsis()
@@ -853,16 +856,16 @@ impl RenderOnce for ListItem {
         // Uses macOS-native modifier symbols (⌘, ⇧, ⌥, ⌃) for a native feel
         let shortcut_element = if let Some(sc) = self.shortcut {
             let display_text = format_shortcut_display(&sc);
-            let badge_border = (colors.text_dimmed << 8) | 0x50; // 31% opacity border
+            let badge_border = (colors.text_dimmed << 8) | 0x40; // 25% opacity border - cleaner
             div()
-                .text_xs()
+                .text_size(px(11.))
                 .font_family("SF Mono")
                 .font_weight(FontWeight::MEDIUM)
-                .text_color(rgb(colors.text_muted))
-                .px(px(7.))
-                .py(px(3.))
+                .text_color(rgba((colors.text_muted << 8) | 0xCC)) // 80% opacity - subtle but readable
+                .px(px(6.))
+                .py(px(2.))
                 .rounded(px(4.))
-                .bg(rgba((colors.text_dimmed << 8) | 0x10))
+                .bg(rgba((colors.text_dimmed << 8) | 0x0D)) // 5% bg - less heavy
                 .border_1()
                 .border_color(rgba(badge_border))
                 .child(display_text)
@@ -894,14 +897,14 @@ impl RenderOnce for ListItem {
         let separator_color = if self.selected {
             rgba(0x00000000) // No separator on selected item
         } else {
-            rgba((colors.text_muted << 8) | 0x14) // ~8% opacity - subtle but scannable
+            rgba((colors.text_muted << 8) | 0x24) // ~14% opacity - clear scannable separator
         };
 
         let mut inner_content = div()
             .w_full()
             .h_full()
-            .px(px(12.))
-            .py(px(2.))
+            .px(px(14.))
+            .py(px(3.))
             .bg(bg_color)
             .border_b_1()
             .border_color(separator_color)
@@ -915,7 +918,7 @@ impl RenderOnce for ListItem {
             .flex()
             .flex_row()
             .items_center()
-            .gap(px(8.))
+            .gap(px(10.))
             .child(icon_element)
             .child(item_content)
             .child({
@@ -934,7 +937,7 @@ impl RenderOnce for ListItem {
                         div()
                             .text_size(px(9.))
                             .font_family("SF Mono")
-                            .text_color(rgba((colors.text_dimmed << 8) | 0x90)) // 56% opacity
+                            .text_color(rgba((colors.text_dimmed << 8) | 0xA6)) // 65% opacity - legible badge
                             .px(px(4.))
                             .py(px(1.))
                             .rounded(px(3.))
@@ -948,7 +951,7 @@ impl RenderOnce for ListItem {
                     accessories = accessories.child(
                         div()
                             .text_size(px(10.))
-                            .text_color(rgba((colors.text_dimmed << 8) | 0x80)) // 50% opacity
+                            .text_color(rgba((colors.text_dimmed << 8) | 0x99)) // 60% opacity - readable hint
                             .child(hint.clone()),
                     );
                 }
@@ -1197,19 +1200,19 @@ pub fn render_section_header(
         );
     }
 
-    // Subtle background tint for section headers to create visual grouping
-    let header_bg = rgba((colors.text_muted << 8) | 0x0D); // ~5% opacity tint
+    // Background tint for section headers to create visual grouping
+    let header_bg = rgba((colors.text_muted << 8) | 0x14); // ~8% opacity tint - clear visual grouping
 
     let header = div()
         .w_full()
-        .h(px(28.0)) // Slightly taller than SECTION_HEADER_HEIGHT for breathing room
-        .px(px(16.))
-        .pt(px(10.)) // More top padding for visual separation
+        .h(px(30.0)) // Taller for clear visual separation between sections
+        .px(px(14.)) // Match item padding for alignment
+        .pt(px(12.)) // Generous top padding for visual separation
         .pb(px(4.)) // Bottom padding
         .bg(header_bg)
         .flex()
         .flex_col()
-        .justify_center(); // Center content vertically
+        .justify_end(); // Align content to bottom for better visual anchoring
 
     // Only show top separator on non-first headers (first header has no item above it)
     let header = if is_first {
@@ -1217,7 +1220,7 @@ pub fn render_section_header(
     } else {
         header
             .border_t_1()
-            .border_color(rgba((colors.text_muted << 8) | 0x30)) // ~19% opacity - visible separator
+            .border_color(rgba((colors.text_muted << 8) | 0x47)) // ~28% opacity - strong separator between sections
     };
 
     header.child(content)
