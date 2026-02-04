@@ -805,3 +805,443 @@ fn global_actions_are_empty() {
         "Global actions should be empty (Settings/Quit are in main menu)"
     );
 }
+
+// ============================================================
+// 11. Note switcher actions (Cmd+P in Notes window)
+// ============================================================
+
+#[test]
+fn note_switcher_empty_shows_no_notes_message() {
+    let notes: Vec<NoteSwitcherNoteInfo> = vec![];
+    let actions = get_note_switcher_actions(&notes);
+    assert_eq!(actions.len(), 1);
+    assert_eq!(actions[0].id, "no_notes");
+    assert_eq!(actions[0].title, "No notes yet");
+    assert!(actions[0].description.as_ref().unwrap().contains("⌘N"));
+    assert_eq!(actions[0].section.as_deref(), Some("Notes"));
+}
+
+#[test]
+fn note_switcher_single_current_note() {
+    let notes = vec![NoteSwitcherNoteInfo {
+        id: "uuid-1".into(),
+        title: "My Note".into(),
+        char_count: 42,
+        is_current: true,
+        is_pinned: false,
+    }];
+    let actions = get_note_switcher_actions(&notes);
+    assert_eq!(actions.len(), 1);
+    assert_eq!(actions[0].id, "note_uuid-1");
+    assert!(
+        actions[0].title.starts_with("• "),
+        "Current note should have bullet prefix"
+    );
+    assert!(actions[0].title.contains("My Note"));
+    assert_eq!(actions[0].description.as_deref(), Some("42 characters"));
+}
+
+#[test]
+fn note_switcher_pinned_note_icon() {
+    let notes = vec![
+        NoteSwitcherNoteInfo {
+            id: "pinned-1".into(),
+            title: "Pinned Note".into(),
+            char_count: 100,
+            is_current: false,
+            is_pinned: true,
+        },
+        NoteSwitcherNoteInfo {
+            id: "current-1".into(),
+            title: "Current Note".into(),
+            char_count: 50,
+            is_current: true,
+            is_pinned: false,
+        },
+        NoteSwitcherNoteInfo {
+            id: "plain-1".into(),
+            title: "Plain Note".into(),
+            char_count: 10,
+            is_current: false,
+            is_pinned: false,
+        },
+    ];
+    let actions = get_note_switcher_actions(&notes);
+
+    assert_eq!(actions.len(), 3);
+
+    // Pinned note gets StarFilled icon
+    let pinned = find_action(&actions, "note_pinned-1").unwrap();
+    assert_eq!(
+        pinned.icon,
+        Some(crate::designs::icon_variations::IconName::StarFilled)
+    );
+    assert!(
+        !pinned.title.starts_with("• "),
+        "Non-current should not have bullet"
+    );
+
+    // Current note gets Check icon
+    let current = find_action(&actions, "note_current-1").unwrap();
+    assert_eq!(
+        current.icon,
+        Some(crate::designs::icon_variations::IconName::Check)
+    );
+    assert!(current.title.starts_with("• "));
+
+    // Plain note gets File icon
+    let plain = find_action(&actions, "note_plain-1").unwrap();
+    assert_eq!(
+        plain.icon,
+        Some(crate::designs::icon_variations::IconName::File)
+    );
+}
+
+#[test]
+fn note_switcher_singular_character_count() {
+    let notes = vec![NoteSwitcherNoteInfo {
+        id: "one-char".into(),
+        title: "Tiny".into(),
+        char_count: 1,
+        is_current: false,
+        is_pinned: false,
+    }];
+    let actions = get_note_switcher_actions(&notes);
+    assert_eq!(
+        actions[0].description.as_deref(),
+        Some("1 character"),
+        "Single char should use singular 'character'"
+    );
+}
+
+#[test]
+fn note_switcher_zero_characters() {
+    let notes = vec![NoteSwitcherNoteInfo {
+        id: "empty".into(),
+        title: "Empty Note".into(),
+        char_count: 0,
+        is_current: false,
+        is_pinned: false,
+    }];
+    let actions = get_note_switcher_actions(&notes);
+    assert_eq!(
+        actions[0].description.as_deref(),
+        Some("0 characters"),
+        "Zero chars should use plural 'characters'"
+    );
+}
+
+#[test]
+fn note_switcher_all_notes_have_section() {
+    let notes = vec![
+        NoteSwitcherNoteInfo {
+            id: "a".into(),
+            title: "A".into(),
+            char_count: 5,
+            is_current: false,
+            is_pinned: false,
+        },
+        NoteSwitcherNoteInfo {
+            id: "b".into(),
+            title: "B".into(),
+            char_count: 10,
+            is_current: true,
+            is_pinned: true,
+        },
+    ];
+    let actions = get_note_switcher_actions(&notes);
+    for action in &actions {
+        assert_eq!(
+            action.section.as_deref(),
+            Some("Notes"),
+            "All note switcher actions should be in 'Notes' section"
+        );
+    }
+}
+
+// ============================================================
+// 12. New chat actions (AI window new chat dropdown)
+// ============================================================
+
+#[test]
+fn new_chat_actions_empty_inputs() {
+    let actions = get_new_chat_actions(&[], &[], &[]);
+    assert!(actions.is_empty(), "No inputs should produce no actions");
+}
+
+#[test]
+fn new_chat_actions_last_used_section() {
+    let last_used = vec![
+        NewChatModelInfo {
+            model_id: "claude-sonnet".into(),
+            display_name: "Claude Sonnet".into(),
+            provider: "anthropic".into(),
+            provider_display_name: "Anthropic".into(),
+        },
+        NewChatModelInfo {
+            model_id: "gpt-4".into(),
+            display_name: "GPT-4".into(),
+            provider: "openai".into(),
+            provider_display_name: "OpenAI".into(),
+        },
+    ];
+    let actions = get_new_chat_actions(&last_used, &[], &[]);
+    assert_eq!(actions.len(), 2);
+
+    assert_eq!(actions[0].id, "last_used_0");
+    assert_eq!(actions[0].title, "Claude Sonnet");
+    assert_eq!(actions[0].description.as_deref(), Some("Anthropic"));
+    assert_eq!(actions[0].section.as_deref(), Some("Last Used Settings"));
+
+    assert_eq!(actions[1].id, "last_used_1");
+    assert_eq!(actions[1].title, "GPT-4");
+    assert_eq!(actions[1].description.as_deref(), Some("OpenAI"));
+}
+
+#[test]
+fn new_chat_actions_presets_section() {
+    let presets = vec![
+        NewChatPresetInfo {
+            id: "general".into(),
+            name: "General".into(),
+            icon: crate::designs::icon_variations::IconName::Settings,
+        },
+        NewChatPresetInfo {
+            id: "code".into(),
+            name: "Code".into(),
+            icon: crate::designs::icon_variations::IconName::Code,
+        },
+    ];
+    let actions = get_new_chat_actions(&[], &presets, &[]);
+    assert_eq!(actions.len(), 2);
+
+    assert_eq!(actions[0].id, "preset_general");
+    assert_eq!(actions[0].title, "General");
+    assert_eq!(actions[0].section.as_deref(), Some("Presets"));
+    assert!(
+        actions[0].description.is_none(),
+        "Presets have no description"
+    );
+
+    assert_eq!(actions[1].id, "preset_code");
+    assert_eq!(actions[1].title, "Code");
+}
+
+#[test]
+fn new_chat_actions_models_section() {
+    let models = vec![NewChatModelInfo {
+        model_id: "opus".into(),
+        display_name: "Claude Opus".into(),
+        provider: "anthropic".into(),
+        provider_display_name: "Anthropic".into(),
+    }];
+    let actions = get_new_chat_actions(&[], &[], &models);
+    assert_eq!(actions.len(), 1);
+
+    assert_eq!(actions[0].id, "model_0");
+    assert_eq!(actions[0].title, "Claude Opus");
+    assert_eq!(actions[0].description.as_deref(), Some("Anthropic"));
+    assert_eq!(actions[0].section.as_deref(), Some("Models"));
+}
+
+#[test]
+fn new_chat_actions_combined_ordering() {
+    let last_used = vec![NewChatModelInfo {
+        model_id: "last".into(),
+        display_name: "Last".into(),
+        provider: "p".into(),
+        provider_display_name: "P".into(),
+    }];
+    let presets = vec![NewChatPresetInfo {
+        id: "preset".into(),
+        name: "Preset".into(),
+        icon: crate::designs::icon_variations::IconName::Star,
+    }];
+    let models = vec![NewChatModelInfo {
+        model_id: "model".into(),
+        display_name: "Model".into(),
+        provider: "p".into(),
+        provider_display_name: "P".into(),
+    }];
+
+    let actions = get_new_chat_actions(&last_used, &presets, &models);
+    assert_eq!(actions.len(), 3);
+
+    // Ordering: Last Used -> Presets -> Models
+    assert_eq!(actions[0].section.as_deref(), Some("Last Used Settings"));
+    assert_eq!(actions[1].section.as_deref(), Some("Presets"));
+    assert_eq!(actions[2].section.as_deref(), Some("Models"));
+}
+
+#[test]
+fn new_chat_actions_all_have_icons() {
+    let last_used = vec![NewChatModelInfo {
+        model_id: "m".into(),
+        display_name: "M".into(),
+        provider: "p".into(),
+        provider_display_name: "P".into(),
+    }];
+    let presets = vec![NewChatPresetInfo {
+        id: "pr".into(),
+        name: "PR".into(),
+        icon: crate::designs::icon_variations::IconName::Code,
+    }];
+    let models = vec![NewChatModelInfo {
+        model_id: "mo".into(),
+        display_name: "MO".into(),
+        provider: "p".into(),
+        provider_display_name: "P".into(),
+    }];
+
+    let actions = get_new_chat_actions(&last_used, &presets, &models);
+    for action in &actions {
+        assert!(
+            action.icon.is_some(),
+            "New chat action '{}' should have an icon",
+            action.id
+        );
+    }
+}
+
+// ============================================================
+// 13. Agent-specific script context actions
+// ============================================================
+
+#[test]
+fn agent_context_has_agent_actions() {
+    let mut agent = ScriptInfo::new("My Agent", "/path/to/agent.claude.md");
+    agent.is_agent = true;
+    agent.is_script = false;
+
+    let actions = get_script_context_actions(&agent);
+    let ids = action_ids(&actions);
+
+    // Agent should have: edit (as "Edit Agent"), reveal, copy_path, copy_content
+    assert!(
+        ids.contains(&"edit_script"),
+        "Agent should have edit_script action"
+    );
+    assert!(ids.contains(&"reveal_in_finder"));
+    assert!(ids.contains(&"copy_path"));
+    assert!(ids.contains(&"copy_content"));
+
+    // Verify edit title says "Edit Agent" not "Edit Script"
+    let edit = find_action(&actions, "edit_script").unwrap();
+    assert_eq!(edit.title, "Edit Agent");
+    assert_eq!(
+        edit.description.as_deref(),
+        Some("Open the agent file in $EDITOR")
+    );
+}
+
+#[test]
+fn agent_context_no_script_only_actions() {
+    let mut agent = ScriptInfo::new("Agent", "/path/to/agent.md");
+    agent.is_agent = true;
+    agent.is_script = false;
+
+    let actions = get_script_context_actions(&agent);
+    let ids = action_ids(&actions);
+
+    // Agent should NOT have view_logs (script-only)
+    assert!(
+        !ids.contains(&"view_logs"),
+        "Agent should not have view_logs"
+    );
+}
+
+#[test]
+fn agent_context_has_deeplink_and_shortcut() {
+    let mut agent = ScriptInfo::new("Code Review Agent", "/path/to/agent.md");
+    agent.is_agent = true;
+    agent.is_script = false;
+
+    let actions = get_script_context_actions(&agent);
+    let ids = action_ids(&actions);
+
+    // Should still have universal actions
+    assert!(ids.contains(&"run_script"), "Agent should have run action");
+    assert!(
+        ids.contains(&"copy_deeplink"),
+        "Agent should have copy_deeplink"
+    );
+    assert!(
+        ids.contains(&"add_shortcut"),
+        "Agent should have add_shortcut"
+    );
+    assert!(ids.contains(&"add_alias"), "Agent should have add_alias");
+}
+
+#[test]
+fn agent_context_with_frecency_shows_reset() {
+    let mut agent = ScriptInfo::new("Agent", "/path/to/agent.md");
+    agent.is_agent = true;
+    agent.is_script = false;
+    let agent = agent.with_frecency(true, Some("agent:path".into()));
+
+    let actions = get_script_context_actions(&agent);
+    let ids = action_ids(&actions);
+    assert!(ids.contains(&"reset_ranking"));
+}
+
+// ============================================================
+// 14. Clipboard action edge cases: destructive actions
+// ============================================================
+
+#[test]
+fn clipboard_text_has_all_destructive_actions() {
+    let entry = make_text_entry(false);
+    let actions = get_clipboard_history_context_actions(&entry);
+    let ids = action_ids(&actions);
+
+    assert!(ids.contains(&"clipboard_delete"));
+    assert!(ids.contains(&"clipboard_delete_multiple"));
+    assert!(ids.contains(&"clipboard_delete_all"));
+}
+
+#[test]
+fn clipboard_text_has_save_actions() {
+    let entry = make_text_entry(false);
+    let actions = get_clipboard_history_context_actions(&entry);
+    let ids = action_ids(&actions);
+
+    assert!(ids.contains(&"clipboard_save_snippet"));
+    assert!(ids.contains(&"clipboard_save_file"));
+}
+
+#[test]
+fn clipboard_image_has_ocr_action() {
+    let entry = make_image_entry(false);
+    let actions = get_clipboard_history_context_actions(&entry);
+    let ids = action_ids(&actions);
+
+    assert!(
+        ids.contains(&"clipboard_ocr"),
+        "Image entry should have OCR action"
+    );
+    // Text entries should NOT have OCR
+    let text_entry = make_text_entry(false);
+    let text_actions = get_clipboard_history_context_actions(&text_entry);
+    let text_ids = action_ids(&text_actions);
+    assert!(
+        !text_ids.contains(&"clipboard_ocr"),
+        "Text entry should NOT have OCR"
+    );
+}
+
+#[test]
+fn clipboard_action_count_text_vs_image() {
+    let text_entry = make_text_entry(false);
+    let text_actions = get_clipboard_history_context_actions(&text_entry);
+
+    let image_entry = make_image_entry(false);
+    let image_actions = get_clipboard_history_context_actions(&image_entry);
+
+    // Image entries should have more actions due to OCR, Open With, etc.
+    assert!(
+        image_actions.len() > text_actions.len(),
+        "Image ({}) should have more actions than text ({})",
+        image_actions.len(),
+        text_actions.len()
+    );
+}
