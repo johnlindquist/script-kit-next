@@ -73,7 +73,7 @@ pub use hex_color::{hex_color_serde, HexColor};
 #[allow(unused_imports)]
 pub use types::{
     detect_system_appearance, AppearanceMode, BackgroundOpacity, BackgroundRole, DropShadow,
-    FontConfig, VibrancyMaterial, VibrancySettings,
+    VibrancySettings,
 };
 
 #[cfg(test)]
