@@ -13,6 +13,16 @@ use syntect::highlighting::{Style, Theme, ThemeSet};
 use syntect::parsing::SyntaxSet;
 use syntect::util::LinesWithEndings;
 
+// =============================================================================
+// Fallback text colors — used when syntect returns no style for a token.
+// =============================================================================
+
+/// Fallback text color for dark themes (light gray).
+const DEFAULT_TEXT_COLOR_DARK: u32 = 0xCCCCCC;
+
+/// Fallback text color for light themes (dark gray).
+const DEFAULT_TEXT_COLOR_LIGHT: u32 = 0x333333;
+
 /// A highlighted span of code with its color.
 #[derive(Debug, Clone, PartialEq)]
 pub struct CodeSpan {
@@ -205,7 +215,11 @@ pub fn highlight_code_lines(code: &str, language: Option<&str>, is_dark: bool) -
 
     let ps = syntax_set();
     let theme = theme_for_mode(is_dark);
-    let default_color = if is_dark { 0xCCCCCC_u32 } else { 0x333333_u32 };
+    let default_color = if is_dark {
+        DEFAULT_TEXT_COLOR_DARK
+    } else {
+        DEFAULT_TEXT_COLOR_LIGHT
+    };
 
     let language = language
         .and_then(normalize_language)

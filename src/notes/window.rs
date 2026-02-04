@@ -132,6 +132,51 @@ const TITLEBAR_ICONS_W: f32 = 100.0;
 /// Footer separator: Unicode middle-dot used between stats in the footer.
 const FOOTER_SEP: &str = " · ";
 
+// =============================================================================
+// Auto-resize constants — govern how the window grows / shrinks with content.
+// =============================================================================
+
+/// Combined top + bottom padding in the editor area (px).
+const AUTO_RESIZE_PADDING: f32 = 24.0;
+
+/// Approximate per-line height used by the text layout (px).
+const AUTO_RESIZE_LINE_HEIGHT: f32 = 20.0;
+
+/// Absolute ceiling — the window will never auto-grow beyond this (px).
+const AUTO_RESIZE_MAX_HEIGHT: f32 = 600.0;
+
+/// Minimum delta before we bother resizing (avoids 1-px jitter).
+const AUTO_RESIZE_THRESHOLD: f32 = 5.0;
+
+/// Delta beyond which we assume the user grabbed the edge to resize manually.
+const MANUAL_RESIZE_THRESHOLD: f32 = 10.0;
+
+// =============================================================================
+// Timing constants
+// =============================================================================
+
+/// Duration (ms) of the brief "✓ Saved" flash after a successful save.
+const SAVED_FLASH_MS: u64 = 1500;
+
+/// Duration (ms) of action feedback flash ("Deleted", "Pinned", etc.).
+const ACTION_FEEDBACK_MS: u64 = 2000;
+
+// =============================================================================
+// Modal overlay tokens (same palette as browse_panel.rs)
+// =============================================================================
+
+/// Dark-mode modal overlay: black at 50 % alpha.
+const MODAL_OVERLAY_DARK: u32 = 0x00000080;
+
+/// Light-mode modal overlay: white at 50 % alpha.
+const MODAL_OVERLAY_LIGHT: u32 = 0xffffff80;
+
+/// Corner radius for shortcuts panel card (px).
+const SHORTCUTS_PANEL_RADIUS: f32 = 10.0;
+
+/// Extra vertical space reserved around the actions panel overlay (px).
+const ACTIONS_PANEL_WINDOW_MARGIN: f32 = 64.0;
+
 /// View mode for the notes list
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum NotesViewMode {
@@ -615,19 +660,13 @@ impl NotesApp {
             return;
         }
 
-        // Layout constants — reuse module-level TITLEBAR_HEIGHT / FOOTER_HEIGHT
-        // to avoid divergence.  PADDING and LINE_HEIGHT are auto-resize-specific.
-        const PADDING: f32 = 24.0; // Top + bottom padding in editor area
-        const LINE_HEIGHT: f32 = 20.0; // Approximate line height
-        const MAX_HEIGHT: f32 = 600.0; // Don't grow too large
-
         // Use initial_height as minimum - never shrink below starting size
         let min_height = self.initial_height;
 
         // Calculate desired height
-        let content_height = (line_count as f32) * LINE_HEIGHT;
-        let total_height = TITLEBAR_HEIGHT + content_height + FOOTER_HEIGHT + PADDING;
-        let clamped_height = total_height.clamp(min_height, MAX_HEIGHT);
+        let content_height = (line_count as f32) * AUTO_RESIZE_LINE_HEIGHT;
+        let total_height = TITLEBAR_HEIGHT + content_height + FOOTER_HEIGHT + AUTO_RESIZE_PADDING;
+        let clamped_height = total_height.clamp(min_height, AUTO_RESIZE_MAX_HEIGHT);
 
         // Get current bounds and update height
         let current_bounds = window.bounds();
@@ -635,8 +674,7 @@ impl NotesApp {
 
         // Resize if height needs to change (both grow AND shrink)
         // Use a small threshold to avoid constant tiny adjustments
-        const RESIZE_THRESHOLD: f32 = 5.0;
-        if (clamped_height - old_height).abs() > RESIZE_THRESHOLD {
+        if (clamped_height - old_height).abs() > AUTO_RESIZE_THRESHOLD {
             let new_size = size(current_bounds.size.width, px(clamped_height));
 
             debug!(
@@ -672,7 +710,6 @@ impl NotesApp {
         let current_height: f32 = window.bounds().size.height.into();
 
         // If height differs significantly from what we set, user resized manually
-        const MANUAL_RESIZE_THRESHOLD: f32 = 10.0;
         if (current_height - self.last_window_height).abs() > MANUAL_RESIZE_THRESHOLD {
             self.auto_sizing_enabled = false;
             self.last_window_height = current_height;
@@ -1366,7 +1403,7 @@ impl NotesApp {
     /// Check if action feedback should still be visible (within 2s window)
     fn get_action_feedback(&self) -> Option<(&str, bool)> {
         self.action_feedback.as_ref().and_then(|(msg, accent, t)| {
-            if t.elapsed() < Duration::from_secs(2) {
+            if t.elapsed() < Duration::from_millis(ACTION_FEEDBACK_MS) {
                 Some((msg.as_str(), *accent))
             } else {
                 None
@@ -2169,7 +2206,7 @@ impl NotesApp {
                     .w(px(SHORTCUTS_PANEL_WIDTH))
                     .max_h(px(SHORTCUTS_PANEL_MAX_HEIGHT))
                     .overflow_y_scrollbar()
-                    .rounded(px(10.)) // radius-md — softer card feel
+                    .rounded(px(SHORTCUTS_PANEL_RADIUS))
                     .border_1()
                     .border_color(border_color.opacity(OPACITY_SECTION_BORDER))
                     .p_4()
@@ -2469,8 +2506,6 @@ impl NotesApp {
     }
 
     fn ensure_actions_panel_height(&mut self, window: &mut Window, row_count: usize) {
-        const ACTIONS_PANEL_WINDOW_MARGIN: f32 = 64.0;
-
         let panel_height = panel_height_for_rows(row_count);
         let desired_height = panel_height + ACTIONS_PANEL_WINDOW_MARGIN;
         let current_bounds = window.bounds();
@@ -3297,7 +3332,7 @@ impl NotesApp {
         let show_saved = !has_unsaved
             && self
                 .last_save_confirmed
-                .map(|t| t.elapsed() < Duration::from_millis(1500))
+                .map(|t| t.elapsed() < Duration::from_millis(SAVED_FLASH_MS))
                 .unwrap_or(false);
         let relative_time = self.get_relative_time();
         let has_history_back = !self.history_back.is_empty();
@@ -3889,9 +3924,9 @@ impl NotesApp {
     fn get_modal_overlay_background() -> gpui::Rgba {
         let sk_theme = crate::theme::get_cached_theme();
         if sk_theme.has_dark_colors() {
-            gpui::rgba(0x00000080) // black at 50% for dark mode
+            gpui::rgba(MODAL_OVERLAY_DARK)
         } else {
-            gpui::rgba(0xffffff80) // white at 50% for light mode
+            gpui::rgba(MODAL_OVERLAY_LIGHT)
         }
     }
 

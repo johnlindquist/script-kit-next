@@ -259,6 +259,60 @@ pub const ACTION_ROW_INSET: f32 = 6.0;
 /// Corner radius for selected row background
 pub const SELECTION_RADIUS: f32 = 8.0;
 
+// =============================================================================
+// Shadow tokens — drop shadow for floating panel when vibrancy is off
+// =============================================================================
+
+/// Primary (close) drop-shadow opacity.
+const SHADOW_PRIMARY_ALPHA: f32 = 0.3;
+/// Secondary (far) drop-shadow opacity.
+const SHADOW_SECONDARY_ALPHA: f32 = 0.15;
+/// Primary shadow vertical offset (px).
+const SHADOW_PRIMARY_OFFSET_Y: f32 = 4.0;
+/// Primary shadow blur radius (px).
+const SHADOW_PRIMARY_BLUR: f32 = 16.0;
+/// Secondary shadow vertical offset (px).
+const SHADOW_SECONDARY_OFFSET_Y: f32 = 8.0;
+/// Secondary shadow blur radius (px).
+const SHADOW_SECONDARY_BLUR: f32 = 32.0;
+/// Secondary shadow inward spread (px, negative = inset).
+const SHADOW_SECONDARY_SPREAD: f32 = -4.0;
+
+// =============================================================================
+// Search input layout tokens
+// =============================================================================
+
+/// Horizontal padding inside the search input row (px).
+const SEARCH_ROW_PX: f32 = 12.0;
+/// Vertical padding inside the search input row (px).
+const SEARCH_ROW_PY: f32 = 8.0;
+/// Height of the inner search text field (px).
+const SEARCH_FIELD_HEIGHT: f32 = 28.0;
+/// Horizontal padding inside the inner search field (px).
+const SEARCH_FIELD_PX: f32 = 8.0;
+/// Corner radius for the inner search field (px).
+const SEARCH_FIELD_RADIUS: f32 = 4.0;
+/// Cursor beam width (px).
+const CURSOR_WIDTH: f32 = 2.0;
+/// Cursor beam height (px).
+const CURSOR_HEIGHT: f32 = 16.0;
+/// Cursor beam margin from adjacent text (px).
+const CURSOR_MARGIN: f32 = 2.0;
+/// Cursor beam corner radius (px).
+const CURSOR_RADIUS: f32 = 1.0;
+
+/// "No results" row padding (px).
+const NO_RESULTS_PY: f32 = 16.0;
+/// "No results" row horizontal padding (px).
+const NO_RESULTS_PX: f32 = 12.0;
+
+/// Inner action row height deduction for vertical padding (px).
+const ACTION_ROW_INNER_PAD: f32 = 8.0;
+/// Inner action row horizontal padding (px).
+const ACTION_ROW_INNER_PX: f32 = 8.0;
+/// Disabled state opacity — floor for legibility.
+const OPACITY_DISABLED: f32 = 0.5;
+
 pub fn panel_height_for_rows(row_count: usize) -> f32 {
     let items_height = (row_count as f32 * ACTION_ITEM_HEIGHT)
         .min(PANEL_MAX_HEIGHT - (PANEL_SEARCH_HEIGHT + 16.0));
@@ -518,10 +572,10 @@ impl NotesActionsPanel {
                     h: 0.0,
                     s: 0.0,
                     l: 0.0,
-                    a: 0.3,
+                    a: SHADOW_PRIMARY_ALPHA,
                 },
-                offset: point(px(0.0), px(4.0)),
-                blur_radius: px(16.0),
+                offset: point(px(0.0), px(SHADOW_PRIMARY_OFFSET_Y)),
+                blur_radius: px(SHADOW_PRIMARY_BLUR),
                 spread_radius: px(0.0),
             },
             BoxShadow {
@@ -529,11 +583,11 @@ impl NotesActionsPanel {
                     h: 0.0,
                     s: 0.0,
                     l: 0.0,
-                    a: 0.15,
+                    a: SHADOW_SECONDARY_ALPHA,
                 },
-                offset: point(px(0.0), px(8.0)),
-                blur_radius: px(32.0),
-                spread_radius: px(-4.0),
+                offset: point(px(0.0), px(SHADOW_SECONDARY_OFFSET_Y)),
+                blur_radius: px(SHADOW_SECONDARY_BLUR),
+                spread_radius: px(SHADOW_SECONDARY_SPREAD),
             },
         ]
     }
@@ -568,8 +622,8 @@ impl Render for NotesActionsPanel {
         let search_input = div()
             .w_full()
             .h(px(PANEL_SEARCH_HEIGHT))
-            .px(px(12.0))
-            .py(px(8.0))
+            .px(px(SEARCH_ROW_PX))
+            .py(px(SEARCH_ROW_PY))
             .bg(search_bg_color) // Vibrancy-aware search area
             .border_b_1()
             .border_color(border_color)
@@ -580,10 +634,10 @@ impl Render for NotesActionsPanel {
             .child(
                 div()
                     .flex_1()
-                    .h(px(28.0))
-                    .px(px(8.0))
+                    .h(px(SEARCH_FIELD_HEIGHT))
+                    .px(px(SEARCH_FIELD_PX))
                     .bg(search_bg_color) // Vibrancy-aware input
-                    .rounded(px(4.0))
+                    .rounded(px(SEARCH_FIELD_RADIUS))
                     .border_1()
                     .border_color(if self.search_text.is_empty() {
                         border_color
@@ -603,10 +657,10 @@ impl Render for NotesActionsPanel {
                     .when(self.search_text.is_empty(), |d| {
                         d.child(
                             div()
-                                .w(px(2.))
-                                .h(px(16.))
-                                .mr(px(2.))
-                                .rounded(px(1.))
+                                .w(px(CURSOR_WIDTH))
+                                .h(px(CURSOR_HEIGHT))
+                                .mr(px(CURSOR_MARGIN))
+                                .rounded(px(CURSOR_RADIUS))
                                 .when(self.cursor_visible, |d| d.bg(accent_color)),
                         )
                     })
@@ -615,10 +669,10 @@ impl Render for NotesActionsPanel {
                     .when(!self.search_text.is_empty(), |d| {
                         d.child(
                             div()
-                                .w(px(2.))
-                                .h(px(16.))
-                                .ml(px(2.))
-                                .rounded(px(1.))
+                                .w(px(CURSOR_WIDTH))
+                                .h(px(CURSOR_HEIGHT))
+                                .ml(px(CURSOR_MARGIN))
+                                .rounded(px(CURSOR_RADIUS))
                                 .when(self.cursor_visible, |d| d.bg(accent_color)),
                         )
                     }),
@@ -632,8 +686,8 @@ impl Render for NotesActionsPanel {
             div()
                 .flex_1()
                 .w_full()
-                .py(px(16.0))
-                .px(px(12.0))
+                .py(px(NO_RESULTS_PY))
+                .px(px(NO_RESULTS_PX))
                 .text_color(text_muted)
                 .text_sm()
                 .child("No actions match your search")
@@ -665,13 +719,7 @@ impl Render for NotesActionsPanel {
                                         false
                                     };
 
-                                    // Transparent Hsla for unselected state
-                                    let transparent = Hsla {
-                                        h: 0.0,
-                                        s: 0.0,
-                                        l: 0.0,
-                                        a: 0.0,
-                                    };
+                                    let transparent = Hsla::transparent_black();
 
                                     // Raycast-style: rounded pill selection, no left accent bar
                                     // Outer wrapper provides horizontal inset for the rounded background
@@ -691,11 +739,11 @@ impl Render for NotesActionsPanel {
                                         .child(
                                             div()
                                                 .w_full()
-                                                .h(px(ACTION_ITEM_HEIGHT - 8.0))
+                                                .h(px(ACTION_ITEM_HEIGHT - ACTION_ROW_INNER_PAD))
                                                 .flex()
                                                 .flex_row()
                                                 .items_center()
-                                                .px(px(8.0))
+                                                .px(px(ACTION_ROW_INNER_PX))
                                                 .rounded(px(SELECTION_RADIUS))
                                                 .bg(if is_selected {
                                                     theme.list_active
@@ -706,7 +754,7 @@ impl Render for NotesActionsPanel {
                                                     d.hover(|s| s.bg(theme.list_hover))
                                                 })
                                                 .when(is_enabled, |d| d.cursor_pointer())
-                                                .when(!is_enabled, |d| d.opacity(0.5))
+                                                .when(!is_enabled, |d| d.opacity(OPACITY_DISABLED))
                                                 // Content row: icon + label + shortcuts
                                                 .child(
                                                     div()

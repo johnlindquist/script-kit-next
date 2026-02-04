@@ -74,6 +74,15 @@ pub enum NoteAction {
     Delete,
 }
 
+// =============================================================================
+// Modal overlay tokens
+// =============================================================================
+
+/// Dark-mode modal overlay: black at 50 % (0x80 alpha channel).
+const MODAL_OVERLAY_DARK: u32 = 0x00000080;
+/// Light-mode modal overlay: white at 50 % (0x80 alpha channel).
+const MODAL_OVERLAY_LIGHT: u32 = 0xffffff80;
+
 /// Browse Panel - modal overlay for browsing and selecting notes
 ///
 /// This component is designed to be rendered as an overlay on top of the
@@ -396,9 +405,9 @@ impl BrowsePanel {
     fn get_modal_overlay_background() -> gpui::Rgba {
         let sk_theme = crate::theme::get_cached_theme();
         if sk_theme.has_dark_colors() {
-            rgba(0x00000080) // black at 50% for dark mode
+            rgba(MODAL_OVERLAY_DARK)
         } else {
-            rgba(0xffffff80) // white at 50% for light mode
+            rgba(MODAL_OVERLAY_LIGHT)
         }
     }
 
