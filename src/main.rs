@@ -3,9 +3,10 @@
 use gpui::{
     div, hsla, list, point, prelude::*, px, rgb, rgba, size, svg, uniform_list, AnyElement, App,
     Application, BoxShadow, Context, CursorStyle, ElementId, Entity, FocusHandle, Focusable,
-    KeyDownEvent, ListAlignment, ListOffset, ListSizingBehavior, ListState, MouseMoveEvent, Render,
-    ScrollStrategy, SharedString, Subscription, Timer, UniformListScrollHandle, Window,
-    WindowBackgroundAppearance, WindowBounds, WindowHandle, WindowKind, WindowOptions,
+    FontWeight, KeyDownEvent, ListAlignment, ListOffset, ListSizingBehavior, ListState,
+    MouseMoveEvent, Render, ScrollStrategy, SharedString, Subscription, Timer,
+    UniformListScrollHandle, Window, WindowBackgroundAppearance, WindowBounds, WindowHandle,
+    WindowKind, WindowOptions,
 };
 
 // gpui-component Root wrapper for theme and context provision
@@ -206,6 +207,7 @@ use designs::{get_tokens, render_design_item, DesignVariant};
 use frecency::FrecencyStore;
 use list_item::{
     render_section_header, GroupedListItem, ListItem, ListItemColors, LIST_ITEM_HEIGHT,
+    SECTION_HEADER_HEIGHT,
 };
 use scripts::get_grouped_results;
 // strip_html_tags removed - DivPrompt now renders HTML properly

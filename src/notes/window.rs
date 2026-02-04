@@ -60,6 +60,55 @@ static NOTES_APP_ENTITY: std::sync::OnceLock<std::sync::Mutex<Option<Entity<Note
 // NOTE: Theme watching is now centralized in crate::theme::service
 // The per-window NOTES_THEME_WATCHER_RUNNING flag has been removed
 
+// =============================================================================
+// Layout constants — all on the 4 px micro-grid / 8 px base grid
+// =============================================================================
+
+/// Titlebar height — 36 px gives comfortable room for macOS traffic lights.
+const TITLEBAR_HEIGHT: f32 = 36.0;
+
+/// Footer / status-bar height — 28 px keeps it compact while readable.
+const FOOTER_HEIGHT: f32 = 28.0;
+
+/// Keyboard-shortcuts overlay width.
+const SHORTCUTS_PANEL_WIDTH: f32 = 310.0;
+
+/// Keyboard-shortcuts overlay max height.
+const SHORTCUTS_PANEL_MAX_HEIGHT: f32 = 480.0;
+
+/// Browse-panel inline fallback width.
+const BROWSE_PANEL_WIDTH: f32 = 500.0;
+
+/// Browse-panel inline fallback max height.
+const BROWSE_PANEL_MAX_HEIGHT: f32 = 400.0;
+
+/// Actions-panel overlay top offset (keeps search input stable).
+const ACTIONS_PANEL_TOP_OFFSET: f32 = 32.0;
+
+// =============================================================================
+// Semantic opacity levels — keeps contrast consistent and reduces magic numbers.
+//
+//   OPACITY_DISABLED  → 0.4  (disabled / inactive — floor for legibility)
+//   OPACITY_SUBTLE    → 0.5  (rest-state chrome, de-emphasized metadata)
+//   OPACITY_MUTED     → 0.7  (secondary info that should still be easy to read)
+//   OPACITY_VISIBLE   → 1.0  (full emphasis)
+//
+// When applied to `muted_foreground`, the lowest tier (0.4) still exceeds
+// WCAG 2.2 AA 3:1 non-text contrast on both dark and light surfaces.
+// =============================================================================
+
+/// Opacity for disabled / completely de-emphasized elements.
+const OPACITY_DISABLED: f32 = 0.4;
+
+/// Opacity for rest-state chrome (unhovered footer, subtle metadata).
+const OPACITY_SUBTLE: f32 = 0.5;
+
+/// Opacity for secondary information (icons, timestamps, line info).
+const OPACITY_MUTED: f32 = 0.7;
+
+/// Minimum interactive target size (px) — WCAG 2.2 §2.5.8 (24 × 24 CSS px).
+const MIN_TARGET_SIZE: f32 = 24.0;
+
 /// View mode for the notes list
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum NotesViewMode {
@@ -2058,32 +2107,22 @@ impl NotesApp {
                 .flex()
                 .justify_between()
                 .w_full()
-                .py(px(2.5))
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(muted.opacity(0.8))
-                        .child(desc.to_string()),
-                )
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(accent.opacity(0.85))
-                        .child(keys.to_string()),
-                )
+                .py_1() // 4px — on the spacing grid
+                .child(div().text_xs().text_color(muted).child(desc.to_string()))
+                .child(div().text_xs().text_color(accent).child(keys.to_string()))
                 .into_any_element()
         };
 
         let section = |title: &str| -> AnyElement {
             div()
                 .pt_3()
-                .pb(px(3.))
-                .mb(px(2.))
+                .pb_1() // 4px — on the spacing grid
+                .mb_1() // 4px — on the spacing grid
                 .border_b_1()
-                .border_color(border_color.opacity(0.15))
+                .border_color(border_color.opacity(0.2))
                 .text_xs()
                 .font_weight(gpui::FontWeight::MEDIUM)
-                .text_color(muted.opacity(0.6))
+                .text_color(muted.opacity(OPACITY_MUTED))
                 .child(title.to_string())
                 .into_any_element()
         };
@@ -2105,8 +2144,8 @@ impl NotesApp {
             )
             .child(
                 div()
-                    .w(px(340.))
-                    .max_h(px(480.))
+                    .w(px(SHORTCUTS_PANEL_WIDTH))
+                    .max_h(px(SHORTCUTS_PANEL_MAX_HEIGHT))
                     .overflow_y_scrollbar()
                     .p_4()
                     .flex()
@@ -2170,7 +2209,7 @@ impl NotesApp {
                         div()
                             .pt_3()
                             .text_xs()
-                            .text_color(muted.opacity(0.35))
+                            .text_color(muted.opacity(OPACITY_SUBTLE))
                             .text_center()
                             .child("Click anywhere or press ⌘/ to dismiss"),
                     ),
@@ -3001,7 +3040,7 @@ impl NotesApp {
         let preview_color = if is_preview {
             accent_color
         } else {
-            muted_color.opacity(0.7)
+            muted_color.opacity(OPACITY_MUTED)
         };
 
         let titlebar = div()
@@ -3009,7 +3048,7 @@ impl NotesApp {
             .flex()
             .items_center()
             .justify_center() // Center the title
-            .h(px(32.)) // Titlebar height (balanced for drag area and visual weight)
+            .h(px(TITLEBAR_HEIGHT))
             .px_3()
             .relative() // For absolute positioning of icons
             // NO .bg() - let vibrancy show through from root
@@ -3036,8 +3075,8 @@ impl NotesApp {
                     .text_ellipsis()
                     .text_sm()
                     .text_color(muted_color) // Use muted color for subtle title
-                    // Always show title at low opacity; brighten on hover
-                    .when(!window_hovered, |d| d.opacity(0.35))
+                    // Always show title at readable opacity; brighten on hover
+                    .when(!window_hovered, |d| d.opacity(OPACITY_SUBTLE))
                     .when(window_hovered, |d| d.opacity(1.0))
                     // In focus mode, hide title completely (distraction-free)
                     .when(in_focus_mode, |d| d.opacity(0.))
@@ -3052,7 +3091,7 @@ impl NotesApp {
                 d.child(
                     div()
                         .text_xs()
-                        .text_color(muted_color.opacity(0.25))
+                        .text_color(muted_color.opacity(OPACITY_DISABLED))
                         .child("esc  or  ⌘.  exit focus"),
                 )
             })
@@ -3075,8 +3114,13 @@ impl NotesApp {
                             d.child(
                                 div()
                                     .id("titlebar-cmd-icon")
+                                    .min_w(px(MIN_TARGET_SIZE))
+                                    .min_h(px(MIN_TARGET_SIZE))
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
                                     .text_sm()
-                                    .text_color(muted_color.opacity(0.7))
+                                    .text_color(muted_color.opacity(OPACITY_MUTED))
                                     .cursor_pointer()
                                     .hover(|s| s.text_color(muted_color))
                                     .tooltip(|window, cx| {
@@ -3100,8 +3144,13 @@ impl NotesApp {
                         .child(
                             div()
                                 .id("titlebar-browse-icon")
+                                .min_w(px(MIN_TARGET_SIZE))
+                                .min_h(px(MIN_TARGET_SIZE))
+                                .flex()
+                                .items_center()
+                                .justify_center()
                                 .text_sm()
-                                .text_color(muted_color.opacity(0.7))
+                                .text_color(muted_color.opacity(OPACITY_MUTED))
                                 .cursor_pointer()
                                 .hover(|s| s.text_color(muted_color))
                                 .tooltip(|window, cx| {
@@ -3126,6 +3175,11 @@ impl NotesApp {
                         .child(
                             div()
                                 .id("titlebar-preview-icon")
+                                .min_w(px(MIN_TARGET_SIZE))
+                                .min_h(px(MIN_TARGET_SIZE))
+                                .flex()
+                                .items_center()
+                                .justify_center()
                                 .text_sm()
                                 .text_color(preview_color)
                                 .cursor_pointer()
@@ -3148,8 +3202,13 @@ impl NotesApp {
                         .child(
                             div()
                                 .id("titlebar-new-icon")
+                                .min_w(px(MIN_TARGET_SIZE))
+                                .min_h(px(MIN_TARGET_SIZE))
+                                .flex()
+                                .items_center()
+                                .justify_center()
                                 .text_sm()
-                                .text_color(muted_color.opacity(0.7))
+                                .text_color(muted_color.opacity(OPACITY_MUTED))
                                 .cursor_pointer()
                                 .hover(|s| s.text_color(muted_color))
                                 .tooltip(|window, cx| {
@@ -3233,34 +3292,41 @@ impl NotesApp {
         let footer = div()
             .flex()
             .items_center()
-            .justify_center()
-            .relative()
-            .h(px(28.))
+            .gap_2() // 8px between left / center / right columns
+            .h(px(FOOTER_HEIGHT))
             .px_3()
             // NO .bg() - let vibrancy show through from root
-            // Always visible at reduced opacity; full on hover
+            // Always visible at readable opacity; full on hover
             // In focus mode: hidden at rest, subtle word count on hover
             .when(in_focus_mode && !window_hovered, |d| d.opacity(0.))
-            .when(in_focus_mode && window_hovered, |d| d.opacity(0.25))
-            .when(!in_focus_mode && !window_hovered, |d| d.opacity(0.35))
+            .when(in_focus_mode && window_hovered, |d| {
+                d.opacity(OPACITY_DISABLED)
+            })
+            .when(!in_focus_mode && !window_hovered, |d| {
+                d.opacity(OPACITY_SUBTLE)
+            })
             .when(!in_focus_mode && window_hovered, |d| d.opacity(1.0))
-            // LEFT: History arrows + note position + unsaved dot
+            // LEFT column: History arrows + note position + unsaved dot
             .child(
                 div()
-                    .absolute()
-                    .left_3()
                     .flex()
                     .items_center()
-                    .gap(px(6.))
-                    // History back arrow (Cmd+[) — proper arrow glyph
+                    .gap_1() // 4px — tighter to save horizontal space
+                    .overflow_hidden()
+                    // History back arrow (Cmd+[) — meets WCAG 2.5.8 target size
                     .child(
                         div()
                             .id("footer-history-back")
+                            .min_w(px(MIN_TARGET_SIZE))
+                            .min_h(px(MIN_TARGET_SIZE))
+                            .flex()
+                            .items_center()
+                            .justify_center()
                             .text_xs()
                             .text_color(if has_history_back {
                                 cx.theme().muted_foreground
                             } else {
-                                cx.theme().muted_foreground.opacity(0.25)
+                                cx.theme().muted_foreground.opacity(OPACITY_DISABLED)
                             })
                             .when(has_history_back, |d| {
                                 d.cursor_pointer()
@@ -3271,15 +3337,20 @@ impl NotesApp {
                             }))
                             .child("‹"),
                     )
-                    // History forward arrow (Cmd+]) — proper arrow glyph
+                    // History forward arrow (Cmd+])
                     .child(
                         div()
                             .id("footer-history-forward")
+                            .min_w(px(MIN_TARGET_SIZE))
+                            .min_h(px(MIN_TARGET_SIZE))
+                            .flex()
+                            .items_center()
+                            .justify_center()
                             .text_xs()
                             .text_color(if has_history_forward {
                                 cx.theme().muted_foreground
                             } else {
-                                cx.theme().muted_foreground.opacity(0.25)
+                                cx.theme().muted_foreground.opacity(OPACITY_DISABLED)
                             })
                             .when(has_history_forward, |d| {
                                 d.cursor_pointer()
@@ -3299,7 +3370,7 @@ impl NotesApp {
                         d.child(
                             div()
                                 .text_xs()
-                                .text_color(cx.theme().accent.opacity(0.7))
+                                .text_color(cx.theme().accent.opacity(OPACITY_MUTED))
                                 .child("✓"),
                         )
                     })
@@ -3311,7 +3382,7 @@ impl NotesApp {
                                 .text_color(if accent {
                                     cx.theme().accent
                                 } else {
-                                    cx.theme().muted_foreground.opacity(0.7)
+                                    cx.theme().muted_foreground.opacity(OPACITY_MUTED)
                                 })
                                 .child(msg),
                         )
@@ -3321,72 +3392,64 @@ impl NotesApp {
                             div()
                                 .text_xs()
                                 .text_color(cx.theme().muted_foreground)
-                                .child(format!("{} of {}", pos, total)),
+                                .child(format!("{}/{}", pos, total)),
                         )
-                    })
+                    }),
+            )
+            // CENTER (flex-1): Ln position · word count · char count · reading time
+            .child(
+                div()
+                    .flex_1()
+                    .min_w(px(0.)) // allow flex shrinking
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .gap_1() // 4px — compact
+                    .overflow_hidden()
                     // Cursor line position — "Ln 5/42"
                     .when_some(cursor_line_info, |d, (line, total)| {
                         d.child(
                             div()
                                 .text_xs()
-                                .text_color(cx.theme().muted_foreground.opacity(0.6))
-                                .child(format!("Ln {}/{}", line, total)),
+                                .text_color(cx.theme().muted_foreground.opacity(OPACITY_MUTED))
+                                .child(format!("Ln {}/{}  ·", line, total)),
                         )
-                    }),
-            )
-            // CENTER: Word count, character count, and reading time (selection-aware)
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap_2()
+                    })
                     .child(if let Some((sel_words, sel_chars)) = selection_stats {
                         // Show selection stats in accent color when text is selected
                         div().text_xs().text_color(cx.theme().accent).child(format!(
-                            "{} of {} word{}  ·  {} of {} char{}",
-                            sel_words,
-                            word_count,
-                            if word_count == 1 { "" } else { "s" },
-                            sel_chars,
-                            char_count,
-                            if char_count == 1 { "" } else { "s" },
+                            "{}/{} words  ·  {}/{} chars",
+                            sel_words, word_count, sel_chars, char_count,
                         ))
                     } else {
                         div()
                             .text_xs()
                             .text_color(cx.theme().muted_foreground)
-                            .child(format!(
-                                "{} word{}  ·  {} char{}",
-                                word_count,
-                                if word_count == 1 { "" } else { "s" },
-                                char_count,
-                                if char_count == 1 { "" } else { "s" },
-                            ))
+                            .child(format!("{} words  ·  {} chars", word_count, char_count,))
                     })
                     .when(!reading_time.is_empty(), |d| {
                         d.child(
                             div()
                                 .text_xs()
-                                .text_color(cx.theme().muted_foreground.opacity(0.5))
+                                .text_color(cx.theme().muted_foreground.opacity(OPACITY_MUTED))
                                 .child(format!("· {}", reading_time)),
                         )
                     }),
             )
-            // RIGHT: Sort indicator + trash badge + empty trash + relative time + type indicator
+            // RIGHT column: Sort indicator + trash badge + time + type indicator
             .child(
                 div()
-                    .absolute()
-                    .right_3()
+                    .flex_shrink_0()
                     .flex()
                     .items_center()
-                    .gap_2()
+                    .gap_1() // 4px — compact to keep right cluster tight
                     // Auto-size disabled indicator — clickable to re-enable
                     .when(auto_sizing_off && !is_trash_view, |d| {
                         d.child(
                             div()
                                 .id("footer-auto-size-off")
                                 .text_xs()
-                                .text_color(cx.theme().muted_foreground.opacity(0.35))
+                                .text_color(cx.theme().muted_foreground.opacity(OPACITY_SUBTLE))
                                 .cursor_pointer()
                                 .hover(|s| s.text_color(cx.theme().accent))
                                 .on_click(cx.listener(|this, _, window, cx| {
@@ -3401,7 +3464,7 @@ impl NotesApp {
                             div()
                                 .id("footer-sort-indicator")
                                 .text_xs()
-                                .text_color(cx.theme().muted_foreground.opacity(0.4))
+                                .text_color(cx.theme().muted_foreground.opacity(OPACITY_SUBTLE))
                                 .cursor_pointer()
                                 .hover(|s| s.text_color(cx.theme().muted_foreground))
                                 .on_click(cx.listener(|this, _, _, cx| {
@@ -3416,7 +3479,7 @@ impl NotesApp {
                             div()
                                 .id("footer-trash-badge")
                                 .text_xs()
-                                .text_color(cx.theme().muted_foreground.opacity(0.5))
+                                .text_color(cx.theme().muted_foreground.opacity(OPACITY_SUBTLE))
                                 .cursor_pointer()
                                 .hover(|s| s.text_color(cx.theme().muted_foreground))
                                 .on_click(cx.listener(|this, _, window, cx| {
@@ -3461,7 +3524,7 @@ impl NotesApp {
                             d.child(
                                 div()
                                     .text_xs()
-                                    .text_color(cx.theme().muted_foreground.opacity(0.35))
+                                    .text_color(cx.theme().muted_foreground.opacity(OPACITY_SUBTLE))
                                     .child(date),
                             )
                         })
@@ -3470,14 +3533,14 @@ impl NotesApp {
                         d.child(
                             div()
                                 .text_xs()
-                                .text_color(cx.theme().muted_foreground.opacity(0.5))
+                                .text_color(cx.theme().muted_foreground.opacity(OPACITY_SUBTLE))
                                 .child(time),
                         )
                     })
                     .child(
                         div()
                             .text_xs()
-                            .text_color(cx.theme().muted_foreground.opacity(0.5))
+                            .text_color(cx.theme().muted_foreground.opacity(OPACITY_SUBTLE))
                             .child(if is_preview { "MD" } else { "TXT" }),
                     ),
             );
@@ -3496,13 +3559,13 @@ impl NotesApp {
                 .child(
                     div()
                         .text_base()
-                        .text_color(cx.theme().muted_foreground.opacity(0.8))
+                        .text_color(cx.theme().muted_foreground)
                         .child("Trash is empty"),
                 )
                 .child(
                     div()
                         .text_sm()
-                        .text_color(cx.theme().muted_foreground.opacity(0.5))
+                        .text_color(cx.theme().muted_foreground.opacity(OPACITY_SUBTLE))
                         .child("Deleted notes will appear here"),
                 )
                 .child(
@@ -3531,16 +3594,16 @@ impl NotesApp {
                 .child(
                     div()
                         .text_base()
-                        .text_color(cx.theme().muted_foreground.opacity(0.6))
+                        .text_color(cx.theme().muted_foreground.opacity(OPACITY_MUTED))
                         .child("No notes yet"),
                 )
                 .child(
                     div()
                         .id("create-first-note")
                         .text_sm()
-                        .text_color(cx.theme().accent.opacity(0.8))
+                        .text_color(cx.theme().accent)
                         .cursor_pointer()
-                        .hover(|s| s.text_color(cx.theme().accent))
+                        .hover(|s| s.text_color(cx.theme().foreground))
                         .on_click(cx.listener(|this, _, window, cx| {
                             this.create_note(window, cx);
                         }))
@@ -3555,19 +3618,19 @@ impl NotesApp {
                             .child(
                                 div()
                                     .text_xs()
-                                    .text_color(cx.theme().muted_foreground.opacity(0.3))
+                                    .text_color(cx.theme().muted_foreground.opacity(OPACITY_SUBTLE))
                                     .child("⌘N  new"),
                             )
                             .child(
                                 div()
                                     .text_xs()
-                                    .text_color(cx.theme().muted_foreground.opacity(0.3))
+                                    .text_color(cx.theme().muted_foreground.opacity(OPACITY_SUBTLE))
                                     .child("⌘⇧N  from clipboard"),
                             )
                             .child(
                                 div()
                                     .text_xs()
-                                    .text_color(cx.theme().muted_foreground.opacity(0.3))
+                                    .text_color(cx.theme().muted_foreground.opacity(OPACITY_SUBTLE))
                                     .child("⌘/  shortcuts"),
                             ),
                     ),
@@ -3636,7 +3699,6 @@ impl NotesApp {
             .unwrap_or_else(|| div().into_any_element());
 
         // Fixed top offset so search input stays at same position regardless of item count
-        const PANEL_TOP_OFFSET: f32 = 32.0;
 
         div()
             .id("actions-panel-overlay")
@@ -3647,7 +3709,7 @@ impl NotesApp {
             .flex_col()
             .items_center() // Horizontally centered
             .justify_start() // Vertically aligned to top (not centered!)
-            .pt(px(PANEL_TOP_OFFSET)) // Fixed offset from top
+            .pt(px(ACTIONS_PANEL_TOP_OFFSET))
             .on_mouse_down(
                 gpui::MouseButton::Left,
                 cx.listener(|this, _, window, cx| {
@@ -3695,8 +3757,8 @@ impl NotesApp {
                 }))
                 .child(
                     div()
-                        .w(px(500.))
-                        .max_h(px(400.))
+                        .w(px(BROWSE_PANEL_WIDTH))
+                        .max_h(px(BROWSE_PANEL_MAX_HEIGHT))
                         // NO .bg() - overlay already provides backdrop, avoid double-layering opacity
                         .border_1()
                         .border_color(cx.theme().border)
