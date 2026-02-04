@@ -12,6 +12,28 @@ use std::ops::Range;
 
 use crate::notes::code_highlight::highlight_code_lines;
 
+// =============================================================================
+// Markdown rendering opacity tokens — code-block / inline-code backgrounds
+// =============================================================================
+
+/// Inline code background alpha for dark themes.
+const CODE_INLINE_BG_ALPHA_DARK: f32 = 0.28;
+
+/// Code fence block background alpha for dark themes.
+const CODE_BLOCK_BG_ALPHA_DARK: f32 = 0.20;
+
+/// Inline code background alpha for light themes (higher for visibility).
+const CODE_INLINE_BG_ALPHA_LIGHT: f32 = 0.45;
+
+/// Code fence block background alpha for light themes.
+const CODE_BLOCK_BG_ALPHA_LIGHT: f32 = 0.35;
+
+/// Border alpha applied to code-related elements.
+const CODE_BORDER_ALPHA: f32 = 0.4;
+
+/// Gap between top-level markdown blocks (px).
+const BLOCK_GAP: f32 = 8.0;
+
 /// Convert hex color to HSLA
 fn hex_to_hsla(hex: u32) -> Hsla {
     let color = gpui::rgb(hex);
@@ -364,7 +386,11 @@ impl RenderStyles {
     fn from_theme(theme: &Theme) -> Self {
         let is_dark = matches!(theme.mode, ThemeMode::Dark);
         // Use higher opacity for light mode since subtle backgrounds are harder to see
-        let (code_bg_alpha, code_block_bg_alpha) = if is_dark { (0.28, 0.2) } else { (0.45, 0.35) };
+        let (code_bg_alpha, code_block_bg_alpha) = if is_dark {
+            (CODE_INLINE_BG_ALPHA_DARK, CODE_BLOCK_BG_ALPHA_DARK)
+        } else {
+            (CODE_INLINE_BG_ALPHA_LIGHT, CODE_BLOCK_BG_ALPHA_LIGHT)
+        };
         let code_bg = with_alpha(theme.muted, code_bg_alpha);
         let code_block_bg = with_alpha(theme.muted, code_block_bg_alpha);
         Self {
@@ -373,7 +399,7 @@ impl RenderStyles {
             link: theme.link,
             code_bg,
             code_block_bg,
-            border: with_alpha(theme.border, 0.4),
+            border: with_alpha(theme.border, CODE_BORDER_ALPHA),
             mono_font: theme.mono_font_family.to_string(),
             is_dark,
         }
@@ -393,7 +419,7 @@ pub fn render_markdown_preview(markdown: &str, theme: &Theme) -> impl IntoElemen
     let mut container = div()
         .flex()
         .flex_col()
-        .gap(px(8.0))
+        .gap(px(BLOCK_GAP))
         .w_full()
         .min_w_0()
         .text_sm();
@@ -440,7 +466,7 @@ fn render_block(block: &MarkdownBlock, styles: &RenderStyles) -> AnyElement {
                 .flex()
                 .flex_row()
                 .items_start()
-                .gap(px(8.0))
+                .gap(px(BLOCK_GAP))
                 .pl(px(12.0 * (*indent as f32)))
                 .text_color(styles.text)
                 .child(div().text_color(styles.muted).child(bullet))
