@@ -468,6 +468,14 @@ impl ScriptListApp {
             self.main_list_state.splice(0..old_list_count, item_count);
             // Invalidate scroll tracking since list structure changed
             self.last_scrolled_index = None;
+            // Restore scroll to selected item to prevent viewport jumping to top.
+            // splice(0..old, new) resets GPUI's logical_scroll_top to item 0.
+            // Callers that want to reset scroll (filter changes, view resets)
+            // will override by calling scroll_to_reveal_item(0) afterward.
+            if self.selected_index < item_count {
+                self.main_list_state
+                    .scroll_to_reveal_item(self.selected_index);
+            }
         }
     }
 
