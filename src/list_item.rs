@@ -136,9 +136,12 @@ const SECTION_GAP: f32 = 6.0;
 const ALPHA_STRONG: u32 = 0xD9;
 /// 80% opacity — used for shortcut badge text and position indicator
 pub(crate) const ALPHA_READABLE: u32 = 0xCC;
-/// 75% opacity — used for description highlight base text, header icon, tool badge text
+/// 75% opacity — used for header icon, tool badge text
 /// (Bumped from 70% for better legibility on vibrancy backgrounds)
 const ALPHA_MUTED: u32 = 0xBF;
+/// 35% opacity — used for non-selected description text
+/// Makes descriptions visible on hover/focus but clearly recedes in the list
+const ALPHA_DESC_QUIET: u32 = 0x59;
 /// 70% opacity — used for source hint text
 /// (Bumped from 65% for WCAG-friendlier contrast on vibrancy)
 const ALPHA_HINT: u32 = 0xB3;
@@ -148,9 +151,8 @@ const ALPHA_SUBTLE: u32 = 0xA6;
 /// 30% opacity — used for shortcut badge border
 /// (Bumped from 25% so kbd borders pass ≥3:1 non-text contrast on vibrancy)
 const ALPHA_BORDER: u32 = 0x4D;
-/// 22% opacity — used for section separator border
-/// (Bumped from 18% for clearer group boundary definition)
-const ALPHA_SEPARATOR_STRONG: u32 = 0x38;
+/// 22% opacity — reserved for strong separators (currently unused, kept for design variants)
+const _ALPHA_SEPARATOR_STRONG: u32 = 0x38;
 /// 20% opacity — used for type tag pill background
 /// (Higher than separator for visible badge fill on vibrancy)
 const ALPHA_TAG_BG: u32 = 0x33;
@@ -869,7 +871,7 @@ impl RenderOnce for ListItem {
         let icon_text_color = if self.selected {
             rgb(colors.text_primary)
         } else {
-            rgba((colors.text_primary << 8) | ALPHA_STRONG)
+            rgba((colors.text_primary << 8) | ALPHA_HINT) // More muted icons for calmer list
         };
         let icon_size = px(ICON_CONTAINER_SIZE);
         let svg_size = px(ICON_SVG_SIZE);
@@ -959,7 +961,7 @@ impl RenderOnce for ListItem {
         let name_weight = if self.selected {
             FontWeight::SEMIBOLD // Visual emphasis for selected item
         } else {
-            FontWeight::MEDIUM
+            FontWeight::NORMAL // Lighter weight reduces visual density
         };
         let name_element = if let Some(ref indices) = self.highlight_indices {
             // Build StyledText with highlighted matched characters
@@ -1003,6 +1005,12 @@ impl RenderOnce for ListItem {
                 .child(styled)
         } else {
             // Plain text rendering (no search active)
+            // Mute non-selected names slightly for a calmer list
+            let name_color = if self.selected {
+                rgb(colors.text_primary)
+            } else {
+                rgba((colors.text_primary << 8) | ALPHA_STRONG)
+            };
             div()
                 .text_size(px(NAME_FONT_SIZE))
                 .font_weight(name_weight)
@@ -1010,6 +1018,7 @@ impl RenderOnce for ListItem {
                 .text_ellipsis()
                 .whitespace_nowrap()
                 .line_height(px(NAME_LINE_HEIGHT))
+                .text_color(name_color)
                 .child(self.name)
         };
 
@@ -1020,13 +1029,14 @@ impl RenderOnce for ListItem {
         // Single-line with ellipsis truncation for long content
         // When description_highlight_indices are present, matched characters are rendered with accent color
         if let Some(desc) = self.description {
-            // Use text_secondary at muted opacity — subordinate to name for clear hierarchy
+            // Use text_secondary at quiet opacity — subordinate to name for clear hierarchy
             // Boost opacity when selected: blue selection bg reduces effective contrast,
             // so ALPHA_STRONG (85%) keeps description readable on the focused item
+            // Non-selected items use ALPHA_DESC_QUIET (45%) to reduce visual density
             let desc_alpha = if self.selected {
                 ALPHA_STRONG
             } else {
-                ALPHA_MUTED
+                ALPHA_DESC_QUIET
             };
             let desc_color = rgba((colors.text_secondary << 8) | desc_alpha);
             let desc_element = if let Some(ref desc_indices) = self.description_highlight_indices {
@@ -1048,12 +1058,12 @@ impl RenderOnce for ListItem {
                     }
                 }
 
-                // Base text uses secondary at moderate opacity - readable but doesn't compete with highlights
+                // Base text uses secondary at quiet opacity - readable but doesn't compete with highlights
                 // Boost when selected for better readability on blue selection bg
                 let base_alpha = if self.selected {
                     ALPHA_STRONG
                 } else {
-                    ALPHA_MUTED
+                    ALPHA_DESC_QUIET
                 };
                 let base_color = rgba((colors.text_secondary << 8) | base_alpha);
                 let styled = StyledText::new(desc.clone()).with_highlights(highlights);
@@ -1119,22 +1129,12 @@ impl RenderOnce for ListItem {
         // without waiting for state updates via cx.notify().
         //
         // For selected items, we don't apply hover styles (they already have full focus styling).
-        // Subtle bottom separator for better scanability between items
-        // Very faint 1px border visible only on non-selected items to avoid clutter
-        let separator_color = if self.selected {
-            rgba(0x00000000) // No separator on selected item
-        } else {
-            rgba((colors.text_muted << 8) | ALPHA_SEPARATOR)
-        };
-
         let mut inner_content = div()
             .w_full()
             .h_full()
             .px(px(ITEM_PADDING_X))
             .py(px(ITEM_PADDING_Y))
             .bg(bg_color)
-            .border_b_1()
-            .border_color(separator_color)
             .text_color(rgb(colors.text_primary))
             .font_family(FONT_SYSTEM_UI)
             .cursor_pointer()
@@ -1384,25 +1384,25 @@ pub fn render_section_header(
     };
 
     // Build the inner content row: icon (optional) → section name → count (optional)
-    // Use text_secondary at strong opacity for readable section labels on vibrancy backgrounds
-    let header_text_color = rgba((colors.text_secondary << 8) | ALPHA_STRONG);
+    // Use text_secondary at hint opacity for subtler section labels
+    let header_text_color = rgba((colors.text_secondary << 8) | ALPHA_HINT);
     let mut content = div()
         .flex()
         .flex_row()
         .items_center()
         .gap(px(SECTION_GAP))
         .text_size(px(SECTION_HEADER_FONT_SIZE))
-        .font_weight(FontWeight::SEMIBOLD)
+        .font_weight(FontWeight::MEDIUM) // Lighter weight for calmer headers
         .text_color(header_text_color);
 
-    // Add icon before section name if provided
+    // Add icon before section name if provided — subtle to avoid visual noise
     if let Some(name) = icon {
         if let Some(icon_name) = icon_name_from_str(name) {
             content = content.child(
                 svg()
                     .external_path(icon_name.external_path())
                     .size(px(SECTION_HEADER_ICON_SIZE))
-                    .text_color(rgba((colors.text_secondary << 8) | ALPHA_MUTED)),
+                    .text_color(rgba((colors.text_secondary << 8) | ALPHA_SUBTLE)),
             );
         }
     }
@@ -1420,27 +1420,24 @@ pub fn render_section_header(
         );
     }
 
-    // Background tint for section headers to create visual grouping
-    let header_bg = rgba((colors.text_secondary << 8) | ALPHA_TINT_FAINT);
-
+    // Clean section headers — no background tint for a calmer list appearance
     let header = div()
         .w_full()
         .h(px(SECTION_HEADER_HEIGHT))
         .px(px(SECTION_PADDING_X))
         .pt(px(SECTION_PADDING_TOP))
         .pb(px(SECTION_PADDING_BOTTOM))
-        .bg(header_bg)
         .flex()
         .flex_col()
         .justify_end(); // Align content to bottom for better visual anchoring
 
-    // Only show top separator on non-first headers (first header has no item above it)
+    // Only show top separator on non-first headers — very subtle
     let header = if is_first {
         header
     } else {
         header
             .border_t_1()
-            .border_color(rgba((colors.text_secondary << 8) | ALPHA_SEPARATOR_STRONG))
+            .border_color(rgba((colors.text_secondary << 8) | ALPHA_SEPARATOR))
     };
 
     header.child(content)
