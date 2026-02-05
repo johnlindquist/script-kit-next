@@ -132,8 +132,14 @@ const SECTION_GAP: f32 = 6.0;
 // Opacity tokens — named for intent, hex for GPUI rgba() bit-packing
 // =============================================================================
 
-/// 85% opacity — used for icon tint, section header text, descriptions
+/// 85% opacity — used for selected description text
 const ALPHA_STRONG: u32 = 0xD9;
+/// 72% opacity — used for non-selected item names
+/// Softer than ALPHA_STRONG to let non-selected items recede (Raycast/Spotlight pattern)
+const ALPHA_NAME_QUIET: u32 = 0xB8;
+/// 50% opacity — used for non-selected item icons
+/// Low enough that icons don't compete for attention; selected items restore full color
+const ALPHA_ICON_QUIET: u32 = 0x80;
 /// 80% opacity — used for shortcut badge text and position indicator
 pub(crate) const ALPHA_READABLE: u32 = 0xCC;
 /// 75% opacity — used for header icon, tool badge text
@@ -158,9 +164,9 @@ const _ALPHA_SEPARATOR_STRONG: u32 = 0x38;
 const ALPHA_TAG_BG: u32 = 0x33;
 /// 35% opacity — used for type tag pill border
 const ALPHA_TAG_BORDER: u32 = 0x59;
-/// 14% opacity — used for item separator
-/// (Bumped from 12% for better list scanability)
-const ALPHA_SEPARATOR: u32 = 0x24;
+/// 8% opacity — used for section separator
+/// Barely-there divider; the section label itself provides enough grouping signal
+const ALPHA_SEPARATOR: u32 = 0x14;
 /// 7% opacity — used for tool badge background
 /// (Bumped from 6% for slightly more visible badge pills)
 const ALPHA_TINT_MEDIUM: u32 = 0x12;
@@ -871,7 +877,7 @@ impl RenderOnce for ListItem {
         let icon_text_color = if self.selected {
             rgb(colors.text_primary)
         } else {
-            rgba((colors.text_primary << 8) | ALPHA_HINT) // More muted icons for calmer list
+            rgba((colors.text_primary << 8) | ALPHA_ICON_QUIET) // Quiet icons let names lead
         };
         let icon_size = px(ICON_CONTAINER_SIZE);
         let svg_size = px(ICON_SVG_SIZE);
@@ -964,7 +970,7 @@ impl RenderOnce for ListItem {
         // When highlight_indices are present, use StyledText to highlight matched characters
         // Otherwise, render as plain text
         let name_weight = if self.selected {
-            FontWeight::SEMIBOLD // Visual emphasis for selected item
+            FontWeight::MEDIUM // Subtle emphasis — launchers rely on background, not weight
         } else {
             FontWeight::NORMAL // Lighter weight reduces visual density
         };
@@ -1010,11 +1016,11 @@ impl RenderOnce for ListItem {
                 .child(styled)
         } else {
             // Plain text rendering (no search active)
-            // Mute non-selected names slightly for a calmer list
+            // Mute non-selected names to let selected item stand out
             let name_color = if self.selected {
                 rgb(colors.text_primary)
             } else {
-                rgba((colors.text_primary << 8) | ALPHA_STRONG)
+                rgba((colors.text_primary << 8) | ALPHA_NAME_QUIET)
             };
             div()
                 .text_size(px(NAME_FONT_SIZE))
@@ -1400,38 +1406,38 @@ pub fn render_section_header(
     };
 
     // Build the inner content row: icon (optional) → section name → count (optional)
-    // Use text_secondary at hint opacity for subtler section labels
-    let header_text_color = rgba((colors.text_secondary << 8) | ALPHA_HINT);
+    // Headers should whisper — subtle orientation labels, not attention-grabbers
+    let header_text_color = rgba((colors.text_secondary << 8) | ALPHA_ICON_QUIET);
     let mut content = div()
         .flex()
         .flex_row()
         .items_center()
         .gap(px(SECTION_GAP))
         .text_size(px(SECTION_HEADER_FONT_SIZE))
-        .font_weight(FontWeight::MEDIUM) // Lighter weight for calmer headers
+        .font_weight(FontWeight::NORMAL) // Lightest weight — headers recede behind items
         .text_color(header_text_color);
 
-    // Add icon before section name if provided — subtle to avoid visual noise
+    // Add icon before section name if provided — very quiet to avoid visual noise
     if let Some(name) = icon {
         if let Some(icon_name) = icon_name_from_str(name) {
             content = content.child(
                 svg()
                     .external_path(icon_name.external_path())
                     .size(px(SECTION_HEADER_ICON_SIZE))
-                    .text_color(rgba((colors.text_secondary << 8) | ALPHA_SUBTLE)),
+                    .text_color(rgba((colors.text_secondary << 8) | ALPHA_DESC_QUIET)),
             );
         }
     }
 
     content = content.child(section_name.to_string());
 
-    // Add count badge if present - rendered as a subtle separate element
+    // Add count badge if present - rendered as a very subtle separate element
     if let Some(count) = count_text {
         content = content.child(
             div()
                 .text_xs()
                 .font_weight(FontWeight::NORMAL)
-                .text_color(rgba((colors.text_secondary << 8) | ALPHA_HINT))
+                .text_color(rgba((colors.text_secondary << 8) | ALPHA_DESC_QUIET))
                 .child(count.to_string()),
         );
     }
