@@ -944,6 +944,11 @@ impl RenderOnce for ListItem {
             }
         };
 
+        // Progressive disclosure: detect if search/filter is active
+        // Used to conditionally show descriptions and accessories
+        let is_filtering =
+            self.highlight_indices.is_some() || self.description_highlight_indices.is_some();
+
         // Build content with name + description (compact with small gap)
         let mut item_content = div()
             .flex_1()
@@ -1024,69 +1029,71 @@ impl RenderOnce for ListItem {
 
         item_content = item_content.child(name_element);
 
-        // Description - 12px for readability (minimum per UI typography guidelines)
-        // Muted color (never changes on selection - only bg shows selection)
-        // Single-line with ellipsis truncation for long content
-        // When description_highlight_indices are present, matched characters are rendered with accent color
+        // Description - progressive disclosure pattern (Spotlight/Raycast style)
+        // Only show descriptions when they add value:
+        // - Selected item: always show (detail context)
+        // - Hovered item: show on hover (peek preview)
+        // - Search active: show when filtering (match context with highlights)
+        // - Default: hidden to reduce visual density and make the list scannable
         if let Some(desc) = self.description {
-            // Use text_secondary at quiet opacity — subordinate to name for clear hierarchy
-            // Boost opacity when selected: blue selection bg reduces effective contrast,
-            // so ALPHA_STRONG (85%) keeps description readable on the focused item
-            // Non-selected items use ALPHA_DESC_QUIET (45%) to reduce visual density
-            let desc_alpha = if self.selected {
-                ALPHA_STRONG
-            } else {
-                ALPHA_DESC_QUIET
-            };
-            let desc_color = rgba((colors.text_secondary << 8) | desc_alpha);
-            let desc_element = if let Some(ref desc_indices) = self.description_highlight_indices {
-                // Build StyledText with highlighted matched characters in description
-                let index_set: HashSet<usize> = desc_indices.iter().copied().collect();
-                let highlight_color = rgb(colors.accent_selected);
-                let highlight_style = HighlightStyle {
-                    color: Some(highlight_color.into()),
-                    font_weight: Some(FontWeight::SEMIBOLD),
-                    ..Default::default()
-                };
+            let show_description = self.selected || self.hovered || is_filtering;
 
-                // Convert character indices to byte ranges for StyledText
-                let mut highlights: Vec<(std::ops::Range<usize>, HighlightStyle)> = Vec::new();
-                for (char_idx, (byte_offset, ch)) in desc.char_indices().enumerate() {
-                    if index_set.contains(&char_idx) {
-                        highlights
-                            .push((byte_offset..byte_offset + ch.len_utf8(), highlight_style));
-                    }
-                }
-
-                // Base text uses secondary at quiet opacity - readable but doesn't compete with highlights
-                // Boost when selected for better readability on blue selection bg
-                let base_alpha = if self.selected {
+            if show_description {
+                let desc_alpha = if self.selected {
                     ALPHA_STRONG
                 } else {
                     ALPHA_DESC_QUIET
                 };
-                let base_color = rgba((colors.text_secondary << 8) | base_alpha);
-                let styled = StyledText::new(desc.clone()).with_highlights(highlights);
+                let desc_color = rgba((colors.text_secondary << 8) | desc_alpha);
+                let desc_element = if let Some(ref desc_indices) =
+                    self.description_highlight_indices
+                {
+                    // Build StyledText with highlighted matched characters in description
+                    let index_set: HashSet<usize> = desc_indices.iter().copied().collect();
+                    let highlight_color = rgb(colors.accent_selected);
+                    let highlight_style = HighlightStyle {
+                        color: Some(highlight_color.into()),
+                        font_weight: Some(FontWeight::SEMIBOLD),
+                        ..Default::default()
+                    };
 
-                div()
-                    .text_size(px(DESC_FONT_SIZE))
-                    .line_height(px(DESC_LINE_HEIGHT))
-                    .text_color(base_color)
-                    .overflow_hidden()
-                    .text_ellipsis()
-                    .whitespace_nowrap()
-                    .child(styled)
-            } else {
-                div()
-                    .text_size(px(DESC_FONT_SIZE))
-                    .line_height(px(DESC_LINE_HEIGHT))
-                    .text_color(desc_color)
-                    .overflow_hidden()
-                    .text_ellipsis()
-                    .whitespace_nowrap()
-                    .child(desc)
-            };
-            item_content = item_content.child(desc_element);
+                    // Convert character indices to byte ranges for StyledText
+                    let mut highlights: Vec<(std::ops::Range<usize>, HighlightStyle)> = Vec::new();
+                    for (char_idx, (byte_offset, ch)) in desc.char_indices().enumerate() {
+                        if index_set.contains(&char_idx) {
+                            highlights
+                                .push((byte_offset..byte_offset + ch.len_utf8(), highlight_style));
+                        }
+                    }
+
+                    let base_alpha = if self.selected {
+                        ALPHA_STRONG
+                    } else {
+                        ALPHA_DESC_QUIET
+                    };
+                    let base_color = rgba((colors.text_secondary << 8) | base_alpha);
+                    let styled = StyledText::new(desc.clone()).with_highlights(highlights);
+
+                    div()
+                        .text_size(px(DESC_FONT_SIZE))
+                        .line_height(px(DESC_LINE_HEIGHT))
+                        .text_color(base_color)
+                        .overflow_hidden()
+                        .text_ellipsis()
+                        .whitespace_nowrap()
+                        .child(styled)
+                } else {
+                    div()
+                        .text_size(px(DESC_FONT_SIZE))
+                        .line_height(px(DESC_LINE_HEIGHT))
+                        .text_color(desc_color)
+                        .overflow_hidden()
+                        .text_ellipsis()
+                        .whitespace_nowrap()
+                        .child(desc)
+                };
+                item_content = item_content.child(desc_element);
+            }
         }
 
         // Shortcut badge (if present) - right-aligned with kbd-style rendering
@@ -1153,30 +1160,39 @@ impl RenderOnce for ListItem {
                     .flex_shrink_0()
                     .gap(px(ITEM_ACCESSORIES_GAP));
 
+                // Tool badge, source hint, and type tag use progressive disclosure:
+                // Only shown on selected/hovered items or during search.
+                // Shortcut badges always visible (keyboard discoverability).
+                let show_accessories = self.selected || self.hovered || is_filtering;
+
                 // Tool/language badge for scriptlets (e.g., "ts", "bash")
-                if let Some(ref badge) = self.tool_badge {
-                    let badge_bg = (colors.text_dimmed << 8) | ALPHA_TINT_MEDIUM;
-                    accessories = accessories.child(
-                        div()
-                            .text_size(px(TOOL_BADGE_FONT_SIZE))
-                            .font_family(FONT_MONO)
-                            .text_color(rgba((colors.text_dimmed << 8) | ALPHA_READABLE))
-                            .px(px(TOOL_BADGE_PADDING_X))
-                            .py(px(TOOL_BADGE_PADDING_Y))
-                            .rounded(px(TOOL_BADGE_RADIUS))
-                            .bg(rgba(badge_bg))
-                            .child(badge.clone()),
-                    );
+                if show_accessories {
+                    if let Some(ref badge) = self.tool_badge {
+                        let badge_bg = (colors.text_dimmed << 8) | ALPHA_TINT_MEDIUM;
+                        accessories = accessories.child(
+                            div()
+                                .text_size(px(TOOL_BADGE_FONT_SIZE))
+                                .font_family(FONT_MONO)
+                                .text_color(rgba((colors.text_dimmed << 8) | ALPHA_READABLE))
+                                .px(px(TOOL_BADGE_PADDING_X))
+                                .py(px(TOOL_BADGE_PADDING_Y))
+                                .rounded(px(TOOL_BADGE_RADIUS))
+                                .bg(rgba(badge_bg))
+                                .child(badge.clone()),
+                        );
+                    }
                 }
 
                 // Source/kit hint (e.g., "main", "cleanshot") - very subtle
-                if let Some(ref hint) = self.source_hint {
-                    accessories = accessories.child(
-                        div()
-                            .text_size(px(SOURCE_HINT_FONT_SIZE))
-                            .text_color(rgba((colors.text_dimmed << 8) | ALPHA_HINT))
-                            .child(hint.clone()),
-                    );
+                if show_accessories {
+                    if let Some(ref hint) = self.source_hint {
+                        accessories = accessories.child(
+                            div()
+                                .text_size(px(SOURCE_HINT_FONT_SIZE))
+                                .text_color(rgba((colors.text_dimmed << 8) | ALPHA_HINT))
+                                .child(hint.clone()),
+                        );
+                    }
                 }
 
                 // Type tag pill (shown during search to distinguish result types)
