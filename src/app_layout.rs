@@ -58,6 +58,7 @@ impl ScriptListApp {
             AppView::FileSearchView { .. } => "FileSearch",
             AppView::ThemeChooserView { .. } => "ThemeChooser",
             AppView::ActionsDialog => "ActionsDialog",
+            AppView::WebcamView { .. } => "Webcam",
         };
 
         // Header bounds (includes padding + input + divider) - common to all views
@@ -524,6 +525,7 @@ impl ScriptListApp {
             AppView::FileSearchView { .. } => "fileSearch",
             AppView::ThemeChooserView { .. } => "themeChooser",
             AppView::ActionsDialog => "actionsDialog",
+            AppView::WebcamView { .. } => "webcam",
         };
 
         let mut components = Vec::new();

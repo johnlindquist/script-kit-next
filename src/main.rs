@@ -34,6 +34,7 @@ mod actions_button_visibility_tests;
 mod agents;
 mod ai;
 mod aliases;
+mod camera;
 #[cfg(test)]
 mod clipboard_actions_tests;
 mod components;
@@ -872,6 +873,10 @@ enum AppView {
     DesignGalleryView {
         filter: String,
         selected_index: usize,
+    },
+    /// Showing webcam prompt
+    WebcamView {
+        entity: Entity<prompts::WebcamPrompt>,
     },
     /// Showing scratch pad editor (auto-saves to disk)
     ScratchPadView {
@@ -1775,6 +1780,9 @@ impl Render for ScriptListApp {
             } => self
                 .render_design_gallery(filter, selected_index, cx)
                 .into_any_element(),
+            AppView::WebcamView { entity } => {
+                self.render_webcam_prompt(entity, cx).into_any_element()
+            }
             AppView::ScratchPadView { entity, .. } => {
                 self.render_editor_prompt(entity, cx).into_any_element()
             }

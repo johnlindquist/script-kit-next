@@ -14,6 +14,7 @@ pub mod actions;
 // Provides ShellSpec, HeaderSpec, FooterSpec, ChromeSpec for consistent prompt layout
 pub mod app_shell;
 
+pub mod camera;
 pub mod components;
 pub mod config;
 
