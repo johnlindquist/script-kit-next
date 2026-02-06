@@ -1173,6 +1173,12 @@ impl ScriptListApp {
                                     cx.stop_propagation();
                                     return;
                                 }
+                                AppView::WebcamView { .. } => {
+                                    logging::log("KEY", "Interceptor: Cmd+K -> toggle_webcam_actions (WebcamView)");
+                                    this.toggle_webcam_actions(cx, window);
+                                    cx.stop_propagation();
+                                    return;
+                                }
                                 AppView::ClipboardHistoryView { .. } => {
                                     // Toggle actions for selected clipboard entry
                                     if let Some(entry) = this.selected_clipboard_entry() {
@@ -1274,6 +1280,7 @@ impl ScriptListApp {
                                 AppView::EditorPrompt { .. } => Some(ActionsDialogHost::EditorPrompt),
                                 AppView::TermPrompt { .. } => Some(ActionsDialogHost::TermPrompt),
                                 AppView::FormPrompt { .. } => Some(ActionsDialogHost::FormPrompt),
+                                AppView::WebcamView { .. } => Some(ActionsDialogHost::WebcamPrompt),
                                 _ => None,
                             };
 
@@ -1298,6 +1305,9 @@ impl ScriptListApp {
                                             }
                                             ActionsDialogHost::ArgPrompt => {
                                                 this.trigger_action_by_name(&action_id, cx);
+                                            }
+                                            ActionsDialogHost::WebcamPrompt => {
+                                                this.execute_webcam_action(&action_id, cx);
                                             }
                                             _ => {
                                                 this.handle_action(action_id, cx);
@@ -3790,6 +3800,102 @@ impl ScriptListApp {
             }
         }
     }
+    /// Toggle actions dialog for webcam prompt (built-in command).
+    /// Opens as a separate window (same pattern as toggle_chat_actions).
+    pub fn toggle_webcam_actions(&mut self, cx: &mut Context<Self>, window: &mut Window) {
+        use crate::actions::{ActionsDialog, ActionsDialogConfig};
+
+        logging::log(
+            "KEY",
+            &format!(
+                "toggle_webcam_actions called: show_actions_popup={}, is_actions_window_open={}",
+                self.show_actions_popup,
+                is_actions_window_open()
+            ),
+        );
+
+        if self.show_actions_popup || is_actions_window_open() {
+            // Close — delegate to central close_actions_popup
+            self.close_actions_popup(ActionsDialogHost::WebcamPrompt, window, cx);
+        } else {
+            // Open actions as a separate window — same pattern as toggle_chat_actions
+            self.show_actions_popup = true;
+            self.push_focus_overlay(focus_coordinator::FocusRequest::actions_dialog(), cx);
+
+            // Transfer focus to main focus_handle while actions window is open
+            self.focus_handle.focus(window, cx);
+            self.gpui_input_focused = false;
+
+            let theme_arc = std::sync::Arc::clone(&self.theme);
+            let webcam_actions = Self::webcam_actions_for_dialog();
+
+            // Use native Action rows with default actions config so webcam uses the same
+            // filtering/navigation behavior as the main actions dialog.
+            let dialog = cx.new(move |cx| {
+                let focus_handle = cx.focus_handle();
+                let mut dialog = ActionsDialog::with_config(
+                    focus_handle,
+                    std::sync::Arc::new(|_action_id| {}),
+                    webcam_actions,
+                    theme_arc,
+                    ActionsDialogConfig::default(),
+                );
+                dialog.set_context_title(Some("Webcam".to_string()));
+                dialog
+            });
+
+            self.actions_dialog = Some(dialog.clone());
+
+            // Set up on_close callback — same pattern as toggle_chat_actions
+            let app_entity = cx.entity().clone();
+            dialog.update(cx, |d, _cx| {
+                d.set_on_close(std::sync::Arc::new(move |cx| {
+                    app_entity.update(cx, |app, cx| {
+                        app.show_actions_popup = false;
+                        app.actions_dialog = None;
+                        app.pop_focus_overlay(cx);
+                        logging::log(
+                            "FOCUS",
+                            "Webcam actions closed via escape, focus restored via coordinator",
+                        );
+                    });
+                }));
+            });
+
+            // Get main window bounds for positioning
+            let main_bounds = window.bounds();
+            let display_id = window.display(cx).map(|d| d.id());
+
+            // Open the actions window — same as toggle_chat_actions
+            cx.spawn(async move |_this, cx| {
+                cx.update(|cx| {
+                    match open_actions_window(
+                        cx,
+                        main_bounds,
+                        display_id,
+                        dialog,
+                        crate::actions::WindowPosition::BottomRight,
+                    ) {
+                        Ok(_handle) => {
+                            logging::log("ACTIONS", "Webcam actions popup window opened");
+                        }
+                        Err(e) => {
+                            logging::log(
+                                "ACTIONS",
+                                &format!("Failed to open webcam actions window: {}", e),
+                            );
+                        }
+                    }
+                })
+                .ok();
+            })
+            .detach();
+
+            logging::log("FOCUS", "Webcam actions opened, keyboard routing active");
+        }
+        cx.notify();
+    }
+
     /// Toggle terminal command bar for built-in terminal
     /// Shows common terminal actions (Clear, Copy, Paste, Scroll, etc.)
     #[allow(dead_code)]
@@ -4061,6 +4167,50 @@ impl ScriptListApp {
             }
             _ => {
                 logging::log("ACTIONS", &format!("Unknown chat action: {}", action_id));
+            }
+        }
+    }
+
+    fn webcam_actions_for_dialog() -> Vec<crate::actions::Action> {
+        use crate::actions::{Action, ActionCategory};
+
+        vec![
+            Action::new(
+                "capture",
+                "Capture",
+                Some("Take a photo".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("↵"),
+            Action::new(
+                "close",
+                "Close",
+                Some("Close webcam".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⎋"),
+        ]
+    }
+
+    fn execute_webcam_action(&mut self, action_id: &str, cx: &mut Context<Self>) {
+        match action_id {
+            "capture" => {
+                logging::log("ACTIONS", "execute_webcam_action: capture");
+                self.close_and_reset_window(cx);
+            }
+            "close" => {
+                logging::log("ACTIONS", "execute_webcam_action: close");
+                self.close_and_reset_window(cx);
+            }
+            _ => {
+                logging::log(
+                    "ACTIONS",
+                    &format!(
+                        "execute_webcam_action: unknown id '{}', falling back to SDK action routing",
+                        action_id
+                    ),
+                );
+                self.trigger_action_by_name(action_id, cx);
             }
         }
     }

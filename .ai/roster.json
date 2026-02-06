@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "updatedAt": "2026-02-06T22:09:46.888Z",
+  "agents": {
+    "codex-actions-consistency": {
+      "id": "codex-actions-consistency",
+      "kind": "codex",
+      "mode": "exec",
+      "model": "gpt-5.3-codex",
+      "task": "Fix the webcam actions window dialog to have the same behavior as the main window actions dialog. The main window has an actions dialog (likely in src/actions.rs or similar) that supports search, focus, keyboard navigation, etc. The webcam prompt (src/prompts/webcam* or similar) has its own actions dialog that behaves differently. Make the webcam actions dialog use the same shared actions component/behavior as the main window so all actions menu dialogs are consistent. Check src/app_impl.rs for how actions are dispatched, src/prompts/ for prompt-specific action handling, and src/actions.rs for the shared actions dialog. Ensure search/filter, keyboard focus, escape handling, and item selection all work identically.",
+      "scope": "src/**/*.rs",
+      "status": "in_progress",
+      "claims": [
+        "src/app_impl.rs",
+        "src/webcam_actions_consistency_tests.rs",
+        "src/lib.rs"
+      ],
+      "createdAt": "2026-02-06T22:03:24.580Z",
+      "lastSeenAt": "2026-02-06T22:09:39.601Z",
+      "host": "johns.macbook.pro.lan",
+      "notes": "Investigating shared actions dialog vs webcam actions behavior",
+      "pid": 17604
+    },
+    "codex-padding-margins": {
+      "id": "codex-padding-margins",
+      "kind": "codex",
+      "mode": "exec",
+      "model": "gpt-5.3-codex",
+      "task": "Audit ALL prompt/view components in src/prompts/*.rs and src/render_prompts/*.rs for inconsistent padding, margins, and container spacing. Every prompt type (chat, markdown, setup, webcam, notes, etc.) should use consistent outer padding, inner content margins, and gap values. Find places where px() values differ between similar components and normalize them to a shared set of spacing constants. Use theme spacing tokens where available. Fix any hardcoded pixel values that should match other prompts but don't.",
+      "scope": "src/prompts/*.rs,src/render_prompts/*.rs",
+      "status": "in_progress",
+      "claims": [],
+      "createdAt": "2026-02-06T22:09:16.886Z",
+      "lastSeenAt": "2026-02-06T22:09:46.888Z",
+      "host": "johns.macbook.pro.lan",
+      "notes": "Auditing prompt/render spacing; collecting baseline before edits",
+      "pid": 23031
+    }
+  }
+}

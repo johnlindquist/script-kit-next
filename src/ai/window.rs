@@ -5201,12 +5201,14 @@ impl AiApp {
                 })
                 .into_any_element()
         } else {
-            let with_cursor = format!("{}▌", self.streaming_content);
+            // Render markdown separately from cursor to avoid invalidating
+            // the markdown cache on every frame during streaming
             div()
                 .w_full()
                 .min_w_0()
                 .overflow_x_hidden()
-                .child(render_markdown(&with_cursor, &colors))
+                .child(render_markdown(&self.streaming_content, &colors))
+                .child(div().text_sm().text_color(cx.theme().accent).child("▌"))
                 .into_any_element()
         };
 
@@ -5708,17 +5710,22 @@ impl AiApp {
                 cx.listener(move |this, event: &ScrollWheelEvent, _window, cx| {
                     let delta_y = event.delta.pixel_delta(px(1.0)).y;
                     if delta_y > px(0.) {
-                        // Scrolling up - user wants to read earlier messages
-                        this.user_has_scrolled_up = true;
-                        cx.notify();
+                        // Scrolling up - only notify when state actually changes
+                        // (avoids redundant re-renders during momentum scroll)
+                        if !this.user_has_scrolled_up {
+                            this.user_has_scrolled_up = true;
+                            cx.notify();
+                        }
                     } else if delta_y < px(0.) {
                         // Scrolling down - check if near bottom to reset flag
                         // Use logical_scroll_top to determine position
                         let scroll_top = this.messages_list_state.logical_scroll_top().item_ix;
                         // If we're within 2 items of the bottom, consider it "at bottom"
                         if total_items > 0 && scroll_top + 3 >= total_items {
-                            this.user_has_scrolled_up = false;
-                            cx.notify();
+                            if this.user_has_scrolled_up {
+                                this.user_has_scrolled_up = false;
+                                cx.notify();
+                            }
                         }
                     }
                 }),
