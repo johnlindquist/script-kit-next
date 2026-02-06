@@ -319,8 +319,9 @@ impl ScriptListApp {
         entity: Entity<prompts::WebcamPrompt>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        // Use design tokens for GLOBAL theming
+        // Use design tokens for GLOBAL theming (same pattern as DivPrompt)
         let tokens = get_tokens(self.current_design);
+        let design_colors = tokens.colors();
         let design_visual = tokens.visual();
 
         // Key handler for global shortcuts (Cmd+W, ESC)
@@ -329,25 +330,67 @@ impl ScriptListApp {
                   event: &gpui::KeyDownEvent,
                   _window: &mut Window,
                   cx: &mut Context<Self>| {
-                // Hide cursor while typing - automatically shows when mouse moves
                 this.hide_mouse_cursor(cx);
-
-                // Global shortcuts (Cmd+W, ESC)
                 let _ = this.handle_global_shortcut_with_options(event, true, cx);
             },
         );
 
+        // VIBRANCY: Use foundation helper - returns None when vibrancy enabled (let Root handle bg)
+        let vibrancy_bg = get_vibrancy_background(&self.theme);
+
+        // Use explicit height from layout constants
+        let content_height = window_resize::layout::STANDARD_HEIGHT;
+
+        // Footer colors and handlers for PromptFooter (same as DivPrompt)
+        let footer_colors = PromptFooterColors {
+            accent: design_colors.accent,
+            text_muted: design_colors.text_muted,
+            border: design_colors.border,
+            background: design_colors.background_selected,
+            is_light_mode: !self.theme.is_dark_mode(),
+        };
+
+        // Footer config: Capture as primary action, helper text "Built-in"
+        let footer_config = PromptFooterConfig::new()
+            .primary_label("Capture")
+            .primary_shortcut("↵")
+            .helper_text("Built-in")
+            .show_secondary(false);
+
+        // Create click handler for footer submit
+        let handle_submit = cx.entity().downgrade();
+
         div()
             .flex()
             .flex_col()
-            // Removed: .bg(rgba(bg_with_alpha)) - let vibrancy show through from Root
-            // NOTE: No shadow - shadows on transparent elements cause gray fill with vibrancy
+            .when_some(vibrancy_bg, |d, bg| d.bg(bg))
             .w_full()
-            .h_full()
+            .h(content_height)
             .overflow_hidden()
             .rounded(px(design_visual.radius_lg))
+            .track_focus(&self.focus_handle)
             .on_key_down(handle_key)
-            .child(div().size_full().child(entity))
+            // Content area - flex-1 to fill remaining space above footer
+            .child(
+                div()
+                    .flex_1()
+                    .w_full()
+                    .min_h(px(0.))
+                    .overflow_hidden()
+                    .child(entity),
+            )
+            // Footer with Capture button (same pattern as all other prompts)
+            .child(
+                PromptFooter::new(footer_config, footer_colors).on_primary_click(Box::new(
+                    move |_, _window, cx| {
+                        if let Some(app) = handle_submit.upgrade() {
+                            app.update(cx, |this, cx| {
+                                this.close_and_reset_window(cx);
+                            });
+                        }
+                    },
+                )),
+            )
             .into_any_element()
     }
 }

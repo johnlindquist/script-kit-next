@@ -1,8 +1,11 @@
 //! Webcam prompt UI component — renders CVPixelBuffer via gpui::surface()
+//!
+//! This is the inner content component. The app container (render_webcam_prompt)
+//! provides the standard chrome: vibrancy, footer with logo/Capture/Actions.
 
 use core_video::pixel_buffer::CVPixelBuffer;
 use gpui::{
-    div, prelude::*, px, rgb, Context, FocusHandle, Focusable, ObjectFit, Render, Styled, Window,
+    div, prelude::*, rgb, Context, FocusHandle, Focusable, ObjectFit, Render, Styled, Window,
 };
 
 use super::base::DesignContext;
@@ -19,7 +22,8 @@ pub enum WebcamState {
     Error(String),
 }
 
-/// Webcam prompt component
+/// Webcam prompt component — just the camera preview content.
+/// The standard app container provides the footer, vibrancy, etc.
 pub struct WebcamPrompt {
     pub base: PromptBase,
     pub state: WebcamState,
@@ -81,120 +85,32 @@ impl Focusable for WebcamPrompt {
 }
 
 impl Render for WebcamPrompt {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         let dc = DesignContext::new(&self.base.theme, self.base.design_variant);
         let colors = self.base.theme.colors.prompt_colors();
 
-        let handle_key = cx.listener(|this, event: &gpui::KeyDownEvent, _window, cx| {
-            let key = event.keystroke.key.to_ascii_lowercase();
-            match key.as_str() {
-                "enter" | "space" => {
-                    this.base.submit(None);
-                    cx.notify();
-                }
-                "escape" | "esc" => {
-                    this.base.cancel();
-                    cx.notify();
-                }
-                "m" => {
-                    this.mirror = !this.mirror;
-                    cx.notify();
-                }
-                _ => {}
-            }
-        });
-
-        let mirror_label = if self.mirror { "On" } else { "Off" };
-
         // Camera preview: use gpui::surface() for zero-copy GPU rendering
-        let preview = if let Some(ref buf) = self.pixel_buffer {
-            div()
-                .w_full()
-                .flex_1()
-                .rounded(px(8.0))
-                .overflow_hidden()
-                .child(
-                    gpui::surface(buf.clone())
-                        .object_fit(ObjectFit::Contain)
-                        .w_full()
-                        .h_full(),
-                )
+        if let Some(ref buf) = self.pixel_buffer {
+            div().size_full().child(
+                gpui::surface(buf.clone())
+                    .object_fit(ObjectFit::Contain)
+                    .w_full()
+                    .h_full(),
+            )
         } else {
+            // Placeholder while camera initializes or on error
             div()
                 .flex()
-                .flex_1()
+                .size_full()
                 .items_center()
                 .justify_center()
-                .w_full()
                 .bg(dc.bg_secondary())
-                .border_1()
-                .border_color(dc.border())
-                .rounded(px(8.0))
                 .child(
                     div()
                         .text_sm()
                         .text_color(rgb(colors.text_secondary))
                         .child(self.state_label()),
                 )
-        };
-
-        div()
-            .id("webcam-prompt")
-            .flex()
-            .flex_col()
-            .w_full()
-            .h_full()
-            // No bg — let vibrancy show through from Root (matches other prompts)
-            .text_color(rgb(colors.text_primary))
-            .p(px(12.0))
-            .track_focus(&self.base.focus_handle)
-            .on_key_down(handle_key)
-            // Header
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .pb(px(8.0))
-                    .child(
-                        div()
-                            .text_sm()
-                            .font_weight(gpui::FontWeight::MEDIUM)
-                            .child("Webcam"),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(rgb(colors.text_secondary))
-                            .child(self.state_label()),
-                    ),
-            )
-            // Preview (fills remaining space)
-            .child(preview)
-            // Footer: shortcuts + status
-            .child(
-                div()
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .justify_between()
-                    .pt(px(8.0))
-                    .text_xs()
-                    .text_color(rgb(colors.text_tertiary))
-                    .child(
-                        div()
-                            .flex()
-                            .flex_row()
-                            .gap(px(12.0))
-                            .child("Enter: Capture")
-                            .child("Esc: Close")
-                            .child("M: Mirror"),
-                    )
-                    .child(
-                        div()
-                            .text_color(rgb(colors.text_secondary))
-                            .child(format!("Mirror: {mirror_label}")),
-                    ),
-            )
+        }
     }
 }
