@@ -966,6 +966,7 @@ impl ScriptListApp {
                             }
                             builtins::BuiltInFeature::SettingsCommand(_) => "Settings".to_string(),
                             builtins::BuiltInFeature::FileSearch => "File Browser".to_string(),
+                            builtins::BuiltInFeature::Webcam => "Webcam Capture".to_string(),
                         };
                         panel = panel.child(
                             div()

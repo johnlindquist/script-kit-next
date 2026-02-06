@@ -26,6 +26,7 @@ pub mod markdown;
 mod path;
 mod select;
 mod template;
+pub mod webcam;
 
 // Re-export prompt types for use when they're integrated into main.rs
 // When integrating:
@@ -41,6 +42,7 @@ pub use chat::{
     ChatSubmitCallback,
 };
 pub use div::{ContainerOptions, ContainerPadding, DivPrompt};
+pub use webcam::WebcamPrompt;
 
 // These exports are ready for use in main.rs when AppView variants are added
 // The #[allow(unused_imports)] is temporary until main.rs integrations are complete

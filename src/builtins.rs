@@ -220,6 +220,8 @@ pub enum BuiltInFeature {
     UtilityCommand(UtilityCommandType),
     /// File search for navigating directories and finding files
     FileSearch,
+    /// Webcam capture
+    Webcam,
 }
 
 /// A built-in feature entry that appears in the main search
@@ -1097,6 +1099,15 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ],
         BuiltInFeature::FileSearch,
         "folder-search",
+    ));
+
+    entries.push(BuiltInEntry::new_with_icon(
+        "builtin-webcam",
+        "Webcam",
+        "Capture from your webcam",
+        vec!["webcam", "camera", "capture", "photo", "image"],
+        BuiltInFeature::Webcam,
+        "📸",
     ));
 
     debug!(count = entries.len(), "Built-in entries loaded");

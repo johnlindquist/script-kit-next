@@ -3429,6 +3429,7 @@ impl ScriptListApp {
             }
             AppView::ScratchPadView { .. } => Some((ViewType::EditorPrompt, 0)),
             AppView::QuickTerminalView { .. } => Some((ViewType::TermPrompt, 0)),
+            AppView::WebcamView { .. } => Some((ViewType::DivPrompt, 0)),
             AppView::FileSearchView { ref query, .. } => {
                 let results = &self.cached_file_results;
                 let filtered_count = if query.is_empty() {
@@ -6092,6 +6093,7 @@ export default {
                 | AppView::ScratchPadView { .. }
                 | AppView::QuickTerminalView { .. }
                 | AppView::EnvPrompt { .. }
+                | AppView::WebcamView { .. }
         )
     }
 
@@ -6318,6 +6320,7 @@ export default {
             AppView::DesignGalleryView { .. } => "DesignGalleryView",
             AppView::ScratchPadView { .. } => "ScratchPadView",
             AppView::QuickTerminalView { .. } => "QuickTerminalView",
+            AppView::WebcamView { .. } => "WebcamView",
             AppView::FileSearchView { .. } => "FileSearchView",
             AppView::ThemeChooserView { .. } => "ThemeChooserView",
         };

@@ -313,4 +313,41 @@ impl ScriptListApp {
             .child(div().size_full().child(entity))
             .into_any_element()
     }
+
+    fn render_webcam_prompt(
+        &mut self,
+        entity: Entity<prompts::WebcamPrompt>,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        // Use design tokens for GLOBAL theming
+        let tokens = get_tokens(self.current_design);
+        let design_visual = tokens.visual();
+
+        // Key handler for global shortcuts (Cmd+W, ESC)
+        let handle_key = cx.listener(
+            move |this: &mut Self,
+                  event: &gpui::KeyDownEvent,
+                  _window: &mut Window,
+                  cx: &mut Context<Self>| {
+                // Hide cursor while typing - automatically shows when mouse moves
+                this.hide_mouse_cursor(cx);
+
+                // Global shortcuts (Cmd+W, ESC)
+                let _ = this.handle_global_shortcut_with_options(event, true, cx);
+            },
+        );
+
+        div()
+            .flex()
+            .flex_col()
+            // Removed: .bg(rgba(bg_with_alpha)) - let vibrancy show through from Root
+            // NOTE: No shadow - shadows on transparent elements cause gray fill with vibrancy
+            .w_full()
+            .h_full()
+            .overflow_hidden()
+            .rounded(px(design_visual.radius_lg))
+            .on_key_down(handle_key)
+            .child(div().size_full().child(entity))
+            .into_any_element()
+    }
 }

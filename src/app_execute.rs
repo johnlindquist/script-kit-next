@@ -1033,6 +1033,11 @@ impl ScriptListApp {
             // =========================================================================
             // File Search (Directory Navigation)
             // =========================================================================
+            builtins::BuiltInFeature::Webcam => {
+                logging::log("EXEC", "Opening Webcam");
+                self.opened_from_main_menu = true;
+                self.open_webcam(cx);
+            }
             builtins::BuiltInFeature::FileSearch => {
                 logging::log("EXEC", "Opening File Search");
                 // Mark as opened from main menu - ESC will return to main menu
@@ -1820,6 +1825,112 @@ impl ScriptListApp {
                 cx.notify();
             }
         }
+    }
+
+    /// Open the webcam prompt
+    fn open_webcam(&mut self, cx: &mut Context<Self>) {
+        logging::log("EXEC", "Opening Webcam prompt");
+
+        let focus_handle = self.focus_handle.clone();
+        let submit_callback: std::sync::Arc<dyn Fn(String, Option<String>) + Send + Sync> =
+            std::sync::Arc::new(|_id: String, value: Option<String>| {
+                if let Some(data) = value {
+                    logging::log("EXEC", &format!("Webcam capture data: {} bytes", data.len()));
+                }
+            });
+
+        let webcam_prompt = prompts::WebcamPrompt::new(
+            "webcam".to_string(),
+            focus_handle,
+            submit_callback,
+            std::sync::Arc::clone(&self.theme),
+        );
+
+        let entity = cx.new(|_| webcam_prompt);
+
+        // Zero-copy camera capture via AVFoundation.
+        // Camera frames arrive as CVPixelBuffer on a dispatch queue,
+        // then we poll and pass them to gpui::surface() — no CPU conversion.
+        let entity_weak = entity.downgrade();
+
+        let (frame_rx, capture_handle) = match crate::camera::start_capture(640) {
+            Ok(pair) => pair,
+            Err(err) => {
+                logging::log("ERROR", &format!("Failed to start webcam: {}", err));
+                // Still show the prompt with an error
+                let entity_weak2 = entity.downgrade();
+                let err_msg = err.to_string();
+                cx.spawn(async move |_this, cx| {
+                    let _ = cx.update(|cx| {
+                        if let Some(entity) = entity_weak2.upgrade() {
+                            entity.update(cx, |prompt, cx| {
+                                prompt.set_error(err_msg, cx);
+                            });
+                        }
+                    });
+                })
+                .detach();
+
+                self.current_view = AppView::WebcamView { entity };
+                self.focused_input = FocusedInput::None;
+                self.pending_focus = Some(FocusTarget::AppRoot);
+                resize_to_view_sync(ViewType::DivPrompt, 0);
+                cx.notify();
+                return;
+            }
+        };
+
+        // Store the capture handle in the prompt — when the prompt entity is
+        // dropped, the handle drops too, stopping the camera and releasing resources.
+        entity.update(cx, |prompt, _cx| {
+            prompt.capture_handle = Some(capture_handle);
+        });
+
+        // Async poller: drain CVPixelBuffers from channel, push latest to prompt.
+        // Exits when the channel disconnects (CaptureHandle dropped) or the entity is gone.
+        cx.spawn(async move |_this, cx| {
+            loop {
+                gpui::Timer::after(std::time::Duration::from_millis(16)).await;
+
+                // Drain to latest frame, detect channel disconnect
+                let mut latest = None;
+                loop {
+                    match frame_rx.try_recv() {
+                        Ok(buf) => latest = Some(buf),
+                        Err(std::sync::mpsc::TryRecvError::Empty) => break,
+                        Err(std::sync::mpsc::TryRecvError::Disconnected) => return,
+                    }
+                }
+
+                let Some(buf) = latest else {
+                    continue;
+                };
+
+                let result = cx.update(|cx| {
+                    if let Some(entity) = entity_weak.upgrade() {
+                        entity.update(cx, |prompt, cx| {
+                            prompt.set_pixel_buffer(buf, cx);
+                        });
+                        true
+                    } else {
+                        false
+                    }
+                });
+
+                match result {
+                    Ok(true) => continue,
+                    Ok(false) | Err(_) => break,
+                }
+            }
+        })
+        .detach();
+
+        self.current_view = AppView::WebcamView { entity };
+        self.focused_input = FocusedInput::None;
+        self.pending_focus = Some(FocusTarget::AppRoot);
+
+        resize_to_view_sync(ViewType::DivPrompt, 0);
+        cx.notify();
     }
 
     /// Handle builtin confirmation modal result.
