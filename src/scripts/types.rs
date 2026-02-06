@@ -226,13 +226,13 @@ impl SearchResult {
     /// Each type gets a distinct, muted color for visual scanning.
     pub fn type_tag_info(&self) -> (&'static str, u32) {
         match self {
-            SearchResult::Script(_) => ("Script", 0x60A5FA), // Blue
-            SearchResult::Scriptlet(_) => ("Snippet", 0xA78BFA), // Purple
-            SearchResult::BuiltIn(_) => ("Command", 0x6EE7B7), // Green
-            SearchResult::App(_) => ("App", 0xFBBF24),       // Amber
-            SearchResult::Window(_) => ("Window", 0xF472B6), // Pink
-            SearchResult::Agent(_) => ("Agent", 0x38BDF8),   // Sky blue
-            SearchResult::Fallback(_) => ("Fallback", 0x9CA3AF), // Gray
+            SearchResult::Script(_) => ("Script", 0x3B82F6), // Blue-500 (saturated for vibrancy)
+            SearchResult::Scriptlet(_) => ("Snippet", 0x8B5CF6), // Violet-500
+            SearchResult::BuiltIn(_) => ("Command", 0x34D399), // Emerald-400
+            SearchResult::App(_) => ("App", 0xF59E0B),       // Amber-500
+            SearchResult::Window(_) => ("Window", 0xEC4899), // Pink-500
+            SearchResult::Agent(_) => ("Agent", 0x0EA5E9),   // Sky-500
+            SearchResult::Fallback(_) => ("Fallback", 0x6B7280), // Gray-500
         }
     }
 

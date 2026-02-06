@@ -717,8 +717,10 @@ pub fn render_markdown(text: &str, colors: &PromptColors) -> impl IntoElement {
     let parsed_blocks = parsed_blocks.unwrap_or_else(|| {
         let blocks = parse_markdown(text, colors.is_dark);
         if let Ok(mut guard) = cache.lock() {
-            // Cap cache size to prevent unbounded growth
-            if guard.len() > 256 {
+            // Cap cache size to prevent unbounded growth.
+            // Use a high limit to avoid full-cache clears during streaming,
+            // which would force every message to be re-parsed.
+            if guard.len() > 1024 {
                 guard.clear();
             }
             guard.insert(key, blocks.clone());

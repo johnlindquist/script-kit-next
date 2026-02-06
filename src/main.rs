@@ -977,6 +977,8 @@ enum ActionsDialogHost {
     FileSearch,
     /// Actions in clipboard history (restore focus to clipboard search input)
     ClipboardHistory,
+    /// Actions in webcam prompt (restore focus to None - webcam has no input)
+    WebcamPrompt,
 }
 
 /// Input mode for list navigation - tracks whether user is using keyboard or mouse.

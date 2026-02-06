@@ -324,14 +324,23 @@ impl ScriptListApp {
         let design_colors = tokens.colors();
         let design_visual = tokens.visual();
 
-        // Key handler for global shortcuts (Cmd+W, ESC)
+        // Key handler for webcam-specific shortcuts
+        // Note: Cmd+K and actions dialog key routing are handled centrally in app_impl.rs
         let handle_key = cx.listener(
             move |this: &mut Self,
                   event: &gpui::KeyDownEvent,
                   _window: &mut Window,
                   cx: &mut Context<Self>| {
+                // Hide cursor while typing - automatically shows when mouse moves
                 this.hide_mouse_cursor(cx);
-                let _ = this.handle_global_shortcut_with_options(event, true, cx);
+
+                // Global shortcuts (Cmd+W, ESC for dismissable prompts)
+                // Note: Escape when actions popup is open is handled by central interceptor
+                if !this.show_actions_popup
+                    && this.handle_global_shortcut_with_options(event, true, cx)
+                {
+                    return;
+                }
             },
         );
 
@@ -350,15 +359,16 @@ impl ScriptListApp {
             is_light_mode: !self.theme.is_dark_mode(),
         };
 
-        // Footer config: Capture as primary action, helper text "Built-in"
+        // Footer config: Capture as primary action, always show Actions button
         let footer_config = PromptFooterConfig::new()
             .primary_label("Capture")
             .primary_shortcut("↵")
             .helper_text("Built-in")
-            .show_secondary(false);
+            .show_secondary(true);
 
-        // Create click handler for footer submit
+        // Create click handlers for footer
         let handle_submit = cx.entity().downgrade();
+        let handle_actions = cx.entity().downgrade();
 
         div()
             .flex()
@@ -379,17 +389,23 @@ impl ScriptListApp {
                     .overflow_hidden()
                     .child(entity),
             )
-            // Footer with Capture button (same pattern as all other prompts)
+            // Footer with Capture button and Actions (same pattern as all other prompts)
             .child(
-                PromptFooter::new(footer_config, footer_colors).on_primary_click(Box::new(
-                    move |_, _window, cx| {
+                PromptFooter::new(footer_config, footer_colors)
+                    .on_primary_click(Box::new(move |_, _window, cx| {
                         if let Some(app) = handle_submit.upgrade() {
                             app.update(cx, |this, cx| {
                                 this.close_and_reset_window(cx);
                             });
                         }
-                    },
-                )),
+                    }))
+                    .on_secondary_click(Box::new(move |_, window, cx| {
+                        if let Some(app) = handle_actions.upgrade() {
+                            app.update(cx, |this, cx| {
+                                this.toggle_webcam_actions(cx, window);
+                            });
+                        }
+                    })),
             )
             .into_any_element()
     }

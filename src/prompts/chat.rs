@@ -486,6 +486,11 @@ impl ChatPrompt {
 
                 let result = cx.update(|cx| {
                     this.update(cx, |chat, cx| {
+                        // Skip redundant re-renders while streaming —
+                        // the streaming reveal loop already drives repaints.
+                        if chat.is_streaming() {
+                            return;
+                        }
                         chat.cursor_visible = !chat.cursor_visible;
                         cx.notify();
                     })
@@ -1448,9 +1453,10 @@ impl ChatPrompt {
             let mut delay_counter: u64 = 0;
 
             loop {
-                // Variable delay per word: 30-55ms for natural pacing
+                // Variable delay per word: 50-80ms for natural pacing
+                // (kept above 50ms to avoid excessive markdown re-parsing)
                 delay_counter = delay_counter.wrapping_add(17);
-                let delay = 30 + (delay_counter % 25);
+                let delay = 50 + (delay_counter % 30);
                 Timer::after(Duration::from_millis(delay)).await;
 
                 // Read is_done BEFORE accumulated content to avoid race condition:
@@ -2165,14 +2171,20 @@ impl ChatPrompt {
                 // Empty streaming state
                 content = content.child(div().text_xs().opacity(0.6).child("Thinking..."));
             } else if turn.streaming {
-                // Streaming with content - append cursor inline so it doesn't take its own line
-                let with_cursor = format!("{}▌", response);
+                // Streaming with content - render markdown separately from cursor
+                // to avoid invalidating the markdown cache on every frame
                 content = content.child(
                     div()
                         .w_full()
                         .min_w_0()
                         .overflow_x_hidden()
-                        .child(render_markdown(&with_cursor, colors)),
+                        .child(render_markdown(response, colors))
+                        .child(
+                            div()
+                                .text_sm()
+                                .text_color(rgb(colors.accent_color))
+                                .child("▌"),
+                        ),
                 );
             } else {
                 // Complete response - full markdown rendering (with container for proper wrapping)
