@@ -94,6 +94,14 @@ pub fn footer_surface_rgba(colors: PromptFooterColors) -> u32 {
     (colors.background << 8) | alpha
 }
 
+fn footer_shadow_alpha(colors: PromptFooterColors) -> u8 {
+    if colors.is_light_mode {
+        0x28
+    } else {
+        0x50
+    }
+}
+
 /// Configuration for PromptFooter display
 #[derive(Clone, Debug)]
 pub struct PromptFooterConfig {
@@ -365,7 +373,7 @@ impl RenderOnce for PromptFooter {
             // Inner shadow above the footer for visual separation from content
             // Footers are the ONE scenario where blocking vibrancy is OK
             .shadow(vec![BoxShadow {
-                color: hsla(0., 0., 0., 0.12), // Black at 12% opacity - visible grounding
+                color: colors.border.rgba8(footer_shadow_alpha(colors)),
                 offset: point(px(0.), px(-1.)), // Negative Y = shadow above element
                 blur_radius: px(8.),           // Wider blur for softer edge
                 spread_radius: px(0.),
@@ -474,5 +482,23 @@ mod tests {
         assert_eq!(resolved.border, expected.border);
         assert_eq!(resolved.background, expected.background);
         assert_eq!(resolved.is_light_mode, expected.is_light_mode);
+    }
+
+    #[test]
+    fn test_footer_shadow_alpha_uses_higher_alpha_in_dark_mode() {
+        let light = PromptFooterColors {
+            accent: 0,
+            text_muted: 0,
+            border: 0,
+            background: 0,
+            is_light_mode: true,
+        };
+        let dark = PromptFooterColors {
+            is_light_mode: false,
+            ..light
+        };
+
+        assert_eq!(super::footer_shadow_alpha(light), 0x28);
+        assert_eq!(super::footer_shadow_alpha(dark), 0x50);
     }
 }

@@ -289,18 +289,7 @@ pub struct UnifiedListItemColors {
 
 impl Default for UnifiedListItemColors {
     fn default() -> Self {
-        Self {
-            text_primary: 0xFFFFFF,
-            text_secondary: 0xCCCCCC,
-            text_muted: 0x888888,
-            text_dimmed: 0x666666,
-            text_highlight: 0x4A90D9,
-            accent: 0x4A90D9,
-            accent_subtle: 0x4A90D9,
-            background: 0x1E1E1E,
-            selected_opacity: 0.35, // Visible selection
-            hover_opacity: 0.25,    // Visible hover
-        }
+        Self::from_theme(&crate::theme::get_cached_theme())
     }
 }
 
@@ -325,3 +314,25 @@ impl UnifiedListItemColors {
 
 /// Height for section headers in grouped lists.
 pub const SECTION_HEADER_HEIGHT: f32 = crate::list_item::SECTION_HEADER_HEIGHT;
+
+#[cfg(test)]
+mod tests {
+    use super::UnifiedListItemColors;
+
+    #[test]
+    fn test_unified_list_item_colors_default_uses_cached_theme_tokens() {
+        let resolved = UnifiedListItemColors::default();
+        let expected = UnifiedListItemColors::from_theme(&crate::theme::get_cached_theme());
+
+        assert_eq!(resolved.text_primary, expected.text_primary);
+        assert_eq!(resolved.text_secondary, expected.text_secondary);
+        assert_eq!(resolved.text_muted, expected.text_muted);
+        assert_eq!(resolved.text_dimmed, expected.text_dimmed);
+        assert_eq!(resolved.text_highlight, expected.text_highlight);
+        assert_eq!(resolved.accent, expected.accent);
+        assert_eq!(resolved.accent_subtle, expected.accent_subtle);
+        assert_eq!(resolved.background, expected.background);
+        assert_eq!(resolved.selected_opacity, expected.selected_opacity);
+        assert_eq!(resolved.hover_opacity, expected.hover_opacity);
+    }
+}
