@@ -170,7 +170,7 @@ fn extract_frontmatter_fields(raw: HashMap<String, serde_yaml::Value>) -> AgentF
                 fm.inputs = parse_inputs(value);
             }
             "_interactive" | "_i" => {
-                fm.interactive = value.as_bool().or(Some(true));
+                fm.interactive = parse_interactive_flag(value);
             }
             "_cwd" => {
                 fm.cwd = value.as_str().map(|s| s.to_string());
@@ -295,6 +295,48 @@ fn parse_env(value: &serde_yaml::Value) -> Option<HashMap<String, String>> {
         }
     } else {
         None
+    }
+}
+
+/// Parse `_interactive`/`_i` values with graceful coercion.
+///
+/// Supports booleans, null (presence means `true`), string booleans, and numeric booleans.
+fn parse_interactive_flag(value: &serde_yaml::Value) -> Option<bool> {
+    match value {
+        serde_yaml::Value::Bool(flag) => Some(*flag),
+        serde_yaml::Value::Null => Some(true),
+        serde_yaml::Value::String(raw) => {
+            let normalized = raw.trim().to_ascii_lowercase();
+            match normalized.as_str() {
+                "true" | "1" | "yes" | "on" => Some(true),
+                "false" | "0" | "no" | "off" => Some(false),
+                _ => {
+                    warn!(
+                        interactive = %raw,
+                        "Invalid _interactive string value; defaulting to true"
+                    );
+                    Some(true)
+                }
+            }
+        }
+        serde_yaml::Value::Number(number) => {
+            if let Some(val) = number.as_i64() {
+                Some(val != 0)
+            } else if let Some(val) = number.as_u64() {
+                Some(val != 0)
+            } else if let Some(val) = number.as_f64() {
+                Some(val != 0.0)
+            } else {
+                Some(true)
+            }
+        }
+        _ => {
+            warn!(
+                value = ?value,
+                "Unsupported _interactive value type; defaulting to true"
+            );
+            Some(true)
+        }
     }
 }
 
@@ -570,6 +612,39 @@ Prompt"#;
     fn test_parse_frontmatter_interactive_short() {
         let content = r#"---
 _i: true
+---
+Prompt"#;
+
+        let fm = parse_frontmatter_ok(content);
+        assert_eq!(fm.interactive, Some(true));
+    }
+
+    #[test]
+    fn test_parse_frontmatter_interactive_string_false() {
+        let content = r#"---
+_interactive: "false"
+---
+Prompt"#;
+
+        let fm = parse_frontmatter_ok(content);
+        assert_eq!(fm.interactive, Some(false));
+    }
+
+    #[test]
+    fn test_parse_frontmatter_interactive_number_zero() {
+        let content = r#"---
+_interactive: 0
+---
+Prompt"#;
+
+        let fm = parse_frontmatter_ok(content);
+        assert_eq!(fm.interactive, Some(false));
+    }
+
+    #[test]
+    fn test_parse_frontmatter_interactive_null_defaults_true() {
+        let content = r#"---
+_interactive:
 ---
 Prompt"#;
 
