@@ -57,6 +57,10 @@ fn file_search_action_error_hud_prefix(action_id: &str) -> Option<&'static str> 
     }
 }
 
+fn should_transition_to_script_list_after_action(current_view: &AppView) -> bool {
+    matches!(current_view, AppView::ScriptList | AppView::ActionsDialog)
+}
+
 fn selection_required_message_for_action(action_id: &str) -> &'static str {
     match action_id {
         "copy_path" => "Select an item to copy its path.",
@@ -162,9 +166,10 @@ mod app_actions_tests {
     use super::{
         clipboard_pin_action_success_hud, extract_scriptlet_source_path,
         file_search_action_error_hud_prefix, file_search_action_success_hud,
-        selection_required_message_for_action,
+        selection_required_message_for_action, should_transition_to_script_list_after_action,
         script_removal_target_from_result, select_clipboard_entry_meta, ScriptRemovalTarget,
     };
+    use crate::AppView;
     use crate::clipboard_history::{ClipboardEntryMeta, ContentType};
     use crate::scripts;
     use std::path::PathBuf;
@@ -280,6 +285,28 @@ mod app_actions_tests {
     }
 
     #[test]
+    fn test_should_transition_to_script_list_after_action_is_context_aware() {
+        assert!(should_transition_to_script_list_after_action(
+            &AppView::ScriptList
+        ));
+        assert!(should_transition_to_script_list_after_action(
+            &AppView::ActionsDialog
+        ));
+        assert!(!should_transition_to_script_list_after_action(
+            &AppView::ClipboardHistoryView {
+                filter: String::new(),
+                selected_index: 0,
+            }
+        ));
+        assert!(!should_transition_to_script_list_after_action(
+            &AppView::FileSearchView {
+                query: String::new(),
+                selected_index: 0,
+            }
+        ));
+    }
+
+    #[test]
     fn test_extract_scriptlet_source_path_removes_anchor() {
         let path_with_anchor = Some("/tmp/snippets/tools.md#open-github".to_string());
         let extracted = extract_scriptlet_source_path(path_with_anchor.as_ref());
@@ -338,4 +365,3 @@ mod app_actions_tests {
         );
     }
 }
-
