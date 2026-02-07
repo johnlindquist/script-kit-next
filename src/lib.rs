@@ -113,6 +113,9 @@ pub mod fallbacks;
 // Favorite script ID storage (~/.scriptkit/favorites.json)
 pub mod favorites;
 
+// Quicklinks storage (~/.scriptkit/quicklinks.json)
+pub mod quicklinks;
+
 // Frecency tracking for script usage
 pub mod frecency;
 
