@@ -106,7 +106,7 @@ pub fn is_command_bar_open() -> bool {
 }
 
 #[cfg(test)]
-mod tests {
+mod command_bar_config_tests {
     use super::*;
 
     #[test]
