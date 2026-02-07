@@ -367,7 +367,6 @@ impl Render for ChatPrompt {
 
         div()
             .id("chat-prompt")
-            .relative() // For absolute positioning of actions menu
             .flex()
             .flex_col()
             .w_full()

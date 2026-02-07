@@ -38,35 +38,6 @@ pub fn default_models() -> Vec<ChatModel> {
     ]
 }
 
-/// Action item in the actions menu
-#[derive(Clone, Debug)]
-pub struct ChatAction {
-    pub id: String,
-    pub label: String,
-    pub shortcut: Option<String>,
-    pub is_separator: bool,
-}
-
-impl ChatAction {
-    pub fn new(id: impl Into<String>, label: impl Into<String>, shortcut: Option<&str>) -> Self {
-        Self {
-            id: id.into(),
-            label: label.into(),
-            shortcut: shortcut.map(|s| s.to_string()),
-            is_separator: false,
-        }
-    }
-
-    pub fn separator() -> Self {
-        Self {
-            id: String::new(),
-            label: String::new(),
-            shortcut: None,
-            is_separator: true,
-        }
-    }
-}
-
 /// Callback type for when user submits a message: (prompt_id, message_text)
 pub type ChatSubmitCallback = Arc<dyn Fn(String, String) + Send + Sync>;
 
