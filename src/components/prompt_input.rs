@@ -302,14 +302,7 @@ impl PromptInputColors {
 
 impl Default for PromptInputColors {
     fn default() -> Self {
-        Self {
-            text_primary: 0xffffff,
-            text_muted: 0x808080,
-            text_dimmed: 0x666666,
-            accent: 0xfbbf24, // Script Kit yellow/gold
-            background: 0x1e1e1e,
-            border: 0x464647,
-        }
+        Self::from_theme(&crate::theme::get_cached_theme())
     }
 }
 
@@ -496,3 +489,21 @@ impl RenderOnce for PromptInput {
 // - PromptInputConfig: Clone, Debug, Default + builder pattern
 // - InputPadding: Copy, Clone, Debug, Default
 // - PromptInput: builder pattern with .filter_text(), .path_prefix(), .with_config()
+
+#[cfg(test)]
+mod tests {
+    use super::PromptInputColors;
+
+    #[test]
+    fn test_prompt_input_colors_default_uses_cached_theme_tokens() {
+        let resolved = PromptInputColors::default();
+        let expected = PromptInputColors::from_theme(&crate::theme::get_cached_theme());
+
+        assert_eq!(resolved.text_primary, expected.text_primary);
+        assert_eq!(resolved.text_muted, expected.text_muted);
+        assert_eq!(resolved.text_dimmed, expected.text_dimmed);
+        assert_eq!(resolved.accent, expected.accent);
+        assert_eq!(resolved.background, expected.background);
+        assert_eq!(resolved.border, expected.border);
+    }
+}

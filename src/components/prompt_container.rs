@@ -61,13 +61,7 @@ impl PromptContainerColors {
 
 impl Default for PromptContainerColors {
     fn default() -> Self {
-        Self {
-            background: 0x1e1e1e,
-            text_primary: 0xffffff,
-            text_muted: 0x808080,
-            border: 0x464647,
-            hint_font_size: 10.0,
-        }
+        Self::from_theme(&crate::theme::get_cached_theme())
     }
 }
 
@@ -303,7 +297,8 @@ impl RenderOnce for PromptContainer {
 #[cfg(test)]
 mod prompt_container_tests {
     use super::{
-        prompt_container_frame_config, PromptContainerConfig, PromptContainerContentLayout,
+        prompt_container_frame_config, PromptContainerColors, PromptContainerConfig,
+        PromptContainerContentLayout,
     };
     use crate::components::prompt_layout_shell::prompt_shell_frame_config;
 
@@ -326,5 +321,17 @@ mod prompt_container_tests {
 
         assert_eq!(shell_config.min_height_px, container_config.min_height_px);
         assert_eq!(shell_config.clip_overflow, container_config.clip_overflow);
+    }
+
+    #[test]
+    fn test_prompt_container_colors_default_uses_cached_theme_tokens() {
+        let resolved = PromptContainerColors::default();
+        let expected = PromptContainerColors::from_theme(&crate::theme::get_cached_theme());
+
+        assert_eq!(resolved.background, expected.background);
+        assert_eq!(resolved.text_primary, expected.text_primary);
+        assert_eq!(resolved.text_muted, expected.text_muted);
+        assert_eq!(resolved.border, expected.border);
+        assert_eq!(resolved.hint_font_size, expected.hint_font_size);
     }
 }

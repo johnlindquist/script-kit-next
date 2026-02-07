@@ -113,14 +113,7 @@ impl Default for ScrollbarColors {
     /// For light mode, use `from_design_with_dark_mode(colors, false)` or
     /// `from_theme()` which auto-detects the mode.
     fn default() -> Self {
-        Self {
-            track: 0x464647, // Default border color
-            track_opacity: 0.1,
-            thumb: 0x808080, // Default muted color
-            thumb_opacity: 0.4,
-            thumb_hover: 0xcccccc, // Default secondary color
-            thumb_hover_opacity: 0.6,
-        }
+        Self::from_theme(&crate::theme::get_cached_theme())
     }
 }
 
@@ -359,3 +352,21 @@ impl RenderOnce for Scrollbar {
 // - should_show(): returns true when total_items > visible_items && total_items > 0
 // - thumb_height_ratio(): returns visible_items / total_items, clamped to [0.05, 1.0]
 // - thumb_position_ratio(): returns scroll_offset / max_offset, clamped to [0.0, 1.0]
+
+#[cfg(test)]
+mod tests {
+    use super::ScrollbarColors;
+
+    #[test]
+    fn test_scrollbar_colors_default_uses_cached_theme_tokens() {
+        let resolved = ScrollbarColors::default();
+        let expected = ScrollbarColors::from_theme(&crate::theme::get_cached_theme());
+
+        assert_eq!(resolved.track, expected.track);
+        assert_eq!(resolved.track_opacity, expected.track_opacity);
+        assert_eq!(resolved.thumb, expected.thumb);
+        assert_eq!(resolved.thumb_opacity, expected.thumb_opacity);
+        assert_eq!(resolved.thumb_hover, expected.thumb_hover);
+        assert_eq!(resolved.thumb_hover_opacity, expected.thumb_hover_opacity);
+    }
+}
