@@ -1,3 +1,9 @@
+mod __render_prompts_term_docs {
+    //! Terminal prompt rendering for script terminals and quick terminal view.
+    //! Key helpers map action IDs to `TerminalAction` values and drive `render_term_prompt` behavior.
+    //! This file depends on `terminal`, shared actions-dialog routing, and global shortcut handling in `ScriptListApp`.
+}
+
 // Term prompt render method - extracted from render_prompts.rs
 // This file is included via include!() macro in main.rs
 

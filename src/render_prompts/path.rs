@@ -1,3 +1,9 @@
+mod __render_prompts_path_docs {
+    //! Path prompt rendering and actions-popup synchronization for filesystem entries.
+    //! Key methods include `render_path_prompt`, `handle_show_path_actions`, and close/sync helpers.
+    //! It depends on `PathPrompt` state, actions dialog plumbing, and focus handling in `ScriptListApp`.
+}
+
 // Path prompt render method - extracted from render_prompts.rs
 // This file is included via include!() macro in main.rs
 

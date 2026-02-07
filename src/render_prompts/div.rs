@@ -1,3 +1,9 @@
+mod __render_prompts_div_docs {
+    //! Div prompt rendering integration for `ScriptListApp::render_div_prompt`.
+    //! The key surface is the single render method that wires keyboard handling and action popups.
+    //! It depends on prompt-shell/components/theme tokens and is included into the main app module.
+}
+
 // Div prompt render method - extracted from render_prompts.rs
 // This file is included via include!() macro in main.rs
 

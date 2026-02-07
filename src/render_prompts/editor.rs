@@ -1,3 +1,9 @@
+mod __render_prompts_editor_docs {
+    //! Editor prompt rendering helpers and `ScriptListApp::render_editor_prompt`.
+    //! Key routines include footer/status builders and shortcut filtering for editor-reserved bindings.
+    //! This file depends on `editor`, `ui_foundation`, and actions-dialog utilities from the main app.
+}
+
 // Editor prompt render method - extracted from render_prompts.rs
 // This file is included via include!() macro in main.rs
 

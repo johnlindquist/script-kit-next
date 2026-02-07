@@ -1,4 +1,9 @@
 #![allow(dead_code)]
+//! File-watching services for config, theme, scripts, and app-level reload orchestration.
+//! Public watchers include `ConfigWatcher`, `ThemeWatcher`, `ScriptWatcher`, and `AppWatcher`,
+//! plus reload event enums consumed by the UI/application loop.
+//! This module depends on `notify`, `config`, and `setup`, and feeds change events into runtime state updates.
+
 use notify::{recommended_watcher, RecursiveMode, Result as NotifyResult, Watcher};
 use std::collections::HashMap;
 use std::ffi::OsString;
@@ -9,7 +14,7 @@ use std::time::{Duration, Instant};
 
 use tracing::{debug, info, warn};
 
-use crate::{config, setup};
+use crate::config;
 
 /// Internal control messages for watcher threads
 enum ControlMsg {

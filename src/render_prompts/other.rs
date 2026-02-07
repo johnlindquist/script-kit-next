@@ -1,3 +1,9 @@
+mod __render_prompts_other_docs {
+    //! Render methods for non-arg prompts: select, env, drop, template, chat, and webcam.
+    //! Key APIs are the `render_*_prompt` methods and shared key-routing helpers for actions dialogs.
+    //! This fragment depends on prompt entities, action routing, and shell container components from `main.rs`.
+}
+
 // Other prompt render methods - extracted from render_prompts.rs
 // Contains: select, env, drop, template prompts
 // This file is included via include!() macro in main.rs
