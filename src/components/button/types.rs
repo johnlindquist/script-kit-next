@@ -7,6 +7,20 @@ pub const BUTTON_GHOST_HEIGHT: f32 = 28.0;
 pub const BUTTON_GHOST_PADDING_X: f32 = 8.0;
 /// Canonical vertical padding for ghost buttons.
 pub const BUTTON_GHOST_PADDING_Y: f32 = 4.0;
+/// Canonical horizontal padding for primary buttons.
+pub const BUTTON_PRIMARY_PADDING_X: f32 = 12.0;
+/// Canonical vertical padding for primary buttons.
+pub const BUTTON_PRIMARY_PADDING_Y: f32 = 6.0;
+/// Canonical horizontal padding for icon buttons.
+pub const BUTTON_ICON_PADDING_X: f32 = 6.0;
+/// Canonical vertical padding for icon buttons.
+pub const BUTTON_ICON_PADDING_Y: f32 = 6.0;
+/// Canonical spacing between button label/shortcut and inline content.
+pub const BUTTON_CONTENT_GAP_PX: f32 = 2.0;
+/// Canonical margin between the main label and shortcut text.
+pub const BUTTON_SHORTCUT_MARGIN_LEFT_PX: f32 = 4.0;
+/// Canonical button corner radius.
+pub const BUTTON_RADIUS_PX: f32 = 6.0;
 
 /// Button variant determines the visual style
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

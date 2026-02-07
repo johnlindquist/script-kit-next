@@ -2,6 +2,11 @@ use gpui::*;
 
 use crate::components::button::{Button, ButtonColors, ButtonVariant};
 
+use super::types::{
+    TOAST_ACTIONS_GAP_PX, TOAST_ACTIONS_MARGIN_TOP_PX, TOAST_BORDER_WIDTH_PX, TOAST_CONTENT_GAP_PX,
+    TOAST_CONTENT_PADDING_X_PX, TOAST_CONTENT_PADDING_Y_PX, TOAST_ICON_SIZE_PX, TOAST_MAX_WIDTH_PX,
+    TOAST_MESSAGE_COLUMN_GAP_PX, TOAST_RADIUS_PX,
+};
 use super::{Toast, ToastColors};
 
 impl RenderOnce for Toast {
@@ -22,11 +27,11 @@ impl RenderOnce for Toast {
             .flex()
             .flex_col()
             .w_full()
-            .max_w(rems(25.)) // 400px at 16px base
+            .max_w(px(TOAST_MAX_WIDTH_PX))
             .bg(rgba((colors.background << 8) | 0xF0)) // 94% opacity
-            .border_l(px(4.)) // Keep borders as px
+            .border_l(px(TOAST_BORDER_WIDTH_PX))
             .border_color(rgb(colors.border))
-            .rounded(px(8.)); // Keep border-radius as px
+            .rounded(px(TOAST_RADIUS_PX));
 
         // Only apply shadow when vibrancy is disabled - shadows block blur
         let styled_toast = if vibrancy_enabled {
@@ -51,24 +56,27 @@ impl RenderOnce for Toast {
             .flex()
             .flex_row()
             .items_start()
-            .gap(rems(0.75)) // 12px at 16px base
-            .px(rems(1.0)) // 16px at 16px base
-            .py(rems(0.75)); // 12px at 16px base
+            .gap(px(TOAST_CONTENT_GAP_PX))
+            .px(px(TOAST_CONTENT_PADDING_X_PX))
+            .py(px(TOAST_CONTENT_PADDING_Y_PX));
 
-        // Icon - keep as px for fixed icon container size
         let icon = div()
             .flex()
             .items_center()
             .justify_center()
-            .w(px(24.)) // Fixed icon size
-            .h(px(24.)) // Fixed icon size
+            .w(px(TOAST_ICON_SIZE_PX))
+            .h(px(TOAST_ICON_SIZE_PX))
             .text_lg()
             .text_color(rgb(colors.icon))
             .font_weight(FontWeight::BOLD)
             .child(variant.icon());
 
         // Message and actions column
-        let mut message_col = div().flex().flex_col().flex_1().gap(rems(0.5)); // 8px at 16px base
+        let mut message_col = div()
+            .flex()
+            .flex_col()
+            .flex_1()
+            .gap(px(TOAST_MESSAGE_COLUMN_GAP_PX));
 
         // Message text
         let message_text = div()
@@ -81,7 +89,11 @@ impl RenderOnce for Toast {
 
         // Actions row (if any)
         if !self.actions.is_empty() {
-            let mut actions_row = div().flex().flex_row().gap(rems(0.5)).mt(rems(0.25)); // 8px gap, 4px margin at 16px base
+            let mut actions_row = div()
+                .flex()
+                .flex_row()
+                .gap(px(TOAST_ACTIONS_GAP_PX))
+                .mt(px(TOAST_ACTIONS_MARGIN_TOP_PX));
 
             for action in self.actions {
                 let callback = action.callback.clone();
@@ -172,8 +184,8 @@ impl RenderOnce for Toast {
             if let Some(details_text) = self.details {
                 let details_section = div()
                     .w_full()
-                    .px(rems(1.0)) // 16px at 16px base
-                    .py(rems(0.75)) // 12px at 16px base
+                    .px(px(TOAST_CONTENT_PADDING_X_PX))
+                    .py(px(TOAST_CONTENT_PADDING_Y_PX))
                     .bg(rgba(colors.details_bg)) // Theme-aware details background
                     .border_t_1()
                     .border_color(rgba((colors.border << 8) | 0x40))
