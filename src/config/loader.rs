@@ -4,12 +4,15 @@
 
 use serde::de::DeserializeOwned;
 use serde_json::{Map, Value};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use tempfile::NamedTempFile;
 use tracing::{info, instrument, warn};
 
 use super::types::{Config, ScriptKitUserPreferences};
+
+const BUN_CONFIG_EXPORT_EXTRACT_SNIPPET: &str =
+    "const modulePath = process.argv[1]; const loaded = require(modulePath); console.log(JSON.stringify(loaded.default));";
 
 fn config_ts_path() -> PathBuf {
     crate::setup::get_kit_path().join("kit").join("config.ts")
@@ -19,6 +22,15 @@ fn settings_json_path() -> PathBuf {
     crate::setup::get_kit_path()
         .join("kit")
         .join("settings.json")
+}
+
+fn build_bun_extract_config_command(transpiled_js_path: &Path) -> Command {
+    let mut command = Command::new("bun");
+    command
+        .arg("-e")
+        .arg(BUN_CONFIG_EXPORT_EXTRACT_SNIPPET)
+        .arg(transpiled_js_path);
+    command
 }
 
 fn parse_optional_field<T>(
@@ -287,13 +299,7 @@ pub fn load_config() -> Config {
     }
 
     // Step 2: Execute the transpiled JS and extract the default export as JSON
-    let json_output = Command::new("bun")
-        .arg("-e")
-        .arg(format!(
-            "console.log(JSON.stringify(require('{}').default))",
-            tmp_js_path.display()
-        ))
-        .output();
+    let json_output = build_bun_extract_config_command(tmp_js_path).output();
 
     match json_output {
         Err(e) => {
@@ -328,9 +334,13 @@ pub fn load_config() -> Config {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_config_json, parse_user_preferences_json};
+    use super::{
+        build_bun_extract_config_command, parse_config_json, parse_user_preferences_json,
+        BUN_CONFIG_EXPORT_EXTRACT_SNIPPET,
+    };
     use crate::config::HotkeyConfig;
     use std::fs;
+    use std::path::Path;
 
     /// Code audit test: Verify all config.ts path references use the authoritative path.
     ///
@@ -482,5 +492,24 @@ mod tests {
             super::super::defaults::DEFAULT_LAYOUT_MAX_HEIGHT
         );
         assert_eq!(preferences.theme.preset_id.as_deref(), Some("nord"));
+    }
+
+    #[test]
+    fn test_build_bun_extract_config_command_passes_module_path_as_argument() {
+        let module_path = Path::new("/tmp/config-with-'quote'.js");
+        let command = build_bun_extract_config_command(module_path);
+
+        let args: Vec<String> = command
+            .get_args()
+            .map(|arg| arg.to_string_lossy().to_string())
+            .collect();
+
+        assert_eq!(args[0], "-e");
+        assert_eq!(args[1], BUN_CONFIG_EXPORT_EXTRACT_SNIPPET);
+        assert_eq!(args[2], module_path.to_string_lossy());
+        assert!(
+            !args[1].contains("require('"),
+            "module path should not be string-interpolated into the eval script"
+        );
     }
 }
