@@ -76,7 +76,7 @@ impl KeymapSpec {
     /// Add a key binding
     pub fn bind(mut self, key: impl Into<String>, action: ShellAction) -> Self {
         self.bindings.push(KeyBinding {
-            key: key.into(),
+            key: normalize_key(&key.into()),
             modifiers: Modifiers::default(),
             action,
         });
@@ -91,7 +91,7 @@ impl KeymapSpec {
         action: ShellAction,
     ) -> Self {
         self.bindings.push(KeyBinding {
-            key: key.into(),
+            key: normalize_key(&key.into()),
             modifiers,
             action,
         });
@@ -106,9 +106,10 @@ impl KeymapSpec {
 
     /// Look up an action for a key
     pub fn lookup(&self, key: &str, modifiers: &Modifiers) -> Option<ShellAction> {
+        let normalized = normalize_key(key);
         self.bindings
             .iter()
-            .find(|b| b.key == key && b.modifiers == *modifiers)
+            .find(|b| b.key == normalized && b.modifiers == *modifiers)
             .map(|b| b.action)
     }
 }
@@ -169,10 +170,24 @@ impl Modifiers {
     }
 }
 
+fn normalize_key(key: &str) -> String {
+    let normalized = key.trim().to_ascii_lowercase();
+    match normalized.as_str() {
+        "arrowup" | "uparrow" => "up".to_string(),
+        "arrowdown" | "downarrow" => "down".to_string(),
+        "arrowleft" | "leftarrow" => "left".to_string(),
+        "arrowright" | "rightarrow" => "right".to_string(),
+        "return" => "enter".to_string(),
+        "esc" => "escape".to_string(),
+        _ => normalized,
+    }
+}
+
 /// Default key bindings for the shell
 ///
 /// These are the global shortcuts that the shell handles before
 /// passing to views. Views can override via KeymapSpec.
+#[allow(dead_code)]
 pub fn default_bindings() -> SmallVec<[KeyBinding; 8]> {
     let mut bindings = SmallVec::new();
 
@@ -249,9 +264,12 @@ pub fn default_bindings() -> SmallVec<[KeyBinding; 8]> {
 /// 2. Default shell bindings
 ///
 /// Returns ShellAction::None if no binding matches.
+#[allow(dead_code)]
 pub fn route_key(key: &str, modifiers: &Modifiers, view_keymap: &KeymapSpec) -> ShellAction {
+    let normalized = normalize_key(key);
+
     // Check view-specific bindings first
-    if let Some(action) = view_keymap.lookup(key, modifiers) {
+    if let Some(action) = view_keymap.lookup(&normalized, modifiers) {
         return action;
     }
 
@@ -263,7 +281,7 @@ pub fn route_key(key: &str, modifiers: &Modifiers, view_keymap: &KeymapSpec) -> 
     // Check default bindings
     let defaults = default_bindings();
     for binding in defaults.iter() {
-        if binding.key == key && binding.modifiers == *modifiers {
+        if binding.key == normalized && binding.modifiers == *modifiers {
             return binding.action;
         }
     }

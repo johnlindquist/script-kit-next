@@ -163,6 +163,67 @@ mod keymap_tests {
     }
 
     #[test]
+    fn test_route_key_returns_prev_for_arrowup_variants() {
+        let keymap = KeymapSpec::new();
+        assert_eq!(
+            route_key("arrowup", &Modifiers::default(), &keymap),
+            ShellAction::Prev
+        );
+        assert_eq!(
+            route_key("ArrowUp", &Modifiers::default(), &keymap),
+            ShellAction::Prev
+        );
+    }
+
+    #[test]
+    fn test_route_key_returns_next_for_arrowdown_variants() {
+        let keymap = KeymapSpec::new();
+        assert_eq!(
+            route_key("arrowdown", &Modifiers::default(), &keymap),
+            ShellAction::Next
+        );
+        assert_eq!(
+            route_key("DownArrow", &Modifiers::default(), &keymap),
+            ShellAction::Next
+        );
+    }
+
+    #[test]
+    fn test_route_key_returns_cancel_for_escape_variants() {
+        let keymap = KeymapSpec::new();
+        assert_eq!(
+            route_key("Esc", &Modifiers::default(), &keymap),
+            ShellAction::Cancel
+        );
+        assert_eq!(
+            route_key("Escape", &Modifiers::default(), &keymap),
+            ShellAction::Cancel
+        );
+    }
+
+    #[test]
+    fn test_route_key_returns_run_for_return_variant() {
+        let keymap = KeymapSpec::new();
+        assert_eq!(
+            route_key("return", &Modifiers::default(), &keymap),
+            ShellAction::Run
+        );
+    }
+
+    #[test]
+    fn test_keymap_spec_bind_normalizes_variant_keys_for_lookup() {
+        let keymap = KeymapSpec::new().bind("ArrowUp", ShellAction::Prev);
+        assert_eq!(
+            keymap.lookup("up", &Modifiers::default()),
+            Some(ShellAction::Prev)
+        );
+        assert_eq!(
+            keymap.lookup("UpArrow", &Modifiers::default()),
+            Some(ShellAction::Prev)
+        );
+    }
+
+    #[test]
     fn default_bindings_include_expected_keys() {
         let defaults = default_bindings();
 
