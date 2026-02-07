@@ -419,24 +419,11 @@ impl ScriptListApp {
                         if let Some(desc) = &script.description {
                             panel = panel.child(
                                 div()
-                                    .flex()
-                                    .flex_col()
+                                    .text_sm()
+                                    .line_height(px(20.0))
+                                    .text_color(rgb(text_secondary))
                                     .pb(px(spacing.padding_lg))
-                                    .child(
-                                        div()
-                                            .text_size(px(11.0))
-                                            .font_weight(gpui::FontWeight::SEMIBOLD)
-                                            .text_color(rgba((text_muted << 8) | 0xCC))
-                                            .pb(px(spacing.padding_xs))
-                                            .child("DESCRIPTION"),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_sm()
-                                            .line_height(px(20.0))
-                                            .text_color(rgb(text_secondary))
-                                            .child(desc.clone()),
-                                    ),
+                                    .child(desc.clone()),
                             );
                         }
 
@@ -639,24 +626,11 @@ impl ScriptListApp {
                         if let Some(desc) = &scriptlet.description {
                             panel = panel.child(
                                 div()
-                                    .flex()
-                                    .flex_col()
+                                    .text_sm()
+                                    .line_height(px(20.0))
+                                    .text_color(rgb(text_secondary))
                                     .pb(px(spacing.padding_lg))
-                                    .child(
-                                        div()
-                                            .text_size(px(11.0))
-                                            .font_weight(gpui::FontWeight::SEMIBOLD)
-                                            .text_color(rgba((text_muted << 8) | 0xCC))
-                                            .pb(px(spacing.padding_xs))
-                                            .child("DESCRIPTION"),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_sm()
-                                            .line_height(px(20.0))
-                                            .text_color(rgb(text_secondary))
-                                            .child(desc.clone()),
-                                    ),
+                                    .child(desc.clone()),
                             );
                         }
 
@@ -873,122 +847,48 @@ impl ScriptListApp {
                         // Description
                         panel = panel.child(
                             div()
-                                .flex()
-                                .flex_col()
+                                .text_sm()
+                                .line_height(px(20.0))
+                                .text_color(rgb(text_secondary))
                                 .pb(px(spacing.padding_lg))
-                                .child(
-                                    div()
-                                        .text_size(px(11.0))
-                                        .font_weight(gpui::FontWeight::SEMIBOLD)
-                                        .text_color(rgba((text_muted << 8) | 0xCC)) // 80% opacity — readable but subordinate
-                                        .pb(px(spacing.padding_xs))
-                                        .child("DESCRIPTION"),
-                                )
-                                .child(
-                                    div()
-                                        .text_sm()
-                                        .line_height(px(20.0))
-                                        .text_color(rgb(text_secondary))
-                                        .child(builtin.description.clone()),
-                                ),
+                                .child(builtin.description.clone()),
                         );
 
-                        // Keywords
-                        if !builtin.keywords.is_empty() {
-                            panel = panel.child(
-                                div()
-                                    .flex()
-                                    .flex_col()
-                                    .pb(px(spacing.padding_lg))
-                                    .child(
-                                        div()
-                                            .text_size(px(11.0))
-                                            .font_weight(gpui::FontWeight::SEMIBOLD)
-                                            .text_color(rgba((text_muted << 8) | 0xCC)) // 80% opacity — readable but subordinate
-                                            .pb(px(spacing.padding_xs))
-                                            .child("KEYWORDS"),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_sm()
-                                            .line_height(px(20.0))
-                                            .text_color(rgb(text_secondary))
-                                            .child(builtin.keywords.join(", ")),
-                                    ),
-                            );
+                        // Keywords and feature type as subtle inline tags
+                        let mut metadata_tags = preview_keyword_tags(&builtin.keywords);
+                        let feature_tag = builtin_feature_annotation(&builtin.feature).to_lowercase();
+                        if !metadata_tags
+                            .iter()
+                            .any(|tag| tag.eq_ignore_ascii_case(&feature_tag))
+                        {
+                            metadata_tags.push(feature_tag);
                         }
 
-                        // Divider — subtle separation before feature type
-                        panel = panel.child(
-                            div()
-                                .w_full()
-                                .h(px(visual.border_thin))
-                                .bg(rgba((ui_border << 8) | if is_light_mode { 0x30 } else { 0x60 }))
-                                .my(px(spacing.padding_sm)),
-                        );
-
-                        // Feature type indicator
-                        let feature_type: String = match &builtin.feature {
-                            builtins::BuiltInFeature::ClipboardHistory => {
-                                "Clipboard History Manager".to_string()
-                            }
-                            builtins::BuiltInFeature::AppLauncher => {
-                                "Application Launcher".to_string()
-                            }
-                            builtins::BuiltInFeature::App(name) => name.clone(),
-                            builtins::BuiltInFeature::WindowSwitcher => {
-                                "Window Manager".to_string()
-                            }
-                            builtins::BuiltInFeature::DesignGallery => "Design Gallery".to_string(),
-                            builtins::BuiltInFeature::AiChat => "AI Assistant".to_string(),
-                            builtins::BuiltInFeature::Notes => "Notes & Scratchpad".to_string(),
-                            builtins::BuiltInFeature::MenuBarAction(_) => {
-                                "Menu Bar Action".to_string()
-                            }
-                            builtins::BuiltInFeature::SystemAction(_) => {
-                                "System Action".to_string()
-                            }
-                            builtins::BuiltInFeature::NotesCommand(_) => {
-                                "Notes Command".to_string()
-                            }
-                            builtins::BuiltInFeature::AiCommand(_) => "AI Command".to_string(),
-                            builtins::BuiltInFeature::ScriptCommand(_) => {
-                                "Script Creation".to_string()
-                            }
-                            builtins::BuiltInFeature::PermissionCommand(_) => {
-                                "Permission Management".to_string()
-                            }
-                            builtins::BuiltInFeature::FrecencyCommand(_) => {
-                                "Suggested Items".to_string()
-                            }
-                            builtins::BuiltInFeature::UtilityCommand(_) => {
-                                "Quick Utility".to_string()
-                            }
-                            builtins::BuiltInFeature::SettingsCommand(_) => "Settings".to_string(),
-                            builtins::BuiltInFeature::FileSearch => "File Browser".to_string(),
-                            builtins::BuiltInFeature::Webcam => "Webcam Capture".to_string(),
-                        };
-                        panel = panel.child(
-                            div()
+                        if !metadata_tags.is_empty() {
+                            let mut tags_row = div()
                                 .flex()
-                                .flex_col()
-                                .pt(px(spacing.padding_xs))
-                                .child(
+                                .flex_row()
+                                .flex_wrap()
+                                .gap(px(spacing.gap_sm))
+                                .pb(px(spacing.padding_md));
+
+                            for tag in metadata_tags {
+                                tags_row = tags_row.child(
                                     div()
-                                        .text_size(px(11.0))
-                                        .font_weight(gpui::FontWeight::SEMIBOLD)
-                                        .text_color(rgba((text_muted << 8) | 0xCC)) // 80% opacity — readable but subordinate
-                                        .pb(px(spacing.padding_xs))
-                                        .child("FEATURE TYPE"),
-                                )
-                                .child(
-                                    div()
-                                        .text_sm()
-                                        .line_height(px(20.0))
-                                        .text_color(rgb(text_secondary))
-                                        .child(feature_type),
-                                ),
-                        );
+                                        .px(px(6.))
+                                        .py(px(2.))
+                                        .rounded(px(999.0))
+                                        .bg(badge_bg)
+                                        .border_1()
+                                        .border_color(badge_border)
+                                        .text_xs()
+                                        .text_color(badge_text)
+                                        .child(tag),
+                                );
+                            }
+
+                            panel = panel.child(tags_row);
+                        }
                     }
                     scripts::SearchResult::App(app_match) => {
                         let app = &app_match.app;
@@ -1715,6 +1615,49 @@ impl ScriptListApp {
     }
 }
 
+fn preview_keyword_tags(keywords: &[String]) -> Vec<String> {
+    let mut tags = Vec::new();
+
+    for keyword in keywords {
+        let normalized = keyword.trim().to_lowercase();
+        if normalized.is_empty() {
+            continue;
+        }
+        if tags.iter().any(|tag| tag == &normalized) {
+            continue;
+        }
+        tags.push(normalized);
+        if tags.len() >= 6 {
+            break;
+        }
+    }
+
+    tags
+}
+
+fn builtin_feature_annotation(feature: &builtins::BuiltInFeature) -> String {
+    match feature {
+        builtins::BuiltInFeature::ClipboardHistory => "Clipboard History Manager".to_string(),
+        builtins::BuiltInFeature::AppLauncher => "Application Launcher".to_string(),
+        builtins::BuiltInFeature::App(name) => name.clone(),
+        builtins::BuiltInFeature::WindowSwitcher => "Window Manager".to_string(),
+        builtins::BuiltInFeature::DesignGallery => "Design Gallery".to_string(),
+        builtins::BuiltInFeature::AiChat => "AI Assistant".to_string(),
+        builtins::BuiltInFeature::Notes => "Notes & Scratchpad".to_string(),
+        builtins::BuiltInFeature::MenuBarAction(_) => "Menu Bar Action".to_string(),
+        builtins::BuiltInFeature::SystemAction(_) => "System Action".to_string(),
+        builtins::BuiltInFeature::NotesCommand(_) => "Notes Command".to_string(),
+        builtins::BuiltInFeature::AiCommand(_) => "AI Command".to_string(),
+        builtins::BuiltInFeature::ScriptCommand(_) => "Script Creation".to_string(),
+        builtins::BuiltInFeature::PermissionCommand(_) => "Permission Management".to_string(),
+        builtins::BuiltInFeature::FrecencyCommand(_) => "Suggested Items".to_string(),
+        builtins::BuiltInFeature::UtilityCommand(_) => "Quick Utility".to_string(),
+        builtins::BuiltInFeature::SettingsCommand(_) => "Settings".to_string(),
+        builtins::BuiltInFeature::FileSearch => "File Browser".to_string(),
+        builtins::BuiltInFeature::Webcam => "Webcam Capture".to_string(),
+    }
+}
+
 /// Helper function to render a group header style item with actual visual styling
 fn render_group_header_item(
     ix: usize,
@@ -2227,4 +2170,56 @@ fn render_group_header_item(
                 ),
         )
         .into_any_element()
+}
+
+#[cfg(test)]
+mod preview_panel_metadata_tests {
+    use super::*;
+    use crate::builtins::BuiltInFeature;
+
+    #[test]
+    fn test_preview_keyword_tags_dedupes_trims_and_limits() {
+        let keywords = vec![
+            "  screenshot ".to_string(),
+            "capture".to_string(),
+            "Screenshot".to_string(),
+            "".to_string(),
+            "tools".to_string(),
+            "utility".to_string(),
+            "shortcuts".to_string(),
+            "extra".to_string(),
+        ];
+
+        let tags = preview_keyword_tags(&keywords);
+
+        assert_eq!(
+            tags,
+            vec![
+                "screenshot".to_string(),
+                "capture".to_string(),
+                "tools".to_string(),
+                "utility".to_string(),
+                "shortcuts".to_string(),
+                "extra".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_builtin_feature_annotation_maps_known_labels() {
+        assert_eq!(
+            builtin_feature_annotation(&BuiltInFeature::FileSearch),
+            "File Browser"
+        );
+        assert_eq!(
+            builtin_feature_annotation(&BuiltInFeature::AiChat),
+            "AI Assistant"
+        );
+        assert_eq!(
+            builtin_feature_annotation(&BuiltInFeature::UtilityCommand(
+                crate::builtins::UtilityCommandType::ScratchPad,
+            )),
+            "Quick Utility"
+        );
+    }
 }
