@@ -297,12 +297,14 @@ pub struct LayoutBounds {
 /// if a newer protocol version adds new component types, older receivers
 /// will deserialize them as `Unknown` instead of failing entirely.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "camelCase")]
 pub enum LayoutComponentType {
     Prompt,
     Input,
     Button,
     List,
+    /// `listItem` in the current protocol, with legacy `listitem` support.
+    #[serde(alias = "listitem")]
     ListItem,
     Header,
     #[default]
