@@ -28,7 +28,6 @@
 use gpui::*;
 use std::rc::Rc;
 
-use crate::components::footer_button::FooterButton;
 use crate::designs::DesignColors;
 use crate::theme::Theme;
 use crate::ui_foundation::{hstack, HexColorExt};
@@ -43,6 +42,14 @@ pub const PROMPT_FOOTER_INFO_TEXT_MAX_WIDTH_PX: f32 = 220.0;
 const PROMPT_FOOTER_SECTION_GAP_PX: f32 = 8.0;
 /// Shared horizontal spacing between footer buttons/divider.
 const PROMPT_FOOTER_BUTTON_GAP_PX: f32 = 4.0;
+/// Hover opacity for footer action buttons.
+const PROMPT_FOOTER_BUTTON_HOVER_OPACITY: u8 = 0x26;
+/// Active/pressed opacity for footer action buttons.
+const PROMPT_FOOTER_BUTTON_ACTIVE_OPACITY: u8 = 0x3a;
+/// Footer button font size delta from base UI font size.
+const PROMPT_FOOTER_BUTTON_FONT_DELTA_PX: f32 = 2.0;
+/// Minimum footer button font size.
+const PROMPT_FOOTER_BUTTON_FONT_MIN_PX: f32 = 10.0;
 /// Footer horizontal padding.
 const PROMPT_FOOTER_PADDING_X_PX: f32 = 12.0;
 /// Optical bottom padding to align footer content vertically.
@@ -120,10 +127,13 @@ impl Default for PromptFooterColors {
 
 /// Resolve footer surface color with mode-specific opacity.
 pub fn footer_surface_rgba(colors: PromptFooterColors) -> u32 {
-    // Always use the caller-provided tokenized background color.
-    // Light mode stays opaque to match app-shell footer color; dark mode keeps subtle overlay.
-    let alpha = if colors.is_light_mode { 0xff } else { 0x33 };
-    (colors.background << 8) | alpha
+    if colors.is_light_mode {
+        // Neutral warm gray for light mode — blocks vibrancy so footer text stays legible.
+        0xf0eeefff
+    } else {
+        // Dark mode: use selected_subtle as a subtle overlay (~12% opacity).
+        (colors.background << 8) | 0x1f
+    }
 }
 
 fn footer_shadow_alpha(colors: PromptFooterColors) -> u8 {
@@ -132,6 +142,25 @@ fn footer_shadow_alpha(colors: PromptFooterColors) -> u8 {
     } else {
         0x50
     }
+}
+
+fn is_footer_button_clickable(has_click_handler: bool, disabled: bool) -> bool {
+    has_click_handler && !disabled
+}
+
+fn is_footer_button_activation_key(key: &str) -> bool {
+    matches!(
+        key,
+        "enter" | "return" | "Enter" | "Return" | " " | "space" | "Space"
+    )
+}
+
+fn footer_button_hover_rgba(colors: PromptFooterColors) -> u32 {
+    (colors.background << 8) | (PROMPT_FOOTER_BUTTON_HOVER_OPACITY as u32)
+}
+
+fn footer_button_active_rgba(colors: PromptFooterColors) -> u32 {
+    (colors.background << 8) | (PROMPT_FOOTER_BUTTON_ACTIVE_OPACITY as u32)
 }
 
 /// Configuration for PromptFooter display
@@ -304,16 +333,63 @@ impl PromptFooter {
         disabled: bool,
         on_click: Option<Rc<FooterClickCallback>>,
     ) -> impl IntoElement {
-        let mut button = FooterButton::new(label)
-            .shortcut(shortcut)
-            .id(id)
-            .disabled(disabled);
+        let theme = crate::theme::get_cached_theme();
+        let button_font_size = (theme.get_fonts().ui_size - PROMPT_FOOTER_BUTTON_FONT_DELTA_PX)
+            .max(PROMPT_FOOTER_BUTTON_FONT_MIN_PX);
+        let has_click_handler = on_click.is_some();
+        let is_clickable = is_footer_button_clickable(has_click_handler, disabled);
+        let on_click_for_key = on_click.clone();
+        let hover_bg = rgba(footer_button_hover_rgba(self.colors));
+        let active_bg = rgba(footer_button_active_rgba(self.colors));
 
-        if let Some(callback) = on_click {
-            let handler = callback.clone();
-            button = button.on_click(Box::new(move |event, window, cx| {
-                handler(event, window, cx);
-            }));
+        let mut button = div()
+            .id(ElementId::Name(id.into()))
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap(px(6.))
+            .px(px(8.))
+            .py(px(2.))
+            .rounded(px(4.))
+            .cursor_default()
+            .child(
+                div()
+                    .text_size(px(button_font_size))
+                    .text_color(self.colors.accent.to_rgb())
+                    .child(label),
+            )
+            .child(
+                div()
+                    .text_size(px(button_font_size))
+                    .text_color(self.colors.text_muted.to_rgb())
+                    .child(shortcut),
+            );
+
+        if is_clickable {
+            button = button
+                .cursor_pointer()
+                .hover(move |s| s.bg(hover_bg))
+                .active(move |s| s.bg(active_bg));
+        } else if disabled {
+            button = button.opacity(0.5).cursor_default();
+        }
+
+        if is_clickable {
+            if let Some(callback) = on_click {
+                button = button.on_click(move |event, window, cx| {
+                    callback(event, window, cx);
+                });
+            }
+
+            if let Some(callback) = on_click_for_key {
+                button = button.on_key_down(move |event: &KeyDownEvent, window, cx| {
+                    let key = event.keystroke.key.as_str();
+                    if is_footer_button_activation_key(key) {
+                        let click_event = ClickEvent::default();
+                        callback(&click_event, window, cx);
+                    }
+                });
+            }
         }
 
         button
@@ -462,7 +538,9 @@ impl RenderOnce for PromptFooter {
 mod tests {
     use super::{
         footer_surface_rgba, PromptFooterColors, PROMPT_FOOTER_BORDER_OPACITY,
-        PROMPT_FOOTER_BUTTON_GAP_PX, PROMPT_FOOTER_DIVIDER_HEIGHT_PX,
+        PROMPT_FOOTER_BUTTON_ACTIVE_OPACITY, PROMPT_FOOTER_BUTTON_FONT_DELTA_PX,
+        PROMPT_FOOTER_BUTTON_FONT_MIN_PX, PROMPT_FOOTER_BUTTON_GAP_PX,
+        PROMPT_FOOTER_BUTTON_HOVER_OPACITY, PROMPT_FOOTER_DIVIDER_HEIGHT_PX,
         PROMPT_FOOTER_DIVIDER_MARGIN_X_PX, PROMPT_FOOTER_DIVIDER_WIDTH_PX,
         PROMPT_FOOTER_HELPER_FONT_DELTA_PX, PROMPT_FOOTER_HELPER_FONT_MIN_PX,
         PROMPT_FOOTER_INFO_FONT_DELTA_PX, PROMPT_FOOTER_INFO_FONT_MIN_PX,
@@ -472,7 +550,7 @@ mod tests {
     };
 
     #[test]
-    fn test_footer_surface_rgba_uses_background_with_full_alpha_in_light_mode() {
+    fn test_footer_surface_rgba_returns_neutral_gray_in_light_mode() {
         let colors = PromptFooterColors {
             accent: 0,
             text_muted: 0,
@@ -481,11 +559,12 @@ mod tests {
             is_light_mode: true,
         };
 
-        assert_eq!(footer_surface_rgba(colors), 0x2255aaff);
+        // Light mode always returns the neutral warm gray, regardless of background token.
+        assert_eq!(footer_surface_rgba(colors), 0xf0eeefff);
     }
 
     #[test]
-    fn test_footer_surface_rgba_uses_background_with_overlay_alpha_in_dark_mode() {
+    fn test_footer_surface_rgba_uses_background_overlay_in_dark_mode() {
         let colors = PromptFooterColors {
             accent: 0,
             text_muted: 0,
@@ -494,7 +573,8 @@ mod tests {
             is_light_mode: false,
         };
 
-        assert_eq!(footer_surface_rgba(colors), 0x2255aa33);
+        // Dark mode uses background token at ~12% opacity.
+        assert_eq!(footer_surface_rgba(colors), 0x2255aa1f);
     }
 
     #[test]
@@ -548,9 +628,56 @@ mod tests {
     }
 
     #[test]
+    fn test_footer_button_hover_rgba_uses_background_token_with_standard_opacity() {
+        let colors = PromptFooterColors {
+            accent: 0,
+            text_muted: 0,
+            border: 0,
+            background: 0x2255aa,
+            is_light_mode: false,
+        };
+
+        assert_eq!(super::footer_button_hover_rgba(colors), 0x2255aa26);
+    }
+
+    #[test]
+    fn test_footer_button_active_rgba_uses_background_token_with_pressed_opacity() {
+        let colors = PromptFooterColors {
+            accent: 0,
+            text_muted: 0,
+            border: 0,
+            background: 0x2255aa,
+            is_light_mode: false,
+        };
+
+        assert_eq!(super::footer_button_active_rgba(colors), 0x2255aa3a);
+    }
+
+    #[test]
+    fn test_is_footer_button_clickable_requires_handler_and_enabled_state() {
+        assert!(super::is_footer_button_clickable(true, false));
+        assert!(!super::is_footer_button_clickable(false, false));
+        assert!(!super::is_footer_button_clickable(true, true));
+    }
+
+    #[test]
+    fn test_is_footer_button_activation_key_accepts_enter_and_space_variants() {
+        assert!(super::is_footer_button_activation_key("enter"));
+        assert!(super::is_footer_button_activation_key("Enter"));
+        assert!(super::is_footer_button_activation_key("return"));
+        assert!(super::is_footer_button_activation_key("Space"));
+        assert!(super::is_footer_button_activation_key(" "));
+        assert!(!super::is_footer_button_activation_key("tab"));
+    }
+
+    #[test]
     fn test_prompt_footer_layout_tokens_stay_consistent_when_spacing_is_adjusted() {
         assert_eq!(PROMPT_FOOTER_SECTION_GAP_PX, 8.0);
         assert_eq!(PROMPT_FOOTER_BUTTON_GAP_PX, 4.0);
+        assert_eq!(PROMPT_FOOTER_BUTTON_HOVER_OPACITY, 0x26);
+        assert_eq!(PROMPT_FOOTER_BUTTON_ACTIVE_OPACITY, 0x3a);
+        assert_eq!(PROMPT_FOOTER_BUTTON_FONT_DELTA_PX, 2.0);
+        assert_eq!(PROMPT_FOOTER_BUTTON_FONT_MIN_PX, 10.0);
         assert_eq!(PROMPT_FOOTER_PADDING_X_PX, 12.0);
         assert_eq!(PROMPT_FOOTER_PADDING_BOTTOM_PX, 2.0);
         assert_eq!(PROMPT_FOOTER_LOGO_SIZE_PX, 16.0);
