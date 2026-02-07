@@ -303,25 +303,33 @@ impl PromptHeader {
     /// Displays: "Ask AI [Tab]" where Tab is in a subtle bordered badge
     fn render_ask_ai_hint(&self) -> impl IntoElement {
         let colors = self.colors;
+        let transparent_bg = 0x00000000;
 
         hstack()
             .flex_shrink_0()
             .gap(rems(0.375))
             .items_center()
-            // "Ask AI" text in muted color
+            // "Ask AI" text button - ghost/transparent style
             .child(
                 div()
+                    .px(rems(0.375))
+                    .py(rems(0.125))
+                    .rounded(px(4.))
+                    .bg(rgba(transparent_bg))
+                    .cursor_pointer()
                     .text_size(px(colors.supporting_font_size))
                     .text_color(colors.text_muted.to_rgb())
                     .child("Ask AI"),
             )
-            // "Tab" badge with border
+            // "Tab" badge button - ghost/transparent style with border
             .child(
                 div()
                     .flex_shrink_0()
                     .px(rems(0.375))
                     .py(rems(0.125))
                     .rounded(px(4.))
+                    .bg(rgba(transparent_bg))
+                    .cursor_pointer()
                     .border_1()
                     .border_color(colors.border.to_rgb())
                     .text_size(px(colors.caption_font_size))
