@@ -100,8 +100,16 @@ pub enum PersistenceError {
 impl std::fmt::Display for PersistenceError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Io(e) => write!(f, "IO error: {}", e),
-            Self::Json(e) => write!(f, "JSON parse error: {}", e),
+            Self::Io(e) => write!(
+                f,
+                "Could not read or write shortcut overrides. {}",
+                e
+            ),
+            Self::Json(e) => write!(
+                f,
+                "Could not parse shortcuts JSON. Check ~/.scriptkit/shortcuts.json for valid JSON syntax. {}",
+                e
+            ),
             Self::InvalidShortcut {
                 binding_id,
                 shortcut,
@@ -109,8 +117,8 @@ impl std::fmt::Display for PersistenceError {
             } => {
                 write!(
                     f,
-                    "Invalid shortcut '{}' for binding '{}': {}",
-                    shortcut, binding_id, error
+                    "Shortcut override for '{}' is invalid ('{}'). {}",
+                    binding_id, shortcut, error
                 )
             }
         }
@@ -467,6 +475,28 @@ mod tests {
             }
             _ => panic!("Expected InvalidShortcut error"),
         }
+    }
+
+    #[test]
+    fn persistence_error_messages_include_context_and_recovery() {
+        let parse_error = PersistenceError::InvalidShortcut {
+            binding_id: "test.action".to_string(),
+            shortcut: "cmd+bogus".to_string(),
+            error: ShortcutParseError::UnknownKey("bogus".to_string()),
+        };
+
+        assert_eq!(
+            parse_error.to_string(),
+            "Shortcut override for 'test.action' is invalid ('cmd+bogus'). Unknown key 'bogus'. Use a letter, number, function key (f1-f12), or named key like 'enter' or 'escape'."
+        );
+
+        let io_error = PersistenceError::Io(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            "permission denied",
+        ));
+        assert!(io_error
+            .to_string()
+            .contains("Could not read or write shortcut overrides"));
     }
 
     #[test]
