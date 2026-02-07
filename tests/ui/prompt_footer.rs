@@ -39,8 +39,10 @@ fn test_prompt_footer_surface_rgba_preserves_legacy_light_and_dark_behavior() {
         ..PromptFooterColors::default()
     };
 
-    assert_eq!(footer_surface_rgba(dark), 0x12345633);
-    assert_eq!(footer_surface_rgba(light), 0xf2f1f1ff);
+    // Dark mode: background token at ~12% opacity.
+    assert_eq!(footer_surface_rgba(dark), 0x1234561f);
+    // Light mode: always neutral warm gray.
+    assert_eq!(footer_surface_rgba(light), 0xf0eeefff);
 }
 
 #[test]
@@ -54,26 +56,37 @@ fn test_prompt_footer_from_theme_uses_selected_subtle_surface_token() {
 }
 
 #[test]
-fn test_prompt_footer_from_design_uses_selected_background_token() {
-    let mut design_colors = DesignColors::default();
-    design_colors.background_selected = 0xabcdef;
-    design_colors.background_secondary = 0x123456;
+fn test_prompt_footer_from_design_delegates_to_theme() {
+    let design_colors = DesignColors {
+        background_selected: 0xabcdef,
+        background_secondary: 0x123456,
+        ..DesignColors::default()
+    };
 
+    // from_design() delegates to from_theme() for consistency with the app shell.
     let colors = PromptFooterColors::from_design(&design_colors);
-    assert_eq!(colors.background, 0xabcdef);
+    let expected = PromptFooterColors::from_theme(&Theme::default());
+    assert_eq!(colors.background, expected.background);
 }
 
 #[test]
-fn test_prompt_footer_default_background_is_legacy_white() {
-    assert_eq!(PromptFooterColors::default().background, 0xffffff);
+fn test_prompt_footer_default_background_uses_theme_token() {
+    let expected = PromptFooterColors::from_theme(&Theme::default());
+    assert_eq!(
+        PromptFooterColors::default().background,
+        expected.background
+    );
 }
 
 #[test]
 fn test_prompt_footer_text_max_width_contract() {
-    assert_eq!(PROMPT_FOOTER_HELPER_TEXT_MAX_WIDTH_PX, 420.0);
-    assert_eq!(PROMPT_FOOTER_INFO_TEXT_MAX_WIDTH_PX, 220.0);
+    let helper_max_width = std::hint::black_box(PROMPT_FOOTER_HELPER_TEXT_MAX_WIDTH_PX);
+    let info_max_width = std::hint::black_box(PROMPT_FOOTER_INFO_TEXT_MAX_WIDTH_PX);
+
+    assert_eq!(helper_max_width, 420.0);
+    assert_eq!(info_max_width, 220.0);
     assert!(
-        PROMPT_FOOTER_HELPER_TEXT_MAX_WIDTH_PX > PROMPT_FOOTER_INFO_TEXT_MAX_WIDTH_PX,
+        helper_max_width > info_max_width,
         "Helper text should get more space than the info label"
     );
 }
