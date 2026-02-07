@@ -17,13 +17,13 @@ use thiserror::Error;
 /// Errors that can occur when parsing a shortcut string.
 #[derive(Error, Debug, Clone, PartialEq, Eq)]
 pub enum ShortcutParseError {
-    #[error("shortcut string is empty")]
+    #[error("Shortcut is empty. Enter one key, for example 'cmd+k' or 'ctrl+k'.")]
     Empty,
-    #[error("shortcut has no key, only modifiers")]
+    #[error("Shortcut is missing a key. Add one key after modifiers, for example 'cmd+k'.")]
     MissingKey,
-    #[error("unknown token '{0}' in shortcut")]
+    #[error("Unexpected token '{0}' in shortcut. Use optional modifiers plus one key, for example 'cmd+shift+k'.")]
     UnknownToken(String),
-    #[error("unknown key '{0}'")]
+    #[error("Unknown key '{0}'. Use a letter, number, function key (f1-f12), or named key like 'enter' or 'escape'.")]
     UnknownKey(String),
 }
 
