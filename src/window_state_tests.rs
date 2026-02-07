@@ -125,19 +125,19 @@ mod tests {
     /// Verify close_and_reset_window exists and has the right structure
     #[test]
     fn test_close_and_reset_window_exists() {
-        let content = read_source_file("app_impl.rs");
+        let content = read_source_file("app_impl/lifecycle_reset.rs");
         let count = count_occurrences(&content, "fn close_and_reset_window");
 
         assert!(
             count >= 1,
-            "close_and_reset_window() function not found in app_impl.rs"
+            "close_and_reset_window() function not found in app_impl/lifecycle_reset.rs"
         );
     }
 
     /// Verify close_and_reset_window calls reset_to_script_list
     #[test]
     fn test_close_and_reset_window_resets() {
-        let content = read_source_file("app_impl.rs");
+        let content = read_source_file("app_impl/lifecycle_reset.rs");
 
         // Find the function and check if it contains reset_to_script_list
         if let Some(start) = content.find("fn close_and_reset_window") {
@@ -150,14 +150,14 @@ mod tests {
                 "close_and_reset_window() must call reset_to_script_list()"
             );
         } else {
-            panic!("close_and_reset_window() function not found in app_impl.rs");
+            panic!("close_and_reset_window() function not found in app_impl/lifecycle_reset.rs");
         }
     }
 
     /// Verify close_and_reset_window checks for Notes/AI windows
     #[test]
     fn test_close_and_reset_window_checks_secondary_windows() {
-        let content = read_source_file("app_impl.rs");
+        let content = read_source_file("app_impl/lifecycle_reset.rs");
 
         // Find the function and check if it checks Notes/AI windows
         if let Some(start) = content.find("fn close_and_reset_window") {
@@ -173,7 +173,7 @@ mod tests {
                 has_notes_check, has_ai_check
             );
         } else {
-            panic!("close_and_reset_window() function not found in app_impl.rs");
+            panic!("close_and_reset_window() function not found in app_impl/lifecycle_reset.rs");
         }
     }
 

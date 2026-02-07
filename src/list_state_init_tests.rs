@@ -20,28 +20,24 @@
 mod tests {
     use std::fs;
 
-    /// Extract the new() function body from app_impl.rs.
-    fn get_new_function_body(content: &str) -> &str {
-        let start = content
-            .find("impl ScriptListApp {")
-            .expect("impl ScriptListApp not found");
+    /// Read startup fragments used by ScriptListApp::new() in execution order.
+    fn read_new_startup_sequence() -> String {
+        let files = [
+            "src/app_impl/startup_new_prelude.rs",
+            "src/app_impl/startup_new_state.rs",
+            "src/app_impl/startup_new_tab.rs",
+            "src/app_impl/startup_new_arrow.rs",
+            "src/app_impl/startup_new_actions.rs",
+        ];
 
-        let after_impl = &content[start..];
-        let fn_new_start = after_impl
-            .find("fn new(")
-            .expect("fn new( not found in impl ScriptListApp");
-
-        // Find the return statement for the function
-        let fn_body_start = start + fn_new_start;
-        let fn_body = &content[fn_body_start..];
-
-        // Get a reasonable chunk that includes the return statement
-        // The new() function ends with "app" on a line by itself
-        let fn_end = fn_body
-            .find("\n    }\n\n    /// Switch to a different design variant")
-            .unwrap_or(fn_body.len().min(50000));
-
-        &fn_body[..fn_end]
+        let mut content = String::new();
+        for file in files {
+            content.push_str(
+                &fs::read_to_string(file).unwrap_or_else(|_| panic!("Failed to read {}", file)),
+            );
+            content.push('\n');
+        }
+        content
     }
 
     /// Verify that sync_list_state() is called during initialization.
@@ -50,9 +46,7 @@ mod tests {
     /// because main_list_state is initialized with 0 items but scripts have been loaded.
     #[test]
     fn test_new_calls_sync_list_state() {
-        let content = fs::read_to_string("src/app_impl.rs").expect("Failed to read app_impl.rs");
-
-        let new_body = get_new_function_body(&content);
+        let new_body = read_new_startup_sequence();
 
         // sync_list_state must be called somewhere in new()
         assert!(
@@ -69,9 +63,7 @@ mod tests {
     /// This ensures the initial selection is valid (not pointing at a section header).
     #[test]
     fn test_new_calls_validate_selection_bounds() {
-        let content = fs::read_to_string("src/app_impl.rs").expect("Failed to read app_impl.rs");
-
-        let new_body = get_new_function_body(&content);
+        let new_body = read_new_startup_sequence();
 
         // validate_selection_bounds must be called somewhere in new()
         assert!(
@@ -88,9 +80,7 @@ mod tests {
     /// depends on that count being correct.
     #[test]
     fn test_sync_before_validate() {
-        let content = fs::read_to_string("src/app_impl.rs").expect("Failed to read app_impl.rs");
-
-        let new_body = get_new_function_body(&content);
+        let new_body = read_new_startup_sequence();
 
         let sync_pos = new_body
             .find("sync_list_state")
@@ -112,9 +102,7 @@ mod tests {
     /// before we know the count. sync_list_state() then updates this count.
     #[test]
     fn test_list_state_initial_count_is_zero() {
-        let content = fs::read_to_string("src/app_impl.rs").expect("Failed to read app_impl.rs");
-
-        let new_body = get_new_function_body(&content);
+        let new_body = read_new_startup_sequence();
 
         // main_list_state should be initialized with 0 items
         assert!(
@@ -129,9 +117,7 @@ mod tests {
     /// This ensures there are scripts available when we sync the list state.
     #[test]
     fn test_scripts_loaded_before_sync() {
-        let content = fs::read_to_string("src/app_impl.rs").expect("Failed to read app_impl.rs");
-
-        let new_body = get_new_function_body(&content);
+        let new_body = read_new_startup_sequence();
 
         let read_scripts_pos = new_body
             .find("scripts::read_scripts()")

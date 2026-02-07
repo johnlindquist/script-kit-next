@@ -8,6 +8,22 @@
 mod tests {
     use std::fs;
 
+    fn read_app_impl_sources() -> String {
+        let files = [
+            "src/app_impl/startup_new_arrow.rs",
+            "src/app_impl/startup_new_actions.rs",
+        ];
+
+        let mut content = String::new();
+        for file in files {
+            content.push_str(
+                &fs::read_to_string(file).unwrap_or_else(|_| panic!("Failed to read {}", file)),
+            );
+            content.push('\n');
+        }
+        content
+    }
+
     fn get_arrow_interceptor_section(content: &str) -> &str {
         let start = content
             .find("let arrow_interceptor = cx.intercept_keystrokes")
@@ -32,7 +48,7 @@ mod tests {
 
     #[test]
     fn clipboard_arrow_routing_checks_actions_popup_first() {
-        let content = fs::read_to_string("src/app_impl.rs").expect("Failed to read app_impl.rs");
+        let content = read_app_impl_sources();
         let arrow_section = get_arrow_interceptor_section(&content);
 
         let clipboard_pos = arrow_section
@@ -59,7 +75,7 @@ mod tests {
 
     #[test]
     fn clipboard_actions_interceptor_routes_modal_keys_to_dialog() {
-        let content = fs::read_to_string("src/app_impl.rs").expect("Failed to read app_impl.rs");
+        let content = read_app_impl_sources();
         let actions_section = get_actions_interceptor_section(&content);
 
         assert!(
@@ -78,7 +94,7 @@ mod tests {
 
     #[test]
     fn actions_interceptor_skips_arrow_keys_for_non_file_search_modal_routing() {
-        let content = fs::read_to_string("src/app_impl.rs").expect("Failed to read app_impl.rs");
+        let content = read_app_impl_sources();
         let actions_section = get_actions_interceptor_section(&content);
 
         let anchor = actions_section
