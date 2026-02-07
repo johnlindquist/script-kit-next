@@ -346,7 +346,7 @@ mod tests {
         // Note: We exclude this file (loader.rs) since it contains the test pattern strings
         let files_to_check = [
             "src/main.rs",
-            "src/app_impl.rs",
+            "src/app_impl/mod.rs",
             "src/config/mod.rs",
             "src/config/types.rs",
             "src/watcher.rs",

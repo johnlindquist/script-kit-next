@@ -7,6 +7,26 @@
 #[cfg(test)]
 mod tests {
     use std::fs;
+    use std::path::PathBuf;
+
+    fn read_app_impl_sources() -> String {
+        let mut files: Vec<PathBuf> = fs::read_dir("src/app_impl")
+            .expect("Failed to read src/app_impl")
+            .filter_map(|entry| entry.ok().map(|e| e.path()))
+            .filter(|path| path.extension().is_some_and(|ext| ext == "rs"))
+            .collect();
+        files.sort();
+
+        let mut content = String::new();
+        for file in files {
+            content.push_str(
+                &fs::read_to_string(&file)
+                    .unwrap_or_else(|_| panic!("Failed to read {}", file.display())),
+            );
+            content.push('\n');
+        }
+        content
+    }
 
     fn webcam_toggle_section(content: &str) -> &str {
         let start = content
@@ -54,7 +74,7 @@ mod tests {
 
     #[test]
     fn webcam_actions_use_shared_native_actions_dialog_path() {
-        let content = fs::read_to_string("src/app_impl.rs").expect("Failed to read app_impl.rs");
+        let content = read_app_impl_sources();
         let section = webcam_toggle_section(&content);
 
         assert!(
@@ -70,7 +90,7 @@ mod tests {
 
     #[test]
     fn webcam_actions_keep_stable_capture_and_close_ids() {
-        let content = fs::read_to_string("src/app_impl.rs").expect("Failed to read app_impl.rs");
+        let content = read_app_impl_sources();
         let section = webcam_actions_builder_section(&content);
 
         assert!(
@@ -91,7 +111,7 @@ mod tests {
 
     #[test]
     fn webcam_capture_action_saves_photo_and_shows_feedback() {
-        let content = fs::read_to_string("src/app_impl.rs").expect("Failed to read app_impl.rs");
+        let content = read_app_impl_sources();
         let section = webcam_execute_section(&content);
 
         assert!(

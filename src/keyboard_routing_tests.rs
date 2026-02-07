@@ -19,7 +19,25 @@
 mod tests {
     use std::fs;
 
-    /// Extract the arrow interceptor section from app_impl.rs.
+    fn read_app_impl_sources() -> String {
+        let files = [
+            "src/app_impl/startup_new_prelude.rs",
+            "src/app_impl/startup_new_arrow.rs",
+            "src/app_impl/startup_new_actions.rs",
+            "src/app_impl/actions_dialog.rs",
+        ];
+
+        let mut content = String::new();
+        for file in files {
+            content.push_str(
+                &fs::read_to_string(file).unwrap_or_else(|_| panic!("Failed to read {}", file)),
+            );
+            content.push('\n');
+        }
+        content
+    }
+
+    /// Extract the arrow interceptor section from startup interceptor sources.
     /// This is the section between "let arrow_interceptor" and the next major interceptor.
     fn get_arrow_interceptor_section(content: &str) -> &str {
         let start = content
@@ -41,7 +59,7 @@ mod tests {
     /// to actions dialog is present and won't regress.
     #[test]
     fn test_scriptlist_arrow_handler_checks_actions_popup() {
-        let content = fs::read_to_string("src/app_impl.rs").expect("Failed to read app_impl.rs");
+        let content = read_app_impl_sources();
 
         let arrow_section = get_arrow_interceptor_section(&content);
 
@@ -77,7 +95,7 @@ mod tests {
     /// keyboard routing should work.
     #[test]
     fn test_filesearchview_arrow_handler_checks_actions_popup() {
-        let content = fs::read_to_string("src/app_impl.rs").expect("Failed to read app_impl.rs");
+        let content = read_app_impl_sources();
 
         let arrow_section = get_arrow_interceptor_section(&content);
 
@@ -152,7 +170,7 @@ mod tests {
     /// This ensures the separate actions window re-renders after state changes.
     #[test]
     fn test_actions_navigation_triggers_window_notify() {
-        let content = fs::read_to_string("src/app_impl.rs").expect("Failed to read app_impl.rs");
+        let content = read_app_impl_sources();
 
         // When we route arrow keys to actions dialog, we should notify the window
         let notify_count = content.matches("notify_actions_window").count();
@@ -190,7 +208,7 @@ mod tests {
     /// This prevents focus overlay state from desynchronizing.
     #[test]
     fn test_main_input_focus_uses_shared_actions_close_path() {
-        let content = fs::read_to_string("src/app_impl.rs").expect("Failed to read app_impl.rs");
+        let content = read_app_impl_sources();
 
         assert!(
             content.contains(
@@ -209,7 +227,7 @@ mod tests {
     /// Home/End/PageUp/PageDown parity is required for power-user keyboard navigation.
     #[test]
     fn test_actions_dialog_route_handles_jump_keys() {
-        let content = fs::read_to_string("src/app_impl.rs").expect("Failed to read app_impl.rs");
+        let content = read_app_impl_sources();
 
         assert!(
             content.contains("let is_home = key.eq_ignore_ascii_case(\"home\")"),
@@ -235,7 +253,7 @@ mod tests {
     /// keyboard routing pattern consistently.
     #[test]
     fn test_all_views_have_consistent_actions_keyboard_routing() {
-        let content = fs::read_to_string("src/app_impl.rs").expect("Failed to read app_impl.rs");
+        let content = read_app_impl_sources();
 
         let arrow_section = get_arrow_interceptor_section(&content);
 
@@ -275,7 +293,7 @@ mod tests {
     /// This prevents the key event from being handled by other components.
     #[test]
     fn test_actions_routing_stops_propagation() {
-        let content = fs::read_to_string("src/app_impl.rs").expect("Failed to read app_impl.rs");
+        let content = read_app_impl_sources();
 
         // After routing to actions dialog, we should stop propagation
         // Look for the pattern: show_actions_popup check followed by stop_propagation
