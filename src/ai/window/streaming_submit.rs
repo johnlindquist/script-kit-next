@@ -11,21 +11,9 @@ impl AiApp {
         }
 
         let content = self.input_state.read(cx).value().to_string();
+        let has_pending_image = self.pending_image.is_some();
 
-        // Capture pending image before clearing
-        let pending_image = self.pending_image.take();
-        let has_image = pending_image.is_some();
-
-        if let Some(ref image_base64) = pending_image {
-            // Calculate approximate image size for logging
-            let image_size_kb = image_base64.len() / 1024;
-            crate::logging::log(
-                "AI",
-                &format!("Message includes attached image (~{}KB)", image_size_kb),
-            );
-        }
-
-        if content.trim().is_empty() {
+        if !ai_window_can_submit_message(&content, has_pending_image) {
             return;
         }
 
@@ -48,10 +36,27 @@ impl AiApp {
             }
         };
 
+        // Capture pending image only after all early-return guards so we don't drop attachments.
+        let pending_image = self.pending_image.take();
+        let has_image = pending_image.is_some();
+
+        if let Some(ref image_base64) = pending_image {
+            // Calculate approximate image size for logging
+            let image_size_kb = image_base64.len() / 1024;
+            crate::logging::log(
+                "AI",
+                &format!("Message includes attached image (~{}KB)", image_size_kb),
+            );
+        }
+
         // Update chat title if this is the first message
         if let Some(chat) = self.chats.iter_mut().find(|c| c.id == chat_id) {
             if chat.title == "New Chat" {
-                let new_title = Chat::generate_title_from_content(&content);
+                let new_title = if content.trim().is_empty() && has_image {
+                    "Image attachment".to_string()
+                } else {
+                    Chat::generate_title_from_content(&content)
+                };
                 chat.set_title(&new_title);
 
                 // Persist title update
@@ -81,8 +86,13 @@ impl AiApp {
         self.force_scroll_to_bottom();
 
         // Update message preview and count cache
-        let preview: String = content.chars().take(60).collect();
-        let preview = if preview.len() < content.len() {
+        let preview_source = if content.trim().is_empty() && has_image {
+            "Image attachment"
+        } else {
+            content.as_str()
+        };
+        let preview: String = preview_source.chars().take(60).collect();
+        let preview = if preview.len() < preview_source.len() {
             format!("{}...", preview.trim())
         } else {
             preview

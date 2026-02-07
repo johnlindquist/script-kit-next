@@ -76,6 +76,98 @@ fn test_submit_while_streaming_different_chat() {
 }
 
 #[test]
+fn test_ai_window_can_submit_message_returns_true_when_only_image_is_attached() {
+    assert!(
+        ai_window_can_submit_message("", true),
+        "Image-only messages should be allowed"
+    );
+    assert!(
+        ai_window_can_submit_message("   ", true),
+        "Whitespace text with an attachment should be allowed"
+    );
+    assert!(
+        ai_window_can_submit_message("hello", false),
+        "Non-empty text should be allowed"
+    );
+    assert!(
+        !ai_window_can_submit_message("   ", false),
+        "Whitespace-only messages without attachments should be blocked"
+    );
+}
+
+#[test]
+fn test_ai_window_prune_deleted_message_ui_state_removes_only_deleted_ids() {
+    let mut collapsed = std::collections::HashSet::from([
+        "message-a".to_string(),
+        "message-b".to_string(),
+        "message-c".to_string(),
+    ]);
+    let mut expanded = std::collections::HashSet::from([
+        "message-b".to_string(),
+        "message-d".to_string(),
+        "message-e".to_string(),
+    ]);
+    let deleted_message_ids = vec!["message-b".to_string(), "message-x".to_string()];
+
+    ai_window_prune_deleted_message_ui_state(&mut collapsed, &mut expanded, &deleted_message_ids);
+
+    assert!(
+        !collapsed.contains("message-b"),
+        "Deleted message IDs must be removed from collapsed state"
+    );
+    assert!(
+        !expanded.contains("message-b"),
+        "Deleted message IDs must be removed from expanded state"
+    );
+    assert!(
+        collapsed.contains("message-a"),
+        "Unrelated collapsed IDs must be preserved"
+    );
+    assert!(
+        expanded.contains("message-d"),
+        "Unrelated expanded IDs must be preserved"
+    );
+}
+
+#[test]
+fn test_ai_window_queue_command_if_open_enqueues_only_when_window_is_open() {
+    let mut pending_commands = Vec::new();
+
+    let was_queued = ai_window_queue_command_if_open(
+        &mut pending_commands,
+        false,
+        AiCommand::SetSearch("hidden".to_string()),
+    );
+    assert!(
+        !was_queued,
+        "Commands must not queue when the AI window is closed"
+    );
+    assert!(
+        pending_commands.is_empty(),
+        "Queue should remain empty when closed"
+    );
+
+    let was_queued = ai_window_queue_command_if_open(
+        &mut pending_commands,
+        true,
+        AiCommand::SetSearch("visible".to_string()),
+    );
+    assert!(
+        was_queued,
+        "Commands should queue when the AI window is open"
+    );
+    assert_eq!(
+        pending_commands.len(),
+        1,
+        "Exactly one command should have been queued"
+    );
+    match pending_commands.first() {
+        Some(AiCommand::SetSearch(query)) => assert_eq!(query, "visible"),
+        _ => panic!("Expected queued command to be AiCommand::SetSearch"),
+    }
+}
+
+#[test]
 fn test_should_retry_existing_user_turn_only_when_last_message_is_user() {
     let chat_id = ChatId::new();
 

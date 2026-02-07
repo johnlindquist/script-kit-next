@@ -34,7 +34,7 @@ use alacritty_terminal::grid::Dimensions;
 use alacritty_terminal::term::cell::Flags as AlacrittyFlags;
 use alacritty_terminal::term::{Config as TermConfig, Term};
 use bitflags::bitflags;
-use tracing::{debug, info, trace};
+use tracing::{debug, info, trace, warn};
 use vte::ansi::Processor;
 
 use crate::terminal::pty::PtyManager;
@@ -51,6 +51,7 @@ mod handle_runtime;
 mod tests;
 
 pub use colors::{resolve_color, resolve_fg_color_with_bold};
+#[allow(unused_imports)]
 pub use content_types::{CursorPosition, TerminalContent};
 
 /// Default scrollback buffer size in lines.
@@ -58,6 +59,12 @@ const DEFAULT_SCROLLBACK_LINES: usize = 10_000;
 
 /// Maximum bytes to read from PTY in a single process() call.
 const PTY_READ_BUFFER_SIZE: usize = 4096;
+
+/// Maximum PTY bytes to process per `process()` call.
+///
+/// This keeps UI frames responsive under heavy terminal output by
+/// spreading parsing work across multiple ticks.
+const MAX_PROCESS_BYTES_PER_TICK: usize = 1_048_576;
 
 /// Event proxy for alacritty_terminal - handles terminal events.
 ///
@@ -341,6 +348,8 @@ pub struct TerminalHandle {
     pty_output_rx: std::sync::mpsc::Receiver<Vec<u8>>,
     /// Flag to signal background reader to stop.
     reader_stop_flag: Arc<std::sync::atomic::AtomicBool>,
+    /// Join handle for the background PTY reader thread.
+    reader_thread: Option<std::thread::JoinHandle<()>>,
 }
 
 impl std::fmt::Debug for TerminalHandle {
@@ -354,8 +363,29 @@ impl std::fmt::Debug for TerminalHandle {
 
 impl Drop for TerminalHandle {
     fn drop(&mut self) {
-        self.reader_stop_flag
-            .store(true, std::sync::atomic::Ordering::Relaxed);
-        debug!("TerminalHandle dropped, signaled reader thread to stop");
+        use std::sync::atomic::Ordering;
+
+        self.reader_stop_flag.store(true, Ordering::Relaxed);
+
+        // Best-effort shutdown: terminate the child to unblock PTY reads, then join.
+        if self.pty.is_running() {
+            if let Err(error) = self.pty.kill() {
+                warn!(
+                    error = %error,
+                    "Failed to kill PTY child during terminal drop"
+                );
+            }
+        }
+
+        if let Some(reader_thread) = self.reader_thread.take() {
+            if let Err(join_error) = reader_thread.join() {
+                warn!(
+                    join_error = ?join_error,
+                    "PTY reader thread panicked during terminal drop"
+                );
+            }
+        }
+
+        debug!("TerminalHandle dropped, reader thread joined");
     }
 }

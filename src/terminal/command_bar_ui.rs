@@ -8,7 +8,7 @@
 
 use std::sync::Arc;
 
-use gpui::{App, Context, FocusHandle};
+use gpui::{Context, FocusHandle};
 
 use crate::theme;
 
@@ -136,6 +136,10 @@ impl TerminalCommandBar {
 
     /// Handle character input for search
     pub fn handle_char(&mut self, ch: char, cx: &mut Context<Self>) {
+        if !Self::should_accept_search_char(ch) {
+            return;
+        }
+
         self.search_text.push(ch);
         self.refilter();
         cx.notify();
@@ -195,5 +199,16 @@ impl TerminalCommandBar {
         }
 
         self.selected_index = 0;
+    }
+
+    /// Returns whether a character should be accepted as search input.
+    pub(super) fn should_accept_search_char(ch: char) -> bool {
+        !ch.is_control()
+    }
+
+    /// Computes list viewport height based on current filtered item count.
+    pub(super) fn command_list_height(item_count: usize) -> f32 {
+        let rows = item_count.max(1) as f32;
+        (rows * COMMAND_ITEM_HEIGHT).min(COMMAND_BAR_MAX_HEIGHT - SEARCH_INPUT_HEIGHT)
     }
 }

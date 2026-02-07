@@ -214,33 +214,7 @@ impl AiApp {
     /// Delete the currently selected chat (soft delete)
     pub(super) fn delete_selected_chat(&mut self, cx: &mut Context<Self>) {
         if let Some(id) = self.selected_chat_id {
-            if let Err(e) = storage::delete_chat(&id) {
-                tracing::error!(error = %e, "Failed to delete chat");
-                return;
-            }
-
-            // Remove from visible list
-            self.chats.retain(|c| c.id != id);
-
-            // Select next chat and load its messages (or clear if no chats remain)
-            self.selected_chat_id = self.chats.first().map(|c| c.id);
-            self.current_messages = self
-                .selected_chat_id
-                .and_then(|new_id| storage::get_chat_messages(&new_id).ok())
-                .unwrap_or_default();
-            self.cache_message_images(&self.current_messages.clone());
-
-            // Clear streaming state - if deleted chat was streaming, suppress stale persistence
-            // so we don't re-save a completion for a deleted chat.
-            self.is_streaming = false;
-            self.streaming_content.clear();
-            // Also clear streaming context if the deleted chat was streaming
-            if self.streaming_chat_id == Some(id) {
-                self.suppress_orphan_save_for_current_stream("chat_deleted");
-                self.streaming_chat_id = None;
-            }
-
-            cx.notify();
+            self.delete_chat_by_id(id, cx);
         }
     }
 }

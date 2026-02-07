@@ -72,6 +72,34 @@ pub(super) fn should_retry_existing_user_turn(messages: &[Message]) -> bool {
         .unwrap_or(false)
 }
 
+pub(super) fn ai_window_can_submit_message(content: &str, has_pending_image: bool) -> bool {
+    !content.trim().is_empty() || has_pending_image
+}
+
+pub(super) fn ai_window_prune_deleted_message_ui_state(
+    collapsed_messages: &mut std::collections::HashSet<String>,
+    expanded_messages: &mut std::collections::HashSet<String>,
+    deleted_message_ids: &[String],
+) {
+    for message_id in deleted_message_ids {
+        collapsed_messages.remove(message_id);
+        expanded_messages.remove(message_id);
+    }
+}
+
+pub(super) fn ai_window_queue_command_if_open(
+    pending_commands: &mut Vec<AiCommand>,
+    window_is_open: bool,
+    command: AiCommand,
+) -> bool {
+    if !window_is_open {
+        return false;
+    }
+
+    pending_commands.push(command);
+    true
+}
+
 pub(super) fn should_persist_stale_completion(
     suppressed_sessions: &mut std::collections::HashSet<StreamingSessionKey>,
     session_key: StreamingSessionKey,
