@@ -229,6 +229,13 @@ impl ParsedSnippet {
         let mut brace_depth = 1;
 
         while let Some(c) = chars.next() {
+            if c == '\\' {
+                if let Some(escaped) = chars.next() {
+                    result.push(escaped);
+                }
+                continue;
+            }
+
             match c {
                 '{' => {
                     brace_depth += 1;
@@ -317,34 +324,10 @@ impl ParsedSnippet {
             }
         }
 
-        // Sort: all non-zero indices in order, then 0 (final cursor) at end
-        let mut result: Vec<TabstopInfo> = tabstop_map
-            .into_iter()
-            .filter(|(idx, _)| *idx != 0)
-            .map(|(_, info)| info)
-            .collect();
-
-        // Add $0 at the end if it exists
-        if let Some(final_cursor) = parts.iter().find_map(|p| {
-            if let SnippetPart::Tabstop {
-                index: 0,
-                placeholder,
-                choices,
-                range,
-            } = p
-            {
-                Some(TabstopInfo {
-                    index: 0,
-                    ranges: vec![*range],
-                    placeholder: placeholder.clone(),
-                    choices: choices.clone(),
-                })
-            } else {
-                None
-            }
-        }) {
-            result.push(final_cursor);
-        }
+        // Sort: all non-zero indices in order, then 0 (final cursor) at end.
+        // Keep merged ranges for every index, including repeated $0.
+        let mut result: Vec<TabstopInfo> = tabstop_map.into_values().collect();
+        result.sort_by_key(|info| (info.index == 0, info.index));
 
         result
     }
@@ -394,6 +377,14 @@ impl ParsedSnippet {
             return;
         }
 
+        let shift = |value: usize| -> usize {
+            if delta >= 0 {
+                value.saturating_add(delta as usize)
+            } else {
+                value.saturating_sub((-delta) as usize)
+            }
+        };
+
         let edit_end = edit_start + old_len;
 
         for (tabstop_idx, tabstop) in self.tabstops.iter_mut().enumerate() {
@@ -409,10 +400,7 @@ impl ParsedSnippet {
                 if range_start > edit_end
                     || (range_start == edit_end && tabstop_idx != current_tabstop_idx)
                 {
-                    *range = (
-                        (range_start as isize + delta) as usize,
-                        (range_end as isize + delta) as usize,
-                    );
+                    *range = (shift(range_start), shift(range_end));
                     continue;
                 }
 
@@ -421,15 +409,12 @@ impl ParsedSnippet {
                 // For other tabstops, the edit should not overlap (they're not being edited)
                 if tabstop_idx == current_tabstop_idx {
                     // Edit is within this range - keep start, resize end
-                    *range = (range_start, (range_end as isize + delta) as usize);
+                    *range = (range_start, shift(range_end).max(range_start));
                 } else {
                     // This range starts at or after the edit point but before edit_end
                     // This means it overlaps with the edit region
                     // Shift the entire range by delta
-                    *range = (
-                        (range_start as isize + delta).max(0) as usize,
-                        (range_end as isize + delta).max(0) as usize,
-                    );
+                    *range = (shift(range_start), shift(range_end));
                 }
             }
         }
