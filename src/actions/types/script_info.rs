@@ -77,28 +77,91 @@ pub struct ScriptInfo {
     /// Used to show/hide the "Reset Ranking" action
     pub is_suggested: bool,
     /// The frecency path used to track this item's usage
-    /// Used by "Reset Ranking" to know which frecency entry to remove
+    /// Used by "Reset Ranking" to know which frecency entry to remove.
+    /// When `is_suggested` is true, this should be a non-empty path.
     pub frecency_path: Option<String>,
     /// Whether this is an agent file (.claude.md or similar)
     /// Agents have their own actions (Edit Agent, Copy Content, etc.)
     pub is_agent: bool,
 }
 
-impl ScriptInfo {
-    /// Create a ScriptInfo for a real script file
-    pub fn new(name: impl Into<String>, path: impl Into<String>) -> Self {
-        ScriptInfo {
-            name: name.into(),
-            path: path.into(),
-            is_script: true,
+impl Default for ScriptInfo {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            path: String::new(),
+            is_script: false,
             is_scriptlet: false,
-            is_agent: false,
             action_verb: "Run".to_string(),
             shortcut: None,
             alias: None,
             is_suggested: false,
             frecency_path: None,
+            is_agent: false,
         }
+    }
+}
+
+impl ScriptInfo {
+    const DEFAULT_ACTION_VERB: &'static str = "Run";
+
+    fn normalized_optional_text(value: Option<String>) -> Option<String> {
+        value.and_then(|text| {
+            let trimmed = text.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        })
+    }
+
+    fn normalized_action_verb(action_verb: impl Into<String>) -> String {
+        let action_verb = action_verb.into();
+        let trimmed = action_verb.trim();
+        if trimmed.is_empty() {
+            Self::DEFAULT_ACTION_VERB.to_string()
+        } else {
+            trimmed.to_string()
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn build(
+        name: impl Into<String>,
+        path: impl Into<String>,
+        is_script: bool,
+        is_scriptlet: bool,
+        is_agent: bool,
+        action_verb: impl Into<String>,
+        shortcut: Option<String>,
+        alias: Option<String>,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            path: path.into(),
+            is_script,
+            is_scriptlet,
+            is_agent,
+            action_verb: Self::normalized_action_verb(action_verb),
+            shortcut: Self::normalized_optional_text(shortcut),
+            alias: Self::normalized_optional_text(alias),
+            ..Self::default()
+        }
+    }
+
+    /// Create a ScriptInfo for a real script file
+    pub fn new(name: impl Into<String>, path: impl Into<String>) -> Self {
+        Self::build(
+            name,
+            path,
+            true,
+            false,
+            false,
+            Self::DEFAULT_ACTION_VERB,
+            None,
+            None,
+        )
     }
 
     /// Create a ScriptInfo for a real script file with shortcut info
@@ -108,18 +171,16 @@ impl ScriptInfo {
         path: impl Into<String>,
         shortcut: Option<String>,
     ) -> Self {
-        ScriptInfo {
-            name: name.into(),
-            path: path.into(),
-            is_script: true,
-            is_scriptlet: false,
-            is_agent: false,
-            action_verb: "Run".to_string(),
+        Self::build(
+            name,
+            path,
+            true,
+            false,
+            false,
+            Self::DEFAULT_ACTION_VERB,
             shortcut,
-            alias: None,
-            is_suggested: false,
-            frecency_path: None,
-        }
+            None,
+        )
     }
 
     /// Create a ScriptInfo for a scriptlet (snippet from markdown file)
@@ -130,18 +191,16 @@ impl ScriptInfo {
         shortcut: Option<String>,
         alias: Option<String>,
     ) -> Self {
-        ScriptInfo {
-            name: name.into(),
-            path: markdown_path.into(),
-            is_script: false,
-            is_scriptlet: true,
-            is_agent: false,
-            action_verb: "Run".to_string(),
+        Self::build(
+            name,
+            markdown_path,
+            false,
+            true,
+            false,
+            Self::DEFAULT_ACTION_VERB,
             shortcut,
             alias,
-            is_suggested: false,
-            frecency_path: None,
-        }
+        )
     }
 
     /// Create a ScriptInfo for a real script file with shortcut and alias info
@@ -152,36 +211,32 @@ impl ScriptInfo {
         shortcut: Option<String>,
         alias: Option<String>,
     ) -> Self {
-        ScriptInfo {
-            name: name.into(),
-            path: path.into(),
-            is_script: true,
-            is_scriptlet: false,
-            is_agent: false,
-            action_verb: "Run".to_string(),
+        Self::build(
+            name,
+            path,
+            true,
+            false,
+            false,
+            Self::DEFAULT_ACTION_VERB,
             shortcut,
             alias,
-            is_suggested: false,
-            frecency_path: None,
-        }
+        )
     }
 
     /// Create a ScriptInfo for a built-in command (not a real script)
     /// Built-ins have limited actions (no edit, view logs, reveal in finder, copy path, configure shortcut)
     #[allow(dead_code)]
     pub fn builtin(name: impl Into<String>) -> Self {
-        ScriptInfo {
-            name: name.into(),
-            path: String::new(),
-            is_script: false,
-            is_scriptlet: false,
-            is_agent: false,
-            action_verb: "Run".to_string(),
-            shortcut: None,
-            alias: None,
-            is_suggested: false,
-            frecency_path: None,
-        }
+        Self::build(
+            name,
+            String::new(),
+            false,
+            false,
+            false,
+            Self::DEFAULT_ACTION_VERB,
+            None,
+            None,
+        )
     }
 
     /// Create a ScriptInfo with explicit is_script flag and custom action verb
@@ -191,18 +246,16 @@ impl ScriptInfo {
         path: impl Into<String>,
         is_script: bool,
     ) -> Self {
-        ScriptInfo {
-            name: name.into(),
-            path: path.into(),
+        Self::build(
+            name,
+            path,
             is_script,
-            is_scriptlet: false,
-            is_agent: false,
-            action_verb: "Run".to_string(),
-            shortcut: None,
-            alias: None,
-            is_suggested: false,
-            frecency_path: None,
-        }
+            false,
+            false,
+            Self::DEFAULT_ACTION_VERB,
+            None,
+            None,
+        )
     }
 
     /// Create a ScriptInfo with all options including custom action verb
@@ -212,18 +265,7 @@ impl ScriptInfo {
         is_script: bool,
         action_verb: impl Into<String>,
     ) -> Self {
-        ScriptInfo {
-            name: name.into(),
-            path: path.into(),
-            is_script,
-            is_scriptlet: false,
-            is_agent: false,
-            action_verb: action_verb.into(),
-            shortcut: None,
-            alias: None,
-            is_suggested: false,
-            frecency_path: None,
-        }
+        Self::build(name, path, is_script, false, false, action_verb, None, None)
     }
 
     /// Create a ScriptInfo with all options including custom action verb and shortcut
@@ -235,18 +277,16 @@ impl ScriptInfo {
         action_verb: impl Into<String>,
         shortcut: Option<String>,
     ) -> Self {
-        ScriptInfo {
-            name: name.into(),
-            path: path.into(),
+        Self::build(
+            name,
+            path,
             is_script,
-            is_scriptlet: false,
-            is_agent: false,
-            action_verb: action_verb.into(),
+            false,
+            false,
+            action_verb,
             shortcut,
-            alias: None,
-            is_suggested: false,
-            frecency_path: None,
-        }
+            None,
+        )
     }
 
     /// Create a ScriptInfo with all options including custom action verb, shortcut, and alias
@@ -259,24 +299,35 @@ impl ScriptInfo {
         shortcut: Option<String>,
         alias: Option<String>,
     ) -> Self {
-        ScriptInfo {
-            name: name.into(),
-            path: path.into(),
+        Self::build(
+            name,
+            path,
             is_script,
-            is_scriptlet: false,
-            is_agent: false,
-            action_verb: action_verb.into(),
+            false,
+            false,
+            action_verb,
             shortcut,
             alias,
-            is_suggested: false,
-            frecency_path: None,
-        }
+        )
     }
 
     /// Set whether this item is suggested (has frecency data) and its frecency path
     pub fn with_frecency(mut self, is_suggested: bool, frecency_path: Option<String>) -> Self {
-        self.is_suggested = is_suggested;
-        self.frecency_path = frecency_path;
+        let normalized_path = Self::normalized_optional_text(frecency_path);
+        self.is_suggested = is_suggested && normalized_path.is_some();
+        self.frecency_path = normalized_path;
         self
+    }
+}
+
+impl From<(&str, &str)> for ScriptInfo {
+    fn from(value: (&str, &str)) -> Self {
+        Self::new(value.0, value.1)
+    }
+}
+
+impl From<(String, String)> for ScriptInfo {
+    fn from(value: (String, String)) -> Self {
+        Self::new(value.0, value.1)
     }
 }
