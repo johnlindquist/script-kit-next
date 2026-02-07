@@ -1,0 +1,151 @@
+use super::*;
+
+impl ScriptListApp {
+    fn handle_global_shortcut_with_options(
+        &mut self,
+        event: &gpui::KeyDownEvent,
+        is_dismissable: bool,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        // If the shortcut recorder is active, don't process any shortcuts here.
+        // The recorder has its own key handlers and should receive all key events.
+        if self.shortcut_recorder_state.is_some() {
+            return false;
+        }
+
+        let key_str = event.keystroke.key.to_lowercase();
+        let has_cmd = event.keystroke.modifiers.platform;
+        let has_shift = event.keystroke.modifiers.shift;
+
+        // Cmd+W always closes window
+        if has_cmd && key_str == "w" {
+            logging::log("KEY", "Cmd+W - closing window");
+            self.close_and_reset_window(cx);
+            return true;
+        }
+
+        // Cmd+Shift+M cycles vibrancy material (for debugging)
+        if has_cmd && has_shift && key_str == "m" {
+            let result = crate::platform::cycle_vibrancy_material();
+            logging::log("KEY", &format!("Cmd+Shift+M - {}", result));
+            // Show HUD with the material name
+            self.show_hud(result, None, cx);
+            return true;
+        }
+
+        // Cmd+Shift+P toggles pin mode (window stays open on blur)
+        if has_cmd && has_shift && key_str == "p" {
+            self.is_pinned = !self.is_pinned;
+            let status = if self.is_pinned {
+                "📌 Window Pinned"
+            } else {
+                "📌 Window Unpinned"
+            };
+            logging::log("KEY", &format!("Cmd+Shift+P - {}", status));
+            self.show_hud(status.to_string(), None, cx);
+            cx.notify();
+            return true;
+        }
+
+        // ESC closes dismissable prompts (when actions popup is not showing)
+        if is_dismissable
+            && crate::ui_foundation::is_key_escape(key_str.as_str())
+            && !self.show_actions_popup
+        {
+            logging::log("KEY", "ESC in dismissable prompt - closing window");
+            self.close_and_reset_window(cx);
+            return true;
+        }
+
+        false
+    }
+
+    /// Check if the current view is a dismissable prompt
+    ///
+    /// Dismissable prompts are those that feel "closeable" with escape:
+    /// - ArgPrompt, DivPrompt, FormPrompt, SelectPrompt, PathPrompt, DropPrompt, TemplatePrompt
+    /// - Built-in views (ClipboardHistory, AppLauncher, WindowSwitcher, DesignGallery)
+    /// - ScriptList
+    ///
+    /// Non-dismissable prompts:
+    /// - TermPrompt, EditorPrompt (these require explicit Cmd+W to close)
+    /// - EnvPrompt (stays open on blur so user can copy API keys from other windows)
+    #[allow(dead_code)]
+    fn is_dismissable_view(&self) -> bool {
+        !matches!(
+            self.current_view,
+            AppView::TermPrompt { .. }
+                | AppView::EditorPrompt { .. }
+                | AppView::ScratchPadView { .. }
+                | AppView::QuickTerminalView { .. }
+                | AppView::EnvPrompt { .. }
+                | AppView::WebcamView { .. }
+        )
+    }
+
+    /// Show a HUD (heads-up display) overlay message
+    ///
+    /// This creates a separate floating window positioned at bottom-center of the
+    /// screen containing the mouse cursor. The HUD is independent of the main
+    /// Script Kit window and will remain visible even when the main window is hidden.
+    ///
+    /// Position: Bottom-center (85% down screen)
+    /// Duration: 2000ms default, configurable
+    /// Shape: Pill (40px tall, variable width)
+    fn show_hud(&mut self, text: String, duration_ms: Option<u64>, cx: &mut Context<Self>) {
+        // Delegate to the HUD manager which creates a separate floating window
+        // This ensures the HUD is visible even when the main app window is hidden
+        hud_manager::show_hud(text, duration_ms, cx);
+    }
+
+    /// Show the debug grid overlay with specified options
+    ///
+    /// This method converts protocol::GridOptions to debug_grid::GridConfig
+    /// and enables the grid overlay rendering.
+    fn show_grid(&mut self, options: protocol::GridOptions, cx: &mut Context<Self>) {
+        use debug_grid::{GridColorScheme, GridConfig, GridDepth};
+        use protocol::GridDepthOption;
+
+        // Convert protocol depth to debug_grid depth
+        let depth = match &options.depth {
+            GridDepthOption::Preset(s) if s == "all" => GridDepth::All,
+            GridDepthOption::Preset(_) => GridDepth::Prompts,
+            GridDepthOption::Components(names) => GridDepth::Components(names.clone()),
+        };
+
+        self.grid_config = Some(GridConfig {
+            grid_size: options.grid_size,
+            show_bounds: options.show_bounds,
+            show_box_model: options.show_box_model,
+            show_alignment_guides: options.show_alignment_guides,
+            show_dimensions: options.show_dimensions,
+            depth,
+            color_scheme: GridColorScheme::default(),
+        });
+
+        logging::log(
+            "DEBUG_GRID",
+            &format!(
+                "Grid overlay enabled: size={}, bounds={}, box_model={}, guides={}, dimensions={}",
+                options.grid_size,
+                options.show_bounds,
+                options.show_box_model,
+                options.show_alignment_guides,
+                options.show_dimensions
+            ),
+        );
+
+        cx.notify();
+    }
+
+    /// Hide the debug grid overlay
+    fn hide_grid(&mut self, cx: &mut Context<Self>) {
+        self.grid_config = None;
+        logging::log("DEBUG_GRID", "Grid overlay hidden");
+        cx.notify();
+    }
+
+    /// Rebuild alias and shortcut registries from current scripts/scriptlets.
+    /// Returns a list of conflict messages (if any) for HUD display.
+    /// Conflict rule: first-registered wins - duplicates are blocked.
+}

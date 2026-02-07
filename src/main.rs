@@ -1543,8 +1543,8 @@ enum AliasMatch {
     App(Arc<app_launcher::AppInfo>),
 }
 
-// Core ScriptListApp implementation extracted to app_impl.rs
-include!("app_impl.rs");
+// Core ScriptListApp implementation extracted to app_impl/mod.rs
+include!("app_impl/mod.rs");
 
 // Script execution logic (execute_interactive) extracted
 include!("execute_script.rs");
