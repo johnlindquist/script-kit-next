@@ -1,10 +1,163 @@
 use super::*;
 
+static SCRIPT_REFRESH_REQUEST_ID: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
+
+struct AsyncScriptRefreshLoadResult {
+    scripts: Vec<std::sync::Arc<scripts::Script>>,
+    scriptlets: Vec<std::sync::Arc<scripts::Scriptlet>>,
+    scripts_elapsed: std::time::Duration,
+    scriptlets_elapsed: std::time::Duration,
+    total_elapsed: std::time::Duration,
+}
+
+fn spawn_async_script_refresh_load(
+    scripts_loader: impl FnOnce() -> Vec<std::sync::Arc<scripts::Script>> + Send + 'static,
+    scriptlets_loader: impl FnOnce() -> Vec<std::sync::Arc<scripts::Scriptlet>> + Send + 'static,
+) -> async_channel::Receiver<AsyncScriptRefreshLoadResult> {
+    let (tx, rx) = async_channel::bounded(1);
+    std::thread::spawn(move || {
+        let load_started_at = std::time::Instant::now();
+        let (scripts, scripts_elapsed, scriptlets, scriptlets_elapsed) = std::thread::scope(
+            |scope| {
+                let scripts_handle = scope.spawn(move || {
+                    let started = std::time::Instant::now();
+                    (scripts_loader(), started.elapsed())
+                });
+                let scriptlets_handle = scope.spawn(move || {
+                    let started = std::time::Instant::now();
+                    (scriptlets_loader(), started.elapsed())
+                });
+
+                let (scripts, scripts_elapsed) = match scripts_handle.join() {
+                    Ok(result) => result,
+                    Err(_) => {
+                        logging::log(
+                        "ERROR",
+                        "script_refresh_async: attempted=load_scripts failed=thread_panicked state=background_loading",
+                    );
+                        (Vec::new(), std::time::Duration::ZERO)
+                    }
+                };
+                let (scriptlets, scriptlets_elapsed) = match scriptlets_handle.join() {
+                    Ok(result) => result,
+                    Err(_) => {
+                        logging::log(
+                        "ERROR",
+                        "script_refresh_async: attempted=load_scriptlets failed=thread_panicked state=background_loading",
+                    );
+                        (Vec::new(), std::time::Duration::ZERO)
+                    }
+                };
+
+                (scripts, scripts_elapsed, scriptlets, scriptlets_elapsed)
+            },
+        );
+
+        let result = AsyncScriptRefreshLoadResult {
+            scripts,
+            scriptlets,
+            scripts_elapsed,
+            scriptlets_elapsed,
+            total_elapsed: load_started_at.elapsed(),
+        };
+
+        if tx.send_blocking(result).is_err() {
+            logging::log(
+                "ERROR",
+                "script_refresh_async: attempted=send_load_result failed=receiver_dropped state=background_complete",
+            );
+        }
+    });
+    rx
+}
+
 impl ScriptListApp {
     pub(crate) fn refresh_scripts(&mut self, cx: &mut Context<Self>) {
-        self.scripts = scripts::read_scripts();
+        let request_id =
+            SCRIPT_REFRESH_REQUEST_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+        logging::log(
+            "APP",
+            &format!(
+                "script_refresh_async: state=dispatching_background_load request_id={} current_scripts={} current_scriptlets={}",
+                request_id,
+                self.scripts.len(),
+                self.scriptlets.len()
+            ),
+        );
+
+        let rx = spawn_async_script_refresh_load(scripts::read_scripts, scripts::load_scriptlets);
+        cx.spawn(async move |this, cx| {
+            let Ok(load_result) = rx.recv().await else {
+                logging::log(
+                    "ERROR",
+                    "script_refresh_async: attempted=receive_load_result failed=channel_closed state=awaiting_background_load",
+                );
+                return;
+            };
+
+            let scripts_count = load_result.scripts.len();
+            let scriptlets_count = load_result.scriptlets.len();
+            let scripts_elapsed_ms = load_result.scripts_elapsed.as_secs_f64() * 1000.0;
+            let scriptlets_elapsed_ms = load_result.scriptlets_elapsed.as_secs_f64() * 1000.0;
+            let total_elapsed_ms = load_result.total_elapsed.as_secs_f64() * 1000.0;
+            let latest_request_id =
+                SCRIPT_REFRESH_REQUEST_ID.load(std::sync::atomic::Ordering::Relaxed);
+            if request_id != latest_request_id {
+                logging::log(
+                    "APP",
+                    &format!(
+                        "script_refresh_async: state=discarding_stale_result request_id={} latest_request_id={} scripts={} scriptlets={}",
+                        request_id,
+                        latest_request_id,
+                        scripts_count,
+                        scriptlets_count
+                    ),
+                );
+                return;
+            }
+
+            let update_result = cx.update(|cx| {
+                this.update(cx, |app, cx| {
+                    app.apply_loaded_scripts_and_scriptlets(
+                        load_result.scripts,
+                        load_result.scriptlets,
+                        cx,
+                    );
+                    logging::log(
+                        "APP",
+                        &format!(
+                            "script_refresh_async: state=applied_to_ui request_id={} scripts={} scriptlets={} scripts_ms={:.2} scriptlets_ms={:.2} total_ms={:.2}",
+                            request_id,
+                            scripts_count,
+                            scriptlets_count,
+                            scripts_elapsed_ms,
+                            scriptlets_elapsed_ms,
+                            total_elapsed_ms
+                        ),
+                    );
+                })
+            });
+
+            if update_result.is_err() {
+                logging::log(
+                    "ERROR",
+                    "script_refresh_async: attempted=apply_loaded_results failed=ui_entity_unavailable state=applying_to_ui",
+                );
+            }
+        })
+        .detach();
+    }
+
+    fn apply_loaded_scripts_and_scriptlets(
+        &mut self,
+        loaded_scripts: Vec<std::sync::Arc<scripts::Script>>,
+        loaded_scriptlets: Vec<std::sync::Arc<scripts::Scriptlet>>,
+        cx: &mut Context<Self>,
+    ) {
+        self.scripts = loaded_scripts;
         // Use load_scriptlets() to load from ALL kits (kit/*/extensions/*.md)
-        self.scriptlets = scripts::load_scriptlets();
+        self.scriptlets = loaded_scriptlets;
         self.invalidate_filter_cache();
         self.invalidate_grouped_cache();
 
@@ -278,5 +431,59 @@ impl ScriptListApp {
 
         cx.notify();
     }
+}
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::{Arc, Mutex};
+    use std::time::Duration;
+
+    #[test]
+    fn test_spawn_async_script_refresh_load_returns_results_when_loaders_run_off_main_thread() {
+        let main_thread_id = std::thread::current().id();
+        let scripts_thread_id = Arc::new(Mutex::new(None));
+        let scriptlets_thread_id = Arc::new(Mutex::new(None));
+
+        let scripts_thread_id_clone = Arc::clone(&scripts_thread_id);
+        let scriptlets_thread_id_clone = Arc::clone(&scriptlets_thread_id);
+
+        let rx = spawn_async_script_refresh_load(
+            move || {
+                std::thread::sleep(Duration::from_millis(5));
+                *scripts_thread_id_clone
+                    .lock()
+                    .expect("scripts thread id lock should succeed") =
+                    Some(std::thread::current().id());
+                Vec::new()
+            },
+            move || {
+                std::thread::sleep(Duration::from_millis(5));
+                *scriptlets_thread_id_clone
+                    .lock()
+                    .expect("scriptlets thread id lock should succeed") =
+                    Some(std::thread::current().id());
+                Vec::new()
+            },
+        );
+
+        let result = rx
+            .recv_blocking()
+            .expect("background loaders should send exactly one result");
+
+        assert!(result.total_elapsed >= result.scripts_elapsed);
+        assert!(result.total_elapsed >= result.scriptlets_elapsed);
+
+        let scripts_worker_thread = scripts_thread_id
+            .lock()
+            .expect("scripts thread id lock should succeed")
+            .expect("scripts loader should execute");
+        let scriptlets_worker_thread = scriptlets_thread_id
+            .lock()
+            .expect("scriptlets thread id lock should succeed")
+            .expect("scriptlets loader should execute");
+
+        assert_ne!(scripts_worker_thread, main_thread_id);
+        assert_ne!(scriptlets_worker_thread, main_thread_id);
+    }
 }
