@@ -153,6 +153,7 @@ pub mod keyword_matcher;
 // Debounced keystroke logging for text expansion system
 // Consolidates per-keystroke logs into periodic summaries
 pub mod keystroke_logger;
+pub mod kit_store;
 
 // Global keyboard monitoring for system-wide keystroke capture
 // Required for text expansion triggers typed in any application
