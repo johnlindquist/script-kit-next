@@ -170,8 +170,8 @@ fn test_form_fields_use_theme_token_font_sizes() {
 
 #[test]
 fn test_arg_prompt_header_uses_design_token_large_input_size() {
-    let source = std::fs::read_to_string("src/render_prompts/arg.rs")
-        .expect("failed to read src/render_prompts/arg.rs");
+    let source = std::fs::read_to_string("src/render_prompts/arg/render.rs")
+        .expect("failed to read src/render_prompts/arg/render.rs");
 
     assert!(
         source.contains(".text_size(px(design_typography.font_size_lg))"),
@@ -229,8 +229,10 @@ fn test_email_field_rejects_spaces_and_multiple_at_signs() {
 
 #[test]
 fn test_form_field_colors_from_design_uses_design_accent_for_cursor() {
-    let mut design = DesignColors::default();
-    design.accent = 0x123456;
+    let design = DesignColors {
+        accent: 0x123456,
+        ..Default::default()
+    };
 
     let colors = FormFieldColors::from_design(&design);
     assert_eq!(colors.cursor, 0x123456);

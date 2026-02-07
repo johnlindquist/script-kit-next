@@ -373,13 +373,13 @@ mod tests {
     #[test]
     fn test_validate_capture_window_output_path_allows_dot_test_screenshots() {
         let temp = TempDir::new().expect("create temp dir");
-        let cwd = temp.path();
+        let cwd = std::fs::canonicalize(temp.path()).expect("canonicalize temp dir");
         let kit_root = cwd.join("kit-root");
         std::fs::create_dir_all(&kit_root).expect("create kit root");
 
         let resolved = validate_capture_window_output_path_with_roots(
             ".test-screenshots/shot.png",
-            cwd,
+            &cwd,
             &kit_root,
         )
         .expect("path should be accepted");
@@ -439,7 +439,7 @@ mod tests {
     #[test]
     fn test_validate_capture_window_output_path_allows_scriptkit_screenshots_root() {
         let temp = TempDir::new().expect("create temp dir");
-        let cwd = temp.path();
+        let cwd = std::fs::canonicalize(temp.path()).expect("canonicalize temp dir");
         let kit_root = cwd.join("kit-root");
         let screenshots_root = kit_root.join("screenshots");
         std::fs::create_dir_all(&screenshots_root).expect("create screenshots root");
@@ -447,7 +447,7 @@ mod tests {
         let target = screenshots_root.join("shot.png");
         let resolved = validate_capture_window_output_path_with_roots(
             target.to_string_lossy().as_ref(),
-            cwd,
+            &cwd,
             &kit_root,
         )
         .expect("path should be accepted");
