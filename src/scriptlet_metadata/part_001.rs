@@ -1,5 +1,5 @@
 #[cfg(test)]
 mod tests {
-    include!("part_001_tests/tests_part_000.rs");
-    include!("part_001_tests/tests_part_001.rs");
+    include!("tests/part_000.rs");
+    include!("tests/part_001.rs");
 }
