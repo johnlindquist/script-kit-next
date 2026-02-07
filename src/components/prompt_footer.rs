@@ -82,13 +82,7 @@ impl PromptFooterColors {
 
 impl Default for PromptFooterColors {
     fn default() -> Self {
-        Self {
-            accent: 0xfbbf24, // Script Kit yellow/gold
-            text_muted: 0x808080,
-            border: 0x464647,
-            background: 0xffffff, // White - subtle brightening like Raycast
-            is_light_mode: false,
-        }
+        Self::from_theme(&crate::theme::get_cached_theme())
     }
 }
 
@@ -452,13 +446,27 @@ mod tests {
 
     #[test]
     fn test_prompt_footer_colors_from_design_uses_cached_theme_tokens() {
-        let mut design = crate::designs::DesignColors::default();
-        design.accent = 0x010203;
-        design.text_muted = 0x040506;
-        design.border = 0x070809;
-        design.background_selected = 0x0a0b0c;
+        let design = crate::designs::DesignColors {
+            accent: 0x010203,
+            text_muted: 0x040506,
+            border: 0x070809,
+            background_selected: 0x0a0b0c,
+            ..crate::designs::DesignColors::default()
+        };
 
         let resolved = PromptFooterColors::from_design(&design);
+        let expected = PromptFooterColors::from_theme(&crate::theme::get_cached_theme());
+
+        assert_eq!(resolved.accent, expected.accent);
+        assert_eq!(resolved.text_muted, expected.text_muted);
+        assert_eq!(resolved.border, expected.border);
+        assert_eq!(resolved.background, expected.background);
+        assert_eq!(resolved.is_light_mode, expected.is_light_mode);
+    }
+
+    #[test]
+    fn test_prompt_footer_colors_default_uses_cached_theme_tokens() {
+        let resolved = PromptFooterColors::default();
         let expected = PromptFooterColors::from_theme(&crate::theme::get_cached_theme());
 
         assert_eq!(resolved.accent, expected.accent);
