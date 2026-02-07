@@ -1,4 +1,13 @@
+fn preview_panel_typography_section_label_size(typography: designs::DesignTypography) -> f32 {
+    typography.font_size_xs
+}
+
+fn preview_panel_typography_body_line_height(typography: designs::DesignTypography) -> f32 {
+    typography.font_size_sm * typography.line_height_relaxed
+}
+
 impl ScriptListApp {
+    #[allow(dead_code)]
     fn read_script_preview(path: &std::path::Path, max_lines: usize) -> String {
         match std::fs::read_to_string(path) {
             Ok(content) => {
@@ -126,6 +135,8 @@ impl ScriptListApp {
         };
         let border_radius = visual.radius_md;
         let font_family = typography.font_family;
+        let section_label_font_size = preview_panel_typography_section_label_size(typography);
+        let body_text_line_height = preview_panel_typography_body_line_height(typography);
 
         // Preview badge colors — light mode needs opaque fills for vibrancy readability
         // Light mode: use theme text colors (dark on light) for visible badges
@@ -390,7 +401,7 @@ impl ScriptListApp {
                                     .pb(px(spacing.padding_lg))
                                     .child(
                                         div()
-                                            .text_size(px(11.0))
+                                            .text_size(px(section_label_font_size))
                                             .font_weight(gpui::FontWeight::SEMIBOLD)
                                             .text_color(rgba((text_muted << 8) | 0xCC))
                                             .pb(px(spacing.padding_xs))
@@ -418,7 +429,7 @@ impl ScriptListApp {
                             panel = panel.child(
                                 div()
                                     .text_sm()
-                                    .line_height(px(20.0))
+                                    .line_height(px(body_text_line_height))
                                     .text_color(rgb(text_secondary))
                                     .pb(px(spacing.padding_lg))
                                     .child(desc.clone()),
@@ -437,7 +448,7 @@ impl ScriptListApp {
                         // Code preview header
                         panel = panel.child(
                             div()
-                                .text_size(px(11.0))
+                                .text_size(px(section_label_font_size))
                                 .font_weight(gpui::FontWeight::SEMIBOLD)
                                 .text_color(rgba((text_muted << 8) | 0xCC))
                                 .pb(px(spacing.padding_sm))
@@ -626,7 +637,7 @@ impl ScriptListApp {
                             panel = panel.child(
                                 div()
                                     .text_sm()
-                                    .line_height(px(20.0))
+                                    .line_height(px(body_text_line_height))
                                     .text_color(rgb(text_secondary))
                                     .pb(px(spacing.padding_lg))
                                     .child(desc.clone()),
@@ -646,7 +657,7 @@ impl ScriptListApp {
                                     .pb(px(spacing.padding_lg))
                                     .child(
                                         div()
-                                            .text_size(px(11.0))
+                                            .text_size(px(section_label_font_size))
                                             .font_weight(gpui::FontWeight::SEMIBOLD)
                                             .text_color(rgba((text_muted << 8) | 0xCC))
                                             .pb(px(spacing.padding_xs))
@@ -681,7 +692,7 @@ impl ScriptListApp {
                         // Content preview header
                         panel = panel.child(
                             div()
-                                .text_size(px(11.0))
+                                .text_size(px(section_label_font_size))
                                 .font_weight(gpui::FontWeight::SEMIBOLD)
                                 .text_color(rgba((text_muted << 8) | 0xCC))
                                 .pb(px(spacing.padding_sm))
@@ -821,7 +832,7 @@ impl ScriptListApp {
                                     .pb(px(spacing.padding_lg))
                                     .child(
                                         div()
-                                            .text_size(px(11.0))
+                                            .text_size(px(section_label_font_size))
                                             .font_weight(gpui::FontWeight::SEMIBOLD)
                                             .text_color(rgba((text_muted << 8) | 0xCC))
                                             .pb(px(spacing.padding_xs))
@@ -848,7 +859,7 @@ impl ScriptListApp {
                         panel = panel.child(
                             div()
                                 .text_sm()
-                                .line_height(px(20.0))
+                                .line_height(px(body_text_line_height))
                                 .text_color(rgb(text_secondary))
                                 .pb(px(spacing.padding_lg))
                                 .child(builtin.description.clone()),
@@ -913,7 +924,7 @@ impl ScriptListApp {
                                     .pb(px(spacing.padding_lg))
                                     .child(
                                         div()
-                                            .text_size(px(11.0))
+                                            .text_size(px(section_label_font_size))
                                             .font_weight(gpui::FontWeight::SEMIBOLD)
                                             .text_color(rgba((text_muted << 8) | 0xCC))
                                             .pb(px(spacing.padding_xs))
@@ -944,7 +955,7 @@ impl ScriptListApp {
                                 .pb(px(spacing.padding_lg))
                                 .child(
                                     div()
-                                        .text_size(px(11.0))
+                                        .text_size(px(section_label_font_size))
                                         .font_weight(gpui::FontWeight::SEMIBOLD)
                                         .text_color(rgba((text_muted << 8) | 0xCC))
                                         .pb(px(spacing.padding_xs))
@@ -953,7 +964,7 @@ impl ScriptListApp {
                                 .child(
                                     div()
                                         .text_sm()
-                                        .line_height(px(20.0))
+                                        .line_height(px(body_text_line_height))
                                         .text_color(rgb(text_secondary))
                                         .child(app.path.to_string_lossy().to_string()),
                                 ),
@@ -968,7 +979,7 @@ impl ScriptListApp {
                                     .pb(px(spacing.padding_lg))
                                     .child(
                                         div()
-                                            .text_size(px(11.0))
+                                            .text_size(px(section_label_font_size))
                                             .font_weight(gpui::FontWeight::SEMIBOLD)
                                             .text_color(rgba((text_muted << 8) | 0xCC))
                                             .pb(px(spacing.padding_xs))
@@ -977,7 +988,7 @@ impl ScriptListApp {
                                     .child(
                                         div()
                                             .text_sm()
-                                            .line_height(px(20.0))
+                                            .line_height(px(body_text_line_height))
                                             .text_color(rgb(text_secondary))
                                             .child(bundle_id.clone()),
                                     ),
@@ -1000,7 +1011,7 @@ impl ScriptListApp {
                                 .flex_col()
                                 .child(
                                     div()
-                                        .text_size(px(11.0))
+                                        .text_size(px(section_label_font_size))
                                         .font_weight(gpui::FontWeight::SEMIBOLD)
                                         .text_color(rgba((text_muted << 8) | 0xCC))
                                         .pb(px(spacing.padding_xs))
@@ -1036,7 +1047,7 @@ impl ScriptListApp {
                                 .pb(px(spacing.padding_md))
                                 .child(
                                     div()
-                                        .text_size(px(11.0))
+                                        .text_size(px(section_label_font_size))
                                         .font_weight(gpui::FontWeight::SEMIBOLD)
                                         .text_color(rgba((text_muted << 8) | 0xCC))
                                         .pb(px(spacing.padding_xs))
@@ -1058,7 +1069,7 @@ impl ScriptListApp {
                                 .pb(px(spacing.padding_md))
                                 .child(
                                     div()
-                                        .text_size(px(11.0))
+                                        .text_size(px(section_label_font_size))
                                         .font_weight(gpui::FontWeight::SEMIBOLD)
                                         .text_color(rgba((text_muted << 8) | 0xCC))
                                         .pb(px(spacing.padding_xs))
@@ -1091,7 +1102,7 @@ impl ScriptListApp {
                                 .flex_col()
                                 .child(
                                     div()
-                                        .text_size(px(11.0))
+                                        .text_size(px(section_label_font_size))
                                         .font_weight(gpui::FontWeight::SEMIBOLD)
                                         .text_color(rgba((text_muted << 8) | 0xCC))
                                         .pb(px(spacing.padding_xs))
@@ -1166,7 +1177,7 @@ impl ScriptListApp {
                                 .pb(px(spacing.padding_md))
                                 .child(
                                     div()
-                                        .text_size(px(11.0))
+                                        .text_size(px(section_label_font_size))
                                         .font_weight(gpui::FontWeight::SEMIBOLD)
                                         .text_color(rgba((text_muted << 8) | 0xCC))
                                         .pb(px(spacing.padding_xs))
@@ -1189,7 +1200,7 @@ impl ScriptListApp {
                                     .pb(px(spacing.padding_md))
                                     .child(
                                         div()
-                                            .text_size(px(11.0))
+                                            .text_size(px(section_label_font_size))
                                             .font_weight(gpui::FontWeight::SEMIBOLD)
                                             .text_color(rgba((text_muted << 8) | 0xCC))
                                             .pb(px(spacing.padding_xs))
@@ -1220,7 +1231,7 @@ impl ScriptListApp {
                                 .flex_col()
                                 .child(
                                     div()
-                                        .text_size(px(11.0))
+                                        .text_size(px(section_label_font_size))
                                         .font_weight(gpui::FontWeight::SEMIBOLD)
                                         .text_color(rgba((text_muted << 8) | 0xCC))
                                         .pb(px(spacing.padding_xs))
@@ -1297,7 +1308,7 @@ impl ScriptListApp {
                                 .flex_col()
                                 .child(
                                     div()
-                                        .text_size(px(11.0))
+                                        .text_size(px(section_label_font_size))
                                         .font_weight(gpui::FontWeight::SEMIBOLD)
                                         .text_color(rgba((text_muted << 8) | 0xCC))
                                         .pb(px(spacing.padding_xs))
