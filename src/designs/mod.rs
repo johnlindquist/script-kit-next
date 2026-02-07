@@ -328,6 +328,51 @@ pub(crate) fn extension_default_icon(extension: &str) -> &'static str {
     }
 }
 
+#[derive(Debug, Default)]
+struct SearchAccessories {
+    type_tag: Option<crate::list_item::TypeTag>,
+    source_hint: Option<String>,
+}
+
+fn resolve_search_accessories(result: &SearchResult, filter_text: &str) -> SearchAccessories {
+    if filter_text.is_empty() {
+        return SearchAccessories::default();
+    }
+
+    // Search rows should stay calm: keep only a quiet type label.
+    // Category/match-reason metadata is intentionally hidden.
+    let (label, color) = result.type_tag_info();
+    SearchAccessories {
+        type_tag: Some(crate::list_item::TypeTag { label, color }),
+        source_hint: None,
+    }
+}
+
+fn resolve_tool_badge(result: &SearchResult, is_filtering: bool) -> Option<String> {
+    if is_filtering {
+        // Action/tool badges ("paste", "open", etc.) are too noisy during search.
+        return None;
+    }
+
+    match result {
+        SearchResult::Script(sm) => sm.script.typed_metadata.as_ref().and_then(|meta| {
+            if meta.cron.is_some() || meta.schedule.is_some() {
+                Some("cron".to_string())
+            } else if !meta.watch.is_empty() {
+                Some("watch".to_string())
+            } else if meta.background {
+                Some("bg".to_string())
+            } else if meta.system {
+                Some("sys".to_string())
+            } else {
+                None
+            }
+        }),
+        SearchResult::Scriptlet(sm) => Some(sm.scriptlet.tool.clone()),
+        _ => None,
+    }
+}
+
 ///
 /// # Arguments
 /// * `variant` - The design variant to render
@@ -526,78 +571,11 @@ pub fn render_design_item(
                 }
             };
 
-            // During search mode, build type tag and source hint for context
-            // During grouped mode, show hidden alias/keyword hints for discoverability
+            // During search mode, keep only quiet type labels.
+            // During grouped mode, use discoverability hints.
             let (type_tag, source_hint) = if !filter_text.is_empty() {
-                let (label, color) = result.type_tag_info();
-                let tag = Some(crate::list_item::TypeTag { label, color });
-                // Build source hint: kit name + file extension + author for scripts
-                // e.g., "cleanshot · .ts · by John" or just ".ts" for main kit
-                let hint = match result {
-                    SearchResult::Script(sm) => {
-                        let kit = sm.script.kit_name.as_deref().filter(|s| *s != "main");
-                        let ext = if sm.script.extension.is_empty() {
-                            None
-                        } else {
-                            Some(format!(".{}", sm.script.extension))
-                        };
-                        let author = sm
-                            .script
-                            .typed_metadata
-                            .as_ref()
-                            .and_then(|m| m.author.as_deref());
-                        // Show alias as discoverable trigger when it's hidden behind shortcut badge
-                        let alias_hint = if sm.script.shortcut.is_some() {
-                            sm.script.alias.as_ref().map(|a| format!("/{}", a))
-                        } else {
-                            None
-                        };
-                        let match_reason = detect_match_reason_for_script(&sm.script, filter_text);
-                        let mut parts: Vec<String> = Vec::new();
-                        if let Some(k) = kit {
-                            parts.push(k.to_string());
-                        }
-                        if let Some(e) = ext {
-                            parts.push(e);
-                        }
-                        if let Some(a) = author {
-                            parts.push(format!("by {}", a));
-                        }
-                        if let Some(ah) = alias_hint {
-                            parts.push(ah);
-                        }
-                        if let Some(reason) = match_reason {
-                            parts.push(reason);
-                        }
-                        if parts.is_empty() {
-                            None
-                        } else {
-                            Some(parts.join(" · "))
-                        }
-                    }
-                    SearchResult::Scriptlet(sm) => {
-                        let mut parts: Vec<String> = Vec::new();
-                        if let Some(source) = sm.scriptlet.group.as_deref().filter(|s| *s != "main")
-                        {
-                            parts.push(source.to_string());
-                        }
-                        if let Some(reason) =
-                            detect_match_reason_for_scriptlet(&sm.scriptlet, filter_text)
-                        {
-                            parts.push(reason);
-                        }
-                        if parts.is_empty() {
-                            None
-                        } else {
-                            Some(parts.join(" · "))
-                        }
-                    }
-                    _ => result
-                        .source_name()
-                        .filter(|s| *s != "main")
-                        .map(|s| s.to_string()),
-                };
-                (tag, hint)
+                let accessories = resolve_search_accessories(result, filter_text);
+                (accessories.type_tag, accessories.source_hint)
             } else {
                 // Grouped view: use extracted helpers for discoverability hints
                 let hint = match result {
@@ -611,23 +589,7 @@ pub fn render_design_item(
             // Tool/language badge for scriptlets (e.g., "ts", "bash", "paste")
             // For scripts: show property indicator if the script has special runtime behavior
             // (cron/schedule, file watch, background, system)
-            let tool_badge = match result {
-                SearchResult::Script(sm) => sm.script.typed_metadata.as_ref().and_then(|meta| {
-                    if meta.cron.is_some() || meta.schedule.is_some() {
-                        Some("cron".to_string())
-                    } else if !meta.watch.is_empty() {
-                        Some("watch".to_string())
-                    } else if meta.background {
-                        Some("bg".to_string())
-                    } else if meta.system {
-                        Some("sys".to_string())
-                    } else {
-                        None
-                    }
-                }),
-                SearchResult::Scriptlet(sm) => Some(sm.scriptlet.tool.clone()),
-                _ => None,
-            };
+            let tool_badge = resolve_tool_badge(result, !filter_text.is_empty());
 
             ListItem::new(name, list_colors)
                 .index(index)
@@ -876,6 +838,7 @@ pub(crate) fn code_preview_for_scriptlet(scriptlet: &crate::scripts::Scriptlet) 
 /// Detect why a script matched the search query when the name didn't match directly.
 /// Returns a concise reason string (e.g., "tag: productivity", "shortcut") for
 /// display in the search source hint area, helping users understand search results.
+#[cfg(test)]
 pub(crate) fn detect_match_reason_for_script(
     script: &crate::scripts::Script,
     query: &str,
@@ -946,6 +909,7 @@ pub(crate) fn detect_match_reason_for_script(
 /// Extract a brief excerpt from text around the first match of a query.
 /// Returns a truncated substring centered on the match, with ellipsis as needed.
 /// `max_len` is the maximum character length of the returned excerpt.
+#[cfg(test)]
 pub(crate) fn excerpt_around_match(text: &str, query_lower: &str, max_len: usize) -> String {
     let text_chars: Vec<char> = text.chars().collect();
     let text_len = text_chars.len();
@@ -986,6 +950,7 @@ pub(crate) fn excerpt_around_match(text: &str, query_lower: &str, max_len: usize
 
 /// Detect why a scriptlet matched the search query when the name didn't match directly.
 /// Returns a concise reason string for display in search source hints.
+#[cfg(test)]
 pub(crate) fn detect_match_reason_for_scriptlet(
     scriptlet: &crate::scripts::Scriptlet,
     query: &str,
@@ -1393,8 +1358,9 @@ mod tests {
     // =========================================================================
 
     use crate::metadata_parser::TypedMetadata;
-    use crate::scripts::Script;
+    use crate::scripts::{MatchIndices, Script, ScriptMatch, Scriptlet, ScriptletMatch};
     use std::path::PathBuf;
+    use std::sync::Arc;
 
     fn make_test_script(name: &str) -> Script {
         Script {
@@ -1406,6 +1372,83 @@ mod tests {
             extension: "ts".to_string(),
             ..Default::default()
         }
+    }
+
+    fn make_script_search_result(script: Script) -> SearchResult {
+        SearchResult::Script(ScriptMatch {
+            filename: format!("{}.ts", script.name.to_lowercase().replace(' ', "-")),
+            script: Arc::new(script),
+            score: 100,
+            match_indices: MatchIndices::default(),
+        })
+    }
+
+    fn make_scriptlet_search_result(scriptlet: Scriptlet) -> SearchResult {
+        SearchResult::Scriptlet(ScriptletMatch {
+            scriptlet: Arc::new(scriptlet),
+            score: 100,
+            display_file_path: None,
+            match_indices: MatchIndices::default(),
+        })
+    }
+
+    #[test]
+    fn test_search_accessories_hide_source_hint_during_filtering() {
+        let mut script = make_test_script("Clipboard Variables");
+        script.kit_name = Some("clipboard".to_string());
+        script.shortcut = Some("cmd shift v".to_string());
+        let result = make_script_search_result(script);
+
+        let accessories = resolve_search_accessories(&result, "clip");
+        assert!(
+            accessories.type_tag.is_some(),
+            "type label should stay visible"
+        );
+        assert_eq!(
+            accessories.source_hint, None,
+            "source/category metadata should be hidden during filtering"
+        );
+    }
+
+    #[test]
+    fn test_resolve_tool_badge_hidden_during_filtering_for_scriptlets() {
+        let scriptlet = Scriptlet {
+            name: "Paste Rich Link".to_string(),
+            description: Some("Paste as markdown link".to_string()),
+            code: "https://example.com".to_string(),
+            tool: "paste".to_string(),
+            shortcut: None,
+            keyword: Some("!mdlink".to_string()),
+            group: Some("Clipboard Transformations".to_string()),
+            file_path: None,
+            command: None,
+            alias: None,
+        };
+        let result = make_scriptlet_search_result(scriptlet);
+
+        assert_eq!(resolve_tool_badge(&result, true), None);
+    }
+
+    #[test]
+    fn test_resolve_tool_badge_kept_when_not_filtering_for_scriptlets() {
+        let scriptlet = Scriptlet {
+            name: "Paste Rich Link".to_string(),
+            description: Some("Paste as markdown link".to_string()),
+            code: "https://example.com".to_string(),
+            tool: "paste".to_string(),
+            shortcut: None,
+            keyword: Some("!mdlink".to_string()),
+            group: Some("Clipboard Transformations".to_string()),
+            file_path: None,
+            command: None,
+            alias: None,
+        };
+        let result = make_scriptlet_search_result(scriptlet);
+
+        assert_eq!(
+            resolve_tool_badge(&result, false),
+            Some("paste".to_string())
+        );
     }
 
     #[test]
