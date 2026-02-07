@@ -107,3 +107,29 @@ fn test_compute_overlay_appear_style_reaches_full_visibility_after_duration() {
     assert!((style.modal_opacity - 1.0).abs() < 0.001);
     assert!(style.complete);
 }
+
+#[test]
+fn test_input_hover_border_token_uses_accent_color_with_visible_alpha() {
+    let colors = AliasInputColors {
+        accent: 0x123456,
+        ..Default::default()
+    };
+
+    assert_eq!(
+        super::AliasInput::input_hover_border_token(colors),
+        0x12345690
+    );
+}
+
+#[test]
+fn test_backdrop_hover_bg_token_uses_overlay_color_with_hover_alpha() {
+    let colors = AliasInputColors {
+        overlay_bg: 0x654321,
+        ..Default::default()
+    };
+
+    assert_eq!(
+        super::AliasInput::backdrop_hover_bg_token(colors),
+        0x65432196
+    );
+}

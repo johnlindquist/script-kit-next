@@ -23,6 +23,7 @@ impl Render for AliasInput {
         let button_colors = ButtonColors::from_theme(&self.theme);
         let validation_feedback = self.validation_feedback();
         let overlay_appear = self.overlay_appear_style();
+        let backdrop_hover_bg = rgba(Self::backdrop_hover_bg_token(colors));
         self.schedule_overlay_animation_tick_if_needed(overlay_appear.complete, cx);
 
         // Determine button states
@@ -214,6 +215,8 @@ impl Render for AliasInput {
                     .inset_0()
                     .bg(rgba((colors.overlay_bg << 8) | 0x80)) // 50% opacity
                     .opacity(overlay_appear.backdrop_opacity)
+                    .cursor_pointer()
+                    .hover(move |style| style.bg(backdrop_hover_bg))
                     .on_click(backdrop_cancel),
             )
             // Modal container - centered on top of backdrop

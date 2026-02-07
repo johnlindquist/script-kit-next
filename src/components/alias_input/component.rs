@@ -182,12 +182,21 @@ impl AliasInput {
         .detach();
     }
 
+    pub(crate) fn input_hover_border_token(colors: AliasInputColors) -> u32 {
+        (colors.accent << 8) | 0x90
+    }
+
+    pub(crate) fn backdrop_hover_bg_token(colors: AliasInputColors) -> u32 {
+        (colors.overlay_bg << 8) | 0x96
+    }
+
     /// Render the text input field with cursor and selection
     fn render_input_field(&self, _cx: &mut Context<Self>) -> impl IntoElement {
         let colors = self.colors;
         let text = self.input.text();
         let cursor_pos = self.input.cursor();
         let selection = self.input.selection();
+        let hover_border_color = rgba(Self::input_hover_border_token(colors));
 
         // Build the input content with cursor indicator
         let display_text = if text.is_empty() {
@@ -261,6 +270,8 @@ impl AliasInput {
             .border_1()
             .border_color(rgba((colors.input_border << 8) | 0x80))
             .rounded(px(8.))
+            .cursor_text()
+            .hover(move |style| style.border_color(hover_border_color))
             .child(display_text)
     }
 

@@ -159,6 +159,15 @@ impl Button {
         runtime_focus.unwrap_or(explicit_focus)
     }
 
+    pub(crate) fn should_show_focus_indicator(
+        focused: bool,
+        has_click_handler: bool,
+        disabled: bool,
+        loading: bool,
+    ) -> bool {
+        focused && Self::should_show_pointer(has_click_handler, disabled, loading)
+    }
+
     pub(crate) fn hover_background_token(variant: ButtonVariant, colors: ButtonColors) -> u32 {
         match variant {
             ButtonVariant::Primary => (colors.background_hover << 8) | 0xB0,
@@ -197,6 +206,8 @@ impl RenderOnce for Button {
                 .as_ref()
                 .map(|handle| handle.is_focused(window)),
         );
+        let show_focus_indicator =
+            Self::should_show_focus_indicator(focused, has_click_handler, disabled, loading);
         let label_text = if loading {
             loading_label.unwrap_or_else(|| label.clone())
         } else {
@@ -294,7 +305,7 @@ impl RenderOnce for Button {
         }
 
         // Apply focus ring styling
-        if focused {
+        if show_focus_indicator {
             button = button
                 .border(px(FOCUS_BORDER_WIDTH))
                 .border_color(focus_ring_color);

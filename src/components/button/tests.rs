@@ -99,6 +99,25 @@ fn test_resolve_focus_state_prefers_runtime_focus_handle_state() {
 }
 
 #[test]
+fn test_should_show_focus_indicator_does_not_render_for_non_interactive_states() {
+    assert!(Button::should_show_focus_indicator(
+        true, true, false, false
+    ));
+    assert!(!Button::should_show_focus_indicator(
+        false, true, false, false
+    ));
+    assert!(!Button::should_show_focus_indicator(
+        true, false, false, false
+    ));
+    assert!(!Button::should_show_focus_indicator(
+        true, true, true, false
+    ));
+    assert!(!Button::should_show_focus_indicator(
+        true, true, false, true
+    ));
+}
+
+#[test]
 fn test_button_layout_tokens_stay_consistent_when_render_spacing_is_updated() {
     assert_eq!(BUTTON_PRIMARY_PADDING_X, 12.0);
     assert_eq!(BUTTON_PRIMARY_PADDING_Y, 6.0);
