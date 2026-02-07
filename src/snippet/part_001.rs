@@ -227,6 +227,17 @@ mod tests {
         assert_eq!(t1.ranges, vec![(0, 4)]);
     }
 
+    #[test]
+    fn test_parse_placeholder_preserves_backslash_before_non_special_character() {
+        let snippet = ParsedSnippet::parse("${1:C:\\tmp}");
+
+        assert_eq!(snippet.text, "C:\\tmp");
+
+        let t1 = snippet.get_tabstop(1).unwrap();
+        assert_eq!(t1.placeholder.as_deref(), Some("C:\\tmp"));
+        assert_eq!(t1.ranges, vec![(0, 6)]);
+    }
+
     // --- Tests for update_tabstops_after_edit ---
 
     #[test]
@@ -359,6 +370,19 @@ mod tests {
                 assert_eq!(c[0], "apple");
                 assert_eq!(c[1], "banana");
                 assert_eq!(c[2], "cherry");
+            }
+            _ => panic!("Expected Tabstop"),
+        }
+    }
+
+    #[test]
+    fn test_parse_choices_preserves_backslash_before_non_special_character() {
+        let snippet = ParsedSnippet::parse("${1|C:\\tmp,D:\\logs|}");
+
+        match &snippet.parts[0] {
+            SnippetPart::Tabstop { choices, .. } => {
+                let c = choices.as_ref().unwrap();
+                assert_eq!(c, &vec!["C:\\tmp".to_string(), "D:\\logs".to_string()]);
             }
             _ => panic!("Expected Tabstop"),
         }

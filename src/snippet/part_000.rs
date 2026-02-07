@@ -230,8 +230,13 @@ impl ParsedSnippet {
 
         while let Some(c) = chars.next() {
             if c == '\\' {
-                if let Some(escaped) = chars.next() {
-                    result.push(escaped);
+                match chars.peek().copied() {
+                    Some('{') | Some('}') | Some('$') | Some('\\') => {
+                        if let Some(escaped) = chars.next() {
+                            result.push(escaped);
+                        }
+                    }
+                    Some(_) | None => result.push('\\'),
                 }
                 continue;
             }
@@ -277,9 +282,13 @@ impl ParsedSnippet {
                     break;
                 }
                 '\\' => {
-                    // Escaped character in choice
-                    if let Some(next) = chars.next() {
-                        current.push(next);
+                    match chars.peek().copied() {
+                        Some(',') | Some('|') | Some('\\') => {
+                            if let Some(next) = chars.next() {
+                                current.push(next);
+                            }
+                        }
+                        Some(_) | None => current.push('\\'),
                     }
                 }
                 _ => current.push(c),
