@@ -1,4 +1,8 @@
 use super::*;
+use crate::actions::{
+    get_ai_command_bar_actions, get_note_switcher_actions,
+    get_scriptlet_context_actions_with_custom, NoteSwitcherNoteInfo,
+};
 
     #[test]
     fn test_alias_actions_dynamic() {
