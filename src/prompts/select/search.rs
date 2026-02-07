@@ -194,12 +194,12 @@ pub(super) fn resolve_submission_indices(
     selected_indices: &[usize],
     focused_choice_index: Option<usize>,
 ) -> Vec<usize> {
-    if !selected_indices.is_empty() {
-        return selected_indices.to_vec();
-    }
-
     if !is_multiple {
         return focused_choice_index.into_iter().collect();
+    }
+
+    if !selected_indices.is_empty() {
+        return selected_indices.to_vec();
     }
 
     Vec::new()

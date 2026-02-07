@@ -1,6 +1,18 @@
 use super::*;
 
+fn resolve_grouped_result_index(
+    grouped_items: &[GroupedListItem],
+    selected_index: usize,
+) -> Option<(usize, usize)> {
+    let coerced_index = crate::list_item::coerce_selection(grouped_items, selected_index)?;
+    match grouped_items.get(coerced_index) {
+        Some(GroupedListItem::Item(result_idx)) => Some((coerced_index, *result_idx)),
+        _ => None,
+    }
+}
+
 impl ScriptListApp {
+    #[allow(dead_code)]
     pub(crate) fn filtered_scripts(&self) -> Vec<Arc<scripts::Script>> {
         let filter_text = self.filter_text();
         if filter_text.is_empty() {
@@ -103,14 +115,12 @@ impl ScriptListApp {
         let grouped_items = grouped_items.clone();
         let flat_results = flat_results.clone();
 
-        // Get the grouped item at selected_index and extract the result index
-        let result_idx = match grouped_items.get(self.selected_index) {
-            Some(GroupedListItem::Item(idx)) => Some(*idx),
-            Some(GroupedListItem::SectionHeader(..)) => None, // Section headers are not selectable
-            None => None,
-        };
-
-        if let Some(idx) = result_idx {
+        if let Some((resolved_index, idx)) =
+            resolve_grouped_result_index(&grouped_items, self.selected_index)
+        {
+            if resolved_index != self.selected_index {
+                self.selected_index = resolved_index;
+            }
             if let Some(result) = flat_results.get(idx).cloned() {
                 // Record frecency usage before executing (unless excluded)
                 let frecency_path: Option<String> = match &result {
@@ -369,4 +379,41 @@ impl ScriptListApp {
         }
     }
 
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_resolve_grouped_result_index_coerces_section_header_selection() {
+        let grouped_items = vec![
+            GroupedListItem::SectionHeader("Suggested".to_string(), None),
+            GroupedListItem::Item(3),
+            GroupedListItem::Item(4),
+        ];
+
+        assert_eq!(resolve_grouped_result_index(&grouped_items, 0), Some((1, 3)));
+    }
+
+    #[test]
+    fn test_resolve_grouped_result_index_clamps_out_of_bounds_selection() {
+        let grouped_items = vec![
+            GroupedListItem::SectionHeader("Suggested".to_string(), None),
+            GroupedListItem::Item(8),
+            GroupedListItem::SectionHeader("Main".to_string(), None),
+        ];
+
+        assert_eq!(resolve_grouped_result_index(&grouped_items, 100), Some((1, 8)));
+    }
+
+    #[test]
+    fn test_resolve_grouped_result_index_returns_none_for_header_only_rows() {
+        let grouped_items = vec![
+            GroupedListItem::SectionHeader("Suggested".to_string(), None),
+            GroupedListItem::SectionHeader("Main".to_string(), None),
+        ];
+
+        assert_eq!(resolve_grouped_result_index(&grouped_items, 0), None);
+    }
 }

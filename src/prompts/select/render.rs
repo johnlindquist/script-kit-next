@@ -113,22 +113,29 @@ impl Render for SelectPrompt {
                     })
                     .child(input_display),
             )
-            .child(
-                div()
-                    .text_sm()
-                    .text_color(muted_color)
-                    .child(format!("{} selected", self.selected.len())),
-            );
+            .when(self.multiple, |container| {
+                container.child(
+                    div()
+                        .text_sm()
+                        .text_color(muted_color)
+                        .child(format!("{} selected", self.selected.len())),
+                )
+            });
 
         // Choices list
         let filtered_len = self.filtered_choices.len();
         let choices_content: AnyElement = if filtered_len == 0 {
+            let empty_message = if self.filter_text.trim().is_empty() {
+                "No choices available"
+            } else {
+                "No choices match your filter"
+            };
             div()
                 .w_full()
                 .py(px(spacing.padding_xl))
                 .px(px(spacing.item_padding_x))
                 .text_color(muted_color)
-                .child("No choices match your filter")
+                .child(empty_message)
                 .into_any_element()
         } else {
             uniform_list(
@@ -149,12 +156,20 @@ impl Render for SelectPrompt {
                                     {
                                         let is_focused = display_idx == this.focused_index;
                                         let is_selected = this.selected.contains(&choice_idx);
+                                        let is_selected_for_ui = if this.multiple {
+                                            is_selected
+                                        } else {
+                                            is_focused
+                                        };
                                         let semantic_id =
                                             choice.semantic_id.clone().unwrap_or_else(|| {
                                                 indexed_choice.stable_semantic_id.clone()
                                             });
                                         let indicator =
-                                            choice_selection_indicator(this.multiple, is_selected);
+                                            choice_selection_indicator(
+                                                this.multiple,
+                                                is_selected_for_ui,
+                                            );
                                         let subtitle = indexed_choice
                                             .metadata
                                             .subtitle_text()
@@ -196,7 +211,7 @@ impl Render for SelectPrompt {
                                                     })
                                                     .density(Density::Comfortable)
                                                     .colors(row_colors)
-                                                    .with_accent_bar(is_selected),
+                                                    .with_accent_bar(is_selected_for_ui),
                                                 ),
                                         );
                                     }
