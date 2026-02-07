@@ -29,6 +29,7 @@ fn protocol_tile_to_window_control(pos: &protocol::TilePosition) -> window_contr
 /// Standard macOS menu bar height in points (consistent since macOS 10.0)
 /// Note: This is an approximation - the actual height can vary with accessibility settings
 const MACOS_MENU_BAR_HEIGHT: i32 = 24;
+const CLIPBOARD_HISTORY_PREVIEW_CHAR_LIMIT: usize = 1000;
 /// Get information about all displays/monitors
 fn get_displays() -> anyhow::Result<Vec<protocol::DisplayInfo>> {
     #[cfg(target_os = "macos")]
@@ -107,6 +108,18 @@ fn format_missing_interactive_session_error(script_name: &str, script_path: &std
         script_path.display()
     )
 }
+
+fn truncate_clipboard_history_preview(content: &str) -> String {
+    let Some((cutoff_idx, _)) = content
+        .char_indices()
+        .nth(CLIPBOARD_HISTORY_PREVIEW_CHAR_LIMIT)
+    else {
+        return content.to_string();
+    };
+
+    format!("{}...", &content[..cutoff_idx])
+}
+
 fn take_active_script_session(
     script_session: &SharedSession,
     script_name: &str,
