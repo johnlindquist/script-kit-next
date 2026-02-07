@@ -1,3 +1,5 @@
+use std::io::Write;
+
 /// Validate TypeScript content by attempting compilation with bun.
 ///
 /// Writes content to a temp .ts file and runs `bun build` on it.
@@ -83,6 +85,57 @@ export default {{
     )
 }
 
+fn atomic_write_with_secure_tempfile(
+    config_path: &Path,
+    content: &str,
+) -> Result<(), ConfigWriteError> {
+    let parent = config_path.parent().ok_or_else(|| {
+        ConfigWriteError::IoError(format!(
+            "config_atomic_write_missing_parent: target={}",
+            config_path.display()
+        ))
+    })?;
+
+    let mut temp_file = tempfile::Builder::new()
+        .prefix(".config-write.")
+        .suffix(".tmp")
+        .tempfile_in(parent)
+        .map_err(|e| {
+            ConfigWriteError::IoError(format!(
+                "config_atomic_write_tempfile_create_failed: target={} error={}",
+                config_path.display(),
+                e
+            ))
+        })?;
+
+    temp_file.write_all(content.as_bytes()).map_err(|e| {
+        ConfigWriteError::IoError(format!(
+            "config_atomic_write_tempfile_write_failed: target={} error={}",
+            config_path.display(),
+            e
+        ))
+    })?;
+
+    temp_file.flush().map_err(|e| {
+        ConfigWriteError::IoError(format!(
+            "config_atomic_write_tempfile_flush_failed: target={} error={}",
+            config_path.display(),
+            e
+        ))
+    })?;
+
+    temp_file.persist(config_path).map_err(|e| {
+        ConfigWriteError::IoError(format!(
+            "config_atomic_write_rename_failed: from={} to={} error={}",
+            e.file.path().display(),
+            config_path.display(),
+            e.error
+        ))
+    })?;
+
+    Ok(())
+}
+
 /// Safely modify config.ts: edit in memory, validate, backup, atomic-write.
 ///
 /// This is the single entry point for all config file modifications.
@@ -154,27 +207,8 @@ pub fn write_config_safely(
         }
     }
 
-    // Step 6: Atomic write (temp file in same directory + rename)
-    let temp_path = config_path.with_extension("ts.tmp");
-
-    std::fs::write(&temp_path, &new_content).map_err(|e| {
-        ConfigWriteError::IoError(format!(
-            "Failed to write temp file {}: {}",
-            temp_path.display(),
-            e
-        ))
-    })?;
-
-    std::fs::rename(&temp_path, config_path).map_err(|e| {
-        // Clean up temp file on rename failure
-        let _ = std::fs::remove_file(&temp_path);
-        ConfigWriteError::IoError(format!(
-            "Failed to rename {} to {}: {}",
-            temp_path.display(),
-            config_path.display(),
-            e
-        ))
-    })?;
+    // Step 6: Atomic write (randomized tempfile in same directory + rename)
+    atomic_write_with_secure_tempfile(config_path, &new_content)?;
 
     if was_empty {
         Ok(WriteOutcome::Created)
@@ -227,14 +261,7 @@ pub fn recover_from_backup(
     }
 
     // Atomic write of backup content
-    let temp_path = config_path.with_extension("ts.tmp");
-    std::fs::write(&temp_path, &backup_content)
-        .map_err(|e| ConfigWriteError::IoError(format!("Failed to write temp: {}", e)))?;
-
-    std::fs::rename(&temp_path, config_path).map_err(|e| {
-        let _ = std::fs::remove_file(&temp_path);
-        ConfigWriteError::IoError(format!("Failed to rename: {}", e))
-    })?;
+    atomic_write_with_secure_tempfile(config_path, &backup_content)?;
 
     tracing::info!(
         path = %config_path.display(),
@@ -244,4 +271,3 @@ pub fn recover_from_backup(
 
     Ok(true)
 }
-
